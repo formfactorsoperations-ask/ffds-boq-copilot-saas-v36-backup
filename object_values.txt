@@ -1,0 +1,3 @@
+components/ProjectListTab.tsx:108:        Object.values(healthScores).forEach((h: PaymentHealth) => {
+components/ops/PreHandoverChecklist.tsx:115:        return Object.values(rooms).sort((a, b) => b.electricalPoints.totalPoints - a.electricalPoints.totalPoints);
+hooks/useCashFlowForecast.ts:183:            const monthlyForecast = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month));

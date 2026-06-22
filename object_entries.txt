@@ -1,0 +1,25 @@
+components/client/ClientRoomDetails.tsx:32:        {Object.entries(rooms).map(([roomName, items]: [string, FullBoqItem[]]) => {
+components/client/ClientPrintView.tsx:156:                            {Object.entries(tier.groupedBoq).map(([roomName, items]) => (
+components/client/ClientRoomwise.tsx:109:                                            {Object.entries(tier.groupedBoq).map(([roomName, rawItems], rIdx) => {
+components/client/ClientRoomwise.tsx:191:                                    {Object.entries(tier.groupedBoq).map(([roomName, rawItems]) => {
+components/client/ClientBlockEstimate.tsx:56:                {Object.entries(activeTier.groupedBoq).map(([roomName, rawItems]) => {
+components/client/ClientLevel3Contract.tsx:750:                    {Object.entries(groupedBoq).map(([room, items]) => {
+components/client/ClientLevel3Contract.tsx:936:                                {Object.entries(groupedBoq).map(([room, items]) => {
+components/client/ClientLevel3Contract.tsx:951:                    Object.entries(groupedBoq).map(([room, items]) => (
+components/ProjectContextCard.tsx:166:  const deliverablesCount = Object.entries(projectContext.designScope || {})
+components/AnalyticsTab.tsx:228:      return Object.entries(activeAggregates.byCat).sort(([, a], [, b]) => (b as any).profit - (a as any).profit);
+components/AddItemModal.tsx:109:    const finalQtys = Object.fromEntries(Object.entries(quantities).map(([id, data]) => [id, (data as any).qty]));
+components/AddItemModal.tsx:110:    const finalRationales = Object.fromEntries(Object.entries(quantities).map(([id, data]) => [id, (data as any).rationale]));
+components/ops/CarpentryCalculator.tsx:167:                                {Object.entries(FURNITURE_PRESETS).map(([key, val]) => (
+components/ops/CommunicationTrackerPage.tsx:173:                    {Object.entries(groupedItems).map(([category, items]) => (
+components/ops/DesignDocumentsManager.tsx:130:                    {Object.entries(groupedDocs).map(([roomName, roomDocs]) => (
+components/ops/PreHandoverChecklist.tsx:322:                            {Object.entries(groupedElectricalPlan).map(([roomId, records]: [string, any]) => {
+components/LeadBrainTab.tsx:299:                                        {Object.entries(strategy.scope_bias).map(([key, val]) => (
+components/Header.tsx:135:    const groups = Object.entries(grouped).map(([groupName, tabs]) => ({
+components/InternalComparisonTable.tsx:116:        return Object.entries(comparisonData).sort(([roomA], [roomB]) => {
+components/studio/StudioSettingsTab.tsx:667:                {Object.entries(groups).map(([phase, items]: [string, any]) => (
+components/MaterialTab.tsx:339:                for (const [cat, keywords] of Object.entries(CategoryKeywords)) {
+components/MaterialTab.tsx:1241:                                                for (const [cat, keywords] of Object.entries(CategoryKeywords)) {
+components/ClientPortal.tsx:966:                                        {Object.entries((context.designDocuments || []).reduce((acc, doc) => {
+components/ClientPortal.tsx:1241:                                            {Object.entries(boqByCategory).map(([category, items]: [string, any[]]) => {
+components/ClientPortal.tsx:1283:                                                    return Object.entries(boqByCategory).map(([category, items]: [string, any[]]) => {

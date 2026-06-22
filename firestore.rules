@@ -1,0 +1,287 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ========================================================================
+    // HELPER FUNCTIONS
+    // ========================================================================
+    
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Retrieve the user's document from the users collection
+    function getUserData() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data : {};
+    }
+    
+    // Check if user is Super Admin
+    function isSuperAdmin() {
+      return (request.auth != null && request.auth.token.email == 'formfactors.operations@gmail.com') || getUserData().role == 'Super Admin';
+    }
+
+    // Get the tenant ID associated with the current user
+    function getUserTenantId() {
+      return getUserData().tenantId;
+    }
+
+    // Check if the user's tenant ID matches the document's tenant ID
+    function isSameTenant(docTenantId) {
+      return getUserTenantId() == docTenantId;
+    }
+
+    // Compatibility for legacy FFDS workflow (demo-tenant-01)
+    function isLegacyFFDS() {
+      return getUserTenantId() == 'demo-tenant-01';
+    }
+
+    // Future-ready RBAC stub - can be expanded to check roles like 'admin', 'editor'
+    // Currently returns true if the user is part of the tenant
+    function hasRole(role) {
+      // In the future, check (getUserData().role == role || getUserData().roles.hasAny([role]))
+      return true; 
+    }
+
+    // ========================================================================
+    // USERS & ORGANIZATIONS
+    // ========================================================================
+    
+    match /users/{userId} {
+      // Users can only read/write their own profile, Super Admins can do anything
+      allow read, write: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+    }
+
+    match /organizations/{orgId} {
+      // Any user can read organizations (public info minimal risk)
+      allow read: if true;
+      // Allow creation/updates if the user belongs to this org (or is creating it), or is Super Admin
+      allow write: if isAuthenticated() && (
+          !exists(/databases/$(database)/documents/organizations/$(orgId)) || 
+          isSameTenant(orgId) ||
+          isSuperAdmin()
+      );
+      
+      match /projects/{projectId} {
+         match /boqItems/{itemId} {
+           allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+           allow create: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+           // No hard deletes
+           allow delete: if false;
+
+           allow update: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
+             // Viewer check
+             && (getUserData().role != 'Viewer')
+             // Enforce append-only array for statusHistory
+             && (!request.resource.data.keys().hasAll(['statusHistory']) || 
+                 !resource.data.keys().hasAll(['statusHistory']) || 
+                 request.resource.data.statusHistory.size() >= resource.data.statusHistory.size())
+             // Designer logic check
+             && (
+                (getUserData().role == 'Designer' && request.resource.data.boqStatus != resource.data.boqStatus) 
+                  ? (request.resource.data.boqStatus in ['included_ffds_scope', 'pending_finalisation', 'on_hold'])
+                  : true // If not Designer, or not changing boqStatus, bypass
+             );
+         }
+
+         match /boqVersions/{versionId} {
+           allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+           // Creation is handled by Cloud Functions, but if we allow it from client:
+           allow create: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+           allow update, delete: if false; // Immutable once created
+         }
+
+         match /bookingPacks/{packId} {
+            // Allow unauthenticated reading and restricted updates for public token approval page
+           allow read: if true;
+           allow create, delete: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+           allow update: if (isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())) ||
+                         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'viewedAt', 'approvalEvidence', 'approvedAt']));
+         }
+
+         match /drawingTracker/{drawingId} {
+           allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+           allow create: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+           allow delete: if false;
+           allow update: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
+             && (getUserData().role != 'Viewer')
+             && (
+               // Owner and Designer of the OWNING org may Issue GFC
+               (request.resource.data.gfc.status == 'issued' && (!('gfc' in resource.data) || resource.data.gfc.status != 'issued'))
+               ? (getUserData().role in ['Owner', 'Designer', 'Admin', 'Ops Director', 'Super Admin'] || isSuperAdmin() || isLegacyFFDS())
+               : true
+             );
+         }
+
+         match /drawingVersions/{versionId} {
+           allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+           allow create: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
+             && (getUserData().role in ['Owner', 'Designer', 'Admin', 'Ops Director', 'Super Admin'] || isSuperAdmin() || isLegacyFFDS());
+           allow update, delete: if false; // Immutability
+         }
+
+         allow read, create, delete: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+         allow update: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
+           && (getUserData().role != 'Viewer')
+           && (
+              (request.resource.data.executionData != null && 
+               (!('executionData' in resource.data) || request.resource.data.executionData.bundles != resource.data.executionData.bundles))
+              ? (getUserData().role in ['Owner', 'Admin', 'Ops Director', 'Super Admin'] || isSuperAdmin() || isLegacyFFDS())
+              : true
+           );
+      }
+      match /{document=**} {
+         allow read, write: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+      }
+    }
+
+    // ========================================================================
+    // CORE COLLECTIONS (Tenant-Aware)
+    // ========================================================================
+    
+    // PROJECTS: Main Project Data
+    match /projects/{projectId} {
+      allow read: if true;
+
+      // CREATE / UPDATE: Document payload must match user's tenantId
+      allow write: if isAuthenticated() && (isSameTenant(request.resource.data.tenantId) || isSuperAdmin())
+        && (
+          (request.method == 'update' && request.resource.data.executionData != null && 
+           (!('executionData' in resource.data) || request.resource.data.executionData.bundles != resource.data.executionData.bundles))
+          ? (getUserData().role in ['Owner', 'Admin', 'Ops Director', 'Super Admin'] || isSuperAdmin() || isLegacyFFDS())
+          : true
+        );
+      
+      // DELETE: Can only delete if they had read access to it
+      allow delete: if isAuthenticated() && (
+        isSameTenant(resource.data.tenantId) ||
+        (isLegacyFFDS() && !('tenantId' in resource.data)) ||
+        isSuperAdmin()
+      );
+
+      match /selections/{selectionId} {
+        allow read, write: if isAuthenticated() && (
+          isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
+          (isLegacyFFDS() && !('tenantId' in get(/databases/$(database)/documents/projects/$(projectId)).data)) ||
+          isSuperAdmin()
+        );
+      }
+
+      // DECISIONS (Nested Collection)
+      match /decisions/{decisionId} {
+        allow read: if (isAuthenticated() && (
+                          isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
+                          (isLegacyFFDS() && !('tenantId' in get(/databases/$(database)/documents/projects/$(projectId)).data)) ||
+                          isSuperAdmin()
+                        )) || 
+                       (!isAuthenticated() && resource.data.signoffToken != null && resource.data.tokenExpiresAt > request.time);
+                    
+        allow create: if isAuthenticated() && (
+                          isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
+                          (isLegacyFFDS() && !('tenantId' in get(/databases/$(database)/documents/projects/$(projectId)).data)) ||
+                          isSuperAdmin()
+                        );
+
+        allow update: if (isAuthenticated() && (
+                          isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
+                          (isLegacyFFDS() && !('tenantId' in get(/databases/$(database)/documents/projects/$(projectId)).data)) ||
+                          isSuperAdmin()
+                        )) ||
+                      (
+                       resource.data.signoffToken != null && 
+                       resource.data.tokenExpiresAt > request.time && 
+                       resource.data.status == 'drawing_sent' &&
+                       request.resource.data.signoffToken == resource.data.signoffToken &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signoff', 'status']));
+                       
+        allow delete: if isAuthenticated() && (
+                          isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
+                          (isLegacyFFDS() && !('tenantId' in get(/databases/$(database)/documents/projects/$(projectId)).data)) ||
+                          isSuperAdmin()
+                        );
+      }
+    }
+
+    // MULTI-TENANT MASTER DATA (Item Bank, Templates, Rate Library)
+    // Legacy system used hardcoded names like 'item_bank'
+    // New system uses 'item_bank_{tenantId}'
+    match /master_data/{docId} {
+      allow read, write: if isAuthenticated() && (
+        (isLegacyFFDS() && (docId == 'item_bank' || docId == 'draft_item_bank' || docId == 'templates')) ||
+        (docId == 'item_bank_' + getUserTenantId()) ||
+        (docId == 'draft_item_bank_' + getUserTenantId()) ||
+        (docId == 'templates_' + getUserTenantId()) ||
+        isSuperAdmin()
+      );
+    }
+    
+    match /publicProposals/{tokenId} {
+      allow read: if true;
+    }
+
+    match /studios/{studioId} {
+      allow read: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
+      allow write: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
+      
+      match /settings/{docId} {
+        allow read: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
+        allow write: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
+      }
+      match /projects/{projectId} {
+         allow read: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
+         allow write: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
+         match /{document=**} {
+            allow read, write: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
+         }
+      }
+    }
+
+    // ========================================================================
+    // FUTURE-READY COLLECTIONS (For upcoming modularization)
+    // Preparing schema for boqItems, proposals, client_outputs, rate_library, execution_data
+    // ========================================================================
+
+    match /boqItems/{itemId} {
+      allow read: if isAuthenticated() && (isSameTenant(resource.data.tenantId) || (isLegacyFFDS() && !('tenantId' in resource.data)));
+      allow write: if isAuthenticated() && isSameTenant(request.resource.data.tenantId);
+      allow delete: if isAuthenticated() && (isSameTenant(resource.data.tenantId) || (isLegacyFFDS() && !('tenantId' in resource.data)));
+    }
+
+    match /proposals/{proposalId} {
+      allow read: if isAuthenticated() && (isSameTenant(resource.data.tenantId) || (isLegacyFFDS() && !('tenantId' in resource.data)));
+      allow write: if isAuthenticated() && isSameTenant(request.resource.data.tenantId) && hasRole('editor');
+      allow delete: if isAuthenticated() && isSameTenant(resource.data.tenantId);
+    }
+
+    match /client_outputs/{outputId} {
+      allow read: if isAuthenticated() && isSameTenant(resource.data.tenantId);
+      allow write: if isAuthenticated() && isSameTenant(request.resource.data.tenantId);
+      allow delete: if isAuthenticated() && isSameTenant(resource.data.tenantId);
+    }
+
+    match /rate_library/{rateId} {
+      allow read: if isAuthenticated() && isSameTenant(resource.data.tenantId);
+      allow write: if isAuthenticated() && isSameTenant(request.resource.data.tenantId) && hasRole('admin');
+      allow delete: if isAuthenticated() && isSameTenant(resource.data.tenantId) && hasRole('admin');
+    }
+
+    match /execution_data/{execId} {
+      allow read: if isAuthenticated() && isSameTenant(resource.data.tenantId);
+      allow write: if isAuthenticated() && isSameTenant(request.resource.data.tenantId);
+      allow delete: if isAuthenticated() && isSameTenant(resource.data.tenantId);
+    }
+
+    // ========================================================================
+    // FALLBACK
+    // ========================================================================
+
+    // Catch-all to deny unspecified collections to prevent accidental data leaks
+    match /{document=**} {
+      allow read, write: if false; 
+    }
+    // DECISIONS (Collection Group for unstructured access, e.g. token-based reads)
+    match /{path=**}/decisions/{decisionId} {
+        allow read: if (resource.data.signoffToken != null && resource.data.tokenExpiresAt > request.time);
+    }
+  }
+}

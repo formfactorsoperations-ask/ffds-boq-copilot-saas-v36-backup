@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
+.pdf-document {
+    font-family: 'Open Sans', sans-serif;
+    color: #222222;
+}
+
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 0; /* Handled by padding in Shell */
+    }
+    
+    body {
+        margin: 0;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    
+    .no-print {
+        display: none !important;
+    }
+    
+    .print-only {
+        display: block !important;
+    }
+
+    .pdf-document {
+        width: 100% !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        page-break-after: always;
+    }
+
+    .page-break-inside-avoid {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+    
+    .page-break-before {
+        page-break-before: always;
+        break-before: page;
+    }
+}

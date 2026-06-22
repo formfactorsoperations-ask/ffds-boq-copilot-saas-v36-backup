@@ -1,0 +1,332 @@
+
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <script>
+      const originalConsoleError = console.error;
+      console.error = function(...args) {
+        if (typeof args[0] === 'string' && (args[0].includes('WebSocket') || args[0].includes('[vite]'))) {
+            return;
+        }
+        originalConsoleError.apply(console, args);
+      }
+      window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && typeof event.reason.message === 'string' && event.reason.message.includes('WebSocket')) {
+            event.preventDefault();
+        }
+        if (typeof event.reason === 'string' && event.reason.includes('WebSocket')) {
+            event.preventDefault();
+        }
+      });
+    </script>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="apple-touch-icon" href="/pwa-192x192.png" />
+    <title>FFDS BOQ Copilot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700;900&family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Pako for URL compression -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    
+    <style>
+      :root { color-scheme: light; }
+      body { 
+        font-family: "Open Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background-color: #ffffff; /* Pure White Base */
+        color: #1e3a8a; /* Blue-900 for main text instead of Slate-900 */
+      }
+      .font-serif {
+        font-family: 'Playfair Display', serif;
+      }
+      .font-opensans {
+        font-family: 'Open Sans', sans-serif;
+      }
+      
+      /* Vibrant Focus */
+      :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; border-radius: 8px; }
+      
+      details > summary { list-style: none; }
+      details > summary::-webkit-details-marker { display: none; }
+
+      /* "Milky White" Glass Theme */
+      .glass-light {
+        background: rgba(255, 255, 255, 0.95); /* High opacity white */
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 1);
+        box-shadow: 
+          0 10px 40px -10px rgba(30, 58, 138, 0.05), /* Subtle blue shadow */
+          0 0 0 1px rgba(241, 245, 249, 0.5) inset;
+      }
+      
+      /* Subtle Ambient Background */
+      body.app-shell {
+        background-color: #ffffff;
+        background-image: 
+            radial-gradient(circle at 0% 0%, #eff6ff 0%, transparent 40%), 
+            radial-gradient(circle at 100% 0%, #f0f9ff 0%, transparent 40%);
+        background-attachment: fixed;
+      }
+      
+      /* Blue Button Theme (Primary) */
+      .btn-primary {
+        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+        color: white;
+        transition: all 0.2s ease;
+      }
+      .btn-primary:hover {
+        background: linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      }
+
+      /* Clean Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1; 
+        border-radius: 4px;
+        border: 2px solid #ffffff; 
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8; 
+      }
+      
+      body.luxe-proposal-active {
+          background-color: #ffffff !important;
+          background-image: none !important;
+          color: #1e3a8a !important;
+      }
+      
+      @media print {
+        @page { margin: 0.5cm; }
+        
+        html, body, #root, .app-shell {
+          background: white !important;
+          background-image: none !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+          height: auto !important;
+          overflow: visible !important;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        
+        /* Hide all default UI elements */
+        .no-print, 
+        nav, 
+        aside, 
+        .vnext-header, 
+        button,
+        .fixed,
+        .sticky { 
+            display: none !important; 
+        }
+
+        /* Reset Main Container */
+        main {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            overflow: visible !important;
+            height: auto !important;
+        }
+
+        /* Proposal Container specific overrides */
+        .proposal-container {
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            overflow: visible !important;
+            height: auto !important;
+            display: block !important;
+        }
+
+        /* Ensure content is visible */
+        * {
+            visibility: visible;
+        }
+        
+        /* Force background printing for specific elements */
+        .bg-slate-900 {
+            background-color: #0f172a !important;
+            color: white !important;
+        }
+        
+        /* Page Break Rules */
+        .page-break-before { page-break-before: always !important; }
+        .page-break-after { page-break-after: always !important; }
+        .break-inside-avoid { page-break-inside: avoid !important; }
+
+        /* Professional PDF Pack Styling */
+        .vnext-proposal-wrapper {
+            background: white !important;
+        }
+
+        /* Force new page for major sections in print */
+        @media print {
+            #snapshot, #roomwise, #payments, #terms, #l2_fees, #l2_risk {
+                page-break-before: always !important;
+            }
+            
+            section {
+                margin-bottom: 2rem !important;
+                border: none !important;
+                box-shadow: none !important;
+                page-break-inside: avoid !important;
+            }
+            
+            /* Ledger Style Polish */
+            .ledger-row {
+                display: flex !important;
+                justify-content: space-between !important;
+                border-bottom: 1px dashed #cbd5e1 !important;
+                padding: 4pt 0 !important;
+            }
+            .ledger-total {
+                background: #0f172a !important;
+                color: white !important;
+                padding: 10pt !important;
+                margin-top: 10pt !important;
+                -webkit-print-color-adjust: exact;
+            }
+        }
+
+        .scan-first {
+            margin-bottom: 2rem !important;
+            display: block !important;
+        }
+
+        .scan-first summary {
+            display: none !important;
+        }
+
+        .scan-first > div {
+            display: block !important;
+            opacity: 1 !important;
+            transform: none !important;
+        }
+
+        /* Table Styling for Print */
+        table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            margin-bottom: 1rem !important;
+        }
+
+        th {
+            background-color: #f8fafc !important;
+            color: #475569 !important;
+            font-weight: 700 !important;
+            text-transform: uppercase !important;
+            font-size: 0.65rem !important;
+            letter-spacing: 0.05em !important;
+            padding: 0.5rem !important;
+            border-bottom: 2px solid #e2e8f0 !important;
+            text-align: left !important;
+        }
+
+        td {
+            padding: 0.5rem !important;
+            border-bottom: 1px solid #f1f5f9 !important;
+            font-size: 0.75rem !important;
+            color: #1e293b !important;
+        }
+
+        .room-header td {
+            background-color: #f1f5f9 !important;
+            font-weight: 800 !important;
+            font-size: 0.7rem !important;
+            letter-spacing: 0.1em !important;
+            padding: 0.4rem 0.5rem !important;
+        }
+
+        .total-row td {
+            font-weight: 700 !important;
+            background-color: #f8fafc !important;
+        }
+
+        /* Print Header/Footer */
+        .print-header {
+            display: none;
+        }
+
+        .print-footer {
+            display: none;
+        }
+
+        @media print {
+            .print-header {
+                display: flex !important;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 40px;
+                border-bottom: 1px solid #e2e8f0;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 1cm;
+                font-size: 10px;
+                color: #94a3b8;
+                background: white;
+            }
+
+            .print-footer {
+                display: flex !important;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 40px;
+                border-top: 1px solid #e2e8f0;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 1cm;
+                font-size: 10px;
+                color: #94a3b8;
+                background: white;
+            }
+
+            .vnext-proposal-wrapper {
+                padding-top: 50px !important;
+                padding-bottom: 50px !important;
+            }
+
+            /* Force new page for major sections */
+            .scan-first {
+                page-break-before: always;
+            }
+
+            .scan-first:first-of-type {
+                page-break-before: auto;
+            }
+        }
+      }
+    </style>
+  </head>
+  <body class="app-shell">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

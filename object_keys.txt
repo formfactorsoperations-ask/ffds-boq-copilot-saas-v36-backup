@@ -1,0 +1,10 @@
+components/client/ClientRoomDetails.tsx:16:  const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set(Object.keys(rooms)));
+components/client/ClientExportView.tsx:59:                    {Object.keys(visibility).map(key => (
+components/ops/DesignDocumentsManager.tsx:122:            {Object.keys(groupedDocs).length === 0 ? (
+components/InternalComparisonTable.tsx:102:        Object.keys(grouped).forEach(key => {
+components/InternalComparisonTable.tsx:216:                        {Object.keys(comparisonData).length === 0 && (
+components/ClientTab.tsx:217:                {Object.keys(data).map(key => (
+components/TemplateEditorTab.tsx:20:    const configOptions = Object.keys(templates);
+components/StudioDashboard.tsx:168:    Object.keys(grouped).forEach(room => {
+components/CashFlowForecastDashboard.tsx:104:      const expectedKeys = Object.keys(variables);
+lib/standardPackages.ts:309:    const configKey = Object.keys(templates).find(k => configStr.includes(k)) || '2-BHK';

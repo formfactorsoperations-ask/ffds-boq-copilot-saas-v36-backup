@@ -1,0 +1,6 @@
+{
+  "name": "node-domexception",
+  "version": "3.0.0",
+  "type": "module",
+  "main": "index.js"
+}

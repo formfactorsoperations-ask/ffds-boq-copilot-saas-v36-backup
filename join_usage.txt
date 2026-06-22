@@ -1,0 +1,37 @@
+components/client/TermsDocketPage.tsx:181:                    <p className="text-sm text-red-800 font-medium">Cannot export PDF. Missing required data: {missingData.join(', ')}. Please update in settings or project details.</p>
+components/client/PaymentSchedulePage.tsx:170:                    <p className="text-sm text-red-800 font-medium">Cannot export PDF. Missing required data: {missingData.join(', ')}. Please update in settings or project details.</p>
+components/client/ClientRoomwise.tsx:24:        return Array.from(cats).slice(0, 3).join(' • ');
+components/client/ClientMaterialSpecs.tsx:132:            const material = foundKeywords.size > 0 ? Array.from(foundKeywords).join(', ') : config.defaultMat;
+components/client/ClientBlockEstimate.tsx:25:        return Array.from(cats).slice(0, 3).join(' • ');
+components/client/ClientLevel3Contract.tsx:758:                        const defaultIncludedText = defaultIncludedList.map(i => "• " + i).join('\n');
+components/client/ClientLevel3Contract.tsx:942:                                            <td className="p-4 text-xs text-slate-600 leading-relaxed font-medium">{uniqueKeys.join(' • ')}</td>
+components/Dashboard.tsx:295:      description: unconfirmedOld.map(s=>s.itemName).join(', ').substring(0,80),
+components/BoqItemCard.tsx:358:                        value={item.inclusions?.join(', ') || ''}
+components/BoqItemCard.tsx:368:                        value={item.exclusions?.join(', ') || ''}
+components/AnalyticsTab.tsx:28:    }).join(', ');
+components/LeadBrainTab.tsx:280:                                            <span className="font-bold text-slate-800 text-sm">{strategy.recommended_tiers.join(' → ')}</span>
+components/Header.tsx:177:                          {orgData.orgName.split(' ').slice(0, 2).join(' ').toUpperCase() || 'STUDIO'}
+components/Header.tsx:180:                          {orgData.orgName.split(' ').slice(2).join(' ') || 'OS'}
+components/studio/StudioSettingsTab.tsx:435:                            <input placeholder="Deliverables (comma separated)" value={(st.deliverables||[]).join(', ')} onChange={e => updateStep(i, 'deliverables', e.target.value.split(',').map((s:string)=>s.trim()))} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-500 bg-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+components/studio/StudioSettingsTab.tsx:621:                    <textarea value={data.standardInclusions?.join(', ') || ''} onChange={e=>setData({...data, standardInclusions: e.target.value.split(',').map((s:string)=>s.trim())})} className="w-full px-4 py-3 border border-slate-200 rounded-xl h-24 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+components/studio/StudioSettingsTab.tsx:625:                    <textarea value={data.standardExclusions?.join(', ') || ''} onChange={e=>setData({...data, standardExclusions: e.target.value.split(',').map((s:string)=>s.trim())})} className="w-full px-4 py-3 border border-slate-200 rounded-xl h-24 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+components/studio/StudioSettingsTab.tsx:737:                <textarea value={(data.kickoffChecklist||[]).join(', ')} onChange={e=>setData({...data, kickoffChecklist: e.target.value.split(',').map((s:string)=>s.trim())})} className="w-full px-4 py-3 border border-slate-200 rounded-xl h-24 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+components/FFDSLogo.tsx:24:  const mainName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ').toUpperCase() : orgData.orgName.toUpperCase();
+components/StudioDashboard.tsx:332:        let csvContent = headers.join(",") + "\n";
+components/StudioDashboard.tsx:368:            csvContent += row.join(",") + "\n";
+components/RevisionStudio.tsx:1304:            'Inclusions': r.inclusions ? r.inclusions.join('\n') : '',
+components/RevisionStudio.tsx:1305:            'Exclusions': r.exclusions ? r.exclusions.join('\n') : ''
+components/RevisionStudio.tsx:1325:              'Inclusions': b.inclusions ? b.inclusions.join('\n') : '',
+components/RevisionStudio.tsx:1326:              'Exclusions': b.exclusions ? b.exclusions.join('\n') : ''
+components/RevisionStudio.tsx:2133:        const itemNames = pendingItems.map((i: any) => i.item).join(', ');
+components/RevisionStudio.tsx:2138:        const itemNames = actualsItems.map((i: any) => i.item).join(', ');
+components/RevisionStudio.tsx:2655:                        }).join('\n')}`;
+components/RevisionStudio.tsx:2661:                        }).join('\n')}`;
+components/RevisionStudio.tsx:2694:                      }).join('\n')}`;
+components/RevisionStudio.tsx:2700:                      }).join('\n')}`;
+components/MaterialTab.tsx:166:            ].join(",");
+components/MaterialTab.tsx:468:            setShareMessage(lines.join('\n'));
+components/MaterialTab.tsx:675:                                setShareMessage(lines.join('\n'));
+components/MaterialTab.tsx:1100:                                                    setShareMessage(lines.join('\n'));
+components/MaterialTab.tsx:1164:                                                    setShareMessage(lines.join('\n'));
+lib/comparison.ts:170:            const joinedKeywords = Array.from(allKeywords).join(', ');

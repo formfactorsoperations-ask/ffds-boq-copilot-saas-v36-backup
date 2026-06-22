@@ -1,0 +1,6 @@
+{
+  "name": "Remix: FFDS BOQ Copilot v36.1 - For SaaS Model",
+  "description": "Version 36.1: Standardized financial calculations across Floating UI, Dashboard, and Tier Manager. Updated Design Fee default range to 9-12%.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

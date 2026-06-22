@@ -1,0 +1,74 @@
+components/client/ClientDecisionLock.tsx:21:    const targetPhone = (phoneNumber || settings?.clientPortalConfig?.supportContact || "919137673996").replace(/[^0-9]/g, '');
+components/client/ClientPrintView.tsx:31:    const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
+components/client/ClientPrintView.tsx:133:                                {tiers.map(t => <td key={t.id} className="text-center" dangerouslySetInnerHTML={{ __html: (row[t.name] || '❌ None').replace(/✔/g, '✓').replace(/❌/g, '✗') }}></td>)}
+components/client/ClientExportView.tsx:67:                            <span className="text-sm font-medium text-slate-700 capitalize">{key.replace(/_/g, ' ')}</span>
+components/client/PaymentSchedulePage.tsx:38:            label: (m.name || '').replace(' (Gross)', ''),
+components/client/PaymentSchedulePage.tsx:42:            dueCondition: m.type === 'execution' ? 'Advance before ' + (m.name || '').replace(' (Gross)', '').toLowerCase() : 'On completion of ' + (m.name || '').replace(' (Gross)', ''),
+components/client/ClientDesignFees.tsx:143:                    {data.practicalView ? data.practicalView.replace('Practical view:', '') : ''} 
+components/client/ClientDesignFees.tsx:398:                            {formatCurrency(Math.round(totalFee)).replace('₹ ', '₹')}
+components/client/ClientRoomwise.tsx:34:                .replace(/^Imported:?\s*/i, '') // Remove "Imported: " prefix
+components/client/ClientRoomwise.tsx:35:                .replace(/^Imported$/i, '')     // Remove exact "Imported"
+components/client/ClientLevel3Contract.tsx:131:    return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
+components/client/ClientLevel3Contract.tsx:783:                                                    const cleanLine = line.replace(/^[•-]\s*/, '').trim();
+components/client/ClientTab.tsx:408:          subtitle: mergedContent.l2_snapshot.subtitle.replace('[Tier Name]', tierName)
+components/client/ClientTab.tsx:433:        const safeProjectName = (projectContext.name || 'Project').replace(/[^a-zA-Z0-9\s-_]/g, '').trim().replace(/\s+/g, '_');
+components/ExcelImportModal.tsx:152:                const clean = String(val).replace(/[^0-9.-]+/g,"");
+components/PaymentCalculatorTab.tsx:83:            label: (m.name || '').replace(' (Gross)', ''),
+components/PaymentCalculatorTab.tsx:87:            dueCondition: m.type === 'execution' ? 'Advance before ' + (m.name || '').replace(' (Gross)', '').toLowerCase() : 'On completion of ' + (m.name || '').replace(' (Gross)', ''),
+components/PaymentCalculatorTab.tsx:533:                                                                onChange={e => handleUpdateMilestone(mainIndex, { name: e.target.value.replace(' (Gross)', '') })}
+components/ContractTab.tsx:91:            span.className = span.className.replace(/border-.*?/g, '').replace(/bg-.*?/g, '');
+components/ContractTab.tsx:92:            el.parentNode?.replaceChild(span, el);
+components/ContractTab.tsx:134:            el.parentNode?.replaceChild(span, el);
+components/ContractTab.tsx:164:        const cName = (currentContext?.name || 'Project').replace(/\s+/g, '_');
+components/ContractTab.tsx:165:        const tName = (selectedTier?.name || 'Tier').replace(/\s+/g, '_');
+components/ops/documents/StudioDocumentShell.tsx:54:    const address = orgData.officeAddress ? ` · ${orgData.officeAddress.replace(/\n/g, ', ')}` : '';
+components/ops/DecisionTracker.tsx:370:            doc.save(`Signoff_${decision.roomName.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
+components/LeadBrainTab.tsx:120:                                                ? leadProfile.behaviouralNotes.replace(tag, '').replace(', ,', ',').trim()
+components/LeadBrainTab.tsx:214:                                <h2 className="text-4xl font-black tracking-tight text-blue-900">{strategy.recommended_proposal_depth.replace(/_/g, ' ')}</h2>
+components/LeadBrainTab.tsx:288:                                            <span className="font-bold text-slate-800 text-sm capitalize">{strategy.proposal_tone.replace(/_/g, ' ')}</span>
+components/LeadBrainTab.tsx:292:                                            <span className="font-bold text-slate-800 text-sm capitalize">{strategy.followup_style.replace(/_/g, ' ')}</span>
+components/LeadBrainTab.tsx:302:                                                {key.replace(/_/g, ' ').toUpperCase()}
+components/Header.tsx:136:      id: groupName.toLowerCase().replace(/\s+/g, '-'),
+components/ProjectSetupWizard.tsx:75:        const base64String = (reader.result as string).replace('data:', '').replace(/^.+,/, '');
+components/ClientTab.tsx:169:                    {path[path.length - 1].replace(/([A-Z])/g, ' $1').trim()}
+components/ClientTab.tsx:517:      mergedContent.footer.phoneNumber = orgData.contactPhone?.replace(/[^0-9]/g, '') || "+910000000000";
+components/ClientTab.tsx:524:          subtitle: mergedContent.l2_snapshot.subtitle.replace('[Tier Name]', tierName)
+components/ClientTab.tsx:550:        const safeCompanyName = companyName.replace(/[^a-zA-Z0-9\s-_]/g, '').trim().replace(/\s+/g, '_');
+components/ClientTab.tsx:551:        const safeClientName = (projectContext.clientName || projectContext.name || 'Project').replace(/[^a-zA-Z0-9\s-_]/g, '').trim().replace(/\s+/g, '_');
+components/VisionTab.tsx:35:    const base64 = imagePreview.replace('data:', '').replace(/^.+,/, '');
+components/TierManager.tsx:116:        a.download = `${(projectContext.name || 'Project').replace(/\s+/g, '_')}_Versions.json`;
+components/StudioDashboard.tsx:342:            const escape = (s: string) => `"${(s || '').toString().replace(/"/g, '""')}"`;
+components/StudioDashboard.tsx:376:        link.setAttribute("download", `${(projectContext.name || 'Project').replace(/\s+/g, '_')}_BOQ_LiveFormulas.csv`);
+components/CashFlowForecastDashboard.tsx:109:             rendered = rendered.replace(regex, `[${key}]`); 
+components/CashFlowForecastDashboard.tsx:111:             rendered = rendered.replace(regex, String(value));
+components/OnboardingTab.tsx:80:        a.download = `Onboarding_Kit_${(projectContext.name || 'Project').replace(/\s+/g, '_')}.html`;
+components/RevisionStudio.tsx:1400:        doc.text((text || '').replace(/₹/g, 'Rs. '), x, y, { align });
+components/RevisionStudio.tsx:1480:              const itemText = `· ${item.item}   ·   ${formatINR(item.total)}`.replace(/₹/g, 'Rs. ');
+components/RevisionStudio.tsx:1492:          writeText(formatINR(finalRevisedTotal).replace(/₹/g, 'Rs. '), marginX, currentY, 28, [26, 26, 46], 'helvetica', 'bold');
+components/RevisionStudio.tsx:1512:      drawInfoCard(marginX, "Original estimate", formatINR(finalOriginalTotal).replace(/₹/g, 'Rs. '), "incl. GST", [15, 23, 42]);
+components/RevisionStudio.tsx:1515:      drawInfoCard(marginX + cardWidth + cardSpacing, "Revised total", formatINR(finalRevisedTotal).replace(/₹/g, 'Rs. '), "incl. GST", [15, 23, 42]);
+components/RevisionStudio.tsx:1527:      const varValStr = grandTotalVariance === 0 ? "No change" : `${varSign}${formatINR(Math.abs(grandTotalVariance)).replace(/₹/g, 'Rs. ')}`;
+components/RevisionStudio.tsx:1545:      summaryToPrint = summaryToPrint.replace(/₹/g, 'Rs. ');
+components/RevisionStudio.tsx:1569:                  `Rs. ${formatINR(pi.total).replace(/₹/g,'')}`,
+components/RevisionStudio.tsx:1627:              { content: formatINR(sectionOrigTotal).replace(/₹/g, 'Rs. '), styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
+components/RevisionStudio.tsx:1628:              { content: formatINR(sectionRevTotal).replace(/₹/g, 'Rs. '), styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
+components/RevisionStudio.tsx:1629:              { content: sectionVar === 0 ? '-' : (sectionVar > 0 ? `+${formatINR(sectionVar)}` : `-${formatINR(Math.abs(sectionVar))}`).replace(/₹/g, 'Rs. '), styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } }
+components/RevisionStudio.tsx:1647:                  { content: displayOrig.replace(/₹/g, 'Rs. '), styles: { halign: 'right' } },
+components/RevisionStudio.tsx:1648:                  { content: displayRev.replace(/₹/g, 'Rs. '), styles: { halign: 'right' } },
+components/RevisionStudio.tsx:1649:                  { content: displayVar.replace(/₹/g, 'Rs. '), styles: { halign: 'right', textColor: variance > 0 ? [220, 38, 38] : (variance < 0 ? [5, 150, 105] : [100, 116, 139]) } }
+components/RevisionStudio.tsx:1730:              { content: formatINR(sectionTotal).replace(/₹/g, 'Rs. '), styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } }
+components/RevisionStudio.tsx:1743:                 { content: formatINR(item.selectedRate || 0).replace(/₹/g, 'Rs. '), styles: { halign: 'right' } },
+components/RevisionStudio.tsx:1744:                 { content: formatINR(subTotal).replace(/₹/g, 'Rs. '), styles: { halign: 'right' } }
+components/RevisionStudio.tsx:1752:            { content: formatINR(grandSubtotal).replace(/₹/g, 'Rs. '), styles: { halign: 'right', fontStyle: 'bold', fillColor: [226, 232, 240], textColor: [15, 23, 42] } }
+components/MaterialTab.tsx:197:                const row = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(s => s.replace(/^"|"$/g, '').trim());
+components/MaterialTab.tsx:455:                lines.push(`Price: ₹${finalSelectionToSave.quotedPrice.toLocaleString('en-IN')}/${finalSelectionToSave.priceUnit?.replace('per_', '') || 'unit'}${finalSelectionToSave.estimatedQty ? ' × ' + finalSelectionToSave.estimatedQty + ' = ₹' + (finalSelectionToSave.quotedPrice * finalSelectionToSave.estimatedQty).toLocaleString('en-IN') : ''}`);
+components/MaterialTab.tsx:903:                                                            {selection.vendor || 'Unknown shop'} · {formatINR(selection.quotedPrice)}/{selection.priceUnit?.replace('per_', '')} · {selection.estimatedQty || 0} qty = <span className="font-medium text-slate-700">{formatINR(selection.estimatedTotal)}</span>
+components/MaterialTab.tsx:1221:                                                    updates.quotedPrice = parseFloat(rateMatch[1].replace(/,/g, ''));
+components/MaterialTab.tsx:1281:                                        {type.replace('_', ' ')}
+components/MaterialTab.tsx:1687:                                                    {formatINR(draftSelection.previousSelectionSnapshot.quotedPrice)} / {draftSelection.previousSelectionSnapshot.priceUnit?.replace('per_', '')}
+components/MaterialTab.tsx:1752:                                        {changeRequestSelection.quotedPrice ? ` · ${formatINR(changeRequestSelection.quotedPrice)}/${changeRequestSelection.priceUnit?.replace('per_', '')}` : ''}
+components/PaymentHealth.tsx:42:            <span className={`flex items-center gap-1.5 text-xs font-semibold ${conf.text.replace('800', '600')}`}>
+components/ClientPortal.tsx:542:                                                            {item.type.replace('_', ' ')}
+components/ClientPortal.tsx:778:                                                            : item.type.replace('_', ' ')}
+components/ClientPortal.tsx:1457:                                                                        {update.status.replace(/_/g, ' ')}
+components/ClientPortal.tsx:1525:                                    <a href={`https://wa.me/${settings.clientPortalConfig.supportContact.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 px-6 py-3 bg-[#25D366] hover:bg-[#1DA851] text-white font-medium rounded-xl transition-all shadow-sm w-full sm:w-auto">
