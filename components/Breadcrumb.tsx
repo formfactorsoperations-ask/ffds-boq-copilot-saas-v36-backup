@@ -52,7 +52,7 @@ const Breadcrumb: React.FC<BreadcrumbProps> = ({ projectName, projectId, current
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
 
-            <span className="text-slate-900 font-medium">
+            <span className="text-indigo-950 font-medium">
                 {sectionName}
             </span>
         </div>

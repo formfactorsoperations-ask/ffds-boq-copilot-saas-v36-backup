@@ -64,7 +64,7 @@ const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({ bank, templates, 
             {/* Header / Selectors */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm shrink-0">
                 <div>
-                    <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+                    <h2 className="text-xl font-black text-indigo-900 tracking-tight flex items-center gap-2">
                         <span className="p-1.5 bg-orange-100 text-orange-600 rounded-lg"><ListIcon className="w-5 h-5"/></span>
                         Standard Templates
                     </h2>
@@ -99,7 +99,7 @@ const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({ bank, templates, 
                                 onClick={() => setActiveRoomType(rt)}
                                 className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap border transition-all ${
                                     activeRoomType === rt 
-                                        ? 'bg-slate-800 text-white border-slate-800 shadow-md' 
+                                        ? 'bg-indigo-900 text-white border-indigo-900 shadow-md' 
                                         : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
                                 }`}
                             >
@@ -130,7 +130,7 @@ const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({ bank, templates, 
                                             className={`p-3 bg-white border rounded-xl flex justify-between items-center transition-all ${isAdded ? 'opacity-50 border-slate-100' : 'hover:border-indigo-300 hover:shadow-sm border-slate-200'}`}
                                         >
                                             <div>
-                                                <p className="font-bold text-slate-800 text-sm">{item.name}</p>
+                                                <p className="font-bold text-indigo-900 text-sm">{item.name}</p>
                                                 <p className="text-[10px] text-slate-500">{item.cat} • {item.unit}</p>
                                             </div>
                                             <button 
@@ -176,7 +176,7 @@ const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({ bank, templates, 
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-1.5 h-8 bg-indigo-500 rounded-full"></div>
                                                     <div>
-                                                        <p className="font-bold text-slate-800 text-sm">{item.name}</p>
+                                                        <p className="font-bold text-indigo-900 text-sm">{item.name}</p>
                                                         <p className="text-[10px] text-slate-500">{item.cat}</p>
                                                     </div>
                                                 </div>
@@ -197,7 +197,7 @@ const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({ bank, templates, 
 
                 {/* RIGHT: Logic Explainer (4 Columns) */}
                 <div className="col-span-12 lg:col-span-4 h-full">
-                    <Card title="Car Variant Logic" className="h-full bg-slate-900 text-white border-slate-800">
+                    <Card title="Car Variant Logic" className="h-full bg-indigo-950 text-white border-indigo-900">
                         <div className="space-y-6">
                             <p className="text-sm text-slate-400">
                                 The system generates 3 options by <strong>subtracting features</strong> from your Master List. <br/>

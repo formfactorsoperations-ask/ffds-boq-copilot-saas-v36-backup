@@ -196,10 +196,10 @@ const ContractTab: React.FC<ContractTabProps> = ({ projectId, tiers, activeTier,
                             onChange={e => setSelectedTierId(e.target.value)}
                             className="w-full p-2 bg-white border rounded-lg mt-1"
                         >
-                            {tiers.map(t => {
+                            {tiers.map((t, idx) => {
                                 const total = t.summary.totalSell > 0 ? t.summary.totalSell : 'N/A';
                                 return (
-                                    <option key={t.id} value={t.id}>{t.name} - {typeof total === 'number' ? formatCurrency(total) : total}</option>
+                                    <option key={`${t.id}-${idx}`} value={t.id}>{t.name} - {typeof total === 'number' ? formatCurrency(total) : total}</option>
                                 )
                             })}
                         </select>
@@ -221,7 +221,7 @@ const ContractTab: React.FC<ContractTabProps> = ({ projectId, tiers, activeTier,
                         <button 
                             type="button"
                             onClick={handlePrintContract}
-                            className="px-6 py-2 bg-slate-800 text-white font-bold text-xs rounded-xl shadow-lg hover:bg-black flex items-center gap-2 transition-transform active:scale-95"
+                            className="px-6 py-2 bg-indigo-900 text-white font-bold text-xs rounded-xl shadow-lg hover:bg-indigo-950 flex items-center gap-2 transition-transform active:scale-95"
                         >
                             <PrintIcon className="w-3.5 h-3.5"/> Print PDF
                         </button>

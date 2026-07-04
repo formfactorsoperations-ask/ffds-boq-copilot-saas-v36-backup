@@ -89,7 +89,7 @@ const OnboardingTab: React.FC<OnboardingTabProps> = ({ projectContext, setProjec
             <Card title="Client Onboarding Kit" titleIcon={<span className="text-xl">🤝</span>}>
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 p-4 bg-slate-50 rounded-xl no-print">
                     <div>
-                        <h4 className="font-bold text-slate-800">Ready to Send?</h4>
+                        <h4 className="font-bold text-indigo-900">Ready to Send?</h4>
                         <p className="text-sm text-slate-600">
                             Configure bank details and QR code first. Then export to share with the client.
                         </p>
@@ -103,7 +103,7 @@ const OnboardingTab: React.FC<OnboardingTabProps> = ({ projectContext, setProjec
                         </button>
                         <button 
                             onClick={handlePrint}
-                            className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl shadow-lg hover:bg-black flex items-center gap-2 transition-all active:scale-95"
+                            className="px-6 py-3 bg-indigo-950 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-950 flex items-center gap-2 transition-all active:scale-95"
                         >
                             <PrintIcon className="w-4 h-4"/> Quick Print
                         </button>

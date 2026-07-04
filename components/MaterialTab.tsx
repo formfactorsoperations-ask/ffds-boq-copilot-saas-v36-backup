@@ -624,7 +624,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
 
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Shop Visit & Selections</h2>
+                    <h2 className="text-2xl font-bold text-indigo-900">Shop Visit & Selections</h2>
                     <p className="text-slate-500 text-sm mt-1">Capture multiple photos (item, label, context) and present options directly from the shop.</p>
                 </div>
                 <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
@@ -657,7 +657,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                     </button>
                     <button 
                         onClick={handleNewItem}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 transition-colors shadow-sm"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-950 text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-900 transition-colors shadow-sm"
                     >
                         <PlusIcon className="w-5 h-5" /> New Item
                     </button>
@@ -708,11 +708,11 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
 
             {/* AI Import Modal */}
             {showImportModal && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6">
+                <div className="fixed inset-0 bg-indigo-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6">
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-indigo-50/50">
                             <div>
-                                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                <h3 className="text-xl font-bold text-indigo-900 flex items-center gap-2">
                                     <SparklesIcon className="w-6 h-6 text-indigo-500" />
                                     Import from Message
                                 </h3>
@@ -766,7 +766,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                     <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6">
                         <CameraIcon className="w-10 h-10 text-indigo-500" />
                     </div>
-                    <h3 className="text-2xl font-bold text-slate-800 mb-2">Start your first selection</h3>
+                    <h3 className="text-2xl font-bold text-indigo-900 mb-2">Start your first selection</h3>
                     <p className="text-slate-500 max-w-sm mx-auto mb-8 text-sm">
                         Tap the + button to capture a material at the shop
                     </p>
@@ -806,7 +806,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                     className="bg-slate-50 px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors"
                                     onClick={() => setDashboardOpen(!dashboardOpen)}
                                 >
-                                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                    <h3 className="font-bold text-indigo-900 flex items-center gap-2">
                                         {dashboardOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
                                         Room completion
                                     </h3>
@@ -855,7 +855,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                 <button
                                     onClick={() => setActiveRoom('All')}
                                     className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${
-                                        activeRoom === 'All' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                                        activeRoom === 'All' ? 'bg-indigo-900 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                                     }`}
                                 >
                                     All Rooms
@@ -865,7 +865,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                         key={room}
                                         onClick={() => setActiveRoom(room)}
                                         className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${
-                                            activeRoom === room ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                                            activeRoom === room ? 'bg-indigo-900 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                                         }`}
                                     >
                                         {room}
@@ -894,7 +894,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                                     )}
                                                 </div>
                                                 <div className="flex flex-col flex-grow min-w-0 py-0.5">
-                                                    <div className="font-bold text-[14px] text-slate-800 truncate mb-0.5">{selection.itemName || 'Untitled Item'}</div>
+                                                    <div className="font-bold text-[14px] text-indigo-900 truncate mb-0.5">{selection.itemName || 'Untitled Item'}</div>
                                                     <div className="text-[12px] text-slate-500 truncate mb-0.5">
                                                         {selection.brand || 'No brand'} — {selection.finishCode || 'No code'} · {selection.category}
                                                     </div>
@@ -979,7 +979,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                         key={status}
                                         onClick={() => setCrStatusFilter(status as any)}
                                         className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${
-                                            crStatusFilter === status ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                                            crStatusFilter === status ? 'bg-indigo-900 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                                         }`}
                                     >
                                         {status}
@@ -998,7 +998,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                     <div key={cr.id} onClick={() => handleEditItem(cr)} className="bg-white border hover:shadow-md cursor-pointer border-slate-200 rounded-2xl p-4 transition-all">
                                         <div className="flex justify-between items-start mb-3">
                                             <div>
-                                                <div className="font-bold text-slate-800">{cr.itemName || 'Untitled Change'}</div>
+                                                <div className="font-bold text-indigo-900">{cr.itemName || 'Untitled Change'}</div>
                                                 <div className="text-xs text-slate-500 mt-1">{cr.notes || 'No description provided'}</div>
                                             </div>
                                             <div className="text-right flex flex-col gap-1 items-end">
@@ -1029,11 +1029,11 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
 
             {/* Draft Docket Panel */}
             {showDocketPanel && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-end">
+                <div className="fixed inset-0 bg-indigo-950/60 backdrop-blur-sm z-50 flex justify-end">
                     <div className="bg-white w-full max-w-md h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
                         <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50/50">
                             <div>
-                                <h3 className="text-xl font-bold text-slate-800">Draft Docket</h3>
+                                <h3 className="text-xl font-bold text-indigo-900">Draft Docket</h3>
                                 <p className="text-sm text-slate-500">Shop visit prep & pending selections</p>
                             </div>
                             <button onClick={() => setShowDocketPanel(false)} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1 shadow-sm border border-slate-200">
@@ -1045,7 +1045,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                             
                             {/* Section 1: Pre-visit agenda */}
                             <section>
-                                <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                <h4 className="font-bold text-indigo-900 mb-4 flex items-center gap-2">
                                     <span className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs">1</span>
                                     Items to select at the next shop visit
                                 </h4>
@@ -1070,7 +1070,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                                 <ul className="divide-y divide-slate-50">
                                                     {items.map(item => (
                                                         <li key={item.id} className="px-4 py-3 text-sm flex justify-between">
-                                                            <span className="font-medium text-slate-800">{item.itemName}</span>
+                                                            <span className="font-medium text-indigo-900">{item.itemName}</span>
                                                             <span className="text-slate-400 text-xs">{item.roomId}</span>
                                                         </li>
                                                     ))}
@@ -1110,7 +1110,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
 
                             {/* Section 2: Awaiting your confirmation */}
                             <section>
-                                <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                <h4 className="font-bold text-indigo-900 mb-4 flex items-center gap-2">
                                     <span className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs">2</span>
                                     Pending Client Approval
                                 </h4>
@@ -1131,7 +1131,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                                                 {item.photos?.[0] ? <img src={item.photos[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xl">{getCategoryEmoji(item.category)}</div>}
                                                             </div>
                                                             <div className="flex-1 min-w-0">
-                                                                <div className="font-bold text-sm text-slate-800 truncate">{item.itemName}</div>
+                                                                <div className="font-bold text-sm text-indigo-900 truncate">{item.itemName}</div>
                                                                 <div className="text-xs text-slate-500 truncate">{item.quotedPrice ? `₹${item.quotedPrice.toLocaleString('en-IN')}` : 'No price'}</div>
                                                             </div>
                                                             <div className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded">
@@ -1179,10 +1179,10 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
 
             {/* Slide-Up / Drawer Panel for Editing */}
             {draftSelection && (
-                <div className="fixed inset-0 z-[100] flex sm:justify-end bg-slate-900/60 backdrop-blur-sm sm:items-stretch flex-col sm:flex-row">
+                <div className="fixed inset-0 z-[100] flex sm:justify-end bg-indigo-950/60 backdrop-blur-sm sm:items-stretch flex-col sm:flex-row">
                     <div className="w-full sm:w-[500px] h-[90vh] sm:h-full mt-auto sm:mt-0 bg-white sm:rounded-l-3xl rounded-t-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-right duration-300">
                         <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-white">
-                            <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg">
+                            <h3 className="font-bold text-indigo-900 flex items-center gap-2 text-lg">
                                 {selections.find(s => s.id === draftSelection.id) ? 'Edit Selection' : 'New Selection'}
                             </h3>
                             <button onClick={() => setDraftSelection(null)} className="text-slate-400 hover:text-slate-600 bg-slate-50 rounded-full p-2 hover:bg-slate-100">
@@ -1274,7 +1274,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                         onClick={() => updateDraft('itemType', type)}
                                         className={`flex-1 py-2 rounded-lg text-sm font-bold capitalize transition-colors ${
                                             (draftSelection.itemType || 'observation') === type 
-                                            ? 'bg-slate-800 text-white shadow-sm' 
+                                            ? 'bg-indigo-900 text-white shadow-sm' 
                                             : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                                         }`}
                                     >
@@ -1335,7 +1335,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                         value={draftSelection.itemName || ''}
                                         onChange={(e) => updateDraft('itemName', e.target.value)}
                                         placeholder="e.g. Living Room Floor Tile"
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[16px] font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 outline-none transition-all placeholder:font-normal"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[16px] font-bold text-indigo-900 focus:bg-white focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 outline-none transition-all placeholder:font-normal"
                                     />
                                 </div>
 
@@ -1601,7 +1601,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                         </div>
                                     </div>
                                     
-                                    <div className="mt-4 bg-white/60 p-3 rounded-xl border border-rose-100 flex gap-4 text-[11px] font-bold text-slate-800">
+                                    <div className="mt-4 bg-white/60 p-3 rounded-xl border border-rose-100 flex gap-4 text-[11px] font-bold text-indigo-900">
                                         <div className="flex-1">
                                             <p className="text-slate-500 uppercase">Cost</p>
                                             <p className={`text-sm ${draftSelection.costDelta! < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -1678,7 +1678,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                             Previous Selection History
                                         </summary>
                                         <div className="mt-3 text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                                            <div className="font-bold mb-1 text-slate-800">{draftSelection.previousSelectionSnapshot.itemName}</div>
+                                            <div className="font-bold mb-1 text-indigo-900">{draftSelection.previousSelectionSnapshot.itemName}</div>
                                             <div className="text-xs text-slate-500 mb-2">
                                                 {draftSelection.previousSelectionSnapshot.brand || 'No Brand'} — {draftSelection.previousSelectionSnapshot.finishCode || 'No Code'}
                                             </div>
@@ -1724,13 +1724,13 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
             
             {/* Change Request Wall */}
             {changeRequestSelection && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-indigo-950/60 backdrop-blur-sm">
                     <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
                         <div className="p-6 text-center border-b border-slate-100">
                             <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <AlertTriangleIcon className="w-8 h-8 text-rose-500" />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-800">This selection is locked</h3>
+                            <h3 className="text-xl font-bold text-indigo-900">This selection is locked</h3>
                         </div>
                         
                         <div className="p-6 space-y-6">
@@ -1741,7 +1741,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                     </div>
                                 )}
                                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                    <div className="font-bold text-sm text-slate-800 truncate mb-0.5">{changeRequestSelection.itemName}</div>
+                                    <div className="font-bold text-sm text-indigo-900 truncate mb-0.5">{changeRequestSelection.itemName}</div>
                                     {(changeRequestSelection.brand || changeRequestSelection.finishCode) && (
                                         <div className="text-xs text-slate-500 truncate mb-0.5">
                                             {changeRequestSelection.brand} {changeRequestSelection.brand && changeRequestSelection.finishCode ? '—' : ''} {changeRequestSelection.finishCode}
@@ -1803,13 +1803,13 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
             
             {/* Share Bottom Sheet Modal */}
             {shareMessage && (
-                <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm shadow-2xl animate-in fade-in duration-200" onClick={() => setShareMessage(null)}>
+                <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-4 bg-indigo-950/60 backdrop-blur-sm shadow-2xl animate-in fade-in duration-200" onClick={() => setShareMessage(null)}>
                     <div 
                         className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md overflow-hidden shadow-xl animate-in slide-in-from-bottom sm:slide-in-from-bottom-8 duration-300 transform"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-slate-800">Share selection</h3>
+                            <h3 className="text-xl font-bold text-indigo-900">Share selection</h3>
                             <button onClick={() => setShareMessage(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full">
                                 <XCircleIcon className="w-6 h-6" />
                             </button>

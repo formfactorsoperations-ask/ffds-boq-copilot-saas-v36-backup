@@ -71,10 +71,12 @@ const TABS = [
   
   { id: 'terms-docket', label: 'Terms Docket', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📜</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
   { id: 'payment-schedule', label: 'Payment Schedule', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📋</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
+  { id: 'handover-docket', label: 'Handover Docket', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🏆</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
   { id: 'client', label: 'Client Proposal', icon: <ClientIcon />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
   { id: 'client-portal', label: 'Client Portal Preview', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🌐</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
   { id: 'onboarding', label: 'Onboarding Kit', icon: <OnboardingIcon />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
   { id: 'contract', label: 'Contract', icon: <ContractIcon />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
+  { id: 'execution-agreement', label: 'Execution Agreement', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">✍️</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
   { id: 'emails', label: 'Email Scripts', icon: <EnvelopeIcon className="w-5 h-5 text-indigo-500" />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
   { id: 'comms-tracker', label: 'Comms Tracker', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📬</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
   { id: 'analytics', label: 'Analytics', icon: <AnalyticsIcon className="w-5 h-5 text-amber-500" />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
@@ -82,6 +84,7 @@ const TABS = [
   { id: 'templates', label: 'Std. Templates', icon: <ListIcon className="w-5 h-5 text-orange-500" />, group: 'Admin', roles: ['Admin', 'Ops Director'] },
   { id: 'bank', label: 'Item Bank', icon: <BankIcon />, group: 'Admin', roles: ['Admin'] },
   { id: 'ai-settings', label: 'AI Strategy', icon: <StrategyIcon />, group: 'Admin', roles: ['Admin'] },
+  { id: 'terms-and-payment', label: 'Terms & Payment', icon: <Settings className="w-5 h-5 text-slate-500" />, group: 'Admin', roles: ['Admin', 'Ops Director'] },
 
   { id: 'studio-settings', label: 'Studio Settings', icon: <Settings className="w-5 h-5 text-slate-500" />, group: 'Pinned', roles: ['Admin', 'Ops Director'] },
   { id: 'saas-dashboard', label: 'Platform Admin', icon: <GlobeIcon />, group: 'Pinned', roles: ['Super Admin'] },
@@ -177,7 +180,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, aiStatus, lo
               )}
               {logo && (
                    <div>
-                      <span className="font-extrabold text-lg tracking-tight text-slate-800 block leading-none">{orgData.orgName || 'PROJECT'}</span>
+                      <span className="font-extrabold text-lg tracking-tight text-indigo-900 block leading-none">{orgData.orgName || 'PROJECT'}</span>
                       <span className="text-[10px] font-bold tracking-widest text-slate-500 uppercase">Copilot</span>
                   </div>
               )}
@@ -197,10 +200,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, aiStatus, lo
                   title={group.label}
                   className={`relative w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 group outline-none border-l-2 ${
                     hasActiveChild && isOpen 
-                      ? 'border-blue-600 bg-slate-50 text-slate-900' 
+                      ? 'border-blue-600 bg-slate-50 text-indigo-950' 
                       : hasActiveChild 
-                        ? 'border-transparent text-slate-900 bg-slate-100/80 shadow-sm' 
-                        : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50/80'
+                        ? 'border-transparent text-indigo-950 bg-slate-100/80 shadow-sm' 
+                        : 'border-transparent text-slate-500 hover:text-indigo-900 hover:bg-slate-50/80'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -230,7 +233,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, aiStatus, lo
                             <button
                               key={tab.id}
                               onClick={() => setActiveTab(tab.id)}
-                              className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 group outline-none ${isActive ? 'text-blue-700' : 'text-slate-500 hover:text-slate-800'}`}
+                              className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 group outline-none ${isActive ? 'text-blue-700' : 'text-slate-500 hover:text-indigo-900'}`}
                             >
                               {isActive && (
                                   <MotionDiv
@@ -259,26 +262,73 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, aiStatus, lo
                                   ✓
                                 </span>
                               )}
+                              {tab.id === 'boq-editor' && (
+                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
+                                  projectContext?.boqFrozen ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-amber-600 bg-amber-100/80 border border-amber-200'
+                                }`}>
+                                  {projectContext?.boqFrozen ? 'Frozen' : 'WIP'}
+                                </span>
+                              )}
+                              {tab.id === 'materials' && (
+                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
+                                  projectContext?.sofFreezeDate ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-amber-600 bg-amber-100/80 border border-amber-200'
+                                }`}>
+                                  {projectContext?.sofFreezeDate ? 'Frozen' : 'WIP'}
+                                </span>
+                              )}
+                              {tab.id === 'contract' && (
+                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
+                                  projectContext?.contractSignoff?.status === 'signed' ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200'
+                                  : projectContext?.contractSignoff?.status === 'sent' ? 'text-blue-600 bg-blue-100/80 border border-blue-200'
+                                  : 'text-slate-500 bg-slate-100 border border-slate-200'
+                                }`}>
+                                  {projectContext?.contractSignoff?.status === 'signed' ? 'Signed' : projectContext?.contractSignoff?.status === 'sent' ? 'Sent' : 'Draft'}
+                                </span>
+                              )}
+                              {tab.id === 'execution-agreement' && (
+                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
+                                  (projectContext as any)?.executionSignoff?.status === 'signed' ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200'
+                                  : (projectContext as any)?.executionSignoff?.status === 'sent' ? 'text-blue-600 bg-blue-100/80 border border-blue-200'
+                                  : 'text-slate-500 bg-slate-100 border border-slate-200'
+                                }`}>
+                                  {(projectContext as any)?.executionSignoff?.status === 'signed' ? 'Signed' : (projectContext as any)?.executionSignoff?.status === 'sent' ? 'Sent' : 'Draft'}
+                                </span>
+                              )}
+                              {tab.id === 'client' && (
+                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
+                                  projectContext?.approvedTierId ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-rose-600 bg-rose-100/80 border border-rose-200'
+                                }`}>
+                                  {projectContext?.approvedTierId ? 'Approved' : 'Pending'}
+                                </span>
+                              )}
+                              {tab.id === 'timeline' && (
+                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
+                                  projectContext?.timelinePhases?.length ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-amber-600 bg-amber-100/80 border border-amber-200'
+                                }`}>
+                                  {projectContext?.timelinePhases?.length ? 'Set' : 'Pending'}
+                                </span>
+                              )}
                               {tab.id === 'terms-docket' && (
                                 <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  (projectContext?.termsDockets || []).some(d => d.status === 'sent' || d.status === 'acknowledged')
+                                  (projectContext?.engagement?.status === 'issued' || projectContext?.engagement?.status === 'acknowledged')
                                     ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-rose-600 bg-rose-100/80 border border-rose-200'
                                 }`}>
-                                  {(projectContext?.termsDockets || []).some(d => d.status === 'sent' || d.status === 'acknowledged') ? 'Sent' : 'Draft'}
+                                  {projectContext?.engagement?.status === 'acknowledged' ? 'Ack' : projectContext?.engagement?.status === 'issued' ? 'Issued' : 'Draft'}
                                 </span>
                               )}
                               {tab.id === 'payment-schedule' && (
                                 <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  (projectContext?.paymentSchedules || []).length === 0
-                                    ? 'text-slate-500 bg-slate-100 border border-slate-200'
-                                    : (projectContext?.paymentSchedules || []).find((s: any) => s.status === 'sent' && !s.supersededBy)
-                                      ? 'text-slate-500 bg-slate-100 border border-slate-200' : 'text-amber-600 bg-amber-100/80 border border-amber-200'
+                                  (projectContext?.engagement?.status === 'issued' || projectContext?.engagement?.status === 'acknowledged')
+                                    ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-amber-600 bg-amber-100/80 border border-amber-200'
                                 }`}>
-                                  {(projectContext?.paymentSchedules || []).length === 0 ? 'Not Gen' : 
-                                    (projectContext?.paymentSchedules || []).find((s: any) => s.status === 'sent' && !s.supersededBy) 
-                                      ? `v${(projectContext!.paymentSchedules!.find((s: any) => s.status === 'sent' && !s.supersededBy) as any).version} Sent`
-                                      : 'Draft'
-                                  }
+                                  {projectContext?.engagement?.status === 'acknowledged' ? 'Ack' : projectContext?.engagement?.status === 'issued' ? 'Issued' : 'Draft'}
+                                </span>
+                              )}
+                              {tab.id === 'handover-docket' && (
+                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
+                                  projectContext?.handoverDate ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-rose-600 bg-rose-100/80 border border-rose-200'
+                                }`}>
+                                  {projectContext?.handoverDate ? 'Issued' : 'Draft'}
                                 </span>
                               )}
                             </button>
@@ -301,7 +351,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, aiStatus, lo
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 group outline-none ${isActive ? 'text-blue-700' : 'text-slate-500 hover:text-slate-800'}`}
+                className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 group outline-none ${isActive ? 'text-blue-700' : 'text-slate-500 hover:text-indigo-900'}`}
               >
                 {isActive && (
                     <MotionDiv
@@ -328,7 +378,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, aiStatus, lo
                   {orgData.orgName?.charAt(0).toUpperCase() || 'S'}
               </div>
               <div className="overflow-hidden flex-1">
-                  <p className="text-xs font-bold text-slate-800 truncate" title={orgData.orgName || 'Studio Admin'}>{orgData.orgName || 'Studio Admin'}</p>
+                  <p className="text-xs font-bold text-indigo-900 truncate" title={orgData.orgName || 'Studio Admin'}>{orgData.orgName || 'Studio Admin'}</p>
                   <p className="text-[10px] text-slate-400 font-medium truncate">Role: {currentRole}</p>
                   {currentUserAuth?.email && (
                       <p className="text-[9px] text-slate-400 truncate" title={currentUserAuth.email}>{currentUserAuth.email}</p>

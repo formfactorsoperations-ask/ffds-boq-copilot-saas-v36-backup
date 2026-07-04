@@ -35,7 +35,7 @@ export const FFDSLogo: React.FC<{ className?: string, mode?: 'full' | 'icon', cu
 
   return (
     <div className={`flex flex-col justify-center ${className}`}>
-        <h1 className="font-extrabold text-2xl tracking-tight text-slate-900 leading-none">{mainName}</h1>
+        <h1 className="font-extrabold text-2xl tracking-tight text-indigo-950 leading-none">{mainName}</h1>
         <p className="text-[10px] font-bold tracking-[0.3em] text-indigo-600 uppercase mt-1">{subName}</p>
     </div>
   );

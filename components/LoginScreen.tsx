@@ -187,13 +187,13 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
     };
 
     return (
-        <div className="min-h-screen bg-slate-900 flex font-sans overflow-hidden">
+        <div className="min-h-screen bg-indigo-950 flex font-sans overflow-hidden">
             {/* Left Side - Image & Branding */}
             <motion.div 
                 initial={{ opacity: 0, x: -50 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
-                className="hidden lg:flex lg:w-1/2 relative bg-slate-900 items-end p-12"
+                className="hidden lg:flex lg:w-1/2 relative bg-indigo-950 items-end p-12"
             >
                 <div className="absolute inset-0">
                     <img 
@@ -250,7 +250,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                 className="space-y-6"
                             >
                                 <div className="mb-10">
-                                    <h2 className="text-3xl font-black text-slate-900 mb-2">
+                                    <h2 className="text-3xl font-black text-indigo-950 mb-2">
                                         Sign in
                                     </h2>
                                     <p className="text-slate-500">
@@ -268,7 +268,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                             type="email" 
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
-                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-900/10 focus:border-slate-900 focus:bg-white outline-none transition-all font-medium text-slate-900"
+                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-900/10 focus:border-indigo-950 focus:bg-white outline-none transition-all font-medium text-indigo-950"
                                             placeholder="you@yourstudio.com"
                                             required
                                         />
@@ -285,7 +285,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                             type="password" 
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-900/10 focus:border-slate-900 focus:bg-white outline-none transition-all font-medium text-slate-900"
+                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-900/10 focus:border-indigo-950 focus:bg-white outline-none transition-all font-medium text-indigo-950"
                                             placeholder="••••••••"
                                             required
                                         />
@@ -311,7 +311,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                 <button 
                                     type="submit"
                                     disabled={isLoading}
-                                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-lg shadow-slate-900/20 hover:bg-slate-800 hover:shadow-slate-900/30 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                                    className="w-full py-4 bg-indigo-950 text-white rounded-2xl font-bold shadow-lg shadow-indigo-950/20 hover:bg-indigo-900 hover:shadow-indigo-950/30 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                                 >
                                     {isLoading ? (
                                         <motion.div 
@@ -351,7 +351,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                     <button 
                                         type="button"
                                         onClick={() => { setIsOpsLogin(false); setError(''); }}
-                                        className="text-slate-900 font-bold hover:underline"
+                                        className="text-indigo-950 font-bold hover:underline"
                                     >
                                         Open client link
                                     </button>
@@ -368,7 +368,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                 className="space-y-6"
                             >
                                 <div className="mb-10">
-                                    <h2 className="text-3xl font-black text-slate-900 mb-2">
+                                    <h2 className="text-3xl font-black text-indigo-950 mb-2">
                                         Client Portal
                                     </h2>
                                 </div>
@@ -383,7 +383,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                             required
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
-                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all font-medium text-slate-900"
+                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all font-medium text-indigo-950"
                                             placeholder="client@example.com"
                                             disabled={isLoading}
                                         />
@@ -430,7 +430,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                     <button 
                                         type="button"
                                         onClick={() => { setIsOpsLogin(true); setError(''); }}
-                                        className="text-slate-900 font-bold hover:underline"
+                                        className="text-indigo-950 font-bold hover:underline"
                                     >
                                         Sign in here
                                     </button>

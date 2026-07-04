@@ -518,14 +518,14 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                     >
                         {toast.type === 'error' ? <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-600"/> : <CheckCircle className="w-5 h-5 shrink-0 mt-0.5 text-emerald-600"/>}
                         <div className="flex-1 font-medium">{toast.message}</div>
-                        <button onClick={() => setToast(null)} className="shrink-0 p-1 hover:bg-black/5 rounded-md -mr-2"><X className="w-4 h-4"/></button>
+                        <button onClick={() => setToast(null)} className="shrink-0 p-1 hover:bg-indigo-950/60 backdrop-blur-md rounded-md -mr-2"><X className="w-4 h-4"/></button>
                     </motion.div>
                 )}
             </AnimatePresence>
             
             {/* Form Trigger Button */}
             <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <h3 className="font-bold text-indigo-900 flex items-center gap-2">
                     <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><Camera className="w-5 h-5"/></span>
                     Site Decisions
                 </h3>
@@ -547,7 +547,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                         exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
                         className="bg-white rounded-2xl border border-indigo-100 shadow-md p-5 sm:p-6"
                     >
-                        <h4 className="font-bold text-slate-800 mb-4 text-lg">Log new decision</h4>
+                        <h4 className="font-bold text-indigo-900 mb-4 text-lg">Log new decision</h4>
                         
                         <div className="space-y-5">
                             {/* 1. Decision description */}
@@ -649,7 +649,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                     {photoUrl ? (
                                         <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-slate-200 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
                                             <img src={photoUrl} alt="Preview" className="w-full h-full object-cover" />
-                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                            <div className="absolute inset-0 bg-indigo-950/60 backdrop-blur-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                                                 <span className="text-white text-xs font-bold">Change</span>
                                             </div>
                                         </div>
@@ -762,7 +762,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                     <div className="flex-1 flex items-start gap-3">
                                         <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${config.dot}`} />
                                         <div className="space-y-1 overflow-hidden">
-                                            <p className="text-sm font-bold text-slate-800 truncate">
+                                            <p className="text-sm font-bold text-indigo-900 truncate">
                                                 {decision.decisionText.length > 60 ? decision.decisionText.substring(0, 60) + '...' : decision.decisionText}
                                             </p>
                                             <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
@@ -853,7 +853,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                 </div>
                                                             </div>
                                                         ) : (
-                                                            <p className="text-sm text-slate-800 leading-relaxed max-w-2xl whitespace-pre-wrap">
+                                                            <p className="text-sm text-indigo-900 leading-relaxed max-w-2xl whitespace-pre-wrap">
                                                                 {decision.decisionText}
                                                             </p>
                                                         )}
@@ -916,7 +916,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                         value={linkValue}
                                                                         onChange={(e) => setLinkValue(e.target.value)}
                                                                         placeholder="https://drive.google.com/..." 
-                                                                        className="w-full bg-white border border-slate-300 text-slate-800 text-sm rounded-lg px-3 focus:ring-1 focus:ring-indigo-500 py-1.5"
+                                                                        className="w-full bg-white border border-slate-300 text-indigo-900 text-sm rounded-lg px-3 focus:ring-1 focus:ring-indigo-500 py-1.5"
                                                                     />
                                                                 </div>
                                                                 <div className="flex gap-2 pt-1 border-t border-slate-200 mt-1 pb-1">
@@ -948,7 +948,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                     value={manualSignoffText}
                                                                     onChange={(e) => setManualSignoffText(e.target.value)}
                                                                     placeholder={activeManualSignoffDecision.type === 'approved' ? "e.g. Approved via WhatsApp" : "Feedback provided..."} 
-                                                                    className="flex-1 bg-white border border-slate-300 text-slate-800 text-sm rounded-lg px-3 focus:ring-1 focus:ring-indigo-500 py-1.5"
+                                                                    className="flex-1 bg-white border border-slate-300 text-indigo-900 text-sm rounded-lg px-3 focus:ring-1 focus:ring-indigo-500 py-1.5"
                                                                 />
                                                                 <button
                                                                     onClick={() => submitManualSignoff(id, activeManualSignoffDecision.type)}
@@ -1029,7 +1029,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                 <div className="w-[1px] h-6 bg-slate-200 self-center mx-1"></div>
                                                                 <button 
                                                                     onClick={() => startEditing(decision)}
-                                                                    className="flex items-center gap-1.5 px-3 py-1.5 text-slate-500 hover:text-slate-800 text-xs font-bold transition"
+                                                                    className="flex items-center gap-1.5 px-3 py-1.5 text-slate-500 hover:text-indigo-900 text-xs font-bold transition"
                                                                 >
                                                                     Edit
                                                                 </button>
@@ -1048,7 +1048,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                     {decision.photoURL && (
                                                         <a href={decision.photoURL} target="_blank" rel="noreferrer" className="flex-1 sm:flex-none aspect-video sm:aspect-square rounded-xl overflow-hidden border border-slate-200 bg-white block group relative">
                                                             <img src={decision.photoURL} alt="Site" className="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
-                                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                                            <div className="absolute inset-0 bg-indigo-950/60 backdrop-blur-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                                                                 <span className="text-white text-[10px] font-bold uppercase tracking-wider">View Full</span>
                                                             </div>
                                                         </a>
@@ -1057,7 +1057,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                         <a href={decision.drawingURL} target="_blank" rel="noreferrer" className="flex-1 sm:flex-none aspect-video sm:aspect-square rounded-xl border border-slate-200 bg-white flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition p-2 text-center group relative">
                                                             <FileText className="w-6 h-6" />
                                                             <span className="text-[10px] font-bold uppercase tracking-wider">Drawing</span>
-                                                            <div className="absolute inset-0 bg-black/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                                            <div className="absolute inset-0 bg-indigo-950/60 backdrop-blur-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                                                                 <Download className="w-5 h-5 text-indigo-600" />
                                                             </div>
                                                         </a>

@@ -468,7 +468,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                 type="number" 
                                 value={item.qty} 
                                 onChange={(v) => onUpdate(item.id, 'qty', v)} 
-                                className="text-center font-bold text-slate-800 bg-slate-100 rounded w-16"
+                                className="text-center font-bold text-indigo-900 bg-slate-100 rounded w-16"
                             />
                             <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap ml-1">{item.unit}</span>
                         </div>
@@ -507,7 +507,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                     )}
 
                     {/* Total */}
-                    <td className="p-2 w-[120px] text-right font-bold text-slate-800 font-mono align-top pt-3">
+                    <td className="p-2 w-[120px] text-right font-bold text-indigo-900 font-mono align-top pt-3">
                         <span className={strikeClass}>{formatCurrency(total)}</span>
                         {item.boqStatus === 'deleted' && <div className="text-[9px] text-rose-500 mt-1">₹0 Billed</div>}
                     </td>
@@ -563,7 +563,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
     return (
         <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-sm bg-white pb-24 relative">
             {lensEnabled && isOwner && marginAnalytics && (
-                <div className="sticky top-0 left-0 right-0 bg-slate-900 text-slate-100 z-50 p-3 flex flex-wrap items-center justify-between shadow-md">
+                <div className="sticky top-0 left-0 right-0 bg-indigo-950 text-slate-100 z-50 p-3 flex flex-wrap items-center justify-between shadow-md">
                     <div className="flex items-center gap-6">
                         <div className="flex items-center gap-2">
                             <span className="text-xl">◐</span>
@@ -597,14 +597,14 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                     {marginAnalytics.versionTrend && marginAnalytics.versionTrend.length > 0 && (
                         <div className="hidden md:flex flex-col items-end group relative cursor-help">
                             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Erosion Trend</div>
-                            <div className="flex items-end gap-[2px] h-6 bg-slate-800 p-1 rounded">
+                            <div className="flex items-end gap-[2px] h-6 bg-indigo-900 p-1 rounded">
                                 {marginAnalytics.versionTrend.slice(-10).map((t: any, i: number) => {
                                     const h = Math.max(10, Math.min(100, (t.blendedMarginPct / 30) * 100)); // normalize relative to 30%
                                     const color = t.blendedMarginPct < 15 ? 'bg-red-500' : t.blendedMarginPct < 18 ? 'bg-amber-500' : 'bg-emerald-500';
                                     return <div key={i} className={`w-3 rounded-t-sm ${color}`} style={{ height: `${h}%` }}></div>
                                 })}
                             </div>
-                            <div className="absolute top-full right-0 mt-2 w-64 bg-slate-800 text-slate-200 text-xs p-2 rounded shadow-xl hidden group-hover:block z-50">
+                            <div className="absolute top-full right-0 mt-2 w-64 bg-indigo-900 text-slate-200 text-xs p-2 rounded shadow-xl hidden group-hover:block z-50">
                                 {marginAnalytics.versionTrend.map((t: any) => (
                                     <div key={t.versionNumber} className="flex justify-between border-b border-slate-700 last:border-0 py-1">
                                         <span>v{t.versionNumber}</span>
@@ -662,7 +662,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                 <tr className="bg-slate-100 border-y border-slate-200">
                                     <td colSpan={14} className="px-4 py-2">
                                         <div className="flex justify-between items-center pr-2">
-                                            <span className="font-bold text-slate-800 text-xs uppercase tracking-wide flex items-center gap-2">
+                                            <span className="font-bold text-indigo-900 text-xs uppercase tracking-wide flex items-center gap-2">
                                                 🏠 {roomName}
                                                 <span className="bg-white px-2 py-0.5 rounded text-[9px] text-slate-400 border border-slate-200 font-medium">{roomItems.length} items</span>
                                                 {lensEnabled && isOwner && marginAnalytics?.byRoom && (() => {
@@ -738,7 +738,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                         initial={{ y: 100, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 100, opacity: 0 }}
-                        className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 shadow-2xl rounded-2xl p-2.5 flex items-center gap-4 z-50 text-slate-200 w-[95%] max-w-5xl"
+                        className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-indigo-950 border border-slate-700 shadow-2xl rounded-2xl p-2.5 flex items-center gap-4 z-50 text-slate-200 w-[95%] max-w-5xl"
                     >
                         <div className="flex-1 flex items-center gap-4 pl-2">
                              <div className="flex flex-col">
@@ -759,13 +759,13 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                              <div className="h-6 w-px bg-slate-700 mx-2"></div>
                              
                              <div className="flex flex-wrap gap-2">
-                                 <button onClick={() => setBulkCoModal({ itemIds: Array.from(selectedIds), newStatus: 'included_ffds_scope' })} className="px-3 py-1.5 bg-slate-800 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Set Status</button>
-                                 <button onClick={() => {/* TODO */}} className="px-3 py-1.5 bg-slate-800 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Move Room</button>
-                                 <button onClick={() => setLinkageModal('bulk')} className="px-3 py-1.5 bg-slate-800 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Set Linkage</button>
+                                 <button onClick={() => setBulkCoModal({ itemIds: Array.from(selectedIds), newStatus: 'included_ffds_scope' })} className="px-3 py-1.5 bg-indigo-900 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Set Status</button>
+                                 <button onClick={() => {/* TODO */}} className="px-3 py-1.5 bg-indigo-900 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Move Room</button>
+                                 <button onClick={() => setLinkageModal('bulk')} className="px-3 py-1.5 bg-indigo-900 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Set Linkage</button>
                                  {isOwner && (
                                      <>
-                                        <button onClick={() => {/* TODO */}} className="px-3 py-1.5 bg-slate-800 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Adjust Margin</button>
-                                        <button onClick={() => {/* TODO */}} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${boqFrozen ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-slate-800 text-slate-300 hover:bg-indigo-600 hover:text-white'}`} disabled={boqFrozen} title={boqFrozen ? "Blocked: BOQ is frozen" : ""}>Refresh Rates</button>
+                                        <button onClick={() => {/* TODO */}} className="px-3 py-1.5 bg-indigo-900 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Adjust Margin</button>
+                                        <button onClick={() => {/* TODO */}} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${boqFrozen ? 'bg-indigo-900 text-slate-500 cursor-not-allowed' : 'bg-indigo-900 text-slate-300 hover:bg-indigo-600 hover:text-white'}`} disabled={boqFrozen} title={boqFrozen ? "Blocked: BOQ is frozen" : ""}>Refresh Rates</button>
                                      </>
                                  )}
                              </div>
@@ -776,7 +776,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                 Undo
                             </button>
                         )}
-                        <button onClick={() => setSelectedIds(new Set())} className="px-3 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors bg-slate-800 hover:bg-slate-700 rounded-xl">
+                        <button onClick={() => setSelectedIds(new Set())} className="px-3 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors bg-indigo-900 hover:bg-indigo-800 rounded-xl">
                             Clear
                         </button>
                     </motion.div>
@@ -786,7 +786,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
             {/* Bulk Status / Change Order Requirement Modal */}
             <AnimatePresence>
                 {bulkCoModal && (
-                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm shadow-2xl flex items-center justify-center p-4 z-[100]">
+                    <div className="fixed inset-0 bg-indigo-950/40 backdrop-blur-sm shadow-2xl flex items-center justify-center p-4 z-[100]">
                         <motion.div 
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -794,7 +794,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                             className="bg-white rounded-xl shadow-2xl w-full max-w-[400px] overflow-hidden"
                         >
                             <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                                <h3 className="font-bold text-slate-800">Bulk Apply Status</h3>
+                                <h3 className="font-bold text-indigo-900">Bulk Apply Status</h3>
                                 <button onClick={() => setBulkCoModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
                             </div>
                             <div className="p-6">
@@ -846,7 +846,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
             {/* Change Order Requirement Modal (Single) */}
             <AnimatePresence>
                 {coModal && (
-                    <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm shadow-2xl flex items-center justify-center p-4 z-[100]">
+                    <div className="fixed inset-0 bg-indigo-950/20 backdrop-blur-sm shadow-2xl flex items-center justify-center p-4 z-[100]">
                         <motion.div 
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -854,7 +854,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                             className="bg-white rounded-xl shadow-2xl w-full max-w-[400px] overflow-hidden"
                         >
                             <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                                <h3 className="font-bold text-slate-800">Change Order Required</h3>
+                                <h3 className="font-bold text-indigo-900">Change Order Required</h3>
                                 <button onClick={() => setCoModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
                             </div>
                             <div className="p-6">
@@ -896,7 +896,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
             {/* Linkage Picker Modal */}
             <AnimatePresence>
                 {linkageModal && (
-                    <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+                    <div className="fixed inset-0 bg-indigo-950/20 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
                         <motion.div 
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -904,7 +904,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                             className="bg-white rounded-xl shadow-2xl w-full max-w-[500px] overflow-hidden"
                         >
                             <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                                <h3 className="font-bold text-slate-800">Edit Traceability Linkage</h3>
+                                <h3 className="font-bold text-indigo-900">Edit Traceability Linkage</h3>
                                 <button onClick={() => setLinkageModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
                             </div>
                             
@@ -967,7 +967,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
             {/* Status Modal */}
             <AnimatePresence>
                 {statusModalId && (
-                    <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+                    <div className="fixed inset-0 bg-indigo-950/20 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
                         <motion.div 
                             initial={{ opacity: 0, scale: 0.95, y: 10 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -976,7 +976,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                         >
                             <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center z-10">
                                 <div>
-                                    <h3 className="font-black text-slate-800">Update Item Status</h3>
+                                    <h3 className="font-black text-indigo-900">Update Item Status</h3>
                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Select a new status for this lineup item</p>
                                 </div>
                                 <button onClick={() => setStatusModalId(null)} className="p-2 bg-slate-200/50 text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-colors font-bold text-lg leading-none">

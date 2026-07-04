@@ -59,6 +59,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
     loading,
     buildTimelineFromTemplate,
     updatePhaseDuration,
+    shiftTimelinePhases,
     resetTimeline,
   } = useTimelinePhases(safeProjectId, studioId);
   const { settings } = useStudioSettings(studioId);
@@ -81,6 +82,12 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   const [siteVisitType, setSiteVisitType] = useState<'site_visit'|'client_meeting'>('site_visit');
   const [showSiteVisitHistory, setShowSiteVisitHistory] = useState(false);
 
+  const [showShiftModal, setShowShiftModal] = useState(false);
+  const [shiftDays, setShiftDays] = useState<number>(0);
+  const [shiftFromPhase, setShiftFromPhase] = useState<number>(1);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+
+
   const handleGenerateTimeline = async () => {
     if (!safeProjectId) {
       alert("Please select or save a project first.");
@@ -96,6 +103,28 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
     } finally {
         setGenerating(false);
     }
+  };
+
+  
+  const generateWhatsAppMessage = () => {
+    const currentPhase = phases.find(p => p.stepProgress?.status === 'in_progress') || phases[0];
+    const delayed = phases.filter(p => p.isDelayed);
+    const nextMilestone = phases.find(p => p.stepProgress?.status === 'not_started');
+    
+    let msg = `*Project Update: ${projectContext?.name || 'Your Project'}*\n\n`;
+    msg += `*Current Phase:* ${currentPhase?.title || 'Planning'}\n`;
+    
+    if (delayed.length > 0) {
+      msg += `⚠️ *Note:* We are tracking a slight delay in ${delayed.map(d => d.title).join(', ')}. We are working to resolve this.\n`;
+    }
+    
+    if (nextMilestone) {
+      msg += `\n*Coming Up Next:* ${nextMilestone.title}\n`;
+      msg += `*Estimated Start:* ${new Date(nextMilestone.startDate).toLocaleDateString()}\n`;
+    }
+    
+    msg += `\nTrack full progress live on your Client Portal.\n- FFDS Team`;
+    return encodeURIComponent(msg);
   };
 
   const handleResetTimeline = async () => {
@@ -137,7 +166,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
           <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
             <CalendarIcon className="w-10 h-10 text-slate-300" />
           </div>
-          <h2 className="text-2xl font-black text-slate-800 mb-2">
+          <h2 className="text-2xl font-black text-indigo-900 mb-2">
             No timeline yet
           </h2>
           <p className="text-slate-500 mb-8">
@@ -152,7 +181,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                 <SparklesIcon className="w-4 h-4" />
                 <span>Recommended</span>
               </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-1">
+              <h3 className="text-lg font-bold text-indigo-900 mb-1">
                 Generate from Phase Template
               </h3>
               <p className="text-sm text-slate-500 pb-1">
@@ -238,7 +267,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
             <CalendarIcon className="w-4 h-4" />
             <span>
               Project kickoff:{" "}
-              <strong className="text-slate-800">{kickoff}</strong>
+              <strong className="text-indigo-900">{kickoff}</strong>
             </span>
           </div>
           <div className="w-1 h-1 bg-slate-300 rounded-full hidden sm:block"></div>
@@ -246,13 +275,13 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
             <FlagIcon className="w-4 h-4" />
             <span>
               Estimated completion:{" "}
-              <strong className="text-slate-800">{completion}</strong>
+              <strong className="text-indigo-900">{completion}</strong>
             </span>
           </div>
           <div className="w-1 h-1 bg-slate-300 rounded-full hidden sm:block"></div>
           <div className="text-sm text-slate-600 whitespace-nowrap">
-            <strong className="text-slate-800">{phases.length}</strong> phases ·{" "}
-            <strong className="text-slate-800">
+            <strong className="text-indigo-900">{phases.length}</strong> phases ·{" "}
+            <strong className="text-indigo-900">
               {completedCount}/{phases.length}
             </strong>{" "}
             complete
@@ -271,6 +300,19 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
             className="text-[10px] uppercase tracking-widest font-bold text-blue-600 hover:text-blue-700 transition-colors bg-white border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg flex items-center gap-1"
           >
             🤝 Log Meeting
+          </button>
+          
+          <button
+            onClick={() => setShowWhatsAppModal(true)}
+            className="text-[10px] uppercase tracking-widest font-bold text-green-600 hover:text-green-700 transition-colors bg-white border border-green-200 hover:bg-green-50 px-3 py-1.5 rounded-lg flex items-center gap-1"
+          >
+            💬 WhatsApp Update
+          </button>
+          <button
+            onClick={() => setShowShiftModal(true)}
+            className="text-[10px] uppercase tracking-widest font-bold text-indigo-600 hover:text-indigo-700 transition-colors bg-white border border-indigo-200 hover:bg-indigo-50 px-3 py-1.5 rounded-lg flex items-center gap-1"
+          >
+            ⏭️ Shift Timeline
           </button>
           <button
             onClick={() => setShowSiteVisitHistory(true)}
@@ -322,7 +364,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
 
           let headerColor = "bg-slate-50 border-slate-200";
           let iconColor = "bg-slate-100 text-slate-400";
-          let titleColor = "text-slate-800";
+          let titleColor = "text-indigo-900";
 
           if (status === "completed") {
             headerColor = "bg-emerald-50/50 border-emerald-100";
@@ -545,6 +587,114 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
         currentPhaseStep={phases.find(p => p.stepProgress?.status === 'in_progress')?.stepProgress?.stepNumber || 1}
         currentPhaseTitle={phases.find(p => p.stepProgress?.status === 'in_progress')?.title || "Planning"}
       />
+
+      {/* Shift Timeline Modal */}
+      <AnimatePresence>
+        {showShiftModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="font-bold text-lg text-slate-800">Shift Timeline</h3>
+                <button onClick={() => setShowShiftModal(false)} className="text-slate-400 hover:text-slate-600">
+                  ✕
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-slate-500">
+                  Delay or pull forward a portion of the timeline. This shifts the selected phase and all subsequent phases.
+                </p>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Shift from Phase</label>
+                  <select 
+                    value={shiftFromPhase} 
+                    onChange={e => setShiftFromPhase(Number(e.target.value))}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium"
+                  >
+                    {phases.map(p => (
+                      <option key={p.stepNumber} value={p.stepNumber}>{p.stepNumber}. {p.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Days to Shift</label>
+                  <input 
+                    type="number" 
+                    value={shiftDays} 
+                    onChange={e => setShiftDays(Number(e.target.value) || 0)}
+                    placeholder="e.g. 5 (delay) or -3 (pull forward)"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium"
+                  />
+                </div>
+              </div>
+              <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                <button onClick={() => setShowShiftModal(false)} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800">Cancel</button>
+                <button 
+                  onClick={() => {
+                    if (shiftDays !== 0) {
+                      // Note: We'll need to call the newly added shiftTimelinePhases hook method here
+                      // wait, the hook returned it! Let's ensure it's destructured at the top.
+                      (window as any)._lastShiftParams = { shiftFromPhase, shiftDays };
+                      shiftTimelinePhases(shiftFromPhase, shiftDays);
+                    }
+                    setShowShiftModal(false);
+                  }} 
+                  className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-sm"
+                >
+                  Apply Shift
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* WhatsApp Update Modal */}
+      <AnimatePresence>
+        {showWhatsAppModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                   <span className="text-green-500">💬</span> Quick Client Update
+                </h3>
+                <button onClick={() => setShowWhatsAppModal(false)} className="text-slate-400 hover:text-slate-600">
+                  ✕
+                </button>
+              </div>
+              <div className="p-6">
+                <p className="text-sm text-slate-500 mb-4">
+                  Send a quick formatted update to your client via WhatsApp.
+                </p>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm text-slate-700 whitespace-pre-wrap font-medium">
+                  {decodeURIComponent(generateWhatsAppMessage())}
+                </div>
+              </div>
+              <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                <button onClick={() => setShowWhatsAppModal(false)} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800">Close</button>
+                <a 
+                  href={`https://wa.me/?text=${generateWhatsAppMessage()}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 shadow-sm flex items-center gap-2"
+                  onClick={() => setShowWhatsAppModal(false)}
+                >
+                  Open WhatsApp
+                </a>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       {showSiteVisitHistory && (
         <SiteVisitHistory 
           projectId={safeProjectId || ""}
@@ -564,6 +714,59 @@ const OldTimelineBuilder: React.FC<any> = ({
   setPhases,
   onBack,
 }) => {
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [targetDays, setTargetDays] = React.useState<number | ''>('');
+
+  const handleAddPhase = () => {
+    setPhases([
+      ...(phases || []),
+      { phaseName: "New Phase", description: "", startDay: 0, durationDays: 14 }
+    ]);
+  };
+
+  const handleRemovePhase = (index: number) => {
+    const newPhases = [...phases];
+    newPhases.splice(index, 1);
+    setPhases(newPhases);
+  };
+
+  const handlePhaseChange = (index: number, field: string, value: any) => {
+    const newPhases = [...phases];
+    newPhases[index] = { ...newPhases[index], [field]: value };
+    setPhases(newPhases);
+  };
+
+  const handleGenerateAI = async () => {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      if (!boq) throw new Error("BOQ is required to generate timeline");
+      const result = await generateProjectTimeline(boq);
+      setPhases(result);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const currentMaxDays = (phases || []).reduce((max: number, p: any) => Math.max(max, (p.startDay || 0) + (p.durationDays || 0)), 0);
+
+  const handleScaleTimeline = () => {
+     if (!targetDays || targetDays <= 0 || !phases || phases.length === 0) return;
+     if (currentMaxDays === 0) return;
+     const ratio = Number(targetDays) / currentMaxDays;
+     
+     const newPhases = phases.map((p: any) => ({
+        ...p,
+        startDay: Math.round((p.startDay || 0) * ratio),
+        durationDays: Math.max(1, Math.round((p.durationDays || 0) * ratio)) // ensure at least 1 day
+     }));
+     setPhases(newPhases);
+     setTargetDays('');
+  };
+
   return (
     <Card
       title="Build Manual Timeline"
@@ -575,9 +778,137 @@ const OldTimelineBuilder: React.FC<any> = ({
       >
         &larr; Back to Template Auto-Build
       </button>
-      <p className="text-slate-500 mb-4">
-        Manual build logic placeholder (legacy mode).
-      </p>
+
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 mb-8 text-white shadow-xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 border border-slate-700 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 opacity-10 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2"></div>
+        <div className="relative z-10">
+           <h3 className="text-2xl font-black tracking-tight mb-2 text-white">Timeline Summary</h3>
+           <p className="text-slate-400 text-sm font-medium">Review and dynamically scale your project schedule.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-4 relative z-10">
+           <div className="bg-white/5 px-5 py-4 rounded-xl backdrop-blur-sm border border-white/10 flex flex-col justify-center">
+              <div className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Total Duration</div>
+              <div className="text-3xl font-black text-white">{currentMaxDays} <span className="text-lg font-medium text-slate-500">Days</span></div>
+           </div>
+           
+           <div className="bg-white/5 px-5 py-4 rounded-xl backdrop-blur-sm border border-white/10 flex flex-col justify-center">
+              <div className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-2">Scale Entire Timeline</div>
+              <div className="flex items-center gap-2">
+                 <input 
+                    type="number" 
+                    placeholder="New Total" 
+                    value={targetDays} 
+                    onChange={e => setTargetDays(Number(e.target.value) || '')} 
+                    className="w-24 px-3 py-2 text-sm rounded-lg bg-white/10 border border-white/20 text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-bold" 
+                 />
+                 <button 
+                    onClick={handleScaleTimeline} 
+                    disabled={!targetDays} 
+                    className="px-4 py-2 bg-indigo-500 text-white rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-indigo-400 transition-colors shadow-sm"
+                 >
+                    Apply
+                 </button>
+              </div>
+           </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-bold text-slate-800 tracking-tight">Timeline Phases</h3>
+        <div className="flex gap-3">
+          {isAiAvailable() && (
+            <button 
+              onClick={handleGenerateAI}
+              disabled={isGenerating || !boq}
+              className="px-4 py-2.5 bg-purple-50 text-purple-700 rounded-xl text-sm font-bold hover:bg-purple-100 disabled:opacity-50 flex items-center gap-2 transition-colors border border-purple-100"
+            >
+              <SparklesIcon className="w-4 h-4" />
+              {isGenerating ? "Generating..." : "Auto-Generate via AI"}
+            </button>
+          )}
+          <button 
+             onClick={handleAddPhase}
+             className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-colors shadow-sm flex items-center gap-2"
+          >
+             <span className="text-lg leading-none">+</span> Add Phase
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="text-red-600 bg-red-50 p-4 rounded-xl mb-6 text-sm font-bold border border-red-100 flex items-center gap-3"><AlertCircleIcon className="w-5 h-5" /> {error}</div>}
+
+      <div className="space-y-4 relative">
+        <div className="absolute left-8 top-4 bottom-4 w-px bg-slate-200 hidden md:block z-0"></div>
+        {phases && phases.length > 0 ? phases.map((phase: any, i: number) => (
+          <div key={i} className="border border-slate-200 p-6 rounded-2xl relative group bg-white shadow-sm hover:shadow-md transition-shadow z-10 ml-0 md:ml-12">
+            <div className="absolute -left-[41px] top-8 w-6 h-6 rounded-full bg-slate-100 border-2 border-slate-300 hidden md:flex items-center justify-center text-[10px] font-black text-slate-500 z-20">
+               {i + 1}
+            </div>
+            
+            <button 
+               onClick={() => handleRemovePhase(i)}
+               className="absolute top-6 right-6 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-50 hover:bg-red-50 p-2 rounded-lg"
+               title="Remove Phase"
+            >
+               <DeleteIcon className="w-4 h-4" />
+            </button>
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-4">
+              <div className="xl:col-span-5">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Phase Name</label>
+                <input 
+                  type="text"
+                  value={phase.phaseName}
+                  onChange={(e) => handlePhaseChange(i, 'phaseName', e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-800 bg-slate-50 focus:bg-white transition-colors"
+                  placeholder="e.g. Demolition & Civil"
+                />
+              </div>
+              <div className="xl:col-span-7 grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Start Day</label>
+                  <div className="relative">
+                     <input 
+                       type="number"
+                       value={phase.startDay}
+                       onChange={(e) => handlePhaseChange(i, 'startDay', parseInt(e.target.value) || 0)}
+                       className="w-full px-4 py-3 pl-10 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-800 bg-slate-50 focus:bg-white transition-colors"
+                     />
+                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">Day</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Duration</label>
+                  <div className="relative">
+                     <input 
+                       type="number"
+                       value={phase.durationDays}
+                       onChange={(e) => handlePhaseChange(i, 'durationDays', parseInt(e.target.value) || 0)}
+                       className="w-full px-4 py-3 pl-4 pr-12 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-800 bg-slate-50 focus:bg-white transition-colors"
+                     />
+                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">Days</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Description / Scope Details</label>
+               <input 
+                  type="text"
+                  value={phase.description}
+                  onChange={(e) => handlePhaseChange(i, 'description', e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm text-slate-600 bg-slate-50 focus:bg-white transition-colors"
+                  placeholder="Optional details about this phase"
+               />
+            </div>
+          </div>
+        )) : (
+          <div className="text-center py-16 text-slate-400 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+             <CalendarIcon className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+             <h4 className="text-lg font-bold text-slate-600 mb-1">No phases defined</h4>
+             <p className="text-sm">Add a phase manually or use AI to generate a complete timeline.</p>
+          </div>
+        )}
+      </div>
     </Card>
   );
 };

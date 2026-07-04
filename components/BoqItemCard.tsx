@@ -244,7 +244,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                 {getCategoryEmoji(item.cat)}
             </div>
             <div>
-                 <h3 className="text-base font-bold text-slate-800 leading-tight mb-1.5">{highlightText(item.name, searchQuery)}</h3>
+                 <h3 className="text-base font-bold text-indigo-900 leading-tight mb-1.5">{highlightText(item.name, searchQuery)}</h3>
                  <div className="text-xs font-medium flex items-center gap-2">
                     <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wide ${categoryStyle} bg-opacity-20`}>{highlightText(item.cat, searchQuery)}</span>
                     <select 
@@ -447,7 +447,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
             </div>
              <div>
                 <label className="text-[9px] font-bold text-slate-400 uppercase">Sell</label>
-                <p className="font-bold text-slate-800 mt-0.5">{formatCurrency(sellPrice)}</p>
+                <p className="font-bold text-indigo-900 mt-0.5">{formatCurrency(sellPrice)}</p>
             </div>
         </div>
 
@@ -493,7 +493,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                         onChange={v => onUpdate(item.id, 'qty', v)}
                         onBlur={() => {}}
                         inputType="number"
-                        className="w-12 font-bold text-sm bg-transparent text-slate-900"
+                        className="w-12 font-bold text-sm bg-transparent text-indigo-950"
                     />
                     <span className="text-[10px] font-bold text-slate-400 border-l border-slate-300 pl-2">
                         {item.unit}
@@ -502,7 +502,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
             </div>
             <div className="text-right">
                 <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Total</div>
-                <div className="font-black text-xl text-slate-900 tracking-tight leading-none mt-0.5">{formatCurrency(totalLineItem)}</div>
+                <div className="font-black text-xl text-indigo-950 tracking-tight leading-none mt-0.5">{formatCurrency(totalLineItem)}</div>
             </div>
         </div>
 

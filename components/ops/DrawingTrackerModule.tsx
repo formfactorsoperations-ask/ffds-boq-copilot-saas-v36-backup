@@ -438,7 +438,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
             <div className="grid grid-cols-4 gap-4 mb-6">
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
                     <span className="text-xs font-bold uppercase text-slate-500 tracking-wider">Total Drawings</span>
-                    <span className="text-3xl font-black text-slate-800 mt-1">{stats.total}</span>
+                    <span className="text-3xl font-black text-indigo-900 mt-1">{stats.total}</span>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
                     <span className="text-xs font-bold uppercase text-emerald-600 tracking-wider">Approved</span>
@@ -489,7 +489,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         </button>
                         {showAddDrawing && (
                             <div className="absolute top-full right-0 mt-2 w-72 bg-white border border-slate-200 p-4 rounded-xl shadow-xl z-50 animate-in fade-in zoom-in-95">
-                                <h4 className="text-sm font-bold text-slate-800 mb-2">New Drawing</h4>
+                                <h4 className="text-sm font-bold text-indigo-900 mb-2">New Drawing</h4>
                                 <input 
                                     type="text" 
                                     placeholder="Drawing name..." 
@@ -626,7 +626,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                             
                                             <button 
                                                 onClick={() => setExpandedRevisionId(expandedRevisionId === d.id ? null : d.id)} 
-                                                className="mt-1 text-[10px] text-slate-500 hover:text-slate-800 underline font-medium transition-colors cursor-pointer"
+                                                className="mt-1 text-[10px] text-slate-500 hover:text-indigo-900 underline font-medium transition-colors cursor-pointer"
                                             >
                                                 Log Round 3+ Revision
                                             </button>
@@ -639,7 +639,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                             {expandedRevisionId === d.id && (
                                 <div className="bg-[#f8fafc] border-t border-slate-200 p-5 px-6">
                                     <div className="flex items-center justify-between mb-4">
-                                        <h4 className="font-bold text-slate-800 text-sm">Classify Revision Request</h4>
+                                        <h4 className="font-bold text-indigo-900 text-sm">Classify Revision Request</h4>
                                         <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${activeRound >= 2 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
                                             Round {activeRound + 1} — {activeRound >= 2 ? 'Chargeable' : 'Included'}
                                         </span>
@@ -658,7 +658,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                                 <button 
                                                     disabled={analyzingRevision[d.id] || !revisionRequestText[d.id]?.trim()}
                                                     onClick={() => handleAnalyzeRevision(d)}
-                                                    className="flex items-center gap-2 px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-sm rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                                                    className="flex items-center gap-2 px-5 py-2 bg-indigo-900 hover:bg-indigo-950 text-white font-bold text-sm rounded-lg transition-colors shadow-sm disabled:opacity-50"
                                                 >
                                                     {analyzingRevision[d.id] ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
                                                     {analyzingRevision[d.id] ? 'Analyzing...' : 'Analyze Request'}
@@ -675,7 +675,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                                     'border-amber-400 bg-amber-50'
                                                 }`}>
                                                     <div className="flex items-center gap-2 mb-2">
-                                                        <span className="font-bold text-slate-800">
+                                                        <span className="font-bold text-indigo-900">
                                                             {classificationResult[d.id].classification.replace(/_/g, ' ')}
                                                         </span>
                                                         <span className="px-2 py-0.5 bg-white border border-slate-200 text-xs rounded-full shadow-sm text-slate-600">
@@ -701,7 +701,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                                 </button>
                                                 <button 
                                                     onClick={() => handleConfirmRevision(d)} 
-                                                    className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-sm rounded-lg transition-colors shadow-sm"
+                                                    className="px-6 py-2 bg-indigo-900 hover:bg-indigo-950 text-white font-bold text-sm rounded-lg transition-colors shadow-sm"
                                                 >
                                                     Confirm & Log Revision →
                                                 </button>

@@ -29,7 +29,8 @@ export function calculateLocalPaymentHealth(paymentMilestones?: any[], legacySte
 
         paymentMilestones.forEach(m => {
             const baseAmount = m.lockedTaxableBase || 0;
-            const amount = baseAmount * ((m.percentage || 0) / 100) * 1.18; // Approx with GST
+            const rawAmount = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : baseAmount * ((m.percentage || 0) / 100);
+            const amount = rawAmount * 1.18; // Approx with GST
 
             if (m.status === 'paid' || m.status === 'invoiced') {
                 expectedReceived += (m.percentage || 0);

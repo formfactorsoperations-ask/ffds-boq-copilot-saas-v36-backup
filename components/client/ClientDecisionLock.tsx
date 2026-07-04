@@ -5,13 +5,14 @@ import { CheckIcon, ArrowRightIcon, ChevronDownIcon } from '../Icons';
 import { useOrg } from '../../contexts/OrgContext';
 
 interface ClientDecisionLockProps {
+    level?: string;
     decision?: ProposalDecision;
     projectName: string;
     phoneNumber?: string;
     settings?: any; // The combined settings object
 }
 
-const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ decision, projectName, phoneNumber, settings }) => {
+const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ level, decision, projectName, phoneNumber, settings }) => {
     const { orgData } = useOrg();
     
     // If explicitly disabled in settings, don't show. Default to show if undefined.
@@ -23,7 +24,23 @@ const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ decision, proje
     const companyDisplayName = settings?.companyName || orgData?.orgName || 'Studio';
     const companyFirstName = companyDisplayName.split(' ')[0];
 
-    const OPTIONS = [
+    const OPTIONS = level === 'LEVEL_1_5' ? [
+        {
+            title: "Approve Interim Scope",
+            description: "Confirm that the updated scope and layout directions align with your expectations. This allows us to proceed to final material selections and 3D visualization.",
+            nextSteps: ["Final Material Selection", "3D Visualization", "Final BOQ Generation", "Site Execution Kick-off"],
+            clarification: "You have already completed the Project Initiation (₹4,999). No payment is required at this stage.",
+            buttonText: "Approve & Proceed",
+            waMessage: `Hi ${companyFirstName}, I approve the Interim Design & Scope Update for ${encodedProjectName}. Let's move to material selections!`
+        },
+        {
+            title: "Request Scope Revisions",
+            description: "If you feel certain items need to be added or removed before we lock the layout.",
+            nextSteps: ["Review specific additions/removals", "Update Commercials", "Final Alignment"],
+            buttonText: "Request Revisions",
+            waMessage: `Hi ${companyFirstName}, I've reviewed the Interim Proposal for ${encodedProjectName} but need some revisions to the scope before we proceed.`
+        }
+    ] : [
         {
             title: "Proceed with Design-Only Engagement",
             description: "Secure professional planning clarity and design direction. Ideal if you have your own execution team but need a solid design foundation before starting work.",
@@ -55,8 +72,8 @@ const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ decision, proje
         <section id="decision-lock" className="py-12 border-t border-slate-200 bg-slate-50/50 rounded-3xl mt-8 scroll-mt-20">
             <div className="px-6 md:px-10">
                 <div className="mb-10 text-center md:text-left">
-                    <span className="inline-block px-3 py-1 bg-slate-900 text-white text-xs font-bold rounded-full mb-3 uppercase tracking-widest shadow-sm">Next Step</span>
-                    <h2 className="text-3xl font-extrabold text-slate-900 mb-2">Select Your Path Forward</h2>
+                    <span className="inline-block px-3 py-1 bg-indigo-950 text-white text-xs font-bold rounded-full mb-3 uppercase tracking-widest shadow-sm">Next Step</span>
+                    <h2 className="text-3xl font-extrabold text-indigo-950 mb-2">Select Your Path Forward</h2>
                     <p className="text-slate-600 text-sm max-w-2xl mx-auto md:mx-0">
                         To move from "Estimate" to "Action", please confirm your preferred engagement model. This allows us to allocate the right design team and resources immediately.
                     </p>
@@ -70,7 +87,7 @@ const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ decision, proje
                             <details className="group md:hidden" open>
                                 <summary className="list-none p-5 flex items-center justify-between cursor-pointer select-none">
                                     <div>
-                                        <h3 className="text-lg font-bold text-slate-900 leading-tight">{opt.title}</h3>
+                                        <h3 className="text-lg font-bold text-indigo-950 leading-tight">{opt.title}</h3>
                                         <p className="text-xs text-slate-500 mt-1 line-clamp-1">{opt.description}</p>
                                     </div>
                                     <div className="ml-3 text-slate-400 group-open:rotate-180 transition-transform">
@@ -101,7 +118,7 @@ const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ decision, proje
                                         href={`https://wa.me/${targetPhone}?text=${opt.waMessage}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-slate-900 text-white font-bold text-sm rounded-xl shadow-lg hover:bg-blue-900 transition-all"
+                                        className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-indigo-950 text-white font-bold text-sm rounded-xl shadow-lg hover:bg-blue-900 transition-all"
                                     >
                                         <span>{opt.buttonText}</span>
                                         <ArrowRightIcon className="w-4 h-4" />
@@ -113,7 +130,7 @@ const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ decision, proje
                             <div className="hidden md:block p-8">
                                 <div className="flex flex-col md:flex-row gap-8">
                                     <div className="flex-grow">
-                                        <h3 className="text-xl font-bold text-slate-900 mb-2">{opt.title}</h3>
+                                        <h3 className="text-xl font-bold text-indigo-950 mb-2">{opt.title}</h3>
                                         <p className="text-sm text-slate-600 leading-relaxed mb-6">{opt.description}</p>
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -160,7 +177,7 @@ const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ decision, proje
                                             href={`https://wa.me/${targetPhone}?text=${opt.waMessage}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-slate-900 text-white font-bold text-sm rounded-xl shadow-lg hover:bg-blue-900 hover:scale-[1.02] transition-all group"
+                                            className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-indigo-950 text-white font-bold text-sm rounded-xl shadow-lg hover:bg-blue-900 hover:scale-[1.02] transition-all group"
                                         >
                                             <span>{opt.buttonText}</span>
                                             <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform" />

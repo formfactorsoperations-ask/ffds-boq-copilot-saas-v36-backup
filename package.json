@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build",
-    "start": "node server.ts",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -19,7 +19,9 @@
     "date-fns": "^4.2.1",
     "deep-object-diff": "^1.1.9",
     "esbuild": "^0.28.0",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
+    "file-saver": "^2.0.5",
     "firebase": "^12.7.0",
     "framer-motion": "^11.3.19",
     "html2pdf.js": "^0.14.0",
@@ -37,6 +39,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@testing-library/react": "^16.3.2",
     "@types/pako": "^2.0.4",
     "jsdom": "^29.1.1",

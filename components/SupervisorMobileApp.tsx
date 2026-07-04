@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Home, PlusCircle, CheckCircle, Camera, Navigation2, FileText, ArrowLeft, LogOut, Package, AlertTriangle, ListTodo, Activity, Clock, Box } from 'lucide-react';
 import { SiteActivityWidget } from './SiteActivityWidget';
 import { SiteVisitLogModal } from './SiteVisitLogModal';
+import { SiteProgressChart } from './SiteProgressChart';
 import { FullProjectData } from '../types';
 import { useOrg } from '../contexts/OrgContext';
 import { formatClientValue } from '../lib/utils';
@@ -33,7 +34,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
                             <Camera className="w-5 h-5" />
                         </div>
                         <div>
-                            <h1 className="text-xl font-black text-slate-800 tracking-tight">Supervisor Ops</h1>
+                            <h1 className="text-xl font-black text-indigo-900 tracking-tight">Supervisor Ops</h1>
                             <p className="text-xs text-slate-500 font-medium">Site Activity Tracker</p>
                         </div>
                     </div>
@@ -48,7 +49,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
 
                 <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8">
                     <div className="mb-8">
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Active Sites</h2>
+                        <h2 className="text-2xl font-black text-indigo-950 tracking-tight">Active Sites</h2>
                         <p className="text-slate-500 font-medium mt-1">Select a site to log updates, blockers, and progress.</p>
                     </div>
 
@@ -82,7 +83,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
                                                 {proj.context?.status?.replace('_', ' ') || 'Setup'}
                                             </div>
                                         </div>
-                                        <h3 className="text-xl font-bold text-slate-800 group-hover:text-indigo-600 transition-colors leading-tight mb-1">{proj.context?.name || 'Unnamed Project'}</h3>
+                                        <h3 className="text-xl font-bold text-indigo-900 group-hover:text-indigo-600 transition-colors leading-tight mb-1">{proj.context?.name || 'Unnamed Project'}</h3>
                                         <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-4">{proj.context?.clientName || 'Client'}</p>
                                         
                                         <div className="space-y-1 mt-4">
@@ -265,12 +266,12 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
                 <div className="flex items-center gap-3">
                     <button 
                         onClick={() => setSelectedProjectId(null)}
-                        className="p-1.5 -ml-1 text-slate-500 hover:text-slate-900 transition-colors rounded-lg hover:bg-slate-100 flex items-center justify-center shrink-0"
+                        className="p-1.5 -ml-1 text-slate-500 hover:text-indigo-950 transition-colors rounded-lg hover:bg-slate-100 flex items-center justify-center shrink-0"
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div className="min-w-0">
-                        <h1 className="text-lg font-black text-slate-800 leading-tight truncate">{activeProject?.context?.clientName || activeProject?.context?.name || 'Client Site'}</h1>
+                        <h1 className="text-lg font-black text-indigo-900 leading-tight truncate">{activeProject?.context?.clientName || activeProject?.context?.name || 'Client Site'}</h1>
                         <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate">{activeProject?.context?.name}</p>
                     </div>
                 </div>
@@ -281,6 +282,8 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
                 <div className="p-3 md:p-6 lg:p-8">
                     {activeTab === 'activity' && (
                         <div className="space-y-6">
+                            <SiteProgressChart project={activeProject} />
+                            
                             <SiteActivityWidget 
                                 projectId={selectedProjectId!}
                                 studioId={orgData?.tenantId || 'FFDS'}
@@ -303,7 +306,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
                                                 </div>
                                                 <span className="text-[10px] text-slate-400 font-medium">{new Date(update.timestamp).toLocaleDateString()}</span>
                                             </div>
-                                            <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{update.text}</p>
+                                            <p className="text-sm text-indigo-900 whitespace-pre-wrap leading-relaxed">{update.text}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -313,7 +316,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
 
                     {activeTab === 'bundles' && (
                         <div className="space-y-4">
-                            <h2 className="text-xl font-black text-slate-900 px-1">Execution Bundles</h2>
+                            <h2 className="text-xl font-black text-indigo-950 px-1">Execution Bundles</h2>
                             {(!executionData?.bundles || executionData.bundles.length === 0) ? (
                                 <div className="text-center p-8 bg-white rounded-xl border border-slate-200">
                                     <ListTodo className="w-10 h-10 text-slate-300 mx-auto mb-3" />
@@ -326,7 +329,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
                                             <div className="flex justify-between items-start mb-3">
                                                 <div>
                                                     <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50 px-2 py-0.5 rounded mr-2">{bundle.trade}</span>
-                                                    <h3 className="font-bold text-slate-800">{bundle.name}</h3>
+                                                    <h3 className="font-bold text-indigo-900">{bundle.name}</h3>
                                                 </div>
                                                 <div className={`text-xs font-bold px-2 py-1 rounded capitalize ${bundle.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : bundle.status === 'blocked' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                                                     {bundle.status}
@@ -374,7 +377,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
 
                     {activeTab === 'materials' && (
                         <div className="space-y-4">
-                            <h2 className="text-xl font-black text-slate-900 px-1">Material Receivals</h2>
+                            <h2 className="text-xl font-black text-indigo-950 px-1">Material Receivals</h2>
                             <p className="text-sm text-slate-500 px-1 mb-4">Mark Schedule of Finishes items when they arrive at site.</p>
                             
                             {(!executionData?.sofItems || executionData.sofItems.length === 0) ? (
@@ -393,7 +396,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
                                                         {item.status}
                                                     </span>
                                                 </div>
-                                                <h4 className="font-bold text-slate-800 text-sm truncate">{item.name}</h4>
+                                                <h4 className="font-bold text-indigo-900 text-sm truncate">{item.name}</h4>
                                                 <p className="text-xs text-slate-500 truncate">{item.location} • {item.specifications?.brand || 'Any Brand'}</p>
                                             </div>
                                             
@@ -414,7 +417,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
 
                     {activeTab === 'blockers' && (
                         <div className="space-y-4">
-                            <h2 className="text-xl font-black text-slate-900 px-1">Site Blockers</h2>
+                            <h2 className="text-xl font-black text-indigo-950 px-1">Site Blockers</h2>
                             <p className="text-sm text-slate-500 px-1 mb-4">Items actively blocking site execution.</p>
                             
                             {(!executionData?.blockers || (executionData.blockers || []).length === 0) ? (
@@ -427,7 +430,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
                                     {(executionData.blockers || []).filter(b => !b.resolved).map(blocker => (
                                         <div key={blocker.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm border-l-4 border-l-red-500">
                                             <div className="flex justify-between items-start mb-2">
-                                                <h4 className="font-bold text-slate-800 text-sm leading-tight">{blocker.description}</h4>
+                                                <h4 className="font-bold text-indigo-900 text-sm leading-tight">{blocker.description}</h4>
                                                 <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${blocker.impactLevel === 'critical' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
                                                     {blocker.impactLevel}
                                                 </span>
@@ -479,10 +482,10 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
 
             {/* Action Sheet Modal */}
             {isActionSheetOpen && (
-                <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-end justify-center" onClick={() => setIsActionSheetOpen(false)}>
+                <div className="fixed inset-0 bg-indigo-950/60 z-50 flex items-end justify-center" onClick={() => setIsActionSheetOpen(false)}>
                     <div className="bg-white w-full rounded-t-3xl p-6 pb-12 animate-in slide-in-from-bottom flex flex-col gap-3" onClick={e => e.stopPropagation()}>
                         <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-4" />
-                        <h3 className="text-lg font-black text-slate-800 mb-2">What would you like to log?</h3>
+                        <h3 className="text-lg font-black text-indigo-900 mb-2">What would you like to log?</h3>
                         
                         <button onClick={() => { setIsActionSheetOpen(false); setIsLoggingVisit(true); }} className="flex items-center gap-4 p-4 rounded-xl bg-orange-50/50 hover:bg-orange-50 border border-orange-100 transition-colors w-full text-left">
                             <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0"><Camera size={18} /></div>
@@ -521,10 +524,10 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
 
             {/* Quick Action Input Modal */}
             {quickAction && (
-                <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-end justify-center" onClick={() => setQuickAction(null)}>
+                <div className="fixed inset-0 bg-indigo-950/60 z-50 flex items-end justify-center" onClick={() => setQuickAction(null)}>
                     <div className="bg-white w-full rounded-t-3xl p-6 pb-12 animate-in slide-in-from-bottom flex flex-col gap-4" onClick={e => e.stopPropagation()}>
                         <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-2" />
-                        <h3 className="text-lg font-black text-slate-800">
+                        <h3 className="text-lg font-black text-indigo-900">
                             {quickAction === 'update' ? 'Post Project Update' : quickAction === 'material' ? 'Log Material Selection' : 'Report New Blocker'}
                         </h3>
                         <textarea 

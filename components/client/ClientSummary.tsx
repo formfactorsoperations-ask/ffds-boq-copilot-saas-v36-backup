@@ -8,7 +8,7 @@ interface ClientSummaryProps {
 const DetailItem: React.FC<{ label: string; value: string | number }> = ({ label, value }) => (
   <div>
     <p className="text-sm text-slate-500">{label}</p>
-    <p className="font-bold text-slate-800 text-base">{value}</p>
+    <p className="font-bold text-indigo-900 text-base">{value}</p>
   </div>
 );
 

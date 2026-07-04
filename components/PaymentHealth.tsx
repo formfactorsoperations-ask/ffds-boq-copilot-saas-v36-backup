@@ -68,7 +68,7 @@ export function PaymentHealthWidget({ health, contractValue, revisedContractValu
     if (health.paymentMilestones && health.paymentMilestones.length > 0) {
         health.paymentMilestones.forEach((m: any) => {
             const baseAmount = m.lockedTaxableBase || cv;
-            const amount = baseAmount * ((m.percentage || 0) / 100);
+            const amount = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : baseAmount * ((m.percentage || 0) / 100);
 
             if (m.status === 'invoiced' || m.status === 'paid') {
                 totalInvoiced += amount;
@@ -92,7 +92,7 @@ export function PaymentHealthWidget({ health, contractValue, revisedContractValu
     // Explicit metrics
     let riskLevel = 'Healthy';
     let riskBg = 'bg-white border-slate-200';
-    let riskText = 'text-slate-900';
+    let riskText = 'text-indigo-950';
 
     if (health.healthStatus === 'unconfigured') {
         riskLevel = 'Unmapped Ledger';
@@ -143,7 +143,7 @@ export function PaymentHealthWidget({ health, contractValue, revisedContractValu
             </div>
 
             {cv > 0 && health.healthStatus !== 'unconfigured' && (
-                <div className="mt-6 pt-4 border-t border-slate-900/5">
+                <div className="mt-6 pt-4 border-t border-indigo-950/5">
                     {/* Visual Segment Bar */}
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Billed vs Collected</span>
@@ -158,7 +158,7 @@ export function PaymentHealthWidget({ health, contractValue, revisedContractValu
                         {/* Orig Contract Marker */}
                         {rcv !== cv && cv > 0 && (
                             <div className="absolute top-0 bottom-0 w-[2px] bg-slate-400 group cursor-help z-10" style={{ left: `${Math.min(100, (cv / rcv) * 100)}%` }}>
-                                 <div className="hidden group-hover:block absolute bottom-4 -right-16 bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap shadow-md">
+                                 <div className="hidden group-hover:block absolute bottom-4 -right-16 bg-indigo-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap shadow-md">
                                     Original Contract BOQ Limit
                                  </div>
                             </div>
@@ -168,7 +168,7 @@ export function PaymentHealthWidget({ health, contractValue, revisedContractValu
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div className="border-r border-slate-200 last:border-0 pr-3">
                              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Revised BOQ</p>
-                             <p className="text-sm font-bold text-slate-800">{formatCurrency(rcv)}</p>
+                             <p className="text-sm font-bold text-indigo-900">{formatCurrency(rcv)}</p>
                              {rcv !== cv && (
                                 <p className="text-[9px] text-slate-400 mt-1" title="Original Budget">Orig: {formatCurrency(cv)}</p>
                              )}

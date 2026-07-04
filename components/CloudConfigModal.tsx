@@ -100,7 +100,7 @@ const CloudConfigModal: React.FC<CloudConfigModalProps> = ({ isOpen, onClose }) 
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-indigo-950/80 backdrop-blur-sm p-4">
                 <MotionDiv 
                     initial={{ opacity: 0, scale: 0.95 }} 
                     animate={{ opacity: 1, scale: 1 }} 
@@ -109,7 +109,7 @@ const CloudConfigModal: React.FC<CloudConfigModalProps> = ({ isOpen, onClose }) 
                 >
                     <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                         <div>
-                            <h3 className="font-bold text-lg text-slate-800">Cloud Database Setup</h3>
+                            <h3 className="font-bold text-lg text-indigo-900">Cloud Database Setup</h3>
                             <p className="text-xs text-slate-500">Connect to Firebase Firestore</p>
                         </div>
                         <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400">

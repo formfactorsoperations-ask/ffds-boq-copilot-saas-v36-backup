@@ -187,7 +187,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                                         onBlur={handleSaveEdit}
                                                         onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
                                                         autoFocus
-                                                        className="font-bold p-1 px-2 border border-indigo-300 ring-2 ring-indigo-100 rounded bg-white text-slate-800 text-sm w-full outline-none"
+                                                        className="font-bold p-1 px-2 border border-indigo-300 ring-2 ring-indigo-100 rounded bg-white text-indigo-900 text-sm w-full outline-none"
                                                     />
                                                     <button 
                                                         onMouseDown={(e) => e.preventDefault()} // Prevent blur before click
@@ -199,14 +199,15 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <div className="cursor-pointer">
+                                                <div className="cursor-pointer group">
                                                     <div className="flex items-center gap-2">
-                                                        <p className="font-bold text-slate-800" onDoubleClick={() => handleStartEditing(tier)}>{tier.name}</p>
+                                                        <p className="font-bold text-indigo-900" onDoubleClick={() => handleStartEditing(tier)} title="Double-click to rename">{tier.name}</p>
                                                         <button 
                                                             onClick={(e) => { e.stopPropagation(); handleStartEditing(tier); }}
-                                                            className="text-slate-300 hover:text-indigo-500 opacity-0 group-hover:opacity-100"
+                                                            className="text-slate-400 hover:text-indigo-600 transition-colors"
+                                                            title="Rename Option"
                                                         >
-                                                            <PencilIcon className="w-3 h-3" />
+                                                            <PencilIcon className="w-3.5 h-3.5" />
                                                         </button>
                                                         {isApproved && <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-600 text-white px-2 py-0.5 rounded">Approved</span>}
                                                     </div>
@@ -249,7 +250,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                         </div>
                     )}
                 </div>
-                 <div className="pt-4 border-t border-slate-900/5">
+                 <div className="pt-4 border-t border-indigo-950/5">
                     <button onClick={handleAddTier} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700">
                         Add New Tier
                     </button>

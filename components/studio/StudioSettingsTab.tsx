@@ -7,9 +7,10 @@ import { Plus, Trash2, CheckCircle2, MessageSquare, Save, Upload } from 'lucide-
 import { renderPaymentReminderMessage } from '../../lib/whatsappUtils';
 import { connectGoogleCalendar, isGoogleCalendarConnected } from '../../services/googleCalendarService';
 import CommunicationTemplatesTab from '../ops/CommunicationTemplatesTab';
-import TermsConfigTab from './TermsConfigTab';
+import TermsAndPaymentTab from './TermsAndPaymentTab';
 
 interface StudioSettingsTabProps {
+    initialTab?: string;
     onDownloadBackup?: () => void;
     onImportProject?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onClearProject?: () => void;
@@ -17,6 +18,7 @@ interface StudioSettingsTabProps {
 }
 
 export default function StudioSettingsTab({
+    initialTab,
     onDownloadBackup,
     onImportProject,
     onClearProject,
@@ -33,9 +35,21 @@ export default function StudioSettingsTab({
     
     // Basic Tabs
     const TABS = [
-        'Branding', 'Process', 'Fees', 'Payments', 'Terms', 'Terms Config', 'Onboarding', 'Communication Templates', 'Portal', 'SOF & Changes', 'Platform Admin'
+        'Branding', 'Process', 'Fees', 'Payments (Legacy)', 'Terms (Legacy)', 'Onboarding', 'Communication Templates', 'Portal', 'SOF & Changes', 'Platform Admin'
     ];
-    const [activeTab, setActiveTab] = useState(TABS[0]);
+    
+    // Add Terms & Payment for authorized roles (Owner equivalent)
+    if (canEdit) {
+        TABS.splice(3, 0, 'Contracts & Payments');
+    }
+    const [activeTab, setActiveTab] = useState(initialTab && TABS.includes(initialTab) ? initialTab : TABS[0]);
+    
+    React.useEffect(() => {
+        if (initialTab && TABS.includes(initialTab)) {
+            setActiveTab(initialTab);
+        }
+    }, [initialTab]);
+
     const [previewMode, setPreviewMode] = useState('Cover');
     const [showPreviewMobile, setShowPreviewMobile] = useState(false);
 
@@ -125,7 +139,7 @@ export default function StudioSettingsTab({
         <div className="max-w-[1500px] mx-auto animate-fade-in pb-24 md:p-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 px-4 md:px-0 mb-6">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">Studio Settings</h1>
+                    <h1 className="text-3xl font-bold tracking-tight text-indigo-950 mb-2">Studio Settings</h1>
                     <p className="text-slate-500">Configure global parameters and workflows for your organization.</p>
                 </div>
                 {/* Mobile Preview Toggle */}
@@ -150,7 +164,7 @@ export default function StudioSettingsTab({
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
-                                className={`px-4 py-2 font-semibold text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === tab ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                                className={`px-4 py-2 font-semibold text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === tab ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-indigo-900'}`}
                             >
                                 {tab}
                             </button>
@@ -175,6 +189,8 @@ export default function StudioSettingsTab({
                                     designFeePercentage: orgData.designFeePercentage || 10,
                                     defaultGstRate: orgData.defaultGstRate || 18,
                                     themeColor: orgData.themeColor || '#4f46e5',
+                                    signatoryName: orgData.signatoryName || '',
+                                    signatoryTitle: orgData.signatoryTitle || '',
                                     procurementLeadTimeWeeks: orgData.procurementLeadTimeWeeks || 4,
                                     forceMajeureText: orgData.defaultContractWordings?.forceMajeureText || '',
                                     revisionsText: orgData.defaultContractWordings?.revisionsText || '',
@@ -189,14 +205,14 @@ export default function StudioSettingsTab({
                         {activeTab === 'Fees' && settings && (
                             <FeeStructureTab settings={settings} updateSettings={updateSettings} onSaved={showSaved} isSaved={isSaved} onLiveChange={setLiveFees} />
                         )}
-                        {activeTab === 'Payments' && settings && (
+                        {activeTab === 'Payments (Legacy)' && settings && (
                             <PaymentsTab settings={settings} updateSettings={updateSettings} onSaved={showSaved} isSaved={isSaved} onLiveChange={setLivePayments} />
                         )}
-                        {activeTab === 'Terms' && settings && (
+                        {activeTab === 'Terms (Legacy)' && settings && (
                             <ProjectTermsTab settings={settings} updateSettings={updateSettings} onSaved={showSaved} isSaved={isSaved} />
                         )}
-                        {activeTab === 'Terms Config' && settings && (
-                            <TermsConfigTab settings={settings} updateSettings={updateSettings} onSaved={showSaved} isSaved={isSaved} />
+                        {activeTab === 'Contracts & Payments' && (
+                            <TermsAndPaymentTab />
                         )}
                         {activeTab === 'Onboarding' && settings && (
                             <OnboardingTab settings={settings} updateSettings={updateSettings} onSaved={showSaved} isSaved={isSaved} />
@@ -212,14 +228,14 @@ export default function StudioSettingsTab({
                         )}
                         {activeTab === 'Platform Admin' && (
                             <div className="bg-white rounded-3xl p-8 border border-slate-200">
-                                <h3 className="text-xl font-bold text-slate-800 mb-2">Integrations</h3>
+                                <h3 className="text-xl font-bold text-indigo-900 mb-2">Integrations</h3>
                                 <p className="text-sm text-slate-500 mb-6">Authorize or direct external application services.</p>
                                 
                                 <div className="p-6 bg-slate-50/50 rounded-2xl border border-slate-100 flex items-center justify-between mb-8 gap-4">
                                     <div className="flex gap-4 items-center">
                                         <div className="text-3xl">🗓️</div>
                                        <div>
-                                          <h4 className="font-bold text-slate-800 text-sm">
+                                          <h4 className="font-bold text-indigo-900 text-sm">
                                             Google Calendar Integration
                                             {isGoogleCalendarConnected() && <span className="ml-2 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">Connected</span>}
                                           </h4>
@@ -243,7 +259,7 @@ export default function StudioSettingsTab({
                                     </button>
                                 </div>
 
-                                <h3 className="text-xl font-bold text-slate-800 mb-2 pt-4 border-t border-slate-100">Project Operations</h3>
+                                <h3 className="text-xl font-bold text-indigo-900 mb-2 pt-4 border-t border-slate-100">Project Operations</h3>
                                 <p className="text-sm text-slate-500 mb-6 font-normal">Manage data portability and clear site session information.</p>
                                 
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -255,7 +271,7 @@ export default function StudioSettingsTab({
                                              <Save className="w-5 h-5 text-emerald-600" />
                                          </div>
                                          <div>
-                                             <h3 className="font-bold text-slate-800 text-sm">Save Backup</h3>
+                                             <h3 className="font-bold text-indigo-900 text-sm">Save Backup</h3>
                                              <p className="text-xs text-slate-500">Download JSON.</p>
                                          </div>
                                      </button>
@@ -266,7 +282,7 @@ export default function StudioSettingsTab({
                                              <Upload className="w-5 h-5 text-blue-600" />
                                          </div>
                                          <div>
-                                             <h3 className="font-bold text-slate-800 text-sm">Import Project</h3>
+                                             <h3 className="font-bold text-indigo-900 text-sm">Import Project</h3>
                                              <p className="text-xs text-slate-500">Restore from file.</p>
                                          </div>
                                      </label>
@@ -279,7 +295,7 @@ export default function StudioSettingsTab({
                                              <Trash2 className={`w-5 h-5 ${confirmReset ? 'text-rose-600' : 'text-slate-500'}`} />
                                          </div>
                                          <div>
-                                             <h3 className={`font-bold transition-colors text-sm ${confirmReset ? 'text-rose-800' : 'text-slate-800'}`}>{confirmReset ? 'Confirm Reset?' : 'Start New'}</h3>
+                                             <h3 className={`font-bold transition-colors text-sm ${confirmReset ? 'text-rose-800' : 'text-indigo-900'}`}>{confirmReset ? 'Confirm Reset?' : 'Start New'}</h3>
                                              <p className="text-xs text-slate-500">Clear all data.</p>
                                          </div>
                                      </button>
@@ -315,7 +331,7 @@ export default function StudioSettingsTab({
                         initial={{ opacity: 0, y: 50 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 50 }}
-                        className="fixed bottom-8 right-8 bg-slate-900 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 z-50"
+                        className="fixed bottom-8 right-8 bg-indigo-950 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 z-50"
                     >
                         <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                         <span className="font-bold">Settings Saved Successfully</span>
@@ -352,7 +368,7 @@ function SectionWrapper({ title, description, children, onSave, isDirty }: any) 
     return (
         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-                <h3 className="font-bold text-slate-800 text-lg">{title}</h3>
+                <h3 className="font-bold text-indigo-900 text-lg">{title}</h3>
                 <p className="text-sm text-slate-500 mt-1">{description}</p>
             </div>
             <div className="p-8 space-y-6">
@@ -371,7 +387,7 @@ function BrandingTab({ data, onChange, onSave, isSaved, isDirty }: any) {
                     
                     {/* Organization Identity */}
                     <div>
-                        <h3 className="font-bold text-slate-800 text-lg mb-4">Organization Identity</h3>
+                        <h3 className="font-bold text-indigo-900 text-lg mb-4">Organization Identity</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Studio Name</label>
@@ -428,7 +444,7 @@ function BrandingTab({ data, onChange, onSave, isSaved, isDirty }: any) {
 
                     {/* Contact Information */}
                     <div className="pt-6 border-t border-slate-100">
-                        <h3 className="font-bold text-slate-800 text-lg mb-4">Contact Information</h3>
+                        <h3 className="font-bold text-indigo-900 text-lg mb-4">Contact Information</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Email</label><input type="email" name="contactEmail" value={data.contactEmail} onChange={onChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Phone</label><input type="text" name="contactPhone" value={data.contactPhone} onChange={onChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
@@ -438,9 +454,17 @@ function BrandingTab({ data, onChange, onSave, isSaved, isDirty }: any) {
                         </div>
                     </div>
 
+                    {/* Studio Signature Authority */}
+                    <div className="pt-6 border-t border-slate-100">
+                        <h3 className="font-bold text-indigo-900 text-lg mb-4">Studio Signature Authority</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Principal Name</label><input type="text" name="signatoryName" value={data.signatoryName || ''} onChange={onChange} placeholder="e.g. Jane Doe" className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Principal Title</label><input type="text" name="signatoryTitle" value={data.signatoryTitle || ''} onChange={onChange} placeholder="e.g. Principal Architect" className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+                        </div>
+                    </div>
                     {/* Financial Defaults */}
                     <div className="pt-6 border-t border-slate-100">
-                        <h3 className="font-bold text-slate-800 text-lg mb-4">Legacy Financial & Procurement</h3>
+                        <h3 className="font-bold text-indigo-900 text-lg mb-4">Legacy Financial & Procurement</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Default GST Rate (%)</label><input type="number" name="defaultGstRate" value={data.defaultGstRate} onChange={onChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Design Fee (%)</label><input type="number" name="designFeePercentage" value={data.designFeePercentage} onChange={onChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
@@ -450,7 +474,7 @@ function BrandingTab({ data, onChange, onSave, isSaved, isDirty }: any) {
 
                     {/* Legacy Contract Wordings */}
                     <div className="pt-6 border-t border-slate-100">
-                        <h3 className="font-bold text-slate-800 text-lg mb-4">Legacy Defaults</h3>
+                        <h3 className="font-bold text-indigo-900 text-lg mb-4">Legacy Defaults</h3>
                         <p className="text-xs text-slate-400 mb-4">Please note that for new features you should use the Tabs configuring the new Project Terms.</p>
                         <div className="grid grid-cols-1 gap-5">
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Force Majeure Wordings</label><textarea name="forceMajeureText" value={data.forceMajeureText} onChange={onChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none h-20" /></div>
@@ -655,7 +679,7 @@ function PaymentsTab({ settings, updateSettings, onSaved, isSaved, onLiveChange 
                 </div>
                 
                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                    <h4 className="text-sm font-bold text-slate-800 mb-4">Payment Escalation Protocol</h4>
+                    <h4 className="text-sm font-bold text-indigo-900 mb-4">Payment Escalation Protocol</h4>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                         <div>
@@ -684,7 +708,7 @@ function PaymentsTab({ settings, updateSettings, onSaved, isSaved, onLiveChange 
                             className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" 
                         />
                         <div className="flex flex-col">
-                            <label htmlFor="autoSendReminder" className="text-sm font-bold text-slate-800">Automatically prepare WhatsApp reminder at Day {data.escalation?.reminderDays || 3}</label>
+                            <label htmlFor="autoSendReminder" className="text-sm font-bold text-indigo-900">Automatically prepare WhatsApp reminder at Day {data.escalation?.reminderDays || 3}</label>
                             <p className="text-xs text-amber-600 mt-0.5">Only enable this if you have verified your client's WhatsApp number in all projects.</p>
                         </div>
                     </div>
@@ -755,7 +779,7 @@ function CommunicationTemplateTab({ settings, updateSettings, onSaved, isSaved }
             <div className="space-y-8 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                 {Object.entries(groups).map(([phase, items]: [string, any]) => (
                     <div key={phase} className="mb-6">
-                        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest border-b border-slate-200 pb-2 mb-4">{phase} Phase</h3>
+                        <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-widest border-b border-slate-200 pb-2 mb-4">{phase} Phase</h3>
                         <div className="space-y-3">
                             {items.map((item: any) => (
                                 <div key={item.id} className="flex flex-col md:flex-row md:items-center gap-4 bg-slate-50 border border-slate-200 rounded-xl p-4 transition-all hover:bg-white hover:shadow-sm">
@@ -872,7 +896,7 @@ function EmailTemplatesTab({ settings, updateSettings, onSaved, isSaved, onLiveC
                             {previewKey === f.key && (
                                 <div className="w-full lg:w-72 bg-slate-100/50 rounded-xl border border-slate-200 p-4 shrink-0 flex flex-col">
                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Live Preview</p>
-                                    <div className="bg-[#E7F6D5] p-3 rounded-2xl rounded-tr-none text-sm text-slate-800 shadow-sm border border-[#D1ECA6] whitespace-pre-wrap leading-snug self-end min-w-[80%] max-w-full">
+                                    <div className="bg-[#E7F6D5] p-3 rounded-2xl rounded-tr-none text-sm text-indigo-900 shadow-sm border border-[#D1ECA6] whitespace-pre-wrap leading-snug self-end min-w-[80%] max-w-full">
                                         {renderPaymentReminderMessage(data[f.key] || "Hi {clientName}, this is a gentle reminder that payment for {milestone} (₹{amount}) is due for your {projectName} project. Please let us know once processed. Thank you! — {studioName}", {
                                             clientName: 'Rahul',
                                             projectName: 'Villa 44',
@@ -920,7 +944,7 @@ function SuperAdminSwitcher({ orgData, updateOrgData }: any) {
     return (
         <div className="mt-12 bg-slate-50 rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-w-2xl">
             <div className="p-6">
-                <h2 className="font-bold text-slate-800">Switch Studio Workspace (Super Admin)</h2>
+                <h2 className="font-bold text-indigo-900">Switch Studio Workspace (Super Admin)</h2>
                 <div className="flex gap-4 mb-4 mt-4">
                     <input
                         type="text"
@@ -936,7 +960,7 @@ function SuperAdminSwitcher({ orgData, updateOrgData }: any) {
                                 window.location.reload();
                             }
                         }}
-                        className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 transition-colors text-white font-medium rounded-xl text-sm"
+                        className="px-6 py-2.5 bg-indigo-900 hover:bg-indigo-800 transition-colors text-white font-medium rounded-xl text-sm"
                     >
                         Switch Tenant
                     </button>
@@ -997,7 +1021,7 @@ function StudioPreviewPanel({
                     <button 
                         key={m}
                         onClick={() => setPreviewMode(m)}
-                        className={`whitespace-nowrap px-4 py-2 text-sm font-bold rounded-lg transition-colors ${previewMode === m ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}
+                        className={`whitespace-nowrap px-4 py-2 text-sm font-bold rounded-lg transition-colors ${previewMode === m ? 'bg-indigo-950 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-indigo-950'}`}
                     >
                         {m}
                     </button>
@@ -1040,7 +1064,7 @@ function StudioPreviewPanel({
                     
                     {previewMode === 'How We Work' && (
                         <div className="space-y-6">
-                            <h2 className="text-2xl font-black text-slate-900 tracking-tight" style={{ color: branding?.themeColor || '#000' }}>How We Work</h2>
+                            <h2 className="text-2xl font-black text-indigo-950 tracking-tight" style={{ color: branding?.themeColor || '#000' }}>How We Work</h2>
                             <p className="text-sm text-slate-600 leading-relaxed">
                                 {val(process?.processSummary, 'No process summary defined')}
                             </p>
@@ -1057,7 +1081,7 @@ function StudioPreviewPanel({
                                                 {st.stepNumber || i + 1}
                                             </div>
                                             <div>
-                                                <h4 className="font-bold text-slate-800 text-sm">{val(st.title, 'Step title')}</h4>
+                                                <h4 className="font-bold text-indigo-900 text-sm">{val(st.title, 'Step title')}</h4>
                                                 <p className="text-xs text-slate-500 mt-1">{val(st.description, 'Step description')}</p>
                                             </div>
                                         </div>
@@ -1069,11 +1093,11 @@ function StudioPreviewPanel({
                     
                     {previewMode === 'Investment Overview' && (
                         <div className="space-y-8">
-                            <h2 className="text-2xl font-black text-slate-900 tracking-tight border-b border-slate-200 pb-4" style={{ color: branding?.themeColor || '#000' }}>Investment Overview</h2>
+                            <h2 className="text-2xl font-black text-indigo-950 tracking-tight border-b border-slate-200 pb-4" style={{ color: branding?.themeColor || '#000' }}>Investment Overview</h2>
                             
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Design Fees</h3>
-                                <div className="text-3xl font-black text-slate-800">
+                                <div className="text-3xl font-black text-indigo-900">
                                     {(fees?.designFeeMin !== undefined || fees?.designFeeMax !== undefined) ? 
                                         `${fees?.designFeeMin ?? '?'}% - ${fees?.designFeeMax ?? '?'}%` : 
                                         val('', 'Fee range not set')}
@@ -1094,7 +1118,7 @@ function StudioPreviewPanel({
                                         {payments.milestones.map((m: any, i: number) => (
                                             <div key={i} className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                                                 <div>
-                                                    <div className="font-bold text-slate-800 text-sm">{val(m.label, 'Milestone label')}</div>
+                                                    <div className="font-bold text-indigo-900 text-sm">{val(m.label, 'Milestone label')}</div>
                                                     <div className="text-xs text-slate-500 mt-0.5">{val(m.trigger, 'Trigger condition')}</div>
                                                 </div>
                                                 <div className="text-lg font-black" style={{ color: branding?.themeColor || '#4f46e5' }}>
@@ -1110,7 +1134,7 @@ function StudioPreviewPanel({
                     
                     {previewMode === 'Email Template' && (
                         <div className="space-y-6">
-                            <h2 className="text-lg font-bold text-slate-800">Proposal Intro Email</h2>
+                            <h2 className="text-lg font-bold text-indigo-900">Proposal Intro Email</h2>
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 font-mono text-sm leading-relaxed whitespace-pre-wrap text-slate-700">
                                 {val(emails?.proposalIntro, 'Proposal Intro Email Template empty')}
                             </div>

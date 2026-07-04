@@ -367,7 +367,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-sm">
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-indigo-950/60 backdrop-blur-sm">
                 <MotionDiv 
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -381,7 +381,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                                 <FileSpreadsheetIcon className="w-6 h-6" />
                             </div>
                             <div>
-                                <h3 className="text-lg font-black text-slate-800 leading-none">Import External BOQ</h3>
+                                <h3 className="text-lg font-black text-indigo-900 leading-none">Import External BOQ</h3>
                                 <div className="flex items-center gap-2 mt-1.5">
                                     {['Upload', 'Select Sheet', 'Map Columns', 'Review'].map((s, i) => {
                                         const steps = ['upload', 'sheet_select', 'mapping', 'review'];
@@ -422,7 +422,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                                 <div className="p-6 bg-indigo-50 rounded-full mb-6 group-hover:scale-110 transition-transform">
                                     <UploadIcon className="w-10 h-10 text-indigo-500" />
                                 </div>
-                                <h4 className="text-xl font-bold text-slate-800 mb-2">Drop your Excel file here</h4>
+                                <h4 className="text-xl font-bold text-indigo-900 mb-2">Drop your Excel file here</h4>
                                 <p className="text-sm text-slate-500">Supports .xlsx, .xls, .csv</p>
                             </div>
                         )}
@@ -430,7 +430,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                         {/* STEP 2: SHEET SELECTION */}
                         {step === 'sheet_select' && workbook && (
                             <div className="max-w-2xl mx-auto">
-                                <h4 className="text-lg font-bold text-slate-800 mb-6 text-center">Select a Sheet to Import</h4>
+                                <h4 className="text-lg font-bold text-indigo-900 mb-6 text-center">Select a Sheet to Import</h4>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {sheetNames.map(name => (
                                         <button
@@ -465,7 +465,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     {/* Left: Critical Fields */}
                                     <div className="space-y-4">
-                                        <h5 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-2 mb-4">Required Fields</h5>
+                                        <h5 className="text-sm font-bold text-indigo-950 border-b border-slate-200 pb-2 mb-4">Required Fields</h5>
                                         <MappingField label="Item Description" fieldKey="name" required />
                                         <MappingField label="Quantity" fieldKey="qty" required />
                                         <MappingField label="Client Rate (Price)" fieldKey="rate" required />
@@ -473,7 +473,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
 
                                     {/* Right: Optional Fields */}
                                     <div className="space-y-4">
-                                        <h5 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-2 mb-4">Optional Details</h5>
+                                        <h5 className="text-sm font-bold text-indigo-950 border-b border-slate-200 pb-2 mb-4">Optional Details</h5>
                                         <MappingField label="Room / Location" fieldKey="room" />
                                         <MappingField label="Category / Group" fieldKey="category" />
                                         <MappingField label="Unit (e.g. sqft)" fieldKey="unit" />
@@ -488,7 +488,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                     <div>
-                                        <h4 className="font-bold text-slate-800">Review Data</h4>
+                                        <h4 className="font-bold text-indigo-900">Review Data</h4>
                                         <div className="flex gap-2 text-xs text-slate-500 mt-1">
                                             <p>Found {processedItems.length} unique items.</p>
                                             {mergedCount > 0 && (
@@ -532,13 +532,13 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                                                             )}
                                                         </td>
                                                         <td className="p-3 text-slate-600">{item.room}</td>
-                                                        <td className="p-3 font-medium text-slate-800">
+                                                        <td className="p-3 font-medium text-indigo-900">
                                                             {item.name}
                                                             <div className="text-[10px] text-slate-400 truncate max-w-[200px]">{item.specs}</div>
                                                         </td>
                                                         <td className="p-3 text-right font-mono text-slate-600">{item.qty}</td>
                                                         <td className="p-3 text-right font-mono text-slate-600">{formatCurrency(item.rate)}</td>
-                                                        <td className="p-3 text-right font-bold text-slate-900 pr-6">{formatCurrency(item.rate * item.qty)}</td>
+                                                        <td className="p-3 text-right font-bold text-indigo-950 pr-6">{formatCurrency(item.rate * item.qty)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -559,17 +559,17 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                     <div className="p-5 border-t border-slate-200 bg-white flex justify-between items-center">
                         <div>
                             {step === 'sheet_select' && (
-                                <button onClick={() => setStep('upload')} className="text-slate-500 font-bold text-xs hover:text-slate-800">
+                                <button onClick={() => setStep('upload')} className="text-slate-500 font-bold text-xs hover:text-indigo-900">
                                     ← Change File
                                 </button>
                             )}
                             {step === 'mapping' && (
-                                <button onClick={() => setStep('sheet_select')} className="text-slate-500 font-bold text-xs hover:text-slate-800">
+                                <button onClick={() => setStep('sheet_select')} className="text-slate-500 font-bold text-xs hover:text-indigo-900">
                                     ← Change Sheet
                                 </button>
                             )}
                             {step === 'review' && (
-                                <button onClick={() => setStep('mapping')} className="text-slate-500 font-bold text-xs hover:text-slate-800">
+                                <button onClick={() => setStep('mapping')} className="text-slate-500 font-bold text-xs hover:text-indigo-900">
                                     ← Edit Mapping
                                 </button>
                             )}
@@ -583,7 +583,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                             {step === 'mapping' && (
                                 <button 
                                     onClick={handleProcess} 
-                                    className="px-8 py-2.5 bg-slate-900 text-white font-bold text-sm rounded-xl hover:bg-black shadow-lg flex items-center gap-2 transition-all"
+                                    className="px-8 py-2.5 bg-indigo-950 text-white font-bold text-sm rounded-xl hover:bg-indigo-950 shadow-lg flex items-center gap-2 transition-all"
                                 >
                                     Verify Data <ArrowRightIcon className="w-4 h-4" />
                                 </button>

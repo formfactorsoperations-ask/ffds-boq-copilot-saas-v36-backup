@@ -71,26 +71,26 @@ export default function PhaseTransitionWidget({
       <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-slate-100 to-transparent rounded-full blur-3xl opacity-50 pointer-events-none"></div>
 
       <div className="relative z-10">
-        <h3 className="text-sm font-bold text-slate-800 tracking-tight mb-8">Project Phase Controller</h3>
+        <h3 className="text-sm font-bold text-indigo-900 tracking-tight mb-8">Project Phase Controller</h3>
 
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 relative">
           
           {/* Progress Line */}
           <div className="hidden md:block absolute top-1/2 left-0 right-0 h-1 bg-slate-200 -translate-y-1/2 z-0 rounded-full overflow-hidden">
-             <div className="h-full bg-slate-800 transition-all duration-700 ease-in-out" 
+             <div className="h-full bg-indigo-900 transition-all duration-700 ease-in-out" 
                   style={{ width: isCompleted ? '100%' : isHandover ? '100%' : isExecution ? '66%' : isDesign ? '33%' : '0%' }}></div>
           </div>
 
           {phases.map((phase, i) => (
             <div key={phase.id} className="relative z-10 flex flex-col items-center gap-3">
               <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-colors ${
-                  phase.active ? 'bg-slate-900 text-white shadow-lg scale-110 ring-4 ring-slate-100' : 
-                  phase.completed ? 'bg-slate-800 text-white' : 
+                  phase.active ? 'bg-indigo-950/90 backdrop-blur-xl border border-indigo-800/50 text-white shadow-2xl shadow-indigo-950/20 scale-110 ring-4 ring-slate-100' : 
+                  phase.completed ? 'bg-indigo-900 text-white' : 
                   'bg-white text-slate-400 border border-slate-200'
               }`}>
                 {phase.completed ? '✓' : i + 1}
               </div>
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${phase.active ? 'text-slate-900' : phase.completed ? 'text-slate-700' : 'text-slate-400'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${phase.active ? 'text-indigo-950' : phase.completed ? 'text-slate-700' : 'text-slate-400'}`}>
                   {phase.label}
               </span>
             </div>
@@ -102,12 +102,12 @@ export default function PhaseTransitionWidget({
             {isPreSales && currentStage !== 'lost' && (
                 <>
                     <div>
-                        <h4 className="text-lg font-bold text-slate-800 mb-1">Move to Design Phase?</h4>
+                        <h4 className="text-lg font-bold text-indigo-900 mb-1">Move to Design Phase?</h4>
                         <p className="text-sm text-slate-500 max-w-md leading-relaxed">Transition the project to Design when the client approves the initial proposal and pays the token/design fee. This marks the project as "Won".</p>
                     </div>
                     <button 
                         onClick={() => advanceLifecycle('design', 'won')}
-                        className="w-full md:w-auto px-8 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+                        className="w-full md:w-auto px-8 py-3.5 bg-indigo-950 hover:bg-indigo-900 text-white font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
                     >
                         Start Design Phase →
                     </button>
@@ -117,7 +117,7 @@ export default function PhaseTransitionWidget({
             {isDesign && (
                 <>
                     <div>
-                        <h4 className="text-lg font-bold text-slate-800 mb-1">Move to Execution Phase?</h4>
+                        <h4 className="text-lg font-bold text-indigo-900 mb-1">Move to Execution Phase?</h4>
                         <p className="text-sm text-slate-500 max-w-md leading-relaxed">Transition when the BOQ is finalized, contracts are signed, and execution advances are received. This activates the timeline and supply chain tools.</p>
                     </div>
                     <button 
@@ -132,7 +132,7 @@ export default function PhaseTransitionWidget({
             {isExecution && (
                 <>
                     <div className="flex-1">
-                        <h4 className="text-lg font-bold text-slate-800 mb-1">Execution Status</h4>
+                        <h4 className="text-lg font-bold text-indigo-900 mb-1">Execution Status</h4>
                         <p className="text-sm text-slate-500 max-w-lg leading-relaxed">
                             {isSubstantiallyDone 
                                 ? "Site execution is virtually complete. You may now transition the project to the Handover & Snag clearance stage."
@@ -169,7 +169,7 @@ export default function PhaseTransitionWidget({
             {isHandover && (
                 <>
                     <div>
-                        <h4 className="text-lg font-bold text-slate-800 mb-1">Mark as Completed?</h4>
+                        <h4 className="text-lg font-bold text-indigo-900 mb-1">Mark as Completed?</h4>
                         <p className="text-sm text-slate-500 max-w-md leading-relaxed">Transition when site handover is complete and final payments (retention aside) are cleared. Project moves to DLP/Warranty tracking.</p>
                     </div>
                     <button 

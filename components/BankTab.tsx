@@ -144,13 +144,13 @@ const BankTab: React.FC<BankTabProps> = ({ bank, setBank, aiStrategy, highlighte
       
       {/* 1. Header Stats Dashboard */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden group">
+          <div className="bg-indigo-950/90 backdrop-blur-xl border border-indigo-800/50 rounded-3xl shadow-2xl shadow-indigo-950/20 p-6 text-white shadow-lg relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
                   <ListIcon className="w-24 h-24" />
               </div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Library Size</p>
               <h2 className="text-4xl font-black">{stats.totalItems} <span className="text-lg font-medium text-slate-500">Items</span></h2>
-              <div className="w-full bg-slate-800 h-1 mt-4 rounded-full overflow-hidden">
+              <div className="w-full bg-indigo-900 h-1 mt-4 rounded-full overflow-hidden">
                   <div className="bg-blue-500 h-full w-3/4"></div>
               </div>
           </div>
@@ -160,7 +160,7 @@ const BankTab: React.FC<BankTabProps> = ({ bank, setBank, aiStrategy, highlighte
                   <GridIcon className="w-24 h-24" />
               </div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Categories</p>
-              <h2 className="text-4xl font-black text-slate-800">{stats.totalCategories}</h2>
+              <h2 className="text-4xl font-black text-indigo-900">{stats.totalCategories}</h2>
               <p className="text-xs text-slate-500 mt-2">Active trades & groups</p>
           </div>
 
@@ -199,7 +199,7 @@ const BankTab: React.FC<BankTabProps> = ({ bank, setBank, aiStrategy, highlighte
                                 onClick={() => setSelectedCategory(cat)}
                                 className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all border
                                     ${selectedCategory === cat 
-                                        ? 'bg-slate-800 text-white border-slate-800 shadow-md' 
+                                        ? 'bg-indigo-900 text-white border-indigo-900 shadow-md' 
                                         : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                                     }
                                 `}

@@ -201,7 +201,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
         {/* Header Area */}
         <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
             <div>
-                <h3 className="text-xl font-bold text-slate-800 tracking-tight">Project Context</h3>
+                <h3 className="text-xl font-bold text-indigo-900 tracking-tight">Project Context</h3>
                 <p className="text-xs text-slate-500 mt-1">Define the core parameters for AI estimation</p>
             </div>
             <div className="flex gap-2">
@@ -220,7 +220,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
       {!isExpanded ? (
           <div className="p-6 md:px-8 md:py-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                <div>
-                   <h4 className="font-bold text-slate-800 text-lg">
+                   <h4 className="font-bold text-indigo-900 text-lg">
                        {projectContext.name || 'Untitled Project'} <span className="text-slate-400 font-normal">· {projectContext.config || 'No config'} · {projectContext.area || 0} sqft · {projectContext.location || 'No location'}</span>
                    </h4>
                    <p className="text-sm font-medium text-slate-500 mt-1 flex gap-2 items-center">
@@ -250,7 +250,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
                 {projectContext.logoImage ? (
                     <div className="relative rounded-2xl overflow-hidden bg-white shadow-sm border border-slate-200 p-2">
                         <img src={projectContext.logoImage} alt="Logo" className="w-auto object-contain" style={{height: (projectContext.logoHeight || 80) / 1.5}} />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div className="absolute inset-0 bg-indigo-950/60 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <button onClick={() => handleContextChange('logoImage', '')} className="text-white hover:text-red-400 p-2">
                                 <DeleteIcon className="w-5 h-5" />
                             </button>
@@ -410,7 +410,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
         </motion.div>
 
         {/* Execution Intelligence Parameters */}
-        <motion.div variants={itemVariants} className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl relative overflow-hidden">
+        <motion.div variants={itemVariants} className="bg-indigo-950 border border-indigo-900 p-6 rounded-3xl shadow-xl relative overflow-hidden">
             {/* Background Accent */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
             
@@ -422,7 +422,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
                         </div>
                         Execution Intelligence
                     </h5>
-                    <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+                    <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase bg-indigo-900 px-3 py-1 rounded-full border border-slate-700">
                         Ops Layer
                     </span>
                 </div>
@@ -436,7 +436,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
                                 type="date" 
                                 value={projectContext.targetHandoverDate || ''} 
                                 onChange={e => handleContextChange('targetHandoverDate', e.target.value)} 
-                                className="w-full p-3 bg-slate-800/50 border border-slate-700 rounded-xl text-sm font-medium text-white focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 outline-none transition-all hover:bg-slate-800" 
+                                className="w-full p-3 bg-indigo-900/50 border border-slate-700 rounded-xl text-sm font-medium text-white focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 outline-none transition-all hover:bg-indigo-900" 
                             />
                         </div>
                     </div>
@@ -449,7 +449,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
                                 type="date" 
                                 value={projectContext.sofFreezeDate || ''} 
                                 onChange={e => handleContextChange('sofFreezeDate', e.target.value)} 
-                                className="w-full p-3 bg-slate-800/50 border border-slate-700 rounded-xl text-sm font-medium text-white focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 outline-none transition-all hover:bg-slate-800" 
+                                className="w-full p-3 bg-indigo-900/50 border border-slate-700 rounded-xl text-sm font-medium text-white focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 outline-none transition-all hover:bg-indigo-900" 
                             />
                         </div>
                     </div>
@@ -459,19 +459,19 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
                         <div className="flex gap-2">
                             <button
                                 onClick={() => handleContextChange('briefFrozenAt', projectContext.briefFrozenAt ? null : Date.now())}
-                                className={`flex-1 p-2 rounded-lg text-xs font-bold border transition-colors ${projectContext.briefFrozenAt ? 'bg-amber-600 border-amber-600 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
+                                className={`flex-1 p-2 rounded-lg text-xs font-bold border transition-colors ${projectContext.briefFrozenAt ? 'bg-amber-600 border-amber-600 text-white' : 'bg-indigo-900 border-slate-700 text-slate-300 hover:bg-indigo-800'}`}
                             >
                                 {projectContext.briefFrozenAt ? '✓ Brief Frozen' : 'Freeze Brief'}
                             </button>
                             <button
                                 onClick={() => handleContextChange('designApprovedAt', projectContext.designApprovedAt ? null : Date.now())}
-                                className={`flex-1 p-2 rounded-lg text-xs font-bold border transition-colors ${projectContext.designApprovedAt ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
+                                className={`flex-1 p-2 rounded-lg text-xs font-bold border transition-colors ${projectContext.designApprovedAt ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-indigo-900 border-slate-700 text-slate-300 hover:bg-indigo-800'}`}
                             >
                                 {projectContext.designApprovedAt ? '✓ Design Approved' : 'Approve Design'}
                             </button>
                             <button
                                 onClick={() => handleContextChange('handoverDate', projectContext.handoverDate ? null : Date.now())}
-                                className={`flex-1 p-2 rounded-lg text-xs font-bold border transition-colors ${projectContext.handoverDate ? 'bg-blue-600 border-blue-600 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
+                                className={`flex-1 p-2 rounded-lg text-xs font-bold border transition-colors ${projectContext.handoverDate ? 'bg-blue-600 border-blue-600 text-white' : 'bg-indigo-900 border-slate-700 text-slate-300 hover:bg-indigo-800'}`}
                             >
                                 {projectContext.handoverDate ? '✓ Handed Over' : 'Mark Handover'}
                             </button>
@@ -486,7 +486,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
                                 type="number" 
                                 value={projectContext.procurementLeadTimeWeeks || 4} 
                                 onChange={e => handleContextChange('procurementLeadTimeWeeks', Number(e.target.value))} 
-                                className="w-full p-3 bg-slate-800/50 border border-slate-700 rounded-xl text-sm font-medium text-white focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 outline-none transition-all hover:bg-slate-800 pl-4" 
+                                className="w-full p-3 bg-indigo-900/50 border border-slate-700 rounded-xl text-sm font-medium text-white focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 outline-none transition-all hover:bg-indigo-900 pl-4" 
                             />
                             <span className="absolute right-4 text-slate-500 text-sm font-medium pointer-events-none">wks</span>
                         </div>
@@ -499,13 +499,13 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
                             <select 
                                 value={projectContext.currentExecutionBundle || 'pre_execution'} 
                                 onChange={e => handleContextChange('currentExecutionBundle', e.target.value)} 
-                                className="w-full p-3 bg-slate-800/50 border border-slate-700 rounded-xl text-sm font-medium text-white focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 outline-none transition-all hover:bg-slate-800 appearance-none cursor-pointer"
+                                className="w-full p-3 bg-indigo-900/50 border border-slate-700 rounded-xl text-sm font-medium text-white focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 outline-none transition-all hover:bg-indigo-900 appearance-none cursor-pointer"
                             >
-                                <option value="pre_execution" className="bg-slate-800">Pre-Execution & Approvals</option>
-                                <option value="civil_mep" className="bg-slate-800">Civil & MEP</option>
-                                <option value="false_ceiling" className="bg-slate-800">False Ceiling & Paneling</option>
-                                <option value="finishes_carpentry" className="bg-slate-800">Finishes & Carpentry</option>
-                                <option value="handover" className="bg-slate-800">Final Handover</option>
+                                <option value="pre_execution" className="bg-indigo-900">Pre-Execution & Approvals</option>
+                                <option value="civil_mep" className="bg-indigo-900">Civil & MEP</option>
+                                <option value="false_ceiling" className="bg-indigo-900">False Ceiling & Paneling</option>
+                                <option value="finishes_carpentry" className="bg-indigo-900">Finishes & Carpentry</option>
+                                <option value="handover" className="bg-indigo-900">Final Handover</option>
                             </select>
                             <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
                                 <ChevronDownIcon className="w-4 h-4 text-slate-400" />
@@ -520,11 +520,11 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
                             <select 
                                 value={projectContext.assignedSupervisors?.[0] || ''} 
                                 onChange={e => handleContextChange('assignedSupervisors', [e.target.value])} 
-                                className="w-full p-3 bg-slate-800/50 border border-slate-700 rounded-xl text-sm font-medium text-white focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 outline-none transition-all hover:bg-slate-800 appearance-none cursor-pointer"
+                                className="w-full p-3 bg-indigo-900/50 border border-slate-700 rounded-xl text-sm font-medium text-white focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 outline-none transition-all hover:bg-indigo-900 appearance-none cursor-pointer"
                             >
-                                <option value="" className="bg-slate-800">Unassigned</option>
+                                <option value="" className="bg-indigo-900">Unassigned</option>
                                 {siteSupervisors.map(s => (
-                                    <option key={s.id} value={s.id} className="bg-slate-800">{s.name}</option>
+                                    <option key={s.id} value={s.id} className="bg-indigo-900">{s.name}</option>
                                 ))}
                             </select>
                             <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
@@ -547,7 +547,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
                         <PencilIcon className="w-5 h-5" />
                     </div>
                     <div>
-                        <h5 className="font-bold text-slate-800 text-base">Design Fees & Deliverables</h5>
+                        <h5 className="font-bold text-indigo-900 text-base">Design Fees & Deliverables</h5>
                         <p className="text-sm text-slate-500 mt-0.5">
                             <span className="font-bold text-indigo-600">{feeLabel}</span>
                             <span className="mx-2 text-slate-300">|</span>
@@ -581,28 +581,28 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
                                         {projectContext.designScope?.has3DRenders && <CheckIcon className="w-3.5 h-3.5" />}
                                     </div>
                                     <input type="checkbox" checked={!!projectContext.designScope?.has3DRenders} onChange={e => handleDesignScopeChange('has3DRenders', e.target.checked)} className="hidden" />
-                                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">3D Visualization (4 views/room)</span>
+                                    <span className="text-sm font-medium text-slate-700 group-hover:text-indigo-950 transition-colors">3D Visualization (4 views/room)</span>
                                 </label>
                                 <label className="flex items-center gap-3 cursor-pointer group p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200">
                                     <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${projectContext.designScope?.has2DDrawings ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`}>
                                         {projectContext.designScope?.has2DDrawings && <CheckIcon className="w-3.5 h-3.5" />}
                                     </div>
                                     <input type="checkbox" checked={!!projectContext.designScope?.has2DDrawings} onChange={e => handleDesignScopeChange('has2DDrawings', e.target.checked)} className="hidden" />
-                                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">2D Working Drawings (GFC)</span>
+                                    <span className="text-sm font-medium text-slate-700 group-hover:text-indigo-950 transition-colors">2D Working Drawings (GFC)</span>
                                 </label>
                                 <label className="flex items-center gap-3 cursor-pointer group p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200">
                                     <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${projectContext.designScope?.hasFurnitureSelection ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`}>
                                         {projectContext.designScope?.hasFurnitureSelection && <CheckIcon className="w-3.5 h-3.5" />}
                                     </div>
                                     <input type="checkbox" checked={!!projectContext.designScope?.hasFurnitureSelection} onChange={e => handleDesignScopeChange('hasFurnitureSelection', e.target.checked)} className="hidden" />
-                                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">Loose Furniture Selection</span>
+                                    <span className="text-sm font-medium text-slate-700 group-hover:text-indigo-950 transition-colors">Loose Furniture Selection</span>
                                 </label>
                                 <label className="flex items-center gap-3 cursor-pointer group p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200">
                                     <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${projectContext.designScope?.hasVrWalkthrough ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`}>
                                         {projectContext.designScope?.hasVrWalkthrough && <CheckIcon className="w-3.5 h-3.5" />}
                                     </div>
                                     <input type="checkbox" checked={!!projectContext.designScope?.hasVrWalkthrough} onChange={e => handleDesignScopeChange('hasVrWalkthrough', e.target.checked)} className="hidden" />
-                                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">VR Walkthrough</span>
+                                    <span className="text-sm font-medium text-slate-700 group-hover:text-indigo-950 transition-colors">VR Walkthrough</span>
                                 </label>
                                 <div className="flex items-center gap-3 mt-4 p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
                                     <label className="flex items-center gap-3 cursor-pointer group flex-grow">
@@ -697,7 +697,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
                         <SparklesIcon className="w-4 h-4"/>
                         {isEstimating ? 'Thinking...' : 'AI Auto-Fill'}
                     </button>
-                    <button onClick={handleAddRoom} className="px-4 py-2 text-sm bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors shadow-sm">+ Add Room</button>
+                    <button onClick={handleAddRoom} className="px-4 py-2 text-sm bg-indigo-950 text-white font-bold rounded-xl hover:bg-indigo-900 transition-colors shadow-sm">+ Add Room</button>
                 </div>
             </div>
 
@@ -726,7 +726,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ projectContext,
                             <div className="flex flex-wrap items-start gap-4">
                                 <div className="flex-grow min-w-[200px]">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Room Name</label>
-                                    <input type="text" value={room.name || ''} onChange={e => handleRoomChange(index, 'name', e.target.value)} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-bold text-slate-800 outline-none transition-all" placeholder="Room Name" />
+                                    <input type="text" value={room.name || ''} onChange={e => handleRoomChange(index, 'name', e.target.value)} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-bold text-indigo-900 outline-none transition-all" placeholder="Room Name" />
                                 </div>
                                 <div className="flex gap-3 items-end">
                                      <div>

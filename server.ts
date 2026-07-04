@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -170,6 +171,12 @@ ${rawNotes}
       console.error("MCP route error", e);
       res.status(500).json({ error: e.message });
     }
+  });
+
+  app.post("/api/log", express.json(), (req, res) => {
+    console.log("CLIENT LOG:", req.body);
+    fs.appendFileSync('client_errors.log', JSON.stringify(req.body) + '\n');
+    res.json({ ok: true });
   });
 
   // Vite middleware for development

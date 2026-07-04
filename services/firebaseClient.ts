@@ -1,6 +1,8 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, Firestore, setLogLevel } from 'firebase/firestore';
+
+setLogLevel('silent');
 import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getFunctions, Functions } from 'firebase/functions';
@@ -83,8 +85,16 @@ let functions: Functions | null = null;
 if (finalConfig) {
     try {
         // Prevent multiple initializations (HMR or Re-renders)
-        const app = getApps().length > 0 ? getApp() : initializeApp(finalConfig);
-        db = getFirestore(app);
+        let app;
+        if (getApps().length > 0) {
+            app = getApp();
+            db = getFirestore(app);
+        } else {
+            app = initializeApp(finalConfig);
+            db = initializeFirestore(app, {
+                experimentalForceLongPolling: true,
+            });
+        }
         auth = getAuth(app);
         storage = getStorage(app);
         functions = getFunctions(app);

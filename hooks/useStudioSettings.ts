@@ -181,7 +181,7 @@ export function useStudioSettings(studioId: string) {
     
     async function loadSettings() {
       if (!firestoreDb) {
-        const defaultData = studioId === 'demo-tenant-01' ? defaultFFDSSettings : defaultEmptySettings;
+        const defaultData = defaultFFDSSettings;
         if (isMounted) setSettings(defaultData);
         setLoading(false);
         return;
@@ -192,7 +192,7 @@ export function useStudioSettings(studioId: string) {
 
         if (docSnap.exists()) {
           const fetchedData = docSnap.data() as Partial<StudioSettings>;
-          const defaultData = studioId === 'demo-tenant-01' ? defaultFFDSSettings : defaultEmptySettings;
+          const defaultData = defaultFFDSSettings;
           
           if (!fetchedData.emailTemplateLibrary || fetchedData.emailTemplateLibrary.length === 0) {
               fetchedData.emailTemplateLibrary = EMAIL_TEMPLATE_LIBRARY;
@@ -202,6 +202,7 @@ export function useStudioSettings(studioId: string) {
           }
           
           // Force apply the 5-step process if the saved version is old and only has 2 steps
+          if (fetchedData?.designProcess?.steps && fetchedData.designProcess.steps.length === 0) { fetchedData.designProcess = defaultFFDSSettings.designProcess; }
           if (studioId === 'demo-tenant-01' && fetchedData?.designProcess?.steps && fetchedData.designProcess.steps.length < 5) {
              fetchedData.designProcess = defaultFFDSSettings.designProcess;
           }
@@ -211,13 +212,13 @@ export function useStudioSettings(studioId: string) {
           }
         } else {
           // Migration logic
-          const defaultData = studioId === 'demo-tenant-01' ? defaultFFDSSettings : defaultEmptySettings;
+          const defaultData = defaultFFDSSettings;
           await setDoc(docRef, defaultData);
           if (isMounted) setSettings(defaultData);
         }
       } catch (err: any) {
         console.error("Error fetching studio settings", err);
-        const defaultData = studioId === 'demo-tenant-01' ? defaultFFDSSettings : defaultEmptySettings;
+        const defaultData = defaultFFDSSettings;
         if (isMounted) {
             setSettings(defaultData);
             setError(err);

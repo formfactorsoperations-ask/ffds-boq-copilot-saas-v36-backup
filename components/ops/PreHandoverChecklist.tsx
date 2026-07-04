@@ -265,13 +265,13 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                     <div className="bg-white border text-sm border-slate-200 p-1 rounded-lg flex font-medium shadow-sm">
                         <button 
                             onClick={() => setViewMode('checklist')}
-                            className={`px-3 py-1.5 rounded-md transition-colors ${viewMode === 'checklist' ? 'bg-slate-100 text-slate-800 font-bold' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`px-3 py-1.5 rounded-md transition-colors ${viewMode === 'checklist' ? 'bg-slate-100 text-indigo-900 font-bold' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             Grid Checklist
                         </button>
                         <button 
                             onClick={() => setViewMode('electrical-plan')}
-                            className={`px-3 py-1.5 rounded-md transition-colors ${viewMode === 'electrical-plan' ? 'bg-slate-100 text-slate-800 font-bold' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`px-3 py-1.5 rounded-md transition-colors ${viewMode === 'electrical-plan' ? 'bg-slate-100 text-indigo-900 font-bold' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             Electrical Plan Table
                         </button>
@@ -285,7 +285,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                             Print
                         </button>
                         {showPrintWarning && (
-                            <div className="absolute top-full right-0 mt-2 w-72 bg-slate-900 text-white text-xs p-3 rounded shadow-xl z-50">
+                            <div className="absolute top-full right-0 mt-2 w-72 bg-indigo-950 text-white text-xs p-3 rounded shadow-xl z-50">
                                 Printing directly from the preview might be blocked. Click the "Open Web App" arrow button ↗ in the top right to open in a new tab, then print.
                             </div>
                         )}
@@ -294,8 +294,8 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
             </div>
 
             {/* Print Header */}
-            <div className="hidden print:block text-center border-b-2 border-slate-900 pb-4 mb-8">
-                <h1 className="text-3xl font-black text-slate-900 uppercase tracking-widest mb-1">
+            <div className="hidden print:block text-center border-b-2 border-indigo-950 pb-4 mb-8">
+                <h1 className="text-3xl font-black text-indigo-950 uppercase tracking-widest mb-1">
                     {viewMode === 'electrical-plan' ? 'Electrical Plan' : 'Site Checklist'}
                 </h1>
                 <h2 className="text-lg font-medium text-slate-600">
@@ -324,7 +324,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                 const roomName = roomMatch ? roomMatch.name : (roomId === 'unassigned' ? 'General / Unassigned' : roomId);
                                 return (
                                     <React.Fragment key={roomId}>
-                                        <tr className="bg-slate-100/50 print:bg-slate-100 text-slate-800">
+                                        <tr className="bg-slate-100/50 print:bg-slate-100 text-indigo-900">
                                             <td colSpan={4} className="px-4 py-2 border-b border-slate-200 print:border-slate-300">
                                                 <div className="flex items-center justify-between font-bold">
                                                     {roomId === 'unassigned' ? (
@@ -367,7 +367,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                                         value={ep.item} 
                                                         onChange={(e) => handleUpdateElectricalPoint(ep.id, 'item', e.target.value)}
                                                         placeholder="E.g., Panel Light, Switch..."
-                                                        className="w-full bg-transparent border-none p-0 focus:ring-0 font-medium text-slate-800"
+                                                        className="w-full bg-transparent border-none p-0 focus:ring-0 font-medium text-indigo-900"
                                                     />
                                                 </td>
                                                 <td className="px-4 py-2 print:p-1.5 border-r border-b border-slate-200 print:border-slate-300">
@@ -376,7 +376,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                                         min={1}
                                                         value={ep.qty} 
                                                         onChange={(e) => handleUpdateElectricalPoint(ep.id, 'qty', parseInt(e.target.value) || 0)}
-                                                        className="w-full bg-transparent border-none p-0 focus:ring-0 text-center font-bold text-slate-800"
+                                                        className="w-full bg-transparent border-none p-0 focus:ring-0 text-center font-bold text-indigo-900"
                                                     />
                                                 </td>
                                                 <td className="px-0 py-0 border-b border-slate-200 print:border-slate-300 relative">
@@ -474,16 +474,16 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                         {/* Electrical Counting Section */}
                         <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 print:bg-white print:border-slate-300">
                             <div className="flex justify-between items-start mb-3">
-                                <div className="flex items-center gap-2 text-indigo-700 font-bold print:text-slate-900">
+                                <div className="flex items-center gap-2 text-indigo-700 font-bold print:text-indigo-950">
                                     <Bolt className="w-4 h-4 print:hidden" /> Electrical Points
                                 </div>
-                                <div className="text-2xl font-black text-slate-800 bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-sm print:shadow-none print:border-slate-900 print:bg-slate-50">
+                                <div className="text-2xl font-black text-indigo-900 bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-sm print:shadow-none print:border-indigo-950 print:bg-slate-50">
                                     {room.electricalPoints.totalPoints}
                                 </div>
                             </div>
                             
                             {room.electricalPoints.breakdown.length > 0 ? (
-                                <ul className="text-xs space-y-2 mb-4 text-slate-600 border-t border-slate-200 pt-3 print:text-[11px] print:text-slate-800">
+                                <ul className="text-xs space-y-2 mb-4 text-slate-600 border-t border-slate-200 pt-3 print:text-[11px] print:text-indigo-900">
                                     {room.electricalPoints.breakdown.map((bd, idx) => (
                                         <li key={`elec-${bd.name}-${idx}`} className="flex justify-between border-b border-slate-100 pb-1 print:border-slate-300">
                                             <span className="truncate pr-2">{bd.name}</span>
@@ -537,7 +537,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                             {/* Print friendly checklist item */}
                                             <div className="hidden print:flex items-start gap-2">
                                                 <div className="w-4 h-4 mt-0.5 border border-slate-400 rounded-sm shrink-0"></div>
-                                                <span className="text-[11px] font-medium text-slate-800 leading-tight">
+                                                <span className="text-[11px] font-medium text-indigo-900 leading-tight">
                                                     {check.label}
                                                 </span>
                                             </div>

@@ -31,6 +31,8 @@ interface StudioDashboardProps {
 }
 
 // Helper function for applying command actions
+import { INITIAL_BANK } from '../constants';
+
 const applyCommandAction = (boq: BoqItem[], action: CommandAction, bank: Item[]): BoqItem[] => {
     const bankMap = new Map(bank.map(item => [item.id, item]));
 
@@ -90,7 +92,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // For AddItemModal
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
@@ -186,9 +188,10 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   const fullBoq = useMemo((): FullBoqItem[] => {
     if (!activeTier) return [];
     return (activeTier.boq || []).map(boqItem => {
-        const bankItem = bankMap.get(boqItem.bankId) || {
+        const initialBankItem = INITIAL_BANK.find(i => i.id === boqItem.bankId);
+        const bankItem = bankMap.get(boqItem.bankId) || initialBankItem || {
             id: boqItem.bankId,
-            name: boqItem.name || 'Custom / Legacy Item',
+            name: (boqItem as any).name || (boqItem as any).item || boqItem.rationale || 'Custom / Legacy Item',
             cat: boqItem.roomId || 'General Scope',
             materials: 0,
             labor: 0,
@@ -450,14 +453,14 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
     <div id="boq-editor-content" className="space-y-8 pb-12 print:space-y-0 print:pb-0">
       
       {/* PRINT-ONLY HEADER */}
-      <div className="hidden print:block w-full pt-8 pb-6 border-b-2 border-slate-800 mb-6">
+      <div className="hidden print:block w-full pt-8 pb-6 border-b-2 border-indigo-900 mb-6">
           <div className="flex justify-between items-end">
               <div>
-                  <h1 className="text-3xl font-black tracking-tighter text-slate-900 mb-1">SCHEDULE OF FINISHES</h1>
+                  <h1 className="text-3xl font-black tracking-tighter text-indigo-950 mb-1">SCHEDULE OF FINISHES</h1>
                   <h2 className="text-lg font-bold text-slate-600 uppercase tracking-widest">{projectContext.name}</h2>
               </div>
               <div className="text-right">
-                  <div className="font-bold text-slate-800 tracking-tight">FORM FACTORS DESIGN STUDIO</div>
+                  <div className="font-bold text-indigo-900 tracking-tight">FORM FACTORS DESIGN STUDIO</div>
                   <div className="text-xs text-slate-500 uppercase font-medium mt-1">Ref: 'Draft' | Date: {new Date().toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'})}</div>
               </div>
           </div>
@@ -466,7 +469,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
       {/* Header Area */}
       <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between mb-4 print:hidden">
           <div>
-            <h2 className="text-2xl font-black text-slate-800 tracking-tight">Studio Editor <span className="text-indigo-600 text-lg align-top font-bold bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 ml-2">{activeTier.name}</span></h2>
+            <h2 className="text-2xl font-black text-indigo-900 tracking-tight">Studio Editor <span className="text-indigo-600 text-lg align-top font-bold bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 ml-2">{activeTier.name}</span></h2>
             <p className="text-slate-500 font-medium">Build and refine your scope room by room.</p>
           </div>
           
@@ -495,11 +498,19 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                   </span>
               </div>
 
+              
+              
+              
+              
+              
+              
+
+              
               {/* View Toggle */}
               <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm self-start">
                   <button 
                     onClick={() => setViewMode('cards')}
-                    className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs font-bold transition-all ${viewMode === 'cards' ? 'bg-slate-100 text-slate-800 shadow-inner' : 'text-slate-400 hover:text-slate-600'}`}
+                    className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs font-bold transition-all ${viewMode === 'cards' ? 'bg-slate-100 text-indigo-900 shadow-inner' : 'text-slate-400 hover:text-slate-600'}`}
                   >
                       <GridIcon className="w-4 h-4" /> Cards
                   </button>
@@ -620,7 +631,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                     <div className="flex items-center gap-4 mb-4">
                         <div className={`text-4xl font-black ${auditResult.score > 80 ? 'text-emerald-500' : auditResult.score > 50 ? 'text-amber-500' : 'text-red-500'}`}>{auditResult.score}</div>
                         <div>
-                            <h4 className="font-bold text-slate-800">Project Health Score</h4>
+                            <h4 className="font-bold text-indigo-900">Project Health Score</h4>
                             <p className="text-xs text-slate-500">AI analysis of scope completeness and logic.</p>
                         </div>
                     </div>
@@ -749,7 +760,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                       <div className="w-full sm:w-[360px] bg-white border border-slate-200 rounded-xl shadow-sm p-4 text-sm">
                           <div className="flex justify-between items-center mb-2">
                               <span className="text-slate-600 font-medium">Firm scope</span>
-                              <span className="font-mono text-slate-800 font-bold">₹ {firmTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                              <span className="font-mono text-indigo-900 font-bold">₹ {firmTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                           </div>
                           <div className="flex justify-between items-center mb-3">
                               <div className="flex items-center gap-2">
@@ -759,8 +770,8 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                               <span className="font-mono text-amber-600 font-bold">₹ {estimateExposure.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                           </div>
                           <div className="flex justify-between items-center border-t border-slate-100 pt-3 mb-3">
-                              <span className="text-slate-800 font-bold text-base">Grand total</span>
-                              <span className="font-mono text-slate-900 font-black text-lg">₹ {grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                              <span className="text-indigo-900 font-bold text-base">Grand total</span>
+                              <span className="font-mono text-indigo-950 font-black text-lg">₹ {grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                           </div>
                           <div className="flex justify-between items-center text-xs text-slate-400">
                               <span>Client-procured: {clientProcuredCount} items (₹0 in FFDS billing) &middot; Excluded: {excludedCount}</span>
@@ -777,6 +788,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
           </div>
       </div>
 
+      
       <AddItemModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

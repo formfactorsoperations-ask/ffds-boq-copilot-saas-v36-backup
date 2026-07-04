@@ -21,7 +21,7 @@ const ClientDesignProcess: React.FC<ClientDesignProcessProps> = ({ content, sett
         <section id="process" className="py-10">
             <div className="mb-8">
                 <span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-full mb-3">Design Process</span>
-                <h2 className="text-3xl font-extrabold text-slate-900 mb-2 whitespace-pre-line">{title}</h2>
+                <h2 className="text-3xl font-extrabold text-indigo-950 mb-2 whitespace-pre-line">{title}</h2>
                 <p className="text-slate-500 max-w-3xl text-sm leading-relaxed">
                     {subtitle}
                 </p>
@@ -37,11 +37,11 @@ const ClientDesignProcess: React.FC<ClientDesignProcessProps> = ({ content, sett
                     {processSteps.map((step: any, index: number) => (
                         <div key={index} className="border border-slate-200 rounded-3xl p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
                             <div className="flex items-start gap-4 mb-4">
-                                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-800 flex items-center justify-center font-black text-sm shrink-0">
+                                <div className="w-8 h-8 rounded-lg bg-slate-100 text-indigo-900 flex items-center justify-center font-black text-sm shrink-0">
                                     {step.stepNumber || index + 1}
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-lg text-slate-900">{step.title}</h3>
+                                    <h3 className="font-bold text-lg text-indigo-950">{step.title}</h3>
                                     <p className="text-sm text-slate-600 mt-1 leading-relaxed">
                                         {step.description}
                                     </p>

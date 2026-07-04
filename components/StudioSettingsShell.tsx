@@ -24,8 +24,8 @@ const StudioSettingsShell: React.FC<StudioSettingsShellProps> = ({
 }) => {
     const { currentRole } = useOrg();
 
-    const currentSubTab = ['setup-wizard', 'team', 'subscription', 'studio-settings'].includes(activeTab) 
-        ? activeTab 
+    const currentSubTab = ['setup-wizard', 'team', 'subscription', 'studio-settings', 'terms-and-payment'].includes(activeTab) 
+        ? (activeTab === 'terms-and-payment' ? 'studio-settings' : activeTab)
         : 'setup-wizard';
 
     const AVAILABLE_TABS = useMemo(() => {
@@ -52,7 +52,7 @@ const StudioSettingsShell: React.FC<StudioSettingsShellProps> = ({
 
     return (
         <div className="max-w-6xl mx-auto w-full">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-6">Settings</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-indigo-950 mb-6">Settings</h1>
             <div className="mb-6 border-b border-slate-200">
                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                     {AVAILABLE_TABS.map((tab) => {
@@ -88,6 +88,7 @@ const StudioSettingsShell: React.FC<StudioSettingsShellProps> = ({
                 )}
                 {currentSubTab === 'studio-settings' && (
                     <StudioSettingsTab 
+                        initialTab={activeTab === 'terms-and-payment' ? 'Contracts & Payments' : undefined}
                         onDownloadBackup={onDownloadBackup}
                         onImportProject={onImportProject}
                         onClearProject={onClearProject}

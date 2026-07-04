@@ -30,12 +30,12 @@ const ClientComparisonMatrix: React.FC<ClientComparisonMatrixProps> = ({ data, t
   if (isLoading || !data || !data.materialMatrix?.length) return null;
 
   return (
-    <div className="border-2 border-slate-900 rounded-xl overflow-hidden shadow-sm">
+    <div className="border-2 border-indigo-950 rounded-xl overflow-hidden shadow-sm">
         {/* Header Row - Updated to Slate-900 for uniform black theme */}
-        <div className="grid grid-cols-[180px_1fr] md:grid-cols-[220px_1fr_1fr_1fr] bg-slate-900 text-white">
+        <div className="grid grid-cols-[180px_1fr] md:grid-cols-[220px_1fr_1fr_1fr] bg-indigo-950 text-white">
             <div className="p-4 font-bold text-xs uppercase tracking-widest flex items-center">Specification</div>
             {tierNames.map((name, idx) => (
-                <div key={idx} className="p-4 font-bold text-xs uppercase tracking-widest border-l border-slate-700 flex items-center justify-center text-center bg-slate-900">
+                <div key={idx} className="p-4 font-bold text-xs uppercase tracking-widest border-l border-slate-700 flex items-center justify-center text-center bg-indigo-950">
                     {name}
                 </div>
             ))}

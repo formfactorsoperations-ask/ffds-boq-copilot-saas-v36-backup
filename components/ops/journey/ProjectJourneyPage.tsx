@@ -26,6 +26,8 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
     const displayPhaseIndex = focusedPhase !== null ? focusedPhase : currentActivePhaseIndex;
     const currentPhaseDef = PHASES[displayPhaseIndex];
     const currentSteps = stepsByPhase[displayPhaseIndex] || [];
+    
+    const isProjectComplete = projectContext?.status === 'completed' || (projectContext as any)?.lifecycle?.stage === 'completed';
 
     const completedSteps = currentSteps.filter(s => s.status === 'done');
     const pendingSteps = currentSteps.filter(s => s.status === 'pending' || s.status === 'active');
@@ -54,10 +56,10 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pt-4">
                 <div className="flex items-center gap-4">
-                    <button onClick={onClose} className="p-2 -ml-2 text-slate-500 hover:text-slate-900 transition-colors rounded-full hover:bg-slate-100 mb-1">
+                    <button onClick={onClose} className="p-2 -ml-2 text-slate-500 hover:text-indigo-950 transition-colors rounded-full hover:bg-slate-100 mb-1">
                         <X className="w-5 h-5"/>
                     </button>
-                    <div className="font-serif text-3xl md:text-5xl font-light tracking-tighter text-slate-900">{projectContext?.name || 'Unnamed Project'}</div>
+                    <div className="font-serif text-3xl md:text-5xl font-light tracking-tighter text-indigo-950">{projectContext?.name || 'Unnamed Project'}</div>
                     <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded bg-slate-100/80 mt-1">
                         <Activity className="w-3.5 h-3.5 text-indigo-600" />
                         <span className="text-[10px] uppercase tracking-widest font-bold text-slate-500">Ops Matrix</span>
@@ -137,7 +139,7 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
                         <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
                             <div>
                                 <div className="text-[10px] uppercase font-bold tracking-widest text-slate-500 mb-2 font-mono">Phase 0{displayPhaseIndex + 1}</div>
-                                <h2 className="text-3xl md:text-4xl font-serif text-slate-900 mb-3 tracking-tight">{currentPhaseDef.name}</h2>
+                                <h2 className="text-3xl md:text-4xl font-serif text-indigo-950 mb-3 tracking-tight">{currentPhaseDef.name}</h2>
                                 <p className="text-slate-500 text-sm leading-relaxed max-w-xl font-light">{currentPhaseDef.desc}</p>
                             </div>
                             
@@ -147,7 +149,7 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
                                     onClick={handleRetrofitPhase}
                                     className="group flex flex-col md:items-end text-left md:text-right shrink-0"
                                 >
-                                    <div className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${retrofitMode ? 'bg-red-50 text-red-600' : 'bg-slate-200/50 text-slate-500 group-hover:bg-slate-800 group-hover:text-white'}`}>
+                                    <div className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${retrofitMode ? 'bg-red-50 text-red-600' : 'bg-slate-200/50 text-slate-500 group-hover:bg-indigo-900 group-hover:text-white'}`}>
                                         {retrofitMode ? <AlertTriangle className="w-3.5 h-3.5" /> : <FastForward className="w-3.5 h-3.5" />}
                                         {retrofitMode ? 'Confirm Force Complete?' : 'Retrofit Phase'}
                                     </div>
@@ -164,7 +166,7 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
                                 <div className="space-y-4 relative">
                                     <div className="flex items-center gap-3 border-b border-slate-200 pb-3">
                                         <Activity className="w-4 h-4 text-indigo-600" />
-                                        <h3 className="text-[10px] font-bold text-slate-900 uppercase tracking-widest font-mono">Active Gateways</h3>
+                                        <h3 className="text-[10px] font-bold text-indigo-950 uppercase tracking-widest font-mono">Active Gateways</h3>
                                     </div>
                                     <div className="space-y-3">
                                         {pendingSteps.map(step => (
@@ -206,7 +208,7 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
                                             <ExecutionMatrixRow 
                                                 key={step.id} 
                                                 step={step} 
-                                                onUndo={() => markStepPending(step.id)}
+                                                onUndo={isProjectComplete ? undefined : () => markStepPending(step.id)}
                                                 onNavigate={onNavigate ? () => step.linkedTab && onNavigate(step.linkedTab) : undefined}
                                             />
                                         ))}
@@ -269,7 +271,7 @@ function ExecutionMatrixRow({
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-1.5">
-                        <span className={`text-[15px] font-semibold tracking-tight truncate ${locked ? 'text-slate-500' : 'text-slate-900'}`}>{step.title}</span>
+                        <span className={`text-[15px] font-semibold tracking-tight truncate ${locked ? 'text-slate-500' : 'text-indigo-950'}`}>{step.title}</span>
                         {step.isAutoDerived && (
                             <span className="text-[8px] font-bold uppercase tracking-widest text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 w-max">Auto Validated</span>
                         )}

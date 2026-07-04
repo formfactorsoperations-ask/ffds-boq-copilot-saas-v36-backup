@@ -62,7 +62,7 @@ export default function TeamTab() {
         <div className="max-w-5xl mx-auto space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-black text-slate-800 tracking-tight">Team & Access Control</h1>
+                    <h1 className="text-2xl font-black text-indigo-900 tracking-tight">Team & Access Control</h1>
                     <p className="text-sm text-slate-500 font-medium mt-1">Manage who evaluates, manages, and executes your interior projects.</p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -95,7 +95,7 @@ export default function TeamTab() {
             {/* Plan Usage Alert */}
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
                 <div>
-                    <div className="text-sm font-bold text-slate-800">Workspace Seats ({teamMembers.length} / {currentPlan === 'Enterprise' ? 'Unlimited' : currentLimit})</div>
+                    <div className="text-sm font-bold text-indigo-900">Workspace Seats ({teamMembers.length} / {currentPlan === 'Enterprise' ? 'Unlimited' : currentLimit})</div>
                     <div className="text-xs text-slate-500 mt-1">
                         {isAtLimit 
                             ? `You have reached the maximum team size for the ${currentPlan} plan.` 
@@ -152,7 +152,7 @@ export default function TeamTab() {
                             {teamMembers.map((member) => (
                                 <tr key={member.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
                                     <td className="py-4 px-4">
-                                        <div className="font-bold text-slate-800">{member.name}</div>
+                                        <div className="font-bold text-indigo-900">{member.name}</div>
                                         <div className="text-slate-500 text-xs">{member.email}</div>
                                     </td>
                                     <td className="py-4 px-4">
@@ -190,7 +190,7 @@ export default function TeamTab() {
 
             <AnimatePresence>
                 {isInviteModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-indigo-950/40 backdrop-blur-sm">
                         <motion.div 
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -198,7 +198,7 @@ export default function TeamTab() {
                             className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-slate-100"
                         >
                             <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                                <h2 className="text-xl font-black text-slate-800">Invite Team Member</h2>
+                                <h2 className="text-xl font-black text-indigo-900">Invite Team Member</h2>
                                 <button onClick={() => setIsInviteModalOpen(false)} className="text-slate-400 hover:text-slate-600">×</button>
                             </div>
                             <form onSubmit={handleInvite} className="p-6 space-y-4">

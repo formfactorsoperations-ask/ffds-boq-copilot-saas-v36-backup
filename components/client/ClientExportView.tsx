@@ -49,10 +49,10 @@ interface SectionVisibilityModalProps {
 const SectionVisibilityModal: React.FC<SectionVisibilityModalProps> = ({ isOpen, onClose, visibility, onChange }) => {
     if (!isOpen) return null;
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-indigo-950/60 backdrop-blur-md backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
                 <div className="p-4 border-b flex justify-between items-center bg-slate-50">
-                    <h3 className="font-bold text-slate-800">Section Visibility</h3>
+                    <h3 className="font-bold text-indigo-900">Section Visibility</h3>
                     <button onClick={onClose}><CloseIcon className="w-5 h-5 text-slate-500" /></button>
                 </div>
                 <div className="p-4 max-h-[60vh] overflow-y-auto">
@@ -101,7 +101,7 @@ const ScanFirstSection: React.FC<{ title: string; cue: string; children: React.R
                 </div>
                 <div>
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">{cue}</span>
-                    <span className="text-lg md:text-xl font-bold text-slate-700 group-open:text-slate-900 leading-none">{title}</span>
+                    <span className="text-lg md:text-xl font-bold text-slate-700 group-open:text-indigo-950 leading-none">{title}</span>
                 </div>
             </div>
         </summary>
@@ -114,6 +114,20 @@ const ScanFirstSection: React.FC<{ title: string; cue: string; children: React.R
 const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
     const { orgData } = useOrg();
     const { settings: fetchedSettings, loading: settingsLoading } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
+    const [paymentStructure, setPaymentStructure] = useState<any>(null);
+
+    useEffect(() => {
+        const loadPaymentStructure = async () => {
+            const { getPaymentStructure } = await import('../../services/engagementService');
+            try {
+                const fetchedPaymentStructure = await getPaymentStructure(orgData?.tenantId || 'demo-tenant-01');
+                setPaymentStructure(fetchedPaymentStructure);
+            } catch (err) {
+                console.error("Error loading payment structure", err);
+            }
+        };
+        loadPaymentStructure();
+    }, [orgData?.tenantId]);
 
     // Create a combined settings object matching the requested schema
     const settings = useMemo(() => ({
@@ -220,15 +234,8 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                     </div>
                 </div>
             )}
-            {/* Print Only Header/Footer */}
-            <div className="print-header">
-                <div className="font-bold tracking-tighter">{settings.companyName.toUpperCase()}</div>
-                <div>{projectContext.name} • {projectContext.location}</div>
-            </div>
-            <div className="print-footer">
-                <div>Confidential Proposal • {new Date().toLocaleDateString()}</div>
-                <div>{settings.address} • {settings.email}</div>
-            </div>
+
+
 
             {/* L1: CONCEPT VIEW */}
             {!isL2 && !isL3 && (
@@ -239,7 +246,9 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                 projectContext={projectContext} 
                                 investmentMin={investmentMin} 
                                 investmentMax={investmentMax} 
-                                level="LEVEL_1"
+                                level={level as any}
+                                designFee={tiers[0]?.summary?.designFee}
+                                executionTotal={tiers[0]?.summary?.totalSell}
                             />
                         </SectionWrapper>
                     )}
@@ -249,11 +258,12 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                         {visibleSections.snapshot && (
                             <ScanFirstSection title="Executive Summary" cue="At a Glance">
                                 <SectionWrapper id="snapshot" onEdit={onEditSection}>
-                                    <ClientSnapshot 
-                                        investmentMin={investmentMin} 
+                                    <ClientSnapshot level={level as any} investmentMin={investmentMin} 
                                         investmentMax={investmentMax} 
                                         timelinePhases={timelinePhases}
                                         content={content.snapshot}
+                                        designFee={tiers[0]?.summary?.designFee}
+                                        executionTotal={tiers[0]?.summary?.totalSell}
                                     />
                                 </SectionWrapper>
                             </ScanFirstSection>
@@ -304,7 +314,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                         {/* Specs Comparison - Now wrapped in accordion */}
                         <ScanFirstSection title="Technical Specifications" cue="Material Grades">
                             <div className="break-inside-avoid">
-                                <ClientMaterialSpecs comparisonData={props.comparisonData} tiers={tiers} />
+                                <ClientMaterialSpecs comparisonData={props.comparisonData} tiers={tiers} projectContext={projectContext} setProjectContext={setProjectContext} />
                             </div>
                         </ScanFirstSection>
 
@@ -326,6 +336,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                         projectContext={projectContext}
                                         onUpdateSchedule={onUpdatePaymentSchedule}
                                         settings={settings}
+                                        paymentStructure={paymentStructure}
                                         // Pass generic totals if needed for L1, but usually L1 is range-based
                                     />
                                 </SectionWrapper>
@@ -335,8 +346,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                         {visibleSections.cta && (
                             <ScanFirstSection title="Next Steps" cue="Action" defaultOpen={true}>
                                 <SectionWrapper id="cta" onEdit={onEditSection}>
-                                    <ClientDecisionLock 
-                                        decision={projectContext.proposalDecision} 
+                                    <ClientDecisionLock level={level as any} decision={projectContext.proposalDecision} 
                                         projectName={projectContext.name}
                                     />
                                 </SectionWrapper>
@@ -352,9 +362,11 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                     <SectionWrapper id="l2_cover" onEdit={onEditSection}>
                         <ClientCover 
                             projectContext={projectContext} 
-                            investmentMin={approvedTier.summary.totalSell} 
-                            investmentMax={approvedTier.summary.totalSell} 
+                            investmentMin={approvedTier.summary.totalRevenue || approvedTier.summary.totalSell} 
+                            investmentMax={approvedTier.summary.totalRevenue || approvedTier.summary.totalSell} 
                             level="LEVEL_2"
+                            designFee={approvedTier.summary.designFee}
+                            executionTotal={approvedTier.summary.totalSell}
                         />
                     </SectionWrapper>
 
@@ -391,6 +403,8 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                 comparisonData={props.comparisonData} 
                                 tiers={[approvedTier]} 
                                 isLevel2={true}
+                                projectContext={projectContext}
+                                setProjectContext={setProjectContext}
                             />
                         </ScanFirstSection>
 
@@ -419,6 +433,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                         // Pass detailed breakdown for L2
                                         financials={paymentsFinancials}
                                         settings={settings}
+                                        paymentStructure={paymentStructure}
                                     />
                                 </SectionWrapper>
                             </ScanFirstSection>
@@ -428,7 +443,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                             <SectionWrapper id="l2_risk" onEdit={onEditSection}>
                                 {/* L2 Risk Content or Footer Actions */}
                                 <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200">
-                                    <h3 className="font-bold text-slate-800 mb-2">Execution Readiness</h3>
+                                    <h3 className="font-bold text-indigo-900 mb-2">Execution Readiness</h3>
                                     <p className="text-sm text-slate-600">By approving this Level 2 document, you confirm the scope and specifications are final.</p>
                                 </div>
                             </SectionWrapper>
@@ -456,34 +471,34 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
             {/* Footer */}
             <div id="terms" className="page-break-before rounded-3xl border border-slate-200 bg-white p-8 md:p-12 print-only-block hidden print:block">
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Annexure A</div>
-                <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 border-b-2 border-slate-900 pb-4">Standard Terms & Conditions</h2>
+                <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-indigo-950 border-b-2 border-indigo-950 pb-4">Standard Terms & Conditions</h2>
                 
                 <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-12 text-xs text-slate-600 leading-relaxed">
                     <div className="space-y-6">
                         <div>
-                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">1. Validity of Proposal</h4>
+                            <h4 className="font-bold text-indigo-950 uppercase tracking-wide mb-2">1. Validity of Proposal</h4>
                             <p>This proposal is valid for {settings?.clientPortalConfig?.validityDays || 15} days from the date of issue. Prices are subject to change based on market fluctuations in raw material costs beyond this period.</p>
                         </div>
                         <div>
-                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">2. Scope of Work</h4>
+                            <h4 className="font-bold text-indigo-950 uppercase tracking-wide mb-2">2. Scope of Work</h4>
                             <p>The scope is limited to the items explicitly mentioned in the "Room-wise Breakdown". Any additional work requested during execution will be billed separately as "Extra Items" at prevailing rates.</p>
                         </div>
                         <div>
-                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">3. Payment Terms</h4>
+                            <h4 className="font-bold text-indigo-950 uppercase tracking-wide mb-2">3. Payment Terms</h4>
                             <p>Work will proceed only upon receipt of payments as per the agreed milestone schedule. Delays in payment may lead to site stoppage and revision of the handover date.</p>
                         </div>
                     </div>
                     <div className="space-y-6">
                         <div>
-                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">4. Design Approvals</h4>
+                            <h4 className="font-bold text-indigo-950 uppercase tracking-wide mb-2">4. Design Approvals</h4>
                             <p>All designs, material selections, and drawings must be signed off by the client before production begins. Changes requested after sign-off may incur additional costs and time.</p>
                         </div>
                         <div>
-                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">5. Site Access & Utilities</h4>
+                            <h4 className="font-bold text-indigo-950 uppercase tracking-wide mb-2">5. Site Access & Utilities</h4>
                             <p>The client must ensure continuous access to the site, along with provision for electricity and water required for execution. Any society/government permissions are the client's responsibility unless mentioned otherwise.</p>
                         </div>
                         <div>
-                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">6. Warranty</h4>
+                            <h4 className="font-bold text-indigo-950 uppercase tracking-wide mb-2">6. Warranty</h4>
                             <p>{orgData?.orgName || 'The Studio'} provides a 5-year limited warranty on modular carpentry and a 1-year service warranty on general contracting work. Manufacturer warranties apply for hardware and appliances.</p>
                         </div>
                     </div>
@@ -495,7 +510,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
             </div>
 
             {/* Footer */}
-            <div className="bg-slate-900 text-slate-400 py-12 text-center print:hidden">
+            <div className="bg-indigo-950 text-slate-400 py-12 text-center print:hidden">
                 <SectionWrapper id="footer" onEdit={onEditSection}>
                     <p className="font-bold text-white text-lg mb-2">{settings.companyName}</p>
                     <p className="text-sm">{settings.tagline}</p>

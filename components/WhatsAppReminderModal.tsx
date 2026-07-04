@@ -23,7 +23,7 @@ export function WhatsAppReminderModal({ isOpen, onClose, onSend, template, varia
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-indigo-950/40 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -31,7 +31,7 @@ export function WhatsAppReminderModal({ isOpen, onClose, onSend, template, varia
             className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col"
           >
             <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="font-bold text-slate-800">Payment Reminder Preview</h3>
+              <h3 className="font-bold text-indigo-900">Payment Reminder Preview</h3>
               <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
                 <X className="w-5 h-5" />
               </button>
@@ -48,7 +48,7 @@ export function WhatsAppReminderModal({ isOpen, onClose, onSend, template, varia
                />
 
                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Message Preview</label>
-               <div className="bg-[#E7F6D5] p-3.5 rounded-2xl rounded-tl-none text-sm text-slate-800 shadow-sm border border-[#D1ECA6] whitespace-pre-wrap leading-relaxed relative self-start">
+               <div className="bg-[#E7F6D5] p-3.5 rounded-2xl rounded-tl-none text-sm text-indigo-900 shadow-sm border border-[#D1ECA6] whitespace-pre-wrap leading-relaxed relative self-start">
                    {message}
                </div>
             </div>

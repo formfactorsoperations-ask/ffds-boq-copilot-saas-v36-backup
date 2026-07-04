@@ -115,7 +115,7 @@ export function MomAcknowledgePage({ token }: { token: string }) {
         <div ref={contentRef} className="w-full">
             {orgData && (
                  <StudioDocumentShell orgData={orgData} docHeaderType="Minutes of Meeting" docHeaderTitle={mom.meetingTitle}>
-                     <div className="space-y-6 text-sm text-slate-800">
+                     <div className="space-y-6 text-sm text-indigo-900">
                          {/* Attendees */}
                          <div>
                              <h4 className="font-bold border-b border-slate-200 pb-1 mb-2 uppercase tracking-wide text-xs text-slate-500">Attendees</h4>
@@ -188,7 +188,7 @@ export function MomAcknowledgePage({ token }: { token: string }) {
             <div className="bg-slate-200 min-h-screen py-8 flex justify-center">
                 <DocumentContent />
                 <div className="fixed top-4 right-4 bg-white p-4 rounded-xl shadow-xl flex flex-col gap-2 no-print">
-                   <p className="font-bold text-slate-800">Generating PDF...</p>
+                   <p className="font-bold text-indigo-900">Generating PDF...</p>
                    <p className="text-xs text-slate-500">Please wait or click download manually.</p>
                    <button onClick={handlePrintPdf} className="bg-indigo-600 text-white rounded px-3 py-1.5 text-sm font-bold mt-2">Download Now</button>
                 </div>

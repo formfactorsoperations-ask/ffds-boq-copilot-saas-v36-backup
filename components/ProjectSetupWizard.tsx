@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import { AI_STRATEGIES } from '../constants';
 import { FullBoqItem, BoqItem } from '../types'; // Import necessary types
 import Card from './shared/Card'; // Import Card component
+import { INITIAL_BANK } from '../constants';
 
 interface ProjectSetupWizardProps {
   setTiers: React.Dispatch<React.SetStateAction<ProposalTier[]>>;
@@ -145,7 +146,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
               setLoadingMessage('AI: Optimizing Timeline...');
               try {
                   const fullBoqForTimeline: FullBoqItem[] = (premiumTier.boq || []).map(boqItem => {
-                      const bankItem = bank.find(b => b.id === boqItem.bankId);
+                      const bankItem = bank.find(b => b.id === boqItem.bankId) || INITIAL_BANK.find(i => i.id === boqItem.bankId);
                       if (!bankItem) return null;
                       return { ...bankItem, ...boqItem, margin: boqItem.marginOverride ?? bankItem.margin };
                   }).filter((i): i is FullBoqItem => i !== null);
@@ -249,7 +250,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                 className="text-center mb-16"
               >
                   <FFDSLogo className="mb-6 scale-125" />
-                  <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight mb-4">
+                  <h1 className="text-4xl md:text-5xl font-black text-indigo-950 tracking-tight mb-4">
                       Create New Project
                   </h1>
                   <p className="text-lg text-slate-500 max-w-xl mx-auto">
@@ -277,7 +278,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                       <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mb-6 text-indigo-600 group-hover:scale-110 transition-transform">
                           <SparklesIcon className="w-7 h-7" />
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-indigo-700 transition-colors">AI Floor Plan Analysis</h3>
+                      <h3 className="text-xl font-bold text-indigo-950 mb-2 group-hover:text-indigo-700 transition-colors">AI Floor Plan Analysis</h3>
                       <p className="text-sm text-slate-500 leading-relaxed">
                           Upload a floor plan image. Our AI will automatically detect rooms, calculate areas, and prepare your BOQ structure.
                       </p>
@@ -294,7 +295,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                       <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mb-6 text-slate-600 group-hover:scale-110 transition-transform">
                           <PencilIcon className="w-7 h-7" />
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-slate-700 transition-colors">Manual Entry</h3>
+                      <h3 className="text-xl font-bold text-indigo-950 mb-2 group-hover:text-slate-700 transition-colors">Manual Entry</h3>
                       <p className="text-sm text-slate-500 leading-relaxed">
                           Start with a blank canvas. Manually define rooms and dimensions. Best for simple renovations or specific scope.
                       </p>
@@ -322,7 +323,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
         <MotionDiv initial={{opacity:0, x: 20}} animate={{opacity:1, x: 0}} className="space-y-8 pt-10">
             {/* Header / Progress */}
             <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-slate-900">Project Context</h2>
+                <h2 className="text-2xl font-bold text-indigo-950">Project Context</h2>
                 <div className="flex justify-center gap-2 mt-4">
                     <div className="h-1.5 w-12 bg-blue-600 rounded-full"></div>
                     <div className="h-1.5 w-4 bg-slate-200 rounded-full"></div>
@@ -368,7 +369,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
           <MotionDiv initial={{opacity:0, scale: 0.95}} animate={{opacity:1, scale: 1}} className="max-w-4xl mx-auto space-y-8 pt-10">
               
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-slate-900">Generation Strategy</h2>
+                <h2 className="text-2xl font-bold text-indigo-950">Generation Strategy</h2>
                 <div className="flex justify-center gap-2 mt-4">
                     <div className="h-1.5 w-4 bg-emerald-500 rounded-full"></div>
                     <div className="h-1.5 w-12 bg-blue-600 rounded-full"></div>
@@ -419,7 +420,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                                 <div className="absolute top-4 right-4 text-blue-600 bg-blue-50 p-2 rounded-lg">
                                     <ListIcon className="w-6 h-6" />
                                 </div>
-                                <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-700">Use Standard Templates</h3>
+                                <h3 className="text-lg font-bold text-indigo-900 group-hover:text-blue-700">Use Standard Templates</h3>
                                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">
                                     Instantly generates 3 tiers (Essential, Comfort, Harmony) using FFDS standard specifications for {projectContext.config}.
                                 </p>
@@ -434,7 +435,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                                 <div className="absolute top-4 right-4 text-purple-600 bg-purple-50 p-2 rounded-lg">
                                     <SparklesIcon className="w-6 h-6" />
                                 </div>
-                                <h3 className="text-lg font-bold text-slate-800 group-hover:text-purple-700">Ask AI to Create</h3>
+                                <h3 className="text-lg font-bold text-indigo-900 group-hover:text-purple-700">Ask AI to Create</h3>
                                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">
                                     Gemini will analyze your exact room list and client brief to build 3 unique custom packages from scratch.
                                 </p>
@@ -456,7 +457,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                              <button 
                                 onClick={handleStartManual} 
                                 disabled={isLoading} 
-                                className="w-full py-4 bg-slate-50 text-slate-500 border border-slate-200 font-bold rounded-2xl hover:bg-white hover:text-slate-800 hover:border-slate-300 transition-all flex items-center justify-center gap-2"
+                                className="w-full py-4 bg-slate-50 text-slate-500 border border-slate-200 font-bold rounded-2xl hover:bg-white hover:text-indigo-900 hover:border-slate-300 transition-all flex items-center justify-center gap-2"
                             >
                                Skip Generation & Start Manual BOQ <ArrowRightIcon className="w-4 h-4"/>
                             </button>

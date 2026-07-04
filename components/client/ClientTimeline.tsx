@@ -30,7 +30,7 @@ const ClientTimeline: React.FC<ClientTimelineProps> = ({ timelinePhases, content
         <section id="timeline" className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 md:p-8">
             <div>
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Section 4</div>
-                <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">{data.title}</h2>
+                <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-indigo-950">{data.title}</h2>
                 <p className="mt-2 text-slate-600 max-w-3xl whitespace-pre-line">
                     {data.subtitle}
                 </p>
@@ -46,17 +46,17 @@ const ClientTimeline: React.FC<ClientTimelineProps> = ({ timelinePhases, content
                         : `Day ${start}-${end}`;
                     
                     return (
-                        <div key={index} className={`rounded-2xl border p-5 flex flex-col h-full transition-all hover:shadow-md ${index === phases.length - 1 ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200'}`}>
+                        <div key={index} className={`rounded-2xl border p-5 flex flex-col h-full transition-all hover:shadow-md ${index === phases.length - 1 ? 'bg-indigo-950 border-indigo-950 text-white' : 'bg-white border-slate-200'}`}>
                             <div className="flex justify-between items-start mb-4">
-                                <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${index === phases.length - 1 ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-500'}`}>
+                                <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${index === phases.length - 1 ? 'bg-indigo-900 text-slate-300' : 'bg-slate-100 text-slate-500'}`}>
                                     Phase {index + 1}
                                 </span>
-                                <span className={`text-xs font-bold ${index === phases.length - 1 ? 'text-emerald-400' : 'text-slate-900'}`}>
+                                <span className={`text-xs font-bold ${index === phases.length - 1 ? 'text-emerald-400' : 'text-indigo-950'}`}>
                                     {timeLabel}
                                 </span>
                             </div>
                             
-                            <div className={`mt-auto font-extrabold text-lg leading-tight mb-2 ${index === phases.length - 1 ? 'text-white' : 'text-slate-900'}`}>
+                            <div className={`mt-auto font-extrabold text-lg leading-tight mb-2 ${index === phases.length - 1 ? 'text-white' : 'text-indigo-950'}`}>
                                 {phase.phaseName}
                             </div>
                             

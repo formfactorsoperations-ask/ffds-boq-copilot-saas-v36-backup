@@ -10,10 +10,11 @@ interface AgreementSignoffPageProps {
 
 export default function AgreementSignoffPage({ token }: AgreementSignoffPageProps) {
   const [loading, setLoading] = useState(true);
-  const [projectContext, setProjectContext] = useState<ProjectContext | null>(null);
+  const [projectContext, setProjectContext] = useState<any>(null);
   const [projectId, setProjectId] = useState<string>('');
   const [isExpired, setIsExpired] = useState(false);
   const [successState, setSuccessState] = useState<'signed' | null>(null);
+  const [signoffTypeState, setSignoffTypeState] = useState<'contract' | 'execution'>('contract');
 
   // Form states
   const [clientName, setClientName] = useState('');
@@ -27,15 +28,18 @@ export default function AgreementSignoffPage({ token }: AgreementSignoffPageProp
   useEffect(() => {
     const fetchAgreement = async () => {
       try {
-        // Token format: AGREEMENT_projectId_random
         const parts = token.split('_');
-        if (parts.length < 3 || parts[0] !== 'AGREEMENT') {
+        let pid = '';
+        if (parts[0] === 'AGREEMENT' && parts.length >= 3) {
+            pid = parts[1];
+        } else if (parts[0] === 'EXEC' && parts[1] === 'AGREEMENT' && parts.length >= 4) {
+            pid = parts[2];
+        } else {
             setIsExpired(true);
             setLoading(false);
             return;
         }
 
-        const pid = parts[1];
         setProjectId(pid);
 
         const projectRef = doc(db, 'projects', pid);
@@ -48,15 +52,23 @@ export default function AgreementSignoffPage({ token }: AgreementSignoffPageProp
         }
 
         const pData = projectSnap.data();
-        const ctx = (pData.context || pData.projectContext) as ProjectContext;
+        const ctx = (pData.context || pData.projectContext) as any;
 
-        if (!ctx || !ctx.contractSignoff || ctx.contractSignoff.token !== token) {
+        let signoffType: 'contract' | 'execution' | null = null;
+        if (ctx?.contractSignoff?.token === token) {
+            signoffType = 'contract';
+        } else if (ctx?.executionSignoff?.token === token) {
+            signoffType = 'execution';
+        }
+
+        if (!signoffType) {
             setIsExpired(true);
             setLoading(false);
             return;
         }
 
         setProjectContext(ctx);
+        setSignoffTypeState(signoffType); // We'll need a state for this
         if (ctx.clientName) {
             setClientName(ctx.clientName);
         }
@@ -79,14 +91,24 @@ export default function AgreementSignoffPage({ token }: AgreementSignoffPageProp
     setError(null);
     try {
         const projectRef = doc(db, 'projects', projectId);
-        await updateDoc(projectRef, {
-            'context.contractSignoff.status': 'signed',
-            'context.contractSignoff.signedAt': new Date().toISOString(),
-            'context.contractSignoff.clientName': clientName,
-            'context.contractSignoff.ipAddress': window.location.hostname,
-            'context.contractSignoff.refId': 'Digital Signature',
-            'context.contractStatus': 'executed'
-        });
+        if (signoffTypeState === 'execution') {
+            await updateDoc(projectRef, {
+                'context.executionSignoff.status': 'signed',
+                'context.executionSignoff.signedAt': new Date().toISOString(),
+                'context.executionSignoff.clientName': clientName,
+                'context.executionSignoff.ipAddress': window.location.hostname,
+                'context.executionSignoff.refId': 'Digital Signature'
+            });
+        } else {
+            await updateDoc(projectRef, {
+                'context.contractSignoff.status': 'signed',
+                'context.contractSignoff.signedAt': new Date().toISOString(),
+                'context.contractSignoff.clientName': clientName,
+                'context.contractSignoff.ipAddress': window.location.hostname,
+                'context.contractSignoff.refId': 'Digital Signature',
+                'context.contractStatus': 'executed'
+            });
+        }
 
       setSuccessState('signed');
       // notification to studio could be sent here
@@ -122,7 +144,7 @@ export default function AgreementSignoffPage({ token }: AgreementSignoffPageProp
     );
   }
 
-  const isAlreadySigned = projectContext.contractSignoff?.status === 'signed' || successState === 'signed';
+  const isAlreadySigned = (signoffTypeState === 'execution' ? projectContext.executionSignoff?.status === 'signed' : projectContext.contractSignoff?.status === 'signed') || successState === 'signed';
 
   if (isAlreadySigned) {
         return (
@@ -131,7 +153,7 @@ export default function AgreementSignoffPage({ token }: AgreementSignoffPageProp
                     <div className="mx-auto w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
                         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                     </div>
-                    <h2 className="text-xl font-semibold text-slate-800 mb-2">Agreement Executed</h2>
+                    <h2 className="text-xl font-semibold text-indigo-900 mb-2">Agreement Executed</h2>
                     <p className="text-slate-600">The execution agreement has been digitally signed and recorded successfully.</p>
                 </div>
             </div>
@@ -146,18 +168,18 @@ export default function AgreementSignoffPage({ token }: AgreementSignoffPageProp
                   {STUDIO_LOGO_URL ? (
                       <img src={STUDIO_LOGO_URL} alt={STUDIO_NAME} className="h-12 mx-auto mb-4" />
                   ) : (
-                      <h1 className="text-2xl font-bold text-slate-900 mb-4">{STUDIO_NAME}</h1>
+                      <h1 className="text-2xl font-bold text-indigo-950 mb-4">{STUDIO_NAME}</h1>
                   )}
-                  <h2 className="text-xl font-semibold text-slate-800">Review Execution Agreement</h2>
+                  <h2 className="text-xl font-semibold text-indigo-900">Review {signoffTypeState === 'execution' ? 'Execution' : 'Contract'} Agreement</h2>
                   <p className="text-slate-500 text-sm mt-1">{projectContext.name}</p>
               </div>
 
               {/* Action Box */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                   <div className="p-6">
-                      <h3 className="font-semibold text-slate-800 mb-4">Digital Signature Request</h3>
+                      <h3 className="font-semibold text-indigo-900 mb-4">Digital Signature Request</h3>
                       <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-                          By entering your name and clicking "Sign Agreement", you digitally authorize and accept the execution agreement, finalized scope, and commercials for the project. Make sure you have reviewed the details sent to you.
+                          By entering your name and clicking "Sign Agreement", you digitally authorize and accept the {signoffTypeState === 'execution' ? 'execution' : 'contract'} agreement, finalized scope, and commercials for the project. Make sure you have reviewed the details sent to you.
                       </p>
 
                       {error && (

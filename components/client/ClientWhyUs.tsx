@@ -32,7 +32,7 @@ const ClientWhyUs: React.FC = () => {
     const { orgData } = useOrg();
 
     return (
-        <section className="py-20 px-6 md:px-20 bg-slate-900 text-white print-section">
+        <section className="py-20 px-6 md:px-20 bg-indigo-950 text-white print-section">
             <div className="max-w-5xl mx-auto">
                 <div className="mb-12 md:text-center max-w-3xl mx-auto">
                     <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-3">The {orgData?.orgName ? orgData.orgName.split(' ')[0] : 'Studio'} Approach</p>
@@ -53,7 +53,7 @@ const ClientWhyUs: React.FC = () => {
                             transition={{ delay: idx * 0.1 }}
                             className="bg-white/5 border border-white/10 p-6 rounded-2xl flex gap-5 items-start hover:bg-white/10 transition-colors"
                         >
-                            <div className="p-3 bg-slate-800 rounded-xl border border-slate-700 shrink-0">
+                            <div className="p-3 bg-indigo-900 rounded-xl border border-slate-700 shrink-0">
                                 {feature.icon}
                             </div>
                             <div>

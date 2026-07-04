@@ -19,6 +19,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useOrg } from "../contexts/OrgContext";
 import { generateClientNote } from "../services/geminiService";
+import { INITIAL_BANK } from "../constants";
 
 interface RevisionStudioProps {
   tiers: ProposalTier[];
@@ -142,7 +143,8 @@ export default function RevisionStudio({
     }
 
     return (tier.boq || []).map((boqItem) => {
-      const bankItem = bankMap.get(boqItem.bankId);
+      const initialBankItem = INITIAL_BANK.find(i => i.id === boqItem.bankId);
+      const bankItem = bankMap.get(boqItem.bankId) || initialBankItem;
       let rate = 0;
       if (bankItem) {
         rate = calculateSellPrice(
@@ -405,15 +407,15 @@ export default function RevisionStudio({
   const unpaidExecutionMilestones = executionMilestones.filter(
     (m) => m.status !== "paid" && m.status !== "invoiced",
   );
-  const unpaidExecutionPct = unpaidExecutionMilestones.reduce(
-    (sum, m) => sum + m.percentage,
-    0,
-  );
 
   let lockedExecutionBase = 0;
   paidExecutionMilestones.forEach((m) => {
-    lockedExecutionBase +=
-      (m.lockedTaxableBase || originalNetExecution) * (m.percentage / 100);
+    if (m.isFixedAmount && m.fixedAmount !== undefined) {
+      lockedExecutionBase += m.fixedAmount;
+    } else {
+      lockedExecutionBase +=
+        (m.lockedTaxableBase || originalNetExecution) * (m.percentage / 100);
+    }
   });
   const remainingExecutionBase = revisedTotal - lockedExecutionBase;
 
@@ -423,15 +425,15 @@ export default function RevisionStudio({
   const unpaidDesignMilestones = designMilestones.filter(
     (m) => m.status !== "paid" && m.status !== "invoiced",
   );
-  const unpaidDesignPct = unpaidDesignMilestones.reduce(
-    (sum, m) => sum + m.percentage,
-    0,
-  );
 
   let lockedDesignBase = 0;
   paidDesignMilestones.forEach((m) => {
-    lockedDesignBase +=
-      (m.lockedTaxableBase || originalNetDesign) * (m.percentage / 100);
+    if (m.isFixedAmount && m.fixedAmount !== undefined) {
+      lockedDesignBase += m.fixedAmount;
+    } else {
+      lockedDesignBase +=
+        (m.lockedTaxableBase || originalNetDesign) * (m.percentage / 100);
+    }
   });
   const remainingDesignBase = revisedDesignFee - lockedDesignBase;
 
@@ -449,54 +451,79 @@ export default function RevisionStudio({
     const isCleared = m.status === "paid" || m.status === "invoiced";
 
     // Original Calculation
-    const originalBaseAmount = isExecution
-      ? originalNetExecution * (m.percentage / 100)
-      : originalNetDesign * (m.percentage / 100);
+    let originalBaseAmount = 0;
+    if (m.isFixedAmount && m.fixedAmount !== undefined) {
+      originalBaseAmount = m.fixedAmount;
+    } else {
+      originalBaseAmount = isExecution
+        ? originalNetExecution * (m.percentage / 100)
+        : originalNetDesign * (m.percentage / 100);
+    }
+    
+    originalBaseAmount = Math.round(originalBaseAmount);
 
-    let originalBillable = isExecution
+    let originalBillable = Math.round(isExecution
       ? originalBaseAmount * (billablePercent / 100)
-      : originalBaseAmount;
-    let originalCash = isExecution
+      : originalBaseAmount);
+    let originalCash = Math.round(isExecution
       ? originalBaseAmount * (Math.max(0, 100 - billablePercent) / 100)
-      : 0;
+      : 0);
     const applicableGstRate = isExecution
       ? executionGstEnabled
         ? gstRate
         : 0
       : gstRate;
-    let originalGST = originalBillable * (applicableGstRate / 100);
-    let originalTotal = originalBillable + originalCash + originalGST;
+    let originalGST = Math.round(originalBillable * (applicableGstRate / 100));
+    let originalTotal = Math.round(originalBillable + originalCash + originalGST);
 
     // Revised Calculation
     let revisedBaseAmount = 0;
     if (isExecution) {
       if (isCleared) {
-        revisedBaseAmount =
-          (m.lockedTaxableBase || originalNetExecution) * (m.percentage / 100);
+        revisedBaseAmount = m.isFixedAmount && m.fixedAmount !== undefined
+          ? m.fixedAmount
+          : (m.lockedTaxableBase || originalNetExecution) * (m.percentage / 100);
       } else {
-        const relativePct =
-          unpaidExecutionPct > 0 ? m.percentage / unpaidExecutionPct : 0;
-        revisedBaseAmount = remainingExecutionBase * relativePct;
+        if (m.isFixedAmount && m.fixedAmount !== undefined) {
+          revisedBaseAmount = m.fixedAmount;
+        } else {
+          const fixedPendingTotal = unpaidExecutionMilestones.filter(x => x.isFixedAmount).reduce((sum, x) => sum + (x.fixedAmount || 0), 0);
+          const remainingBaseForPercentages = Math.max(0, remainingExecutionBase - fixedPendingTotal);
+          
+          const unpaidPctExcludingFixed = unpaidExecutionMilestones.filter(x => !x.isFixedAmount).reduce((sum, x) => sum + x.percentage, 0);
+          const relativePct = unpaidPctExcludingFixed > 0 ? (m.percentage / unpaidPctExcludingFixed) : 0;
+          revisedBaseAmount = remainingBaseForPercentages * relativePct;
+        }
       }
     } else {
       if (isCleared) {
-        revisedBaseAmount =
-          (m.lockedTaxableBase || originalNetDesign) * (m.percentage / 100);
+        revisedBaseAmount = m.isFixedAmount && m.fixedAmount !== undefined
+          ? m.fixedAmount
+          : (m.lockedTaxableBase || originalNetDesign) * (m.percentage / 100);
       } else {
-        const relativePct =
-          unpaidDesignPct > 0 ? m.percentage / unpaidDesignPct : 0;
-        revisedBaseAmount = remainingDesignBase * relativePct;
+        if (m.isFixedAmount && m.fixedAmount !== undefined) {
+          revisedBaseAmount = m.fixedAmount;
+        } else {
+          const fixedPendingTotal = unpaidDesignMilestones.filter(x => x.isFixedAmount).reduce((sum, x) => sum + (x.fixedAmount || 0), 0);
+          const remainingBaseForPercentages = Math.max(0, remainingDesignBase - fixedPendingTotal);
+          
+          const unpaidPctExcludingFixed = unpaidDesignMilestones.filter(x => !x.isFixedAmount).reduce((sum, x) => sum + x.percentage, 0);
+          const relativePct = unpaidPctExcludingFixed > 0 ? (m.percentage / unpaidPctExcludingFixed) : 0;
+          revisedBaseAmount = remainingBaseForPercentages * relativePct;
+        }
       }
     }
 
-    let revisedBillable = isExecution
+    revisedBaseAmount = Math.round(revisedBaseAmount);
+
+    let revisedBillable = Math.round(isExecution
       ? revisedBaseAmount * (billablePercent / 100)
-      : revisedBaseAmount;
-    let revisedCash = isExecution
+      : revisedBaseAmount);
+    let revisedCash = Math.round(isExecution
       ? revisedBaseAmount * (Math.max(0, 100 - billablePercent) / 100)
-      : 0;
-    let revisedGST = revisedBillable * (applicableGstRate / 100);
-    let revisedTotal = revisedBillable + revisedCash + revisedGST;
+      : 0);
+    let revisedGST = Math.round(revisedBillable * (applicableGstRate / 100));
+    let revisedTotal = Math.round(revisedBillable + revisedCash + revisedGST);
 
     let deductedInitiationFee = 0;
     if (!isExecution && idx === 0 && initiationFee > 0) {
@@ -674,7 +701,7 @@ export default function RevisionStudio({
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-semibold text-slate-800">Baseline BOQ</h3>
+          <h3 className="text-lg font-semibold text-indigo-900">Baseline BOQ</h3>
           <p className="text-sm text-slate-500">
             The single source of truth. Locked and read-only.
           </p>
@@ -712,7 +739,7 @@ export default function RevisionStudio({
             {baselineBoq.map((item: any, idx: number) => (
               <tr key={idx} className="hover:bg-slate-50">
                 <td className="px-4 py-2 text-slate-600">{item.section}</td>
-                <td className="px-4 py-2 font-medium text-slate-800">
+                <td className="px-4 py-2 font-medium text-indigo-900">
                   {item.item}
                 </td>
                 <td className="px-4 py-2 text-right text-slate-600">
@@ -738,7 +765,7 @@ export default function RevisionStudio({
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-1 space-y-6">
           <Card className="p-4 border border-slate-200 bg-white shadow-sm">
-            <h4 className="font-semibold text-slate-800 mb-4">
+            <h4 className="font-semibold text-indigo-900 mb-4">
               Natural Language Input
             </h4>
             <textarea
@@ -766,7 +793,7 @@ export default function RevisionStudio({
           </Card>
 
           <Card className="p-4 border border-slate-200 bg-white shadow-sm">
-            <h4 className="font-semibold text-slate-800 mb-4">
+            <h4 className="font-semibold text-indigo-900 mb-4">
               Manual Action Entry
             </h4>
             <div className="space-y-4">
@@ -1073,7 +1100,7 @@ export default function RevisionStudio({
 
         <div className="col-span-2 space-y-6">
           <div className="flex justify-between items-center">
-            <h4 className="font-semibold text-slate-800">
+            <h4 className="font-semibold text-indigo-900">
               Current Revision Preview
             </h4>
             {actions.length > 0 && (
@@ -1165,7 +1192,7 @@ export default function RevisionStudio({
                           return (
                             <tr key={`${section}-${idx}`} className={rowClass}>
                               <td className="px-4 py-3 pl-6">
-                                <div className="font-medium text-slate-800">
+                                <div className="font-medium text-indigo-900">
                                   {item.item}
                                 </div>
                                 {item.note && (
@@ -1232,7 +1259,7 @@ export default function RevisionStudio({
     <div className="space-y-6">
       <Card className="p-0 overflow-hidden border border-slate-200">
         <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-          <h3 className="font-semibold text-slate-800">
+          <h3 className="font-semibold text-indigo-900">
             Structured Change Log
           </h3>
           <button
@@ -1275,7 +1302,7 @@ export default function RevisionStudio({
                       {action.type}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-medium text-slate-800">
+                  <td className="px-4 py-3 font-medium text-indigo-900">
                     {action.item}
                   </td>
                   <td className="px-4 py-3 text-slate-600">
@@ -1326,7 +1353,7 @@ export default function RevisionStudio({
 
       <Card className="p-0 overflow-hidden border border-slate-200">
         <div className="p-4 border-b border-slate-200 bg-slate-50">
-          <h3 className="font-semibold text-slate-800">
+          <h3 className="font-semibold text-indigo-900">
             Generated Scope Annexures
           </h3>
         </div>
@@ -1339,13 +1366,13 @@ export default function RevisionStudio({
             <div className="space-y-3">
               {tiers
                 .filter((t) => t.name.startsWith("Annexure"))
-                .map((tier) => (
+                .map((tier, index) => (
                   <div
-                    key={tier.id}
+                    key={`${tier.id}-${index}`}
                     className="flex items-center justify-between p-3 border border-slate-200 rounded-lg bg-white shadow-sm"
                   >
                     <div>
-                      <h4 className="font-medium text-slate-800">
+                      <h4 className="font-medium text-indigo-900">
                         {tier.name}
                       </h4>
                       <p className="text-xs text-slate-500">
@@ -2915,7 +2942,7 @@ export default function RevisionStudio({
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-lg border border-slate-200 shadow-sm mb-4 gap-4">
           <div className="flex flex-wrap items-center gap-4 text-sm">
-            <span className="font-semibold text-slate-800">
+            <span className="font-semibold text-indigo-900">
               {totalChangesCount} changes from original scope
             </span>
             <div className="hidden md:block h-4 w-px bg-slate-300"></div>
@@ -2973,7 +3000,7 @@ export default function RevisionStudio({
                       className="px-4 py-3 flex justify-between items-center bg-white"
                     >
                       <div className="flex flex-col">
-                        <span className="font-medium text-slate-800">
+                        <span className="font-medium text-indigo-900">
                           {item.item}
                         </span>
                       </div>
@@ -2981,7 +3008,7 @@ export default function RevisionStudio({
                         <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
                           Vendor-direct at actuals
                         </span>
-                        <span className="font-bold text-slate-800">
+                        <span className="font-bold text-indigo-900">
                           Est. {formatINR(item.revTotal)}
                         </span>
                       </div>
@@ -2993,7 +3020,7 @@ export default function RevisionStudio({
                       className="px-4 py-3 flex justify-between items-center bg-white"
                     >
                       <div className="flex flex-col">
-                        <span className="font-medium text-slate-800">
+                        <span className="font-medium text-indigo-900">
                           {item.item}
                         </span>
                       </div>
@@ -3001,7 +3028,7 @@ export default function RevisionStudio({
                         <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">
                           Pending your confirmation
                         </span>
-                        <span className="font-bold text-slate-800">
+                        <span className="font-bold text-indigo-900">
                           Est. {formatINR(item.revTotal)}
                         </span>
                       </div>
@@ -3036,7 +3063,7 @@ export default function RevisionStudio({
                       className="px-4 py-3 flex justify-between items-center hover:bg-slate-50"
                     >
                       <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
-                        <span className="font-medium text-slate-800">
+                        <span className="font-medium text-indigo-900">
                           {item.item}
                         </span>
                         {item.reasonCategory && (
@@ -3076,7 +3103,7 @@ export default function RevisionStudio({
                       className="px-4 py-3 flex justify-between items-center hover:bg-slate-50"
                     >
                       <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
-                        <span className="font-medium text-slate-800">
+                        <span className="font-medium text-indigo-900">
                           {item.item}
                         </span>
                         {item.reasonCategory && (
@@ -3100,7 +3127,7 @@ export default function RevisionStudio({
           <Card className="p-0 overflow-hidden border border-slate-200">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
-                <thead className="bg-slate-800 text-white">
+                <thead className="bg-indigo-900 text-white">
                   <tr>
                     <th className="px-4 py-3 font-medium text-xs uppercase tracking-wider">
                       Item
@@ -3150,7 +3177,7 @@ export default function RevisionStudio({
 
                     return (
                       <React.Fragment key={section}>
-                        <tr className="bg-amber-400 text-slate-900 font-bold">
+                        <tr className="bg-amber-400 text-indigo-950 font-bold">
                           <td colSpan={3} className="px-4 py-2 uppercase">
                             {section}
                           </td>
@@ -3244,7 +3271,7 @@ export default function RevisionStudio({
                               </td>
                               <td className="px-4 py-3 text-xs text-slate-600">
                                 {item.reasonCategory && (
-                                  <span className="font-semibold text-slate-800 block mb-0.5">
+                                  <span className="font-semibold text-indigo-900 block mb-0.5">
                                     [{item.reasonCategory}]
                                   </span>
                                 )}
@@ -3270,7 +3297,7 @@ export default function RevisionStudio({
       <div className="space-y-6">
         <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">
+            <h2 className="text-xl font-bold text-indigo-900">
               Detailed Specs & Inclusions
             </h2>
             <p className="text-sm text-slate-500 mt-1">
@@ -3298,7 +3325,7 @@ export default function RevisionStudio({
                       key={idx}
                       className="hover:bg-slate-50 transition-colors"
                     >
-                      <td className="px-4 py-4 font-medium text-slate-800 align-top">
+                      <td className="px-4 py-4 font-medium text-indigo-900 align-top">
                         {item.item}
                       </td>
                       <td className="px-4 py-4 text-slate-500 align-top">
@@ -3410,7 +3437,7 @@ export default function RevisionStudio({
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h3 className="text-lg font-semibold text-slate-800">
+            <h3 className="text-lg font-semibold text-indigo-900">
               Client Pack Generation
             </h3>
             <p className="text-sm text-slate-500">
@@ -3464,7 +3491,7 @@ export default function RevisionStudio({
         <div className="grid grid-cols-1 gap-6">
           <Card className="p-6 border border-slate-200 bg-white shadow-sm flex flex-col items-end">
             <div className="flex justify-between items-center mb-4 w-full">
-              <h4 className="font-semibold text-slate-800 uppercase tracking-wider text-sm">
+              <h4 className="font-semibold text-indigo-900 uppercase tracking-wider text-sm">
                 Executive Summary
               </h4>
               <div className="flex items-center gap-2">
@@ -3494,7 +3521,7 @@ export default function RevisionStudio({
               className={`px-4 py-2 border rounded-lg text-sm font-medium shadow-sm transition-all flex items-center gap-2 ${
                 isWhatsappCopied
                   ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                  : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                  : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-indigo-950"
               }`}
             >
               {isWhatsappCopied ? (
@@ -3538,7 +3565,7 @@ export default function RevisionStudio({
 
         {/* Impact Visibility */}
         <div className="grid grid-cols-2 gap-6">
-          <Card className="p-6 border-2 border-slate-800 bg-slate-800 text-white shadow-lg relative overflow-hidden">
+          <Card className="p-6 border-2 border-indigo-900 bg-indigo-900 text-white shadow-lg relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">
               🏗️
             </div>
@@ -3719,7 +3746,7 @@ export default function RevisionStudio({
                 className="p-4 border border-slate-200 bg-slate-50"
               >
                 <div className="flex justify-between items-center mb-2">
-                  <div className="font-medium text-slate-800">{s.section}</div>
+                  <div className="font-medium text-indigo-900">{s.section}</div>
                   <div
                     className={`text-sm font-semibold ${s.delta > 0 ? "text-rose-600" : "text-emerald-600"}`}
                   >
@@ -3745,7 +3772,7 @@ export default function RevisionStudio({
             <div className="text-3xl mb-4 group-hover:scale-110 transition-transform">
               📄
             </div>
-            <h4 className="font-semibold text-slate-800 mb-2">
+            <h4 className="font-semibold text-indigo-900 mb-2">
               Client Review PDF
             </h4>
             <p className="text-sm text-slate-500 mb-4">
@@ -3766,7 +3793,7 @@ export default function RevisionStudio({
             <div className="text-3xl mb-4 group-hover:scale-110 transition-transform">
               📊
             </div>
-            <h4 className="font-semibold text-slate-800 mb-2">
+            <h4 className="font-semibold text-indigo-900 mb-2">
               Detailed Excel
             </h4>
             <p className="text-sm text-slate-500 mb-4">
@@ -3934,7 +3961,7 @@ export default function RevisionStudio({
             <div className="mt-6 space-y-6 flex flex-col">
               {designMilestones.length > 0 && (
                 <Card className="p-6 border border-slate-200 bg-white shadow-sm overflow-hidden">
-                  <h4 className="font-semibold text-slate-800 uppercase tracking-wider text-sm mb-4">
+                  <h4 className="font-semibold text-indigo-900 uppercase tracking-wider text-sm mb-4">
                     Design fee schedule
                   </h4>
                   <div className="bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col">
@@ -3956,11 +3983,11 @@ export default function RevisionStudio({
                       if (current.deductedInitiationFee > 0) {
                         rows.push(
                           <div key={`${idx}-gross`} style={rowStyle}>
-                            <span className="font-medium text-slate-800">
+                            <span className="font-medium text-indigo-900">
                               {m.name} (Gross)
                             </span>
                             <div className="flex items-center gap-3">
-                              <span className="font-semibold text-slate-900">
+                              <span className="font-semibold text-indigo-950">
                                 {formatINR(
                                   Math.round(
                                     current.revisedTotal +
@@ -4020,11 +4047,11 @@ export default function RevisionStudio({
                       } else {
                         rows.push(
                           <div key={`${idx}`} style={rowStyle}>
-                            <span className="font-medium text-slate-800">
+                            <span className="font-medium text-indigo-900">
                               {m.name}
                             </span>
                             <div className="flex items-center gap-3">
-                              <span className="font-semibold text-slate-900">
+                              <span className="font-semibold text-indigo-950">
                                 {formatINR(Math.round(current.revisedTotal))}
                               </span>
                               <span
@@ -4044,7 +4071,7 @@ export default function RevisionStudio({
 
               {executionMilestones.length > 0 && (
                 <Card className="p-6 border border-slate-200 bg-white shadow-sm overflow-x-auto w-full">
-                  <h4 className="font-semibold text-slate-800 uppercase tracking-wider text-sm mb-6">
+                  <h4 className="font-semibold text-indigo-900 uppercase tracking-wider text-sm mb-6">
                     Payment journey
                   </h4>
                   <div
@@ -4173,7 +4200,7 @@ export default function RevisionStudio({
         {/* Communication Drafts */}
         <div className="grid grid-cols-1 gap-6 mt-6">
           <Card className="p-6 border border-slate-200 bg-white shadow-sm">
-            <h4 className="font-semibold text-slate-800 uppercase tracking-wider text-sm mb-4">
+            <h4 className="font-semibold text-indigo-900 uppercase tracking-wider text-sm mb-4">
               Communication Drafts
             </h4>
 
@@ -4336,7 +4363,7 @@ export default function RevisionStudio({
   return (
     <div className="h-full flex flex-col bg-slate-50/50 relative">
       <div className="bg-white border-b border-slate-200 px-8 py-6">
-        <h1 className="text-2xl font-bold text-slate-800 mb-2">
+        <h1 className="text-2xl font-bold text-indigo-900 mb-2">
           Revision Studio
         </h1>
         <p className="text-slate-500">
@@ -4361,7 +4388,7 @@ export default function RevisionStudio({
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   activeTab === tab.id
                     ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                    : "text-slate-600 hover:text-indigo-950 hover:bg-slate-200/50"
                 }`}
               >
                 {tab.label}
@@ -4392,7 +4419,7 @@ export default function RevisionStudio({
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-6 right-6 bg-slate-900 text-white px-6 py-3 rounded-lg shadow-xl font-medium text-sm z-50 flex items-center gap-3"
+            className="fixed bottom-6 right-6 bg-indigo-950 text-white px-6 py-3 rounded-lg shadow-xl font-medium text-sm z-50 flex items-center gap-3"
           >
             <span>✨</span>
             {toastMessage}

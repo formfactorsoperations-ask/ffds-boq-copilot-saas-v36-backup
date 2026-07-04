@@ -154,7 +154,23 @@ const LocalStrategy: DBService = {
                     localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(leanProjects));
                 } catch (innerError) {
                     console.error("Still exceeding quota even after stripping images from all projects.", innerError);
-                    alert("Local storage is full. Please delete some old projects to save new ones.");
+                    if (isFirebaseConfigured()) {
+                        console.warn("Firebase connected. Safely clearing older local projects...");
+                        try {
+                            // Keep only the most recent project (the one we are saving right now)
+                            // or top 3 if possible
+                            let sliced = leanProjects.slice(0, 3);
+                            localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(sliced));
+                        } catch(e3) {
+                            try {
+                                localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify([leanProjects[0]]));
+                            } catch(e4) {
+                                alert("Local storage is critically full. Please clear your browser cache/data.");
+                            }
+                        }
+                    } else {
+                        alert("Local storage is full. Please delete some old projects to save new ones.");
+                    }
                 }
             } else {
                 console.error("Failed to save to local storage", e);
@@ -293,7 +309,7 @@ const CloudStrategy: DBService = {
                                 decisionBrainOutput: null,
                                 _wasCompressed: true,
                                 _failedHydration: true
-                            } as FullProjectData; 
+                            } as unknown as FullProjectData; 
                         }
                         
                         const projectData = data as FullProjectData;
@@ -332,19 +348,32 @@ const CloudStrategy: DBService = {
         try {
             // 2. Prepare Payload
             // Firestore Limit: 1 MB (1,048,576 bytes)
-            const jsonString = JSON.stringify(project);
-            const sizeBytes = new Blob([jsonString]).size;
+
             
+            // Create a pre-cleaned project to avoid compressing derived view data
+            const cleanProject = { ...project };
+            if (cleanProject.tiers) {
+                cleanProject.tiers = cleanProject.tiers.map(t => {
+                    const newT = { ...t };
+                    delete newT.fullBoq;
+                    delete newT.groupedBoq;
+                    return newT;
+                });
+            }
+
+            const cleanJsonString = JSON.stringify(cleanProject);
+            const sizeBytes = new Blob([cleanJsonString]).size;
+
             // Parse the stringified JSON to automatically strip any 'undefined' values
             // which are not supported by Firestore.
-            let payload: any = JSON.parse(jsonString);
+            let payload: any = JSON.parse(cleanJsonString);
             payload.tenantId = getCurrentTenantId();
             
             // 3. Compression Trigger (at 800KB)
             if (sizeBytes > 800000) {
                 console.log(`Project ${project.id} size (${(sizeBytes/1024).toFixed(0)}KB) exceeds threshold. Compressing...`);
                 
-                const compressedString = compressData(project);
+                const compressedString = compressData(cleanProject);
                 
                 if (compressedString) {
                     payload = {
@@ -381,6 +410,16 @@ const CloudStrategy: DBService = {
                             }));
                         }
 
+                        // Remove fullBoq and groupedBoq from tiers (derived data)
+                        if (leanProject.tiers) {
+                            leanProject.tiers = leanProject.tiers.map(t => {
+                                const newT = { ...t };
+                                delete newT.fullBoq;
+                                delete newT.groupedBoq;
+                                return newT;
+                            });
+                        }
+
                         // Strip Design Summary images
                         if (leanProject.context && leanProject.context.designSummary) {
                             leanProject.context = {
@@ -398,8 +437,61 @@ const CloudStrategy: DBService = {
                             };
                         }
                         
+                        // Strip Execution updates images
+                        if (leanProject.activeProject?.executionData?.updates) {
+                            leanProject.activeProject.executionData.updates = leanProject.activeProject.executionData.updates.map(u => ({
+                                ...u,
+                                images: undefined
+                            }));
+                        }
+                        
+                        // Aggressively strip any base64 images from anywhere in the project
+                        const leanString = JSON.stringify(leanProject, (key, value) => {
+                            if (typeof value === 'string' && value.startsWith('data:image/')) {
+                                return undefined; // Strip all base64 images
+                            }
+                            return value;
+                        });
+                        const superLeanProject = JSON.parse(leanString);
+
                         // Compress lean version
-                        const leanCompressed = compressData(leanProject);
+                        // DEBUG: Find out what's huge
+                        for (const key of Object.keys(leanProject)) {
+                            const size = new Blob([JSON.stringify(leanProject[key])]).size;
+                            if (size > 50000) {
+                                console.warn(`Key ${key} is huge: ${(size/1024).toFixed(2)} KB`);
+                                if (key === 'tiers') {
+                                    leanProject.tiers.forEach((t, i) => console.warn(`  Tier ${i} size: ${(new Blob([JSON.stringify(t)]).size/1024).toFixed(2)} KB`));
+                                } else if (key === 'activeProject' && leanProject.activeProject?.executionData) {
+                                     console.warn(`  ExecutionData size: ${(new Blob([JSON.stringify(leanProject.activeProject.executionData)]).size/1024).toFixed(2)} KB`);
+                                }
+                            }
+                        }
+
+                        // Remove unused or huge fields
+                        // If there are many tiers, only keep the active one and the first one? No that loses data.
+                        
+                        let leanCompressed = compressData(superLeanProject);
+                        
+                        if (leanCompressed && leanCompressed.length > 900000) {
+                             console.warn("Still huge! Stripping BOQs from non-active tiers...");
+                             if (superLeanProject.tiers) {
+                                 superLeanProject.tiers = superLeanProject.tiers.map(t => {
+                                     if (t.id === superLeanProject.activeTierId) return t; // Keep active
+                                     return { ...t, boq: [] };
+                                 });
+                             }
+                             leanCompressed = compressData(superLeanProject);
+                        }
+
+                        if (leanCompressed && leanCompressed.length > 900000) {
+                             console.warn("Still huge! Keeping only active tier...");
+                             if (superLeanProject.tiers) {
+                                 superLeanProject.tiers = superLeanProject.tiers.filter(t => t.id === superLeanProject.activeTierId);
+                             }
+                             leanCompressed = compressData(superLeanProject);
+                        }
+
                         if (leanCompressed) {
                             payload = {
                                 id: project.id,
@@ -412,6 +504,14 @@ const CloudStrategy: DBService = {
                         }
                     }
                 }
+            }
+
+            if (payload.compressedData && payload.compressedData.length > 1048400) {
+                console.error("Payload still too large for Firestore after aggressive stripping!");
+                // Just clear the compressedData to avoid breaking the app, but save metadata
+                payload.compressedData = "";
+                payload.warning = "Project too large for cloud sync. Saved locally only.";
+                payload.isCloudSyncFailed = true;
             }
 
             await setDoc(doc(firestore, "projects", project.id), payload);
@@ -438,8 +538,30 @@ const CloudStrategy: DBService = {
             const docRef = doc(firestore, "master_data", getTenantDocId("item_bank"));
             const docSnap = await getDoc(docRef);
             
+            let tenantItems: Item[] = [];
             if (docSnap.exists()) {
-                return (docSnap.data() as any).items as Item[];
+                tenantItems = (docSnap.data() as any).items as Item[];
+            }
+            
+            // Fallback / merge with global legacy bank to recover lost imported items
+            if (getTenantDocId("item_bank") !== "item_bank") {
+                try {
+                    const globalRef = doc(firestore, "master_data", "item_bank");
+                    const globalSnap = await getDoc(globalRef);
+                    if (globalSnap.exists()) {
+                        const globalItems = (globalSnap.data() as any).items as Item[];
+                        const seen = new Set(tenantItems.map(i => i.id));
+                        for (const gItem of globalItems) {
+                            if (!seen.has(gItem.id)) {
+                                tenantItems.push(gItem);
+                            }
+                        }
+                    }
+                } catch (e) {}
+            }
+
+            if (tenantItems.length > 0) {
+                return tenantItems;
             } else {
                 try {
                     await setDoc(docRef, { items: INITIAL_BANK, updatedAt: Date.now() });
@@ -470,8 +592,30 @@ const CloudStrategy: DBService = {
             const docRef = doc(firestore, "master_data", getTenantDocId("draft_item_bank"));
             const docSnap = await getDoc(docRef);
             
+            let tenantItems: Item[] = [];
             if (docSnap.exists()) {
-                return (docSnap.data() as any).items as Item[];
+                tenantItems = (docSnap.data() as any).items as Item[];
+            }
+            
+            // Fallback / merge with global legacy bank to recover lost imported items
+            if (getTenantDocId("draft_item_bank") !== "draft_item_bank") {
+                try {
+                    const globalRef = doc(firestore, "master_data", "draft_item_bank");
+                    const globalSnap = await getDoc(globalRef);
+                    if (globalSnap.exists()) {
+                        const globalItems = (globalSnap.data() as any).items as Item[];
+                        const seen = new Set(tenantItems.map(i => i.id));
+                        for (const gItem of globalItems) {
+                            if (!seen.has(gItem.id)) {
+                                tenantItems.push(gItem);
+                            }
+                        }
+                    }
+                } catch (e) {}
+            }
+
+            if (tenantItems.length > 0) {
+                return tenantItems;
             } else {
                 // Initial fallback to cloud active bank
                 return await CloudStrategy.getBank();

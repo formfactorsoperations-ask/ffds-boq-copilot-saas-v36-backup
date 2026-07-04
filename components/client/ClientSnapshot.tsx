@@ -5,7 +5,10 @@ import { formatCurrency, formatClientValue } from '../../lib/utils';
 import ClientDiscountShowcase from './ClientDiscountShowcase';
 import { CheckBadgeIcon, ShieldCheckIcon } from '../Icons';
 
+import { ProposalLevel } from '../../types';
+
 interface ClientSnapshotProps {
+    level?: string;
     investmentMin: number;
     investmentMax: number;
     timelinePhases: TimelinePhase[];
@@ -16,7 +19,7 @@ interface ClientSnapshotProps {
     settings?: any; // Dynamic studio settings
 }
 
-const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ investmentMin, investmentMax, timelinePhases, content, designFee, executionTotal, projectContext, settings }) => {
+const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ level, investmentMin, investmentMax, timelinePhases, content, designFee, executionTotal, projectContext, settings }) => {
     // Correct calculation: Max End Day across all phases
     const totalDaysMin = useMemo(() => {
         // Smart Default logic matching Contract View
@@ -35,11 +38,16 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ investmentMin, investme
     // Max range is roughly +20% or +15 days
     const totalDaysMax = Math.ceil(totalDaysMin * 1.25);
 
-    const data = content || {
+    const data = content || (
+        level === 'LEVEL_1_5' ? {
+            title: "Interim Snapshot",
+            subtitle: "This snapshot outlines the revised scope and investment required based on our recent discussions.",
+            engagementModel: "Design-led Turnkey Execution"
+        } : {
         title: "Project Snapshot",
         subtitle: "This snapshot helps you quickly decide if the direction and investment feel broadly aligned before going into details.",
         engagementModel: "Design-led Turnkey Execution"
-    };
+    });
 
     const modelString = data.engagementModel || '';
     const isDesignOnly = modelString.includes('Design Consultancy');
@@ -93,7 +101,7 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ investmentMin, investme
             <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
                 <div>
                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Section 1</div>
-                    <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">{data.title}</h2>
+                    <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-indigo-950">{data.title}</h2>
                     <p className="mt-2 text-slate-600 max-w-3xl whitespace-pre-line">
                         {data.subtitle}
                     </p>
@@ -113,7 +121,7 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ investmentMin, investme
                         /* NEW: Detailed Level 2 Commercial Breakdown - Ledger Style */
                         <div className="bg-white rounded-[20px] h-full flex flex-col">
                             <div className="p-6 pb-4 border-b border-slate-100 bg-slate-50/50">
-                                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Detailed Commercial Summary</h3>
+                                <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wide">Detailed Commercial Summary</h3>
                                 <p className="text-xs text-slate-500 mt-1">Consolidated view of Execution + Professional Fees</p>
                             </div>
                             
@@ -173,7 +181,7 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ investmentMin, investme
                             </div>
 
                             {/* Final Total Footer */}
-                            <div className="bg-slate-900 p-6 text-white flex justify-between items-end rounded-b-[20px]">
+                            <div className="bg-indigo-950 p-6 text-white flex justify-between items-end rounded-b-[20px]">
                                 <div>
                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Project Cost</p>
                                     <p className="text-xs text-slate-500">Inclusive of Taxes & Fees</p>
@@ -189,7 +197,7 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ investmentMin, investme
                             {isDesignOnly ? (
                                 <>
                                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Estimated Execution Budget</div>
-                                    <div className="mt-2 text-3xl font-extrabold text-slate-900">{formatClientValue(investmentMin)} – {formatClientValue(investmentMax)}</div>
+                                    <div className="mt-2 text-3xl font-extrabold text-indigo-950">{formatClientValue(investmentMin)} – {formatClientValue(investmentMax)}</div>
                                     <div className="mt-1 text-sm text-slate-500">Advisory Estimate • Construction Cost</div>
                                     <div className="mt-4 text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-200">
                                         <span className="font-bold">Note:</span> This is the estimated cost to execute the designs. It does not include professional fees (Design/PMC).
@@ -198,7 +206,7 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ investmentMin, investme
                             ) : isPMC ? (
                                 <>
                                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Estimated PMC Fee</div>
-                                    <div className="mt-2 text-3xl font-extrabold text-slate-900">12% <span className="text-lg text-slate-500 font-medium">of Vendor Billing</span></div>
+                                    <div className="mt-2 text-3xl font-extrabold text-indigo-950">12% <span className="text-lg text-slate-500 font-medium">of Vendor Billing</span></div>
                                     <div className="mt-1 text-sm text-slate-500">Excl. GST • Billed monthly on progress</div>
                                     <div className="mt-4 text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-200">
                                         <span className="font-bold">Execution Budget:</span> {formatClientValue(investmentMin)} – {formatClientValue(investmentMax)} (Managed by us, paid by you).
@@ -207,7 +215,7 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ investmentMin, investme
                             ) : (
                                 <>
                                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Overall project investment</div>
-                                    <div className="mt-2 text-3xl font-extrabold text-slate-900">{formatClientValue(investmentMin)} – {formatClientValue(investmentMax)}</div>
+                                    <div className="mt-2 text-3xl font-extrabold text-indigo-950">{formatClientValue(investmentMin)} – {formatClientValue(investmentMax)}</div>
                                     <div className="mt-1 text-sm text-slate-500">Excl. GST • Excl. loose furniture + appliances</div>
                                     <div className="mt-4 text-sm text-slate-700">
                                         Final number depends on: scope lock, storage detailing, civil changes, and material/hardware selection.
@@ -224,13 +232,13 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ investmentMin, investme
                     <div className="rounded-3xl bg-white border border-slate-200 p-6 flex flex-col justify-between">
                         <div>
                             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Timeline (indicative)</div>
-                            <div className="mt-2 text-2xl font-extrabold text-slate-900">{totalDaysMin}–{totalDaysMax} days</div>
+                            <div className="mt-2 text-2xl font-extrabold text-indigo-950">{totalDaysMin}–{totalDaysMax} days</div>
                             <div className="mt-1 text-sm text-slate-600">Post possession • subject to approvals and site realities</div>
                         </div>
 
                         <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                             <div className="rounded-2xl bg-[#F7F7F6] border border-slate-200 p-4">
-                                <div className="font-extrabold text-slate-900 text-xs uppercase tracking-wide mb-2">Included Scope</div>
+                                <div className="font-extrabold text-indigo-950 text-xs uppercase tracking-wide mb-2">Included Scope</div>
                                 <ul className="space-y-1.5 text-slate-600 list-disc list-inside text-xs font-medium pl-1">
                                     {(settings?.scopeInclusions?.included || []).length > 0 ? (
                                         settings.scopeInclusions.included.map((item: string, idx: number) => (
@@ -254,7 +262,7 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ investmentMin, investme
                                 </ul>
                             </div>
                             <div className="rounded-2xl bg-[#F7F7F6] border border-slate-200 p-4">
-                                <div className="font-extrabold text-slate-900 text-xs uppercase tracking-wide mb-2">Standard Exclusions</div>
+                                <div className="font-extrabold text-indigo-950 text-xs uppercase tracking-wide mb-2">Standard Exclusions</div>
                                 <ul className="space-y-1.5 text-slate-600 list-disc list-inside text-xs font-medium pl-1">
                                     {(settings?.scopeInclusions?.excluded || []).length > 0 ? (
                                         settings.scopeInclusions.excluded.map((item: string, idx: number) => (
@@ -302,7 +310,7 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ investmentMin, investme
                 <div className="flex items-start gap-3">
                     <div className="mt-1 w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center font-extrabold text-slate-700 shadow-sm">i</div>
                     <div>
-                        <div className="font-extrabold text-slate-900 text-sm">How to read this summary</div>
+                        <div className="font-extrabold text-indigo-950 text-sm">How to read this summary</div>
                         <div className="mt-1 text-xs text-slate-600 leading-relaxed">
                             {showGrandTotal 
                                 ? "The Investment Ledger above consolidates all costs—Execution, Fees, and Taxes—into a single final figure. This allows you to sign the contract with complete clarity on the total outgoing."
@@ -315,23 +323,23 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ investmentMin, investme
 
             {/* NEW: Execution Intelligence Layer (Impactful for Print) */}
             <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 break-inside-avoid">
-                <div className="rounded-2xl border-2 border-slate-900 p-5 bg-white">
+                <div className="rounded-2xl border-2 border-indigo-950 p-5 bg-white">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Critical Milestone</div>
-                    <div className="text-sm font-black text-slate-900 uppercase">SOF Freeze</div>
+                    <div className="text-sm font-black text-indigo-950 uppercase">SOF Freeze</div>
                     <p className="mt-1 text-[10px] text-slate-500 leading-relaxed">
-                        Schedule of Finishes (SOF) must be locked by <span className="font-bold text-slate-800">Day 15</span> to avoid procurement delays.
+                        Schedule of Finishes (SOF) must be locked by <span className="font-bold text-indigo-900">Day 15</span> to avoid procurement delays.
                     </p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 p-5 bg-white">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Lead Time Alert</div>
-                    <div className="text-sm font-black text-slate-900 uppercase">Long-Lead Items</div>
+                    <div className="text-sm font-black text-indigo-950 uppercase">Long-Lead Items</div>
                     <p className="mt-1 text-[10px] text-slate-500 leading-relaxed">
-                        Custom hardware and imported veneers require <span className="font-bold text-slate-800">4-6 weeks</span> lead time from order date.
+                        Custom hardware and imported veneers require <span className="font-bold text-indigo-900">4-6 weeks</span> lead time from order date.
                     </p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 p-5 bg-white">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Ops Intelligence</div>
-                    <div className="text-sm font-black text-slate-900 uppercase">Decision Blockers</div>
+                    <div className="text-sm font-black text-indigo-950 uppercase">Decision Blockers</div>
                     <p className="mt-1 text-[10px] text-slate-500 leading-relaxed">
                         Electrical point lock and Appliance selection are the primary blockers for modular production.
                     </p>

@@ -276,6 +276,7 @@ const ContentEditorModal: React.FC<{
         { id: 'process', label: 'L1: Process' },
         { id: 'fees', label: 'L1: Fees' },
         { id: 'options', label: 'L1: Options' },
+        { id: 'materials', label: 'Technical Specifications' },
         { id: 'timeline', label: 'L1: Timeline' },
         { id: 'payments', label: 'L1: Payments' },
         { id: 'cta', label: 'L1: Call to Action' },
@@ -294,15 +295,15 @@ const ContentEditorModal: React.FC<{
     const sectionData = (localContent as any)[activeSection];
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-indigo-950/60 backdrop-blur-md backdrop-blur-sm p-4">
             <MotionDiv 
                 initial={{ opacity: 0, scale: 0.95 }} 
                 animate={{ opacity: 1, scale: 1 }} 
                 className={`bg-white w-full ${initialSection ? 'max-w-2xl h-auto max-h-[85vh]' : 'max-w-6xl h-[90vh]'} rounded-2xl shadow-2xl flex flex-col overflow-hidden`}
             >
                 <div className="p-4 border-b flex justify-between items-center bg-slate-50">
-                    <h3 className="font-bold text-lg text-slate-800">{initialSection ? `Edit: ${currentLabel}` : 'Proposal Content Editor'}</h3>
-                    <button onClick={onClose}><CloseIcon className="w-6 h-6 text-slate-500 hover:text-slate-800" /></button>
+                    <h3 className="font-bold text-lg text-indigo-900">{initialSection ? `Edit: ${currentLabel}` : 'Proposal Content Editor'}</h3>
+                    <button onClick={onClose}><CloseIcon className="w-6 h-6 text-slate-500 hover:text-indigo-900" /></button>
                 </div>
                 
                 <div className="flex flex-grow overflow-hidden">
@@ -323,7 +324,7 @@ const ContentEditorModal: React.FC<{
 
                     {/* Content Area */}
                     <div className="flex-1 overflow-y-auto p-6 md:p-8">
-                        {!initialSection && <h4 className="font-bold text-lg text-slate-800 border-b pb-4 mb-6">{currentLabel}</h4>}
+                        {!initialSection && <h4 className="font-bold text-lg text-indigo-900 border-b pb-4 mb-6">{currentLabel}</h4>}
                         
                         {sectionData ? (
                             <FieldRenderer 
@@ -339,7 +340,7 @@ const ContentEditorModal: React.FC<{
 
                 <div className="p-4 border-t bg-slate-50 flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg">Cancel</button>
-                    <button onClick={() => onSave(localContent)} className="px-6 py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-black shadow-lg">Save Changes</button>
+                    <button onClick={() => onSave(localContent)} className="px-6 py-2 bg-indigo-950 text-white font-bold rounded-lg hover:bg-indigo-950 shadow-lg">Save Changes</button>
                 </div>
             </MotionDiv>
         </div>,
@@ -615,7 +616,7 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
                             <button
                                 key={m.id}
                                 onClick={() => setActiveMode(m.id as ProposalType)}
-                                className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition-all ${activeMode === m.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
+                                className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition-all ${activeMode === m.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-indigo-900 hover:bg-slate-50'}`}
                             >
                                 {m.icon}
                                 {m.label}
@@ -642,7 +643,7 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
                         <button 
                             type="button"
                             onClick={handlePrint}
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white font-bold text-sm rounded-lg shadow-sm hover:bg-black transition-all"
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-900 text-white font-bold text-sm rounded-lg shadow-sm hover:bg-indigo-950 transition-all"
                         >
                             <PrintIcon className="w-4 h-4"/> Save PDF
                         </button>
@@ -650,22 +651,28 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
                  </div>
                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="flex flex-col gap-2">
-                        <div className="flex self-start bg-white rounded-lg p-1 border border-slate-300 shadow-sm">
+                        <div className="flex self-start bg-white rounded-lg p-1 border border-slate-300 shadow-sm flex-wrap gap-1">
                             <button 
                                 onClick={() => setProposalLevel('LEVEL_1')}
-                                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_1' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_1' ? 'bg-indigo-950 text-white shadow-md' : 'text-slate-500 hover:text-indigo-900'}`}
                             >
                                 Level 1: Concept
                             </button>
                             <button 
+                                onClick={() => setProposalLevel('LEVEL_1_5')}
+                                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_1_5' ? 'bg-indigo-950 text-white shadow-md' : 'text-slate-500 hover:text-indigo-900'}`}
+                            >
+                                Level 1.5: Interim Update
+                            </button>
+                            <button 
                                 onClick={() => setProposalLevel('LEVEL_2')}
-                                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_2' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_2' ? 'bg-indigo-950 text-white shadow-md' : 'text-slate-500 hover:text-indigo-900'}`}
                             >
                                 Level 2: Planning
                             </button>
                             <button 
                                 onClick={() => setProposalLevel('LEVEL_3')}
-                                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_3' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_3' ? 'bg-indigo-950 text-white shadow-md' : 'text-slate-500 hover:text-indigo-900'}`}
                             >
                                 Level 3: Execution
                             </button>
@@ -694,7 +701,7 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
                                     onClick={() => setProjectContext && setProjectContext(prev => ({ ...prev, coverStyle: 'bold' }))}
                                     className={`relative flex flex-col items-center gap-1 group`}
                                 >
-                                    <div className={`w-16 h-20 rounded shadow-sm border-2 transition-all bg-slate-900 flex flex-col p-1 ${
+                                    <div className={`w-16 h-20 rounded shadow-sm border-2 transition-all bg-indigo-950 flex flex-col p-1 ${
                                         (projectContext.coverStyle || 'photo') === 'bold' ? 'border-indigo-600' : 'border-slate-200 hover:border-slate-400'
                                     }`}>
                                         <div className="w-4 h-1 bg-slate-500 rounded-full mb-auto mt-1"></div>
@@ -717,7 +724,7 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
                                         </div>
                                         <div className="w-1/2 flex flex-col p-1 justify-center">
                                             <div className="w-4 h-1 bg-slate-300 self-end rounded-full mb-2"></div>
-                                            <div className="w-6 h-1.5 bg-slate-800 rounded-full mb-1"></div>
+                                            <div className="w-6 h-1.5 bg-indigo-900 rounded-full mb-1"></div>
                                             <div className="w-4 h-1 bg-slate-400 rounded-full"></div>
                                         </div>
                                     </div>

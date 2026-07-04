@@ -11,11 +11,19 @@
         originalConsoleError.apply(console, args);
       }
       window.addEventListener('unhandledrejection', function(event) {
-        if (event.reason && typeof event.reason.message === 'string' && event.reason.message.includes('WebSocket')) {
-            event.preventDefault();
+        var reasonStr = '';
+        if (event.reason instanceof Error) {
+          reasonStr = event.reason.message;
+        } else if (typeof event.reason === 'string') {
+          reasonStr = event.reason;
+        } else if (event.reason && typeof event.reason === 'object') {
+          try { reasonStr = JSON.stringify(event.reason); } catch(e) {}
+          if (event.reason.message) reasonStr += ' ' + event.reason.message;
         }
-        if (typeof event.reason === 'string' && event.reason.includes('WebSocket')) {
+        
+        if (reasonStr.includes('WebSocket') || reasonStr.includes('WebChannel') || reasonStr.includes('transport errored')) {
             event.preventDefault();
+            event.stopImmediatePropagation();
         }
       });
     </script>

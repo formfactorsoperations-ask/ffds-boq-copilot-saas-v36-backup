@@ -7,6 +7,8 @@ interface ClientMaterialSpecsProps {
     comparisonData: AiComparisonResult;
     tiers: { name: string, executionTotal: number, fullBoq?: FullBoqItem[] }[];
     isLevel2?: boolean;
+    projectContext?: any;
+    setProjectContext?: any;
 }
 
 // Helper to check room type for filtering
@@ -20,7 +22,7 @@ const checkRoom = (name: string | undefined, type: 'wet' | 'dry' | 'kitchen') =>
     return false;
 };
 
-const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonData, tiers, isLevel2 = false }) => {
+const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonData, tiers, isLevel2 = false, projectContext, setProjectContext }) => {
     // If no data, return null to avoid empty section
     if (!tiers || tiers.length === 0) return null;
 
@@ -157,6 +159,27 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
     }, [comparisonData, tiers, isLevel2]);
 
 
+
+    const overrides = projectContext?.proposalContent?.materials?.overrides || {};
+
+    const handleOverride = (category: string, colKey: string, newValue: string) => {
+        if (!setProjectContext) return;
+        setProjectContext((prev: any) => {
+            const content = prev.proposalContent || {};
+            const materials = content.materials || {};
+            const overs = materials.overrides ? { ...materials.overrides } : {};
+            if (!overs[category]) overs[category] = {};
+            overs[category][colKey] = newValue;
+            return {
+                ...prev,
+                proposalContent: {
+                    ...content,
+                    materials: { ...materials, overrides: overs }
+                }
+            };
+        });
+    };
+
     const isSingleTier = tiers.length === 1;
     const sectionTitle = isLevel2 ? "Material Specifications" : "Detailed Specifications & Differences";
     const finalRows = isLevel2 ? l2Rows : l1Rows;
@@ -167,7 +190,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     {isLevel2 ? 'Technical Specs' : (isSingleTier ? 'Specification Sheet' : 'Section 6')}
                 </div>
-                <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
+                <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-indigo-950">
                     {sectionTitle}
                 </h2>
                 {!isLevel2 && (
@@ -187,15 +210,15 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                         <tr className="bg-slate-50 border-b border-slate-200">
                             {isLevel2 ? (
                                 <>
-                                    <th className="py-4 px-6 font-bold text-slate-800 w-1/4 border-r border-slate-200">Category</th>
-                                    <th className="py-4 px-6 font-bold text-slate-800 w-1/2 border-r border-slate-200">Proposed Material/Brand</th>
-                                    <th className="py-4 px-6 font-bold text-slate-800 w-1/4">Notes</th>
+                                    <th className="py-4 px-6 font-bold text-indigo-900 w-1/4 border-r border-slate-200">Category</th>
+                                    <th className="py-4 px-6 font-bold text-indigo-900 w-1/2 border-r border-slate-200">Proposed Material/Brand</th>
+                                    <th className="py-4 px-6 font-bold text-indigo-900 w-1/4">Notes</th>
                                 </>
                             ) : (
                                 <>
-                                    <th className={`py-4 px-6 font-bold text-slate-800 border-r border-slate-200 ${isSingleTier ? 'w-1/3' : 'w-1/4'}`}>Category</th>
+                                    <th className={`py-4 px-6 font-bold text-indigo-900 border-r border-slate-200 ${isSingleTier ? 'w-1/3' : 'w-1/4'}`}>Category</th>
                                     {tiers.map((tier, idx) => (
-                                        <th key={tier.name} className={`py-4 px-6 font-bold text-slate-800 min-w-[200px] ${idx !== tiers.length - 1 ? 'border-r border-slate-200' : ''}`}>
+                                        <th key={tier.id} className={`py-4 px-6 font-bold text-indigo-900 min-w-[200px] ${idx !== tiers.length - 1 ? 'border-r border-slate-200' : ''}`}>
                                             {!isSingleTier && (
                                                 <span className="block text-[10px] font-normal text-slate-500 uppercase tracking-wide mb-1">Option {String.fromCharCode(65 + idx)}</span>
                                             )}
@@ -209,22 +232,37 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                     <tbody className="divide-y divide-slate-100">
                         {finalRows.map((row: any, idx) => (
                             <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                                <td className="py-4 px-6 font-bold text-slate-900 border-r border-slate-100 bg-slate-50/30">
+                                <td className="py-4 px-6 font-bold text-indigo-950 border-r border-slate-100 bg-slate-50/30">
                                     {row.category}
                                 </td>
                                 {isLevel2 ? (
                                     <>
                                         <td className="py-4 px-6 text-slate-700 leading-relaxed align-top font-medium border-r border-slate-100">
-                                            {row.material}
+                                            <div 
+                                               contentEditable={!!setProjectContext} 
+                                               suppressContentEditableWarning
+                                               onBlur={(e) => handleOverride(row.category, 'material', e.currentTarget.innerText)}
+                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-indigo-500' : ''}`}
+                                            >{overrides[row.category]?.['material'] ?? row.material}</div>
                                         </td>
                                         <td className="py-4 px-6 text-slate-500 leading-relaxed align-top text-xs">
-                                            {row.notes}
+                                            <div 
+                                               contentEditable={!!setProjectContext} 
+                                               suppressContentEditableWarning
+                                               onBlur={(e) => handleOverride(row.category, 'notes', e.currentTarget.innerText)}
+                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-indigo-500' : ''}`}
+                                            >{overrides[row.category]?.['notes'] ?? row.notes}</div>
                                         </td>
                                     </>
                                 ) : (
                                     tiers.map((tier, tIdx) => (
-                                        <td key={tier.name} className={`py-4 px-6 text-slate-700 leading-relaxed align-top ${tIdx !== tiers.length - 1 ? 'border-r border-slate-100' : ''}`}>
-                                            <div className="whitespace-pre-line">{row[tier.name]}</div>
+                                        <td key={tier.id} className={`py-4 px-6 text-slate-700 leading-relaxed align-top ${tIdx !== tiers.length - 1 ? 'border-r border-slate-100' : ''}`}>
+                                            <div 
+                                               contentEditable={!!setProjectContext} 
+                                               suppressContentEditableWarning
+                                               onBlur={(e) => handleOverride(row.category, tier.name, e.currentTarget.innerText)}
+                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-indigo-500' : ''}`}
+                                            >{overrides[row.category]?.[tier.name] ?? row[tier.name]}</div>
                                         </td>
                                     ))
                                 )}
@@ -238,24 +276,39 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
             <div className="md:hidden mt-6 space-y-4">
                 {finalRows.map((row: any, idx) => (
                     <div key={idx} className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
-                        <h4 className="font-bold text-slate-900 text-sm mb-4 border-b border-slate-200 pb-2">{row.category}</h4>
+                        <h4 className="font-bold text-indigo-950 text-sm mb-4 border-b border-slate-200 pb-2">{row.category}</h4>
                         <div className="space-y-4">
                             {isLevel2 ? (
                                 <>
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase">Material/Brand</p>
-                                        <p className="text-sm font-bold text-slate-800">{row.material}</p>
+                                        <div 
+                                           contentEditable={!!setProjectContext} 
+                                           suppressContentEditableWarning
+                                           onBlur={(e) => handleOverride(row.category, 'material', e.currentTarget.innerText)}
+                                           className={`text-sm font-bold text-indigo-900 whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-200 p-1 rounded outline-none focus:ring-2 focus:ring-indigo-500' : ''}`}
+                                        >{overrides[row.category]?.['material'] ?? row.material}</div>
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase">Notes</p>
-                                        <p className="text-sm text-slate-600">{row.notes}</p>
+                                        <div 
+                                           contentEditable={!!setProjectContext} 
+                                           suppressContentEditableWarning
+                                           onBlur={(e) => handleOverride(row.category, 'notes', e.currentTarget.innerText)}
+                                           className={`text-sm text-slate-600 whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-200 p-1 rounded outline-none focus:ring-2 focus:ring-indigo-500' : ''}`}
+                                        >{overrides[row.category]?.['notes'] ?? row.notes}</div>
                                     </div>
                                 </>
                             ) : (
                                 tiers.map((tier, tIdx) => (
-                                    <div key={tier.name} className="flex flex-col gap-1">
+                                    <div key={tier.id} className="flex flex-col gap-1">
                                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{tier.name}</span>
-                                        <span className="text-sm text-slate-800 font-medium bg-white p-2 rounded-lg border border-slate-100 shadow-sm">{row[tier.name]}</span>
+                                        <div 
+                                           contentEditable={!!setProjectContext} 
+                                           suppressContentEditableWarning
+                                           onBlur={(e) => handleOverride(row.category, tier.name, e.currentTarget.innerText)}
+                                           className={`text-sm text-indigo-900 font-medium bg-white p-2 rounded-lg border border-slate-100 shadow-sm whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 outline-none focus:ring-2 focus:ring-indigo-500' : ''}`}
+                                        >{overrides[row.category]?.[tier.name] ?? row[tier.name]}</div>
                                     </div>
                                 ))
                             )}

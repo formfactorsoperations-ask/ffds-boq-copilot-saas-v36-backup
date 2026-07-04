@@ -73,7 +73,7 @@ export const SiteActivityWidget = ({
   return (
     <div className="bg-white border rounded-xl shadow-sm overflow-hidden flex flex-col h-full">
       <div className="p-4 border-b bg-slate-50 flex items-center justify-between">
-        <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+        <h3 className="font-semibold text-indigo-900 flex items-center gap-2">
            <MapPin size={18} className="text-slate-500"/> Site & Meetings
         </h3>
         <button onClick={onOpenHistory} className="text-sm font-medium text-indigo-600 hover:text-indigo-800 flex items-center">
@@ -83,15 +83,15 @@ export const SiteActivityWidget = ({
 
       <div className="grid grid-cols-4 divide-x border-b">
          <div className="p-3 text-center">
-            <p className="text-xl font-bold text-slate-800">{totalVisits}</p>
+            <p className="text-xl font-bold text-indigo-900">{totalVisits}</p>
             <p className="text-xs text-slate-500 font-medium">Visits</p>
          </div>
          <div className="p-3 text-center">
-            <p className="text-xl font-bold text-slate-800">{totalMeetings}</p>
+            <p className="text-xl font-bold text-indigo-900">{totalMeetings}</p>
             <p className="text-xs text-slate-500 font-medium">Meetings</p>
          </div>
          <div className="p-3 text-center">
-            <p className="text-xl font-bold text-slate-800">{hours}h</p>
+            <p className="text-xl font-bold text-indigo-900">{hours}h</p>
             <p className="text-xs text-slate-500 font-medium">Time Logged</p>
          </div>
          <div className="p-3 text-center">
@@ -113,7 +113,7 @@ export const SiteActivityWidget = ({
                      <p className="text-lg font-bold text-indigo-900 leading-none">{start.getDate()}</p>
                   </div>
                   <div className="flex-1">
-                     <p className="text-sm font-medium text-slate-800 line-clamp-1">{ev.summary}</p>
+                     <p className="text-sm font-medium text-indigo-900 line-clamp-1">{ev.summary}</p>
                      <p className="text-xs text-slate-500 mt-0.5">{start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                   </div>
                 </div>
@@ -132,7 +132,7 @@ export const SiteActivityWidget = ({
                  <div key={visit.id} className={`p-3 rounded-lg border flex gap-3 ${isSite ? 'border-orange-100 bg-orange-50/30' : 'border-blue-100 bg-blue-50/30'}`}>
                     <div className="text-2xl mt-0.5">{isSite ? '🏗️' : '🤝'}</div>
                     <div className="flex-1 min-w-0">
-                       <p className="text-sm font-medium text-slate-900 truncate">{visit.title}</p>
+                       <p className="text-sm font-medium text-indigo-950 truncate">{visit.title}</p>
                        <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
                           <span className="flex items-center gap-1"><Calendar size={12}/> {dDate.toLocaleDateString()}</span>
                           <span className="flex items-center gap-1"><Clock size={12}/> {visit.durationMinutes}m</span>

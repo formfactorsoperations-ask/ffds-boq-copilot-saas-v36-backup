@@ -17,7 +17,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
     const [copySuccess, setCopySuccess] = useState('');
 
     useEffect(() => {
-        if (settings && settings.emailTemplateLibrary && settings.emailTemplateLibrary.length > 0) {
+        if (settings && Array.isArray(settings.emailTemplateLibrary) && settings.emailTemplateLibrary.length > 0 && settings.emailTemplateLibrary[0]?.title) {
             setTemplates(settings.emailTemplateLibrary);
         } else {
             setTemplates(EMAIL_TEMPLATE_LIBRARY);
@@ -115,7 +115,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
             <div className="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-slate-800 tracking-tight">Communication Template Library</h2>
+                    <h2 className="text-xl font-bold text-indigo-900 tracking-tight">Communication Template Library</h2>
                     <p className="text-sm text-slate-500 mt-1">Manage standard email and WhatsApp scripts for your studio.</p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -161,7 +161,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                         <div key={template.key} className="border border-slate-200 rounded-xl bg-white overflow-hidden hover:shadow-md transition-shadow">
                             <div className="bg-slate-50 px-5 py-4 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                 <div>
-                                    <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                                    <h3 className="font-bold text-indigo-900 text-base flex items-center gap-2">
                                         {template.title}
                                         {template.isCustomised && <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full tracking-wider uppercase">Customised</span>}
                                     </h3>
@@ -234,7 +234,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                                         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3">
                                             <div>
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase">Subject</p>
-                                                <p className="font-semibold text-sm text-slate-900" dangerouslySetInnerHTML={{__html: resolveTemplate(template.email?.subject || '', sampleVariables)}}></p>
+                                                <p className="font-semibold text-sm text-indigo-950" dangerouslySetInnerHTML={{__html: resolveTemplate(template.email?.subject || '', sampleVariables)}}></p>
                                             </div>
                                             <hr className="border-slate-100" />
                                             <div>

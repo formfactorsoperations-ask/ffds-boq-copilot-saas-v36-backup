@@ -146,7 +146,7 @@ export default function SignoffPage({ token }: SignoffPageProps) {
                         <div className="mx-auto w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                         </div>
-                        <h2 className="text-xl font-semibold text-slate-800 mb-2">Thank you, {successName}.</h2>
+                        <h2 className="text-xl font-semibold text-indigo-900 mb-2">Thank you, {successName}.</h2>
                         <p className="text-slate-600">Your approval has been recorded. {STUDIO_NAME} will be notified.</p>
                     </div>
                 </div>
@@ -158,7 +158,7 @@ export default function SignoffPage({ token }: SignoffPageProps) {
                         <div className="mx-auto w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-4">
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                         </div>
-                        <h2 className="text-xl font-semibold text-slate-800 mb-2">Your concern has been submitted.</h2>
+                        <h2 className="text-xl font-semibold text-indigo-900 mb-2">Your concern has been submitted.</h2>
                         <p className="text-slate-600">{STUDIO_NAME} will get back to you within 24 hours.</p>
                     </div>
                 </div>
@@ -170,7 +170,7 @@ export default function SignoffPage({ token }: SignoffPageProps) {
       return (
          <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
             <div className="max-w-md bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 className="text-lg font-semibold text-slate-800 mb-2">Sign-off Complete</h3>
+                <h3 className="text-lg font-semibold text-indigo-900 mb-2">Sign-off Complete</h3>
                 <p className="text-slate-600 mb-4">You have already responded to this request on {dateResponded}. Thank you.</p>
                 <div className={`px-4 py-3 rounded-lg text-sm font-medium ${finalState === 'approved' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>
                     Your response: {finalState === 'approved' ? 'Approved' : 'Raised a Concern'}
@@ -195,9 +195,9 @@ export default function SignoffPage({ token }: SignoffPageProps) {
                   {STUDIO_LOGO_URL ? (
                       <img src={STUDIO_LOGO_URL} alt={STUDIO_NAME} className="h-12 mx-auto mb-4" />
                   ) : (
-                      <h1 className="text-2xl font-bold text-slate-900 mb-4">{STUDIO_NAME}</h1>
+                      <h1 className="text-2xl font-bold text-indigo-950 mb-4">{STUDIO_NAME}</h1>
                   )}
-                  <h2 className="text-xl font-semibold text-slate-800">Design approval request</h2>
+                  <h2 className="text-xl font-semibold text-indigo-900">Design approval request</h2>
                   <p className="text-slate-500 mt-1">{decision.projectName} · {decision.clientName || 'Client'}</p>
               </div>
 
@@ -205,7 +205,7 @@ export default function SignoffPage({ token }: SignoffPageProps) {
               <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                   <div className="p-5 bg-slate-50 border-b border-slate-200">
                      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">What was discussed and agreed</h3>
-                     <p className="text-slate-800 text-[15px] leading-relaxed whitespace-pre-wrap">{decision.decisionText}</p>
+                     <p className="text-indigo-900 text-[15px] leading-relaxed whitespace-pre-wrap">{decision.decisionText}</p>
                      
                      <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium">
                          <span className="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-md">{decision.roomName}</span>
@@ -225,7 +225,7 @@ export default function SignoffPage({ token }: SignoffPageProps) {
                   {/* Updated Drawing */}
                   {decision.drawingURL && (
                       <div className="p-5 border-b border-slate-100 bg-blue-50/30">
-                          <h4 className="text-sm font-semibold text-slate-800 mb-3">Updated Drawing</h4>
+                          <h4 className="text-sm font-semibold text-indigo-900 mb-3">Updated Drawing</h4>
                           {isImageFile ? (
                               <img src={decision.drawingURL} alt="Updated Drawing" className="w-full h-auto rounded border border-slate-200" />
                           ) : (
@@ -275,7 +275,7 @@ export default function SignoffPage({ token }: SignoffPageProps) {
                           </div>
                       ) : (
                           <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                              <label className="block text-sm font-bold text-slate-800">Please describe your concern:</label>
+                              <label className="block text-sm font-bold text-indigo-900">Please describe your concern:</label>
                               <textarea
                                   value={queryText}
                                   onChange={(e) => setQueryText(e.target.value)}

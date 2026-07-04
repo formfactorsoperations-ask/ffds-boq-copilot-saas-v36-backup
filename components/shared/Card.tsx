@@ -30,7 +30,7 @@ const Card: React.FC<CardProps> = ({ children, className = '', title, titleIcon,
                         {titleIcon}
                     </div>
                 )}
-                <h4 className="text-lg font-bold text-slate-800 tracking-tight flex-1 w-full">
+                <h4 className="text-lg font-bold text-indigo-900 tracking-tight flex-1 w-full">
                     {title}
                 </h4>
             </div>

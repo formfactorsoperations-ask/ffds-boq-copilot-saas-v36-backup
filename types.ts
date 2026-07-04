@@ -9,6 +9,8 @@ export interface OrganizationContext {
     cityState?: string;
     gstin?: string;
     legalName?: string;
+    signatoryName?: string;
+    signatoryTitle?: string;
     isSetupComplete?: boolean;
     tagline?: string;
     accentColor?: string;
@@ -57,7 +59,7 @@ export type ProposalType = 'TURNKEY' | 'DESIGN_ONLY';
 
 export type ProjectStatus = 'lead' | 'draft' | 'proposal_sent' | 'negotiation' | 'won' | 'execution' | 'work_paused' | 'completed' | 'lost';
 
-export type ProposalLevel = 'LEVEL_1' | 'LEVEL_2' | 'LEVEL_3';
+export type ProposalLevel = 'LEVEL_1' | 'LEVEL_1_5' | 'LEVEL_2' | 'LEVEL_3';
 
 export interface Room {
     name: string;
@@ -188,6 +190,7 @@ export interface ProposalContent {
     cta?: { title: string; subtitle: string; nextStepsTitle: string; steps: string[] };
     footer?: { orgName: string; tagline: string; contactInfo: string; phoneNumber: string };
     visibleSections?: Record<string, boolean>;
+    materials?: { overrides?: Record<string, Record<string, string>> };
     l2_cover?: { title: string; text: string };
     l2_snapshot?: { title: string; subtitle: string };
     l2_fees?: { title: string; subtitle: string };
@@ -208,11 +211,16 @@ export interface PaymentMilestone {
     date?: string; // ISO YYYY-MM-DD
     isCustom?: boolean; // If true, auto-calc skips this
     
+    // Fixed Amount Feature
+    isFixedAmount?: boolean;
+    fixedAmount?: number;
+    
     // Invoicing & Ops
     status?: PaymentStatus;
     invoiceNumber?: string;
     invoiceDate?: string;
     lockedTaxableBase?: number; // The taxable base amount at the time of invoicing
+    trigger?: string;
     subSteps?: { id: string; label: string; isDone: boolean }[];
     unlocks?: string;
     isHandoverAdvance?: boolean;
@@ -523,6 +531,7 @@ export interface ProjectContext {
     termsDockets?: TermsDocket[];
     paymentSchedules?: PaymentSchedule[];
     lifecycle?: ProjectLifecycle;
+    engagement?: ProjectEngagement;
 }
 
 export interface SiteUpdateRecord {
@@ -819,15 +828,10 @@ export interface AiComparisonResult {
 
 export interface LeadProfile {
     projectBrief?: string;
-    budgetValue?: number;
-    budgetDisclosed?: boolean;
-    responsiveness?: 'high' | 'medium' | 'low';
-    communicationStyle?: string;
-    meetingsAttended?: boolean;
-    sharedReferences?: boolean;
-    behaviouralNotes: string;
-    leadLensGhostingScore: number;
-    leadLensFitScore: number;
+    iterationsToClose: '1' | '2' | '3+';
+    hiddenDecisionMakers: 'None' | 'Spouse' | 'Parents' | 'Consultant';
+    primaryFrictionPoint: 'Overall Budget' | 'Itemized Costs' | 'Timeline' | 'Design Details' | 'Trust';
+    communicationPreference: 'Calls' | 'WhatsApp' | 'Emails';
 }
 
 export interface DecisionBrainOutput {
@@ -840,9 +844,11 @@ export interface DecisionBrainOutput {
     followup_style: string;
     scope_bias: Record<string, boolean>;
     rationale_summary: string[];
+    execution_risks: string[]; // Added this based on interactions
     flags: {
         discovery_required_before_proposal: boolean;
         proposal_should_wait_due_to_silence: boolean;
+        high_flight_risk: boolean;
     };
 }
 
@@ -1212,26 +1218,7 @@ export interface CommunicationLogItem {
   needsAttention?: boolean;
 }
 
-export interface TermsConfigClause {
-  title: string;
-  body: string;
-}
 
-export interface TermsConfig {
-  warrantyCivilMonths: number;
-  warrantyCarpentryMonths: number;
-  warrantyPaintingMonths: number;
-  warrantyElectricalMonths: number;
-  includedRevisionRounds: number;
-  pauseThresholdDays: number;
-  changeRequestResponseDays: number;
-  snagCategoryADays: number;
-  snagCategoryBDays: number;
-  jurisdiction: string;
-  signatoryName: string;
-  signatoryTitle: string;
-  customClauses: TermsConfigClause[];
-}
 
 export interface ManualJourneyStep {
     stepId: string;
@@ -1246,12 +1233,12 @@ export interface TermsDocket {
   id?: string;
   projectId?: string;
   docketRef: string;
-  status: "draft" | "sent" | "acknowledged";
+  status: "draft" | "sent" | "acknowledged" | "issued";
   generatedAt: number;
   sentAt: number | null;
   sentBy: string;
   acknowledgedAt: number | null;
-  snapshotTermsConfig: TermsConfig;
+  snapshotTermsConfig: TermsSettings;
   snapshotClientData: {
     clientName: string;
     projectName: string;
@@ -1264,6 +1251,8 @@ export interface PaymentAdvance {
   label: string;
   phase: "design" | "execution" | "handover";
   percentage: number;
+  isFixedAmount?: boolean;
+  fixedAmount?: number;
   amount: number;
   dueCondition: string;
   unlocks: string;
@@ -1278,12 +1267,83 @@ export interface PaymentSchedule {
   projectId?: string;
   version: number;
   versionLabel: string;
-  status: "draft" | "sent" | "superseded";
+  status: "draft" | "sent" | "superseded" | "issued" | "acknowledged";
   docketRef: string;
   issuedAt: number;
   issuedBy: string;
   contractValue: number;
-  advances: PaymentAdvance[];
+  advances: PaymentAdvance[]; // keeping for backwards compatibility, or we can replace it
+  snapshotPaymentStructure?: PaymentStructure;
+  snapshotEngagement?: ProjectEngagement;
+  snapshotTermsConfig?: TermsSettings;
   revisionNote: string;
   supersededBy: string | null;
+}
+
+export interface TermsSectionBlock {
+  type: "clause" | "callout" | "table";
+  ref?: string;
+  text?: string;
+  style?: "principle" | "highlight";
+  label?: string;
+  intro?: string;
+  source?: "warrantyPeriods" | "snagCategories";
+  note?: string;
+}
+
+export interface TermsSection {
+  n: number;
+  title: string;
+  recommended?: boolean;
+  blocks: TermsSectionBlock[];
+}
+
+export interface TermsSettings {
+  docketRefPrefix: string;
+  studioFoundedYear: number;
+  includedRevisionRounds: number;
+  changeRequestResponseDays: number;
+  paymentOverdueGraceDays: number;
+  resumeAfterPaymentDays: number;
+  gstRate: number;
+  paymentMethods: string[];
+  snagCategories: { label: string; resolveDays: number }[];
+  warrantyPeriods: { trade: string; months: number }[];
+  disputeMediationDays: number;
+  disputeJurisdiction: string;
+  signatory: { name: string; title: string };
+  preamble: string;
+  sections: TermsSection[];
+}
+
+export interface PaymentStructureStage {
+  code: string;
+  name: string;
+  pct: number;
+  trigger: string;
+  unlocks: string;
+}
+
+export interface PaymentStructure {
+  designStages: PaymentStructureStage[];
+  executionStages: PaymentStructureStage[];
+  handoverClause: string;
+  validation: {
+    designSumMustEqual: number;
+    executionSumMustEqual: number;
+  };
+}
+
+export interface ProjectEngagement {
+  designFee: number | null;
+  executionValue: number | null;
+  docketRef: string | null;
+  termsVersion: number | null;
+  paymentScheduleVersion: number | null;
+  status: "draft" | "issued" | "acknowledged";
+  issuedAt: number | null;
+  acknowledgedAt: number | null;
+  acknowledgedVia: "WhatsApp" | "email" | null;
+  lockedSnapshot: any | null;
+  history?: any[];
 }

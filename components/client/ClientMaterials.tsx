@@ -12,14 +12,14 @@ const ClientMaterials: React.FC<ClientMaterialsProps> = ({ suggestions }) => {
     return (
         <section className="mt-16 pt-10 border-t-2 border-slate-200">
             <div className="flex items-center gap-4 mb-8">
-                <h2 className="text-3xl font-bold text-slate-800">Design & Material Palette</h2>
+                <h2 className="text-3xl font-bold text-indigo-900">Design & Material Palette</h2>
                 <div className="h-px bg-gradient-to-r from-slate-300 to-transparent flex-grow"></div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {suggestions.map((room, roomIdx) => (
                     <div key={roomIdx} className="glass p-6 rounded-3xl">
-                        <h3 className="text-xl font-bold text-slate-800 mb-6 border-b border-slate-200/50 pb-2">{room.roomName}</h3>
+                        <h3 className="text-xl font-bold text-indigo-900 mb-6 border-b border-slate-200/50 pb-2">{room.roomName}</h3>
                         
                         <div className="mb-8">
                             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Color Palette</h4>
@@ -43,7 +43,7 @@ const ClientMaterials: React.FC<ClientMaterialsProps> = ({ suggestions }) => {
                                     <div key={mIdx} className="flex items-start gap-3 bg-white/40 p-3 rounded-2xl border border-white/50">
                                         <div className="w-1.5 h-full min-h-[40px] bg-indigo-400 rounded-full"></div>
                                         <div>
-                                            <p className="text-sm font-bold text-slate-800">{mat.name}</p>
+                                            <p className="text-sm font-bold text-indigo-900">{mat.name}</p>
                                             <p className="text-xs text-slate-600 leading-relaxed">{mat.description}</p>
                                         </div>
                                     </div>

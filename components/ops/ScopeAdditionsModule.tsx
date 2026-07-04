@@ -821,7 +821,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                 <div className="w-16 h-16 bg-amber-50 border border-amber-100 rounded-full flex items-center justify-center text-amber-500 mb-6 shadow-inner">
                     <Lock className="w-8 h-8" />
                 </div>
-                <h2 className="text-2xl font-bold text-slate-800 font-serif mb-3">Scope Additions Locked</h2>
+                <h2 className="text-2xl font-bold text-indigo-900 font-serif mb-3">Scope Additions Locked</h2>
                 <p className="text-slate-600 text-sm max-w-md mb-8 leading-relaxed">
                     This module is designed to handle supplementary client requests and post-agreement changes. It is locked until the initial project design and budget are frozen.
                 </p>
@@ -830,7 +830,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 text-left mb-8">
                     <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50">
                         <span className="text-[10px] font-bold tracking-wider text-indigo-600 uppercase block mb-1">Method 1 (Standard Operations)</span>
-                        <h4 className="font-bold text-slate-800 text-xs mb-1.5">Activate Design Complete Gate</h4>
+                        <h4 className="font-bold text-indigo-900 text-xs mb-1.5">Activate Design Complete Gate</h4>
                         <p className="text-slate-500 text-[11px] leading-relaxed">
                             Under <strong>Design & Proposals</strong> &gt; <strong>Design Complete</strong>, tick all items on the design closeout checklist and choose "Activate Design Gate". This automatically freezes the BOQ, shifts the project stage to Execution, and activates this module.
                         </p>
@@ -887,7 +887,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
             {/* Header Area */}
             <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 font-serif">Scope Additions & Extra Items</h1>
+                    <h1 className="text-2xl font-bold text-indigo-950 font-serif">Scope Additions & Extra Items</h1>
                     <p className="text-sm text-slate-500">Log client alterations, adjust line-item pricing margins, and generate PDF Tax Invoices.</p>
                 </div>
                 <div className="flex gap-2">
@@ -900,7 +900,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                     {additions.length > 0 && (
                         <button 
                             onClick={generateLifetimeLedger}
-                            className="bg-slate-800 hover:bg-slate-900 font-bold text-xs text-white px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-sm transition duration-150"
+                            className="bg-indigo-900 hover:bg-indigo-950 font-bold text-xs text-white px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-sm transition duration-150"
                         >
                             <FileText className="w-4 h-4" /> Export Combined Ledger PDF
                         </button>
@@ -914,7 +914,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                     <div className="flex justify-between items-center pb-4 border-b border-slate-100">
                         <div>
                             <span className="text-[10px] font-bold text-indigo-600 tracking-wider uppercase">Active Draft Phase</span>
-                            <h3 className="font-bold text-slate-900 text-lg">Formulate Contract Modification</h3>
+                            <h3 className="font-bold text-indigo-950 text-lg">Formulate Contract Modification</h3>
                         </div>
                         <button 
                             onClick={() => { setIsFormOpen(false); setClassification(null); setGeneratedBoq(null); }}
@@ -974,7 +974,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                         {classification.type.split('_')[1] || classification.type}
                                     </div>
                                     <div>
-                                        <h4 className="font-bold text-slate-800 text-sm">
+                                        <h4 className="font-bold text-indigo-900 text-sm">
                                             {classification.type === 'TYPE_A' ? 'Material Update (Type A — Non-structural alteration)' :
                                              classification.type === 'TYPE_B' ? 'Minor Scope Increment (Type B — Checklist gate addition)' :
                                              classification.type === 'TYPE_C' ? 'Major New Area Scope (Type C — Structural draft addition)' : 
@@ -996,7 +996,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
 
                             {/* Portfolio margin warning preview */}
                             {currentRole && ['Super Admin', 'Admin', 'Ops Director'].includes(currentRole) && marginAnalytics && (
-                                <div className="bg-slate-900 text-slate-200 border border-slate-800 p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div className="bg-indigo-950 text-slate-200 border border-indigo-900 p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                     <div className="flex items-center gap-3">
                                         <TrendingUp className="w-5 h-5 text-indigo-400" />
                                         <div>
@@ -1021,7 +1021,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                             {/* Interactive Editable Draft Mini-BOQ Table */}
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center">
-                                    <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                                    <h4 className="font-bold text-indigo-950 text-sm flex items-center gap-1.5">
                                          Itemized Scope Breakdown <span className="text-xs font-normal text-slate-500">(Double check quantities and spec origins)</span>
                                     </h4>
                                     
@@ -1059,7 +1059,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                                     className="w-full text-left p-2 hover:bg-slate-50 rounded-lg flex justify-between items-center border border-transparent hover:border-slate-100 transition"
                                                                 >
                                                                     <div className="truncate pr-4">
-                                                                        <div className="text-[11px] font-bold text-slate-800 truncate">{item.name}</div>
+                                                                        <div className="text-[11px] font-bold text-indigo-900 truncate">{item.name}</div>
                                                                         <span className="text-[9px] text-slate-400 uppercase tracking-tight">{item.cat || 'General'} • {item.unit}</span>
                                                                     </div>
                                                                     <span className="text-xs font-bold text-slate-700 font-mono flex-shrink-0">{formatINR(total)}</span>
@@ -1133,7 +1133,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                     <td className="py-2 px-4">
                                                         <input 
                                                             type="number" 
-                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-indigo-500 rounded px-2 py-1 text-xs outline-none bg-transparent font-mono text-slate-800"
+                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-indigo-500 rounded px-2 py-1 text-xs outline-none bg-transparent font-mono text-indigo-900"
                                                             value={item.estimatedUnitRate}
                                                             onChange={e => updateDraftItem(index, { estimatedUnitRate: Math.max(0, Number(e.target.value) || 0) })}
                                                         />
@@ -1146,7 +1146,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                             onChange={e => updateDraftItem(index, { marginOverride: Math.max(0, Number(e.target.value) || 0) })}
                                                         />
                                                     </td>
-                                                    <td className="py-2 px-4 font-mono font-bold text-slate-800">
+                                                    <td className="py-2 px-4 font-mono font-bold text-indigo-900">
                                                         {formatINR(item.baseCost)}
                                                     </td>
                                                     <td className="py-2 px-4">
@@ -1311,7 +1311,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <span className="font-bold text-slate-800 text-sm font-mono">{add.id}</span>
+                                        <span className="font-bold text-indigo-900 text-sm font-mono">{add.id}</span>
                                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white border border-slate-200 text-slate-600 uppercase tracking-tight">{add.type}</span>
                                         <span className="text-[10px] text-slate-400">Created: {add.createdAt ? new Date(add.createdAt.seconds * 1000).toLocaleDateString() : 'Just now'}</span>
                                     </div>
@@ -1323,7 +1323,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                             </div>
                             <div className="flex sm:flex-col items-baseline sm:items-end justify-between sm:justify-start w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-0 border-slate-100">
                                 <span className="text-xs text-slate-400">Grand Total Invoice</span>
-                                <span className="text-lg font-extrabold text-slate-800 font-mono">{formatINR(add.grandTotal)}</span>
+                                <span className="text-lg font-extrabold text-indigo-900 font-mono">{formatINR(add.grandTotal)}</span>
                             </div>
                         </div>
 
@@ -1339,13 +1339,13 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                 <div className="space-y-1.5 text-xs">
                                     <div className="flex justify-between">
                                         <span className="text-slate-500">Net Fee Base Estimate</span>
-                                        <span className="font-medium text-slate-800">{formatINR(add.designFeeBase)}</span>
+                                        <span className="font-medium text-indigo-900">{formatINR(add.designFeeBase)}</span>
                                     </div>
                                     <div className="flex justify-between pb-1.5 border-b border-dashed border-indigo-100">
                                         <span className="text-slate-500">Design CGST + SGST (18%)</span>
-                                        <span className="font-medium text-slate-800">{formatINR(add.designFeeGst)}</span>
+                                        <span className="font-medium text-indigo-900">{formatINR(add.designFeeGst)}</span>
                                     </div>
-                                    <div className="flex justify-between font-bold text-sm text-slate-900 pt-1">
+                                    <div className="flex justify-between font-bold text-sm text-indigo-950 pt-1">
                                         <span>Total Design Payable</span>
                                         <span className="font-mono text-indigo-700">{formatINR(add.designFeeTotal)}</span>
                                     </div>
@@ -1378,7 +1378,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                 <div className="space-y-1.5 text-xs">
                                     <div className="flex justify-between">
                                         <span className="text-slate-500">Subtotal</span>
-                                        <span className="font-medium text-slate-800">{formatINR(add.executionSubtotal)}</span>
+                                        <span className="font-medium text-indigo-900">{formatINR(add.executionSubtotal)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-slate-500">Applied Margin Markups</span>
@@ -1386,9 +1386,9 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                     </div>
                                     <div className="flex justify-between pb-1.5 border-b border-dashed border-blue-100">
                                         <span className="text-slate-500">Execution GST (18%)</span>
-                                        <span className="font-medium text-slate-800">{formatINR(add.executionGst)}</span>
+                                        <span className="font-medium text-indigo-900">{formatINR(add.executionGst)}</span>
                                     </div>
-                                    <div className="flex justify-between font-bold text-sm text-slate-900 pt-1">
+                                    <div className="flex justify-between font-bold text-sm text-indigo-950 pt-1">
                                         <span>Total Execution Scope</span>
                                         <span className="font-mono text-blue-700">{formatINR(add.executionTotal)}</span>
                                     </div>
@@ -1416,7 +1416,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                         {add.miniBoq && add.miniBoq.length > 0 && (
                             <div className="px-4 pb-3 pt-1 border-t border-slate-100 bg-slate-50/30">
                                 <details className="group">
-                                    <summary className="text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer list-none flex items-center gap-1 py-1">
+                                    <summary className="text-xs font-semibold text-slate-500 hover:text-indigo-900 cursor-pointer list-none flex items-center gap-1 py-1">
                                         <ChevronDown className="w-3.5 h-3.5 transform group-open:rotate-180 transition duration-150" />
                                         View Line Items specifications & markup breakdown ({add.miniBoq.length} items logged)
                                     </summary>
@@ -1437,7 +1437,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                             <tbody className="divide-y divide-slate-100 font-medium">
                                                 {add.miniBoq.map((item: any, i: number) => (
                                                     <tr key={i} className="hover:bg-slate-50/50">
-                                                        <td className="py-2 px-3 text-slate-800">{item.description}</td>
+                                                        <td className="py-2 px-3 text-indigo-900">{item.description}</td>
                                                         <td className="py-2 px-3 text-slate-500">{item.category}</td>
                                                         <td className="py-2 px-3 text-center">{item.qty}</td>
                                                         <td className="py-2 px-3 text-slate-500">{item.unit}</td>
@@ -1498,7 +1498,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                         <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-400">
                             ✓
                         </div>
-                        <h4 className="font-bold text-slate-800">No Post-Agreement Alterations Logged</h4>
+                        <h4 className="font-bold text-indigo-900">No Post-Agreement Alterations Logged</h4>
                         <p className="text-slate-400 text-xs max-w-sm mx-auto">Click "Log Proposed Alteration" above to draft a budget deviation using Gemini estimation or direct catalogue rates.</p>
                     </div>
                 )}

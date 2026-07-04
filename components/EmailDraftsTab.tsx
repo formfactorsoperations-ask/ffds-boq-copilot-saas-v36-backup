@@ -18,7 +18,7 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
     const [filterCategory, setFilterCategory] = useState('All');
     const [copySuccess, setCopySuccess] = useState('');
 
-    const templates = settings?.emailTemplateLibrary && settings.emailTemplateLibrary.length > 0
+    const templates = settings?.emailTemplateLibrary && Array.isArray(settings.emailTemplateLibrary) && settings.emailTemplateLibrary.length > 0 && settings.emailTemplateLibrary[0]?.title
         ? settings.emailTemplateLibrary
         : EMAIL_TEMPLATE_LIBRARY;
     const categories = ['All', ...new Set(templates.map(t => t.category))];
@@ -62,7 +62,7 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
         <div className="space-y-6 max-w-6xl mx-auto pb-12 animate-in fade-in zoom-in-95 duration-300">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Project Communication Scripts</h2>
+                    <h2 className="text-2xl font-bold text-indigo-900 tracking-tight">Project Communication Scripts</h2>
                     <p className="text-sm text-slate-500 mt-1">Pre-filled templates based on {projectContext?.name || 'this project'}</p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
@@ -94,7 +94,7 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
                         <div key={template.key} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                             <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
                                 <div>
-                                    <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                                    <h3 className="font-bold text-indigo-900 text-lg flex items-center gap-2">
                                         {template.title}
                                     </h3>
                                     <div className="text-xs text-slate-500 font-medium flex gap-3 mt-1.5 align-center">
@@ -111,7 +111,7 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
                                     <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 relative group">
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Subject</p>
                                         <div 
-                                            className="text-slate-900 font-semibold text-sm pr-12"
+                                            className="text-indigo-950 font-semibold text-sm pr-12"
                                             dangerouslySetInnerHTML={{ __html: resolveTemplate(template.email?.subject || '', vars) }}
                                         />
                                         <button 

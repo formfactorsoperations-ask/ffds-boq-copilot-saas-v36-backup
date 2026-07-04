@@ -153,11 +153,11 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClose, onIm
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
+            <div className="fixed inset-0 bg-indigo-950/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
                 <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-auto flex flex-col max-h-[90vh]">
                     <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl">
                         <div>
-                            <h2 className="text-xl font-bold text-slate-800">Bulk Import from Excel</h2>
+                            <h2 className="text-xl font-bold text-indigo-900">Bulk Import from Excel</h2>
                             <p className="text-sm text-slate-500 font-medium">Standardize and ingest external scopes rapidly.</p>
                         </div>
                         <button onClick={onClose} className="text-slate-400 hover:text-slate-600 bg-white shadow-sm border border-slate-200 p-2 rounded-xl transition-all">
@@ -184,7 +184,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClose, onIm
                         ) : step === 2 ? (
                             <div>
                                 <div className="mb-6">
-                                    <h3 className="font-bold text-slate-800 mb-2">Map Columns</h3>
+                                    <h3 className="font-bold text-indigo-900 mb-2">Map Columns</h3>
                                     <p className="text-sm text-slate-500">Match your Excel columns to the system fields.</p>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -207,7 +207,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClose, onIm
                                     ))}
                                 </div>
 
-                                <h3 className="font-bold text-slate-800 mt-10 mb-4">Data Preview ({parsedData.length} rows detected)</h3>
+                                <h3 className="font-bold text-indigo-900 mt-10 mb-4">Data Preview ({parsedData.length} rows detected)</h3>
                                 <div className="overflow-x-auto border border-slate-200 rounded-xl">
                                     <table className="w-full text-left text-sm whitespace-nowrap">
                                         <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-medium">
@@ -248,7 +248,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClose, onIm
 
                                 {errors.length > 0 && (
                                     <div>
-                                        <h3 className="font-bold text-slate-800 mb-4">Error Log</h3>
+                                        <h3 className="font-bold text-indigo-900 mb-4">Error Log</h3>
                                         <div className="overflow-x-auto border border-rose-200 rounded-xl bg-rose-50/50">
                                             <table className="w-full text-left text-sm text-rose-900">
                                                 <thead className="bg-rose-100/50 border-b border-rose-200 font-bold text-rose-700">

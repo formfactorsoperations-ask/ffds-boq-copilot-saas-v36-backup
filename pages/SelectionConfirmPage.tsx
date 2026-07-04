@@ -103,14 +103,14 @@ export default function SelectionConfirmPage({ token }: SelectionConfirmPageProp
                     )}
                     <div>
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{project?.orgName || 'Studio'}</div>
-                        <div className="text-sm font-bold text-slate-800">{project?.name || 'Project'}</div>
+                        <div className="text-sm font-bold text-indigo-900">{project?.name || 'Project'}</div>
                     </div>
                 </div>
             </div>
 
             {/* Content */}
             <div className="flex-1 max-w-2xl w-full mx-auto p-4 sm:p-6 sm:pt-8 w-full">
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-black text-indigo-950 mb-6 flex items-center gap-2">
                     Material selection confirmation
                 </h1>
 
@@ -119,7 +119,7 @@ export default function SelectionConfirmPage({ token }: SelectionConfirmPageProp
                         <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
                             ✓
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-800 mb-2">Selection confirmed</h2>
+                        <h2 className="text-2xl font-bold text-indigo-900 mb-2">Selection confirmed</h2>
                         <p className="text-slate-600">Your selection has been confirmed. {project?.orgName || 'The studio'} will proceed with procurement.</p>
                     </div>
                 ) : submitStatus === 'success' ? (
@@ -127,7 +127,7 @@ export default function SelectionConfirmPage({ token }: SelectionConfirmPageProp
                         <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
                             ✓
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-800 mb-2">Request sent</h2>
+                        <h2 className="text-2xl font-bold text-indigo-900 mb-2">Request sent</h2>
                         <p className="text-slate-600">Your request has been sent. {project?.orgName || 'The studio'} will review and be in touch soon.</p>
                     </div>
                 ) : (
@@ -142,7 +142,7 @@ export default function SelectionConfirmPage({ token }: SelectionConfirmPageProp
                             
                             <div className="p-6 sm:p-8 space-y-6">
                                 <div>
-                                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">{itemName}</h2>
+                                    <h2 className="text-2xl sm:text-3xl font-black text-indigo-950 leading-tight">{itemName}</h2>
                                     {(brand || finishCode) && (
                                         <div className="text-lg text-slate-600 font-medium mt-1">
                                             {brand && <span className="font-bold">{brand}</span>}
@@ -156,7 +156,7 @@ export default function SelectionConfirmPage({ token }: SelectionConfirmPageProp
                                     {vendor && (
                                         <div>
                                             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Shop / Vendor</div>
-                                            <div className="font-bold text-slate-800 flex items-center gap-2">
+                                            <div className="font-bold text-indigo-900 flex items-center gap-2">
                                                 <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                                 </svg>
@@ -186,7 +186,7 @@ export default function SelectionConfirmPage({ token }: SelectionConfirmPageProp
                         {/* Action Buttons */}
                         {showChangeRequest ? (
                             <div className="bg-white rounded-3xl border border-rose-100 p-6 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
-                                <h3 className="font-bold text-slate-800 text-lg mb-2 flex items-center gap-2">
+                                <h3 className="font-bold text-indigo-900 text-lg mb-2 flex items-center gap-2">
                                     <svg className="w-5 h-5 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                     </svg>
@@ -212,7 +212,7 @@ export default function SelectionConfirmPage({ token }: SelectionConfirmPageProp
                                     <button 
                                         onClick={handleChangeRequest}
                                         disabled={!changeReason.trim()}
-                                        className="flex-1 bg-slate-800 text-white font-bold py-3.5 rounded-xl hover:bg-slate-900 transition-colors shadow-sm disabled:opacity-50"
+                                        className="flex-1 bg-indigo-900 text-white font-bold py-3.5 rounded-xl hover:bg-indigo-950 transition-colors shadow-sm disabled:opacity-50"
                                     >
                                         Send Request
                                     </button>

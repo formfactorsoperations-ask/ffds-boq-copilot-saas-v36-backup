@@ -52,12 +52,12 @@ const ClientRoomDetails: React.FC<ClientRoomDetailsProps> = ({ rooms, projectCon
                           <ChevronDownIcon className="w-4 h-4" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-lg text-slate-800">{roomName}</h3>
+                        <h3 className="font-bold text-lg text-indigo-900">{roomName}</h3>
                         {roomContext && <p className="text-xs text-slate-500">{roomContext.size} {roomContext.unit}</p>}
                       </div>
                   </div>
                   <div className="text-right">
-                      <p className="font-bold text-slate-800">{formatCurrency(roomTotal)}</p>
+                      <p className="font-bold text-indigo-900">{formatCurrency(roomTotal)}</p>
                       <p className="text-xs text-slate-500">{items.length} items</p>
                   </div>
               </div>
@@ -100,7 +100,7 @@ const ClientRoomDetails: React.FC<ClientRoomDetailsProps> = ({ rooms, projectCon
                                                 />
                                             )}
                                             <div>
-                                                <p className={`font-bold text-sm ${isSelected ? 'text-slate-800' : ''}`}>{item.name}</p>
+                                                <p className={`font-bold text-sm ${isSelected ? 'text-indigo-900' : ''}`}>{item.name}</p>
                                                 <p className={`text-xs leading-relaxed mt-0.5 ${isSelected ? 'text-slate-500' : 'text-slate-400'}`}>{item.specs}</p>
                                                 {item.optional && <span className="inline-block mt-1 text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">Optional Add-on</span>}
                                             </div>
@@ -108,7 +108,7 @@ const ClientRoomDetails: React.FC<ClientRoomDetailsProps> = ({ rooms, projectCon
                                     </td>
                                     <td className="p-3 text-right align-top whitespace-nowrap text-slate-600">{item.qty.toFixed(2)} <span className="text-[10px]">{item.unit}</span></td>
                                     <td className="p-3 text-right align-top whitespace-nowrap text-slate-600">{formatCurrency(rate)}</td>
-                                    <td className="p-3 pr-6 text-right align-top font-bold whitespace-nowrap text-slate-800">{formatCurrency(total)}</td>
+                                    <td className="p-3 pr-6 text-right align-top font-bold whitespace-nowrap text-indigo-900">{formatCurrency(total)}</td>
                                     </tr>
                                 );
                                 })}

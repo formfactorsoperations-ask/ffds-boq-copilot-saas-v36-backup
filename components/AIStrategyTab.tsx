@@ -28,7 +28,7 @@ const AIStrategyTab: React.FC<AIStrategyTabProps> = ({ aiStrategy, setAiStrategy
           >
             <div className="text-3xl bg-white p-2 rounded-full shadow-sm border">{strategy.icon}</div>
             <div>
-                <h4 className="font-bold text-slate-800">{strategy.name}</h4>
+                <h4 className="font-bold text-indigo-900">{strategy.name}</h4>
                 <p className="text-sm text-slate-600 mt-1">{strategy.description}</p>
             </div>
           </div>

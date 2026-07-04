@@ -163,7 +163,7 @@ const InternalComparisonTable: React.FC<InternalComparisonTableProps> = ({ tiers
                             <th className="p-3 border-b border-r border-slate-300 w-16 text-center">Unit</th>
                             {tiers.map(tier => (
                                 <th key={tier.id} className="p-3 border-b border-r border-slate-300 text-center min-w-[140px]">
-                                    <div className="text-slate-800">{tier.name}</div>
+                                    <div className="text-indigo-900">{tier.name}</div>
                                     <div className="text-[9px] text-slate-500 font-normal mt-1">{tier.boq?.length || 0} items</div>
                                 </th>
                             ))}
@@ -173,7 +173,7 @@ const InternalComparisonTable: React.FC<InternalComparisonTableProps> = ({ tiers
                         {sortedRoomEntries.map(([roomName, items]) => (
                             <React.Fragment key={roomName}>
                                 {/* Room Header Row */}
-                                <tr className="bg-slate-200/60 font-bold text-slate-800">
+                                <tr className="bg-slate-200/60 font-bold text-indigo-900">
                                     <td colSpan={3 + tiers.length} className="p-2 pl-4 border-b border-slate-300 sticky left-0 bg-slate-200/60 z-10 uppercase tracking-wider text-[11px]">
                                         {roomName}
                                     </td>
@@ -197,7 +197,7 @@ const InternalComparisonTable: React.FC<InternalComparisonTableProps> = ({ tiers
                                                 <td key={tier.id} className={`p-2 border-b border-r border-slate-200 text-center ${!data.exists ? 'bg-slate-50 text-slate-300' : ''}`}>
                                                     {data.exists ? (
                                                         <div className="flex flex-col items-center">
-                                                            <span className="font-bold text-slate-800">{data.qty.toFixed(1)}</span>
+                                                            <span className="font-bold text-indigo-900">{data.qty.toFixed(1)}</span>
                                                             <div className="flex gap-1.5 mt-0.5 opacity-60">
                                                                 <span className="text-[9px] font-mono text-slate-500">{formatCurrency(data.sell)}</span>
                                                                 <span className={`text-[9px] font-bold ${data.margin < 15 ? 'text-red-500' : 'text-emerald-600'}`}>{data.margin}%</span>

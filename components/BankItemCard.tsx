@@ -50,7 +50,7 @@ const FastInput: React.FC<{
             onChange={handleChange}
             onBlur={onBlur}
             placeholder={placeholder}
-            className={`bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 rounded px-1.5 py-0.5 outline-none transition-all w-full text-slate-800 placeholder:text-slate-300 ${className}`}
+            className={`bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 rounded px-1.5 py-0.5 outline-none transition-all w-full text-indigo-900 placeholder:text-slate-300 ${className}`}
         />
     );
 };
@@ -187,7 +187,7 @@ const BankItemCard: React.FC<BankItemCardProps> = ({ item, onUpdate, onDelete, a
                     type="number" 
                     value={parseFloat(sellPrice.toFixed(0))} 
                     onChange={v => handleSellPriceChange(v as number)} 
-                    className="text-right text-sm font-bold text-slate-900 font-mono bg-slate-50/50"
+                    className="text-right text-sm font-bold text-indigo-950 font-mono bg-slate-50/50"
                 />
             </div>
 
@@ -226,7 +226,7 @@ const BankItemCard: React.FC<BankItemCardProps> = ({ item, onUpdate, onDelete, a
         <FastInput 
             value={item.name} 
             onChange={v => handleUpdate('name', v)} 
-            className="font-bold text-base text-slate-900 mb-1" 
+            className="font-bold text-base text-indigo-950 mb-1" 
             placeholder="Item Name"
         />
         
@@ -277,7 +277,7 @@ const BankItemCard: React.FC<BankItemCardProps> = ({ item, onUpdate, onDelete, a
                     type="number" 
                     value={parseFloat(sellPrice.toFixed(0))} 
                     onChange={v => handleSellPriceChange(v as number)} 
-                    className="text-lg font-black text-slate-900 bg-transparent text-right p-0"
+                    className="text-lg font-black text-indigo-950 bg-transparent text-right p-0"
                 />
             </div>
         </div>

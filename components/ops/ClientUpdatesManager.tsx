@@ -115,7 +115,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h3 className="text-lg font-bold text-slate-800">Client Portal Live Feed</h3>
+                    <h3 className="text-lg font-bold text-indigo-900">Client Portal Live Feed</h3>
                     <p className="text-sm text-slate-500">Post real-time site updates directly to the client's portal.</p>
                 </div>
                 <div className="flex gap-2">
@@ -128,7 +128,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                     </button>
                     <button 
                         onClick={() => setIsAdding(!isAdding)}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-950 text-white text-sm font-bold rounded-lg hover:bg-indigo-900 transition-colors"
                     >
                         {isAdding ? 'Cancel' : <><Plus className="w-4 h-4" /> New Update</>}
                     </button>
@@ -136,7 +136,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
             </div>
 
             {summaryModalOpen && (
-                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-indigo-950/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
                         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-emerald-50">
                             <h3 className="font-bold text-emerald-800 flex items-center gap-2">
@@ -171,7 +171,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
             {isAdding && (
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                        <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                        <h4 className="font-bold text-indigo-900 flex items-center gap-2">
                             <Camera className="w-5 h-5 text-slate-400" />
                             Draft New Site Update
                         </h4>
@@ -309,7 +309,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                                     <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                                     <span className="text-xs font-medium text-slate-500">{update.author}</span>
                                 </div>
-                                <h4 className="font-bold text-slate-800 text-base mb-1">{update.title}</h4>
+                                <h4 className="font-bold text-indigo-900 text-base mb-1">{update.title}</h4>
                                 <p className="text-sm text-slate-600 mb-3">{update.description}</p>
                                 {update.tags && update.tags.length > 0 && (
                                     <div className="flex flex-wrap gap-2">

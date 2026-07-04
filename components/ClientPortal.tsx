@@ -154,7 +154,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         if (m.type === 'design') baseAmount = taxableDesign;
         if (m.lockedTaxableBase !== undefined) baseAmount = m.lockedTaxableBase;
         
-        const rowBaseOriginal = baseAmount * (m.percentage / 100);
+        const rowBaseOriginal = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : baseAmount * (m.percentage / 100);
         
         let rowBillable = rowBaseOriginal;
         let rowCash = 0;
@@ -361,7 +361,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         </div>
                     )}
                     <div>
-                        <h1 className="font-bold text-slate-900 leading-tight">
+                        <h1 className="font-bold text-indigo-950 leading-tight">
                             {settings?.clientPortalConfig?.portalTitle || `${settings?.companyName || orgData.orgName || 'Studio'} — Your Design Journey`}
                         </h1>
                         <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Client Portal</p>
@@ -391,7 +391,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${
                                 activeTab === tab.id 
                                     ? 'text-white shadow-md' 
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-indigo-950'
                             }`}
                             style={activeTab === tab.id ? { backgroundColor: orgData.themeColor || '#0f172a' } : {}}
                         >
@@ -416,7 +416,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                 {/* Top Header */}
                 <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-10 px-6 md:px-10 py-5 flex items-center justify-between">
                     <div>
-                        <h2 className="text-xl font-bold text-slate-900">{context.name || 'Your Project'}</h2>
+                        <h2 className="text-xl font-bold text-indigo-950">{context.name || 'Your Project'}</h2>
                         <p className="text-sm text-slate-500 flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                             Execution Phase
@@ -425,7 +425,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                     <div className="hidden md:flex items-center gap-4">
                         <div className="text-right">
                             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Project Manager</p>
-                            <p className="text-sm font-semibold text-slate-800">{settings?.companyName || orgData.orgName || 'Studio'} Ops Team</p>
+                            <p className="text-sm font-semibold text-indigo-900">{settings?.companyName || orgData.orgName || 'Studio'} Ops Team</p>
                         </div>
                         {settings?.phone && (
                             <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center border border-slate-200">
@@ -496,7 +496,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
                                         <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Total Project Value</p>
-                                        <p className="text-3xl font-bold text-slate-900">₹{currentProjectValue.toLocaleString('en-IN')}</p>
+                                        <p className="text-3xl font-bold text-indigo-950">₹{currentProjectValue.toLocaleString('en-IN')}</p>
                                         <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-sm">
                                             <span className="text-slate-500">Base Contract</span>
                                             <span className="font-medium text-slate-700">₹{baseProjectValue.toLocaleString('en-IN')}</span>
@@ -506,7 +506,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                     <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-between relative overflow-hidden">
                                         <div className="absolute top-0 left-0 w-1 h-full bg-emerald-400"></div>
                                         <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Amount Paid</p>
-                                        <p className="text-3xl font-bold text-slate-900">₹{totalPaid.toLocaleString('en-IN')}</p>
+                                        <p className="text-3xl font-bold text-indigo-950">₹{totalPaid.toLocaleString('en-IN')}</p>
                                         <div className="mt-4 pt-4 border-t border-slate-100">
                                             <div className="flex justify-between items-center text-sm mb-2">
                                                 <span className="text-slate-500">Progress</span>
@@ -520,7 +520,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
 
                                     <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
                                         <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Balance Due</p>
-                                        <p className="text-3xl font-bold text-slate-900">₹{balanceDue.toLocaleString('en-IN')}</p>
+                                        <p className="text-3xl font-bold text-indigo-950">₹{balanceDue.toLocaleString('en-IN')}</p>
                                         <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-sm">
                                             <span className="text-slate-500">Next Milestone</span>
                                             <button onClick={() => setActiveTab('financials')} className="font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
@@ -533,8 +533,8 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 {/* Recent Activity Preview */}
                                 <div>
                                     <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-lg font-bold text-slate-900">Recent Activity</h3>
-                                        <button onClick={() => setActiveTab('feed')} className="text-sm font-medium text-slate-500 hover:text-slate-900 flex items-center gap-1 transition-colors">
+                                        <h3 className="text-lg font-bold text-indigo-950">Recent Activity</h3>
+                                        <button onClick={() => setActiveTab('feed')} className="text-sm font-medium text-slate-500 hover:text-indigo-950 flex items-center gap-1 transition-colors">
                                             View Full Feed <ArrowRight className="w-4 h-4" />
                                         </button>
                                     </div>
@@ -556,7 +556,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                             {(item.type || '').replace('_', ' ')}
                                                         </span>
                                                     </div>
-                                                    <h4 className="font-semibold text-slate-800 text-sm">
+                                                    <h4 className="font-semibold text-indigo-900 text-sm">
                                                         {item.type === 'site_update' ? item.data.title :
                                                          item.type === 'payment' ? `Payment ${item.data.status}: ${item.data.name}` :
                                                          `Scope Update: ${item.data.title}`}
@@ -578,7 +578,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 className="max-w-3xl mx-auto space-y-8"
                             >
                                 <div className="mb-8">
-                                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Project Roadmap</h2>
+                                    <h2 className="text-2xl font-bold text-indigo-950 mb-2">Project Roadmap</h2>
                                     <p className="text-slate-500">Your guide to the interior execution journey. See where we are, what happens next, and what to expect.</p>
                                 </div>
 
@@ -683,7 +683,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                 >
                                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
                                                         <div className="flex items-center gap-3">
-                                                            <h3 className={`font-bold text-lg ${isActive ? 'text-indigo-900' : 'text-slate-800'}`}>
+                                                            <h3 className={`font-bold text-lg ${isActive ? 'text-indigo-900' : 'text-indigo-900'}`}>
                                                                 {step.title}
                                                             </h3>
                                                             {isActive && (
@@ -756,7 +756,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 className="max-w-3xl mx-auto"
                             >
                                 <div className="mb-8">
-                                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Live Feed</h2>
+                                    <h2 className="text-2xl font-bold text-indigo-950 mb-2">Live Feed</h2>
                                     <p className="text-slate-500">Real-time updates from the site, financial milestones, and scope changes.</p>
                                 </div>
 
@@ -799,7 +799,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
 
                                                 {item.type === 'site_update' && (
                                                     <div>
-                                                        <h4 className="font-bold text-slate-800 text-lg mb-2">{item.data.title}</h4>
+                                                        <h4 className="font-bold text-indigo-900 text-lg mb-2">{item.data.title}</h4>
                                                         <p className="text-sm text-slate-600 leading-relaxed mb-4">{item.data.description}</p>
                                                         {item.data.tags && (
                                                             <div className="flex flex-wrap gap-2 mb-4">
@@ -817,11 +817,11 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
 
                                                 {item.type === 'payment' && (
                                                     <div>
-                                                        <h4 className="font-bold text-slate-800 text-lg mb-1">{item.data.name}</h4>
+                                                        <h4 className="font-bold text-indigo-900 text-lg mb-1">{item.data.name}</h4>
                                                         <p className="text-sm text-slate-500 mb-3">{item.data.description}</p>
                                                         <div className="bg-slate-50 rounded-xl p-3 flex justify-between items-center border border-slate-100">
                                                             <span className="text-xs font-medium text-slate-500">Amount</span>
-                                                            <span className="font-bold text-slate-900">
+                                                            <span className="font-bold text-indigo-950">
                                                                 ₹{calculateMilestoneTotal(item.data).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                                             </span>
                                                         </div>
@@ -830,7 +830,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
 
                                                 {item.type === 'project_update' && (
                                                     <div>
-                                                        <h4 className="font-bold text-slate-800 text-lg mb-1">{item.data.title}</h4>
+                                                        <h4 className="font-bold text-indigo-900 text-lg mb-1">{item.data.title}</h4>
                                                         <p className="text-sm text-slate-500 mb-3">
                                                             {item.data.status === 'approved' ? 'Scope variation approved and integrated.' : 'Variation pending your approval.'}
                                                         </p>
@@ -864,12 +864,12 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 className="space-y-8"
                             >
                                 <div className="mb-8">
-                                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Financial Ledger</h2>
+                                    <h2 className="text-2xl font-bold text-indigo-950 mb-2">Financial Ledger</h2>
                                     <p className="text-slate-500">Track your payments, upcoming milestones, and official invoices.</p>
                                 </div>
 
                                 {/* Ledger Summary */}
-                                <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-lg relative overflow-hidden">
+                                <div className="bg-indigo-950/90 backdrop-blur-xl border border-indigo-800/50 rounded-3xl shadow-2xl shadow-indigo-950/20 p-8 text-white shadow-lg relative overflow-hidden">
                                     <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative z-10">
                                         <div>
@@ -903,7 +903,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 {/* Payment Schedule */}
                                 <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                                     <div className="p-6 md:p-8 border-b border-slate-100">
-                                        <h3 className="text-lg font-bold text-slate-900">Payment Schedule</h3>
+                                        <h3 className="text-lg font-bold text-indigo-950">Payment Schedule</h3>
                                     </div>
                                     <div className="divide-y divide-slate-100">
                                         {milestones.map((milestone) => {
@@ -923,7 +923,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                         </div>
                                                         <div>
                                                             <div className="flex items-center gap-3 mb-1">
-                                                                <h4 className={`font-bold text-base ${isDue ? 'text-slate-900' : 'text-slate-800'}`}>{milestone.name}</h4>
+                                                                <h4 className={`font-bold text-base ${isDue ? 'text-indigo-950' : 'text-indigo-900'}`}>{milestone.name}</h4>
                                                                 {isDue && <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold uppercase tracking-wider rounded">Action Required</span>}
                                                             </div>
                                                             <p className="text-slate-500 text-sm mt-1 max-w-2xl leading-relaxed">{milestone.description}</p>
@@ -935,7 +935,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                         </div>
                                                     </div>
                                                     <div className="text-left md:text-right shrink-0 pl-17 md:pl-0 flex flex-col items-start md:items-end gap-2">
-                                                        <p className={`text-xl font-bold ${isPaid ? 'text-slate-400' : isDue ? 'text-slate-900' : 'text-slate-700'}`}>
+                                                        <p className={`text-xl font-bold ${isPaid ? 'text-slate-400' : isDue ? 'text-indigo-950' : 'text-slate-700'}`}>
                                                             ₹{amount.toLocaleString('en-IN')}
                                                         </p>
                                                         <span className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider ${
@@ -963,7 +963,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 className="space-y-8"
                             >
                                 <div className="mb-8">
-                                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Approved Designs</h2>
+                                    <h2 className="text-2xl font-bold text-indigo-950 mb-2">Approved Designs</h2>
                                     <p className="text-slate-500">Access and review all finalized PDFs and design documents directly from Google Drive.</p>
                                 </div>
                                 
@@ -984,7 +984,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                         }, {} as Record<string, any[]>)).map(([roomName, roomDocs]) => (
                                             <div key={roomName} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                                                 <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                                                    <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                                                    <h3 className="font-bold text-indigo-900 text-lg flex items-center gap-2">
                                                         <Folder className="w-5 h-5 text-indigo-500" />
                                                         {roomName}
                                                     </h3>
@@ -1007,7 +1007,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                     <span className="text-[8px] font-bold uppercase">PDF</span>
                                                                 </div>
                                                                 <div>
-                                                                    <p className="font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors text-sm">{doc.title}</p>
+                                                                    <p className="font-semibold text-indigo-900 group-hover:text-indigo-700 transition-colors text-sm">{doc.title}</p>
                                                                     <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
                                                                         <Clock className="w-3 h-3" />
                                                                         {new Date(doc.addedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -1036,7 +1036,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 className="space-y-8"
                             >
                                 <div className="mb-8">
-                                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Decisions Log</h2>
+                                    <h2 className="text-2xl font-bold text-indigo-950 mb-2">Decisions Log</h2>
                                     <p className="text-slate-500">A clear audit trail of all confirmed decisions and their impact on the project.</p>
                                 </div>
                                 
@@ -1063,7 +1063,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                             <span className="text-xs text-slate-400 font-medium">{new Date(decision.date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
                                                         </div>
                                                         
-                                                        <h4 className={`text-lg font-bold text-slate-800 ${decision.status === 'revoked' ? 'line-through text-slate-500' : ''}`}>
+                                                        <h4 className={`text-lg font-bold text-indigo-900 ${decision.status === 'revoked' ? 'line-through text-slate-500' : ''}`}>
                                                             {decision.title}
                                                         </h4>
                                                         <p className="text-slate-600 text-sm mt-2 whitespace-pre-wrap leading-relaxed">{decision.description}</p>
@@ -1101,7 +1101,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                             >
                                 <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
                                     <div>
-                                        <h2 className="text-2xl font-bold text-slate-900 mb-2">Scope & Variations</h2>
+                                        <h2 className="text-2xl font-bold text-indigo-950 mb-2">Scope & Variations</h2>
                                         <p className="text-slate-500">Review your active Bill of Quantities and track any changes to the project scope.</p>
                                         
                                         {operativeBoq && (
@@ -1119,7 +1119,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                         onClick={() => setShowGlossary(!showGlossary)}
                                         className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm ${
                                             showGlossary 
-                                                ? 'bg-slate-900 text-white shadow-slate-900/20' 
+                                                ? 'bg-indigo-950 text-white shadow-indigo-950/20' 
                                                 : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
                                         }`}
                                     >
@@ -1171,7 +1171,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 {boqRevisions && boqRevisions.length > 0 && (
                                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mb-8">
                                         <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50">
-                                            <h3 className="text-lg font-bold text-slate-900">Change Log / BOQ Revisions</h3>
+                                            <h3 className="text-lg font-bold text-indigo-950">Change Log / BOQ Revisions</h3>
                                             <p className="text-slate-500 text-sm mt-1">History of approved changes made to your original BOQ.</p>
                                         </div>
                                         <div className="p-6 md:p-8 space-y-4">
@@ -1188,7 +1188,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                     </div>
                                                     <div className="flex-1">
                                                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-1">
-                                                            <h4 className="font-bold text-slate-900">
+                                                            <h4 className="font-bold text-indigo-950">
                                                                 {action.type === 'ADD' && 'Item Added'}
                                                                 {action.type === 'REMOVE' && 'Item Removed'}
                                                                 {action.type === 'REPLACE' && 'Item Replaced'}
@@ -1251,13 +1251,13 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                                     <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                         <div>
-                                            <h3 className="text-lg font-bold text-slate-900">Active BOQ Summary</h3>
+                                            <h3 className="text-lg font-bold text-indigo-950">Active BOQ Summary</h3>
                                             <p className="text-slate-500 text-sm mt-1">Current approved scope of work.</p>
                                         </div>
                                         {activeTier && (
                                             <div className="text-left md:text-right bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 shadow-sm">
                                                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Active BOQ Value</p>
-                                                <p className="text-2xl font-bold text-slate-900">₹{rawExecutionTotal.toLocaleString('en-IN')}</p>
+                                                <p className="text-2xl font-bold text-indigo-950">₹{rawExecutionTotal.toLocaleString('en-IN')}</p>
                                             </div>
                                         )}
                                     </div>
@@ -1269,7 +1269,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                 return (
                                                     <div key={`summary-${category}`} className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
                                                         <p className="text-xs font-medium text-slate-500 mb-1 truncate uppercase tracking-wider" title={category}>{category}</p>
-                                                        <p className="text-lg font-bold text-slate-900">₹{categoryTotal.toLocaleString('en-IN')}</p>
+                                                        <p className="text-lg font-bold text-indigo-950">₹{categoryTotal.toLocaleString('en-IN')}</p>
                                                         <p className="text-xs text-slate-400 mt-1">{percentage.toFixed(1)}% of total</p>
                                                     </div>
                                                 );
@@ -1282,7 +1282,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                                     <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center">
                                         <div>
-                                            <h3 className="text-lg font-bold text-slate-900">Detailed Bill of Quantities</h3>
+                                            <h3 className="text-lg font-bold text-indigo-950">Detailed Bill of Quantities</h3>
                                             <p className="text-slate-500 text-sm mt-1">Itemized breakdown of your active scope.</p>
                                         </div>
                                         <button className="flex items-center gap-2 text-sm font-medium text-indigo-600 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition-colors">
@@ -1312,11 +1312,11 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                 {/* Category Header */}
                                                                 <tr className="bg-slate-50/50 border-b border-slate-200 group">
                                                                     <td className="px-4 py-3"></td>
-                                                                    <td colSpan={4} className="px-4 py-3 font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wide">
+                                                                    <td colSpan={4} className="px-4 py-3 font-bold text-indigo-900 flex items-center gap-2 uppercase tracking-wide">
                                                                         <div className="w-1.5 h-4 bg-indigo-500 rounded-full"></div>
                                                                         {category}
                                                                     </td>
-                                                                    <td className="px-4 py-3 font-bold text-slate-900 text-right">
+                                                                    <td className="px-4 py-3 font-bold text-indigo-950 text-right">
                                                                         ₹{categoryTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                                                     </td>
                                                                 </tr>
@@ -1332,7 +1332,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                             <td className="px-4 py-4 text-center text-slate-400 text-xs">{currentSrNo}</td>
                                                                             <td className="px-4 py-4">
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <p className={`font-medium ${item.status === 'Added' ? 'text-emerald-800' : item.status === 'Revised' || item.status === 'Replaced' ? 'text-amber-800' : 'text-slate-800'}`}>{item.item}</p>
+                                                                                    <p className={`font-medium ${item.status === 'Added' ? 'text-emerald-800' : item.status === 'Revised' || item.status === 'Replaced' ? 'text-amber-800' : 'text-indigo-900'}`}>{item.item}</p>
                                                                                     {item.status && item.status !== 'Approved' && (
                                                                                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
                                                                                             item.status === 'Added' ? 'bg-emerald-100 text-emerald-700' :
@@ -1351,7 +1351,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                             <td className="px-4 py-4 text-slate-600 text-center text-xs font-medium bg-slate-50/50">{item.unit}</td>
                                                                             <td className="px-4 py-4 text-center font-medium text-slate-700">{item.qty}</td>
                                                                             <td className="px-4 py-4 text-right text-slate-600">₹{(item.rate || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
-                                                                            <td className="px-4 py-4 text-right font-bold text-slate-800">₹{item.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                                                                            <td className="px-4 py-4 text-right font-bold text-indigo-900">₹{item.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
                                                                         </tr>
                                                                     );
                                                                 })}
@@ -1376,7 +1376,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                 <td colSpan={5} className="px-4 py-4 font-medium text-slate-600 text-right">
                                                                     Execution Cost (Excl. Loose Furniture)
                                                                 </td>
-                                                                <td className="px-4 py-4 font-bold text-slate-900 text-right">
+                                                                <td className="px-4 py-4 font-bold text-indigo-950 text-right">
                                                                     ₹{executionTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                                                 </td>
                                                             </tr>
@@ -1384,15 +1384,15 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                 <td colSpan={5} className="px-4 py-4 font-medium text-slate-600 text-right">
                                                                     Interior Design Fee {(!projectData.context.designFeeType || projectData.context.designFeeType === 'percentage') ? `(${projectData.context.designFee || 8}%)` : (projectData.context.designFeeType === 'fixed_sqft' ? `(Flat Rate: ₹${projectData.context.designFee}/sqft)` : `(Lumpsum)`)}
                                                                 </td>
-                                                                <td className="px-4 py-4 font-bold text-slate-900 text-right">
+                                                                <td className="px-4 py-4 font-bold text-indigo-950 text-right">
                                                                     ₹{designFee.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                                                 </td>
                                                             </tr>
                                                             <tr className="bg-slate-50 border-b border-slate-200">
-                                                                <td colSpan={5} className="px-4 py-4 font-bold text-slate-800 text-right">
+                                                                <td colSpan={5} className="px-4 py-4 font-bold text-indigo-900 text-right">
                                                                     Total Project Cost (Excl. GST)
                                                                 </td>
-                                                                <td className="px-4 py-4 font-bold text-slate-900 text-right">
+                                                                <td className="px-4 py-4 font-bold text-indigo-950 text-right">
                                                                     ₹{totalExclGst.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                                                 </td>
                                                             </tr>
@@ -1432,7 +1432,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 {/* Variations Journey */}
                                 {displayUpdates.length > 0 ? (
                                     <div>
-                                        <h3 className="text-lg font-bold text-slate-900 mb-6">Scope Variations Journey</h3>
+                                        <h3 className="text-lg font-bold text-indigo-950 mb-6">Scope Variations Journey</h3>
                                         <div className="relative pl-6 md:pl-8 border-l-2 border-slate-100 space-y-10">
                                             {/* Base Contract */}
                                             <div className="relative">
@@ -1442,9 +1442,9 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                 <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
                                                     <div className="flex justify-between items-start mb-2">
                                                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 px-2 py-1 rounded border border-slate-100">Project Kickoff</span>
-                                                        <span className="text-lg font-bold text-slate-900">₹{baseProjectValue.toLocaleString('en-IN')}</span>
+                                                        <span className="text-lg font-bold text-indigo-950">₹{baseProjectValue.toLocaleString('en-IN')}</span>
                                                     </div>
-                                                    <h4 className="font-bold text-slate-800 text-base">Base Contract</h4>
+                                                    <h4 className="font-bold text-indigo-900 text-base">Base Contract</h4>
                                                     <p className="text-sm text-slate-500 mt-1">The original approved scope of work.</p>
                                                 </div>
                                             </div>
@@ -1483,7 +1483,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                     </span>
                                                                     <span className="text-xs font-medium text-slate-400">{update.date}</span>
                                                                 </div>
-                                                                <h4 className="font-bold text-slate-800 text-base">{update.title}</h4>
+                                                                <h4 className="font-bold text-indigo-900 text-base">{update.title}</h4>
                                                             </div>
                                                             <div className="text-right">
                                                                 <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block mb-0.5">Net Impact</span>
@@ -1498,7 +1498,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                 <div className="space-y-3">
                                                                     {update.changes.map((change: any, idx: number) => (
                                                                         <div key={idx} className="text-sm">
-                                                                            <div className="flex justify-between font-medium text-slate-800 mb-1">
+                                                                            <div className="flex justify-between font-medium text-indigo-900 mb-1">
                                                                                 <span>{change.itemName}</span>
                                                                                 <span className={change.delta > 0 ? 'text-rose-600' : 'text-emerald-600'}>
                                                                                     {change.delta > 0 ? '+' : ''}₹{change.delta.toLocaleString('en-IN')}
@@ -1532,7 +1532,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                         <div className="w-12 h-12 bg-white text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100">
                                             <ClipboardList className="w-6 h-6" />
                                         </div>
-                                        <h3 className="text-lg font-bold text-slate-900 mb-1">No Scope Variations</h3>
+                                        <h3 className="text-lg font-bold text-indigo-950 mb-1">No Scope Variations</h3>
                                         <p className="text-slate-500 text-sm max-w-md mx-auto">Your project is currently running exactly on the original approved base contract. Any future changes to the scope will be tracked here.</p>
                                     </div>
                                 )}
@@ -1543,7 +1543,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                     {/* Support Block & Footer */}
                     <div className="mt-16 pt-10 border-t border-slate-200 text-center">
                         <div className="bg-slate-100/50 rounded-2xl p-6 md:p-8 max-w-2xl mx-auto border border-slate-200 mb-10 inline-block w-full">
-                            <h3 className="text-lg font-bold text-slate-800 mb-2">Need Help?</h3>
+                            <h3 className="text-lg font-bold text-indigo-900 mb-2">Need Help?</h3>
                             <p className="text-slate-500 mb-6 text-sm">Have a question about your project? We're here to assist you.</p>
                             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                                 {settings?.clientPortalConfig?.supportContact && (

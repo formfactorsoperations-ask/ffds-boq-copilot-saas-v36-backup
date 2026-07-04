@@ -14,7 +14,7 @@ export default function SuperAdminDashboard() {
         <div className="max-w-6xl mx-auto space-y-8 animate-fade-in p-8">
             <div className="flex justify-between items-end">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">Platform Admin</h1>
+                    <h1 className="text-3xl font-bold tracking-tight text-indigo-950 mb-2">Platform Admin</h1>
                     <p className="text-slate-500">Manage tenant studios, MRR, and platform health.</p>
                 </div>
             </div>
@@ -22,20 +22,20 @@ export default function SuperAdminDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <p className="text-sm font-bold text-slate-500 uppercase">Total Studios</p>
-                    <p className="text-3xl font-bold text-slate-900 mt-2">124</p>
+                    <p className="text-3xl font-bold text-indigo-950 mt-2">124</p>
                     <div className="mt-2 text-sm text-emerald-600 font-medium">+12 this month</div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <p className="text-sm font-bold text-slate-500 uppercase">Active Projects</p>
-                    <p className="text-3xl font-bold text-slate-900 mt-2">892</p>
+                    <p className="text-3xl font-bold text-indigo-950 mt-2">892</p>
                     <div className="mt-2 text-sm text-emerald-600 font-medium">+104 this month</div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <p className="text-sm font-bold text-slate-500 uppercase">MRR</p>
-                    <p className="text-3xl font-bold text-slate-900 mt-2">$24,500</p>
+                    <p className="text-3xl font-bold text-indigo-950 mt-2">$24,500</p>
                     <div className="mt-2 text-sm text-emerald-600 font-medium">+4% this month</div>
                 </div>
-                <div className="bg-slate-900 p-6 rounded-2xl shadow-lg shadow-slate-900/20 text-white">
+                <div className="bg-indigo-950 p-6 rounded-2xl shadow-lg shadow-indigo-950/20 text-white">
                     <p className="text-sm font-bold text-slate-400 uppercase">Est. ARR</p>
                     <p className="text-3xl font-bold tracking-tight mt-2">$294,000</p>
                 </div>
@@ -47,7 +47,7 @@ export default function SuperAdminDashboard() {
                         <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
                             <BuildingOfficeIcon className="w-5 h-5" />
                         </div>
-                        <h2 className="font-bold text-slate-800">Tenant Studios</h2>
+                        <h2 className="font-bold text-indigo-900">Tenant Studios</h2>
                     </div>
                     <button className="px-4 py-2 bg-indigo-50 text-indigo-600 font-bold text-sm rounded-lg hover:bg-indigo-100 transition-colors">
                         + Provision New Tenant
@@ -69,7 +69,7 @@ export default function SuperAdminDashboard() {
                             {studios.map(studio => (
                                 <tr key={studio.id} className="hover:bg-slate-50 transition-colors group cursor-pointer">
                                     <td className="p-4">
-                                        <p className="font-bold text-slate-900">{studio.name}</p>
+                                        <p className="font-bold text-indigo-950">{studio.name}</p>
                                     </td>
                                     <td className="p-4">
                                         <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${

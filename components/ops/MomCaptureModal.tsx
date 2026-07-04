@@ -73,21 +73,21 @@ export function MomCaptureModal({ visit, projectId, studioId, projectContextName
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-indigo-950/60 z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh]">
          {loading ? (
            <div className="p-16 flex flex-col items-center justify-center text-center space-y-4">
              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-2">
                <Sparkles className="animate-pulse" size={32} />
              </div>
-             <h2 className="text-2xl font-bold text-slate-900">Structuring Intelligence...</h2>
+             <h2 className="text-2xl font-bold text-indigo-950">Structuring Intelligence...</h2>
              <p className="text-slate-500 max-w-xs">Organizing your notes into actionable decisions, flags, and tasks.</p>
            </div>
          ) : (
            <>
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-[#f1f5f9]">
                <div>
-                  <h2 className="text-xl font-bold text-slate-900">Capture the meeting</h2>
+                  <h2 className="text-xl font-bold text-indigo-950">Capture the meeting</h2>
                   <p className="text-sm text-slate-500 mt-1">Refining notes for: {visit.title}</p>
                </div>
                <button onClick={onClose} className="text-slate-400 hover:text-slate-700 bg-white rounded-full p-2 shadow-sm">✕</button>
@@ -112,7 +112,7 @@ export function MomCaptureModal({ visit, projectId, studioId, projectContextName
                >
                  <Sparkles size={20} /> Structure with AI
                </button>
-               <button onClick={handleSkipAI} className="text-sm text-slate-500 font-bold hover:text-slate-800 transition">
+               <button onClick={handleSkipAI} className="text-sm text-slate-500 font-bold hover:text-indigo-900 transition">
                  Skip AI, write manually
                </button>
             </div>

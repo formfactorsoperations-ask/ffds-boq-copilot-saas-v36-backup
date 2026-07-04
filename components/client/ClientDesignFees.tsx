@@ -96,7 +96,7 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
         return (
             <section id="fees" className="py-10">
                 <div className="mb-8">
-                    <h2 className="text-3xl font-extrabold text-slate-900 mb-2">{data.title}</h2>
+                    <h2 className="text-3xl font-extrabold text-indigo-950 mb-2">{data.title}</h2>
                     <p className="text-slate-600 max-w-3xl text-sm leading-relaxed">
                         {data.subtitle}
                     </p>
@@ -106,7 +106,7 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
                     {/* Design Fee Card */}
                     <div className="border border-slate-200 rounded-3xl p-8 bg-white shadow-sm flex flex-col justify-center">
                         <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">{data.card1.label}</p>
-                        <h3 className="text-3xl font-black text-slate-900 mb-3 leading-tight tracking-tight">{data.card1.value}</h3>
+                        <h3 className="text-3xl font-black text-indigo-950 mb-3 leading-tight tracking-tight">{data.card1.value}</h3>
                         <p className="text-sm text-slate-600 leading-relaxed">
                             {data.card1.desc}
                         </p>
@@ -139,7 +139,7 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
 
                 {/* Practical View Box */}
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm text-slate-700 leading-relaxed">
-                    <span className="font-bold text-slate-900">Note: </span>
+                    <span className="font-bold text-indigo-950">Note: </span>
                     {data.practicalView ? data.practicalView.replace('Practical view:', '') : ''} 
                 </div>
             </section>
@@ -222,20 +222,20 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
     return (
         <section id="fees" className="py-10">
             <div className="mb-8">
-                <span className="inline-block px-3 py-1 bg-slate-900 text-white text-xs font-bold rounded-full mb-3">Thane/Mumbai Pricing</span>
-                <h2 className="text-3xl font-extrabold text-slate-900 mb-2">{data.title}</h2>
+                <span className="inline-block px-3 py-1 bg-indigo-950 text-white text-xs font-bold rounded-full mb-3">Thane/Mumbai Pricing</span>
+                <h2 className="text-3xl font-extrabold text-indigo-950 mb-2">{data.title}</h2>
                 <p className="text-slate-600 max-w-3xl text-sm leading-relaxed">
                     {data.subtitle}
                 </p>
             </div>
 
-            <div className="bg-white border-2 border-slate-900 rounded-3xl overflow-hidden shadow-lg">
+            <div className="bg-white border-2 border-indigo-950 rounded-3xl overflow-hidden shadow-lg">
                 <div className="grid grid-cols-1 md:grid-cols-12">
                     
                     {/* Left: Breakdown */}
                     <div className="md:col-span-7 p-8 border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50/50">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Fee Breakdown</h3>
+                            <h3 className="font-bold text-indigo-900 text-sm uppercase tracking-wider">Fee Breakdown</h3>
                             {setProjectContext && (
                                 <label className="flex items-center gap-2 cursor-pointer no-print">
                                     <div className="relative">
@@ -254,7 +254,7 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
                                     <p className="text-sm font-semibold text-slate-700">Base Retainer Fee</p>
                                     <p className="text-xs text-slate-500">Core planning & concept development</p>
                                 </div>
-                                <div className="font-mono font-bold text-slate-900 text-lg group-hover:text-blue-600 transition-colors">
+                                <div className="font-mono font-bold text-indigo-950 text-lg group-hover:text-blue-600 transition-colors">
                                     {formatCurrency(baseFee)}
                                 </div>
                             </div>
@@ -270,7 +270,7 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <div className="font-mono font-bold text-slate-900 text-lg group-hover:text-blue-600 transition-colors">
+                                    <div className="font-mono font-bold text-indigo-950 text-lg group-hover:text-blue-600 transition-colors">
                                         {formatCurrency(area * multiplier)}
                                     </div>
                                     <p className="text-xs text-slate-500 mt-0.5">
@@ -304,7 +304,7 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
                         {/* PMC Details - Show if active */}
                         {includePmc && (
                             <div className="mt-6 p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-                                <h4 className="text-xs font-bold text-slate-800 uppercase mb-3">PMC Scope</h4>
+                                <h4 className="text-xs font-bold text-indigo-900 uppercase mb-3">PMC Scope</h4>
                                 <div className="grid grid-cols-2 gap-4 text-xs">
                                     <div>
                                         <p className="font-bold text-emerald-700 mb-1">Includes:</p>
@@ -388,7 +388,7 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
                     </div>
 
                     {/* Right: Total */}
-                    <div className="md:col-span-5 bg-slate-900 p-8 flex flex-col justify-center items-center text-center text-white relative overflow-hidden">
+                    <div className="md:col-span-5 bg-indigo-950 p-8 flex flex-col justify-center items-center text-center text-white relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
                             <svg width="200" height="200" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"/></svg>
                         </div>
@@ -397,7 +397,7 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
                         <div className="text-4xl md:text-5xl font-black tracking-tight mb-2">
                             {formatCurrency(Math.round(totalFee)).replace('₹ ', '₹')}
                         </div>
-                        <div className="inline-block px-3 py-1 rounded-full bg-slate-800 text-[10px] font-bold text-slate-300 uppercase tracking-wide border border-slate-700">
+                        <div className="inline-block px-3 py-1 rounded-full bg-indigo-900 text-[10px] font-bold text-slate-300 uppercase tracking-wide border border-slate-700">
                             + GST Applicable (18%)
                         </div>
                         {includePmc && (

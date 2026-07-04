@@ -58,12 +58,12 @@ export default function SiteVisitHistory({
   }, [projectId, studioId]);
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-indigo-950/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl flex flex-col max-h-[90vh]">
         
         <div className="p-5 border-b flex items-center justify-between bg-slate-50 rounded-t-xl">
            <div>
-             <h2 className="text-xl font-bold text-slate-900">Site Log & Meetings History</h2>
+             <h2 className="text-xl font-bold text-indigo-950">Site Log & Meetings History</h2>
              <p className="text-sm text-slate-500 mt-1">{projectContext?.name}</p>
            </div>
            
@@ -211,7 +211,7 @@ function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, 
               {isSite ? '🏗️' : '🤝'}
            </div>
            <div>
-             <h3 className="font-bold text-slate-900">{visit.title}</h3>
+             <h3 className="font-bold text-indigo-950">{visit.title}</h3>
              <div className="flex items-center gap-2 mt-0.5 mt-1 text-xs font-semibold text-slate-500 tracking-wide uppercase">
                 <span>Phase: {visit.phaseTitle} (Step {visit.phaseStepNumber})</span>
                 {visit.status === 'cancelled' && <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded">Cancelled</span>}

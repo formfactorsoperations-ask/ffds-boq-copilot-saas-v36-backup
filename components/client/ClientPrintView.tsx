@@ -42,7 +42,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = ({ tiers, projectConte
                     <div className="w-1/2 flex flex-col justify-center items-start pl-8 border-l-4 border-orange-400">
                         <div className="text-center mb-12">
                             <p className="text-xs uppercase tracking-[0.2em]">ARCHITECTS</p>
-                            <h2 className="text-3xl font-bold tracking-widest my-1 border-y-2 border-black py-2">{orgData?.orgName?.toUpperCase() || 'FORM FACTORS'}</h2>
+                            <h2 className="text-3xl font-bold tracking-widest my-1 border-y-2 border-indigo-950 py-2">{orgData?.orgName?.toUpperCase() || 'FORM FACTORS'}</h2>
                             <p className="text-sm uppercase tracking-widest">DESIGN STUDIO</p>
                             <p className="text-xs uppercase tracking-[0.2em]">INTERIOR DESIGNERS</p>
                         </div>
@@ -103,14 +103,14 @@ const ClientExportView: React.FC<ClientExportViewProps> = ({ tiers, projectConte
                      <thead>
                         <tr>
                             <th className="w-1/4">Category</th>
-                            {tiers.map(t => <th key={t.id} className="text-center">{t.name}</th>)}
+                            {tiers.map((t, idx) => <th key={`${t.id}-${idx}`} className="text-center">{t.name}</th>)}
                         </tr>
                     </thead>
                     <tbody>
                         {(comparisonData.materialMatrix || []).map((row: ComparisonRow, idx: number) => (
                             <tr key={idx}>
                                 <td className="font-bold">{row.feature}</td>
-                                {tiers.map(t => <td key={t.id} className="text-center">{row[t.name] || '-'}</td>)}
+                                {tiers.map((t, idx) => <td key={`${t.id}-${idx}`} className="text-center">{row[t.name] || '-'}</td>)}
                             </tr>
                         ))}
                     </tbody>
@@ -123,14 +123,14 @@ const ClientExportView: React.FC<ClientExportViewProps> = ({ tiers, projectConte
                      <thead>
                         <tr>
                             <th className="w-1/4">Item / Scope</th>
-                            {tiers.map(t => <th key={t.id} className="text-center">{t.name}</th>)}
+                            {tiers.map((t, idx) => <th key={`${t.id}-${idx}`} className="text-center">{t.name}</th>)}
                         </tr>
                     </thead>
                     <tbody>
                         {(comparisonData.scopeMatrix || []).map((row: ComparisonRow, idx: number) => (
                             <tr key={idx}>
                                 <td className="font-bold">{row.feature}</td>
-                                {tiers.map(t => <td key={t.id} className="text-center" dangerouslySetInnerHTML={{ __html: (row[t.name] || '❌ None').replace(/✔/g, '✓').replace(/❌/g, '✗') }}></td>)}
+                                {tiers.map((t, idx) => <td key={`${t.id}-${idx}`} className="text-center" dangerouslySetInnerHTML={{ __html: (row[t.name] || '❌ None').replace(/✔/g, '✓').replace(/❌/g, '✗') }}></td>)}
                             </tr>
                         ))}
                     </tbody>
@@ -212,9 +212,9 @@ const ClientExportView: React.FC<ClientExportViewProps> = ({ tiers, projectConte
                         {projectContext.proposalDecision.options.map(opt => {
                             const isSelected = projectContext.proposalDecision?.selected === opt.id;
                             return (
-                                <div key={opt.id} className={`border-2 p-6 rounded-xl ${isSelected ? 'border-black bg-gray-50' : 'border-gray-200'}`}>
+                                <div key={opt.id} className={`border-2 p-6 rounded-xl ${isSelected ? 'border-indigo-950 bg-gray-50' : 'border-gray-200'}`}>
                                     <div className="flex items-start gap-4">
-                                        <div className={`w-6 h-6 border-2 flex items-center justify-center font-bold text-sm ${isSelected ? 'border-black bg-black text-white' : 'border-gray-300'}`}>
+                                        <div className={`w-6 h-6 border-2 flex items-center justify-center font-bold text-sm ${isSelected ? 'border-indigo-950 bg-indigo-950 text-white' : 'border-gray-300'}`}>
                                             {isSelected ? '✓' : ''}
                                         </div>
                                         <div>
@@ -232,14 +232,14 @@ const ClientExportView: React.FC<ClientExportViewProps> = ({ tiers, projectConte
                         })}
                     </div>
 
-                    <div className="mt-12 pt-8 border-t-2 border-black flex justify-between items-end">
+                    <div className="mt-12 pt-8 border-t-2 border-indigo-950 flex justify-between items-end">
                         <div>
                             <p className="text-sm font-bold uppercase mb-8">Client Signature</p>
-                            <div className="w-48 border-b border-black"></div>
+                            <div className="w-48 border-b border-indigo-950"></div>
                         </div>
                         <div>
                             <p className="text-sm font-bold uppercase mb-8">Date</p>
-                            <div className="w-48 border-b border-black"></div>
+                            <div className="w-48 border-b border-indigo-950"></div>
                         </div>
                     </div>
                 </Page>

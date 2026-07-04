@@ -139,11 +139,20 @@ export function useProjectJourney(projectId: string, projectContext: ProjectCont
         isAutoDerived: s.statusSource === 'auto'
     }));
 
+    const isProjectComplete = projectContext?.status === 'completed' || (projectContext as any)?.lifecycle?.stage === 'completed';
+
     let activeSetInPhase: boolean[] = [false, false, false, false, false, false];
 
     for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
         
+        if (isProjectComplete) {
+            step.status = 'done';
+            step.completedAt = step.completedAt || new Date();
+            step.completedByName = step.completedByName || 'System Auto-close';
+            continue;
+        }
+
         // 1. Check prerequisites
         let isLocked = false;
         for (const prereqId of step.prerequisiteIds) {

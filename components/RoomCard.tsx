@@ -82,13 +82,13 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, items, allRooms, searchQuery,
                 🏠
             </div>
             <div>
-                <h4 className="font-bold text-lg text-slate-800 leading-tight">{room.name}</h4>
+                <h4 className="font-bold text-lg text-indigo-900 leading-tight">{room.name}</h4>
                 {room.size > 0 && <p className="text-xs font-medium text-slate-500 bg-white/30 inline-block px-2 py-0.5 rounded-md mt-0.5 border border-white/30">{room.size} {room.unit}</p>}
             </div>
         </div>
         <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end">
             <div className="text-right">
-                <p className="font-black text-lg text-slate-800 tracking-tight">{formatCurrency(roomTotal)}</p>
+                <p className="font-black text-lg text-indigo-900 tracking-tight">{formatCurrency(roomTotal)}</p>
                 <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
                     {searchActive ? `${matchedItems.size} of ${items.length} match` : `${items.length} items`}
                 </p>

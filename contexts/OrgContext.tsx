@@ -114,12 +114,27 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         return (saved as UserRole) || 'Admin';
     });
 
-    const updateOrgData = (newData: Partial<OrganizationContext>) => {
+    const updateOrgData = async (newData: Partial<OrganizationContext>) => {
         setOrgData(prev => {
             const updated = { ...prev, ...newData };
             localStorage.setItem('ffds_org_context', JSON.stringify(updated));
             return updated;
         });
+
+        // Prevent saving to firestore if we are just switching the local tenant context
+        const isContextSwitch = newData.tenantId && newData.tenantId !== orgData.tenantId;
+
+        if (!isContextSwitch && db && orgData?.tenantId) {
+            try {
+                await updateDoc(doc(db, "organizations", orgData.tenantId), newData);
+            } catch (e: any) {
+                if (e.code === 'not-found') {
+                    await setDoc(doc(db, "organizations", orgData.tenantId), { ...orgData, ...newData }, { merge: true });
+                } else {
+                    console.error("Could not sync orgData to firestore", e);
+                }
+            }
+        }
     };
 
     const addTeamMember = async (member: TeamMember) => {

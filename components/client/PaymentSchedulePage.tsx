@@ -1,23 +1,67 @@
 import React, { useState } from 'react';
-import { ProjectContext, PaymentSchedule } from '../../types';
+import { ProjectContext, PaymentSchedule, ProjectEngagement } from '../../types';
 import { FileText, Send, Download, AlertTriangle, ArrowRight, History, Eye } from 'lucide-react';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, id as generateId } from '../../lib/utils';
 import { useOrg } from '../../contexts/OrgContext';
 import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
 
 interface PaymentSchedulePageProps {
     projectContext: ProjectContext;
     setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
+    activeTier?: any;
 }
 
-export default function PaymentSchedulePage({ projectContext, setProjectContext }: PaymentSchedulePageProps) {
-    const { orgData } = useOrg();
+export default function PaymentSchedulePage({ projectContext, setProjectContext, activeTier }: PaymentSchedulePageProps) {
+    const { orgData, currentRole } = useOrg();
     const [previewMode, setPreviewMode] = useState(true);
-    const schedules = projectContext.paymentSchedules || [];
-    const latestSchedule = schedules.find(s => !s.supersededBy) || schedules[0]; // Active version
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
     
+    const engagement = projectContext.engagement;
+    const isLocked = engagement?.status === 'issued' || engagement?.status === 'acknowledged';
+    const lockedSnapshot = engagement?.lockedSnapshot;
+
+    const schedules = projectContext.paymentSchedules || [];
     // Sort history by version desc
     const sortedHistory = [...schedules].sort((a,b) => b.version - a.version);
+
+    let latestSchedule = sortedHistory.find(s => selectedScheduleId ? s.id === selectedScheduleId : !s.supersededBy) || sortedHistory[0]; // Active version
+    
+    if (isLocked && lockedSnapshot?.paymentStructure && !selectedScheduleId) {
+        const contractValue = (engagement.executionValue || 0) + (engagement.designFee || 0);
+        
+        const engagementSnapshot = {
+            docketRef: null,
+            termsVersion: null,
+            paymentScheduleVersion: null,
+            status: "draft" as const,
+            issuedAt: null,
+            acknowledgedAt: null,
+            acknowledgedVia: null,
+            lockedSnapshot: null,
+            history: [],
+            ...(engagement || {}),
+            designFee: engagement?.designFee || projectContext.financials?.approvedDesignValue || activeTier?.summary?.designFee || 0,
+            executionValue: engagement?.executionValue || projectContext.financials?.approvedExecutionValue || activeTier?.summary?.totalSell || 0
+        } as ProjectEngagement;
+
+        latestSchedule = {
+            id: 'locked',
+            version: engagement.paymentScheduleVersion || 1,
+            versionLabel: `v${engagement.paymentScheduleVersion || 1}.0`,
+            status: engagement.status,
+            docketRef: engagement.docketRef || '____',
+            issuedAt: engagement.issuedAt || Date.now(),
+            issuedBy: 'System',
+            contractValue,
+            advances: lockedSnapshot.advances || latestSchedule?.advances || [],
+            revisionNote: 'Locked Payment Schedule',
+            supersededBy: null,
+            snapshotPaymentStructure: lockedSnapshot.paymentStructure,
+            snapshotEngagement: engagementSnapshot,
+            snapshotTermsConfig: lockedSnapshot.termsSettings
+        };
+    }
 
     const handleSend = () => {
         if (!latestSchedule) return;
@@ -28,46 +72,170 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext 
         }));
     };
 
-    const handleRegenerate = () => {
-        if (!latestSchedule) return;
-        const milestones = projectContext.paymentMilestones || [];
-        const contractValue = latestSchedule.contractValue;
-        
-        const newAdvances = milestones.map((m, i) => ({
-            advanceCode: (m.type === 'design' ? 'D' : 'E') + (i + 1),
-            label: (m.name || '').replace(' (Gross)', ''),
-            phase: m.type as 'design' | 'execution' | 'handover',
-            percentage: m.percentage,
-            amount: contractValue ? (contractValue * m.percentage) / 100 : 0,
-            dueCondition: m.type === 'execution' ? 'Advance before ' + (m.name || '').replace(' (Gross)', '').toLowerCase() : 'On completion of ' + (m.name || '').replace(' (Gross)', ''),
-            unlocks: m.unlocks || '',
-            status: m.status === 'invoiced' ? 'advance_requested' : m.status === 'paid' ? 'received' : 'pending',
-            invoiceRef: m.invoiceNumber || null,
-            receivedAt: null,
-            isHandoverAdvance: m.isHandoverAdvance || false
-        }));
+    const handleRegenerate = async () => {
+        setIsGenerating(true);
+        try {
+            const orgId = orgData?.tenantId || 'demo-tenant-01';
+            const { getPaymentStructure, getTermsSettings } = await import('../../services/engagementService');
+            
+            const paymentStructure = await getPaymentStructure(orgId);
+            const termsSettings = await getTermsSettings(orgId);
+            
+            if (!paymentStructure || !termsSettings) {
+                alert("Settings not configured in Studio Settings.");
+                setIsGenerating(false);
+                return;
+            }
 
-        const newSchedule = {
-            ...latestSchedule,
-            issuedAt: Date.now(),
-            advances: newAdvances
-        };
+            const engagement = projectContext.engagement;
+            const originalNetDesign = engagement?.designFee || projectContext.financials?.approvedDesignValue || activeTier?.summary?.designFee || 0;
+            const originalNetExecution = engagement?.executionValue || projectContext.financials?.approvedExecutionValue || activeTier?.summary?.totalSell || 0;
+            const contractValue = originalNetExecution + originalNetDesign;
 
-        setProjectContext(prev => {
-            const existing = prev.paymentSchedules || [];
-            const filtered = existing.filter(s => s.status !== 'draft');
-            return {
-                ...prev,
-                paymentSchedules: [...filtered, newSchedule as any]
+            const engagementSnapshot = {
+                docketRef: null,
+                termsVersion: null,
+                paymentScheduleVersion: null,
+                status: "draft" as const,
+                issuedAt: null,
+                acknowledgedAt: null,
+                acknowledgedVia: null,
+                lockedSnapshot: null,
+                history: [],
+                ...(engagement || {}),
+                designFee: originalNetDesign,
+                executionValue: originalNetExecution
+            } as ProjectEngagement;
+
+            let newAdvances = [];
+            
+            if (projectContext.paymentMilestones && projectContext.paymentMilestones.length > 0) {
+                // Use custom milestones from Payment Calculator
+                let dIndex = 0;
+                let eIndex = 0;
+                newAdvances = projectContext.paymentMilestones.map((m) => {
+                    const originalBaseAmount = m.type === 'execution' ? originalNetExecution : originalNetDesign;
+                    let amount = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : (originalBaseAmount * (m.percentage / 100));
+                    amount = Math.round(amount);
+                    const advCode = m.type === 'design' ? `D${++dIndex}` : `E${++eIndex}`;
+                    return {
+                        advanceCode: m.description && m.description.match(/^[DEH][0-9]$/) ? m.description : advCode,
+                        label: (m.name || '').replace(' (Gross)', ''),
+                        phase: m.type as 'design' | 'execution' | 'handover',
+                        percentage: m.percentage,
+                        isFixedAmount: m.isFixedAmount,
+                        fixedAmount: m.fixedAmount,
+                        amount: amount,
+                        dueCondition: m.trigger || (m.type === 'execution' ? 'Advance before ' + (m.name || '').replace(' (Gross)', '').toLowerCase() : 'On completion of ' + (m.name || '').replace(' (Gross)', '')),
+                        unlocks: m.unlocks || '',
+                        status: 'pending',
+                        invoiceRef: null,
+                        receivedAt: null,
+                        isHandoverAdvance: m.isHandoverAdvance || false
+                    };
+                });
+            } else {
+                let i = 0;
+                
+                // Design Stages
+                for (const m of paymentStructure.designStages) {
+                    newAdvances.push({
+                        advanceCode: m.code || `D${i+1}`,
+                        label: m.name,
+                        phase: 'design',
+                        percentage: m.pct,
+                        amount: Math.round((m.pct / 100) * originalNetDesign),
+                        dueCondition: m.trigger,
+                        unlocks: m.unlocks,
+                        status: 'pending',
+                        isHandoverAdvance: false,
+                        invoiceRef: null,
+                        receivedAt: null
+                    });
+                    i++;
+                }
+    
+                // Execution Stages
+                for (const m of paymentStructure.executionStages) {
+                    newAdvances.push({
+                        advanceCode: m.code || `E${i+1}`,
+                        label: m.name,
+                        phase: 'execution',
+                        percentage: m.pct,
+                        amount: Math.round((m.pct / 100) * originalNetExecution),
+                        dueCondition: m.trigger,
+                        unlocks: m.unlocks,
+                        status: 'pending',
+                        isHandoverAdvance: m.name.toLowerCase().includes('handover') || (m.trigger && m.trigger.toLowerCase().includes('handover')) || false,
+                        invoiceRef: null,
+                        receivedAt: null
+                    });
+                    i++;
+                }
+            }
+
+            const termsDockets = projectContext.termsDockets || [];
+            let latestDocket = null;
+            if (termsDockets.length > 0) {
+                latestDocket = termsDockets.reduce((prev, curr) => (prev.generatedAt > curr.generatedAt) ? prev : curr);
+            }
+            const fallbackDocketRef = latestDocket?.docketRef || '____';
+
+            const nextVersion = (latestSchedule && latestSchedule.status !== 'draft') ? latestSchedule.version + 1 : (latestSchedule?.version || 1);
+
+            const newSchedule: PaymentSchedule = {
+                id: generateId(),
+                version: nextVersion,
+                versionLabel: `v${nextVersion}.0`,
+                status: 'draft',
+                docketRef: engagement?.docketRef || fallbackDocketRef,
+                issuedAt: Date.now(),
+                issuedBy: 'System',
+                contractValue,
+                advances: newAdvances as any,
+                revisionNote: (latestSchedule && latestSchedule.status !== 'draft') ? 'Revised schedule' : (latestSchedule?.revisionNote || 'Initial Payment Schedule issued with Design Agreement'),
+                supersededBy: null,
+                snapshotPaymentStructure: paymentStructure,
+                snapshotEngagement: engagementSnapshot,
+                snapshotTermsConfig: termsSettings
             };
-        });
+
+            setProjectContext(prev => {
+                const existing = prev.paymentSchedules || [];
+                const filtered = existing.filter(s => s.status !== 'draft');
+                return {
+                    ...prev,
+                    paymentSchedules: [...filtered, newSchedule]
+                };
+            });
+        } catch (err) {
+            console.error(err);
+            alert("Failed to generate schedule.");
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     const missingData = [];
     if (!orgData.orgName) missingData.push("Studio Name");
     if (!projectContext.clientName) missingData.push("Client Name");
     if (!projectContext.name) missingData.push("Project Name");
-    if (latestSchedule && !latestSchedule.docketRef) missingData.push("Governing Docket Ref");
+    
+    let isDocketRefMissing = false;
+    if (latestSchedule) {
+        const dockets = projectContext.termsDockets || [];
+        let tempLatestDocket = null;
+        if (dockets.length > 0) {
+            tempLatestDocket = dockets.reduce((prev, curr) => (prev.generatedAt > curr.generatedAt) ? prev : curr);
+        }
+        const tempResolved = (latestSchedule?.docketRef && latestSchedule.docketRef !== '____') 
+            ? latestSchedule.docketRef 
+            : (projectContext.engagement?.docketRef || tempLatestDocket?.docketRef || '____');
+        if (tempResolved === '____') {
+            isDocketRefMissing = true;
+        }
+    }
+    if (isDocketRefMissing) missingData.push("Governing Docket Ref");
     
     const isValid = missingData.length === 0;
 
@@ -90,13 +258,31 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext 
                      return;
                 }
                 const opt = {
-                    margin: 0,
-                    filename: `FFDS-PaymentSchedule-${projectContext.name}-v${latestSchedule.version}.pdf`,
+                    margin: [15, 0, 15, 0],
+                    filename: `${orgData.orgName?.replace(/\s+/g, '') || 'Studio'}-PaymentSchedule-${projectContext.name}-v${latestSchedule.version}.pdf`,
                     image: { type: 'jpeg' as const, quality: 1 },
                     html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+                    pagebreak: { mode: ['css', 'legacy'], avoid: ['.sec-group', 'tr', '.highlight', '.sig', '.metabar', '.valuebar'] }
                 };
-                html2pdfObj().set(opt).from(element).save();
+                html2pdfObj().set(opt).from(element).toPdf().get('pdf').then((pdf: any) => {
+                    const totalPages = pdf.internal.getNumberOfPages();
+                    const pageWidth = pdf.internal.pageSize.getWidth();
+                    const pageHeight = pdf.internal.pageSize.getHeight();
+                    for (let i = 1; i <= totalPages; i++) {
+                        pdf.setPage(i);
+                        pdf.setFontSize(8);
+                        pdf.setTextColor(150);
+                        // Footer on all pages
+                        pdf.text(`${orgData.orgName || 'Form Factors Design Studio'} • ${orgData.contactEmail || 'formfactors.operations@gmail.com'}`, 15, pageHeight - 8);
+                        pdf.text(`Page ${i} of ${totalPages}`, pageWidth - 15, pageHeight - 8, { align: 'right' });
+                        // Header on subsequent pages
+                        if (i > 1) {
+                            pdf.text(`Advance Payment Schedule • ${projectContext.name}`, 15, 10);
+                            pdf.text(`${orgData.orgName || 'Form Factors Design Studio'}`, pageWidth - 15, 10, { align: 'right' });
+                        }
+                    }
+                }).save();
             }).catch(err => {
                 console.error("Failed to load html2pdf", err);
             });
@@ -108,10 +294,13 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext 
             <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in">
                 <div className="bg-white border text-center border-slate-200 p-16 rounded-3xl shadow-sm">
                     <FileText className="w-16 h-16 text-slate-300 mx-auto mb-6" />
-                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">Advance Payment Schedule</h2>
+                    <h2 className="text-2xl font-black text-indigo-900 tracking-tight">Advance Payment Schedule</h2>
                     <p className="text-slate-500 mt-2 max-w-lg mx-auto">
-                        No payment schedule has been generated yet for this project. Head over to <strong>Payment Calc</strong> to set up your milestones and generate the Schedule document.
+                        No payment schedule has been generated yet for this project.
                     </p>
+                    <button onClick={handleRegenerate} disabled={isGenerating} className="mt-8 px-6 py-3 bg-[#2f4a2e] text-white font-bold rounded-xl shadow-sm hover:bg-[#1a2d19] transition flex items-center justify-center mx-auto gap-2">
+                        {isGenerating ? 'Generating...' : 'Generate Schedule'}
+                    </button>
                 </div>
             </div>
         );
@@ -119,22 +308,51 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext 
 
     // Grouping logic for the PDF table
     const designAdvances = latestSchedule.advances.filter(a => a.phase === 'design');
-    const executionAdvances = latestSchedule.advances.filter(a => a.phase === 'execution');
+    const executionAdvances = latestSchedule.advances.filter(a => a.phase === 'execution' && !a.isHandoverAdvance);
     const handoverAdvances = latestSchedule.advances.filter(a => a.phase === 'handover' || a.isHandoverAdvance);
 
-    const formatAdvanceRow = (adv: any, index: number, isHandoverBlock: boolean = false) => (
-        <tr key={index} className={`advance-table-row border-b border-[#d9d6cc] ${isHandoverBlock || adv.isHandoverAdvance ? 'bg-[#f7f1e6] font-bold text-[#222222]' : 'text-[#444444]'}`} style={{ pageBreakInside: 'avoid' }}>
-            <td className="py-3 px-2 text-center border-r border-[#d9d6cc] w-8">{adv.advanceCode || index + 1}</td>
-            <td className="py-3 px-3">
-                {adv.label}
-                {isHandoverBlock || adv.isHandoverAdvance ? <div className="text-[9px] text-[#6f7f52] mt-0.5 uppercase tracking-wide">Final Advance</div> : null}
-            </td>
-            <td className="py-3 px-3 text-center">{adv.percentage}%</td>
-            <td className="py-3 px-3 text-right">₹{adv.amount ? adv.amount.toLocaleString('en-IN') : '--'}</td>
-            <td className="py-3 px-3 italic min-w-[120px]">{adv.dueCondition}</td>
-            <td className="py-3 px-3 font-medium min-w-[140px] text-[#2f4a2e]">{adv.unlocks || 'Next Phase'}</td>
-        </tr>
-    );
+    const isOwner = currentRole === 'Super Admin' || currentRole === 'Admin';
+    const studioName = orgData.orgName || '[set in Studio Settings]';
+    const signatoryName = orgData.signatoryName || latestSchedule.snapshotTermsConfig?.signatory?.name || (latestSchedule.snapshotTermsConfig as any)?.signatoryName || '[Principal Name]';
+    const signatoryTitle = orgData.signatoryTitle || latestSchedule.snapshotTermsConfig?.signatory?.title || (latestSchedule.snapshotTermsConfig as any)?.signatoryTitle || '[Principal Title]';
+
+    const baseDesignFee = latestSchedule.snapshotEngagement?.designFee || projectContext.financials?.approvedDesignValue || activeTier?.summary?.designFee || 0;
+    const baseExecutionValue = latestSchedule.snapshotEngagement?.executionValue || projectContext.financials?.approvedExecutionValue || activeTier?.summary?.totalSell || 0;
+
+    const termsDockets = projectContext.termsDockets || [];
+    let latestDocket = null;
+    if (termsDockets.length > 0) {
+        latestDocket = termsDockets.reduce((prev, curr) => (prev.generatedAt > curr.generatedAt) ? prev : curr);
+    }
+    const resolvedDocketRef = (latestSchedule?.docketRef && latestSchedule.docketRef !== '____') 
+        ? latestSchedule.docketRef 
+        : (projectContext.engagement?.docketRef || latestDocket?.docketRef || '____');
+
+    if (latestSchedule?.snapshotEngagement && latestSchedule?.snapshotPaymentStructure) {
+        const { designFee, executionValue } = latestSchedule.snapshotEngagement;
+        const struct = latestSchedule.snapshotPaymentStructure;
+        for (const adv of latestSchedule.advances) {
+            const base = adv.phase === 'design' ? baseDesignFee : baseExecutionValue;
+            const expectedAmount = Math.round((adv.percentage / 100) * base);
+            if (!adv.amount || adv.amount === 0) {
+                adv.amount = expectedAmount;
+            } else if (adv.amount !== expectedAmount) {
+                console.warn(`Data Integrity Error: Advance amount for ${adv.label} (${adv.amount}) does not match computed value ${expectedAmount} (Base: ${base}, Pct: ${adv.percentage}%)`);
+            }
+            
+            // Validate percentage against stored structure
+            const stages = adv.phase === 'design' ? struct.designStages : struct.executionStages;
+            const originalStage = stages?.find(s => s.code === adv.advanceCode || s.name === adv.label);
+            if (originalStage && adv.percentage !== originalStage.pct) {
+                console.warn(`Data Integrity Error: Advance percentage for ${adv.label} (${adv.percentage}%) does not match stored structure (${originalStage.pct}%)`);
+            }
+        }
+    }
+
+    const designPctTotal = designAdvances.reduce((sum, a) => sum + a.percentage, 0);
+    const designAmountTotal = designAdvances.reduce((sum, a) => sum + (a.amount || 0), 0);
+    const executionPctTotal = executionAdvances.reduce((sum, a) => sum + a.percentage, 0) + handoverAdvances.reduce((sum, a) => sum + a.percentage, 0);
+    const executionAmountTotal = executionAdvances.reduce((sum, a) => sum + (a.amount || 0), 0) + handoverAdvances.reduce((sum, a) => sum + (a.amount || 0), 0);
 
     return (
         <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in pb-20 font-sans">
@@ -146,13 +364,31 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext 
                         <FileText className="w-6 h-6 text-[#6f7f52]" />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-slate-800 leading-tight">Payment Schedule <span className="font-mono text-slate-500 ml-2 text-sm">{latestSchedule.versionLabel}</span></h2>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-bold text-indigo-900 leading-tight">Payment Schedule</h2>
+                            {isOwner && sortedHistory.length > 1 ? (
+                                <select 
+                                    className="ml-2 font-mono text-sm bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700 outline-none focus:border-indigo-300"
+                                    value={selectedScheduleId || ''}
+                                    onChange={(e) => setSelectedScheduleId(e.target.value || null)}
+                                >
+                                    <option value="">Latest ({sortedHistory[0].versionLabel})</option>
+                                    {sortedHistory.map(sh => (
+                                        <option key={sh.id} value={sh.id}>
+                                            {sh.versionLabel} {sh.status === 'draft' ? '(Draft)' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <span className="font-mono text-slate-500 ml-2 text-sm">{latestSchedule.versionLabel}</span>
+                            )}
+                        </div>
                         <div className="flex items-center gap-2 mt-1">
                             <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded ${latestSchedule.status === 'draft' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                                 {latestSchedule.status === 'draft' ? 'Draft Version' : 'Sent & Current'}
                             </span>
                             <span className="text-xs text-slate-500">
-                                Governed by Docket: <strong className="text-slate-700 font-mono">{latestSchedule.docketRef || 'None'}</strong>
+                                Governed by Docket: <strong className="text-slate-700 font-mono">{resolvedDocketRef === '____' ? '----' : resolvedDocketRef}</strong>
                             </span>
                         </div>
                     </div>
@@ -166,13 +402,20 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext 
                     </button>
                     {latestSchedule.status === 'draft' && (
                         <>
-                            <button onClick={handleRegenerate} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2">
-                                Regenerate
-                            </button>
+                            {!isLocked && (
+                                <button onClick={handleRegenerate} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2">
+                                    Regenerate
+                                </button>
+                            )}
                             <button onClick={handleSend} className="px-4 py-2 bg-[#2f4a2e] border border-[#2f4a2e] text-white font-bold text-sm rounded-lg hover:bg-[#1a2d19] transition flex items-center gap-2 shadow-sm">
                                 <Send className="w-4 h-4" /> Mark as Sent
                             </button>
                         </>
+                    )}
+                    {latestSchedule.status !== 'draft' && !isLocked && (
+                        <button onClick={handleRegenerate} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2">
+                            Regenerate
+                        </button>
                     )}
                 </div>
             </div>
@@ -186,146 +429,171 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext 
 
             {/* Document Render Container */}
             <div className={`transition-all duration-500 ${previewMode ? 'bg-[#e2e8f0] p-8 -mx-8 flex justify-center rounded-3xl overflow-x-auto shadow-inner' : ''}`}>
-                <div id="payment-schedule-pdf-render" className={previewMode ? 'print-only' : ''}>
-                    <StudioDocumentShell 
-                        orgData={orgData} 
-                        docHeaderType="DOCUMENT 2 OF 2" 
-                        docHeaderTitle="ADVANCE PAYMENT SCHEDULE\nPROJECT-SPECIFIC" 
-                        pageCount={2}
-                    >
-                        <div className="space-y-8" style={{ fontSize: '11px', lineHeight: '1.6' }}>
-                            <div className="text-center space-y-2 border-b border-[#d9d6cc] pb-8">
-                                <h1 className="text-2xl font-bold uppercase tracking-widest text-[#2f4a2e] m-0">Advance Payment Schedule</h1>
-                                <p className="text-[#666666] max-w-2xl mx-auto my-0">Project-specific advance payment structure for the engagement. This document is governed by and to be read alongside the Terms of Engagement Docket ({latestSchedule.docketRef || '_____'}). It may be revised by mutual agreement. Revisions do not require re-acknowledgement of the Terms of Engagement Docket.</p>
-                            </div>
+                <div id="payment-schedule-pdf-render" className={`payment-schedule-template ${previewMode ? 'print-only' : ''}`}>
+                    <style dangerouslySetInnerHTML={{__html: `
+                        :root{
+                            --ink:#1f2328; --ink-soft:#3f464e; --muted:#727a82;
+                            --line:#e6e3dc; --line-soft:#efece6; --paper:#fbfaf7; --card:#ffffff;
+                            --slate:#1f2328; --accent:#1e3a8a; --accent-soft:#eef2fb; --gold:#b08d57;
+                        }
+                        .payment-schedule-template {
+                            background:var(--paper); color:var(--ink);
+                            font-family:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+                            line-height:1.6; font-size:14px; -webkit-font-smoothing:antialiased;
+                            width: 100%; max-width: 820px;
+                        }
+                        .payment-schedule-template * { box-sizing:border-box; }
+                        .payment-schedule-template .sheet{max-width:820px; margin:0 auto; background:var(--card); padding:40px 52px 50px;}
+                        .payment-schedule-template header.mast{border-bottom:2px solid var(--slate); padding-bottom:18px; display:flex; justify-content:space-between; align-items:flex-end;}
+                        .payment-schedule-template .brand{font-size:14px; letter-spacing:.22em; text-transform:uppercase; font-weight:800;}
+                        .payment-schedule-template .tagline{font-size:11px; color:var(--muted); letter-spacing:.05em; margin-top:3px;}
+                        .payment-schedule-template .docnum{font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--gold); font-weight:700; text-align:right;}
+                        .payment-schedule-template .title{margin:20px 0 4px; font-size:21px; font-weight:800; letter-spacing:-.01em;}
+                        .payment-schedule-template .preamble{font-size:12.5px; color:var(--ink-soft); margin:0 0 14px;}
+                        .payment-schedule-template .metabar{display:grid; grid-template-columns:1fr 1fr 1fr; border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:18px 0 6px;}
+                        .payment-schedule-template .metabar div{padding:10px 14px; border-bottom:1px solid var(--line-soft); border-right:1px solid var(--line-soft);}
+                        .payment-schedule-template .metabar div:nth-child(3n){border-right:none;}
+                        .payment-schedule-template .metabar div:nth-child(-n+3){background:#faf9f5;}
+                        .payment-schedule-template .metabar .k{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700;}
+                        .payment-schedule-template .metabar .v{font-weight:700; color:var(--ink); margin-top:2px; font-size:13px;}
+                        .payment-schedule-template .valuebar{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0 6px;}
+                        .payment-schedule-template .vb{border:1px solid var(--line); border-radius:10px; padding:12px 16px; background:#fff;}
+                        .payment-schedule-template .vb .k{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700;}
+                        .payment-schedule-template .vb .v{font-weight:800; color:var(--slate); font-size:18px; margin-top:3px; font-variant-numeric:tabular-nums;}
+                        .payment-schedule-template h2.sec{font-size:13px; letter-spacing:.1em; text-transform:uppercase; font-weight:800; color:var(--slate);
+                            margin:24px 0 8px; padding-top:14px; border-top:1px solid var(--line); display:flex; align-items:center; gap:10px;}
+                        .payment-schedule-template .pill{font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:2px 9px; border-radius:999px;}
+                        .payment-schedule-template .pill.d{background:var(--accent-soft); color:var(--accent);} 
+                        .payment-schedule-template .pill.e{background:#f3efe7; color:var(--gold);}
+                        .payment-schedule-template table{width:100%; border-collapse:collapse; margin:4px 0; font-size:13px;}
+                        .payment-schedule-template thead th{background:var(--slate); color:#fff; text-align:left; padding:7px 10px; font-size:10px; letter-spacing:.05em; text-transform:uppercase; font-weight:700;}
+                        .payment-schedule-template thead th.r{text-align:right;}
+                        .payment-schedule-template tbody td{padding:9px 10px; border-bottom:1px solid var(--line-soft); vertical-align:top; color:var(--ink-soft); font-size: 12.5px;}
+                        .payment-schedule-template tbody td .nm{font-weight:700; color:var(--ink); display:block;}
+                        .payment-schedule-template tbody td .sm{font-size:11.5px; color:var(--muted);}
+                        .payment-schedule-template td.pct{text-align:right; font-weight:800; color:var(--slate); font-variant-numeric:tabular-nums; white-space:nowrap;}
+                        .payment-schedule-template td.amt{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:600; color:var(--ink);}
+                        .payment-schedule-template tfoot td{padding:8px 10px; font-weight:800; color:var(--slate); border-top:2px solid var(--slate); font-variant-numeric:tabular-nums; font-size: 13px;}
+                        .payment-schedule-template tfoot td.r{text-align:right;}
+                        .payment-schedule-template .highlight{background:#fdf8ef; border:1px solid #ecdcc0; border-left:3px solid var(--gold); border-radius:0 10px 10px 0; padding:12px 16px; margin:16px 0;}
+                        .payment-schedule-template .highlight .lab{font-size:10px; letter-spacing:.12em; text-transform:uppercase; font-weight:800; color:#8a6b34; display:block; margin-bottom:5px;}
+                        .payment-schedule-template .highlight p{margin:0; color:#5c4a2a; font-size:12.5px;}
+                        .payment-schedule-template .note{font-size:11px; color:var(--muted); margin:8px 0 0; font-style:italic;}
+                        .payment-schedule-template .sig{display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:32px;}
+                        .payment-schedule-template .sig .line{border-top:1px solid var(--ink); padding-top:9px; margin-top:40px; font-size:12px; color:var(--muted);}
+                        .payment-schedule-template .sig .line b{display:block; color:var(--ink); font-size:12.5px; margin-bottom:2px;}
+                        .payment-schedule-template footer{margin-top:32px; padding-top:12px; border-top:1px solid var(--line); font-size:10.5px; color:var(--muted); text-align:center; letter-spacing:.04em;}
+                        @media print{ 
+                            .payment-schedule-template {background:#fff;} 
+                            .payment-schedule-template .sheet{padding:0 8px;} 
+                            .payment-schedule-template .sec-group { break-inside: avoid; page-break-inside: avoid; }
+                            .payment-schedule-template h2.sec{break-after:avoid;}
+                            .payment-schedule-template .highlight, .payment-schedule-template tr{break-inside:avoid; page-break-inside:avoid;} 
+                            .payment-schedule-template footer { display: none; }
+                        }
+                        @media(max-width:600px){ 
+                            .payment-schedule-template .sheet{padding:32px 22px 56px;} 
+                            .payment-schedule-template .metabar{grid-template-columns:1fr;} 
+                            .payment-schedule-template .metabar div{border-right:none;} 
+                            .payment-schedule-template .valuebar, .payment-schedule-template .sig{grid-template-columns:1fr;} 
+                        }
+                    `}} />
 
-                            <div className="metadata-grid bg-[#f7f1e6] p-5 rounded-md border border-[#d9d6cc] grid grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-2 text-[11px]" style={{ pageBreakInside: 'avoid' }}>
-                                <div>
-                                    <p className="font-bold text-[#6f7f52] uppercase tracking-wider text-[9px] mb-1 m-0">Version</p>
-                                    <p className="font-semibold text-[#222222] m-0">v{latestSchedule.version}.0</p>
-                                </div>
-                                <div>
-                                    <p className="font-bold text-[#6f7f52] uppercase tracking-wider text-[9px] mb-1 m-0">Issued Date</p>
-                                    <p className="font-semibold text-[#222222] m-0">{new Date(latestSchedule.issuedAt).toLocaleDateString('en-IN')}</p>
-                                </div>
-                                <div>
-                                    <p className="font-bold text-[#6f7f52] uppercase tracking-wider text-[9px] mb-1 m-0">Governs Terms Docket</p>
-                                    <p className="font-semibold text-[#222222] m-0">{latestSchedule.docketRef || '_____'}</p>
-                                </div>
-                                <div>
-                                    <p className="font-bold text-[#6f7f52] uppercase tracking-wider text-[9px] mb-1 m-0">Client Name</p>
-                                    <p className="font-semibold text-[#222222] m-0">{projectContext.clientName}</p>
-                                </div>
-                                <div>
-                                    <p className="font-bold text-[#6f7f52] uppercase tracking-wider text-[9px] mb-1 m-0">Project Name</p>
-                                    <p className="font-semibold text-[#222222] m-0">{projectContext.name}</p>
-                                </div>
-                                <div>
-                                    <p className="font-bold text-[#6f7f52] uppercase tracking-wider text-[9px] mb-1 m-0">Total Contract Value</p>
-                                    {/* Defaulting to + GST. If inclusive requested in future, logic could flip based on settings */}
-                                    <p className="font-bold text-[#2f4a2e] m-0">₹{(latestSchedule.contractValue || 0).toLocaleString('en-IN')} + GST</p>
-                                </div>
+                    <div className="sheet">
+                        <header className="mast">
+                            <div>
+                                <div className="brand">{orgData.orgName || 'Form Factors Design Studio'}</div>
+                                <div className="tagline">Minimal Design. Maximum Impact.</div>
                             </div>
+                            <div className="docnum">Document 2 of 2<br/>Payment Schedule</div>
+                        </header>
 
-                            <div className="mt-8">
-                                <table className="w-full text-[10px] text-left border border-[#d9d6cc] bg-white">
-                                    <thead>
-                                        <tr className="bg-[#2f4a2e] text-white">
-                                            <th className="py-2 px-2 w-8 border-r border-[#6f7f52]">#</th>
-                                            <th className="py-2 px-3">Advance Name</th>
-                                            <th className="py-2 px-3 text-center">%</th>
-                                            <th className="py-2 px-3 text-right">Amount Excl. GST</th>
-                                            <th className="py-2 px-3">Due</th>
-                                            <th className="py-2 px-3">Unlocks</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {designAdvances.length > 0 && (
-                                            <>
-                                                <tr>
-                                                    <td colSpan={6} className="bg-[#f2f2f2] text-[#222222] font-bold text-[9px] uppercase tracking-widest py-1.5 px-3 border-b border-[#d9d6cc]">Design Phase</td>
-                                                </tr>
-                                                {designAdvances.map((adv, i) => formatAdvanceRow(adv, i))}
-                                            </>
-                                        )}
-                                        {executionAdvances.length > 0 && (
-                                            <>
-                                                <tr>
-                                                    <td colSpan={6} className="bg-[#f2f2f2] text-[#222222] font-bold text-[9px] uppercase tracking-widest py-1.5 px-3 border-y border-[#d9d6cc]">Execution Phase</td>
-                                                </tr>
-                                                {executionAdvances.map((adv, i) => formatAdvanceRow(adv, i + designAdvances.length))}
-                                            </>
-                                        )}
-                                        {handoverAdvances.length > 0 && (
-                                            <>
-                                                <tr>
-                                                    <td colSpan={6} className="bg-[#f2f2f2] text-[#2f4a2e] font-bold text-[9px] uppercase tracking-widest py-1.5 px-3 border-y border-[#d9d6cc]">Handover</td>
-                                                </tr>
-                                                {handoverAdvances.map((adv, i) => formatAdvanceRow(adv, i + designAdvances.length + executionAdvances.length, true))}
-                                            </>
-                                        )}
-                                        {latestSchedule.advances.length === 0 && (
-                                            <tr>
-                                                <td colSpan={6} className="py-8 text-center text-slate-400 italic">No advances defined. Please update Payment Calc.</td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                        <h1 className="title">Advance Payment Schedule</h1>
+                        <p className="preamble">Project-specific advance payment structure for this engagement. Governed by and to be read alongside the Terms of Engagement Governing Docket ({resolvedDocketRef === '____' ? '----' : resolvedDocketRef}). It may be revised by mutual agreement; revisions do not require re-acknowledgement of the Docket.</p>
 
-                            <div className="highlight-box bg-white border border-[#2f4a2e] p-5 rounded-md my-6 page-break-inside-avoid">
-                                <h3 className="font-bold text-[#2f4a2e] text-[11px] tracking-wider mb-2 m-0 uppercase">IMPORTANT: REGARDING THE HANDOVER ADVANCE</h3>
-                                <p className="mb-0 text-[#222222] leading-relaxed">The Handover Advance unlocks the formal handover package, including keys, dossier, and warranty certificate. It is due upon completion of all installation and finishing work and is not conditional upon snag clearance. Snag items are addressed under warranty as per Clause 6.4 of the Terms of Engagement Docket {latestSchedule.docketRef || ''}.</p>
-                            </div>
-
-                            <div className="revision-history mt-8 page-break-inside-avoid">
-                                <h3 className="font-bold text-[#2f4a2e] text-[12px] uppercase tracking-wide border-b border-[#d9d6cc] pb-1 mb-3">Revision History</h3>
-                                <table className="w-full text-[10px] text-left border border-[#d9d6cc]">
-                                    <thead>
-                                        <tr className="bg-[#f7f1e6] text-[#2f4a2e]">
-                                            <th className="py-2 px-3 border-b border-[#d9d6cc]">Version</th>
-                                            <th className="py-2 px-3 border-b border-[#d9d6cc]">Date</th>
-                                            <th className="py-2 px-3 border-b border-[#d9d6cc]">Changes</th>
-                                            <th className="py-2 px-3 border-b border-[#d9d6cc]">Issued By</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {sortedHistory.length > 0 ? sortedHistory.map((s) => (
-                                            <tr key={s.id} className="border-b border-[#d9d6cc]">
-                                                <td className="py-2 px-3 font-medium">v{s.version}.0</td>
-                                                <td className="py-2 px-3">{new Date(s.issuedAt).toLocaleDateString('en-IN')}</td>
-                                                <td className="py-2 px-3">{s.version === 1 ? 'Initial Payment Schedule issued with Design Agreement' : s.revisionNote || 'Schedule mutually revised'}</td>
-                                                <td className="py-2 px-3">Form Factors Design Studio</td>
-                                            </tr>
-                                        )) : (
-                                            <tr className="border-b border-[#d9d6cc]">
-                                                <td className="py-2 px-3 font-medium">v1.0</td>
-                                                <td className="py-2 px-3">{new Date().toLocaleDateString('en-IN')}</td>
-                                                <td className="py-2 px-3">Initial Payment Schedule issued with Design Agreement</td>
-                                                <td className="py-2 px-3">Form Factors Design Studio</td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div className="signature-block mt-12 pt-8 border-t border-[#d9d6cc] grid grid-cols-2 gap-8 page-break-inside-avoid">
-                                <div>
-                                    <div className="h-12 mb-2"></div>
-                                    <div className="w-48 border-t border-[#222222]"></div>
-                                    <p className="mt-2 font-bold text-[12px] text-[#222222] m-0">Client Signature & Date</p>
-                                    <p className="text-[10px] text-[#666666] m-0">{projectContext.clientName}</p>
-                                </div>
-                                <div>
-                                    <div className="h-12 mb-2"></div>
-                                    <div className="w-48 border-t border-[#222222]"></div>
-                                    <p className="mt-2 font-bold text-[12px] text-[#222222] m-0">For Form Factors Design Studio</p>
-                                    <p className="text-[10px] text-[#666666] m-0">Ar. Mayuri Kaulgud<br/>Principal Architect</p>
-                                </div>
-                            </div>
-
+                        <div className="metabar">
+                            <div><div className="k">Version</div><div className="v">v{latestSchedule.version}.0</div></div>
+                            <div><div className="k">Issued</div><div className="v">{new Date(latestSchedule.issuedAt).toLocaleDateString('en-IN')}</div></div>
+                            <div><div className="k">Governs Docket</div><div className="v">{resolvedDocketRef === '____' ? '----' : resolvedDocketRef}</div></div>
+                            <div><div className="k">Client</div><div className="v">{projectContext.clientName}</div></div>
+                            <div><div className="k">Project</div><div className="v">{projectContext.name}</div></div>
+                            <div><div className="k">GST</div><div className="v">18% extra</div></div>
                         </div>
-                    </StudioDocumentShell>
+
+                        <div className="valuebar">
+                            <div className="vb"><div className="k">Design Fee (excl. GST)</div><div className="v">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${baseDesignFee.toLocaleString('en-IN')}` : '[HIDDEN]'}</div></div>
+                            <div className="vb"><div className="k">Execution Value (excl. GST)</div><div className="v">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${baseExecutionValue.toLocaleString('en-IN')}` : '[HIDDEN]'}</div></div>
+                        </div>
+
+                        {designAdvances.length > 0 && (
+                            <div className="sec-group">
+                                <h2 className="sec">A &middot; Design Phase <span className="pill d">% OF DESIGN FEE</span></h2>
+                                <table>
+                                    <thead><tr><th>STAGE</th><th>PAID WHEN</th><th className="r">%</th><th className="r">AMOUNT (EXCL. GST)</th><th className="r">+18% GST</th><th className="r">TOTAL (INCL. GST)</th></tr></thead>
+                                    <tbody>
+                                        {designAdvances.map((adv, i) => (
+                                            <tr key={`d-${i}`}>
+                                                <td><span className="nm">{adv.advanceCode || `D${i+1}`} &middot; {adv.label}</span><span className="sm">{adv.unlocks || ''}</span></td>
+                                                <td>{adv.dueCondition}</td>
+                                                <td className="pct">{adv.percentage}%</td>
+                                                <td className="amt">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${(adv.amount || 0).toLocaleString('en-IN')}` : '--'}</td>
+                                                <td className="amt text-slate-500">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * 0.18).toLocaleString('en-IN')}` : '--'}</td>
+                                                <td className="amt font-bold">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * 1.18).toLocaleString('en-IN')}` : '--'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot><tr><td colSpan={2}>Design Fee total</td><td className="r">{designPctTotal}%</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${designAmountTotal.toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal * 0.18).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal * 1.18).toLocaleString('en-IN')}` : '--'}</td></tr></tfoot>
+                                </table>
+                            </div>
+                        )}
+
+                        {(executionAdvances.length > 0 || handoverAdvances.length > 0) && (
+                            <div className="sec-group">
+                                <h2 className="sec">B &middot; Execution Phase <span className="pill e">% OF EXECUTION VALUE</span></h2>
+                                <table>
+                                    <thead><tr><th>STAGE</th><th>PAID WHEN</th><th className="r">%</th><th className="r">AMOUNT (EXCL. GST)</th><th className="r">+18% GST</th><th className="r">TOTAL (INCL. GST)</th></tr></thead>
+                                    <tbody>
+                                        {executionAdvances.map((adv, i) => (
+                                            <tr key={`e-${i}`}>
+                                                <td><span className="nm">{adv.advanceCode || `E${i+1}`} &middot; {adv.label}</span><span className="sm">{adv.unlocks || ''}</span></td>
+                                                <td>{adv.dueCondition}</td>
+                                                <td className="pct">{adv.percentage}%</td>
+                                                <td className="amt">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${(adv.amount || 0).toLocaleString('en-IN')}` : '--'}</td>
+                                                <td className="amt text-slate-500">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * 0.18).toLocaleString('en-IN')}` : '--'}</td>
+                                                <td className="amt font-bold">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * 1.18).toLocaleString('en-IN')}` : '--'}</td>
+                                            </tr>
+                                        ))}
+                                        {handoverAdvances.map((adv, i) => (
+                                            <tr key={`h-${i}`}>
+                                                <td><span className="nm">{adv.advanceCode || 'H1'} &middot; {adv.label}</span><span className="sm">{adv.unlocks || ''}</span></td>
+                                                <td>{adv.dueCondition}</td>
+                                                <td className="pct">{adv.percentage}%</td>
+                                                <td className="amt">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${(adv.amount || 0).toLocaleString('en-IN')}` : '--'}</td>
+                                                <td className="amt text-slate-500">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * 0.18).toLocaleString('en-IN')}` : '--'}</td>
+                                                <td className="amt font-bold">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * 1.18).toLocaleString('en-IN')}` : '--'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot><tr><td colSpan={2}>Execution total</td><td className="r">{executionPctTotal}%</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${executionAmountTotal.toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * 0.18).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * 1.18).toLocaleString('en-IN')}` : '--'}</td></tr></tfoot>
+                                </table>
+                                <p className="note">Percentages are fixed; amounts are calculated from the values above. Each payment is triggered by the completed milestone shown, not by a calendar date.</p>
+                            </div>
+                        )}
+
+                        {handoverAdvances.length > 0 && (
+                            <div className="highlight">
+                                <span className="lab">Regarding the Completion &amp; Handover Advance</span>
+                                <p>{latestSchedule.snapshotPaymentStructure?.handoverClause || "The Completion & Handover Advance unlocks the formal handover package — keys, dossier and warranty certificate. It is due upon completion of all installation and finishing work and is not conditional upon snag clearance. Snag items are addressed under warranty as per Clause 6.4 of the Terms of Engagement Governing Docket."}</p>
+                            </div>
+                        )}
+
+                        <div className="sig">
+                            <div><div className="line"><b>Client Signature &amp; Date</b>{projectContext.clientName}</div></div>
+                            <div><div className="line"><b>For {studioName}</b>{signatoryName} &middot; {signatoryTitle}</div></div>
+                        </div>
+
+                        <footer>{orgData.orgName || 'Form Factors Design Studio'} &middot; Minimal Design. Maximum Impact. &middot; {orgData.officeAddress || '[studio address]'} &middot; {orgData.contactEmail || 'formfactors.operations@gmail.com'}</footer>
+                    </div>
                 </div>
             </div>
         </div>

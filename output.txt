@@ -1,0 +1,53 @@
+104:  const [bank, setBank] = useState<Item[]>([]);
+257:        const p = localStorage.getItem("ffds_item_bank");
+263:      let bankModified = false;
+269:          bankModified = true;
+279:            bankModified = true;
+289:      if (newItems.length > 0 || bankModified) {
+291:          `Merging ${newItems.length} new items into bank and fixing categories...`,
+303:      if (newItems.length > 0 || bankModified) {
+314:        const p = localStorage.getItem("ffds_draft_item_bank");
+422:    if (isDataLoaded && bank.length > 0) {
+424:        db.saveBank(bank);
+428:  }, [bank, isDataLoaded]);
+466:    const bankMap = new Map<string, Item>(bank.map((i) => [i.id, i]));
+470:      projectContext.adHocItems.forEach((i) => bankMap.set(i.id, i));
+478:        const item = bankMap.get(b.bankId);
+489:          // Safe calculation if item is completely missing from bank and adHocItems
+534:  }, [tiers, bank, projectContext]);
+628:    const bankMap = new Map<string, Item>(bank.map((i) => [i.id, i]));
+632:        const item = bankMap.get(b.bankId);
+643:  }, [activeTierId, tiers, bank]);
+664:    const bankMap = new Map<string, Item>(bank.map((i) => [i.id, i]));
+666:      projectContext.adHocItems.forEach((i) => bankMap.set(i.id, i));
+671:        bankMap.get(b.bankId) ||
+673:          id: b.bankId,
+680:          specs: "Details missing from bank",
+691:  }, [activeProject, tiers, bank, projectContext?.adHocItems]);
+853:  const handleViewInBank = (bankId: string) => {
+854:    setHighlightedBankItemId(bankId);
+855:    setActiveTab("bank");
+863:    // Sync entirely new items to bank so they aren't lost to "Custom / Legacy Item"
+866:      if (!bank.find((b) => b.id === toAdd.item.id)) {
+877:      bankId: item.id,
+1173:    "bank",
+1330:        bank={bank}
+1395:          bank={[]}
+1520:                  {activeTab === "bank" && (
+1549:                                  "Are you sure you want to completely overwrite the LIVE item bank with your Draft sandbox? This will affect new projects and prices.",
+1572:                                setDraftBank(bank);
+1583:                        bank={isDraftBankMode ? draftBank : bank}
+1593:                      bank={bank}
+1632:                              bank={bank}
+1660:                              bank={bank}
+1690:                          bank={bank}
+1719:                          bank={bank}
+1747:                          bank={bank}
+1770:                          bank={bank}
+1798:                          bank={bank}
+1831:                          bank={bank}
+1847:                          bank={bank}
+1861:                          bank={bank}
+1911:                              bankId: newBankItem.id,
+1936:                          bank={bank}
+1937:                          setBank={setBank} // NEW: Pass bank setter for dynamic creation

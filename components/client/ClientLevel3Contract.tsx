@@ -121,7 +121,7 @@ const EditableText: React.FC<{
 
 const ContractSection: React.FC<{ number: number; title: React.ReactNode; children: React.ReactNode, className?: string }> = ({ number, title, children, className = "" }) => (
     <div className={`mb-12 break-inside-avoid ${className}`}>
-        <h3 className="text-xl font-bold text-slate-900 uppercase tracking-wide border-b-2 border-slate-900 pb-3 mb-6 font-opensans flex gap-2 items-start">
+        <h3 className="text-xl font-bold text-indigo-950 uppercase tracking-wide border-b-2 border-indigo-950 pb-3 mb-6 font-opensans flex gap-2 items-start">
             <span className="text-slate-400">{number}.</span> 
             <div className="flex-grow">{title}</div>
         </h3>
@@ -145,7 +145,7 @@ const PaymentTable: React.FC<{
 }> = ({ milestones, isEditing, onUpdateMilestone, onAddMilestone, onDeleteMilestone }) => (
     <div className="mb-6 break-inside-avoid shadow-sm rounded-lg border border-slate-200 overflow-hidden">
         <table className="w-full text-sm">
-            <thead className="bg-slate-900 text-white font-bold text-[10px] uppercase">
+            <thead className="bg-indigo-950 text-white font-bold text-[10px] uppercase">
                 <tr>
                     <th className="text-left p-3 w-1/4">Stage</th>
                     <th className="text-left p-3">Milestone Trigger</th>
@@ -157,7 +157,7 @@ const PaymentTable: React.FC<{
             <tbody className="divide-y divide-slate-100 bg-white">
                 {milestones.map((m, i) => (
                     <tr key={i} className="hover:bg-slate-50 group">
-                        <td className="p-3 font-bold text-slate-800">
+                        <td className="p-3 font-bold text-indigo-900">
                             {isEditing ? (
                                 <input 
                                     type="text" 
@@ -177,7 +177,7 @@ const PaymentTable: React.FC<{
                                 />
                             ) : m.description}
                         </td>
-                        <td className="text-right p-3 font-mono font-bold text-slate-900">
+                        <td className="text-right p-3 font-mono font-bold text-indigo-950">
                             {isEditing ? (
                                 <div className="flex items-center justify-end">
                                     <input 
@@ -353,7 +353,7 @@ const ExecutionBlock: React.FC<{ clientName: string, location: string, projectId
                             <h4 className="text-lg font-black text-emerald-800 uppercase tracking-widest">Digitally Executed</h4>
                         </div>
                         <p className="text-sm text-slate-600 font-medium">
-                            Authorized by <span className="font-bold text-slate-900">{currentSignoff?.clientName || clientName}</span>
+                            Authorized by <span className="font-bold text-indigo-950">{currentSignoff?.clientName || clientName}</span>
                         </p>
                         <p className="text-xs text-slate-500 mt-1 font-mono">Ref: {refIdText} • {timestamp}</p>
                         {currentSignoff?.ipAddress && currentSignoff?.ipAddress !== 'Internal' && (
@@ -462,7 +462,7 @@ const ExecutionBlock: React.FC<{ clientName: string, location: string, projectId
         <div className="mt-12 bg-slate-50 border border-slate-200 rounded-xl p-6 relative break-inside-avoid">
             <div className="flex flex-col md:flex-row justify-between items-start gap-6">
                 <div className="flex-grow">
-                    <h4 className="text-sm font-bold text-slate-900 uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-indigo-950 uppercase tracking-widest mb-2 flex items-center gap-2">
                         Execution Protocol
                     </h4>
                     <p className="text-xs text-slate-600 leading-relaxed max-w-xl mb-4">
@@ -570,7 +570,7 @@ const ExecutionBlock: React.FC<{ clientName: string, location: string, projectId
                             <p className="text-[10px] uppercase tracking-widest font-bold text-slate-500">Manual Approval Reference</p>
                             <input type="text" value={manualRef} onChange={e => setManualRef(e.target.value)} className="text-xs p-2 border border-slate-200 rounded w-full outline-none focus:border-slate-400" placeholder="e.g. Email from Client" />
                             <div className="flex items-center gap-2">
-                                <button onClick={handleMarkExecuted} className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded text-xs flex-1">Mark Executed</button>
+                                <button onClick={handleMarkExecuted} className="px-3 py-2 bg-indigo-900 hover:bg-indigo-950 text-white font-bold rounded text-xs flex-1">Mark Executed</button>
                                 <button onClick={() => setShowMarkManual(false)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded text-xs flex-1">Cancel</button>
                             </div>
                         </div>
@@ -943,10 +943,10 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
     let sectionCounter = 1;
 
     return (
-        <div id="execution-contract-root" className="bg-white p-8 md:p-16 max-w-5xl mx-auto shadow-2xl my-8 font-opensans text-slate-800 print:shadow-none print:my-0 print:w-full print:max-w-none print:p-0 print:mx-0">
+        <div id="execution-contract-root" className="bg-white p-8 md:p-16 max-w-5xl mx-auto shadow-2xl my-8 font-opensans text-indigo-900 print:shadow-none print:my-0 print:w-full print:max-w-none print:p-0 print:mx-0">
             
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b-4 border-slate-900 pb-8 mb-12 gap-6 relative">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b-4 border-indigo-950 pb-8 mb-12 gap-6 relative">
                 {isShowingOperative && operativeBoq && (
                     <div className="absolute top-0 right-0 -mt-16 bg-blue-50 border border-blue-200 text-blue-800 text-[10px] uppercase font-bold py-1 px-3 rounded shadow-sm flex items-center space-x-1">
                         <CheckBadgeIcon className="w-3 h-3 text-blue-500" />
@@ -960,7 +960,7 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                     </div>
                 )}
                 <div className="flex-grow w-full">
-                    <h1 className="text-4xl font-extrabold uppercase tracking-tight text-slate-900 leading-none">
+                    <h1 className="text-4xl font-extrabold uppercase tracking-tight text-indigo-950 leading-none">
                         <EditableText isEditing={isEditing} value={content.titleLine1} onChange={v => updateContent('titleLine1', v)} />
                         <EditableText isEditing={isEditing} value={content.titleLine2} onChange={v => updateContent('titleLine2', v)} className="mt-2 text-blue-800" />
                     </h1>
@@ -981,13 +981,13 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 mb-6">
                     <div>
                         <p className="text-[10px] text-slate-400 uppercase font-bold mb-1 tracking-widest">Client</p>
-                        <p className="font-bold text-lg text-slate-900">{projectContext.clientName || projectContext.name}</p>
+                        <p className="font-bold text-lg text-indigo-950">{projectContext.clientName || projectContext.name}</p>
                         <p className="text-slate-600">{projectContext.location}</p>
                         {projectContext.config && <p className="text-xs text-slate-500 mt-1">{projectContext.config} Residence ({projectContext.area} sq.ft)</p>}
                     </div>
                     <div>
                         <p className="text-[10px] text-slate-400 uppercase font-bold mb-1 tracking-widest">Service Partner</p>
-                        <p className="font-bold text-lg text-slate-900">{settings?.companyName || orgData.orgName || 'Studio'}</p>
+                        <p className="font-bold text-lg text-indigo-950">{settings?.companyName || orgData.orgName || 'Studio'}</p>
                         <p className="text-slate-600">{settings?.address || 'Thane, Maharashtra'}</p>
                         {settings?.gstNumber && <p className="text-xs text-slate-500 mt-1">GST: {settings.gstNumber}</p>}
                         {settings?.email && <p className="text-xs text-slate-500">{settings.email} {settings?.phone ? `| ${settings.phone}` : ''}</p>}
@@ -999,7 +999,7 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                 </div>
 
                 {/* Unified Value Block */}
-                <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg print:bg-white print:text-black print:border-2 print:border-black">
+                <div className="bg-indigo-950 text-white p-6 rounded-xl shadow-lg print:bg-white print:text-indigo-950 print:border-2 print:border-indigo-950">
                     <div className="flex flex-col md:flex-row justify-between items-start gap-8">
                         <div className="flex-grow max-w-md">
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-700 pb-2">Financial Summary</p>
@@ -1079,7 +1079,7 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
 
                         return (
                             <div key={room} className="break-inside-avoid border-b border-slate-100 pb-6 last:border-0">
-                                <h4 className="font-bold text-slate-900 text-base uppercase tracking-wide mb-3 flex justify-between items-center">
+                                <h4 className="font-bold text-indigo-950 text-base uppercase tracking-wide mb-3 flex justify-between items-center">
                                     {room}
                                 </h4>
                                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 text-sm">
@@ -1092,7 +1092,7 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                                                 className="w-full bg-blue-50 border border-blue-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none resize-none min-h-[120px]"
                                             />
                                         ) : (
-                                            <ul className="list-disc list-inside space-y-1 text-slate-800 font-medium marker:text-emerald-300 text-xs">
+                                            <ul className="list-disc list-inside space-y-1 text-indigo-900 font-medium marker:text-emerald-300 text-xs">
                                                 {finalIncludedText.split('\n').map((line, i) => {
                                                     // Clean bullet for cleaner re-rendering
                                                     const cleanLine = line.replace(/^[•-]\s*/, '').trim();
@@ -1120,7 +1120,7 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                     {/* Additional Manually Added Scopes */}
                     {(content.additionalScopes || []).map((scope) => (
                         <div key={scope.id} className="break-inside-avoid border-b border-slate-100 pb-6 last:border-0 relative group">
-                            <h4 className="font-bold text-slate-900 text-base uppercase tracking-wide mb-3 flex justify-between items-center">
+                            <h4 className="font-bold text-indigo-950 text-base uppercase tracking-wide mb-3 flex justify-between items-center">
                                 <EditableText isEditing={isEditing} value={scope.title} onChange={v => handleUpdateAdditionalScope(scope.id, 'title', v)} />
                                 {isEditing && (
                                     <button 
@@ -1214,11 +1214,11 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                     <div className="mb-4 flex flex-col sm:flex-row items-center gap-4 bg-slate-100 p-3 rounded-lg border border-slate-200 print:hidden">
                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Presentation Mode:</span>
                         <div className="flex gap-4">
-                            <label className={`flex items-center gap-2 text-xs font-bold cursor-pointer px-3 py-2 rounded-md transition-colors ${content.boqPresentationMode === 'summary' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-800'}`}>
+                            <label className={`flex items-center gap-2 text-xs font-bold cursor-pointer px-3 py-2 rounded-md transition-colors ${content.boqPresentationMode === 'summary' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-indigo-900'}`}>
                                 <input type="radio" name="boqMode" checked={content.boqPresentationMode === 'summary'} onChange={() => updateContent('boqPresentationMode', 'summary')} className="hidden" />
                                 Pre-Signoff (Budget Roll-up)
                             </label>
-                            <label className={`flex items-center gap-2 text-xs font-bold cursor-pointer px-3 py-2 rounded-md transition-colors ${content.boqPresentationMode !== 'summary' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-800'}`}>
+                            <label className={`flex items-center gap-2 text-xs font-bold cursor-pointer px-3 py-2 rounded-md transition-colors ${content.boqPresentationMode !== 'summary' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-indigo-900'}`}>
                                 <input type="radio" name="boqMode" checked={content.boqPresentationMode !== 'summary'} onChange={() => updateContent('boqPresentationMode', 'detailed')} className="hidden" />
                                 Post-Signoff (Detailed Annexure)
                             </label>
@@ -1240,22 +1240,22 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                 {content.boqPresentationMode === 'summary' ? (
                     <div className="overflow-hidden rounded-lg border border-slate-200">
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-800 text-white font-bold uppercase tracking-wider text-[10px]">
+                            <thead className="bg-indigo-900 text-white font-bold uppercase tracking-wider text-[10px]">
                                 <tr>
                                     <th className="p-4 w-1/4">Location / Zone</th>
                                     <th className="p-4 w-1/2">Key Inclusions (High-Level)</th>
                                     <th className="p-4 w-1/4 text-right">Lumpsum Allocation</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100 bg-white border-b-2 border-slate-800">
+                            <tbody className="divide-y divide-slate-100 bg-white border-b-2 border-indigo-900">
                                 {Object.entries(groupedBoq).map(([room, items]) => {
                                     const roomTotal = items.reduce((sum: number, item: any) => sum + (item.finalCost !== undefined ? item.finalCost : (calculateSellPrice(item.materials, item.labor, item.margin) * item.qty)), 0);
                                     const uniqueKeys = Array.from(new Set(items.map((i: any) => i.cat || i.category || (i.name || i.description || '').split('(')[0].trim())));
                                     return (
                                         <tr key={`summary-${room}`} className="hover:bg-slate-50 transition-colors">
-                                            <td className="p-4 font-bold text-slate-800 text-xs uppercase tracking-wide">{room}</td>
+                                            <td className="p-4 font-bold text-indigo-900 text-xs uppercase tracking-wide">{room}</td>
                                             <td className="p-4 text-xs text-slate-600 leading-relaxed font-medium">{uniqueKeys.join(' • ')}</td>
-                                            <td className="p-4 font-mono font-bold text-slate-900 text-right">{formatCurrency(roomTotal)}</td>
+                                            <td className="p-4 font-mono font-bold text-indigo-950 text-right">{formatCurrency(roomTotal)}</td>
                                         </tr>
                                     );
                                 })}
@@ -1265,7 +1265,7 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                 ) : (
                     Object.entries(groupedBoq).map(([room, items]) => (
                         <div key={`boq-${room}`} className="mb-8 break-inside-avoid">
-                            <h4 className="font-bold text-white text-sm uppercase tracking-wide bg-slate-800 p-2.5 rounded-t-lg">
+                            <h4 className="font-bold text-white text-sm uppercase tracking-wide bg-indigo-900 p-2.5 rounded-t-lg">
                                 {room}
                             </h4>
                             <table className="w-full text-xs text-left border-collapse border border-slate-200 rounded-b-lg overflow-hidden">
@@ -1290,7 +1290,7 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                                                 <td className="p-3 border-r border-slate-100 text-center text-slate-400 font-medium">{index + 1}</td>
                                                 <td className="p-3 border-r border-slate-100 font-bold text-slate-600 text-[10px] uppercase tracking-wider">{item.cat || item.category || '-'}</td>
                                                 <td className="p-3 border-r border-slate-100 text-slate-600 min-w-[250px]">
-                                                    <div className="font-bold text-slate-900 mb-1.5 text-sm leading-snug">
+                                                    <div className="font-bold text-indigo-950 mb-1.5 text-sm leading-snug">
                                                         {item.name || item.description || 'Item'}
                                                         {item.boqStatus && <span className="ml-2 text-[9px] uppercase tracking-wider bg-slate-100 border border-slate-200 px-1 py-0.5 rounded text-slate-500">{item.boqStatus}</span>}
                                                     </div>
@@ -1302,10 +1302,10 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                                                         className="w-full text-xs leading-relaxed text-slate-600" 
                                                     />
                                                 </td>
-                                                <td className="p-3 border-r border-slate-100 text-center font-bold text-slate-800 text-sm bg-slate-50/50">{item.qty}</td>
+                                                <td className="p-3 border-r border-slate-100 text-center font-bold text-indigo-900 text-sm bg-slate-50/50">{item.qty}</td>
                                                 <td className="p-3 border-r border-slate-100 text-center text-slate-600 uppercase text-[10px] font-bold bg-slate-50/50">{item.unit}</td>
                                                 <td className="p-3 border-r border-slate-100 text-right font-mono text-slate-500">{formatCurrency(rate)}</td>
-                                                <td className="p-3 text-right font-mono font-bold text-slate-900">{formatCurrency(amount)}</td>
+                                                <td className="p-3 text-right font-mono font-bold text-indigo-950">{formatCurrency(amount)}</td>
                                             </tr>
                                         );
                                     })}
@@ -1320,13 +1320,13 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
             <ContractSection number={sectionCounter++} title={<EditableText isEditing={isEditing} value={content.deliverablesTitle} onChange={v => updateContent('deliverablesTitle', v)} />}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
-                        <h5 className="font-bold text-slate-800 text-sm mb-2">Deliverables</h5>
+                        <h5 className="font-bold text-indigo-900 text-sm mb-2">Deliverables</h5>
                         <div className="text-xs text-slate-600 leading-relaxed">
                             <EditableText isEditing={isEditing} value={content.deliverablesText} onChange={v => updateContent('deliverablesText', v)} multiline />
                         </div>
                     </div>
                     <div>
-                        <h5 className="font-bold text-slate-800 text-sm mb-2">Revision Policy</h5>
+                        <h5 className="font-bold text-indigo-900 text-sm mb-2">Revision Policy</h5>
                         <div className="text-xs text-slate-600 leading-relaxed">
                             <EditableText isEditing={isEditing} value={settings?.feeStructure?.revisionPolicy || content.revisionsText} onChange={v => updateContent('revisionsText', v)} multiline />
                         </div>
@@ -1344,12 +1344,12 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                         <span className="text-xs text-slate-500">{settings?.feeStructure?.feeNote || 'Professional Fees (Billed Separately / As per Design Agreement)'}</span>
                     </div>
                     <div className="text-right">
-                        <span className="font-bold text-slate-800">{formatCurrency(designFeeValue)}</span>
+                        <span className="font-bold text-indigo-900">{formatCurrency(designFeeValue)}</span>
                         <span className="text-[10px] text-slate-400 block">+ GST</span>
                     </div>
                 </div>
 
-                <div className="mb-2 font-bold text-slate-800 text-sm">B. Execution Milestones</div>
+                <div className="mb-2 font-bold text-indigo-900 text-sm">B. Execution Milestones</div>
                 <div className="grid grid-cols-1 gap-8">
                     <PaymentTable 
                         milestones={executionMilestones} 
@@ -1395,13 +1395,13 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
             <ContractSection number={sectionCounter++} title={<EditableText isEditing={isEditing} value={content.responsibilitiesTitle} onChange={v => updateContent('responsibilitiesTitle', v)} />}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="p-5 bg-slate-50 rounded-xl border border-slate-100">
-                        <h5 className="font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2 text-sm uppercase tracking-wider">Client: Enabling the Build</h5>
+                        <h5 className="font-bold text-indigo-900 mb-3 border-b border-slate-200 pb-2 text-sm uppercase tracking-wider">Client: Enabling the Build</h5>
                         <div className="text-xs text-slate-600 leading-relaxed">
                             <EditableText isEditing={isEditing} value={content.clientObsText} onChange={v => updateContent('clientObsText', v)} multiline />
                         </div>
                     </div>
                     <div className="p-5 bg-slate-50 rounded-xl border border-slate-100">
-                        <h5 className="font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2 text-sm uppercase tracking-wider">{orgData?.orgName || 'Studio'}: Commitment to Quality</h5>
+                        <h5 className="font-bold text-indigo-900 mb-3 border-b border-slate-200 pb-2 text-sm uppercase tracking-wider">{orgData?.orgName || 'Studio'}: Commitment to Quality</h5>
                         <div className="text-xs text-slate-600 leading-relaxed">
                             <EditableText isEditing={isEditing} value={content.ffdsObsText} onChange={v => updateContent('ffdsObsText', v)} multiline />
                         </div>
@@ -1413,7 +1413,7 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
             <ContractSection number={sectionCounter++} title="Handover & Protocols">
                  <div className="space-y-6">
                     <div>
-                        <h5 className="font-bold text-slate-800 text-sm mb-2">Handover & Snag Closure</h5>
+                        <h5 className="font-bold text-indigo-900 text-sm mb-2">Handover & Snag Closure</h5>
                         <p className="text-xs text-slate-600 leading-relaxed">
                             A joint snag list shall be prepared at project completion. Snags must be mutually identified and recorded within 7 days of handover. Items raised beyond this period shall be treated as maintenance.
                         </p>
@@ -1421,7 +1421,7 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="p-5 border border-slate-200 rounded-xl bg-white shadow-sm">
-                            <p className="font-bold text-sm text-slate-800 mb-2">Communication & Timeline Exclusions</p>
+                            <p className="font-bold text-sm text-indigo-900 mb-2">Communication & Timeline Exclusions</p>
                             <div className="text-xs text-slate-600 leading-relaxed space-y-4">
                                 <EditableText isEditing={isEditing} value={content.commProtocolText} onChange={v => updateContent('commProtocolText', v)} multiline />
                                 <EditableText isEditing={isEditing} value={content.forceMajeureText} onChange={v => updateContent('forceMajeureText', v)} multiline />
@@ -1501,8 +1501,8 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
             )}
 
             {/* Sign-off & Execution Protocol */}
-            <div className="mt-20 pt-10 border-t-4 border-slate-900 break-inside-avoid">
-                <h3 className="text-lg font-bold text-slate-900 uppercase tracking-wide mb-6 font-opensans">
+            <div className="mt-20 pt-10 border-t-4 border-indigo-950 break-inside-avoid">
+                <h3 className="text-lg font-bold text-indigo-950 uppercase tracking-wide mb-6 font-opensans">
                     <EditableText isEditing={isEditing} value={content.signoffTitle} onChange={v => updateContent('signoffTitle', v)} />
                 </h3>
                 
@@ -1521,12 +1521,12 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                     <div className="grid grid-cols-2 gap-20">
                         <div>
                             <div className="h-24 border-b-2 border-slate-300 mb-3"></div>
-                            <p className="font-bold text-slate-900 text-lg">{projectContext.clientName || projectContext.name}</p>
+                            <p className="font-bold text-indigo-950 text-lg">{projectContext.clientName || projectContext.name}</p>
                             <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Client</p>
                         </div>
                         <div>
                             <div className="h-24 border-b-2 border-slate-300 mb-3"></div>
-                            <p className="font-bold text-slate-900 text-lg">For {settings?.companyName || orgData.orgName || 'Studio'}</p>
+                            <p className="font-bold text-indigo-950 text-lg">For {settings?.companyName || orgData.orgName || 'Studio'}</p>
                             <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-1">Authorised Signatory</p>
                             <p className="text-[10px] text-slate-500">{settings?.address}</p>
                             {settings?.gstNumber && <p className="text-[10px] text-slate-500">GST: {settings.gstNumber}</p>}

@@ -39,7 +39,7 @@ const ClientTestimonials: React.FC = () => {
                                 "{review.text}"
                             </p>
                             <div>
-                                <p className="font-bold text-slate-900 text-sm">{review.author}</p>
+                                <p className="font-bold text-indigo-950 text-sm">{review.author}</p>
                                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">{review.project}</p>
                             </div>
                         </MotionDiv>

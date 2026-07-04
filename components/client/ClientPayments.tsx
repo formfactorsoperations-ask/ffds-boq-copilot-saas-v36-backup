@@ -240,7 +240,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                         </div>
                     ) : (
                         <div>
-                            <div className="font-bold text-slate-800 text-sm">{m.name}</div>
+                            <div className="font-bold text-indigo-900 text-sm">{m.name}</div>
                             <div className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5">{m.description}</div>
                         </div>
                     )}
@@ -255,7 +255,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                             className="w-10 text-right font-bold text-sm bg-white border border-indigo-200 rounded px-1 py-1 outline-none"
                         />
                     ) : (
-                        <span className="font-bold text-slate-900 text-sm">{m.percentage}%</span>
+                        <span className="font-bold text-indigo-950 text-sm">{m.percentage}%</span>
                     )}
                 </td>
 
@@ -274,7 +274,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                 <td className={`py-3 px-4 text-right border-b border-slate-100 align-top w-32 ${financials ? 'bg-slate-50/50' : ''}`}>
                     {total > 0 ? (
                         <div>
-                            <span className="font-mono font-bold text-slate-800 text-sm">{formatCurrency(total)}</span>
+                            <span className="font-mono font-bold text-indigo-900 text-sm">{formatCurrency(total)}</span>
                             {isFirstDesign && initiationFee > 0 && (
                                 <div className="text-[9px] text-slate-400 italic mt-0.5 whitespace-nowrap">
                                     (Less {formatCurrency(initiationFee)} adj.)
@@ -342,7 +342,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8">
                 <div className="flex-grow">
                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Commercial Terms</div>
-                    <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">{data.title}</h2>
+                    <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-indigo-950">{data.title}</h2>
                     <p className="mt-2 text-slate-600 max-w-2xl text-sm leading-relaxed whitespace-pre-line">
                         {data.subtitle}
                     </p>
@@ -391,8 +391,8 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                     <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
                         <h4 className="font-bold text-slate-700 text-sm">Part A: Design Fees</h4>
                         <div className="text-right">
-                            {financials && <span className="block text-xs font-bold text-slate-800">{formatCurrency(financials.design.total)}</span>}
-                            {!financials && designTotal && <span className="block text-xs font-bold text-slate-800">{formatCurrency(designTotal)}</span>}
+                            {financials && <span className="block text-xs font-bold text-indigo-900">{formatCurrency(financials.design.total)}</span>}
+                            {!financials && designTotal && <span className="block text-xs font-bold text-indigo-900">{formatCurrency(designTotal)}</span>}
                             <span className={`text-[10px] font-bold ${designTotalPercent !== 100 ? 'text-red-500' : 'text-emerald-600'}`}>
                                 Total: {designTotalPercent}%
                             </span>
@@ -438,8 +438,8 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                         <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
                             <h4 className="font-bold text-slate-700 text-sm">Part B: Execution</h4>
                             <div className="text-right">
-                                {financials && <span className="block text-xs font-bold text-slate-800">{formatCurrency(financials.execution.total)}</span>}
-                                {!financials && executionTotal && <span className="block text-xs font-bold text-slate-800">{formatCurrency(executionTotal)}</span>}
+                                {financials && <span className="block text-xs font-bold text-indigo-900">{formatCurrency(financials.execution.total)}</span>}
+                                {!financials && executionTotal && <span className="block text-xs font-bold text-indigo-900">{formatCurrency(executionTotal)}</span>}
                                 <span className={`text-[10px] font-bold ${executionTotalPercent !== 100 ? 'text-red-500' : 'text-emerald-600'}`}>
                                     Total: {executionTotalPercent}%
                                 </span>

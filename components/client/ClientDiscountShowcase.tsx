@@ -61,7 +61,7 @@ const ClientDiscountShowcase: React.FC<ClientDiscountShowcaseProps> = ({ discoun
                     {discounts.map((discount, idx) => {
                         const amount = getDiscountValue(discount);
                         return (
-                            <div key={discount.id} className="relative bg-white text-slate-800 p-4 rounded-xl flex items-center justify-between shadow-sm group border-l-4 border-emerald-500">
+                            <div key={discount.id} className="relative bg-white text-indigo-900 p-4 rounded-xl flex items-center justify-between shadow-sm group border-l-4 border-emerald-500">
                                 {/* Ticket Perforation Visuals */}
                                 <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-teal-900 rounded-full"></div>
 
@@ -70,7 +70,7 @@ const ClientDiscountShowcase: React.FC<ClientDiscountShowcaseProps> = ({ discoun
                                         <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded text-white ${discount.target === 'design' ? 'bg-blue-600' : 'bg-slate-600'}`}>
                                             {discount.target === 'design' ? 'Design Fee' : 'Execution'}
                                         </span>
-                                        <h4 className="font-bold text-slate-900 text-sm">{discount.name}</h4>
+                                        <h4 className="font-bold text-indigo-950 text-sm">{discount.name}</h4>
                                     </div>
                                     <div className="flex items-center gap-1.5 text-xs text-slate-500">
                                         <CheckBadgeIcon className="w-3 h-3 text-emerald-600" />

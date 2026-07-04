@@ -686,12 +686,12 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
             </button>
             <button 
               type="submit" 
-              disabled={loading || !title || !hasCalendarToken} 
+              disabled={loading || !title} 
               onClick={handleSubmit} 
               className="px-5 py-2.5 bg-stone-100 text-stone-950 font-bold text-xs rounded-xl hover:bg-white active:bg-stone-200 shadow-lg disabled:bg-stone-800 disabled:text-stone-600 disabled:shadow-none disabled:border disabled:border-stone-800 transition-all duration-200 flex items-center justify-center gap-2"
             >
               {loading && <Loader2 size={13} className="animate-spin text-stone-950" />}
-              <span>Save & Sync Event</span>
+              <span>{hasCalendarToken ? 'Save & Sync Event' : 'Save Event'}</span>
             </button>
           </div>
         </div>

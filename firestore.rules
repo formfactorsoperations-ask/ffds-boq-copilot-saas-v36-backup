@@ -62,6 +62,12 @@ service cloud.firestore {
           isSuperAdmin()
       );
       
+      match /settings/{settingId} {
+         allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+         allow write: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
+            && (getUserData().role == 'Owner' || isSuperAdmin());
+      }
+
       match /projects/{projectId} {
          match /boqItems/{itemId} {
            allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
@@ -128,6 +134,11 @@ service cloud.firestore {
                (!('executionData' in resource.data) || request.resource.data.executionData.bundles != resource.data.executionData.bundles))
               ? (getUserData().role in ['Owner', 'Admin', 'Ops Director', 'Super Admin'] || isSuperAdmin() || isLegacyFFDS())
               : true
+           )
+           && (
+              (request.resource.data.engagement != resource.data.engagement)
+              ? (getUserData().role == 'Owner' || isSuperAdmin())
+              : true
            );
       }
       match /{document=**} {
@@ -149,6 +160,11 @@ service cloud.firestore {
           (request.method == 'update' && request.resource.data.executionData != null && 
            (!('executionData' in resource.data) || request.resource.data.executionData.bundles != resource.data.executionData.bundles))
           ? (getUserData().role in ['Owner', 'Admin', 'Ops Director', 'Super Admin'] || isSuperAdmin() || isLegacyFFDS())
+          : true
+        )
+        && (
+          (request.method == 'update' && request.resource.data.engagement != resource.data.engagement)
+          ? (getUserData().role == 'Owner' || isSuperAdmin())
           : true
         );
       

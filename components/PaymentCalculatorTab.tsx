@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { RotateCcw } from 'lucide-react';
 import Card from './shared/Card';
 import { CalculatorIcon, ShieldCheckIcon, AlertIcon, CheckIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon, DeleteIcon, PlusIcon, ScissorsIcon, ClockIcon } from './Icons';
+import { useOrg } from '../contexts/OrgContext';
+import { FFDS_PAYMENT_STRUCTURE_DEFAULTS } from '../services/engagementService';
 
 interface PaymentCalculatorTabProps {
     projectContext: ProjectContext;
@@ -27,6 +29,7 @@ const DEFAULT_MILESTONES: PaymentMilestone[] = [
 
 const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectContext, setProjectContext, activeTier, allProjects = [] }) => {
     // --- STATE ---
+    const { orgData } = useOrg();
     const financials = projectContext.financials || {
         initiationFeePaid: 4999,
         billablePercent: 100,
@@ -74,23 +77,79 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
     const handleGenerateSchedule = () => {
         // Contract value is sum of execution and design value
-        const totalExecutionValue = activeTier?.metrics?.projectValue || 0;
-        const totalDesignValue = 0; // Or whatever is design value. Assuming activeTier.metrics.projectValue is total.
-        const contractValue = totalExecutionValue + totalDesignValue;
+        const contractValue = taxableExecution + taxableDesign;
 
-        const newAdvances = milestones.map((m, i) => ({
-            advanceCode: (m.type === 'design' ? 'D' : 'E') + (i + 1),
-            label: (m.name || '').replace(' (Gross)', ''),
-            phase: m.type as 'design' | 'execution' | 'handover',
-            percentage: m.percentage,
-            amount: 0, // Calculated later strictly
-            dueCondition: m.type === 'execution' ? 'Advance before ' + (m.name || '').replace(' (Gross)', '').toLowerCase() : 'On completion of ' + (m.name || '').replace(' (Gross)', ''),
-            unlocks: m.unlocks || '',
-            status: m.status === 'invoiced' ? 'advance_requested' : m.status === 'paid' ? 'received' : 'pending',
-            invoiceRef: m.invoiceNumber || null,
-            receivedAt: null,
-            isHandoverAdvance: m.isHandoverAdvance || false
-        }));
+        // Pre-calculate design items remaining base
+        const paidDesign = designMilestones.filter(m => m.status === 'paid' || m.status === 'invoiced');
+        const unpaidDesign = designMilestones.filter(m => m.status !== 'paid' && m.status !== 'invoiced');
+        let lockedDesignBase = 0;
+        paidDesign.forEach(m => {
+            if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                lockedDesignBase += m.fixedAmount;
+            } else {
+                lockedDesignBase += (m.lockedTaxableBase || taxableDesign) * (m.percentage / 100);
+            }
+        });
+        const remainingDesignBase = taxableDesign - lockedDesignBase;
+
+        // Pre-calculate execution items remaining base
+        const paidExec = executionMilestones.filter(m => m.status === 'paid' || m.status === 'invoiced');
+        const unpaidExec = executionMilestones.filter(m => m.status !== 'paid' && m.status !== 'invoiced');
+        let lockedExecBase = 0;
+        paidExec.forEach(m => {
+            if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                lockedExecBase += m.fixedAmount;
+            } else {
+                lockedExecBase += (m.lockedTaxableBase || taxableExecution) * (m.percentage / 100);
+            }
+        });
+        const remainingExecBase = taxableExecution - lockedExecBase;
+
+
+        let designIndex = 0;
+        let execIndex = 0;
+        const newAdvances = milestones.map((m, i) => {
+            let rowBaseOriginal = 0;
+            const isExecution = m.type === 'execution';
+            const unpaidItems = isExecution ? unpaidExec : unpaidDesign;
+            const remainingBaseAmount = isExecution ? remainingExecBase : remainingDesignBase;
+            const originalBaseAmount = isExecution ? taxableExecution : taxableDesign;
+            
+            const isCleared = m.status === 'paid' || m.status === 'invoiced';
+            if (isCleared) {
+                rowBaseOriginal = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : ((m.lockedTaxableBase || originalBaseAmount) * (m.percentage / 100));
+            } else {
+                if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                    rowBaseOriginal = m.fixedAmount;
+                } else {
+                    const fixedPendingTotal = unpaidItems.filter(x => x.isFixedAmount).reduce((sum, x) => sum + (x.fixedAmount || 0), 0);
+                    const remainingBaseForPercentages = Math.max(0, remainingBaseAmount - fixedPendingTotal);
+                    
+                    const unpaidPctExcludingFixed = unpaidItems.filter(x => !x.isFixedAmount).reduce((sum, x) => sum + x.percentage, 0);
+                    const relativePct = unpaidPctExcludingFixed > 0 ? (m.percentage / unpaidPctExcludingFixed) : 0;
+                    rowBaseOriginal = remainingBaseForPercentages * relativePct;
+                }
+            }
+            rowBaseOriginal = Math.round(rowBaseOriginal);
+
+            const advCode = m.type === 'design' ? `D${++designIndex}` : `E${++execIndex}`;
+
+            return {
+                advanceCode: m.description && m.description.match(/^[DEH][0-9]$/) ? m.description : advCode,
+                label: (m.name || '').replace(' (Gross)', ''),
+                phase: m.type as 'design' | 'execution' | 'handover',
+                percentage: m.percentage,
+                isFixedAmount: m.isFixedAmount,
+                fixedAmount: m.fixedAmount,
+                amount: rowBaseOriginal,
+                dueCondition: m.trigger || (m.type === 'execution' ? 'Advance before ' + (m.name || '').replace(' (Gross)', '').toLowerCase() : 'On completion of ' + (m.name || '').replace(' (Gross)', '')),
+                unlocks: m.unlocks || '',
+                status: m.status === 'invoiced' ? 'advance_requested' : m.status === 'paid' ? 'received' : 'pending',
+                invoiceRef: m.invoiceNumber || null,
+                receivedAt: null,
+                isHandoverAdvance: m.isHandoverAdvance || false
+            };
+        });
 
         const newSchedule = {
             id: 'ps_' + Math.random().toString(36).substring(2, 9),
@@ -103,7 +162,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             contractValue: contractValue,
             advances: newAdvances as any,
             revisionNote: latestSchedule ? 'Milestone adjustments' : '',
-            supersededBy: null
+            supersededBy: null,
+            snapshotEngagement: {
+                designFee: taxableDesign,
+                executionValue: taxableExecution
+            }
         };
 
         const updatedSchedules = [...paymentSchedules];
@@ -119,16 +182,131 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         alert('Payment Schedule v' + newSchedule.version + ' Generated. You can view it in the Client Outputs section.');
     };
 
+    const getDefaultMilestones = () => {
+        const paymentStr = (orgData as any).paymentStructure;
+        const structure = paymentStr?.designStages ? paymentStr : FFDS_PAYMENT_STRUCTURE_DEFAULTS;
+        
+        return [
+            ...structure.designStages.map((s: any, i: number) => ({
+                id: `d${i + 1}`,
+                type: 'design' as const,
+                name: s.name,
+                percentage: s.pct,
+                description: s.code,
+                unlocks: s.unlocks || '',
+                trigger: s.trigger || ''
+            })),
+            ...structure.executionStages.map((s: any, i: number) => ({
+                id: `e${i + 1}`,
+                type: 'execution' as const,
+                name: s.name,
+                percentage: s.pct,
+                description: s.code,
+                unlocks: s.unlocks || '',
+                trigger: s.trigger || '',
+                isHandoverAdvance: s.code === 'E8' || s.name.toLowerCase().includes('handover') || i === structure.executionStages.length - 1
+            }))
+        ];
+    };
+
     // --- DEFAULTS ---
     useEffect(() => {
-        if (!projectContext.paymentMilestones) {
-            setProjectContext(prev => ({ ...prev, paymentMilestones: JSON.parse(JSON.stringify(DEFAULT_MILESTONES)) }));
+        if (!projectContext.paymentMilestones || projectContext.paymentMilestones.length === 0) {
+            setProjectContext(prev => ({ ...prev, paymentMilestones: getDefaultMilestones() }));
         }
     }, []);
 
+    const autoBalanceMilestones = (items: PaymentMilestone[], phase: string, changedId?: string) => {
+        const phaseItems = items.filter(m => m.type === phase);
+        const baseAmount = phase === 'design' ? originalNetDesign : originalNetExecution;
+        
+        let lockedPercent = 0;
+        let adjustableItems: PaymentMilestone[] = [];
+        
+        // First pass: identify locked and adjustable items
+        phaseItems.forEach(m => {
+            const isLocked = m.status === 'paid' || m.status === 'invoiced' || m.isFixedAmount || m.isCustom || m.id === changedId;
+            if (isLocked) {
+                if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                    lockedPercent += baseAmount > 0 ? (m.fixedAmount / baseAmount) * 100 : 0;
+                } else {
+                    lockedPercent += m.percentage;
+                }
+            } else {
+                adjustableItems.push(m);
+            }
+        });
+
+        // If everything is locked but we need to balance (e.g. they edited the last adjustable one)
+        // We will unlock all pending percentage-based items EXCEPT the one they just changed
+        if (adjustableItems.length === 0) {
+            lockedPercent = 0;
+            phaseItems.forEach(m => {
+                const isForceLocked = m.status === 'paid' || m.status === 'invoiced' || m.isFixedAmount || m.id === changedId;
+                if (isForceLocked) {
+                    if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                        lockedPercent += baseAmount > 0 ? (m.fixedAmount / baseAmount) * 100 : 0;
+                    } else {
+                        lockedPercent += m.percentage;
+                    }
+                } else {
+                    m.isCustom = false; // Unlock it
+                    adjustableItems.push(m);
+                }
+            });
+        }
+        
+        const remainingPercent = Math.max(0, 100 - lockedPercent);
+        
+        if (adjustableItems.length > 0 || phaseItems.some(m => m.isFixedAmount)) {
+            const currentAdjustableSum = adjustableItems.reduce((sum, m) => sum + m.percentage, 0);
+            
+            let totalAssigned = 0;
+            let adjustedCount = 0;
+            
+            items = items.map(m => {
+                if (m.type === phase) {
+                    if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                        return { ...m, percentage: Math.round(baseAmount > 0 ? (m.fixedAmount / baseAmount) * 100 : 0) };
+                    } else if (adjustableItems.some(a => a.id === m.id)) {
+                        adjustedCount++;
+                        let newPct = 0;
+                        
+                        if (adjustedCount === adjustableItems.length) {
+                            // For the last item, just give it whatever is left of the remaining percent to avoid rounding errors
+                            newPct = Math.max(0, Math.round(remainingPercent - totalAssigned));
+                        } else {
+                            if (currentAdjustableSum > 0) {
+                                newPct = Math.round((m.percentage / currentAdjustableSum) * remainingPercent);
+                            } else {
+                                newPct = Math.round(remainingPercent / adjustableItems.length);
+                            }
+                        }
+                        totalAssigned += newPct;
+                        return { ...m, percentage: newPct };
+                    }
+                }
+                return m;
+            });
+        }
+        
+        return items;
+    };
+
     const handleUpdateMilestone = (index: number, updates: Partial<PaymentMilestone>) => {
-        const newMilestones = [...milestones];
+        let newMilestones = [...milestones];
+        
+        // If they manually edit percentage or amount, lock it as custom
+        if (updates.percentage !== undefined || updates.fixedAmount !== undefined) {
+            updates.isCustom = true;
+        }
+        
         newMilestones[index] = { ...newMilestones[index], ...updates };
+        
+        if (updates.percentage !== undefined || updates.fixedAmount !== undefined || updates.isFixedAmount !== undefined) {
+             newMilestones = autoBalanceMilestones(newMilestones, newMilestones[index].type, newMilestones[index].id);
+        }
+        
         setProjectContext(prev => ({ ...prev, paymentMilestones: newMilestones }));
     };
 
@@ -141,13 +319,15 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             description: '',
             status: 'pending'
         };
-        setProjectContext(prev => ({ ...prev, paymentMilestones: [...milestones, newMilestone] }));
+        const newMilestones = [...milestones, newMilestone];
+        setProjectContext(prev => ({ ...prev, paymentMilestones: autoBalanceMilestones(newMilestones, type) }));
     };
 
     const handleDeleteMilestone = (index: number) => {
         const newMilestones = [...milestones];
+        const type = newMilestones[index].type;
         newMilestones.splice(index, 1);
-        setProjectContext(prev => ({ ...prev, paymentMilestones: newMilestones }));
+        setProjectContext(prev => ({ ...prev, paymentMilestones: autoBalanceMilestones(newMilestones, type) }));
     };
 
     const handleRevertRevision = (revision: any) => {
@@ -202,11 +382,16 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
         setProjectContext(prev => ({ 
             ...prev, 
-            paymentMilestones: JSON.parse(JSON.stringify(DEFAULT_MILESTONES)), 
+            paymentMilestones: getDefaultMilestones(), 
             financials: defaultFinancials 
         }));
 
         setIsResetting(false);
+    };
+
+    const handleLoadDefaults = () => {
+        if (!window.confirm("This will overwrite your current milestones with the Studio Defaults. Continue?")) return;
+        setProjectContext(prev => ({ ...prev, paymentMilestones: getDefaultMilestones() }));
     };
 
     const handleInvoiceAction = (index: number, action: 'generate_invoice' | 'mark_paid' | 'revert_invoice', lockedTaxableBase?: number) => {
@@ -219,6 +404,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             invNumber = `INV-026-${projectCode}-${seq}`;
         } else {
             invNumber = `INV-CASH-${projectCode}-${seq}`;
+        }
+
+        if (action === 'generate_invoice' || action === 'mark_paid') {
+            const engagementStatus = projectContext.engagement?.status;
+            if (engagementStatus !== 'acknowledged') {
+                alert("Issue and obtain client acknowledgement of the Terms Docket and Payment Schedule before recording any advance.");
+                return;
+            }
         }
 
         if (action === 'generate_invoice') {
@@ -356,10 +549,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         // Sum up paid milestones
         designMilestones.forEach((m, i) => {
             if (m.status === 'paid') {
-                const rowBaseOriginal = (m.lockedTaxableBase || originalNetDesign) * (m.percentage / 100);
-                let rowBillable = rowBaseOriginal;
-                let rowGST = rowBillable * (gstRate / 100);
-                let rowInvoiceTotal = rowBillable + rowGST;
+                let rowBaseOriginal = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : (m.lockedTaxableBase || originalNetDesign) * (m.percentage / 100);
+                rowBaseOriginal = Math.round(rowBaseOriginal);
+                let rowBillable = Math.round(rowBaseOriginal);
+                let rowGST = Math.round(rowBillable * (gstRate / 100));
+                let rowInvoiceTotal = Math.round(rowBillable + rowGST);
                 
                 if (i === 0 && initiationFee > 0) {
                     rowInvoiceTotal = Math.max(0, rowInvoiceTotal - initiationFee);
@@ -370,14 +564,15 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
         executionMilestones.forEach((m) => {
             if (m.status === 'paid') {
-                const rowBaseOriginal = (m.lockedTaxableBase || originalNetExecution) * (m.percentage / 100);
-                let rowBillable = rowBaseOriginal * (billablePercent / 100);
+                let rowBaseOriginal = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : (m.lockedTaxableBase || originalNetExecution) * (m.percentage / 100);
+                rowBaseOriginal = Math.round(rowBaseOriginal);
+                let rowBillable = Math.round(rowBaseOriginal * (billablePercent / 100));
                 const applicableGstRate = executionGstEnabled ? gstRate : 0;
-                let rowGST = rowBillable * (applicableGstRate / 100);
-                let rowInvoiceTotal = rowBillable + rowGST;
+                let rowGST = Math.round(rowBillable * (applicableGstRate / 100));
+                let rowInvoiceTotal = Math.round(rowBillable + rowGST);
                 
                 // Add cash component to paid amount
-                const rowCash = rowBaseOriginal * ((100 - billablePercent) / 100);
+                const rowCash = Math.round(rowBaseOriginal * ((100 - billablePercent) / 100));
                 paid += rowInvoiceTotal + rowCash;
             }
         });
@@ -427,8 +622,15 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         isExecution: boolean, 
         title: string
     ) => {
-        const totalPercent = items.reduce((sum, m) => sum + m.percentage, 0);
-        const isBalanced = totalPercent === 100;
+        let totalEffectivePercent = 0;
+        items.forEach(m => {
+            if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                totalEffectivePercent += baseAmount > 0 ? (m.fixedAmount / baseAmount) * 100 : 0;
+            } else {
+                totalEffectivePercent += m.percentage;
+            }
+        });
+        const isBalanced = Math.abs(totalEffectivePercent - 100) < 0.1;
 
         const paidItems = items.filter(m => m.status === 'paid' || m.status === 'invoiced');
         const unpaidItems = items.filter(m => m.status !== 'paid' && m.status !== 'invoiced');
@@ -436,7 +638,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         
         let lockedBase = 0;
         paidItems.forEach(m => {
-            lockedBase += (m.lockedTaxableBase || originalBaseAmount) * (m.percentage / 100);
+            if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                lockedBase += m.fixedAmount;
+            } else {
+                lockedBase += (m.lockedTaxableBase || originalBaseAmount) * (m.percentage / 100);
+            }
         });
         const remainingBaseAmount = baseAmount - lockedBase;
 
@@ -444,7 +650,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mb-8">
                 <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
                     <div>
-                        <h3 className="font-bold text-slate-800">{title} Tracking</h3>
+                        <h3 className="font-bold text-indigo-900">{title} Tracking</h3>
                         <div className="text-xs text-slate-500 mt-1 flex gap-4 items-center">
                             {baseAmount !== originalBaseAmount ? (
                                 <div className="flex items-center gap-2">
@@ -466,14 +672,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         </div>
                     </div>
                     <div className={`text-xs font-bold px-3 py-1.5 rounded-lg border ${isBalanced ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                        Total: {totalPercent}%
+                        Total: {totalEffectivePercent.toFixed(1).replace('.0', '')}%
                     </div>
                 </div>
                 <table className="w-full text-sm text-left">
                     <thead className="bg-slate-100 text-xs font-bold text-slate-500 uppercase">
                         <tr>
                             <th className="p-4 w-[35%]">Stage & Conditions</th>
-                            <th className="p-4 w-16 text-center">%</th>
+                            <th className="p-4 w-24 text-center">% / Amt</th>
                             <th className="p-4 text-right bg-blue-50/30 text-blue-800">Invoice Amount</th>
                             {isExecution && billablePercent < 100 && (
                                 <th className="p-4 text-right bg-amber-50/30 text-amber-800">Cash</th>
@@ -489,22 +695,31 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             let rowBaseOriginal = 0;
                             let effectiveTaxableBaseForLocking = baseAmount;
                             if (isCleared) {
-                                rowBaseOriginal = (m.lockedTaxableBase || originalBaseAmount) * (m.percentage / 100);
+                                rowBaseOriginal = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : ((m.lockedTaxableBase || originalBaseAmount) * (m.percentage / 100));
                                 effectiveTaxableBaseForLocking = m.lockedTaxableBase || originalBaseAmount;
                             } else {
-                                const relativePct = unpaidPct > 0 ? (m.percentage / unpaidPct) : 0;
-                                rowBaseOriginal = remainingBaseAmount * relativePct;
-                                effectiveTaxableBaseForLocking = unpaidPct > 0 ? (remainingBaseAmount * 100 / unpaidPct) : baseAmount;
+                                if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                                    rowBaseOriginal = m.fixedAmount;
+                                } else {
+                                    const fixedPendingTotal = unpaidItems.filter(x => x.isFixedAmount).reduce((sum, x) => sum + (x.fixedAmount || 0), 0);
+                                    const remainingBaseForPercentages = Math.max(0, remainingBaseAmount - fixedPendingTotal);
+                                    
+                                    const unpaidPctExcludingFixed = unpaidItems.filter(x => !x.isFixedAmount).reduce((sum, x) => sum + x.percentage, 0);
+                                    const relativePct = unpaidPctExcludingFixed > 0 ? (m.percentage / unpaidPctExcludingFixed) : 0;
+                                    rowBaseOriginal = remainingBaseForPercentages * relativePct;
+                                }
+                                effectiveTaxableBaseForLocking = m.percentage > 0 ? (rowBaseOriginal / (m.percentage / 100)) : baseAmount;
                             }
+                            rowBaseOriginal = Math.round(rowBaseOriginal);
                             
-                            let rowBillable = isExecution ? rowBaseOriginal * (billablePercent / 100) : rowBaseOriginal;
-                            const rowCash = isExecution ? rowBaseOriginal * ((100 - billablePercent) / 100) : 0;
+                            let rowBillable = Math.round(isExecution ? rowBaseOriginal * (billablePercent / 100) : rowBaseOriginal);
+                            const rowCash = Math.round(isExecution ? rowBaseOriginal * ((100 - billablePercent) / 100) : 0);
                             
                             const applicableGstRate = isExecution ? (executionGstEnabled ? gstRate : 0) : gstRate;
-                            let rowGST = rowBillable * (applicableGstRate / 100);
+                            let rowGST = Math.round(rowBillable * (applicableGstRate / 100));
                             
                             // Calculate Raw Invoice Total
-                            let rowInvoiceTotal = rowBillable + rowGST;
+                            let rowInvoiceTotal = Math.round(rowBillable + rowGST);
                             
                             let deductedInitiationFee = 0;
                             if (!isExecution && i === 0 && initiationFee > 0) {
@@ -531,7 +746,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                                 type="text" 
                                                                 value={m.name + ' (Gross)'} 
                                                                 onChange={e => handleUpdateMilestone(mainIndex, { name: e.target.value.replace(' (Gross)', '') })}
-                                                                className="w-full bg-transparent outline-none font-bold text-slate-800 mb-1 focus:border-b focus:border-indigo-300"
+                                                                className="w-full bg-transparent outline-none font-bold text-indigo-900 mb-1 focus:border-b focus:border-indigo-300"
                                                             />
                                                             {(!m.status || m.status === 'pending') && (
                                                                 <button 
@@ -544,9 +759,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                             )}
                                                         </div>
                                                         <div className="flex flex-col gap-1 mt-1">
-                                                            <input 
-                                                                type="text"
-                                                                value={m.unlocks || ''}
+                                                            <input type="text" value={m.trigger || ''} onChange={e => handleUpdateMilestone(mainIndex, { trigger: e.target.value })} placeholder="Paid When / Trigger..." className="text-[10px] uppercase tracking-wider font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded w-full outline-none focus:bg-white focus:border-indigo-300" />
+                                                            <input type="text" value={m.unlocks || ''}
                                                                 onChange={e => handleUpdateMilestone(mainIndex, { unlocks: e.target.value })}
                                                                 placeholder="Unlocks what..."
                                                                 className="text-[10px] uppercase tracking-wider font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded w-full outline-none focus:bg-indigo-100 focus:border-indigo-300"
@@ -580,12 +794,39 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 </div>
                                             </td>
                                             <td className="p-4 text-center align-top">
-                                                <input 
-                                                    type="number" 
-                                                    value={m.percentage} 
-                                                    onChange={e => handleUpdateMilestone(mainIndex, { percentage: Number(e.target.value) })}
-                                                    className="w-12 text-center font-bold text-slate-800 outline-none bg-slate-100 rounded focus:ring-2 focus:ring-indigo-200"
-                                                />
+                                                <div className="flex flex-col items-center justify-center gap-1.5">
+                                                    <div className="flex items-center justify-center bg-slate-200/60 rounded overflow-hidden p-0.5">
+                                                        <button 
+                                                            onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: false })}
+                                                            className={`px-1.5 py-0.5 text-[9px] font-bold rounded-sm transition-all ${!m.isFixedAmount ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
+                                                            title="Percentage Mode"
+                                                        >
+                                                            %
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: true, fixedAmount: m.fixedAmount || rowBaseOriginal })}
+                                                            className={`px-1.5 py-0.5 text-[9px] font-bold rounded-sm transition-all ${m.isFixedAmount ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
+                                                            title="Fixed Amount Mode"
+                                                        >
+                                                            ₹
+                                                        </button>
+                                                    </div>
+                                                    {!m.isFixedAmount ? (
+                                                        <input 
+                                                            type="number" 
+                                                            value={m.percentage} 
+                                                            onChange={e => handleUpdateMilestone(mainIndex, { percentage: Number(e.target.value) })}
+                                                            className="w-12 text-center font-bold text-indigo-900 outline-none bg-slate-100 rounded focus:ring-2 focus:ring-indigo-200"
+                                                        />
+                                                    ) : (
+                                                        <input 
+                                                            type="number" 
+                                                            value={m.fixedAmount || 0} 
+                                                            onChange={e => handleUpdateMilestone(mainIndex, { fixedAmount: Number(e.target.value) })}
+                                                            className="w-28 text-center font-bold text-indigo-900 outline-none bg-amber-50 border border-amber-200 rounded focus:ring-2 focus:ring-amber-400"
+                                                        />
+                                                    )}
+                                                </div>
                                             </td>
                                             
                                             {/* Invoice Column */}
@@ -609,7 +850,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 {!m.status || m.status === 'pending' ? (
                                                     <button 
                                                         onClick={() => handleInvoiceAction(mainIndex, 'generate_invoice', effectiveTaxableBaseForLocking)}
-                                                        className="px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded shadow hover:bg-black transition-all"
+                                                        className="px-3 py-1.5 bg-indigo-950 text-white text-xs font-bold rounded shadow hover:bg-indigo-950 transition-all"
                                                     >
                                                         Raise Invoice
                                                     </button>
@@ -674,7 +915,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                             type="text" 
                                                             value={m.name} 
                                                             onChange={e => handleUpdateMilestone(mainIndex, { name: e.target.value })}
-                                                            className="w-full bg-transparent outline-none font-bold text-slate-800 mb-1 focus:border-b focus:border-indigo-300"
+                                                            className="w-full bg-transparent outline-none font-bold text-indigo-900 mb-1 focus:border-b focus:border-indigo-300"
                                                         />
                                                         {(!m.status || m.status === 'pending') && (
                                                             <button 
@@ -703,9 +944,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                                 <span className="text-[10px] uppercase text-amber-700 font-bold block">Tags final advance unlocking Dossier, Keys & Warranty.</span>
                                                             </div>
                                                         )}
-                                                        <input 
-                                                            type="text"
-                                                            value={m.unlocks || ''}
+                                                        <input type="text" value={m.trigger || ''} onChange={e => handleUpdateMilestone(mainIndex, { trigger: e.target.value })} placeholder="Paid When / Trigger..." className="text-[10px] uppercase tracking-wider font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded w-full outline-none focus:bg-white focus:border-indigo-300" />
+                                                            <input type="text" value={m.unlocks || ''}
                                                             onChange={e => handleUpdateMilestone(mainIndex, { unlocks: e.target.value })}
                                                             placeholder="Unlocks what..."
                                                             className="text-[10px] uppercase tracking-wider font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded w-full outline-none focus:bg-indigo-100 focus:border-indigo-300"
@@ -739,12 +979,39 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             </div>
                                         </td>
                                         <td className="p-4 text-center align-top">
-                                            <input 
-                                                type="number" 
-                                                value={m.percentage} 
-                                                onChange={e => handleUpdateMilestone(mainIndex, { percentage: Number(e.target.value) })}
-                                                className="w-12 text-center font-bold text-slate-800 outline-none bg-slate-100 rounded focus:ring-2 focus:ring-indigo-200"
-                                            />
+                                            <div className="flex flex-col items-center justify-center gap-1.5">
+                                                <div className="flex items-center justify-center bg-slate-200/60 rounded overflow-hidden p-0.5">
+                                                    <button 
+                                                        onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: false })}
+                                                        className={`px-1.5 py-0.5 text-[9px] font-bold rounded-sm transition-all ${!m.isFixedAmount ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
+                                                        title="Percentage Mode"
+                                                    >
+                                                        %
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: true, fixedAmount: m.fixedAmount || rowBaseOriginal })}
+                                                        className={`px-1.5 py-0.5 text-[9px] font-bold rounded-sm transition-all ${m.isFixedAmount ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
+                                                        title="Fixed Amount Mode"
+                                                    >
+                                                        ₹
+                                                    </button>
+                                                </div>
+                                                {!m.isFixedAmount ? (
+                                                    <input 
+                                                        type="number" 
+                                                        value={m.percentage} 
+                                                        onChange={e => handleUpdateMilestone(mainIndex, { percentage: Number(e.target.value) })}
+                                                        className="w-12 text-center font-bold text-indigo-900 outline-none bg-slate-100 rounded focus:ring-2 focus:ring-indigo-200"
+                                                    />
+                                                ) : (
+                                                    <input 
+                                                        type="number" 
+                                                        value={m.fixedAmount || 0} 
+                                                        onChange={e => handleUpdateMilestone(mainIndex, { fixedAmount: Number(e.target.value) })}
+                                                        className="w-28 text-center font-bold text-indigo-900 outline-none bg-amber-50 border border-amber-200 rounded focus:ring-2 focus:ring-amber-400"
+                                                    />
+                                                )}
+                                            </div>
                                         </td>
                                         
                                         {/* Invoice Column */}
@@ -775,7 +1042,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             {!m.status || m.status === 'pending' ? (
                                                 <button 
                                                     onClick={() => handleInvoiceAction(mainIndex, 'generate_invoice', effectiveTaxableBaseForLocking)}
-                                                    className="px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded shadow hover:bg-black transition-all"
+                                                    className="px-3 py-1.5 bg-indigo-950 text-white text-xs font-bold rounded shadow hover:bg-indigo-950 transition-all"
                                                 >
                                                     Raise Invoice
                                                 </button>
@@ -854,21 +1121,29 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
             {/* 1. CONFIGURATION HEADER */}
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col lg:flex-row gap-8 relative">
-                <button 
-                    onClick={handleReset}
-                    className={`absolute top-4 right-4 text-xs font-bold transition-all flex items-center gap-1 px-3 py-1.5 rounded-lg border ${
-                        isResetting 
-                            ? 'bg-red-500 text-white border-red-500 hover:bg-red-600' 
-                            : 'text-red-500 hover:text-red-700 bg-red-50 border-red-100'
-                    }`}
-                >
-                    {isResetting ? 'Click Again to Confirm Reset' : 'Reset Defaults'}
-                </button>
+                <div className="absolute top-4 right-4 flex items-center gap-2">
+                    <button 
+                        onClick={handleLoadDefaults}
+                        className="text-xs font-bold transition-all px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                    >
+                        Load Studio Defaults
+                    </button>
+                    <button 
+                        onClick={handleReset}
+                        className={`text-xs font-bold transition-all flex items-center gap-1 px-3 py-1.5 rounded-lg border ${
+                            isResetting 
+                                ? 'bg-red-500 text-white border-red-500 hover:bg-red-600' 
+                                : 'text-red-500 hover:text-red-700 bg-red-50 border-red-100'
+                        }`}
+                    >
+                        {isResetting ? 'Click Again to Confirm Reset' : 'Reset Everything'}
+                    </button>
+                </div>
 
                 {/* LEFT COLUMN: ADJUSTMENTS */}
                 <div className="flex-1 space-y-6">
                     <div>
-                        <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+                        <h2 className="text-2xl font-black text-indigo-950 flex items-center gap-3">
                             <span className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><CalculatorIcon className="w-6 h-6"/></span>
                             Payment Ops & Invoicing
                         </h2>
@@ -939,7 +1214,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                     type="number" 
                                     value={initiationFee} 
                                     onChange={e => setInitiationFee(Number(e.target.value))}
-                                    className="w-20 text-right font-bold text-slate-800 outline-none border-b border-dashed border-slate-300 focus:border-indigo-500" 
+                                    className="w-20 text-right font-bold text-indigo-900 outline-none border-b border-dashed border-slate-300 focus:border-indigo-500" 
                                 />
                             </div>
 
@@ -966,7 +1241,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 </div>
 
                 {/* RIGHT COLUMN: TAX & RATIO */}
-                <div className="flex-1 bg-slate-900 rounded-2xl p-6 text-white relative overflow-hidden">
+                <div className="flex-1 bg-indigo-950 rounded-2xl p-6 text-white relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-4 opacity-10"><ShieldCheckIcon className="w-24 h-24" /></div>
                     
                     <div className="relative z-10">
@@ -1042,12 +1317,12 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         </tr>
                         {/* Grand Total Row */}
                         <tr className="bg-slate-50 font-bold">
-                            <td className="p-4 text-slate-900">GRAND TOTAL</td>
+                            <td className="p-4 text-indigo-950">GRAND TOTAL</td>
                             <td className="p-4 text-right">{formatCurrency(rawExecutionTotal + rawDesignFee)}</td>
                             <td className="p-4 text-right text-red-700">-{formatCurrency(executionDiscountVal + designDiscountVal)}</td>
                             <td className="p-4 text-right text-blue-900 bg-blue-100/20">{formatCurrency(taxableExecution + taxableDesign)}</td>
                             <td className="p-4 text-right text-slate-600">{formatCurrency(totalGST)}</td>
-                            <td className="p-4 text-right text-lg text-slate-900">{formatCurrency(grossProjectValue)}</td>
+                            <td className="p-4 text-right text-lg text-indigo-950">{formatCurrency(grossProjectValue)}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1074,7 +1349,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             {/* 4. REVISION HISTORY */}
             {financials.paymentRevisions && financials.paymentRevisions.length > 0 && (
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                    <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
+                    <h2 className="text-xl font-black text-indigo-950 mb-4 flex items-center gap-2">
                         <span className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg"><ClockIcon className="w-5 h-5"/></span>
                         Payment Revisions History
                     </h2>
@@ -1093,7 +1368,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                 {[...financials.paymentRevisions].reverse().map((rev) => (
                                     <tr key={rev.id} className="hover:bg-slate-50">
                                         <td className="p-4 text-slate-600">{new Date(rev.date).toLocaleString()}</td>
-                                        <td className="p-4 text-slate-800 font-medium">{rev.reason || 'Manual Revision'}</td>
+                                        <td className="p-4 text-indigo-900 font-medium">{rev.reason || 'Manual Revision'}</td>
                                         <td className="p-4 text-right">
                                             <div className="flex flex-col items-end">
                                                 <span className="text-slate-400 line-through text-xs">{formatCurrency(rev.previousExecutionValue || 0)}</span>
@@ -1131,7 +1406,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             )}
 
             {/* 5. NET RECEIVABLE FOOTER */}
-            <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-xl flex flex-col md:flex-row justify-between items-center gap-6">
+            <div className="bg-indigo-950 text-white p-6 rounded-2xl shadow-xl flex flex-col md:flex-row justify-between items-center gap-6">
                 <div className="flex-1">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Gross Project Value</p>
                     <h2 className="text-2xl font-black text-slate-200">{formatCurrency(grossProjectValue)}</h2>
@@ -1158,7 +1433,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-indigo-950/50 backdrop-blur-sm p-4"
                     >
                         <motion.div 
                             initial={{ scale: 0.95, opacity: 0 }}
@@ -1168,7 +1443,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         >
                             <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                                 <div>
-                                    <h2 className="text-xl font-bold text-slate-900">Version Comparison</h2>
+                                    <h2 className="text-xl font-bold text-indigo-950">Version Comparison</h2>
                                     <p className="text-sm text-slate-500 mt-1">
                                         Comparing <span className="font-semibold text-slate-700">{new Date(compareRevision.date).toLocaleString()}</span> vs Current
                                     </p>
@@ -1188,10 +1463,10 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                     {/* Previous Version */}
                                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                                         <div className="bg-slate-50 p-4 border-b border-slate-200">
-                                            <h3 className="font-bold text-slate-800 text-center">Previous Version</h3>
+                                            <h3 className="font-bold text-indigo-900 text-center">Previous Version</h3>
                                             <div className="flex justify-between mt-2 text-sm">
-                                                <span className="text-slate-500">Execution: <span className="font-bold text-slate-900">{formatCurrency(compareRevision.previousExecutionValue)}</span></span>
-                                                <span className="text-slate-500">Design: <span className="font-bold text-slate-900">{formatCurrency(compareRevision.previousDesignValue)}</span></span>
+                                                <span className="text-slate-500">Execution: <span className="font-bold text-indigo-950">{formatCurrency(compareRevision.previousExecutionValue)}</span></span>
+                                                <span className="text-slate-500">Design: <span className="font-bold text-indigo-950">{formatCurrency(compareRevision.previousDesignValue)}</span></span>
                                             </div>
                                         </div>
                                         <div className="p-4">
@@ -1205,10 +1480,10 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     // Use lockedTaxableBase if available, otherwise fallback to origBase
                                                     let amount = 0;
                                                     if (isCleared) {
-                                                        amount = (m.lockedTaxableBase || origBase) * (m.percentage / 100);
+                                                        amount = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : (m.lockedTaxableBase || origBase) * (m.percentage / 100);
                                                     } else {
                                                         // This is a simplified approximation for the modal
-                                                        amount = baseAmount * (m.percentage / 100); 
+                                                        amount = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : baseAmount * (m.percentage / 100); 
                                                     }
                                                     
                                                     const billable = m.type === 'execution' ? amount * (billablePercent / 100) : amount;
@@ -1223,7 +1498,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     return (
                                                         <div key={m.id} className="flex justify-between items-center text-sm p-2 bg-slate-50 rounded border border-slate-100">
                                                             <span className="text-slate-600 truncate pr-2" title={m.name}>{m.percentage}% - {m.name}</span>
-                                                            <span className="font-bold text-slate-900">{formatCurrency(total)}</span>
+                                                            <span className="font-bold text-indigo-950">{formatCurrency(total)}</span>
                                                         </div>
                                                     );
                                                 })}
@@ -1250,9 +1525,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     
                                                     let amount = 0;
                                                     if (isCleared) {
-                                                        amount = (m.lockedTaxableBase || origBase) * (m.percentage / 100);
+                                                        amount = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : (m.lockedTaxableBase || origBase) * (m.percentage / 100);
                                                     } else {
-                                                        amount = baseAmount * (m.percentage / 100); 
+                                                        amount = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : baseAmount * (m.percentage / 100); 
                                                     }
                                                     
                                                     const billable = m.type === 'execution' ? amount * (billablePercent / 100) : amount;

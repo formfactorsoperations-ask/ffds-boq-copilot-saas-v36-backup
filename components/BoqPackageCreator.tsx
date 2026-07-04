@@ -4,6 +4,7 @@ import Card from './shared/Card';
 import { generateBoqPackage, isAiAvailable } from '../services/geminiService';
 import { SparklesIcon } from './Icons';
 import { id as generateId } from '../lib/utils';
+import { INITIAL_BANK } from '../constants';
 
 interface BoqPackageCreatorProps {
   projectContext: ProjectContext;
@@ -31,7 +32,7 @@ const BoqPackageCreator: React.FC<BoqPackageCreatorProps> = ({ projectContext, b
     
     // The service returns AIGeneratedBoqItem[], we need to map to BoqItem[]
     const boqItems: BoqItem[] = generatedItems.map((genItem): BoqItem | null => {
-        const bankItem = bank.find(b => b.id === genItem.id);
+        const bankItem = bank.find(b => b.id === genItem.id) || INITIAL_BANK.find(b => b.id === genItem.id);
         if (!bankItem) return null; // Should not happen if AI follows instructions
         
         return {

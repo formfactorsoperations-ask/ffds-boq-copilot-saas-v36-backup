@@ -136,7 +136,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-indigo-950/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <MotionDiv
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -154,7 +154,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                   <div className="flex bg-white rounded-lg p-1 border border-slate-200">
                       <button 
                         onClick={() => setMode('items')} 
-                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === 'items' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === 'items' ? 'bg-indigo-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
                       >
                           Individual Items
                       </button>
@@ -180,7 +180,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                 {filteredBank.map(item => (
                     <div key={item.id} onClick={() => toggleItemSelection(item.id)} className={`p-3 border rounded-lg cursor-pointer transition-all flex justify-between items-center ${selectedItems.has(item.id) ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-200' : 'bg-white hover:border-blue-300'}`} >
                         <div>
-                            <p className="font-bold text-sm text-slate-800">{item.name}</p>
+                            <p className="font-bold text-sm text-indigo-900">{item.name}</p>
                             <p className="text-xs text-slate-500">{item.cat} • {item.specs}</p>
                         </div>
                         <div className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100">
@@ -203,7 +203,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                             >
                                 <div className="flex items-center gap-3 mb-2">
                                     <div className="text-2xl bg-indigo-50 w-10 h-10 flex items-center justify-center rounded-full group-hover:scale-110 transition-transform">{bundle.icon}</div>
-                                    <h4 className="font-bold text-slate-800">{bundle.name}</h4>
+                                    <h4 className="font-bold text-indigo-900">{bundle.name}</h4>
                                 </div>
                                 <p className="text-xs text-slate-500 mb-4 h-8">{bundle.description}</p>
                                 <div className="flex justify-between items-center border-t border-slate-100 pt-3">
@@ -227,7 +227,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <label className="text-xs font-semibold uppercase text-slate-400">Qty</label>
-                                    <input type="number" min="0" value={quantities[item.id]?.qty || 0} disabled={quantities[item.id]?.isLoading} onChange={e => handleQuantityChange(item.id, parseFloat(e.target.value))} className="w-20 p-1.5 border border-slate-300 rounded text-center font-bold text-slate-800" />
+                                    <input type="number" min="0" value={quantities[item.id]?.qty || 0} disabled={quantities[item.id]?.isLoading} onChange={e => handleQuantityChange(item.id, parseFloat(e.target.value))} className="w-20 p-1.5 border border-slate-300 rounded text-center font-bold text-indigo-900" />
                                 </div>
                            </div>
                            <div className="mt-2 text-xs text-indigo-700 italic bg-indigo-50 border border-indigo-100 p-2 rounded-md flex gap-2">
@@ -259,7 +259,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                     Cancel
                 </button>
                 {stage === 'select' ? (
-                    <button onClick={handleNext} disabled={selectedItems.size === 0} className="px-6 py-2 bg-slate-900 text-white font-bold rounded-lg shadow-md hover:bg-black disabled:bg-slate-300 disabled:shadow-none transition-all text-sm">
+                    <button onClick={handleNext} disabled={selectedItems.size === 0} className="px-6 py-2 bg-indigo-950 text-white font-bold rounded-lg shadow-md hover:bg-indigo-950 disabled:bg-slate-300 disabled:shadow-none transition-all text-sm">
                         Review Selection ({selectedItems.size})
                     </button>
                 ) : (

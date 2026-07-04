@@ -27,7 +27,7 @@ export default function ManualStepCompleter({ projectId, projectContext, activeT
                 </div>
                 <div>
                     <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">Required Action</p>
-                    <h3 className="font-bold text-slate-800 text-lg">{currentManualStep.title}</h3>
+                    <h3 className="font-bold text-indigo-900 text-lg">{currentManualStep.title}</h3>
                     <p className="text-sm text-slate-600 mt-1 max-w-xl">{currentManualStep.description}</p>
                 </div>
             </div>

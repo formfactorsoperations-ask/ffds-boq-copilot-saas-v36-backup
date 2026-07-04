@@ -256,11 +256,46 @@ export function useTimelinePhases(projectId: string, studioId: string) {
     }
   };
 
+  const shiftTimelinePhases = async (stepNumber: number, daysToShift: number) => {
+    if (!firestoreDb || !projectId || !studioId || daysToShift === 0) return;
+    try {
+      const sortedPhases = [...phases].sort((a, b) => a.stepNumber - b.stepNumber);
+      const targetIndex = sortedPhases.findIndex(p => p.stepNumber === stepNumber);
+      if (targetIndex === -1) return;
+
+      const batch = writeBatch(firestoreDb);
+      const phasesRef = collection(firestoreDb, `studios/${studioId}/projects/${projectId}/timelinePhases`);
+      
+      let lastEndDate = new Date();
+      for (let i = targetIndex; i < sortedPhases.length; i++) {
+        const phase = sortedPhases[i];
+        const newStartDate = new Date(phase.startDate);
+        newStartDate.setDate(newStartDate.getDate() + daysToShift);
+        const newEndDate = new Date(phase.endDate);
+        newEndDate.setDate(newEndDate.getDate() + daysToShift);
+
+        batch.update(doc(phasesRef, String(phase.stepNumber)), {
+          startDate: newStartDate.toISOString(),
+          endDate: newEndDate.toISOString()
+        });
+        lastEndDate = newEndDate;
+      }
+
+      const projectRef = doc(firestoreDb, `studios/${studioId}/projects`, projectId);
+      batch.set(projectRef, { estimatedCompletionDate: lastEndDate.toISOString() }, { merge: true });
+
+      await batch.commit();
+    } catch (err) {
+      console.error("Error shifting timeline:", err);
+    }
+  };
+
   return {
     phases,
     loading,
     buildTimelineFromTemplate,
     updatePhaseDuration,
+    shiftTimelinePhases,
     resetTimeline,
   };
 }

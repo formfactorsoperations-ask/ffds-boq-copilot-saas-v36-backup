@@ -58,12 +58,12 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h3 className="text-lg font-bold text-slate-800">Approved Design Documents</h3>
+                    <h3 className="text-lg font-bold text-indigo-900">Approved Design Documents</h3>
                     <p className="text-sm text-slate-500">Share Google Drive links to finalized PDFs with the client securely.</p>
                 </div>
                 <button 
                     onClick={() => setIsAdding(!isAdding)}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-950 text-white text-sm font-bold rounded-lg hover:bg-indigo-900 transition-colors"
                 >
                     {isAdding ? 'Cancel' : <><Plus className="w-4 h-4" /> Add Document Link</>}
                 </button>
@@ -130,7 +130,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                     {Object.entries(groupedDocs).map(([roomName, roomDocs]) => (
                         <div key={roomName} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                             <div className="bg-slate-50 p-4 border-b border-slate-100 flex items-center justify-between">
-                                <h4 className="font-bold text-slate-800">{roomName}</h4>
+                                <h4 className="font-bold text-indigo-900">{roomName}</h4>
                                 <span className="text-xs font-bold text-slate-400 bg-white px-2 py-1 rounded border border-slate-200">
                                     {roomDocs.length} {roomDocs.length === 1 ? 'Doc' : 'Docs'}
                                 </span>
@@ -145,7 +145,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                                 </div>
                                             </div>
                                             <div className="min-w-0">
-                                                <p className="font-medium text-slate-900 text-sm truncate" title={doc.title}>{doc.title}</p>
+                                                <p className="font-medium text-indigo-950 text-sm truncate" title={doc.title}>{doc.title}</p>
                                                 <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:text-blue-700 hover:underline flex items-center gap-1 mt-0.5 truncate">
                                                     View Document <ArrowUpRight className="w-3 h-3 flex-shrink-0" />
                                                 </a>
