@@ -139,7 +139,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
             
             // Collect related BOQ items
             const relatedBoqItems = fullBoq
-                .filter(i => i.cat === drawing.boqTriggers[0]) // Simple matching for demo
+                .filter(i => (i.cat || i.category) === drawing.boqTriggers[0]) // Simple matching for demo
                 .map(i => `${i.name} (${i.qty} ${i.unit})`)
                 .join('\n');
             const boqItemsList = relatedBoqItems || 'No items matched directly. Rely on trigger logic.';

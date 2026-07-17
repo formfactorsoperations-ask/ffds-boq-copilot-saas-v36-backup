@@ -28,6 +28,7 @@
     "noEmit": true
   },
   "exclude": [
+    "dist",
     "functions"
   ]
 }

@@ -1,0 +1,35 @@
+
+                      // 5. Payment Due (within 7 days or overdue)
+                      const upcomingOrOverdue =
+                        project.context?.paymentMilestones
+                          ?.filter((m) => {
+                            const st = m.status?.toLowerCase();
+                            if (st === "paid" || st === "cleared" || st === "received" || !m.date) return false;
+                            const mDate = new Date(m.date);
+                            if (isNaN(mDate.getTime())) return false;
+                            const in7Days = new Date();
+                            in7Days.setDate(in7Days.getDate() + 7);
+                            return mDate <= in7Days;
+                          })
+                          .sort(
+                            (a, b) =>
+                              new Date(a.date!).getTime() -
+                              new Date(b.date!).getTime(),
+                          );
+
+                      if (upcomingOrOverdue && upcomingOrOverdue.length > 0) {
+                        const mDate = new Date(upcomingOrOverdue[0].date!);
+                        const now = new Date();
+                        now.setHours(0, 0, 0, 0); // compare dates only
+                        const isOverdue = mDate < now;
+                        
+                        const d = mDate.toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                        });
+                        conditions.push({
+                          dot: isOverdue ? "bg-rose-500 animate-pulse" : "bg-amber-500",
+                          text: isOverdue ? `Payment Overdue ${d}` : `Payment due ${d}`,
+                          isAlert: isOverdue
+                        });
+                      }

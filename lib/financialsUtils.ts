@@ -83,7 +83,7 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
     let designPaid = initiationFee; // Initiation fee counts towards design typically?
     let executionPaid = 0;
     let totalInvoicedBaseAmt = 0;
-    let overdueAmt = 0;
+    let pendingAmt = 0;
     
     let isFirstDesign = true;
 
@@ -103,9 +103,10 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
             else executionPaid += finalAmount;
         }
         
-        if (m.status === 'invoiced') {
+                if (m.status === 'invoiced' || m.status === 'advance_requested') {
             totalInvoicedBaseAmt += finalAmount;
-            overdueAmt += finalAmount;
+            
+            pendingAmt += finalAmount;
         }
     });
 
@@ -115,7 +116,7 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
         designPaid: Math.round(designPaid),
         executionPaid: Math.round(executionPaid),
         totalInvoicedBaseAmt: Math.round(totalInvoicedBaseAmt),
-        overdueAmt: Math.round(overdueAmt),
+        pendingAmt: Math.round(pendingAmt),
         calculateMilestoneTotal
     };
 }

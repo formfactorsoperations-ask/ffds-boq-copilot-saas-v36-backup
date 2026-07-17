@@ -335,6 +335,7 @@ export interface MaterialSelection {
     priceUnit?: string;
     estimatedQty?: number | null;
     estimatedTotal?: number | null;
+    allowancePrice?: number | null;
     clientConfirmedAt?: string | null;
     clientConfirmMethod?: string | null;
     confirmationSentAt?: string | null;
@@ -417,6 +418,71 @@ export interface ProjectLifecycle {
     updatedBy?: string;
 }
 
+
+export interface ReportCorrection {
+    id: string;
+    fieldPath: string; // e.g. 'paymentPlan[0].status' or 'healthLabel'
+    originalValue: any;
+    correctedValue: any;
+    reason: string;
+    correctedBy: string;
+    correctedAt: number;
+    mismatchTaskId?: string;
+    state: 'active' | 'retired';
+}
+
+export interface MismatchTask {
+    id: string;
+    type: 'report_source_mismatch' | string;
+    module: string;
+    instruction: string;
+    raisedByReport?: string;
+    correctionId?: string;
+    status: 'open' | 'resolved';
+    createdAt: number;
+    createdBy: string;
+}
+
+export interface WeeklyPulseReport {
+  photos?: string[];
+  corrections?: ReportCorrection[];
+  id: string;
+  weekNumber: number;
+  startDate: string;
+  endDate: string;
+  publishedAt?: string;
+  executiveBriefing: string;
+  nextWeekPlan?: string;
+  manualActions?: { id: string; text: string; assignee: 'client'|'studio' }[];
+  roomProgress?: Record<string, number>;
+  revisions?: { id: string; drawing: string; change: string; category: string; charge: string }[];
+  selections?: { id: string; category: string; selectedCount: number; totalCount: number; pendingText: string }[];
+  status?: 'building' | 'published';
+  syncCount?: number;
+  syncedAt?: number;
+  paymentPlan?: any[];
+  avgClearanceDays?: number;
+  healthLabel?: 'On Track' | 'At Risk' | 'Delayed';
+  deltas?: Record<string, number>;
+  activities?: { date: string, text: string }[];
+  velocity?: { clientAvgHours?: number; studioAvgHours?: number; coveragePercent: number; };
+  categoryProgress?: { category: string; percentage: number; roomsCovered: number; totalRooms: number; }[];
+  openItems?: { client: { text: string; date?: string; type: string }[]; studio: { text: string; date?: string; type: string }[]; };
+  revisionLedger?: { clientRequested: number; siteCondition: number; internalRefinement: number; unclassified: number; chargeableSummary: string[]; };
+  sectionVisibility: {
+    weekAtGlance: boolean;
+    governance: boolean;
+    designProgress: boolean;
+    revisions: boolean;
+    financials: boolean;
+    siteProgress: boolean;
+    selections: boolean;
+    upcomingPlan: boolean;
+    actionRequired: boolean;
+  };
+  studioNotes: Record<string, string>;
+}
+
 export interface ProjectContext {
     name: string;
     location: string;
@@ -453,6 +519,24 @@ export interface ProjectContext {
     proposalDecision?: ProposalDecision;
     contractContent?: ContractContent;
     contractSignoff?: {
+        status: 'pending' | 'sent' | 'signed' | 'disputed';
+        token?: string;
+        sentAt?: any;
+        signedAt?: any;
+        clientName?: string;
+        ipAddress?: string;
+        refId?: string;
+    };
+    handoverSignoff?: {
+        status: 'pending' | 'sent' | 'signed' | 'disputed';
+        token?: string;
+        sentAt?: any;
+        signedAt?: any;
+        clientName?: string;
+        ipAddress?: string;
+        refId?: string;
+    };
+    designAgreementSignoff?: {
         status: 'pending' | 'sent' | 'signed' | 'disputed';
         token?: string;
         sentAt?: any;
@@ -532,6 +616,11 @@ export interface ProjectContext {
     paymentSchedules?: PaymentSchedule[];
     lifecycle?: ProjectLifecycle;
     engagement?: ProjectEngagement;
+    weeklyReportCommentaries?: Record<string, string>;
+    weeklyPulseReports?: WeeklyPulseReport[];
+    weeklyRoomProgress?: Record<string, Record<string, { progress: number; stage: string }>>;
+    weeklyDrawingProgress?: Record<string, Record<string, string>>;
+    executionApprovedByFFDS?: boolean;
 }
 
 export interface SiteUpdateRecord {
@@ -669,6 +758,7 @@ export interface BoqItem {
 
 export interface FullBoqItem extends Item, BoqItem {
     // Merged properties from Item and BoqItem
+    category?: string;
 }
 
 export interface ProjectTask {
@@ -1034,6 +1124,9 @@ export interface ExecutionUpdate {
 }
 
 export interface ActiveProject {
+    drawingTracker?: any[];
+    paymentGates?: any[];
+    tasks?: any[];
     tierId: string;
     budget: number;
     startDate: string;

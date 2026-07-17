@@ -73,6 +73,7 @@ const TABS = [
   { id: 'payment-schedule', label: 'Payment Schedule', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📋</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
   { id: 'handover-docket', label: 'Handover Docket', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🏆</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
   { id: 'client', label: 'Client Proposal', icon: <ClientIcon />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
+  { id: 'weekly-report', label: 'Weekly Progress Report', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📈</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director', 'Site Supervisor'] },
   { id: 'client-portal', label: 'Client Portal Preview', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🌐</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
   { id: 'onboarding', label: 'Onboarding Kit', icon: <OnboardingIcon />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
   { id: 'contract', label: 'Contract', icon: <ContractIcon />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
@@ -310,10 +311,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, aiStatus, lo
                               )}
                               {tab.id === 'terms-docket' && (
                                 <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  (projectContext?.engagement?.status === 'issued' || projectContext?.engagement?.status === 'acknowledged')
-                                    ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-rose-600 bg-rose-100/80 border border-rose-200'
+                                  projectContext?.designAgreementSignoff?.status === 'signed' ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200'
+                                  : projectContext?.designAgreementSignoff?.status === 'sent' ? 'text-blue-600 bg-blue-100/80 border border-blue-200'
+                                  : 'text-slate-500 bg-slate-100 border border-slate-200'
                                 }`}>
-                                  {projectContext?.engagement?.status === 'acknowledged' ? 'Ack' : projectContext?.engagement?.status === 'issued' ? 'Issued' : 'Draft'}
+                                  {projectContext?.designAgreementSignoff?.status === 'signed' ? 'Signed' : projectContext?.designAgreementSignoff?.status === 'sent' ? 'Sent' : 'Draft'}
                                 </span>
                               )}
                               {tab.id === 'payment-schedule' && (
@@ -326,13 +328,15 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, aiStatus, lo
                               )}
                               {tab.id === 'handover-docket' && (
                                 <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  projectContext?.handoverDate ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-rose-600 bg-rose-100/80 border border-rose-200'
+                                  projectContext?.handoverSignoff?.status === 'signed' ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200'
+                                  : projectContext?.handoverSignoff?.status === 'sent' ? 'text-blue-600 bg-blue-100/80 border border-blue-200'
+                                  : 'text-slate-500 bg-slate-100 border border-slate-200'
                                 }`}>
-                                  {projectContext?.handoverDate ? 'Issued' : 'Draft'}
+                                  {projectContext?.handoverSignoff?.status === 'signed' ? 'Signed' : projectContext?.handoverSignoff?.status === 'sent' ? 'Sent' : 'Draft'}
                                 </span>
                               )}
                             </button>
-                          )
+                          );
                         })}
                       </div>
                     </motion.div>

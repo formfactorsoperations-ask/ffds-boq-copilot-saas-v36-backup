@@ -27,7 +27,7 @@ export function PaymentHealthBadge({ health, size = 'md' }: { health: PaymentHea
         return <span className="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> Secured</span>;
     }
 
-    const { healthStatus, healthRatio, overdueAmount } = health;
+    const { healthStatus, healthRatio, pendingAmount } = health;
 
     const statusConfig = {
         green: { dot: 'bg-emerald-500', bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'Healthy' },
@@ -102,8 +102,8 @@ export function PaymentHealthWidget({ health, contractValue, revisedContractValu
         riskLevel = 'No Financials';
         riskBg = 'bg-slate-50 border-slate-200';
         riskText = 'text-slate-500';
-    } else if (health.overdueCount > 0) {
-        riskLevel = 'Overdue Alert';
+    } else if (health.pendingCount > 0) {
+        riskLevel = 'Pending Alert';
         riskBg = 'bg-rose-50/50 border-rose-200 shadow-sm ring-1 ring-rose-100 ring-inset';
         riskText = 'text-rose-700';
     } else if (pendingCollectionAmt > 0) {
@@ -123,7 +123,7 @@ export function PaymentHealthWidget({ health, contractValue, revisedContractValu
         <div className={`text-left p-6 md:p-8 rounded-[2rem] flex flex-col justify-between w-full lg:flex-1 md:min-w-[300px] border transition-all ${riskBg}`}>
             <div>
                 <div className="flex justify-between items-start mb-4 gap-2">
-                    <p className={`text-[10px] font-bold uppercase tracking-widest shrink-0 ${health.overdueCount > 0 ? 'text-rose-500' : 'text-slate-500'}`}>
+                    <p className={`text-[10px] font-bold uppercase tracking-widest shrink-0 ${health.pendingCount > 0 ? 'text-rose-500' : 'text-slate-500'}`}>
                         Payment Ledger
                     </p>
                 </div>
@@ -132,9 +132,9 @@ export function PaymentHealthWidget({ health, contractValue, revisedContractValu
                     {riskLevel}
                 </h3>
 
-                <p className={`text-sm font-medium ${health.overdueCount > 0 ? 'text-rose-600/80' : 'text-slate-500'}`}>
+                <p className={`text-sm font-medium ${health.pendingCount > 0 ? 'text-rose-600/80' : 'text-slate-500'}`}>
                    {health.healthStatus === 'unconfigured' ? 'Execute milestones to track cash flow.' :
-                    health.overdueCount > 0 ? `${health.overdueCount} payment(s) marked as invoiced but no receipts logged.` :
+                    health.pendingCount > 0 ? `${health.pendingCount} payment(s) marked as invoiced but no receipts logged.` :
                     pendingCollectionAmt > 0 ? `Waiting for payment receipts on raised invoices.` :
                     collectedAmt > 0 && collectedAmt >= cv * 0.95 ? 'All milestones marked as paid.' :
                     health.healthStatus === 'neutral' ? 'Waiting for first invoice trigger.' :
@@ -182,8 +182,8 @@ export function PaymentHealthWidget({ health, contractValue, revisedContractValu
                              </div>
                         </div>
                         <div className="border-r border-slate-200 last:border-0 pr-3 pl-1">
-                             <p className={`text-[9px] font-bold uppercase tracking-widest mb-1 ${health.overdueCount > 0 ? 'text-rose-500' : 'text-amber-600/80'}`}>Due Now</p>
-                             <p className={`text-sm font-bold ${health.overdueCount > 0 ? 'text-rose-600' : 'text-amber-700'}`}>{formatCurrency(pendingCollectionAmt)}</p>
+                             <p className={`text-[9px] font-bold uppercase tracking-widest mb-1 ${health.pendingCount > 0 ? 'text-rose-500' : 'text-amber-600/80'}`}>Due Now</p>
+                             <p className={`text-sm font-bold ${health.pendingCount > 0 ? 'text-rose-600' : 'text-amber-700'}`}>{formatCurrency(pendingCollectionAmt)}</p>
                         </div>
                         <div className="pl-1">
                              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Unbilled</p>

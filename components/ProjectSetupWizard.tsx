@@ -148,7 +148,8 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                   const fullBoqForTimeline: FullBoqItem[] = (premiumTier.boq || []).map(boqItem => {
                       const bankItem = bank.find(b => b.id === boqItem.bankId) || INITIAL_BANK.find(i => i.id === boqItem.bankId);
                       if (!bankItem) return null;
-                      return { ...bankItem, ...boqItem, margin: boqItem.marginOverride ?? bankItem.margin };
+                      const effectiveMaterials = boqItem.baseRate !== undefined ? boqItem.baseRate : bankItem.materials;
+                      return { ...bankItem, ...boqItem, materials: effectiveMaterials, margin: boqItem.marginOverride ?? bankItem.margin };
                   }).filter((i): i is FullBoqItem => i !== null);
                   
                   const timeline = await generateProjectTimeline(fullBoqForTimeline);

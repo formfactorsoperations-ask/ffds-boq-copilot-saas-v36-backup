@@ -1,22 +1,10 @@
 const fs = require('fs');
 
-let content = fs.readFileSync('components/StudioDashboard.tsx', 'utf8');
+let code = fs.readFileSync('components/WeeklyProgressReportTab.tsx', 'utf8');
+code = code.replace(/import \{ doc, getDoc, collection, getDocs, setDoc, updateDoc \} from 'firebase\/firestore';\n/, '');
+fs.writeFileSync('components/WeeklyProgressReportTab.tsx', code);
 
-// remove imports
-content = content.replace(/import BoqHealthCheckDrawer.*?\n/, '');
-content = content.replace(/import BookingPackModal.*?\n/, '');
-content = content.replace(/import BookingPackDrawer.*?\n/, '');
-content = content.replace(/import CompareVersionsModal.*?\n/, '');
-
-// remove state vars
-content = content.replace(/.*exportIncludeMargin.*\n/, '');
-content = content.replace(/.*isBookingPackModalOpen.*\n/, '');
-content = content.replace(/.*isBookingPackDrawerOpen.*\n/, '');
-content = content.replace(/.*isHealthCheckOpen.*\n/, '');
-content = content.replace(/.*showCompareModal.*\n/, '');
-content = content.replace(/.*selectedVersionsToCompare.*\n/, '');
-
-// The toggleLens feature
-content = content.replace(/.*toggleLens.*\n.*setLensEnabled.*\n.*setAuditData.*\n.*\};\n/, '');
-
-fs.writeFileSync('components/StudioDashboard.tsx', content);
+let comp = fs.readFileSync('services/weeklyReportCompiler.ts', 'utf8');
+comp = comp.replace(/import \{ dbService \} from '\.\/dbService';\n/, 'import { db as dbService } from \'./dbService\';\n');
+fs.writeFileSync('services/weeklyReportCompiler.ts', comp);
+console.log('Fixed imports');

@@ -1,0 +1,864 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { ProjectContext, SiteUpdateRecord, PaymentMilestone, ProposalTier, Item, FullProjectData, WeeklyPulseReport, DrawingTrackerItem, PaymentAdvance } from '../types';
+import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../services/firebaseClient';
+import { useOrg } from '../contexts/OrgContext';
+import { Calendar, ChevronLeft, ChevronRight, Share2, Printer, Eye, Sliders, MessageCircle, Wand2, Plus, CheckCircle2, Copy, Loader2 } from 'lucide-react';
+import { formatCurrency, formatINR } from '../lib/utils';
+import { generateComprehensiveWeeklyReport } from '../services/geminiService';
+import { motion, AnimatePresence } from 'framer-motion';
+
+interface WeeklyProgressReportTabProps {
+    projectContext: ProjectContext;
+    setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
+    activeTier?: ProposalTier;
+    bank?: Item[];
+    projectId?: string;
+    projectData?: FullProjectData;
+}
+
+export default function WeeklyProgressReportTab({ 
+    projectContext, 
+    setProjectContext,
+    activeTier,
+    bank,
+    projectId,
+    projectData
+}: WeeklyProgressReportTabProps) {
+    const { orgData } = useOrg();
+    const orgId = orgData?.tenantId || 'demo-tenant-01';
+
+    const [realDrawings, setRealDrawings] = useState<DrawingTrackerItem[]>([]);
+    
+    useEffect(() => {
+        if (!projectId || !db) return;
+        const unsub = onSnapshot(
+            collection(db, `organizations/${orgId}/projects/${projectId}/drawingTracker`),
+            (snap) => {
+                const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as DrawingTrackerItem));
+                setRealDrawings(list);
+            },
+            (err) => {
+                console.error("Failed to load drawings inside weekly report", err);
+            }
+        );
+        return () => unsub();
+    }, [projectId, orgId]);
+
+    const [activeViewMode, setActiveViewMode] = useState<'ops' | 'client'>('ops');
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [selectedWeek, setSelectedWeek] = useState<number>(1);
+    
+    // Resolve project start date
+    const projectStartDateStr = useMemo(() => {
+        if (projectContext.paymentScheduleConfig?.signupDate) {
+            return projectContext.paymentScheduleConfig.signupDate;
+        }
+        const updates = projectContext.siteUpdates || [];
+        if (updates.length > 0) {
+            const sorted = [...updates].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            return sorted[0].date;
+        }
+        const date = new Date();
+        date.setDate(date.getDate() - 28);
+        return date.toISOString();
+    }, [projectContext.paymentScheduleConfig?.signupDate, projectContext.siteUpdates]);
+
+    const projectStartDate = useMemo(() => new Date(projectStartDateStr), [projectStartDateStr]);
+
+    const weeksList = useMemo(() => {
+        const today = new Date();
+        const start = new Date(projectStartDate);
+        const diffTime = Math.abs(today.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const totalWeeks = Math.max(1, Math.ceil(diffDays / 7));
+        
+        const weeks = [];
+        for (let i = 0; i < totalWeeks; i++) {
+            const wStart = new Date(start);
+            wStart.setDate(start.getDate() + i * 7);
+            const wEnd = new Date(wStart);
+            wEnd.setDate(wStart.getDate() + 6);
+            wEnd.setHours(23, 59, 59, 999);
+            
+            const formatDateStr = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            weeks.push({
+                weekNumber: i + 1,
+                start: wStart,
+                end: wEnd,
+                label: `Week ${i + 1}`,
+                dateRange: `${formatDateStr(wStart).replace(/, \d{4}/, '')} – ${formatDateStr(wEnd)}`
+            });
+        }
+        return weeks;
+    }, [projectStartDate]);
+
+    useEffect(() => {
+        if (weeksList.length > 0 && (selectedWeek < 1 || selectedWeek > weeksList.length)) {
+            setSelectedWeek(weeksList.length);
+        }
+    }, [weeksList, selectedWeek]);
+
+    const activeWeekRange = useMemo(() => {
+        return weeksList.find(w => w.weekNumber === selectedWeek) || weeksList[weeksList.length - 1] || {
+            weekNumber: 1,
+            start: new Date(projectStartDate),
+            end: new Date(),
+            label: 'Week 1',
+            dateRange: 'Pending'
+        };
+    }, [weeksList, selectedWeek, projectStartDate]);
+
+    // Data compilation for the current week report
+    const pulseReports = projectContext.weeklyPulseReports || [];
+    let currentPulse = pulseReports.find(p => p.weekNumber === selectedWeek);
+    
+    if (!currentPulse) {
+        currentPulse = {
+            id: `pulse-wk${selectedWeek}`,
+            weekNumber: selectedWeek,
+            startDate: activeWeekRange.start.toISOString(),
+            endDate: activeWeekRange.end.toISOString(),
+            executiveBriefing: '',
+            sectionVisibility: {
+                weekAtGlance: true,
+                governance: true,
+                designProgress: true,
+                revisions: true,
+                financials: true,
+                siteProgress: true,
+                selections: false
+            },
+            studioNotes: {},
+            manualActions: []
+        };
+    }
+
+    const updateCurrentPulse = (updater: (prev: WeeklyPulseReport) => WeeklyPulseReport) => {
+        const nextPulse = updater(currentPulse!);
+        setProjectContext(prev => {
+            const reports = prev.weeklyPulseReports || [];
+            const idx = reports.findIndex(r => r.weekNumber === selectedWeek);
+            if (idx >= 0) {
+                const newReports = [...reports];
+                newReports[idx] = nextPulse;
+                return { ...prev, weeklyPulseReports: newReports };
+            } else {
+                return { ...prev, weeklyPulseReports: [...reports, nextPulse] };
+            }
+        });
+    };
+
+    // Derived Data
+    // Governance
+    const govData = {
+        executionSigned: projectContext.engagement?.acknowledgedAt ? new Date(projectContext.engagement.acknowledgedAt).toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'}) : null,
+        tcAck: projectContext.engagement?.acknowledgedAt ? new Date(projectContext.engagement.acknowledgedAt).toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'}) : null,
+        boqBaseline: projectContext.engagement?.docketRef ? `v${projectContext.engagement.termsVersion}.0 · locked` : 'Pending',
+        gateConditions: Object.values((projectContext.lifecycle as any)?.checklist || {}).filter((c: any) => c.done).length,
+        totalGateConditions: Object.keys((projectContext.lifecycle as any)?.checklist || {}).length || 6,
+        gateFrozen: (projectContext.lifecycle as any)?.gateActivated
+    };
+
+    // Financials
+    const advances = projectContext.paymentSchedules?.find(s => s.status === 'issued' || s.status === 'acknowledged')?.advances || [];
+    const designAdvances = advances.filter(a => a.phase === 'design');
+    const execAdvances = advances.filter(a => a.phase === 'execution' || a.phase === 'handover');
+    
+    const countCleared = (advs: PaymentAdvance[]) => advs.filter(a => a.status === 'received').length;
+
+    // Design
+    const drawingsApproved = realDrawings.filter(d => d.rounds && d.rounds.some(r => r.status === 'approved')).length;
+    const drawingsWithClient = realDrawings.filter(d => d.rounds && d.rounds.some(r => r.status === 'issued' || r.status === 'in_review')).length;
+    const drawingsInRevision = realDrawings.filter(d => d.rounds && d.rounds.some(r => r.status === 'not_issued' && r.roundNumber > 1)).length;
+    const totalDrawings = realDrawings.length || 1;
+    const designCompletionPct = Math.round((drawingsApproved / totalDrawings) * 100);
+
+    const handleRegenerateBriefing = async () => {
+        setIsGenerating(true);
+        try {
+            const financialSummary = `Design Advances: ${countCleared(designAdvances)} of ${designAdvances.length} cleared. Execution Advances: ${countCleared(execAdvances)} of ${execAdvances.length} cleared.`;
+            const designSummary = `Drawings Approved: ${drawingsApproved}. With Client: ${drawingsWithClient}. In Revision: ${drawingsInRevision}. Total: ${totalDrawings}. Design completion: ${designCompletionPct}%`;
+            
+            const siteProgressArr = (projectContext.rooms || []).map(r => `${r.name}: ${currentPulse?.roomProgress?.[r.name] || 0}%`);
+            const executionSummary = `Room Progress: ${siteProgressArr.join(', ')}`;
+            
+            const decisionsSummary = `Governance T&C Ack: ${govData.tcAck || 'Pending'}, Execution Signed: ${govData.executionSigned || 'Pending'}, BOQ Baseline: ${govData.boqBaseline}`;
+            
+            const summary = await generateComprehensiveWeeklyReport(
+                projectContext,
+                selectedWeek,
+                activeWeekRange.dateRange,
+                financialSummary,
+                designSummary,
+                executionSummary,
+                decisionsSummary
+            );
+            
+            if (summary && summary.trim().length > 0) {
+                updateCurrentPulse(p => ({ ...p, executiveBriefing: summary }));
+            }
+        } catch (e) {
+            console.error("Failed to generate briefing", e);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    // Render Ops Console
+    const renderOpsConsole = () => {
+        return (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-[#f4f3f0] p-6 rounded-2xl">
+                <div className="lg:col-span-12 flex justify-between items-center mb-2">
+                    <div>
+                        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
+                            Studio Ops Console — {projectContext.name}
+                        </h2>
+                        <h3 className="text-xl font-bold text-slate-900">
+                            Weekly Pulse · Week {selectedWeek}
+                        </h3>
+                        <p className="text-sm text-slate-600">Draft compiled {new Date().toLocaleDateString('en-IN', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})} · {activeWeekRange.dateRange}</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <button onClick={() => setActiveViewMode('client')} className="px-5 py-2.5 bg-white border border-indigo-200 text-indigo-700 font-bold rounded-xl shadow-sm hover:bg-indigo-50 transition-colors">
+                            Preview Client Briefing
+                        </button>
+                        <button className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-2">
+                            Copy WhatsApp Update
+                        </button>
+                        <button className="px-5 py-2.5 bg-indigo-950 text-white font-bold rounded-xl shadow-sm hover:bg-indigo-900 transition-colors">
+                            Publish Report
+                        </button>
+                    </div>
+                </div>
+
+                {/* LEFT COL */}
+                <div className="lg:col-span-7 space-y-6">
+                    {/* Executive Briefing */}
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60">
+                        <div className="flex justify-between items-center mb-4">
+                            <h4 className="font-bold text-slate-800 text-sm tracking-wide uppercase">Executive Briefing</h4>
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md uppercase tracking-wider">Editable</span>
+                        </div>
+                        <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-100 mb-4">
+                            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-2">AI Draft · Review Before Publish</p>
+                            <textarea 
+                                className="w-full bg-transparent border-none p-0 text-slate-700 text-sm leading-relaxed resize-none focus:ring-0"
+                                rows={6}
+                                value={currentPulse?.executiveBriefing || "Drawing documentation is moving well. Please review the updated items so we can close the design phase."}
+                                onChange={(e) => updateCurrentPulse(p => ({ ...p, executiveBriefing: e.target.value }))}
+                            />
+                        </div>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={handleRegenerateBriefing}
+                                disabled={isGenerating}
+                                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                                {isGenerating ? 'Generating...' : 'Regenerate'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Site Progress */}
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60">
+                        <div className="flex justify-between items-center mb-6">
+                            <h4 className="font-bold text-slate-800 text-sm tracking-wide uppercase">Site Progress — Quick Update</h4>
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md uppercase tracking-wider">Editable</span>
+                        </div>
+                        <div className="space-y-4">
+                            {(projectContext.rooms || []).map((r, idx) => {
+                                const currentProg = currentPulse?.roomProgress?.[r.name] || 0;
+                                const prevPulse = weeksList.find(w => w.weekNumber === selectedWeek - 1);
+                                const prevProg = prevPulse?.roomProgress?.[r.name] || 0;
+                                return (
+                                <div key={`room-${r.name || idx}-${idx}`} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <span className="font-bold text-slate-800 text-sm w-1/3">{r.name}</span>
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-xs text-slate-400">last wk {prevProg}%</span>
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => updateCurrentPulse(p => ({
+                                                    ...p,
+                                                    roomProgress: {
+                                                        ...(p.roomProgress || {}),
+                                                        [r.name]: Math.max(0, currentProg - 5)
+                                                    }
+                                                }))}
+                                                className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-600">-</button>
+                                            <span className="font-bold text-sm w-12 text-center">{currentProg}%</span>
+                                            <button 
+                                                onClick={() => updateCurrentPulse(p => ({
+                                                    ...p,
+                                                    roomProgress: {
+                                                        ...(p.roomProgress || {}),
+                                                        [r.name]: Math.min(100, currentProg + 5)
+                                                    }
+                                                }))}
+                                                className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-600">+</button>
+                                        </div>
+                                        <span className="text-xs font-bold text-slate-400 uppercase w-20">
+                                            {currentProg === 100 ? 'Finished' : currentProg === 0 ? 'Not Started' : 'In Progress'}
+                                        </span>
+                                    </div>
+                                </div>
+                                );
+                            })}
+                            {(!projectContext.rooms || projectContext.rooms.length === 0) && (
+                                <div className="p-4 text-center text-slate-500 text-sm">No rooms defined in project context.</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* RIGHT COL */}
+                <div className="lg:col-span-5 space-y-6">
+                    {/* Governance */}
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60">
+                        <div className="flex justify-between items-center mb-6">
+                            <h4 className="font-bold text-slate-800 text-sm tracking-wide uppercase">Governance</h4>
+                            <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-xs font-bold rounded-md uppercase tracking-wider">Compiled</span>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                                <span className="text-sm text-slate-600">T&C acknowledged</span>
+                                <span className="text-sm font-bold text-slate-900">{govData.tcAck || 'Pending'}</span>
+                            </div>
+                            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                                <span className="text-sm text-slate-600">Execution Agreement</span>
+                                <span className="text-sm font-bold text-slate-900">{govData.executionSigned ? `Signed · ${govData.executionSigned}` : 'Pending'}</span>
+                            </div>
+                            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                                <span className="text-sm text-slate-600">Design Complete Gate</span>
+                                <span className="text-sm font-bold text-slate-900">{govData.gateFrozen ? 'Frozen ✓' : `${govData.gateConditions}/${govData.totalGateConditions} met`}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-slate-600">BOQ baseline</span>
+                                <span className="text-sm font-bold text-slate-900">{govData.boqBaseline}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Financials */}
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60">
+                        <div className="flex justify-between items-center mb-6">
+                            <h4 className="font-bold text-slate-800 text-sm tracking-wide uppercase">Financials</h4>
+                            <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-xs font-bold rounded-md uppercase tracking-wider">Compiled</span>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                                <span className="text-sm text-slate-600">Design fee (25/40/35)</span>
+                                <span className="text-sm font-bold text-slate-900">{countCleared(designAdvances)} of {designAdvances.length} cleared</span>
+                            </div>
+                            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                                <span className="text-sm text-slate-600">Execution ({(projectContext.paymentScheduleConfig as any)?.executionStructure === 'standard' ? '40/30/20/10' : 'Custom'})</span>
+                                <span className="text-sm font-bold text-slate-900">{countCleared(execAdvances)} of {execAdvances.length} cleared</span>
+                            </div>
+                            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                                <span className="text-sm text-slate-600">Scope additions</span>
+                                <span className="text-sm font-bold text-slate-900">{((projectContext as any).scopeAdditions || []).length} active</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-slate-600">Account standing</span>
+                                <span className="text-sm font-bold text-emerald-600 flex items-center gap-1">Current <CheckCircle2 className="w-3.5 h-3.5" /></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Revisions (Editable) */}
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60">
+                        <div className="flex justify-between items-center mb-6">
+                            <h4 className="font-bold text-slate-800 text-sm tracking-wide uppercase">Revisions</h4>
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md uppercase tracking-wider">Editable</span>
+                        </div>
+                        <div className="space-y-4">
+                            {currentPulse?.revisions?.map((rev, idx) => (
+                                <div key={`rev-${rev.id}-${idx}`} className="flex flex-col gap-2 pb-3 border-b border-slate-100">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm font-bold text-slate-800">{rev.drawing}</span>
+                                        <button 
+                                            onClick={() => updateCurrentPulse(p => ({
+                                                ...p,
+                                                revisions: p.revisions?.filter(r => r.id !== rev.id)
+                                            }))}
+                                            className="text-xs font-bold text-red-500 hover:text-red-700"
+                                        >Remove</button>
+                                    </div>
+                                    <div className="text-sm text-slate-600">{rev.change}</div>
+                                    <div className="flex gap-2">
+                                        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{rev.category}</span>
+                                        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{rev.charge}</span>
+                                    </div>
+                                </div>
+                            ))}
+                            <button 
+                                onClick={() => {
+                                    const drawing = prompt("Drawing name:");
+                                    if (!drawing) return;
+                                    const change = prompt("Change description:");
+                                    const category = prompt("Category (e.g. Studio correction, Client change):");
+                                    const charge = prompt("Charge (e.g. No charge, Chargeable):");
+                                    updateCurrentPulse(p => ({
+                                        ...p,
+                                        revisions: [...(p.revisions || []), { id: 'rev-'+Date.now(), drawing, change: change || '', category: category || '', charge: charge || '' }]
+                                    }));
+                                }}
+                                className="text-indigo-600 text-sm font-bold flex items-center gap-2 hover:text-indigo-800"
+                            >
+                                <Plus className="w-4 h-4" /> Add Revision
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Selections (Editable) */}
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60">
+                        <div className="flex justify-between items-center mb-6">
+                            <h4 className="font-bold text-slate-800 text-sm tracking-wide uppercase">Selections (SOF)</h4>
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md uppercase tracking-wider">Editable</span>
+                        </div>
+                        <div className="space-y-4">
+                            {currentPulse?.selections?.map((sel, idx) => (
+                                <div key={`sel-${sel.id}-${idx}`} className="flex flex-col gap-2 pb-3 border-b border-slate-100">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm font-bold text-slate-800">{sel.category}</span>
+                                        <button 
+                                            onClick={() => updateCurrentPulse(p => ({
+                                                ...p,
+                                                selections: p.selections?.filter(s => s.id !== sel.id)
+                                            }))}
+                                            className="text-xs font-bold text-red-500 hover:text-red-700"
+                                        >Remove</button>
+                                    </div>
+                                    <div className="text-sm text-slate-600">{sel.selectedCount} of {sel.totalCount} selected</div>
+                                    <div className="text-sm text-slate-500">{sel.pendingText}</div>
+                                </div>
+                            ))}
+                            <button 
+                                onClick={() => {
+                                    const category = prompt("Category (e.g. Laminates):");
+                                    if (!category) return;
+                                    const selectedCount = parseInt(prompt("Selected count:") || "0");
+                                    const totalCount = parseInt(prompt("Total count:") || "0");
+                                    const pendingText = prompt("Pending text (e.g. 2 - due 16 Jul):");
+                                    updateCurrentPulse(p => ({
+                                        ...p,
+                                        selections: [...(p.selections || []), { id: 'sel-'+Date.now(), category, selectedCount, totalCount, pendingText: pendingText || '' }]
+                                    }));
+                                }}
+                                className="text-indigo-600 text-sm font-bold flex items-center gap-2 hover:text-indigo-800"
+                            >
+                                <Plus className="w-4 h-4" /> Add Selection Status
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Section Visibility */}
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60">
+                        <div className="flex justify-between items-center mb-6">
+                            <h4 className="font-bold text-slate-800 text-sm tracking-wide uppercase">Section Visibility</h4>
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md uppercase tracking-wider">Editable</span>
+                        </div>
+                        <div className="space-y-3">
+                            {Object.entries(currentPulse?.sectionVisibility || {}).map(([key, value], idx) => (
+                                <div key={`section-${key || idx}-${idx}`} className="flex justify-between items-center">
+                                    <span className="text-sm text-slate-700 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                                    <button 
+                                        onClick={() => updateCurrentPulse(p => ({
+                                            ...p,
+                                            sectionVisibility: { ...p.sectionVisibility, [key]: !value }
+                                        }))}
+                                        className={`w-10 h-6 rounded-full transition-colors relative ${value ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                    >
+                                        <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${value ? 'translate-x-5' : 'translate-x-1'}`} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Client Actions */}
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60">
+                        <div className="flex justify-between items-center mb-6">
+                            <h4 className="font-bold text-slate-800 text-sm tracking-wide uppercase">Client Actions</h4>
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md uppercase tracking-wider">Editable</span>
+                        </div>
+                        <div className="space-y-4">
+
+                            {currentPulse?.manualActions?.map((action, idx) => (
+                                <div key={`action-${action.id || idx}-${idx}`} className="flex justify-between items-center pb-3 border-b border-slate-100">
+                                    <span className="text-sm text-slate-600">{action.text}</span>
+                                    <button 
+                                        onClick={() => updateCurrentPulse(p => ({
+                                            ...p,
+                                            manualActions: p.manualActions.filter(a => a.id !== action.id)
+                                        }))}
+                                        className="text-xs font-bold text-red-500 hover:text-red-700"
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            ))}
+                            <button 
+                                onClick={() => {
+                                    const text = prompt("Enter manual action required from client:");
+                                    if (text) {
+                                        updateCurrentPulse(p => ({
+                                            ...p,
+                                            manualActions: [...p.manualActions, { id: 'act-'+Date.now(), text }]
+                                        }));
+                                    }
+                                }}
+                                className="text-indigo-600 text-sm font-bold flex items-center gap-2 hover:text-indigo-800"
+                            >
+                                <Plus className="w-4 h-4" /> Add manual action
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderClientView = () => {
+        return (
+            <div className="max-w-4xl mx-auto bg-[#faf9f7] p-8 sm:p-12 md:p-16 border border-slate-200 shadow-sm relative">
+                {/* Print Header */}
+                <div className="flex justify-between items-end pb-8 border-b border-[#d8b87e]">
+                    <div>
+                        <h1 className="text-2xl font-bold text-[#1e293b] font-sans tracking-tight">Form Factors Design Studio</h1>
+                        <p className="text-xs text-slate-500 tracking-[0.2em] mt-2 uppercase">Interior Architecture · {projectContext.location}</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-[10px] text-slate-500 font-bold tracking-[0.2em] uppercase">Weekly Pulse · Week {selectedWeek}</p>
+                        <p className="text-sm text-[#1e293b] font-bold mt-1">{activeWeekRange.dateRange}</p>
+                    </div>
+                </div>
+
+                <div className="py-8">
+                    <h2 className="text-2xl sm:text-3xl font-bold text-[#1e293b] leading-tight font-sans tracking-tight">
+                        {projectContext.name} — Residence for {(projectContext as any).clients?.[0]?.name || 'Client'}
+                    </h2>
+                    <p className="text-sm text-slate-500 mt-3 flex items-center gap-2">
+                        {projectContext.location} · {projectContext.area} sq ft · Project ref {projectId?.substring(0,8).toUpperCase()} 
+                    </p>
+                    
+                    <div className="mt-6 inline-flex items-center gap-2 border border-slate-300 px-4 py-2">
+                        <span className="text-[11px] font-bold text-[#1e293b] uppercase tracking-widest">Status · {govData.gateFrozen ? 'Execution Phase' : 'Design Phase'} · On Track</span>
+                    </div>
+                </div>
+
+                {currentPulse?.sectionVisibility.weekAtGlance && (
+                    <div className="mb-12">
+                        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">Week at a Glance</h3>
+                        <p className="text-[#334155] leading-relaxed whitespace-pre-wrap text-[15px]">
+                            {currentPulse.executiveBriefing || "No executive summary provided for this week."}
+                        </p>
+                    </div>
+                )}
+
+                {currentPulse?.sectionVisibility.governance && (
+                    <div className="mb-12">
+                        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">Project Governance</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 text-[13px]">
+                            <div className="flex justify-between py-3 border-b border-slate-200">
+                                <span className="text-slate-600">Integrated Execution Agreement</span>
+                                <span className="font-bold text-[#1e293b]">{govData.executionSigned ? `● Signed · ${govData.executionSigned}` : '○ Pending'}</span>
+                            </div>
+                            <div className="flex justify-between py-3 border-b border-slate-200">
+                                <span className="text-slate-600">Terms & Conditions acknowledged</span>
+                                <span className="font-bold text-[#1e293b]">{govData.tcAck ? `● ${govData.tcAck}` : '○ Pending'}</span>
+                            </div>
+                            <div className="flex justify-between py-3 border-b border-slate-200">
+                                <span className="text-slate-600">BOQ Baseline (Annexure A)</span>
+                                <span className="font-bold text-[#1e293b]">● {govData.boqBaseline}</span>
+                            </div>
+                            <div className="flex justify-between py-3 border-b border-slate-200">
+                                <span className="text-slate-600">Design Complete Gate</span>
+                                <span className="font-bold text-[#1e293b]">{govData.gateFrozen ? '● Activated' : `○ ${govData.gateConditions} of ${govData.totalGateConditions} conditions met`}</span>
+                            </div>
+                            <div className="flex justify-between py-3 border-b border-slate-200 md:col-span-2">
+                                <span className="text-slate-600">Execution authorisation</span>
+                                <span className="font-bold text-[#1e293b]">{govData.gateFrozen ? '● Unlocked' : '○ Locked until gate closes'}</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {currentPulse?.sectionVisibility.designProgress && (
+                    <div className="mb-12">
+                        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">Design Progress — Drawing Status</h3>
+                        
+                        <div className="grid grid-cols-4 gap-4 mb-8">
+                            <div className="border border-slate-200 p-6 bg-white">
+                                <div className="text-3xl font-bold text-[#1e293b] tracking-tight">{drawingsApproved}/{totalDrawings}</div>
+                                <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-2 leading-tight">Drawings<br/>Approved</div>
+                            </div>
+                            <div className="border border-slate-200 p-6 bg-white">
+                                <div className="text-3xl font-bold text-[#1e293b] tracking-tight">{drawingsWithClient}</div>
+                                <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-2 leading-tight">With You For<br/>Review</div>
+                            </div>
+                            <div className="border border-slate-200 p-6 bg-white">
+                                <div className="text-3xl font-bold text-[#1e293b] tracking-tight">{drawingsInRevision}</div>
+                                <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-2 leading-tight">In Studio<br/>Revision</div>
+                            </div>
+                            <div className="border border-slate-200 p-6 bg-white">
+                                <div className="text-3xl font-bold text-[#1e293b] tracking-tight">{designCompletionPct}%</div>
+                                <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-2 leading-tight">Design<br/>Completion</div>
+                            </div>
+                        </div>
+
+                        <div className="w-full text-left text-[13px]">
+                            <div className="grid grid-cols-12 pb-3 border-b border-[#1e293b] font-bold uppercase tracking-widest text-[10px] text-[#1e293b]">
+                                <div className="col-span-5">Drawing</div>
+                                <div className="col-span-2">Round</div>
+                                <div className="col-span-3">Status</div>
+                                <div className="col-span-2 text-right">Updated</div>
+                            </div>
+                            {realDrawings.map((drawing, idx) => {
+                                const currentRound = drawing.rounds?.[drawing.rounds.length - 1] || { status: 'not_started', roundNumber: 1 };
+                                const isApproved = currentRound.status === 'approved';
+                                return (
+                                    <div key={`drawing-${drawing.id || idx}-${idx}`} className="grid grid-cols-12 py-4 border-b border-slate-200">
+                                        <div className="col-span-5 text-slate-700 font-medium">{drawing.name}</div>
+                                        <div className="col-span-2 text-slate-500">Round {currentRound.roundNumber}</div>
+                                        <div className={`col-span-3 font-bold ${isApproved ? 'text-[#1e293b]' : 'text-slate-500'}`}>
+                                            {isApproved ? '● Approved' : `○ ${currentRound.status.replace('_', ' ')}`}
+                                        </div>
+                                        <div className="col-span-2 text-right text-slate-500">{currentRound.dateSent ? new Date(currentRound.dateSent).toLocaleDateString('en-IN', {day:'numeric', month:'short'}) : 'Pending'}</div>
+                                    </div>
+                                )
+                            })}
+                            {realDrawings.length === 0 && (
+                                <div className="py-8 text-center text-slate-500">No drawings tracked yet.</div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {currentPulse?.sectionVisibility.financials && (
+                    <div className="mb-12">
+                        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">Financial Summary</h3>
+                        
+                        <div className="w-full text-left text-[13px] mb-8">
+                            <div className="grid grid-cols-12 pb-3 border-b border-[#1e293b] font-bold uppercase tracking-widest text-[10px] text-[#1e293b]">
+                                <div className="col-span-7">Design Fee — 3 Stages</div>
+                                <div className="col-span-2 text-right">Amount</div>
+                                <div className="col-span-3 text-right">Status</div>
+                            </div>
+                            {designAdvances.map((adv, idx) => (
+                                <div key={`adv-${adv.advanceCode || idx}-${idx}`} className="grid grid-cols-12 py-4 border-b border-slate-200">
+                                    <div className="col-span-7 text-slate-700">{adv.label} ({adv.percentage}%)</div>
+                                    <div className="col-span-2 text-right text-slate-500">{formatINR(adv.amount)}</div>
+                                    <div className={`col-span-3 text-right font-bold ${adv.status === 'received' ? 'text-[#1e293b]' : 'text-slate-500'}`}>
+                                        {adv.status === 'received' ? `● Paid` : `○ ${adv.status.replace('_', ' ')}`}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="w-full text-left text-[13px] mb-8">
+                            <div className="grid grid-cols-12 pb-3 border-b border-[#1e293b] font-bold uppercase tracking-widest text-[10px] text-[#1e293b]">
+                                <div className="col-span-7">Execution Fee — {execAdvances.length} Stages</div>
+                                <div className="col-span-2 text-right">Amount</div>
+                                <div className="col-span-3 text-right">Status</div>
+                            </div>
+                            {execAdvances.map((adv, idx) => (
+                                <div key={`adv-${adv.advanceCode || idx}-${idx}`} className="grid grid-cols-12 py-4 border-b border-slate-200">
+                                    <div className="col-span-7 text-slate-700">{adv.label} ({adv.percentage}%)</div>
+                                    <div className="col-span-2 text-right text-slate-500">{formatINR(adv.amount)}</div>
+                                    <div className={`col-span-3 text-right font-bold ${adv.status === 'received' ? 'text-[#1e293b]' : 'text-slate-500'}`}>
+                                        {adv.status === 'received' ? `● Paid` : `○ ${adv.status.replace('_', ' ')}`}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+
+                {currentPulse?.sectionVisibility.revisions && currentPulse?.revisions && currentPulse.revisions.length > 0 && (
+                    <div className="mb-12">
+                        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">Revisions This Week</h3>
+                        <div className="w-full text-left text-[13px]">
+                            <div className="grid grid-cols-12 pb-3 border-b border-[#1e293b] font-bold uppercase tracking-widest text-[10px] text-[#1e293b]">
+                                <div className="col-span-3">Drawing</div>
+                                <div className="col-span-5">Change</div>
+                                <div className="col-span-2">Category</div>
+                                <div className="col-span-2 text-right">Charge</div>
+                            </div>
+                            {currentPulse.revisions.map((rev, idx) => (
+                                <div key={`client-rev-${rev.id}-${idx}`} className="grid grid-cols-12 py-4 border-b border-slate-200">
+                                    <div className="col-span-3 text-slate-700 font-bold">{rev.drawing}</div>
+                                    <div className="col-span-5 text-slate-700 pr-4">{rev.change}</div>
+                                    <div className="col-span-2 text-slate-500">{rev.category}</div>
+                                    <div className="col-span-2 text-right text-slate-500">{rev.charge}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {currentPulse?.sectionVisibility.financials && (
+                    <div className="mb-12">
+                        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">Execution Update</h3>
+                        <div className="border border-[#1e293b] p-6 text-[13px] leading-relaxed text-[#1e293b]">
+                            <strong>EXECUTION · {govData.gateFrozen ? 'UNLOCKED' : 'LOCKED'}</strong> — On-site work and vendor orders begin only after (1) Design Complete Gate activation and (2) E1 Material Order Advance clearance. This sequencing is a deliberate studio safeguard: your BOQ rates freeze at gate activation and nothing is built against unapproved drawings.
+                        </div>
+                    </div>
+                )}
+
+                {currentPulse?.sectionVisibility.selections && (
+                    <div className="mb-12">
+                        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">Selections & Order Forms (SOF)</h3>
+                        <div className="w-full text-left text-[13px]">
+                            <div className="grid grid-cols-12 pb-3 border-b border-[#1e293b] font-bold uppercase tracking-widest text-[10px] text-[#1e293b]">
+                                <div className="col-span-6">Category</div>
+                                <div className="col-span-3">Selected</div>
+                                <div className="col-span-3 text-right">Pending Your Selection</div>
+                            </div>
+                            <div className="grid grid-cols-12 py-4 border-b border-slate-200">
+                                <div className="col-span-6 text-slate-700">Laminates & veneers</div>
+                                <div className="col-span-3 text-slate-700">6 of 8</div>
+                                <div className="col-span-3 text-right text-slate-500">2 — due 16 Jul</div>
+                            </div>
+                            <div className="grid grid-cols-12 py-4 border-b border-slate-200">
+                                <div className="col-span-6 text-slate-700">Sanitaryware</div>
+                                <div className="col-span-3 text-slate-700">3 of 5</div>
+                                <div className="col-span-3 text-right text-slate-500">2 — due 18 Jul</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div className="mb-12">
+                    <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">Decisions Needed From You</h3>
+                    <div className="space-y-4 text-[13px] text-slate-700 leading-relaxed">
+                        <div className="flex gap-4">
+                            <span className="font-bold text-[#1e293b]">1.</span>
+                            <div>Review the <strong>Electrical Looping Layout</strong> and submit consolidated feedback (one batch) by Wed 15 Jul.</div>
+                        </div>
+                        <div className="flex gap-4">
+                            <span className="font-bold text-[#1e293b]">2.</span>
+                            <div>Confirm remaining <strong>laminate selections (2)</strong> by 16 Jul and <strong>sanitaryware (2)</strong> by 18 Jul so vendor quotes stay valid.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mb-12">
+                    <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">Coming Up Next Week</h3>
+                    <p className="text-[#334155] leading-relaxed whitespace-pre-wrap text-[13px]">
+                        Studio revision of the Master Bedroom elevation completes Tuesday. On your electrical layout feedback, we close the final drawings, run the Design Complete Gate checklist, freeze the BOQ and clear E1 so execution can begin.
+                    </p>
+                </div>
+
+
+                {currentPulse?.manualActions && currentPulse.manualActions.length > 0 && (
+                    <div className="mb-12">
+                        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">Action Required From You</h3>
+                        <div className="space-y-3">
+                            {currentPulse.manualActions.map((action, idx) => (
+                                <div key={`client-action-${action.id}-${idx}`} className="flex items-start gap-3 bg-amber-50/50 border border-amber-200/60 p-4 rounded-xl">
+                                    <div className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                    </div>
+                                    <p className="text-[#1e293b] text-sm leading-relaxed">{action.text}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                {currentPulse?.sectionVisibility.siteProgress && (
+                    <div className="mb-12">
+                        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">Site Progress By Room</h3>
+                        <div className="w-full text-left text-[13px]">
+                            <div className="grid grid-cols-12 pb-3 border-b border-[#1e293b] font-bold uppercase tracking-widest text-[10px] text-[#1e293b]">
+                                <div className="col-span-5">Room / Area</div>
+                                <div className="col-span-3 text-right">Weekly Change</div>
+                                <div className="col-span-2 text-right">Progress</div>
+                                <div className="col-span-2 text-right">Status</div>
+                            </div>
+                            {(projectContext.rooms || []).map((r, idx) => {
+                                const currentProg = currentPulse?.roomProgress?.[r.name] || 0;
+                                const prevPulse = weeksList.find(w => w.weekNumber === selectedWeek - 1);
+                                const prevProg = prevPulse?.roomProgress?.[r.name] || 0;
+                                const diff = currentProg - prevProg;
+                                
+                                return (
+                                    <div key={`client-room-${r.name || idx}-${idx}`} className="grid grid-cols-12 py-4 border-b border-slate-200">
+                                        <div className="col-span-5 text-slate-700 font-medium">{r.name}</div>
+                                        <div className="col-span-3 text-right text-slate-500">
+                                            {diff > 0 ? `+${diff}%` : diff < 0 ? `${diff}%` : '-'}
+                                        </div>
+                                        <div className="col-span-2 text-right font-bold text-[#1e293b]">{currentProg}%</div>
+                                        <div className={`col-span-2 text-right ${currentProg === 100 ? 'font-bold text-[#1e293b]' : 'text-slate-500'}`}>
+                                            {currentProg === 100 ? '● Finished' : currentProg === 0 ? '○ Not Started' : '○ In Progress'}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {(!projectContext.rooms || projectContext.rooms.length === 0) && (
+                                <div className="py-4 text-center text-slate-500">No rooms defined in project context.</div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    return (
+        <div className="space-y-6 pb-20">
+            {/* Top Control Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => setSelectedWeek(Math.max(1, selectedWeek - 1))}
+                        disabled={selectedWeek <= 1}
+                        className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all disabled:opacity-40"
+                    >
+                        <ChevronLeft className="w-5 h-5 text-indigo-950" />
+                    </button>
+                    <div className="min-w-[180px]">
+                        <h4 className="font-bold text-indigo-950 text-sm">Select Report Week</h4>
+                        <p className="text-xs text-slate-500 font-semibold">{activeWeekRange.dateRange}</p>
+                    </div>
+                    <button 
+                        onClick={() => setSelectedWeek(Math.min(weeksList.length, selectedWeek + 1))}
+                        disabled={selectedWeek >= weeksList.length}
+                        className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all disabled:opacity-40"
+                    >
+                        <ChevronRight className="w-5 h-5 text-indigo-950" />
+                    </button>
+                </div>
+                
+                <div className="bg-slate-100 p-1.5 rounded-xl flex gap-1 border border-slate-200/60">
+                    <button 
+                        onClick={() => setActiveViewMode('ops')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeViewMode === 'ops' ? 'bg-white shadow-sm text-indigo-900' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <Sliders className="w-3.5 h-3.5" /> Ops Console
+                    </button>
+                    <button 
+                        onClick={() => setActiveViewMode('client')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeViewMode === 'client' ? 'bg-white shadow-sm text-indigo-900' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <Eye className="w-3.5 h-3.5" /> Client View
+                    </button>
+                </div>
+            </div>
+
+            <AnimatePresence mode="wait">
+                <motion.div
+                    key={activeViewMode}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                >
+                    {activeViewMode === 'ops' ? renderOpsConsole() : renderClientView()}
+                </motion.div>
+            </AnimatePresence>
+        </div>
+    );
+}

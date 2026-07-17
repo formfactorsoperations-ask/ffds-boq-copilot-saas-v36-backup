@@ -59,11 +59,13 @@ const ContractTab: React.FC<ContractTabProps> = ({ projectId, tiers, activeTier,
             const bankItem = bankMap.get(boqItem.bankId);
             if (!bankItem) return null;
             const effectiveMargin = boqItem.marginOverride ?? bankItem.margin;
+            const effectiveMaterials = boqItem.baseRate !== undefined ? boqItem.baseRate : bankItem.materials;
             const { id, ...bankRest } = bankItem;
             return {
                 ...bankRest,
                 ...boqItem,
                 id: boqItem.id,
+                materials: effectiveMaterials,
                 margin: effectiveMargin
             };
         }).filter((i): i is FullBoqItem => i !== null);

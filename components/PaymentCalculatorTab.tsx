@@ -396,7 +396,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
     const handleInvoiceAction = (index: number, action: 'generate_invoice' | 'mark_paid' | 'revert_invoice', lockedTaxableBase?: number) => {
         const m = milestones[index];
-        const projectCode = (projectContext.name || 'PRJ').substring(0, 3).toUpperCase();
+        const projectCode = (projectContext?.name || 'PRJ').substring(0, 3).toUpperCase();
         const seq = String(index + 1).padStart(2, '0');
         
         let invNumber = '';
@@ -585,9 +585,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     // 6. Global FY Tracking
     const otherProjectsCash = useMemo(() => {
         return allProjects
-            .filter(p => p.context.name !== projectContext.name) 
-            .reduce((sum, p) => sum + (p.context.financials?.projectedCashValue || 0), 0);
-    }, [allProjects, projectContext.name]);
+            .filter(p => p.context?.name !== projectContext?.name) 
+            .reduce((sum, p) => sum + (p.context?.financials?.projectedCashValue || 0), 0);
+    }, [allProjects, projectContext?.name]);
 
     const totalFYCash = otherProjectsCash + executionCash;
     const cashUtilization = (totalFYCash / cashLimit) * 100;
@@ -1148,7 +1148,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             Payment Ops & Invoicing
                         </h2>
                         <p className="text-sm text-slate-500 mt-2">
-                            Manage residential payment schedules, track invoice status, and handle cash flow splits for <strong>{activeTier.name}</strong>.
+                            Manage residential payment schedules, track invoice status, and handle cash flow splits for <strong>{activeTier?.name || 'Active Tier'}</strong>.
                         </p>
                     </div>
 

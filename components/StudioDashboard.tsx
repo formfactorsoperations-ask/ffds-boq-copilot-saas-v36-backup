@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ProjectContext, Item, BoqItem, Room, AIStrategy, FullBoqItem, CommandAction, ProposalTier, AuditResult } from '../types';
-import { id as generateId } from '../lib/utils';
+import { id as generateId, calculateSellPrice } from '../lib/utils';
 import CommandBar from './CommandBar';
 import RoomCard from './RoomCard';
 import StudioExcelGrid from './StudioExcelGrid';
@@ -201,11 +201,13 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
         } as Item;
         
         const effectiveMargin = boqItem.marginOverride ?? bankItem.margin;
+        const effectiveMaterials = boqItem.baseRate !== undefined ? boqItem.baseRate : bankItem.materials;
         const { id, ...bankRest } = bankItem;
         return {
             ...bankRest,
             ...boqItem,
             id: boqItem.id,
+            materials: effectiveMaterials,
             margin: effectiveMargin
         };
     });
@@ -740,7 +742,8 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               let excludedCount = 0;
               
               fullBoq.forEach(item => {
-                  const val = (item.materials + item.labor) * (1 + (item.marginOverride !== undefined ? item.marginOverride : item.margin) / 100) * item.qty;
+                  const sellPrice = calculateSellPrice(item.materials, item.labor, item.margin);
+                  const val = sellPrice * item.qty;
                   
                   if (item.boqStatus === 'client_procured') {
                       clientProcuredCount++;

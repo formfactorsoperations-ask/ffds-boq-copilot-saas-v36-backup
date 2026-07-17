@@ -14,6 +14,7 @@ import PhaseTransitionWidget from "./components/PhaseTransitionWidget";
 import LeadBrainTab from "./components/LeadBrainTab";
 import TimelineTab from "./components/TimelineTab";
 import MaterialTab from "./components/MaterialTab";
+import SOFBoardTab from "./components/SOFBoardTab";
 import ContractTab from "./components/ContractTab";
 import ExecutionAgreementPage from "./components/client/ExecutionAgreementPage";
 import DesignCompleteGate from "./components/ops/DesignCompleteGate";
@@ -48,6 +49,7 @@ import ManualStepCompleter from "./components/ops/journey/ManualStepCompleter";
 import DrawingTrackerModule from "./components/ops/DrawingTrackerModule";
 import ScopeAdditionsModule from "./components/ops/ScopeAdditionsModule";
 import SupervisorMobileApp from "./components/SupervisorMobileApp";
+import WeeklyProgressReportTab from "./components/WeeklyProgressReportTab";
 import { useOrg } from "./contexts/OrgContext";
 
 import {
@@ -492,11 +494,12 @@ export default function App() {
         let itemSell = 0;
 
         if (item) {
-          const cost = (item.materials + item.labor) * b.qty;
+          const effectiveMaterials = b.baseRate !== undefined ? b.baseRate : item.materials;
+          const cost = (effectiveMaterials + item.labor) * b.qty;
           const margin = b.marginOverride ?? item.margin;
           itemCost = cost;
           itemSell =
-            calculateSellPrice(item.materials, item.labor, margin) * b.qty;
+            calculateSellPrice(effectiveMaterials, item.labor, margin) * b.qty;
         } else {
           // Safe calculation if item is completely missing from bank and adHocItems
           const margin = b.marginOverride ?? 0;
@@ -641,17 +644,27 @@ export default function App() {
 
     return (activeTier.boq || [])
       .map((b) => {
-        const item = bankMap.get(b.bankId);
-        if (!item) return null;
+        const item = bankMap.get(b.bankId) || ({
+          id: b.bankId,
+          name: b.name || "Custom / Legacy Item",
+          cat: b.cat || b.category || b.roomId || "General Scope",
+          materials: b.baseRate !== undefined ? b.baseRate : 0,
+          labor: 0,
+          margin: b.marginOverride ?? 0,
+          unit: b.unit || "lumpsum",
+          specs: "Details missing from bank",
+        } as Item);
+
         const effectiveMargin = b.marginOverride ?? item.margin;
+        const effectiveMaterials = b.baseRate !== undefined ? b.baseRate : item.materials;
         return {
           ...item,
           ...b,
           id: b.id,
+          materials: effectiveMaterials,
           margin: effectiveMargin,
         } as FullBoqItem;
-      })
-      .filter((item) => item !== null) as FullBoqItem[];
+      });
   }, [activeTierId, tiers, bank]);
 
   const setBoqForActiveTier: React.Dispatch<React.SetStateAction<BoqItem[]>> = (
@@ -671,7 +684,16 @@ export default function App() {
 
   const executionBoq = useMemo(() => {
     if (!activeProject) return [];
-    const tier = tiers.find((t) => t.id === activeProject.tierId);
+    
+    // Find the most up-to-date approved/annexure tier by timestamp, fallback to activeProject.tierId
+    let tier = tiers.find((t) => t.id === activeProject.tierId);
+    if (tiers.length > 0) {
+      const sortedTiers = [...tiers].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      if (sortedTiers[0]) {
+        tier = sortedTiers[0];
+      }
+    }
+
     if (!tier) return [];
     const bankMap = new Map<string, Item>(bank.map((i) => [i.id, i]));
     if (projectContext?.adHocItems) {
@@ -684,19 +706,21 @@ export default function App() {
         ({
           id: b.bankId,
           name: b.name || "Custom / Legacy Item",
-          cat: b.roomId || "General Scope",
-          materials: 0,
+          cat: b.cat || b.category || b.roomId || "General Scope",
+          materials: b.baseRate !== undefined ? b.baseRate : 0,
           labor: 0,
           margin: b.marginOverride ?? 0,
-          unit: "lumpsum",
+          unit: b.unit || "lumpsum",
           specs: "Details missing from bank",
         } as Item);
 
       const effectiveMargin = b.marginOverride ?? item.margin;
+      const effectiveMaterials = b.baseRate !== undefined ? b.baseRate : item.materials;
       return {
         ...item,
         ...b,
         id: b.id,
+        materials: effectiveMaterials,
         margin: effectiveMargin,
       } as FullBoqItem;
     });
@@ -1137,6 +1161,7 @@ export default function App() {
         ].includes(i.cat),
       )
       .forEach((item, index) => {
+        if (!item) return;
         const itemName = (item.name || "").toLowerCase();
         if (
           itemName.includes("provide") ||
@@ -1756,11 +1781,9 @@ export default function App() {
                         />
                       )}
                       {activeTab === "materials" && (
-                        <MaterialTab
+                        <SOFBoardTab
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
-                          activeTier={activeCalculatedTier}
-                          bank={bank}
                         />
                       )}
 
@@ -1817,6 +1840,15 @@ export default function App() {
                           fullBoq={
                             activeProject ? executionBoq : fullBoqForActiveTier
                           }
+                        />
+                      )}
+                      {activeTab === "weekly-report" && (
+                        <WeeklyProgressReportTab
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          activeTier={activeCalculatedTier}
+                          projectId={activeInternalId || undefined}
+                          projectData={projectLibrary.find(p => p.id === activeInternalId) || undefined}
                         />
                       )}
                       {activeTab === "client-portal" && (

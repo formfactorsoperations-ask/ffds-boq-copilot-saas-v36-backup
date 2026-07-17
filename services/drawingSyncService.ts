@@ -52,7 +52,7 @@ export const triggerDrawingSync = async (orgId: string, projectId: string, boqIt
     }
     
     // Normalize categories to lowercase and also to Contract Categories
-    const rawCategories = boqItems.map((item: any) => item.cat || '').filter(Boolean);
+    const rawCategories = boqItems.map((item: any) => item.cat || item.category || '').filter(Boolean);
     const categories = new Set(rawCategories.map(c => c.toLowerCase()));
     const contractCategories = new Set(rawCategories.map(getContractCategory));
     console.log("triggerDrawingSync contract categories:", Array.from(contractCategories));

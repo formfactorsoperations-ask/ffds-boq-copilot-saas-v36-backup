@@ -416,8 +416,9 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
         const bankItem = bankMap.get(boqItem.bankId);
         if (!bankItem) return null;
         const effectiveMargin = boqItem.marginOverride ?? bankItem.margin;
+        const effectiveMaterials = boqItem.baseRate !== undefined ? boqItem.baseRate : bankItem.materials;
         const { id, ...bankRest } = bankItem;
-        return { ...bankRest, ...boqItem, id: boqItem.id, margin: effectiveMargin };
+        return { ...bankRest, ...boqItem, id: boqItem.id, materials: effectiveMaterials, margin: effectiveMargin };
       }).filter((i): i is FullBoqItem => i !== null);
 
       const executionTotal = fullBoq.reduce((sum, item) => sum + calculateSellPrice(item.materials, item.labor, item.margin) * item.qty, 0);

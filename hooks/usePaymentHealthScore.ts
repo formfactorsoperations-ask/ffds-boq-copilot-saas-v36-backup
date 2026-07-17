@@ -8,8 +8,8 @@ export interface PaymentHealth {
     completionPercent: number;
     expectedReceived: number;
     actualReceived: number;
-    overdueCount: number;
-    overdueAmount: number;
+    pendingCount: number;
+    pendingAmount: number;
     outstandingAmount: number;
     loading: boolean;
     paymentMilestones?: any[];
@@ -18,8 +18,8 @@ export interface PaymentHealth {
 export function calculateLocalPaymentHealth(paymentMilestones?: any[], legacySteps?: any[], legacyPayments?: any[]): PaymentHealth {
     let expectedReceived = 0;
     let actualReceived = 0;
-    let overdueCount = 0;
-    let overdueAmount = 0;
+    let pendingCount = 0;
+    let pendingAmount = 0;
     let outstandingAmount = 0;
     let completionPercent = 0;
 
@@ -39,10 +39,12 @@ export function calculateLocalPaymentHealth(paymentMilestones?: any[], legacySte
                 actualReceived += (m.percentage || 0);
                 completedMilestones++;
             }
-            if (m.status === 'invoiced') {
-                overdueCount++;
-                overdueAmount += Math.round(amount);
+                        if (m.status === 'invoiced' || m.status === 'advance_requested') {
                 outstandingAmount += Math.round(amount);
+                
+                // Check if it is actually overdue (invoiceDate + 7 days)
+                pendingCount++;
+                pendingAmount += Math.round(amount);
             }
             if (m.status === 'pending') {
                 // Next expected includes pending milestone values if their base is locked
@@ -76,8 +78,8 @@ export function calculateLocalPaymentHealth(paymentMilestones?: any[], legacySte
             }
 
             if (payment.status === 'overdue') {
-                overdueCount++;
-                overdueAmount += (payment.amount || 0);
+                pendingCount++;
+                pendingAmount += (payment.amount || 0);
                 outstandingAmount += (payment.amount || 0);
             }
             if (payment.status === 'pending') {
@@ -92,8 +94,8 @@ export function calculateLocalPaymentHealth(paymentMilestones?: any[], legacySte
                 completionPercent,
                 expectedReceived: legacyPayments.length === 0 ? 0 : expectedReceived,
                 actualReceived: legacyPayments.length === 0 ? 0 : actualReceived,
-                overdueCount: legacyPayments.length === 0 ? 0 : overdueCount,
-                overdueAmount: legacyPayments.length === 0 ? 0 : overdueAmount,
+                pendingCount: legacyPayments.length === 0 ? 0 : pendingCount,
+                pendingAmount: legacyPayments.length === 0 ? 0 : pendingAmount,
                 outstandingAmount: legacyPayments.length === 0 ? 0 : outstandingAmount,
                 loading: false,
             };
@@ -105,8 +107,8 @@ export function calculateLocalPaymentHealth(paymentMilestones?: any[], legacySte
             completionPercent: 0,
             expectedReceived: 0,
             actualReceived: 0,
-            overdueCount: 0,
-            overdueAmount: 0,
+            pendingCount: 0,
+            pendingAmount: 0,
             outstandingAmount: 0,
             loading: false,
         };
@@ -119,13 +121,13 @@ export function calculateLocalPaymentHealth(paymentMilestones?: any[], legacySte
     
     let healthStatus: PaymentHealth['healthStatus'] = 'neutral';
 
-    if (actualReceived >= 100 && overdueCount === 0) {
+    if (actualReceived >= 100 && pendingCount === 0) {
         healthStatus = 'fully_paid';
-    } else if (healthRatio < 0.5 || overdueCount > 0) {
+    } else if (healthRatio < 0.5 || pendingCount > 0) {
         healthStatus = 'red';
-    } else if (healthRatio >= 0.5 && healthRatio !== 1 && overdueCount === 0) {
+    } else if (healthRatio >= 0.5 && healthRatio !== 1 && pendingCount === 0) {
         healthStatus = 'amber';
-    } else if (healthRatio >= 1.0 && overdueCount === 0) {
+    } else if (healthRatio >= 1.0 && pendingCount === 0) {
         healthStatus = expectedReceived === 0 && actualReceived === 0 ? 'neutral' : 'green';
     }
 
@@ -135,8 +137,8 @@ export function calculateLocalPaymentHealth(paymentMilestones?: any[], legacySte
         completionPercent,
         expectedReceived,
         actualReceived,
-        overdueCount,
-        overdueAmount,
+        pendingCount,
+        pendingAmount,
         outstandingAmount,
         loading: false,
         paymentMilestones
@@ -196,8 +198,8 @@ export function usePaymentHealthScore(projectId: string | null | undefined, stud
         completionPercent: 0,
         expectedReceived: 0,
         actualReceived: 0,
-        overdueCount: 0,
-        overdueAmount: 0,
+        pendingCount: 0,
+        pendingAmount: 0,
         outstandingAmount: 0,
         loading: true,
     });

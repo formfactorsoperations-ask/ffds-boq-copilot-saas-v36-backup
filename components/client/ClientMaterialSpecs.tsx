@@ -45,6 +45,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
         const foundRow = (comparisonData.materialMatrix || []).find(r => r.feature === key);
         const rowObj: any = { category: key };
         tiers.forEach(t => {
+            if (!t) return;
             rowObj[t.name] = foundRow ? (foundRow[t.name] || '-') : '-';
         });
         return rowObj;

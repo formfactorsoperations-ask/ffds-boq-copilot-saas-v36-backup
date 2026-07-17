@@ -34,6 +34,12 @@ export default function AgreementSignoffPage({ token }: AgreementSignoffPageProp
             pid = parts[1];
         } else if (parts[0] === 'EXEC' && parts[1] === 'AGREEMENT' && parts.length >= 4) {
             pid = parts[2];
+        } else if (parts[0] === 'EXECUTION' && parts[1] === 'AGREEMENT' && parts.length >= 4) {
+            pid = parts[2];
+        } else if (parts[0] === 'DESIGN' && parts[1] === 'AGREEMENT' && parts.length >= 4) {
+            pid = parts[2];
+        } else if (parts[0] === 'HANDOVER' && parts[1] === 'AGREEMENT' && parts.length >= 4) {
+            pid = parts[2];
         } else {
             setIsExpired(true);
             setLoading(false);
@@ -54,11 +60,15 @@ export default function AgreementSignoffPage({ token }: AgreementSignoffPageProp
         const pData = projectSnap.data();
         const ctx = (pData.context || pData.projectContext) as any;
 
-        let signoffType: 'contract' | 'execution' | null = null;
+        let signoffType: 'contract' | 'execution' | 'design' | 'handover' | null = null;
         if (ctx?.contractSignoff?.token === token) {
             signoffType = 'contract';
         } else if (ctx?.executionSignoff?.token === token) {
             signoffType = 'execution';
+        } else if (ctx?.designAgreementSignoff?.token === token) {
+            signoffType = 'design';
+        } else if (ctx?.handoverSignoff?.token === token) {
+            signoffType = 'handover';
         }
 
         if (!signoffType) {
@@ -144,7 +154,20 @@ export default function AgreementSignoffPage({ token }: AgreementSignoffPageProp
     );
   }
 
-  const isAlreadySigned = (signoffTypeState === 'execution' ? projectContext.executionSignoff?.status === 'signed' : projectContext.contractSignoff?.status === 'signed') || successState === 'signed';
+  let isAlreadySigned = successState === 'signed';
+  if (!isAlreadySigned) {
+      if (signoffTypeState === 'execution') isAlreadySigned = projectContext.executionSignoff?.status === 'signed';
+      else if (signoffTypeState === 'design') isAlreadySigned = projectContext.designAgreementSignoff?.status === 'signed';
+      else if (signoffTypeState === 'handover') isAlreadySigned = projectContext.handoverSignoff?.status === 'signed';
+      else isAlreadySigned = projectContext.contractSignoff?.status === 'signed';
+  }
+  
+  const getDocName = () => {
+      if (signoffTypeState === 'design') return 'Design Agreement';
+      if (signoffTypeState === 'handover') return 'Handover Docket';
+      if (signoffTypeState === 'execution') return 'Execution Agreement';
+      return 'Contract Agreement';
+  };
 
   if (isAlreadySigned) {
         return (
@@ -170,7 +193,7 @@ export default function AgreementSignoffPage({ token }: AgreementSignoffPageProp
                   ) : (
                       <h1 className="text-2xl font-bold text-indigo-950 mb-4">{STUDIO_NAME}</h1>
                   )}
-                  <h2 className="text-xl font-semibold text-indigo-900">Review {signoffTypeState === 'execution' ? 'Execution' : 'Contract'} Agreement</h2>
+                  <h2 className="text-xl font-semibold text-indigo-900">Review {getDocName()}</h2>
                   <p className="text-slate-500 text-sm mt-1">{projectContext.name}</p>
               </div>
 
@@ -179,7 +202,7 @@ export default function AgreementSignoffPage({ token }: AgreementSignoffPageProp
                   <div className="p-6">
                       <h3 className="font-semibold text-indigo-900 mb-4">Digital Signature Request</h3>
                       <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-                          By entering your name and clicking "Sign Agreement", you digitally authorize and accept the {signoffTypeState === 'execution' ? 'execution' : 'contract'} agreement, finalized scope, and commercials for the project. Make sure you have reviewed the details sent to you.
+                          By entering your name and clicking "Sign Agreement", you digitally authorize and accept the {getDocName().toLowerCase()}, finalized scope, and commercials for the project. Make sure you have reviewed the details sent to you.
                       </p>
 
                       {error && (

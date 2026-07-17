@@ -16,6 +16,20 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
     const { settings } = useStudioSettings(tenantId || '');
     const { orgData } = useOrg();
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isSending, setIsSending] = useState(false);
+    const [showSendConfirm, setShowSendConfirm] = useState(false);
+    const [localError, setLocalError] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+    
+    const currentSignoff = projectContext.designAgreementSignoff;
+    const signoffStatus = currentSignoff?.status || 'pending';
+    const getSignoffUrl = (token: string) => {
+        let appDomain = import.meta.env.VITE_APP_DOMAIN || window.location.origin;
+        if (appDomain.includes('ais-dev-')) {
+            appDomain = appDomain.replace('ais-dev-', 'ais-pre-');
+        }
+        return `${appDomain}/?agreementSignoff=${token}`;
+    };
     const [previewMode, setPreviewMode] = useState(true);
 
     const engagement = projectContext.engagement;
@@ -124,6 +138,28 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
     
     const isValid = missingData.length === 0;
 
+    const handleCopy = async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+        }
+    };
+
+    const sendEmailSignoff = async () => {
+        setIsSending(true);
+        try {
+            handleSend();
+            setShowSendConfirm(false);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSending(false);
+        }
+    };
+
     const handleDownloadPdf = () => {
         if (!latestDocket || !isValid) return;
         const element = document.getElementById('terms-docket-pdf-render');
@@ -176,7 +212,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
     if (!latestDocket) {
         return (
             <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in">
-                <div className="bg-white border text-center border-slate-200 p-16 rounded-3xl shadow-sm">
+                <div id="terms-docket-root" className="bg-white border text-center border-slate-200 p-16 rounded-3xl shadow-sm">
                     <FileText className="w-16 h-16 text-slate-300 mx-auto mb-6" />
                     <h2 className="text-2xl font-black text-indigo-900 tracking-tight">Terms of Engagement Docket</h2>
                     <p className="text-slate-500 mt-2 max-w-lg mx-auto">
@@ -272,6 +308,54 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
 
     return (
         <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in pb-20">
+            {/* Status Banner */}
+            {signoffStatus === 'sent' && currentSignoff?.token && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 no-print">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                        <div className="flex-grow">
+                            <h3 className="text-lg font-black text-amber-900 uppercase tracking-wider mb-2">Awaiting Client Sign-Off</h3>
+                            <p className="text-sm text-amber-800">The design agreement has been generated and is awaiting digital signature.</p>
+                            
+                            <div className="mt-4 p-4 bg-white rounded-lg border border-amber-200 shadow-sm">
+                                <div className="flex items-center justify-between mb-2 pb-2 border-b border-amber-100">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Digital Sign-Off URL</span>
+                                    <button 
+                                        onClick={() => handleCopy(getSignoffUrl(currentSignoff.token!))}
+                                        className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold rounded transition-all cursor-pointer"
+                                    >
+                                        {copied ? "Copied!" : "Copy Link"}
+                                    </button>
+                                </div>
+                                <div className="text-[11px] font-mono break-all text-slate-500 bg-slate-50 p-2.5 rounded border border-slate-200">
+                                    {getSignoffUrl(currentSignoff.token!)}
+                                </div>
+                                <div className="mt-3">
+                                    <a href={getSignoffUrl(currentSignoff.token!)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-semibold tracking-tight inline-block cursor-pointer">
+                                        Open Sign-Off Screen &rarr;
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {signoffStatus === 'signed' && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 no-print">
+                    <h3 className="text-lg font-black text-emerald-900 uppercase tracking-wider mb-2">Digitally Executed</h3>
+                    <p className="text-sm text-emerald-800">Authorized by <span className="font-bold">{currentSignoff?.clientName || projectContext.clientName}</span> on {currentSignoff?.signedAt ? new Date(currentSignoff.signedAt).toLocaleString() : 'N/A'}</p>
+                    {currentSignoff?.ipAddress && currentSignoff.ipAddress !== 'Internal' && (
+                        <p className="text-[10px] text-emerald-600/70 font-mono mt-1">IP: {currentSignoff.ipAddress} | Ref: {currentSignoff.refId}</p>
+                    )}
+                </div>
+            )}
+
+            {localError && (
+                <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm mb-4">
+                    {localError}
+                </div>
+            )}
+
             {/* Header Actions */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200 no-print">
                 <div className="flex items-center gap-4">
@@ -304,9 +388,18 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                     <FileText className="w-4 h-4" /> Regenerate
                                 </button>
                             )}
-                            <button onClick={handleSend} className="px-4 py-2 bg-indigo-600 border border-indigo-600 text-white font-bold text-sm rounded-lg hover:bg-indigo-700 transition flex items-center gap-2 shadow-sm">
-                                <Send className="w-4 h-4" /> Mark as Sent
-                            </button>
+                            
+        {!showSendConfirm ? (
+            <button onClick={() => setShowSendConfirm(true)} disabled={isSending} className="px-4 py-2 bg-indigo-600 border border-indigo-600 text-white font-bold text-sm rounded-lg hover:bg-indigo-700 transition flex items-center gap-2 shadow-sm">
+                <CheckCircle2 className="w-4 h-4" /> {isSending ? 'Sending...' : 'Send to Client'}
+            </button>
+        ) : (
+            <div className="flex items-center gap-2">
+                <button onClick={sendEmailSignoff} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-sm transition shadow-sm">Confirm Send</button>
+                <button onClick={() => setShowSendConfirm(false)} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded text-sm hover:bg-slate-50 transition">Cancel</button>
+            </div>
+        )}
+    
                         </>
                     )}
                     {latestDocket.status === 'sent' && !isLocked && (

@@ -523,7 +523,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectConte
     const approvedExecutionCost = activeTier?.summary.totalCost || 0;
 
     // 3. Cash Flow Risk Real Time
-    const { currentProjectValue, totalPaid, designPaid, executionPaid, totalInvoicedBaseAmt, overdueAmt } = calculateProjectFinancials(projectContext, activeTier);
+    const { currentProjectValue, totalPaid, designPaid, executionPaid, totalInvoicedBaseAmt, pendingAmt } = calculateProjectFinancials(projectContext, activeTier);
     
     // Override local values
     const displayContractValueFinal = currentProjectValue || displayContractValue;
@@ -532,7 +532,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectConte
     const executionCollectedAmt = executionPaid;
     const actualPercentDisplay = displayContractValueFinal > 0 ? Math.min(100, Math.round((collectedAmt / displayContractValueFinal) * 100)) : 0;
     const expectedPercent = Math.min(100, Math.max(0, health.expectedReceived));
-    const cashFlowRisk = (expectedPercent > actualPercentDisplay) || health.overdueCount > 0;
+    const cashFlowRisk = (expectedPercent > actualPercentDisplay) || health.pendingCount > 0;
 
     // Pre-execution Intelligence
     const pricedItems = (fullBoq || []).filter(item => item.rate > 0).length;
@@ -544,10 +544,10 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectConte
 
     // Dynamically derive the "What to do today" actions
     const todayItems: any[] = [];
-    if (health.overdueCount > 0) {
+    if (health.pendingCount > 0) {
         todayItems.push({
-            title: 'Overdue Payment Alert',
-            description: `₹${health.overdueAmount.toLocaleString('en-IN')} is overdue. Send reminder message.`,
+            title: 'Pending Payment',
+            description: `₹${health.pendingAmount.toLocaleString('en-IN')} is pending.`,
             btnText: 'Send Reminder',
             route: 'comms-tracker',
             badge: 'High Priority',
@@ -844,7 +844,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectConte
                                 </div>
                                 <div className="px-4 border-l border-slate-100">
                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">DUE NOW</p>
-                                    <p className="text-xl md:text-2xl font-bold tracking-tight text-emerald-600 mb-1">{formatINR(overdueAmt)}</p>
+                                    <p className="text-xl md:text-2xl font-bold tracking-tight text-emerald-600 mb-1">{formatINR(pendingAmt)}</p>
                                     <p className="text-[9px] text-slate-500 leading-tight">No outstanding invoices</p>
                                 </div>
                                 <div className="px-4 border-l border-slate-100">

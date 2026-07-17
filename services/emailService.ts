@@ -223,7 +223,7 @@ export const sendDesignerNotification = async (decisionId: string, projectId: st
     }
 };
 
-export const sendAgreementSignoffRequest = async (projectId: string, projectContext: any, contractValue: number, pdfBase64?: string, studioId: string = 'demo-tenant-01'): Promise<{ success: boolean; token?: string; error?: string }> => {
+export const sendAgreementSignoffRequest = async (projectId: string, projectContext: any, contractValue: number, pdfBase64?: string, studioId: string = 'demo-tenant-01', agreementType: 'execution' | 'design' | 'handover' = 'execution'): Promise<{ success: boolean; token?: string; error?: string }> => {
     try {
         const clientEmail = projectContext.clientEmail;
         
@@ -231,11 +231,17 @@ export const sendAgreementSignoffRequest = async (projectId: string, projectCont
             throw new Error('Client email not available');
         }
 
-        const subject = `Action Required: Execution Agreement for ${projectContext.name || 'Project'}`;
+        const typeTitles = {
+            execution: 'Execution Agreement',
+            design: 'Design Agreement',
+            handover: 'Handover Docket & Warranty'
+        };
+        const docTitle = typeTitles[agreementType];
+        const subject = `Action Required: ${docTitle} for ${projectContext.name || 'Project'}`;
         
         // Generate Token
         const randomPart = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        const signoffToken = `AGREEMENT_${projectId}_${randomPart}`;
+        const signoffToken = `${agreementType.toUpperCase()}_AGREEMENT_${projectId}_${randomPart}`;
         
         let appDomain = import.meta.env.VITE_APP_DOMAIN || window.location.origin;
         let isDev = false;
@@ -258,7 +264,7 @@ export const sendAgreementSignoffRequest = async (projectId: string, projectCont
         const variables = {
             clientName: projectContext.clientName || 'Client',
             projectName: projectContext.name || 'Project',
-            amount: `₹${contractValue.toLocaleString()}`,
+            amount: contractValue > 0 ? `₹${contractValue.toLocaleString()}` : 'N/A',
             signoffUrl: signoffUrl,
             studioPhone: STUDIO_PHONE,
             studioName: STUDIO_NAME

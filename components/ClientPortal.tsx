@@ -46,6 +46,7 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import { useStudioSettings } from '../hooks/useStudioSettings';
+import WeeklyProgressReportTab from './WeeklyProgressReportTab';
 
 interface ClientPortalProps {
     projectData: FullProjectData;
@@ -67,8 +68,18 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const { activeRequest, overridePaymentGate } = usePaymentRequests(projectData.id, studioId);
     const [expandedStepIdx, setExpandedStepIdx] = useState<number | null>(null);
     
-    const [activeTab, setActiveTab] = useState<'overview' | 'roadmap' | 'feed' | 'financials' | 'scope' | 'designs' | 'decisions'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'roadmap' | 'feed' | 'financials' | 'scope' | 'designs' | 'decisions' | 'weekly-reports'>('overview');
     const [showGlossary, setShowGlossary] = useState(false);
+
+    const setProjectContext = (updater: any) => {
+        const nextContext = typeof updater === 'function' ? updater(projectData.context) : updater;
+        if (onProjectUpdate) {
+            onProjectUpdate({
+                ...projectData,
+                context: nextContext
+            });
+        }
+    };
 
     // Filter out drafts
     const displayUpdates = updates.filter(u => u.status !== 'draft');
@@ -378,6 +389,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         { id: 'overview', label: 'Overview', icon: LayoutDashboard },
                         ...(settings?.clientPortalConfig?.showTimeline !== false ? [{ id: 'roadmap', label: 'Project Roadmap', icon: MapIcon }] : []),
                         { id: 'feed', label: 'Live Feed', icon: Activity },
+                        { id: 'weekly-reports', label: 'Weekly Progress', icon: ClipboardList },
                         ...(settings?.clientPortalConfig?.showDocuments !== false ? [
                             { id: 'designs', label: 'Approved Designs', icon: ImageIcon },
                             { id: 'decisions', label: 'Decisions Log', icon: ShieldCheck },
@@ -645,12 +657,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                 
                                                 {showPaymentGate && (
                                                     <div className={`mb-4 w-full p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-4 ${activeRequest.status === 'overdue' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
-                                                        {activeRequest.status === 'overdue' ? (
-                                                            <div className="flex items-center gap-3 text-red-800 font-bold">
-                                                                <span className="flex-shrink-0 animate-pulse text-red-500">🔴</span>
-                                                                Payment Overdue — {Math.ceil((Date.now() - new Date(activeRequest.triggeredAt.toDate ? activeRequest.triggeredAt.toDate() : activeRequest.triggeredAt).getTime()) / (1000 * 60 * 60 * 24))} days since raised
-                                                            </div>
-                                                        ) : (
+                                                        {activeRequest.status === 'overdue' ? (<div className="flex items-center gap-3 text-red-800 font-bold"><span className="flex-shrink-0 animate-pulse text-red-500">🔴</span>Payment Pending</div>) : (
                                                             <div className="flex items-center gap-3 text-amber-800 font-bold">
                                                                 <span className="flex-shrink-0 animate-pulse text-amber-500">⏳</span>
                                                                 Awaiting Payment — {activeRequest.milestoneLabel}
@@ -852,6 +859,28 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                     ))
                                     )}
                                 </div>
+                            </motion.div>
+                        )}
+
+                        {activeTab === 'weekly-reports' && (
+                            <motion.div
+                                key="weekly-reports"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                            >
+                                <div className="mb-8">
+                                    <h2 className="text-2xl font-bold text-indigo-950 mb-2">Weekly Progress Reports</h2>
+                                    <p className="text-slate-500">Chronological week-by-week summaries of design, site execution, and financials.</p>
+                                </div>
+                                <WeeklyProgressReportTab
+                                    projectContext={context}
+                                    setProjectContext={setProjectContext}
+                                    activeTier={activeTier}
+                                    projectId={projectData.id}
+                                    projectData={projectData}
+                                    isClientView={true}
+                                />
                             </motion.div>
                         )}
 

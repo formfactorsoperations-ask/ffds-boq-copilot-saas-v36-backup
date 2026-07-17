@@ -4,7 +4,7 @@ import Card from "./shared/Card";
 import { BuildingOfficeIcon, PlusIcon, NewFileIcon, DeleteIcon } from "./Icons";
 import { formatClientValue, timeAgo, formatCurrency } from "../lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { Info } from "lucide-react";
+import { Info, PlayCircle, PauseCircle, CheckCircle, FileText, Send, MessageSquare, Briefcase, Zap, Trophy, LayoutDashboard } from "lucide-react";
 import { ProjectPaymentBadge } from "./PaymentHealth";
 import { ClockIcon } from "./Icons";
 import {
@@ -30,55 +30,63 @@ interface ProjectListTabProps {
 
 const STATUS_CONFIG: Record<
   string,
-  { label: string; color: string; bg: string; border: string }
+  { label: string; color: string; bg: string; border: string; icon?: any }
 > = {
   lead: {
     label: "New Lead",
     color: "text-blue-600",
     bg: "bg-blue-50/50 backdrop-blur-sm",
     border: "border-blue-200/50",
+    icon: Zap,
   },
   draft: {
     label: "Drafting",
     color: "text-slate-600",
     bg: "bg-slate-100/50 backdrop-blur-sm",
     border: "border-slate-200/50",
+    icon: FileText,
   },
   proposal_sent: {
     label: "Proposal Sent",
     color: "text-indigo-600",
     bg: "bg-indigo-50/50 backdrop-blur-sm",
     border: "border-indigo-200/50",
+    icon: Send,
   },
   negotiation: {
     label: "Negotiation",
     color: "text-amber-600",
     bg: "bg-amber-50/50 backdrop-blur-sm",
     border: "border-amber-200/50",
+    icon: MessageSquare,
   },
   won: {
     label: "Won",
     color: "text-emerald-600",
     bg: "bg-emerald-50/50 backdrop-blur-sm",
     border: "border-emerald-200/50",
+    icon: Trophy,
   },
   execution: {
     label: "Execution",
     color: "text-purple-600",
     bg: "bg-purple-50/50 backdrop-blur-sm",
     border: "border-purple-200/50",
+    icon: PlayCircle,
   },
   work_paused: {
-    label: "Work Paused 🔴",
+    label: "Work Paused",
     color: "text-rose-700",
     bg: "bg-rose-100 backdrop-blur-sm",
     border: "border-rose-300",
+    icon: PauseCircle,
   },
   completed: {
     label: "Completed",
     color: "text-teal-600",
     bg: "bg-teal-50/50 backdrop-blur-sm",
     border: "border-teal-200/50",
+    icon: CheckCircle,
   },
   lost: {
     label: "Lost",
@@ -652,7 +660,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
     const ONE_DAY = 86400000;
 
     projects.forEach((p) => {
-      const projectName = p.context.name || "Project";
+      const projectName = p.context?.name || "Project";
 
       // Selections
       const selections = p.activeProject?.materialSelections || [];
@@ -705,8 +713,9 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
       });
 
       // Milestones
-      const milestones = p.context.paymentMilestones || [];
+      const milestones = p.context?.paymentMilestones || [];
       milestones.forEach((m) => {
+        if (!m) return;
         if (m.status === "paid")
           items.push({
             text: `[${projectName}] ${m.name} payment received`,
@@ -875,12 +884,15 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
 
           {/* 1. COMPACT STATS HEADER */}
           <MotionDiv
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, staggerChildren: 0.1 }}
+            initial="hidden"
+            animate="visible"
+            variants={{
+              hidden: { opacity: 0 },
+              visible: { opacity: 1, transition: { staggerChildren: 0.15 } }
+            }}
             className="grid grid-cols-1 md:grid-cols-3 gap-6 px-4"
           >
-            <MotionDiv className="bg-indigo-950 text-white p-8 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between hover:-translate-y-1 transition-transform">
+            <MotionDiv variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="bg-indigo-950 text-white p-8 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between hover:-translate-y-1 transition-transform">
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">
                   Blockers & Risks
@@ -908,7 +920,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
               )}
             </MotionDiv>
 
-            <MotionDiv className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between hover:-translate-y-1 transition-transform">
+            <MotionDiv variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between hover:-translate-y-1 transition-transform">
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">
                   Pace & Volume
@@ -942,7 +954,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
               </div>
             </MotionDiv>
 
-            <MotionDiv className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between hover:-translate-y-1 transition-transform">
+            <MotionDiv variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between hover:-translate-y-1 transition-transform">
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">
                   Value & Margin
@@ -1188,10 +1200,47 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
           {viewMode === "grid" && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <AnimatePresence>
-                {filteredProjects.map((project) => {
+                {filteredProjects.map((project, index) => {
                   const metrics = getProjectMetrics(project);
                   const isActive = activeProjectId === project.id;
-                  const lastEdited = timeAgo(project.lastModified);
+                  
+                  const getLatestActivity = () => {
+                      let events: { time: number, text: string }[] = [];
+
+                      const updates = project.activeProject?.executionData?.updates;
+                      if (updates && updates.length > 0) {
+                          const latestUpdate = [...updates].sort((a, b) => b.timestamp - a.timestamp)[0];
+                          events.push({ time: latestUpdate.timestamp, text: `Update: ${latestUpdate.text.substring(0, 30)}${latestUpdate.text.length > 30 ? '...' : ''}`});
+                      }
+
+                      const contract = project.context?.contractSignoff;
+                      if (contract?.signedAt) {
+                          events.push({ time: new Date(contract.signedAt).getTime(), text: "Contract signed" });
+                      } else if (contract?.sentAt) {
+                          events.push({ time: new Date(contract.sentAt).getTime(), text: "Contract sent" });
+                      }
+
+                      project.materials?.forEach(m => {
+                          if (m.clientConfirmedAt) events.push({ time: new Date(m.clientConfirmedAt).getTime(), text: `Confirmed: ${m.itemName.substring(0, 20)}`});
+                          if (m.changeRequestedAt) events.push({ time: new Date(m.changeRequestedAt).getTime(), text: `CR: ${m.itemName.substring(0, 20)}`});
+                      });
+                      
+                      const blockers = project.activeProject?.executionData?.blockers;
+                      if (blockers) {
+                          blockers.forEach(b => {
+                              if (b.resolvedAt) events.push({ time: b.resolvedAt, text: `Resolved: ${b.title || 'Blocker'}`});
+                          });
+                      }
+                      
+                      if (events.length > 0) {
+                          events.sort((a, b) => b.time - a.time);
+                          return events[0];
+                      }
+                      return null;
+                  };
+
+                  const latestAct = getLatestActivity();
+                  
                   const statusStyle =
                     STATUS_CONFIG[metrics.status] || STATUS_CONFIG["draft"];
 
@@ -1199,38 +1248,71 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                   const getIndicators = () => {
                     const conditions = [];
 
-                    if (metrics.status !== "lost") {
-                      // 1. Payment Due (within 7 days or overdue)
-                      const upcomingOrOverdue =
-                        project.context?.paymentMilestones
-                          ?.filter((m) => {
-                            if (m.status === "paid" || !m.date) return false;
-                            const mDate = new Date(m.date);
-                            if (isNaN(mDate.getTime())) return false;
-                            const in7Days = new Date();
-                            in7Days.setDate(in7Days.getDate() + 7);
-                            return mDate <= in7Days;
-                          })
-                          .sort(
-                            (a, b) =>
-                              new Date(a.date!).getTime() -
-                              new Date(b.date!).getTime(),
-                          );
-
-                      if (upcomingOrOverdue && upcomingOrOverdue.length > 0) {
-                        const d = new Date(
-                          upcomingOrOverdue[0].date!,
-                        ).toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                        });
+                    if (metrics.status !== "lost" && metrics.status !== "completed") {
+                      // 1. Flight Risk (Pre-sales)
+                      if ((metrics.status === 'lead' || metrics.status === 'proposal_sent') && project.decisionBrainOutput?.flags?.high_flight_risk) {
                         conditions.push({
-                          dot: "bg-rose-500",
-                          text: `Payment due ${d}`,
+                          dot: "bg-rose-500 animate-pulse",
+                          text: "High Flight Risk",
+                          bg: "bg-rose-50 border-rose-200 text-rose-700"
                         });
                       }
 
-                      // 2. Pending Decisions
+                      // 2. Critical Sign-offs Pending
+                      const signoffs = [
+                        { name: 'Contract', data: project.context?.contractSignoff },
+                        { name: 'Design Agreement', data: project.context?.designAgreementSignoff },
+                        { name: 'Handover', data: project.context?.handoverSignoff },
+                      ];
+                      
+                      signoffs.forEach(s => {
+                        if (s.data?.status === 'sent') {
+                          conditions.push({
+                            dot: "bg-amber-500 animate-pulse",
+                            text: `${s.name} Pending Sign-off`,
+                            bg: "bg-amber-50 border-amber-200 text-amber-700"
+                          });
+                        }
+                      });
+
+                      // 3. Execution Blockers
+                      const unresolvedBlockers = project.activeProject?.executionData?.blockers?.filter(b => !b.resolved) || [];
+                      const criticalBlocker = unresolvedBlockers.find(b => b.impactLevel === 'critical' || b.severity === 'high');
+                      
+                      if (criticalBlocker) {
+                        conditions.push({
+                          dot: "bg-rose-500 animate-pulse",
+                          text: `Critical Blocker: ${criticalBlocker.description.substring(0, 25)}${criticalBlocker.description.length > 25 ? '...' : ''}`,
+                        });
+                      } else if (unresolvedBlockers.length > 0) {
+                         conditions.push({
+                          dot: "bg-amber-500",
+                          text: `${unresolvedBlockers.length} Active Blocker${unresolvedBlockers.length > 1 ? 's' : ''}`,
+                        });
+                      }
+
+                      // 4. Pending Change Requests
+                      const pendingCRs = project.materials?.filter(m => m.itemType === 'change_request' && m.status === 'pending_approval')?.length || 0;
+                      if (pendingCRs > 0) {
+                        conditions.push({
+                          dot: "bg-indigo-500",
+                          text: `${pendingCRs} Change Request${pendingCRs > 1 ? 's' : ''} Pending`,
+                        });
+                      }                      // 5. Payment Pending
+                      const pendingPayments = project.context?.paymentMilestones?.filter((m) => {
+                          const st = m.status?.toLowerCase();
+                          return st === "invoiced" || st === "advance_requested";
+                      });
+
+                      if (pendingPayments && pendingPayments.length > 0) {
+                        conditions.push({
+                          dot: "bg-amber-500 animate-pulse",
+                          text: pendingPayments.length === 1 ? 'Payment Pending' : `${pendingPayments.length} Payments Pending`,
+                          isAlert: true
+                        });
+                      }
+
+                      // 6. Pending Decisions
                       const pendingDecisions =
                         project.activeProject?.executionData?.decisions?.filter(
                           (d) => !d.resolved,
@@ -1242,14 +1324,14 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                         });
                       }
 
-                      // 3. SOF Items Pending
+                      // 7. SOF Items Pending
                       const pendingSofItems =
                         project.activeProject?.executionData?.sofItems?.filter(
                           (s) => s.status === "pending",
                         )?.length || 0;
                       if (pendingSofItems > 0) {
                         conditions.push({
-                          dot: "bg-amber-500",
+                          dot: "bg-indigo-500",
                           text: `${pendingSofItems} SOF item${pendingSofItems > 1 ? "s" : ""} pending`,
                         });
                       }
@@ -1258,22 +1340,22 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                     if (conditions.length === 0) return null;
 
                     return (
-                      <div className="mt-2 pt-3 border-t border-slate-100 flex flex-col gap-2 mb-2">
-                        {conditions.slice(0, 2).map((c, i) => (
+                      <div className="mt-3 flex flex-col gap-1.5 mb-1">
+                        {conditions.slice(0, 2).map((c: any, i) => (
                           <div
                             key={i}
-                            className="flex items-center gap-2 text-[10px] text-slate-600 font-semibold uppercase tracking-wider"
+                            className={`flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider ${c.isAlert ? 'text-rose-600 font-bold' : 'text-slate-600'}`}
                           >
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${c.dot}`}
                             ></span>
-                            <span>{c.text}</span>
+                            <span className="truncate">{c.text}</span>
                           </div>
                         ))}
                         {conditions.length > 2 && (
-                          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                          <div className="flex items-center gap-2 mt-0.5 text-[9px] text-slate-400 font-bold uppercase tracking-wider">
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                            <span>+{conditions.length - 2} more blockers</span>
+                            <span>+{conditions.length - 2} more action{conditions.length - 2 > 1 ? 's' : ''}</span>
                           </div>
                         )}
                       </div>
@@ -1284,10 +1366,11 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                     <MotionDiv
                       key={project.id}
                       layout
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
+                      initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      className={`bg-white rounded-2xl border transition-all duration-200 relative group flex flex-col cursor-pointer overflow-hidden h-full hover:shadow-lg hover:-translate-y-0.5
+                      transition={{ duration: 0.4, delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
+                      className={`bg-white rounded-2xl border transition-all duration-300 relative group flex flex-col cursor-pointer overflow-hidden h-full hover:shadow-xl hover:-translate-y-1
                                     ${isActive ? "border-indigo-500 ring-1 ring-indigo-500 shadow-md" : "border-slate-200 hover:border-slate-300"}
                                 `}
                       onClick={() => onOpenProject(project)}
@@ -1296,34 +1379,42 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                         <div className="flex justify-between items-start">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span
-                              className={`px-2 py-1 rounded text-[9px] font-bold uppercase tracking-[0.15em] border ${statusStyle.bg} ${statusStyle.color} ${statusStyle.border}`}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-[0.15em] border transition-colors ${statusStyle.bg} ${statusStyle.color} ${statusStyle.border}`}
                             >
+                              {statusStyle.icon && <statusStyle.icon className="w-3 h-3" />}
                               {statusStyle.label}
                             </span>
                             {metrics.riskScore > 0 && (
-                              <span className="flex items-center gap-1.5 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-[0.15em] bg-rose-50 text-rose-600 border border-rose-100">
+                              <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-[0.15em] bg-rose-50 text-rose-600 border border-rose-100">
                                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                                 At Risk
                               </span>
                             )}
                           </div>
                           <span className="text-[10px] text-slate-400 font-semibold tracking-wider shrink-0 mt-0.5">
-                            {lastEdited}
+                            {timeAgo(project.lastModified)}
                           </span>
                         </div>
                         
                         {/* Status Progress Bar */}
-                        <div className="flex flex-col gap-1.5 mt-2 mb-[-2px]">
+                        <div className="flex flex-col gap-1.5 mt-3 mb-1">
                           <div className="flex items-center justify-between">
-                             <div className="flex gap-[1px] flex-1 mr-3">
+                             <div className="flex gap-[2px] flex-1 mr-3">
                                 {[...Array(10)].map((_, i) => {
-                                  const progressPct = metrics.status === 'completed' ? 100 : 
-                                    (metrics.status === 'execution' || metrics.status === 'work_paused') ? 65 : 
-                                    metrics.status === 'won' ? 35 : 
-                                    metrics.status === 'negotiation' ? 25 : 
-                                    metrics.status === 'proposal_sent' ? 15 : 
-                                    metrics.status === 'draft' ? 5 : 0;
+                                  const baseProgressPct = metrics.status === 'completed' ? 100 : 
+                                    (metrics.status === 'execution' || metrics.status === 'work_paused') ? 60 : 
+                                    metrics.status === 'won' ? 40 : 
+                                    metrics.status === 'negotiation' ? 30 : 
+                                    metrics.status === 'proposal_sent' ? 20 : 
+                                    metrics.status === 'draft' ? 10 : 0;
                                     
+                                  // For execution phase, interpolate between 60% and 100% based on journeySummary pct
+                                  let progressPct = baseProgressPct;
+                                  if ((metrics.status === 'execution' || metrics.status === 'work_paused') && project.context?.journeySummary?.pct !== undefined) {
+                                      // Scale 0-100 execution progress into the remaining 40% (60% to 100%)
+                                      progressPct = 60 + Math.floor((project.context.journeySummary.pct / 100) * 40);
+                                  }
+
                                   const barColor = metrics.status === 'completed' ? 'bg-emerald-500' : 
                                     metrics.status === 'execution' ? 'bg-indigo-500' : 
                                     metrics.status === 'work_paused' ? 'bg-rose-500' : 
@@ -1332,23 +1423,33 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                     metrics.status === 'proposal_sent' ? 'bg-indigo-400' : 
                                     'bg-slate-400';
 
+                                  const isFilled = (i + 1) * 10 <= (progressPct + 5);
+
                                   return (
-                                    <div 
+                                    <motion.div 
                                       key={i} 
-                                      className={`h-1.5 flex-1 rounded-[1px] ${
-                                        (i + 1) * 10 <= (progressPct + 5) ? barColor : 'bg-slate-200/60'
+                                      initial={{ opacity: 0, scale: 0.5 }}
+                                      animate={{ opacity: 1, scale: 1 }}
+                                      transition={{ duration: 0.3, delay: i * 0.03 }}
+                                      className={`h-1.5 flex-1 rounded-[1px] transition-colors duration-500 ${
+                                        isFilled ? barColor : 'bg-slate-200/60'
                                       }`}
-                                    ></div>
+                                    ></motion.div>
                                   );
                                 })}
                              </div>
-                             <span className="text-[9px] font-bold text-slate-500 tracking-wider">
-                                {metrics.status === 'completed' ? 100 : 
-                                 (metrics.status === 'execution' || metrics.status === 'work_paused') ? 65 : 
-                                 metrics.status === 'won' ? 35 : 
-                                 metrics.status === 'negotiation' ? 25 : 
-                                 metrics.status === 'proposal_sent' ? 15 : 
-                                 metrics.status === 'draft' ? 5 : 0}%
+                             <span className="text-[10px] font-bold text-slate-500 tracking-wider min-w-[28px] text-right">
+                                {(() => {
+                                  if (metrics.status === 'completed') return 100;
+                                  if (metrics.status === 'execution' || metrics.status === 'work_paused') {
+                                      return 60 + Math.floor(((project.context?.journeySummary?.pct || 0) / 100) * 40);
+                                  }
+                                  if (metrics.status === 'won') return 40;
+                                  if (metrics.status === 'negotiation') return 30;
+                                  if (metrics.status === 'proposal_sent') return 20;
+                                  if (metrics.status === 'draft') return 10;
+                                  return 0;
+                                })()}%
                              </span>
                           </div>
                         </div>
@@ -1470,6 +1571,14 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                             </div>
                           )}
                         </div>
+
+                        {/* Latest Activity Footer */}
+                        {latestAct && (
+                          <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center text-[9px] text-slate-500 font-medium">
+                            <span className="truncate pr-4">{latestAct.text}</span>
+                            <span className="shrink-0 font-bold uppercase tracking-wider opacity-60">{timeAgo(latestAct.time)}</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Footer actions */}

@@ -148,7 +148,7 @@ export default function RevisionStudio({
       let rate = 0;
       if (bankItem) {
         rate = calculateSellPrice(
-          bankItem.materials,
+          boqItem.baseRate !== undefined ? boqItem.baseRate : bankItem.materials,
           bankItem.labor,
           boqItem.marginOverride ?? bankItem.margin,
         );
@@ -1790,6 +1790,7 @@ export default function RevisionStudio({
             "Reason / Notes": "Variance",
           });
           designMilestones.forEach((m, idx) => {
+            if (!m) return;
             const current = calculateMilestone(m, false, idx);
             const variance = current.revisedTotal - current.originalTotal;
             if (current.deductedInitiationFee > 0) {
@@ -1896,6 +1897,7 @@ export default function RevisionStudio({
             "Reason / Notes": "Variance",
           });
           executionMilestones.forEach((m, idx) => {
+            if (!m) return;
             const current = calculateMilestone(m, true, idx);
             const variance = current.revisedTotal - current.originalTotal;
             exportData.push({

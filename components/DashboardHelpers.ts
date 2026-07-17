@@ -43,27 +43,19 @@ export function generateProjectFeed(projectContext: ProjectContext, activeProjec
   const milestones = projectContext.paymentMilestones || [];
   if (milestones) {
     milestones.forEach(m => {
+      if (!m) return;
       if (m.status === 'paid') items.push({
         text: `${m.name} — payment received`,
         emoji: '💰', type: 'payment',
         timestamp: m.date ? new Date(m.date).getTime() : now,
         route: 'payment-calc'
       });
-      const dueDateTimestamp = (m.date || m.invoiceDate) ? new Date(m.date || m.invoiceDate as string).getTime() : undefined;
-      const isCompleted = projectContext.lifecycle?.stage === 'completed' || projectContext.status === 'completed';
+            const isCompleted = projectContext.lifecycle?.stage === 'completed' || projectContext.status === 'completed';
       
-      // Only flag overdue if invoiced or if it's explicitly unpaid, and the project is active.
-      if (dueDateTimestamp && m.status === 'invoiced' && !isCompleted) {
-        const daysUntilDue = Math.ceil((dueDateTimestamp - now) / ONE_DAY);
-        if (daysUntilDue <= 7 && daysUntilDue > 0) items.push({
-          text: `${m.name} due in ${daysUntilDue} day${daysUntilDue===1?'':'s'}`,
-          emoji: '📅', type: 'alert',
-          timestamp: now - 3600000,
-          route: 'payment-calc'
-        });
-        if (daysUntilDue <= 0) items.push({
-          text: `${m.name} — payment overdue`,
-          emoji: '🚨', type: 'critical',
+      if ((m.status === 'invoiced' || (m as any).status === 'advance_requested') && !isCompleted) {
+         items.push({
+          text: `${m.name} payment pending`,
+          emoji: '⏳', type: 'alert',
           timestamp: now,
           route: 'payment-calc'
         });
@@ -117,30 +109,18 @@ export function calculateActionProtocol(projectContext: ProjectContext, activePr
     }
   }
 
-  // -- OVERDUE PAYMENT MILESTONES --
+  // -- PENDING PAYMENT MILESTONES --
   const isCompleted = projectContext.lifecycle?.stage === 'completed' || projectContext.status === 'completed';
   if (milestones && !isCompleted) {
     milestones.forEach(m => {
-      if (m.status === 'invoiced' && (m.date || (m as any).invoiceDate)) {
-        const dueDate = new Date(m.date || (m as any).invoiceDate);
-        const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / 86400000);
-        if (daysOverdue > 0) {
+      if (m.status === 'invoiced' || (m as any).status === 'advance_requested') {
           items.push({
             severity: 'critical',
-            title: `${m.name} overdue by ${daysOverdue} day${daysOverdue===1?'':'s'}`,
+            title: `${m.name} Payment Pending`,
             description: `₹${((m as any).amount || 0).toLocaleString('en-IN')} payment not received.`,
             action: 'View milestone',
             route: 'payment-calc'
           });
-        } else if (daysOverdue > -7 && daysOverdue <= 0) {
-          items.push({
-            severity: 'warning',
-            title: `${m.name} due in ${Math.abs(daysOverdue)} days`,
-            description: `Send payment reminder to client.`,
-            action: 'View milestone',
-            route: 'payment-calc'
-          });
-        }
       }
     });
   }

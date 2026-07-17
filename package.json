@@ -4,12 +4,12 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "NODE_OPTIONS=--max-old-space-size=4096 vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@google/genai": "^1.27.0",
+    "@google/genai": "^2.11.0",
     "@supabase/supabase-js": "^2.90.1",
     "@types/express": "^5.0.6",
     "@types/node": "^22.19.20",
@@ -45,5 +45,8 @@
     "jsdom": "^29.1.1",
     "puppeteer": "^25.1.0",
     "vitest": "^4.1.9"
+  },
+  "overrides": {
+    "node-domexception": "file:./node-domexception-stub"
   }
 }

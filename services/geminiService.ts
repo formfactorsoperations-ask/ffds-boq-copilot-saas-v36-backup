@@ -157,6 +157,7 @@ export async function estimateQuantity(item: Item, room: Room, projectContext: P
     const ceilingHeight = room.height || projectContext.ceilingHeight || 9.5;
     const prompt = `Estimate qty for item: ${item.name} (${item.unit}) in room: ${room.name} (${room.size} sqft). Context: ${projectContext.config}. Return JSON {qty, rationale}.`;
      try {
+        const ai = getAi();
         const response = await ai.models.generateContent({
             model: 'gemini-3.5-flash',
             contents: prompt,
@@ -220,6 +221,7 @@ export async function generateExecutionTasks(boq: FullBoqItem[]): Promise<Projec
     `;
 
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({
             model: 'gemini-3.5-flash',
             contents: prompt,
@@ -278,6 +280,7 @@ export async function suggestItemsFromBrief(brief: string, bank: Item[]): Promis
     const ai = getAi();
     const prompt = `Match items from bank for brief: "${brief}". Bank: ${JSON.stringify(bank.map(i => ({id: i.id, name: i.name})))}. Return JSON array of item IDs.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         const itemIds = parseJsonResponse<string[]>(response.text, []);
         return bank.filter(item => itemIds.includes(item.id));
@@ -289,6 +292,7 @@ export async function splitCost(item: Item, totalCost: number, strategy: AIStrat
     const ai = getAi();
     const prompt = `Split cost ${totalCost} for ${item.name} into materials and labor. Strategy: ${strategy}. Return JSON {materials, labor, rationale}.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse(response.text, { materials: totalCost, labor: 0, rationale: 'Error' });
     } catch (error) { return { materials: totalCost, labor: 0, rationale: 'API call failed' }; }
@@ -304,7 +308,8 @@ Total Cost: INR ${aggregates.totalCost}
 Gross Margin: ${aggregates.grossMargin}%
 
 Do not use vague marketing fluff. State specific financial health, margin strength, and overall execution scope.`;
-    try { const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt }); return response.text || "Error"; } catch (e) { return "Error"; }
+    try { const ai = getAi();
+        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt }); return response.text || "Error"; } catch (e) { return "Error"; }
 }
 
 export async function getAiCoachSuggestions(boq: BoqItem[], aggregates: any): Promise<string[]> {
@@ -312,6 +317,7 @@ export async function getAiCoachSuggestions(boq: BoqItem[], aggregates: any): Pr
     const ai = getAi();
     const prompt = `3 actionable profitability suggestions for interior project. GM: ${aggregates.totalGm}%. Return JSON string array.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<string[]>(response.text, []);
     } catch (e) { return []; }
@@ -322,6 +328,7 @@ export async function optimizeMargins(boq: FullBoqItem[], targetGm: number, stra
     const ai = getAi();
     const prompt = `Optimize margins to hit ${targetGm}% GM. Strategy: ${strategy}. BOQ: ${JSON.stringify(boq.map(i => ({id: i.id, name: i.name, currentMargin: i.margin})))}. Return JSON array {itemId, itemName, currentMargin, newMargin, rationale}.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<MarginSuggestion[]>(response.text, []);
     } catch (e) { return []; }
@@ -333,6 +340,7 @@ export async function estimateRoomSizes(area: number, config: string): Promise<R
     const prompt = `Estimate standard physical rooms (e.g. Living Room, Bedroom 1, Kitchen) for ${area} sqft ${config} apartment. 
 Return JSON array {name, size, unit:'sq ft'}. DO NOT include functional or miscellaneous zones like 'Functional' or 'Others' in your response.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         const rooms = parseJsonResponse<Room[]>(response.text, []);
         if (rooms.length > 0) {
@@ -349,6 +357,7 @@ export async function analyzeFloorPlan(imageBase64: string, area: number): Promi
     const imagePart = { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } };
     const prompt = `Analyze floor plan image. Total area ${area} sqft. Identify rooms and sizes. Return JSON array {name, size, unit:'sq ft'}.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [imagePart, { text: prompt }] }, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<Room[]>(response.text, []);
     } catch (e) { return []; }
@@ -375,6 +384,7 @@ CRITICAL:
 - Provide a highly specific rationale for each item detailing material logic, functional benefit, or aesthetic fit (e.g. "Selected 18mm MR grade plywood with standard laminate for durable base kitchen cabinets"). Do NOT use vague statements.
 `;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<AIGeneratedBoqItem[]>(response.text, []);
     } catch (e) { return []; }
@@ -412,6 +422,7 @@ CRITICAL:
 - ANY miscellaneous items (like Debris Removal, Deep Cleaning, Floor Protection) MUST be assigned to the 'Others' room.
 `;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.1-pro-preview', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse(response.text, { essential: [], premium: [], luxury: [] });
     } catch (e) { return { essential: [], premium: [], luxury: [] }; }
@@ -439,6 +450,7 @@ Return EXACTLY a JSON file with this structure:
 }
 `;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse(response.text, { materialMatrix: [], scopeMatrix: [], tierSummaries: [] });
     } catch (e) { return { materialMatrix: [], scopeMatrix: [], tierSummaries: [] }; }
@@ -449,6 +461,7 @@ export async function processCommand(command: string, boq: BoqItem[], projectCon
     const ai = getAi();
     const prompt = `Process BOQ command: "${command}". Return JSON {actions: [], summary: string}.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse(response.text, { actions: [], summary: "Error" });
     } catch (e) { return { actions: [], summary: "Error" }; }
@@ -460,6 +473,7 @@ export async function analyzeRoomImage(imageBase64: string): Promise<VisionAnaly
     const imagePart = { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } };
     const prompt = `Analyze room image. Return JSON {roomType, observations: string[], suggestedItems: {name, category, qty, unit, rationale}[]}.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [imagePart, { text: prompt }] }, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<VisionAnalysisResult>(response.text, null);
     } catch (e) { return null; }
@@ -512,6 +526,7 @@ export async function generateProjectTimeline(boq: FullBoqItem[]): Promise<Timel
     `;
 
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<TimelinePhase[]>(response.text, []);
     } catch (e) { return []; }
@@ -538,6 +553,7 @@ Return EXACTLY a JSON array matching this structure:
 ]
 DO NOT use vague descriptions like "wood" or "paint". Specify exact textures, finishes, and combinations.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<MaterialSuggestion[]>(response.text, []);
     } catch (e) { return []; }
@@ -548,6 +564,7 @@ export async function generateSmartContract(tier: ProposalTier, projectContext: 
     const ai = getAi();
     const prompt = `Generate interior contract for ${projectContext.name}. Tier: ${tier.name}. Value: ${tier.summary.totalSell}. Return markdown text.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt });
         return response.text || "Error";
     } catch (e) { return "Error"; }
@@ -558,6 +575,7 @@ export async function analyzeLeadStrategy(projectContext: ProjectContext, leadPr
     const ai = getAi();
     const prompt = `Analyze lead strategy. Context: ${JSON.stringify(projectContext)}. Lead: ${JSON.stringify(leadProfile)}. Return JSON DecisionBrainOutput.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<DecisionBrainOutput>(response.text, null);
     } catch (e) { return null; }
@@ -568,6 +586,7 @@ export async function generateProposalContent(projectContext: ProjectContext, br
     const ai = getAi();
     const prompt = `Write proposal content. Context: ${JSON.stringify(projectContext)}. Strategy: ${JSON.stringify(brainOutput)}. Return JSON ProposalWriterOutput.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<ProposalWriterOutput>(response.text, null);
     } catch (e) { return null; }
@@ -577,7 +596,8 @@ export async function refineItemSpecs(itemName: string, currentSpecs: string, th
     if (!isAiAvailable()) return currentSpecs;
     const ai = getAi();
     const prompt = `Refine specs for ${itemName}: ${currentSpecs}. Theme: ${theme}. Return string.`;
-    try { const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt }); return response.text || currentSpecs; } catch (e) { return currentSpecs; }
+    try { const ai = getAi();
+        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt }); return response.text || currentSpecs; } catch (e) { return currentSpecs; }
 }
 
 export async function auditProject(projectContext: ProjectContext, boq: FullBoqItem[]): Promise<AuditResult | null> {
@@ -585,6 +605,7 @@ export async function auditProject(projectContext: ProjectContext, boq: FullBoqI
     const ai = getAi();
     const prompt = `Audit project BOQ. Return JSON {score, warnings[], missingItems[], suggestions[]}.`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<AuditResult>(response.text, null);
     } catch (e) { return null; }
@@ -594,7 +615,8 @@ export async function chatWithProject(message: string, context: { boq: FullBoqIt
     if (!isAiAvailable()) return "Service unavailable";
     const ai = getAi();
     const prompt = `Chat context: Project ${context.projectContext.name}. Message: ${message}.`;
-    try { const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt }); return response.text || "Error"; } catch (e) { return "Error"; }
+    try { const ai = getAi();
+        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt }); return response.text || "Error"; } catch (e) { return "Error"; }
 }
 
 export async function suggestValueEngineering(boq: FullBoqItem[]): Promise<ValueEngineeringSuggestion[]> {
@@ -616,6 +638,7 @@ Return EXACTLY a JSON array of objects with the following keys:
 - impactAnalysis (string, the exact visual or functional compromise)
 `;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<ValueEngineeringSuggestion[]>(response.text, []);
     } catch (e) { return []; }
@@ -640,6 +663,7 @@ Return EXACTLY a JSON object with this structure:
   ]
 }`;
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse(response.text, null);
     } catch (e) { return null; }
@@ -662,6 +686,7 @@ export async function enrichProcurementList(items: {id: string, name: string, ca
     `;
 
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ 
             model: 'gemini-3.5-flash', 
             contents: prompt, 
@@ -706,6 +731,7 @@ export async function generateLumpsumBreakdown(itemName: string, category: strin
     `;
 
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({
             model: 'gemini-3.5-flash',
             contents: prompt,
@@ -772,6 +798,7 @@ export async function generateSiteIssueOptions(issueDescription: string): Promis
     `;
 
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({
             model: 'gemini-3.5-flash',
             contents: prompt,
@@ -833,6 +860,7 @@ export async function generateWeeklyUpdateSummary(updates: SiteUpdateRecord[], p
     `;
 
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({
             model: 'gemini-3.5-flash',
             contents: prompt,
@@ -859,6 +887,7 @@ export async function parseQuickSiteUpdate(rawText: string): Promise<Partial<Sit
     `;
 
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({
             model: 'gemini-3.5-flash',
             contents: prompt,
@@ -899,6 +928,7 @@ export async function parseQuickDecision(rawText: string): Promise<Partial<Proje
     `;
 
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({
             model: 'gemini-3.5-flash',
             contents: prompt,
@@ -943,6 +973,7 @@ export async function parseDecisionFromImage(imageBase64: string): Promise<Parti
     `;
 
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents: { parts: [imagePart, { text: prompt }] },
@@ -989,6 +1020,7 @@ Rules:
 Return only the sentence. No quotes. No preamble.`;
 
     try {
+        const ai = getAi();
         const response = await ai.models.generateContent({ 
             model: 'gemini-3.5-flash', 
             contents: prompt 
@@ -1208,4 +1240,128 @@ export async function generateScopeAdditionBoq(
         totalExecutionValue,
         aiNote: "Generated via local heuristic based on request."
     };
+}
+
+export async function generateComprehensiveWeeklyReport(
+    projectContext: ProjectContext,
+    weekNumber: number,
+    dateRange: string,
+    financialSummary: string,
+    designSummary: string,
+    executionSummary: string,
+    decisionsSummary: string
+): Promise<string> {
+    if (!isAiAvailable()) return "AI not available to generate weekly commentary.";
+
+    const ai = getAi();
+
+    const prompt = `
+    You are the Principal Design & Ops Director for BOQ Copilot, a multi-tenant B2B platform for premium interior design studios.
+    Write a highly professional, sophisticated, and reassuring executive commentary for the Client Progress Report of Week ${weekNumber} (${dateRange}).
+    This report is shared directly with the client to build deep trust, show architectural precision, and keep them fully aligned on project progress.
+
+    Project Details:
+    - Project Name: ${projectContext.name || 'Premium Interior Project'}
+    - Client: ${projectContext.clientName || 'Valued Client'}
+    
+    WEEK ${weekNumber} SNAPSHOTS:
+    
+    Financial Summary:
+    ${financialSummary}
+    
+    Design & Approvals Progress:
+    ${designSummary}
+    
+    Site Execution & Operations Updates:
+    ${executionSummary}
+    
+    Pending Client Decisions:
+    ${decisionsSummary}
+
+    STYLE & TONALITY INSTRUCTIONS:
+    - Tone must be elegant, sober, elite, and reassuring. Speak with operational mastery and design authority.
+    - Focus on actual facts, quality control, precision engineering, and visual progress.
+    - Avoid low-quality, over-excited fluff, exclamation marks, or generic "excited" text. Keep it cool, poised, and objective.
+    - Highlight our commitment to the design intent, precision milestones, and seamless handoffs.
+    - Format output in beautiful, clear paragraphs with clean lists where appropriate. Keep it concise but comprehensive (around 2 to 3 short paragraphs).
+    - Do not include markdown code blocks, just raw professional text.
+    `;
+
+    try {
+        const ai = getAi();
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.5-flash',
+            contents: prompt,
+        });
+        return response.text || "Could not generate weekly progress commentary.";
+    } catch (error) {
+        console.error("Error generating comprehensive weekly progress report:", error);
+        return "Failed to generate AI weekly progress report. Manual commentary can be entered below.";
+    }
+}
+
+
+export async function draftWeeklyReportContent(currentPulse: any, projectContext: any, projectData?: any): Promise<{ executiveBriefing?: string, nextWeekPlan?: string, manualActions?: any[] }> {
+    if (!isAiAvailable()) return { executiveBriefing: "AI not configured.", nextWeekPlan: "", manualActions: [] };
+
+    try {
+        let executionSummary = "";
+        let paymentsSummary = "";
+        
+        if (projectData?.activeProject) {
+            const execData = projectData?.activeProject.executionData;
+            if (execData) {
+                const updates = execData.updates || [];
+                const recentUpdates = updates.slice(0, 5).map((u: any) => u.category + ': ' + u.notes).join(' | ');
+                
+                executionSummary = `Recent Site Updates: ${recentUpdates || 'None'}`;
+            }
+            const gates = projectData?.activeProject.paymentGates || [];
+            const pendingGates = gates.filter((g: any) => g.status === 'pending' || g.status === 'invoice_raised').map((g: any) => g.gate_name).join(", ");
+            paymentsSummary = `Pending Payments: ${pendingGates || 'None'}.`;
+        }
+
+        const prompt = `
+You are an expert project manager for an interior design studio.
+Draft a weekly report for Week ${currentPulse.weekNumber}.
+Project: ${projectContext.name || 'Unknown'}
+Status: ${projectData?.status || 'active'}
+Execution Data: ${executionSummary}
+Financial Data: ${paymentsSummary}
+
+Please return ONLY a valid JSON object with these keys:
+- executiveBriefing (string): A polished 2-paragraph summary of progress, referencing the execution and financial data provided.
+- nextWeekPlan (string): A short paragraph on upcoming focus based on the current active tasks and pending payments.
+- manualActions (array of objects): Up to 3 action items, each with:
+   - assignee: "client" or "studio"
+   - text: "the action description"
+
+Keep the tone professional, concise, and focused on design and execution realities.
+`;
+        
+        const ai = getAi();
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.7,
+                responseMimeType: "application/json"
+            }
+        });
+        
+        const text = response.text;
+        if (!text) return {};
+        
+        const parsed = JSON.parse(text);
+        const forbidden = ['margin', 'base cost', 'internal', 'ffds_design_miss'];
+        const textToCheck = (parsed.executiveBriefing || '').toLowerCase();
+        if (forbidden.some(f => textToCheck.includes(f))) {
+            parsed.executiveBriefing = "Progress continues according to schedule. We are moving into the next phase of design and execution.";
+        }
+        return parsed;
+    } catch(e) {
+        console.error(e);
+        return {};
+    }
 }

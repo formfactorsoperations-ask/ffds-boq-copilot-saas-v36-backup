@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
         hmr: false,
       },
       build: {
+        sourcemap: false,
         outDir: 'dist',
         emptyOutDir: true,
       },
