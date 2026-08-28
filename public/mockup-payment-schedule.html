@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Schedule — Option 3 (Interactive Full Prototype)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-serif { font-family: 'Playfair Display', serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .shadow-card { box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen p-4 sm:p-8">
+
+  <!-- Interactive State Notification Banner (Hidden by default, shown on action) -->
+  <div id="toast-notify" class="fixed top-5 right-5 z-50 transform translate-y-[-150%] transition-transform duration-300 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 text-xs font-semibold">
+    <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toast-message">Payment recorded successfully</span>
+  </div>
+
+  <div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- Top Navigation Bar & Page Title (Exact App Framing) -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-extrabold uppercase tracking-wider">
+            Option 3 • 2-Stage Master
+          </span>
+          <span class="text-xs text-slate-400 font-medium">Stage 4 of 6: Agreement & Design</span>
+        </div>
+        <h1 class="font-serif text-2xl sm:text-3xl font-bold text-slate-900">Payment Schedule</h1>
+        <p class="text-xs sm:text-sm text-slate-500 mt-1">
+          Milestone billing and cashflow tracker with clean stage separation between Design Fees and Site Execution.
+        </p>
+      </div>
+
+      <!-- Quick Action Controls -->
+      <div class="flex items-center gap-2.5 flex-wrap">
+        <button onclick="toggleTaxDrawer()" class="px-3.5 py-2 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-xl transition-all flex items-center gap-2 cursor-pointer">
+          <i data-lucide="percent" class="w-3.5 h-3.5 text-slate-500"></i> GST: 18% Standard
+        </button>
+        <button onclick="showModal('add-milestone')" class="px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer">
+          <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-indigo-600"></i> Add Milestone
+        </button>
+        <button onclick="showToast('Schedule PDF generated and ready for client!')" class="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Schedule PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- Executive Financial Snapshot (3 Clear Vitals) -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      
+      <!-- Vital 1: Total Contract Value -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card">
+        <div class="flex items-center justify-between text-slate-400 mb-1">
+          <span class="text-[11px] font-bold uppercase tracking-wider">Total Contract Value</span>
+          <i data-lucide="file-text" class="w-4 h-4"></i>
+        </div>
+        <div class="text-2xl font-bold font-mono text-slate-900">₹24,80,000</div>
+        <div class="flex items-center gap-3 text-xs text-slate-500 mt-1.5 pt-1.5 border-t border-slate-100 font-medium">
+          <span>Design: <strong class="text-slate-800 font-mono">₹3.80L</strong></span>
+          <span>•</span>
+          <span>Execution: <strong class="text-slate-800 font-mono">₹21.00L</strong></span>
+        </div>
+      </div>
+
+      <!-- Vital 2: Collected (Realized) -->
+      <div class="bg-white rounded-2xl border border-emerald-200 bg-emerald-50/20 p-5 shadow-card">
+        <div class="flex items-center justify-between text-emerald-700 mb-1">
+          <span class="text-[11px] font-bold uppercase tracking-wider">Realized in Bank</span>
+          <span class="flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span> 40% PAID
+          </span>
+        </div>
+        <div class="text-2xl font-bold font-mono text-emerald-700">₹9,92,000</div>
+        <div class="text-xs text-emerald-800 mt-1.5 pt-1.5 border-t border-emerald-100/80 font-medium">
+          Phase 1 (100% Settled) + Phase 2 Advance Pending
+        </div>
+      </div>
+
+      <!-- Vital 3: Outstanding to Collect -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card">
+        <div class="flex items-center justify-between text-slate-400 mb-1">
+          <span class="text-[11px] font-bold uppercase tracking-wider">Remaining Balance</span>
+          <i data-lucide="clock" class="w-4 h-4"></i>
+        </div>
+        <div class="text-2xl font-bold font-mono text-slate-800">₹14,88,000</div>
+        <div class="text-xs text-amber-700 mt-1.5 pt-1.5 border-t border-slate-100 font-medium flex items-center justify-between">
+          <span>1 Active invoice due now</span>
+          <span class="font-bold font-mono">₹6,30,000</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MAIN 2-CARD STAGE SEPARATION LAYOUT -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      
+      <!-- ========================================================================= -->
+      <!-- CARD 1: PHASE 1 DESIGN FEE (100% SETTLED) -->
+      <!-- ========================================================================= -->
+      <div class="bg-white rounded-2xl border border-emerald-200 shadow-card overflow-hidden">
+        
+        <!-- Header -->
+        <div class="px-6 py-4.5 bg-emerald-50/50 border-b border-emerald-100 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+              <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-slate-900">Phase 1: Design Fee Schedule</h2>
+              <p class="text-xs text-emerald-800 font-medium">Total: ₹3,80,000 + GST = ₹4,48,400</p>
+            </div>
+          </div>
+          <span class="text-xs font-bold text-emerald-800 bg-emerald-100/90 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> 100% Settled
+          </span>
+        </div>
+
+        <!-- Milestones List -->
+        <div class="p-6 space-y-4">
+          
+          <!-- D1 Milestone -->
+          <div class="p-4 rounded-xl border border-emerald-100 bg-emerald-50/30 flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3">
+              <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                ✓
+              </div>
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-slate-800">D1: Booking Advance</span>
+                  <span class="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-1.5 py-0.2 rounded">10%</span>
+                </div>
+                <p class="text-xs text-slate-500">Unlocks discovery kickoff & measurement survey</p>
+                <div class="text-[11px] text-slate-400 pt-1 flex items-center gap-2">
+                  <span>INV-2026-012</span>
+                  <span>•</span>
+                  <span>Paid on 12 Aug (NEFT Ref: 9812)</span>
+                </div>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="text-sm font-bold font-mono text-slate-900 block">₹38,000</span>
+              <span class="text-[10px] text-emerald-700 font-semibold">+ GST ₹6,840</span>
+            </div>
+          </div>
+
+          <!-- D2 Milestone -->
+          <div class="p-4 rounded-xl border border-emerald-100 bg-emerald-50/30 flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3">
+              <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                ✓
+              </div>
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-slate-800">D2: Concept & Space Plan Approval</span>
+                  <span class="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-1.5 py-0.2 rounded">40%</span>
+                </div>
+                <p class="text-xs text-slate-500">Unlocks 3D photorealistic renderings & material moodboard</p>
+                <div class="text-[11px] text-slate-400 pt-1 flex items-center gap-2">
+                  <span>INV-2026-024</span>
+                  <span>•</span>
+                  <span>Paid on 19 Aug (UPI Ref: 4410)</span>
+                </div>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="text-sm font-bold font-mono text-slate-900 block">₹1,52,000</span>
+              <span class="text-[10px] text-emerald-700 font-semibold">+ GST ₹27,360</span>
+            </div>
+          </div>
+
+          <!-- D3 Milestone -->
+          <div class="p-4 rounded-xl border border-emerald-100 bg-emerald-50/30 flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3">
+              <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                ✓
+              </div>
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-slate-800">D3: Final 3D Visuals & GFC Drawings</span>
+                  <span class="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-1.5 py-0.2 rounded">50%</span>
+                </div>
+                <p class="text-xs text-slate-500">Unlocks Design Gate & BOQ Freeze for execution</p>
+                <div class="text-[11px] text-slate-400 pt-1 flex items-center gap-2">
+                  <span>INV-2026-038</span>
+                  <span>•</span>
+                  <span>Paid on 24 Aug (Cheque: 00921)</span>
+                </div>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="text-sm font-bold font-mono text-slate-900 block">₹1,90,000</span>
+              <span class="text-[10px] text-emerald-700 font-semibold">+ GST ₹34,200</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer Note -->
+        <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <span>All 3 design milestones completed</span>
+          <button onclick="showToast('Viewing receipt vouchers archive')" class="text-indigo-600 font-bold hover:underline">
+            View Design Invoices (3) →
+          </button>
+        </div>
+
+      </div>
+
+
+      <!-- ========================================================================= -->
+      <!-- CARD 2: PHASE 2 EXECUTION WORKS (ACTIVE IN-FLIGHT) -->
+      <!-- ========================================================================= -->
+      <div class="bg-white rounded-2xl border-2 border-indigo-600 shadow-card overflow-hidden">
+        
+        <!-- Header -->
+        <div class="px-6 py-4.5 bg-indigo-50/40 border-b border-indigo-100 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+              02
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-slate-900">Phase 2: Execution Works Schedule</h2>
+              <p class="text-xs text-slate-500">Contract Base: ₹21,00,000 (100% Split)</p>
+            </div>
+          </div>
+          <span class="text-xs font-bold text-indigo-700 bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"></span> Active Stage
+          </span>
+        </div>
+
+        <!-- Milestones List -->
+        <div class="p-6 space-y-4">
+          
+          <!-- E1 Milestone (Active Due Now) -->
+          <div id="milestone-e1" class="p-4.5 rounded-xl border border-indigo-300 bg-indigo-50/50 space-y-3 transition-all">
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex items-start gap-3">
+                <div class="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                  1
+                </div>
+                <div class="space-y-0.5">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-sm font-bold text-slate-900">E1: Site Mobilization & Raw Material Order</span>
+                    <span class="text-xs font-bold text-indigo-700 bg-white border border-indigo-200 px-2 py-0.2 rounded">30%</span>
+                  </div>
+                  <p class="text-xs text-slate-600">Unlocks site prep, demolition & commercial plywood procurement</p>
+                </div>
+              </div>
+              <div class="text-right shrink-0">
+                <span class="text-base font-bold font-mono text-indigo-950 block">₹6,30,000</span>
+                <span class="text-[10px] text-indigo-700 font-semibold">+ GST ₹1,13,400</span>
+              </div>
+            </div>
+
+            <!-- Due Date & Action Strip -->
+            <div class="pt-2.5 border-t border-indigo-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+              <div class="flex items-center gap-2 text-slate-600">
+                <span class="px-2 py-0.5 rounded-md bg-amber-100 border border-amber-300 text-amber-900 font-bold text-[10px]">
+                  DUE IN 2 DAYS
+                </span>
+                <span>Invoice: <strong class="text-slate-800">#INV-2026-042</strong></span>
+                <span>(Due 29 Aug 2026)</span>
+              </div>
+              
+              <div class="flex items-center gap-2">
+                <button onclick="openRecordPaymentModal('E1: Site Mobilization', '₹6,30,000', 'INV-2026-042')" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer">
+                  <i data-lucide="check" class="w-3.5 h-3.5"></i> Mark Paid
+                </button>
+                <button onclick="showToast('Payment reminder sent to client via WhatsApp and Email')" class="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 cursor-pointer">
+                  <i data-lucide="send" class="w-3.5 h-3.5 text-indigo-600"></i> Remind
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- E2 Milestone (Upcoming) -->
+          <div class="p-4 rounded-xl border border-slate-200 hover:border-slate-300 bg-white flex items-start justify-between gap-4 transition-colors">
+            <div class="flex items-start gap-3">
+              <div class="w-6 h-6 rounded-full border-2 border-slate-200 text-slate-400 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                2
+              </div>
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-slate-800">E2: Factory Carcass & Woodwork Ready</span>
+                  <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded">40%</span>
+                </div>
+                <p class="text-xs text-slate-500">Trigger: Carcass inspection passed & ready for dispatch</p>
+                <div class="text-[11px] text-slate-400 pt-1">
+                  Est. Target: <strong>18 Sep 2026</strong>
+                </div>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="text-sm font-bold font-mono text-slate-700 block">₹8,40,000</span>
+              <button onclick="showToast('Drafting Invoice for Milestone E2...')" class="text-[11px] font-bold text-indigo-600 hover:underline mt-1 block">
+                Generate Invoice →
+              </button>
+            </div>
+          </div>
+
+          <!-- E3 Milestone (Upcoming) -->
+          <div class="p-4 rounded-xl border border-slate-200 hover:border-slate-300 bg-white flex items-start justify-between gap-4 transition-colors">
+            <div class="flex items-start gap-3">
+              <div class="w-6 h-6 rounded-full border-2 border-slate-200 text-slate-400 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                3
+              </div>
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-slate-800">E3: Finishing, Fixtures & Painting</span>
+                  <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded">20%</span>
+                </div>
+                <p class="text-xs text-slate-500">Trigger: Final coat applied, sanitaryware installed</p>
+                <div class="text-[11px] text-slate-400 pt-1">
+                  Est. Target: <strong>05 Oct 2026</strong>
+                </div>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="text-sm font-bold font-mono text-slate-700 block">₹4,20,000</span>
+              <span class="text-[11px] text-slate-400 font-medium">Pending Release</span>
+            </div>
+          </div>
+
+          <!-- E4 Milestone (Handover) -->
+          <div class="p-4 rounded-xl border border-slate-200 hover:border-slate-300 bg-white flex items-start justify-between gap-4 transition-colors">
+            <div class="flex items-start gap-3">
+              <div class="w-6 h-6 rounded-full border-2 border-slate-200 text-slate-400 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                4
+              </div>
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-slate-800">E4: Final Handover & Snag Sign-off</span>
+                  <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded">10%</span>
+                </div>
+                <p class="text-xs text-slate-500">Trigger: All snags resolved & handover pack signed</p>
+                <div class="text-[11px] text-slate-400 pt-1">
+                  Est. Target: <strong>20 Oct 2026</strong>
+                </div>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="text-sm font-bold font-mono text-slate-700 block">₹2,10,000</span>
+              <span class="text-[10px] text-slate-400 font-medium bg-slate-100 px-1.5 py-0.5 rounded">Retainer</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer Split Check -->
+        <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2 text-slate-600 font-medium">
+            <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+            <span>Percentages sum: <strong class="text-slate-900">30% + 40% + 20% + 10% = 100%</strong></span>
+          </div>
+          <button onclick="showToast('Auto-Balancer is active: Splits are locked to 100%')" class="text-indigo-600 font-bold hover:underline">
+            Adjust Splits →
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- SMART CAPABILITIES PROMPT DRAWER (Interactive) -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-card space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Smart Features included in this Overhaul</h3>
+            <p class="text-xs text-slate-500">Designed to eliminate manual arithmetic and prevent billing mistakes</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+        
+        <!-- Smart Feature 1 -->
+        <div class="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-1.5">
+          <div class="flex items-center gap-2 text-xs font-bold text-slate-900">
+            <i data-lucide="calendar" class="w-4 h-4 text-indigo-600"></i>
+            <span>Smart Due Dates & Urgency</span>
+          </div>
+          <p class="text-xs text-slate-500 leading-relaxed">
+            Auto-calculates Net 7 / Net 15 days from invoice issuance and shows clear badges like <em>"Due in 2 days"</em> or <em>"Overdue"</em>.
+          </p>
+        </div>
+
+        <!-- Smart Feature 2 -->
+        <div class="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-1.5">
+          <div class="flex items-center gap-2 text-xs font-bold text-slate-900">
+            <i data-lucide="sliders" class="w-4 h-4 text-indigo-600"></i>
+            <span>100% Real-time Auto-Balancer</span>
+          </div>
+          <p class="text-xs text-slate-500 leading-relaxed">
+            If you change one milestone percentage, a 1-click <strong>Auto-Balance</strong> button adjusts the final milestone so you never leak unallocated contract value.
+          </p>
+        </div>
+
+        <!-- Smart Feature 3 -->
+        <div class="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-1.5">
+          <div class="flex items-center gap-2 text-xs font-bold text-slate-900">
+            <i data-lucide="receipt" class="w-4 h-4 text-indigo-600"></i>
+            <span>One-Click Record & Receipt Sync</span>
+          </div>
+          <p class="text-xs text-slate-500 leading-relaxed">
+            Clicking <strong>Mark Paid</strong> logs the payment mode (NEFT/UPI/Cheque) and automatically updates the project's Money ledger.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: RECORD PAYMENT INTERACTION -->
+  <!-- ========================================================================= -->
+  <div id="modal-record-payment" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs hidden">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+            <i data-lucide="check-circle" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Record Payment</h3>
+            <p class="text-xs text-slate-400" id="modal-payment-subtitle">E1: Site Mobilization</p>
+          </div>
+        </div>
+        <button onclick="closeModal('record-payment')" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Amount Received (INR)</label>
+          <input type="text" id="modal-amount-input" value="₹6,30,000 + GST (₹7,43,400)" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono font-bold text-slate-900" readonly>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Payment Date</label>
+            <input type="date" value="2026-08-27" class="w-full p-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Payment Method</label>
+            <select class="w-full p-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800">
+              <option>NEFT / RTGS</option>
+              <option>UPI / QR</option>
+              <option>Cheque</option>
+              <option>Direct Bank Transfer</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Transaction Ref / Cheque No.</label>
+          <input type="text" placeholder="e.g. UTR #98210491290 or Cheque #00192" class="w-full p-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button onclick="closeModal('record-payment')" class="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl cursor-pointer">
+          Cancel
+        </button>
+        <button onclick="confirmPaymentRecorded()" class="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs cursor-pointer">
+          Save Payment & Sync Money Ledger
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast-notify');
+      document.getElementById('toast-message').innerText = msg;
+      toast.classList.remove('translate-y-[-150%]');
+      toast.classList.add('translate-y-0');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0');
+        toast.classList.add('translate-y-[-150%]');
+      }, 3000);
+    }
+
+    function openRecordPaymentModal(title, amt, inv) {
+      document.getElementById('modal-payment-subtitle').innerText = title + ' • Invoice ' + inv;
+      document.getElementById('modal-amount-input').value = amt + ' (Gross incl. GST)';
+      document.getElementById('modal-record-payment').classList.remove('hidden');
+    }
+
+    function closeModal(type) {
+      if (type === 'record-payment') {
+        document.getElementById('modal-record-payment').classList.add('hidden');
+      }
+    }
+
+    function confirmPaymentRecorded() {
+      closeModal('record-payment');
+      showToast('Payment for E1 recorded and synchronized to Money tab!');
+      
+      // Update UI row dynamically to show paid state
+      const e1 = document.getElementById('milestone-e1');
+      if (e1) {
+        e1.className = "p-4 rounded-xl border border-emerald-100 bg-emerald-50/30 flex items-start justify-between gap-4 transition-all";
+        e1.innerHTML = `
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+              ✓
+            </div>
+            <div class="space-y-0.5">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-slate-800">E1: Site Mobilization & Raw Material Order</span>
+                <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">PAID</span>
+              </div>
+              <p class="text-xs text-slate-500">Unlocks site prep, demolition & commercial plywood procurement</p>
+              <div class="text-[11px] text-slate-400 pt-1">Paid on 27 Aug 2026 (Just now) • Ref: UTR #98210</div>
+            </div>
+          </div>
+          <div class="text-right shrink-0">
+            <span class="text-sm font-bold font-mono text-slate-900 block">₹6,30,000</span>
+            <span class="text-[10px] text-emerald-700 font-semibold">+ GST ₹1,13,400</span>
+          </div>
+        `;
+        lucide.createIcons();
+      }
+    }
+
+    function toggleTaxDrawer() {
+      showToast('GST is configured at 18% standard rate for both Design and Execution.');
+    }
+
+    function showModal(type) {
+      showToast('Add Milestone dialog: adds customized stage split with automatic balance check.');
+    }
+  </script>
+</body>
+</html>

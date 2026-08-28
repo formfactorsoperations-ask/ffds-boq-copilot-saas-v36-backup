@@ -151,9 +151,14 @@ export const syncSiteVisitToCalendar = async (
   const endStr = getOffsetTime(endDate);
   
   const prefix = studioSettings?.calendarEventPrefix || "[BOQ]";
-  const typeLabel = visit.type === 'site_visit' ? '👷 Site Visit' : '🤝 Client Meeting';
-  const summary = `${prefix} ${typeLabel}: ${projectContext.name || 'Project'} · ${visit.phaseTitle}`;
-  const colorId = visit.type === 'site_visit' ? "6" : "7";
+  let typeLabel = '👷 Site Visit';
+  if (visit.type === 'client_meeting') typeLabel = '🤝 Client Meeting';
+  else if (visit.type === 'internal_meeting') typeLabel = '👥 Internal Meeting';
+  else if (visit.type === 'vendor_meeting') typeLabel = '🏭 Vendor Meeting';
+  else if (visit.type === 'measurement_survey') typeLabel = '📐 Measurement Survey';
+
+  const summary = `${prefix} ${typeLabel}: ${visit.title || 'Meeting'} (${projectContext.name || 'Project'}) · ${visit.phaseTitle}`;
+  const colorId = (visit.type === 'site_visit' || visit.type === 'measurement_survey') ? "6" : "7";
 
   const description = `Project: ${projectContext.name || 'N/A'}
 Client: ${projectContext.clientName || 'N/A'}
@@ -183,7 +188,7 @@ Logged via BOQ Copilot`;
       dateTime: endStr,
       timeZone: "Asia/Kolkata"
     },
-    attendees: visit.type === 'client_meeting' ? (visit.attendeeEmails || []).filter(e => /^[A-Z0-9._%+-]+@([A-Z0-9-]+\.)+[A-Z]{2,4}$/i.test(e)).map(email => ({ email })) : [],
+    attendees: (visit.type !== 'site_visit' && visit.type !== 'measurement_survey') ? (visit.attendeeEmails || []).filter(e => /^[A-Z0-9._%+-]+@([A-Z0-9-]+\.)+[A-Z]{2,4}$/i.test(e)).map(email => ({ email })) : [],
     reminders: {
       useDefault: false,
       overrides: [{ method: "popup", minutes: studioSettings?.defaultReminderMinutes || 30 }]

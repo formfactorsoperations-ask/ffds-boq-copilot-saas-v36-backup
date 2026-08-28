@@ -19,7 +19,7 @@ const HotspotList: React.FC<{ title: string; items: ProfitabilityHotspot[]; mode
                 {items.length === 0 && <p className="text-xs text-slate-400 italic">No significant items found.</p>}
                 {items.map(item => (
                     <div key={item.itemId} className={`p-4 rounded-xl border ${isEngine ? 'bg-emerald-50/50 border-emerald-100' : 'bg-amber-50/50 border-amber-100'}`}>
-                        <p className="font-bold text-sm text-indigo-950 leading-tight mb-2">{item.itemName}</p>
+                        <p className="font-bold text-sm text-slate-900 leading-tight mb-2">{item.itemName}</p>
                         <div className="flex gap-4 mb-3">
                             <div>
                                 <span className="block text-[9px] uppercase font-bold text-slate-400 tracking-wider">Profit</span>
@@ -54,7 +54,7 @@ const ProfitabilityHotspots: React.FC<ProfitabilityHotspotsProps> = ({ boq }) =>
     return (
         <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-200">
             <div className="mb-6">
-                <h3 className="text-xl font-light tracking-tight text-indigo-950 leading-none mb-1">Profitability Hotspots</h3>
+                <h3 className="text-xl font-light tracking-tight text-slate-900 leading-none mb-1">Profitability Hotspots</h3>
                 <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">Identify top performers and margin drags</p>
             </div>
             
@@ -71,7 +71,7 @@ const ProfitabilityHotspots: React.FC<ProfitabilityHotspotsProps> = ({ boq }) =>
                 <button
                     onClick={handleAnalyze}
                     disabled={loading || !isAiAvailable() || boq.length === 0}
-                    className="flex w-full items-center justify-center gap-2 px-6 py-3 bg-white border border-slate-200 text-indigo-950 font-bold text-[11px] uppercase tracking-[0.2em] rounded-full hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="flex w-full items-center justify-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-900 font-bold text-[11px] uppercase tracking-[0.2em] rounded-full hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                     {loading ? (
                          <div className="flex items-center gap-2">

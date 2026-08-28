@@ -70,22 +70,22 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
                             {projectContext.logoImage ? (
                                 <img src={projectContext.logoImage} alt="Logo" className="h-16 object-contain" />
                             ) : (
-                                <div className="text-2xl font-black text-indigo-950 tracking-tighter uppercase">{orgData?.orgName?.toUpperCase() || 'FORM FACTORS STUDIO'}</div>
+                                <div className="text-2xl font-black text-slate-900 tracking-tighter uppercase">{orgData?.orgName?.toUpperCase() || 'FORM FACTORS STUDIO'}</div>
                             )}
                         </div>
                         <div className="flex-1 flex flex-col items-center justify-center text-center">
-                            <h1 className="text-6xl md:text-8xl font-black text-indigo-950 tracking-tighter mb-4 px-4">{projectContext.name}</h1>
+                            <h1 className="text-6xl md:text-8xl font-black text-slate-900 tracking-tighter mb-4 px-4">{projectContext.name}</h1>
                             <p className="text-2xl text-slate-500 font-light">{level === 'LEVEL_2' ? 'Design Finalisation & Readiness' : level === 'LEVEL_1_5' ? 'Interim Design & Scope Review' : 'Interior Design Concept'}</p>
                         </div>
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-t border-slate-200 pt-8 mt-auto gap-8 text-left md:text-right">
                             <div className="text-left w-full md:w-auto">
                                 <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">Prepared For</p>
-                                <p className="text-xl font-bold text-indigo-950">{projectContext.clientName || 'Valued Client'}</p>
+                                <p className="text-xl font-bold text-slate-900">{projectContext.clientName || 'Valued Client'}</p>
                                 <p className="text-slate-600">{today}</p>
                             </div>
                             <div className="w-full md:w-auto">
                                 <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1 text-left md:text-right">Prepared By</p>
-                                <p className="text-xl font-bold text-indigo-950">{orgData?.orgName || 'Form Factors Studio'}</p>
+                                <p className="text-xl font-bold text-slate-900">{orgData?.orgName || 'Form Factors Studio'}</p>
                                 <p className="text-slate-600">{orgData?.contactEmail}</p>
                             </div>
                         </div>
@@ -116,7 +116,7 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
             default:
                 return (
                     <div className="relative w-full min-h-[600px] h-screen print:h-[28.5cm] flex flex-col md:flex-row bg-white overflow-hidden print:page-break-after-always border-b border-slate-200">
-                        <div className="w-full md:w-1/2 h-1/2 md:h-full relative bg-indigo-950">
+                        <div className="w-full md:w-1/2 h-1/2 md:h-full relative bg-[#0066CC]/90 backdrop-blur-md border border-white/20">
                             <img src={coverImage} alt="Interior Design Theme" className="w-full h-full object-cover opacity-90" onError={() => setImgError(true)} />
                         </div>
                         <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col justify-between p-8 md:p-12 lg:p-20">
@@ -124,19 +124,19 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
                                 {projectContext.logoImage ? (
                                     <img src={projectContext.logoImage} alt="Logo" className="h-12 md:h-16 object-contain" />
                                 ) : (
-                                    <div className="text-xl md:text-2xl font-black text-indigo-950 tracking-tighter uppercase">{orgData?.orgName?.toUpperCase() || 'FORM FACTORS STUDIO'}</div>
+                                    <div className="text-xl md:text-2xl font-black text-slate-900 tracking-tighter uppercase">{orgData?.orgName?.toUpperCase() || 'FORM FACTORS STUDIO'}</div>
                                 )}
                             </div>
                             <div className="flex-1 flex flex-col justify-center">
                                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-6 w-fit bg-slate-50">
                                     {level === 'LEVEL_2' ? 'Planning & Readiness' : level === 'LEVEL_1_5' ? 'Interim Proposal' : 'Concept Proposal'}
                                 </div>
-                                <h1 className="text-4xl md:text-5xl lg:text-7xl font-black text-indigo-950 tracking-tighter mb-4">{projectContext.name}</h1>
+                                <h1 className="text-4xl md:text-5xl lg:text-7xl font-black text-slate-900 tracking-tighter mb-4">{projectContext.name}</h1>
                                 <p className="text-lg md:text-xl text-slate-500">{projectContext.config} • {projectContext.location}</p>
                             </div>
                             <div className="border-t border-slate-200 pt-8 mt-8">
                                 <p className="text-[10px] md:text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">Prepared For</p>
-                                <p className="text-lg md:text-xl font-bold text-indigo-950">{projectContext.clientName || 'Valued Client'}</p>
+                                <p className="text-lg md:text-xl font-bold text-slate-900">{projectContext.clientName || 'Valued Client'}</p>
                                 <p className="text-slate-600 text-sm md:text-base">{today}</p>
                             </div>
                         </div>
@@ -162,7 +162,7 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
                                     style={{ height: projectContext.logoHeight || 80 }}
                                 />
                             ) : (
-                                <div className="text-2xl font-black text-indigo-950 tracking-tighter uppercase">
+                                <div className="text-2xl font-black text-slate-900 tracking-tighter uppercase">
                                     {orgData?.orgName?.toUpperCase() || 'FORM FACTORS STUDIO'}
                                 </div>
                             )}
@@ -170,27 +170,27 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
 
                                                 {level === 'LEVEL_2' ? (
                             <>
-                                <h2 className="text-2xl font-bold text-indigo-900 mb-4">{l2Content.title}</h2>
+                                <h2 className="text-2xl font-bold text-slate-800 mb-4">{l2Content.title}</h2>
                                 <p className="text-slate-600 text-base md:text-lg leading-relaxed mb-8 whitespace-pre-line">
                                     {l2Content.text}
                                 </p>
                             </>
                         ) : level === 'LEVEL_1_5' ? (
                             <>
-                                <h2 className="text-2xl font-bold text-indigo-900 mb-4">{l15Content.title}</h2>
+                                <h2 className="text-2xl font-bold text-slate-800 mb-4">{l15Content.title}</h2>
                                 <p className="text-slate-600 text-base md:text-lg leading-relaxed mb-8 whitespace-pre-line">
                                     {l15Content.text}
                                 </p>
                             </>
                         ) : (
                             <>
-                                <h2 className="text-2xl font-bold text-indigo-900 mb-4">{l1Content.title}</h2>
+                                <h2 className="text-2xl font-bold text-slate-800 mb-4">{l1Content.title}</h2>
                                 <p className="text-slate-600 text-base md:text-lg leading-relaxed mb-8 whitespace-pre-line">
                                     {l1Content.text}
                                 </p>
                                 {/* Mobile Jump Button */}
                                 <div className="md:hidden mt-4 mb-8">
-                                    <a href="#decision-lock" className="flex items-center gap-2 text-indigo-700 font-bold text-sm bg-indigo-50 border border-indigo-100 px-4 py-3 rounded-xl justify-between shadow-sm active:bg-indigo-100">
+                                    <a href="#decision-lock" className="flex items-center gap-2 text-[#0055B3] font-bold text-sm bg-sky-50 border border-sky-100 px-4 py-3 rounded-xl justify-between shadow-sm active:bg-sky-100">
                                         <span>Already reviewed? Jump to Next Steps</span>
                                         <ArrowRightIcon className="w-4 h-4" />
                                     </a>
@@ -203,19 +203,19 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
                             <div className="grid grid-cols-2 gap-y-4 gap-x-8">
                                 <div>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase">Client Name</p>
-                                    <p className="text-base font-bold text-indigo-950">{projectContext.clientName || 'Valued Client'}</p>
+                                    <p className="text-base font-bold text-slate-900">{projectContext.clientName || 'Valued Client'}</p>
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase">Project Name</p>
-                                    <p className="text-base font-bold text-indigo-950">{projectContext.name}</p>
+                                    <p className="text-base font-bold text-slate-900">{projectContext.name}</p>
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase">Location</p>
-                                    <p className="text-base font-bold text-indigo-950">{projectContext.location}</p>
+                                    <p className="text-base font-bold text-slate-900">{projectContext.location}</p>
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase">Date</p>
-                                    <p className="text-base font-bold text-indigo-950">{today}</p>
+                                    <p className="text-base font-bold text-slate-900">{today}</p>
                                 </div>
                             </div>
                         </div>
@@ -233,7 +233,7 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
                             <div className="text-sm font-bold text-slate-600 mb-1">
                                 {isFixedPrice ? 'Project Investment (Design-led)' : 'Typical Range'}
                             </div>
-                            <div className="text-3xl font-extrabold text-indigo-950 tracking-tight">
+                            <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
                                 {isFixedPrice 
                                     ? formatClientValue(investmentMin) 
                                     : `${formatClientValue(investmentMin)} – ${formatClientValue(investmentMax)}`
@@ -241,15 +241,15 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
                             </div>
 
                             {isFixedPrice && executionTotal !== undefined && designFee !== undefined && (
-                                <div className="mt-4 flex items-center justify-between px-4 py-3 bg-indigo-50/70 rounded-xl text-xs border border-indigo-100/50">
+                                <div className="mt-4 flex items-center justify-between px-4 py-3 bg-sky-50/70 rounded-xl text-xs border border-sky-100/50">
                                     <div className="flex flex-col">
                                         <span className="text-slate-500 font-bold tracking-wider uppercase text-[9px]">Execution Core</span>
-                                        <span className="font-extrabold text-indigo-950 text-base">{formatClientValue(executionTotal)}</span>
+                                        <span className="font-extrabold text-slate-900 text-base">{formatClientValue(executionTotal)}</span>
                                     </div>
-                                    <div className="text-indigo-300 font-bold">+</div>
+                                    <div className="text-sky-300 font-bold">+</div>
                                     <div className="flex flex-col text-right">
                                         <span className="text-slate-500 font-bold tracking-wider uppercase text-[9px]">Design Fee</span>
-                                        <span className="font-extrabold text-indigo-950 text-base">{formatClientValue(designFee)}</span>
+                                        <span className="font-extrabold text-slate-900 text-base">{formatClientValue(designFee)}</span>
                                     </div>
                                 </div>
                             )}
@@ -276,7 +276,7 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
                             <div className="mt-8 no-print">
                                 <button 
                                     onClick={handleExploreClick}
-                                    className="w-full inline-flex items-center justify-center px-4 py-4 rounded-xl bg-indigo-950 text-white font-bold text-sm hover:bg-indigo-950 hover:scale-[1.02] transition-all shadow-lg"
+                                    className="w-full inline-flex items-center justify-center px-4 py-4 rounded-xl bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white font-bold text-sm hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 hover:scale-[1.02] transition-all shadow-lg"
                                 >
                                     Explore Proposal Details
                                 </button>

@@ -229,7 +229,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                                 type="text" 
                                 value={m.name} 
                                 onChange={(e) => handleUpdateMilestone(globalIdx, 'name', e.target.value)}
-                                className="w-full font-bold text-sm bg-white border border-indigo-200 rounded px-2 py-1 outline-none focus:ring-2 focus:ring-indigo-300"
+                                className="w-full font-bold text-sm bg-white border border-sky-200 rounded px-2 py-1 outline-none focus:ring-2 focus:ring-sky-300"
                             />
                             <input 
                                 type="text" 
@@ -240,7 +240,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                         </div>
                     ) : (
                         <div>
-                            <div className="font-bold text-indigo-900 text-sm">{m.name}</div>
+                            <div className="font-bold text-slate-800 text-sm">{m.name}</div>
                             <div className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5">{m.description}</div>
                         </div>
                     )}
@@ -252,10 +252,10 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                             type="number" 
                             value={m.percentage} 
                             onChange={(e) => handleUpdateMilestone(globalIdx, 'percentage', parseInt(e.target.value))}
-                            className="w-10 text-right font-bold text-sm bg-white border border-indigo-200 rounded px-1 py-1 outline-none"
+                            className="w-10 text-right font-bold text-sm bg-white border border-sky-200 rounded px-1 py-1 outline-none"
                         />
                     ) : (
-                        <span className="font-bold text-indigo-950 text-sm">{m.percentage}%</span>
+                        <span className="font-bold text-slate-900 text-sm">{m.percentage}%</span>
                     )}
                 </td>
 
@@ -274,7 +274,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                 <td className={`py-3 px-4 text-right border-b border-slate-100 align-top w-32 ${financials ? 'bg-slate-50/50' : ''}`}>
                     {total > 0 ? (
                         <div>
-                            <span className="font-mono font-bold text-indigo-900 text-sm">{formatCurrency(total)}</span>
+                            <span className="font-mono font-bold text-slate-800 text-sm">{formatCurrency(total)}</span>
                             {isFirstDesign && initiationFee > 0 && (
                                 <div className="text-[9px] text-slate-400 italic mt-0.5 whitespace-nowrap">
                                     (Less {formatCurrency(initiationFee)} adj.)
@@ -292,15 +292,15 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                             type="date" 
                             value={m.date || ''} 
                             onChange={(e) => handleUpdateMilestone(globalIdx, 'date', e.target.value)}
-                            className="w-full text-xs bg-white border border-indigo-200 rounded px-1 py-1 font-mono text-slate-600 outline-none"
+                            className="w-full text-xs bg-white border border-sky-200 rounded px-1 py-1 font-mono text-slate-600 outline-none"
                         />
                     ) : (
                         <div>
-                            <div className="font-bold text-indigo-900 text-xs flex items-center gap-2">
+                            <div className="font-bold text-slate-800 text-xs flex items-center gap-2">
                                 {formatDate(m.date || '')}
                                 {m.isCustom && <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" title="Custom Date"></span>}
                             </div>
-                            <div className="text-[9px] uppercase font-bold tracking-wider text-indigo-400">
+                            <div className="text-[9px] uppercase font-bold tracking-wider text-sky-400">
                                 {getProjectWeek(signupDate, m.date || '')}
                             </div>
                         </div>
@@ -313,7 +313,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                             {m.percentage >= 10 && (
                                 <button 
                                     onClick={() => handleSplitMilestone(globalIdx)}
-                                    className="p-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100"
+                                    className="p-1 bg-sky-50 text-[#0066CC] rounded hover:bg-sky-100"
                                     title="Split"
                                 >
                                     <ScissorsIcon className="w-3 h-3" />
@@ -342,7 +342,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8">
                 <div className="flex-grow">
                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Commercial Terms</div>
-                    <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-indigo-950">{data.title}</h2>
+                    <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">{data.title}</h2>
                     <p className="mt-2 text-slate-600 max-w-2xl text-sm leading-relaxed whitespace-pre-line">
                         {data.subtitle}
                     </p>
@@ -361,7 +361,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                         )}
                         <button 
                             onClick={() => setIsEditing(!isEditing)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-sm border ${isEditing ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-sm border ${isEditing ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
                         >
                             {isEditing ? <><CheckIcon className="w-4 h-4" /> Save Schedule</> : <><PencilIcon className="w-4 h-4" /> Customize Milestones</>}
                         </button>
@@ -391,8 +391,8 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                     <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
                         <h4 className="font-bold text-slate-700 text-sm">Part A: Design Fees</h4>
                         <div className="text-right">
-                            {financials && <span className="block text-xs font-bold text-indigo-900">{formatCurrency(financials.design.total)}</span>}
-                            {!financials && designTotal && <span className="block text-xs font-bold text-indigo-900">{formatCurrency(designTotal)}</span>}
+                            {financials && <span className="block text-xs font-bold text-slate-800">{formatCurrency(financials.design.total)}</span>}
+                            {!financials && designTotal && <span className="block text-xs font-bold text-slate-800">{formatCurrency(designTotal)}</span>}
                             <span className={`text-[10px] font-bold ${designTotalPercent !== 100 ? 'text-red-500' : 'text-emerald-600'}`}>
                                 Total: {designTotalPercent}%
                             </span>
@@ -423,7 +423,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                             <div className="p-2 bg-slate-50 border-t border-slate-100 flex justify-center">
                                 <button 
                                     onClick={() => handleAddMilestone('design')}
-                                    className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded shadow-sm hover:bg-slate-50 hover:text-indigo-600 transition-all"
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded shadow-sm hover:bg-slate-50 hover:text-[#0066CC] transition-all"
                                 >
                                     <PlusIcon className="w-3 h-3" /> Add Design Milestone
                                 </button>
@@ -438,8 +438,8 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                         <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
                             <h4 className="font-bold text-slate-700 text-sm">Part B: Execution</h4>
                             <div className="text-right">
-                                {financials && <span className="block text-xs font-bold text-indigo-900">{formatCurrency(financials.execution.total)}</span>}
-                                {!financials && executionTotal && <span className="block text-xs font-bold text-indigo-900">{formatCurrency(executionTotal)}</span>}
+                                {financials && <span className="block text-xs font-bold text-slate-800">{formatCurrency(financials.execution.total)}</span>}
+                                {!financials && executionTotal && <span className="block text-xs font-bold text-slate-800">{formatCurrency(executionTotal)}</span>}
                                 <span className={`text-[10px] font-bold ${executionTotalPercent !== 100 ? 'text-red-500' : 'text-emerald-600'}`}>
                                     Total: {executionTotalPercent}%
                                 </span>
@@ -470,7 +470,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                                 <div className="p-2 bg-slate-50 border-t border-slate-100 flex justify-center">
                                     <button 
                                         onClick={() => handleAddMilestone('execution')}
-                                        className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded shadow-sm hover:bg-slate-50 hover:text-indigo-600 transition-all"
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded shadow-sm hover:bg-slate-50 hover:text-[#0066CC] transition-all"
                                     >
                                         <PlusIcon className="w-3 h-3" /> Add Execution Milestone
                                     </button>
@@ -491,7 +491,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
 
             <div className="text-[10px] text-slate-400 text-center mt-6 flex flex-col items-center gap-1">
                 <p className="italic">* Milestone dates are tied to project progress. Delays in site possession or approvals may shift subsequent dates.</p>
-                {mode !== 'design_only' && <p className="font-medium text-indigo-400">Design completes in ~5 weeks. Execution timeline runs parallel post-possession.</p>}
+                {mode !== 'design_only' && <p className="font-medium text-sky-400">Design completes in ~5 weeks. Execution timeline runs parallel post-possession.</p>}
             </div>
         </section>
     );

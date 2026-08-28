@@ -34,30 +34,223 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="theme-color" content="#ffffff" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
-    <title>FFDS BOQ Copilot</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <title>Studio Copilot</title>
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700;900&family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Pako for URL compression -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700;900&family=Open+Sans:wght@400;500;600;700&family=Great+Vibes&family=Dancing+Script:wght@600;700&family=Caveat:wght@600;700&family=Sacramento&display=swap" rel="stylesheet">
     
     <style>
       :root { color-scheme: light; }
-      body { 
-        font-family: "Open Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        background-color: #ffffff; /* Pure White Base */
-        color: #1e3a8a; /* Blue-900 for main text instead of Slate-900 */
+      
+      /* Global Font Selections */
+      body.font-choice-jakarta,
+      body.font-choice-jakarta :not(.font-mono):not(code):not(pre) { 
+        font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif !important;
       }
-      .font-serif {
-        font-family: 'Playfair Display', serif;
+      body.font-choice-opensans,
+      body.font-choice-opensans :not(.font-mono):not(code):not(pre) { 
+        font-family: "Open Sans", system-ui, -apple-system, sans-serif !important;
       }
-      .font-opensans {
-        font-family: 'Open Sans', sans-serif;
+      body.font-choice-playfair,
+      body.font-choice-playfair :not(.font-mono):not(code):not(pre) { 
+        font-family: "Playfair Display", Georgia, serif !important;
+      }
+      body.font-choice-system,
+      body.font-choice-system :not(.font-mono):not(code):not(pre) { 
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+      }
+      
+      /* Keep monospace for actual technical dockets/IPs/codes */
+      .font-mono, code, pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+      }
+      
+      /* COMPACT DENSITY MODE GLOBAL OVERRIDES */
+      body.compact-density .p-6,
+      body.compact-density .p-8,
+      body.compact-density .md\:p-8,
+      body.compact-density .sm\:p-6 {
+        padding: 0.875rem !important;
+      }
+      body.compact-density .p-4,
+      body.compact-density .md\:p-6 {
+        padding: 0.625rem !important;
+      }
+      body.compact-density .py-6,
+      body.compact-density .py-8 {
+        padding-top: 0.75rem !important;
+        padding-bottom: 0.75rem !important;
+      }
+      body.compact-density .pt-8,
+      body.compact-density .pt-6 {
+        padding-top: 0.5rem !important;
+      }
+      body.compact-density .pb-8,
+      body.compact-density .pb-6 {
+        padding-bottom: 0.5rem !important;
+      }
+      body.compact-density .mb-8,
+      body.compact-density .mb-6,
+      body.compact-density .my-6,
+      body.compact-density .my-8 {
+        margin-top: 0.5rem !important;
+        margin-bottom: 0.5rem !important;
+      }
+      body.compact-density .mb-8 {
+        margin-bottom: 0.75rem !important;
+      }
+      body.compact-density .gap-6,
+      body.compact-density .gap-8 {
+        gap: 0.625rem !important;
+      }
+      body.compact-density .space-y-6 > :not([hidden]) ~ :not([hidden]),
+      body.compact-density .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+        margin-top: 0.625rem !important;
+      }
+      body.compact-density .p-3,
+      body.compact-density .p-4 {
+        padding: 0.5rem !important;
+      }
+      body.compact-density td,
+      body.compact-density th {
+        padding-top: 0.375rem !important;
+        padding-bottom: 0.375rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+      }
+      body.compact-density h1 {
+        font-size: 1.5rem !important;
+      }
+      body.compact-density h2 {
+        font-size: 1.25rem !important;
+      }
+      body.compact-density h3 {
+        font-size: 1.125rem !important;
+      }
+      body.compact-density .rounded-2xl,
+      body.compact-density .rounded-3xl,
+      body.compact-density .rounded-\[2rem\] {
+        border-radius: 0.75rem !important;
+      }
+      
+      body {
+        background-color: #F8FAFC; /* Milky White (#F8FAFC) */
+        color: #0f172a; /* Slate-900 instead of legacy blue-900 */
+      }
+
+      /* =======================================================
+         COLOR THEMES GLOBAL OVERRIDES
+         ======================================================= */
+      
+      /* 1. Milky White Theme (Default Pristine Glossy) */
+      body.theme-milky-white, body.theme-milky-white.app-shell {
+        background-color: #F8FAFC !important;
+        color: #0f172a !important;
+      }
+
+      /* 2. Dark Blue Theme (Luxury Navy) */
+      body.theme-dark-blue, body.theme-dark-blue.app-shell {
+        background-color: #0B132B !important;
+        color: #F1F5F9 !important;
+      }
+      body.theme-dark-blue .bg-white,
+      body.theme-dark-blue .bg-slate-50,
+      body.theme-dark-blue .bg-slate-50\/30,
+      body.theme-dark-blue .bg-\[\#FAF9F6\],
+      body.theme-dark-blue .bg-slate-100,
+      body.theme-dark-blue .bg-sky-50\/30,
+      body.theme-dark-blue .bg-sky-50\/50,
+      body.theme-dark-blue .bg-slate-50\/50 {
+        background-color: #111C40 !important;
+        color: #F1F5F9 !important;
+      }
+      body.theme-dark-blue .border,
+      body.theme-dark-blue .border-slate-200,
+      body.theme-dark-blue .border-slate-100,
+      body.theme-dark-blue .border-sky-100 {
+        border-color: #22336B !important;
+      }
+      body.theme-dark-blue h1,
+      body.theme-dark-blue h2,
+      body.theme-dark-blue h3,
+      body.theme-dark-blue h4,
+      body.theme-dark-blue p,
+      body.theme-dark-blue span:not(.font-mono),
+      body.theme-dark-blue label,
+      body.theme-dark-blue select,
+      body.theme-dark-blue input,
+      body.theme-dark-blue td,
+      body.theme-dark-blue th {
+        color: #F1F5F9 !important;
+      }
+      body.theme-dark-blue .text-slate-500,
+      body.theme-dark-blue .text-slate-400,
+      body.theme-dark-blue .text-slate-600 {
+        color: #94A3B8 !important;
+      }
+      body.theme-dark-blue .text-sky-950,
+      body.theme-dark-blue .text-sky-900,
+      body.theme-dark-blue .text-slate-800 {
+        color: #E2E8F0 !important;
+      }
+      body.theme-dark-blue select,
+      body.theme-dark-blue input,
+      body.theme-dark-blue textarea {
+        background-color: #0F172A !important;
+        color: #F1F5F9 !important;
+        border-color: #334155 !important;
+      }
+
+      /* 3. Light Blue Theme (Tech Clean) */
+      body.theme-light-blue, body.theme-light-blue.app-shell {
+        background-color: #EBF5FF !important;
+        color: #0F2942 !important;
+      }
+      body.theme-light-blue .bg-white,
+      body.theme-light-blue .bg-slate-50,
+      body.theme-light-blue .bg-[#FAF9F6],
+      body.theme-light-blue .bg-slate-100 {
+        background-color: #F4F9FF !important;
+      }
+      body.theme-light-blue .border,
+      body.theme-light-blue .border-slate-200,
+      body.theme-light-blue .border-slate-100 {
+        border-color: #BDD7F5 !important;
+      }
+      body.theme-light-blue h1,
+      body.theme-light-blue h2,
+      body.theme-light-blue h3,
+      body.theme-light-blue h4,
+      body.theme-light-blue .text-sky-950,
+      body.theme-light-blue .text-sky-900 {
+        color: #1E3A8A !important;
+      }
+
+      /* 4. Light Orange Theme (Warm Cream Amber) */
+      body.theme-light-orange, body.theme-light-orange.app-shell {
+        background-color: #FFFBEB !important; /* Soft warm yellow-orange canvas */
+        color: #451A03 !important;
+      }
+      body.theme-light-orange .bg-white,
+      body.theme-light-orange .bg-slate-50,
+      body.theme-light-orange .bg-[#FAF9F6],
+      body.theme-light-orange .bg-slate-100 {
+        background-color: #FFFDF5 !important;
+      }
+      body.theme-light-orange .border,
+      body.theme-light-orange .border-slate-200,
+      body.theme-light-orange .border-slate-100 {
+        border-color: #FDE68A !important;
+      }
+      body.theme-light-orange h1,
+      body.theme-light-orange h2,
+      body.theme-light-orange h3,
+      body.theme-light-orange h4,
+      body.theme-light-orange .text-sky-950,
+      body.theme-light-orange .text-sky-900 {
+        color: #78350F !important;
       }
       
       /* Vibrant Focus */
@@ -68,21 +261,19 @@
 
       /* "Milky White" Glass Theme */
       .glass-light {
-        background: rgba(255, 255, 255, 0.95); /* High opacity white */
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
-        border: 1px solid rgba(255, 255, 255, 1);
+        background: rgba(255, 255, 255, 0.85); /* Polished milky white with high-blur transparency */
+        backdrop-filter: blur(20px) saturate(190%);
+        -webkit-backdrop-filter: blur(20px) saturate(190%);
+        border: 1px solid rgba(255, 255, 255, 0.7);
         box-shadow: 
-          0 10px 40px -10px rgba(30, 58, 138, 0.05), /* Subtle blue shadow */
-          0 0 0 1px rgba(241, 245, 249, 0.5) inset;
+          0 8px 32px 0 rgba(31, 38, 135, 0.04),
+          0 1px 2px 0 rgba(255, 255, 255, 0.8) inset;
       }
       
-      /* Subtle Ambient Background */
+      /* Subtle Ambient Background - Pristine Milky White */
       body.app-shell {
-        background-color: #ffffff;
-        background-image: 
-            radial-gradient(circle at 0% 0%, #eff6ff 0%, transparent 40%), 
-            radial-gradient(circle at 100% 0%, #f0f9ff 0%, transparent 40%);
+        background-color: #F8FAFC !important; /* Uniform Milky White Canvas */
+        background-image: none !important; /* Remove gradients for seamless clean canvas */
         background-attachment: fixed;
       }
       
@@ -330,6 +521,21 @@
                 page-break-before: auto;
             }
         }
+      }
+
+      /* Wavy page note — the characters ripple, there is no underline. */
+      .page-header-wave > span {
+        display: inline-block;
+        white-space: pre;
+        animation: ph-wave-char 2.8s ease-in-out infinite;
+        will-change: transform;
+      }
+      @keyframes ph-wave-char {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-2.5px); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .page-header-wave > span { animation: none; }
       }
     </style>
   </head>

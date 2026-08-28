@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { prepareClonedDocForPdf } from "../../lib/pdfUtils";
 import {
   MOM,
   MOMAttendee,
@@ -26,6 +27,9 @@ import {
   StickyNote,
   Clock,
   ArrowRight,
+  Sparkles,
+  Send,
+  FileText,
 } from "lucide-react";
 import { useOrg } from "../../contexts/OrgContext";
 import { StudioDocumentShell } from "./documents/StudioDocumentShell";
@@ -47,8 +51,16 @@ export function MomReviewModal({
 }: MomReviewModalProps) {
   const { currentRole, orgData } = useOrg();
   const isOwner = currentRole === "Admin" || currentRole === "Ops Director";
+  const studioName = orgData?.orgName || "Studio";
 
-  const [draft, setDraft] = useState<MOM>(JSON.parse(JSON.stringify(mom)));
+  const [draft, setDraft] = useState<MOM>(() => {
+    if (!mom) return {} as MOM;
+    try {
+      return JSON.parse(JSON.stringify(mom));
+    } catch (e) {
+      return {} as MOM;
+    }
+  });
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<
     "attendees" | "decisions" | "actions" | "notes" | null
@@ -101,10 +113,9 @@ export function MomReviewModal({
           margin: 0,
           filename: `MoM_${draft.momRef}.pdf`,
           image: { type: "jpeg", quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true },
+          html2canvas: { scale: 2, useCORS: true, onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc) },
           jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
         };
-
         const pdfBlob = await html2pdfObj()
           .set(opt)
           .from(pdfContentRef.current)
@@ -158,19 +169,30 @@ export function MomReviewModal({
 
   const handleCopyLink = async () => {
     setSaving(true);
-    const token = await getOrCreateShareToken();
-    await markShared();
-    const link = `${window.location.origin}/mom/${token}`;
-    await navigator.clipboard.writeText(link);
-    alert("Link copied to clipboard!");
-    setSaving(false);
+    try {
+      const token = await getOrCreateShareToken();
+      const link = `${window.location.origin}/mom/${token}`;
+      await navigator.clipboard.writeText(link);
+      alert("Client signable link copied to clipboard!");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to copy link");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const pdfContentRef = useRef<HTMLDivElement>(null);
 
+  if (!mom || !draft || !draft.id) {
+    return null;
+  }
+
   const handleDownloadPdf = async () => {
     setSaving(true);
     await getOrCreateShareToken();
+    await markShared();
+
     if (pdfContentRef.current) {
       try {
         const html2pdfModule = await import("html2pdf.js");
@@ -185,7 +207,7 @@ export function MomReviewModal({
           margin: 0,
           filename: `MoM_${draft.momRef}.pdf`,
           image: { type: "jpeg", quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true },
+          html2canvas: { scale: 2, useCORS: true, onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc) },
           jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
         };
         await html2pdfObj().set(opt).from(pdfContentRef.current).save();
@@ -208,7 +230,6 @@ export function MomReviewModal({
   ).length;
 
   const handleLogDecision = async (idx: number) => {
-    // Mock linkage
     const newD = [...draft.decisions];
     newD[idx].linkedDecisionId = `DEC-${Date.now()}`;
     await updateDoc(
@@ -222,7 +243,6 @@ export function MomReviewModal({
   };
 
   const handleCreateSA = async (idx: number) => {
-    // Mock linkage
     const nx = [...draft.actionItems];
     nx[idx].linkedScopeAdditionId = `SA-${Date.now()}`;
     await updateDoc(
@@ -233,20 +253,6 @@ export function MomReviewModal({
     );
     updateDraft({ actionItems: nx });
     alert("Opened Scope Addition flow prefilled with: " + nx[idx].text);
-  };
-
-  const handleCreateDrawing = async (idx: number) => {
-    // Mock linkage
-    const nx = [...draft.actionItems];
-    nx[idx].linkedDrawingId = `REV-${Date.now()}`;
-    await updateDoc(
-      doc(db, `organizations/${studioId}/projects/${projectId}/moms`, mom.id),
-      {
-        actionItems: nx,
-      },
-    );
-    updateDraft({ actionItems: nx });
-    alert("Logged to Drawing Tracker!");
   };
 
   const handleSaveDraft = async () => {
@@ -293,55 +299,62 @@ export function MomReviewModal({
     mom.status === "acknowledged";
 
   return (
-    <div className="fixed inset-0 bg-indigo-950/60 z-[60] flex items-center justify-center p-0 sm:p-4">
-      <div className="bg-white sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-h-[90vh] max-w-3xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 z-[100] flex items-center justify-center p-0 sm:p-4 backdrop-blur-xs font-sans">
+      <div className="bg-white sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-h-[92vh] max-w-3xl flex flex-col overflow-hidden border border-slate-200/80">
+        
         {/* Header */}
-        <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-[#f1f5f9]">
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-[#FAF9F6]">
           <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg sm:text-xl font-bold text-indigo-950">
-                Review MoM: {draft.momRef}
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
+                Review Minutes: {draft.momRef}
+                <span className="h-1.5 w-1.5 rounded-full bg-[#B89047]"></span>
               </h2>
-              {!isFinalised && (
-                <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-sm uppercase tracking-wide">
-                  Draft — review before sharing
+              {!isFinalised ? (
+                <span className="bg-amber-50 text-amber-700 text-xs font-bold px-2.5 py-0.5 border border-amber-200 rounded-md uppercase tracking-wider">
+                  Draft — Review Phase
+                </span>
+              ) : (
+                <span className="bg-emerald-50 text-emerald-800 text-xs font-bold px-2.5 py-0.5 border border-emerald-200 rounded-md uppercase tracking-wider">
+                  Finalized Protocol
                 </span>
               )}
             </div>
-            <p className="text-sm text-slate-500 mt-1">{draft.meetingTitle}</p>
+            <p className="text-sm text-slate-500 font-semibold mt-1">{draft.meetingTitle}</p>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 bg-white rounded-full p-2 shadow-sm"
+            className="text-slate-400 hover:text-slate-900 bg-white border border-slate-200 rounded-full p-2.5 hover:shadow-sm hover:bg-slate-50 transition"
           >
-            <X size={20} />
+            <X size={16} />
           </button>
         </div>
 
-        {/* Scope Banner */}
+        {/* Scope Risk Banner (Clean Navy/Gold highlights) */}
         {!isFinalised && scopeCostCount > 0 && (
-          <div className="bg-rose-50 border-b border-rose-100 px-4 py-3 flex flex-col sm:flex-row gap-2 sm:gap-4 items-start sm:items-center justify-between">
-            <div className="flex items-center gap-2 text-rose-800">
-              <AlertTriangle size={16} className="text-rose-600 shrink-0" />
-              <p className="text-sm font-semibold">
-                ⚠ {scopeCostCount} item(s) may affect scope — review before
-                sharing
+          <div className="bg-amber-50/50 border-b border-amber-200/60 px-6 py-4 flex flex-col sm:flex-row gap-2 sm:gap-4 items-start sm:items-center justify-between">
+            <div className="flex items-center gap-2 text-slate-900">
+              <AlertTriangle size={15} className="text-[#B89047] shrink-0" />
+              <p className="text-sm font-bold leading-relaxed text-slate-900/80">
+                Notice: {scopeCostCount} item(s) flagged as potential scope expansions. Verify before final client share.
               </p>
             </div>
             <button
               onClick={() => setActiveSection("actions")}
-              className="text-xs font-bold uppercase tracking-wider bg-rose-100 text-rose-700 px-2 py-1 rounded hover:bg-rose-200 transition"
+              className="text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 px-3.5 py-2 rounded-lg hover:bg-amber-200 transition shrink-0"
             >
-              View items
+              Analyze Items
             </button>
           </div>
         )}
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/50 space-y-4">
-          {/* Sections implementation to follow... */}
+        {/* Content Section (Streamlined light-grey viewport) */}
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 space-y-5">
+          
+          {/* 1. ATTENDEES ACCORDION */}
           <AccordionSection
-            title={`Attendees (${draft.attendees?.length || 0})`}
+            title={`Meeting Attendees (${draft.attendees?.length || 0})`}
+            icon={<Users size={16} className="text-slate-400" />}
             isOpen={activeSection === "attendees"}
             onToggle={() =>
               setActiveSection(
@@ -353,18 +366,19 @@ export function MomReviewModal({
               {draft.attendees?.map((att, idx) => (
                 <div
                   key={idx}
-                  className="flex gap-2 items-center bg-white border border-slate-200 rounded-lg p-2"
+                  className="flex gap-2.5 items-center bg-white border border-slate-200/80 rounded-xl p-2.5"
                 >
                   <input
                     type="text"
                     disabled={isFinalised}
                     value={att.name}
+                    placeholder="Attendee full name"
                     onChange={(e) => {
                       const newAtts = [...draft.attendees];
                       newAtts[idx].name = e.target.value;
                       updateDraft({ attendees: newAtts });
                     }}
-                    className="flex-1 bg-transparent px-2 py-1 text-sm outline-none"
+                    className="flex-1 bg-transparent px-2.5 py-1 text-sm text-slate-900 font-semibold outline-none placeholder-slate-400"
                   />
                   <select
                     disabled={isFinalised}
@@ -374,12 +388,12 @@ export function MomReviewModal({
                       newAtts[idx].side = e.target.value as any;
                       updateDraft({ attendees: newAtts });
                     }}
-                    className="bg-slate-50 text-xs px-2 py-1 rounded border-none outline-none"
+                    className="bg-slate-50 border border-slate-200 text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-xl outline-none text-slate-600 transition focus:bg-white"
                   >
                     <option value="client">Client</option>
-                    <option value="ffds">FFDS</option>
+                    <option value="ffds">{studioName}</option>
                     <option value="vendor">Vendor</option>
-                    <option value="unknown">Unknown</option>
+                    <option value="unknown">External</option>
                   </select>
                   {!isFinalised && (
                     <button
@@ -388,7 +402,7 @@ export function MomReviewModal({
                         newAtts.splice(idx, 1);
                         updateDraft({ attendees: newAtts });
                       }}
-                      className="text-slate-400 hover:text-red-500 p-1"
+                      className="text-slate-300 hover:text-red-500 p-2 transition rounded-lg hover:bg-slate-100"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -405,7 +419,7 @@ export function MomReviewModal({
                       ],
                     })
                   }
-                  className="text-sm text-[#1e3a8a] font-semibold flex items-center gap-1 hover:underline"
+                  className="text-sm text-[#B89047] font-bold hover:text-slate-900 flex items-center gap-1.5 mt-2 px-1 transition"
                 >
                   <Plus size={14} /> Add Attendee
                 </button>
@@ -413,8 +427,10 @@ export function MomReviewModal({
             </div>
           </AccordionSection>
 
+          {/* 2. DECISIONS ACCORDION */}
           <AccordionSection
-            title={`Decisions (${draft.decisions?.length || 0})`}
+            title={`Decisions Recorded (${draft.decisions?.length || 0})`}
+            icon={<Gavel size={16} className="text-slate-400" />}
             isOpen={activeSection === "decisions"}
             onToggle={() =>
               setActiveSection(
@@ -422,26 +438,27 @@ export function MomReviewModal({
               )
             }
           >
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               {draft.decisions?.map((d, idx) => (
                 <div
                   key={d.id}
-                  className="flex flex-col gap-2 bg-white border border-slate-200 rounded-lg p-3"
+                  className="flex flex-col gap-2.5 bg-white border border-slate-200/80 rounded-xl p-4"
                 >
-                  <div className="flex gap-2 items-start">
+                  <div className="flex gap-2.5 items-start">
                     <CheckCircle
                       size={16}
-                      className="text-emerald-500 shrink-0 mt-0.5"
+                      className="text-[#B89047] shrink-0 mt-1"
                     />
                     <textarea
                       disabled={isFinalised}
                       value={d.text}
+                      placeholder="Enter recorded decision statement..."
                       onChange={(e) => {
                         const newD = [...draft.decisions];
                         newD[idx].text = e.target.value;
                         updateDraft({ decisions: newD });
                       }}
-                      className="flex-1 bg-transparent text-sm outline-none resize-none min-h-[40px] leading-relaxed"
+                      className="flex-1 bg-transparent text-sm font-semibold text-slate-900 outline-none resize-none min-h-[44px] leading-relaxed placeholder-slate-400"
                     />
                     {!isFinalised && (
                       <button
@@ -450,24 +467,24 @@ export function MomReviewModal({
                           newD.splice(idx, 1);
                           updateDraft({ decisions: newD });
                         }}
-                        className="text-slate-400 hover:text-red-500 p-1"
+                        className="text-slate-300 hover:text-red-500 p-2 transition rounded-lg hover:bg-slate-100"
                       >
                         <Trash2 size={14} />
                       </button>
                     )}
                   </div>
                   {isFinalised && (
-                    <div className="pl-6 flex">
+                    <div className="pl-6 pt-2 border-t border-slate-100 flex">
                       {d.linkedDecisionId ? (
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-sm">
-                          → Decision Logged
+                        <span className="text-xs font-bold uppercase tracking-wider text-[#B89047] bg-amber-50/50 border border-[#B89047]/20 px-3 py-1.5 rounded">
+                          ✓ Sync Active — Decision Logged
                         </span>
                       ) : (
                         <button
                           onClick={() => handleLogDecision(idx)}
-                          className="text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-indigo-600 transition"
+                          className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900 transition flex items-center gap-1"
                         >
-                          → Log Decision
+                          → Sync to Decisions Log
                         </button>
                       )}
                     </div>
@@ -484,7 +501,7 @@ export function MomReviewModal({
                       ],
                     })
                   }
-                  className="text-sm text-[#1e3a8a] font-semibold flex items-center gap-1 hover:underline"
+                  className="text-sm text-[#B89047] font-bold hover:text-slate-900 flex items-center gap-1.5 mt-2 px-1 transition"
                 >
                   <Plus size={14} /> Add Decision
                 </button>
@@ -492,8 +509,10 @@ export function MomReviewModal({
             </div>
           </AccordionSection>
 
+          {/* 3. ACTION ITEMS ACCORDION */}
           <AccordionSection
-            title={`Action Items (${draft.actionItems?.length || 0})`}
+            title={`Action Items & Milestones (${draft.actionItems?.length || 0})`}
+            icon={<ListTodo size={16} className="text-slate-400" />}
             isOpen={activeSection === "actions"}
             onToggle={() =>
               setActiveSection(activeSection === "actions" ? null : "actions")
@@ -503,9 +522,9 @@ export function MomReviewModal({
               {draft.actionItems?.map((a, idx) => (
                 <div
                   key={a.id}
-                  className="flex flex-col bg-white border border-slate-200 rounded-lg overflow-hidden"
+                  className="flex flex-col bg-white border border-slate-200/80 rounded-xl overflow-hidden"
                 >
-                  <div className="p-3 border-b border-slate-50 flex gap-2">
+                  <div className="p-4 border-b border-slate-100 flex gap-2.5">
                     <textarea
                       disabled={isFinalised}
                       value={a.text}
@@ -514,8 +533,8 @@ export function MomReviewModal({
                         nx[idx].text = e.target.value;
                         updateDraft({ actionItems: nx });
                       }}
-                      className="flex-1 bg-transparent text-sm font-medium outline-none resize-none min-h-[40px]"
-                      placeholder="Task description..."
+                      className="flex-1 bg-transparent text-sm font-semibold text-slate-900 outline-none resize-none min-h-[44px] leading-relaxed placeholder-slate-400"
+                      placeholder="Task description / target output..."
                     />
                     {!isFinalised && (
                       <button
@@ -524,33 +543,33 @@ export function MomReviewModal({
                           nx.splice(idx, 1);
                           updateDraft({ actionItems: nx });
                         }}
-                        className="text-slate-400 hover:text-red-500 p-1 h-fit"
+                        className="text-slate-300 hover:text-red-500 p-2 transition h-fit rounded-lg hover:bg-slate-100"
                       >
                         <Trash2 size={14} />
                       </button>
                     )}
                   </div>
 
-                  <div className="p-3 bg-slate-50/50 flex flex-col gap-3">
+                  <div className="p-4 bg-[#FAF9F6]/50 flex flex-col gap-3">
                     <div className="flex flex-wrap gap-3 items-center justify-between w-full">
-                      <div className="flex flex-wrap gap-2 items-center">
+                      <div className="flex flex-wrap gap-2.5 items-center">
                         <select
                           disabled={isFinalised}
                           value={a.owner}
                           onChange={(e) => {
                             const nx = [...draft.actionItems];
                             nx[idx].owner = e.target.value;
-                            nx[idx].ownerName = e.target.value; // simplistic
+                            nx[idx].ownerName = e.target.value;
                             updateDraft({ actionItems: nx });
                           }}
-                          className="text-xs bg-white border border-slate-200 rounded-md py-1 px-2 font-medium text-slate-700"
+                          className="text-xs bg-white border border-slate-200 rounded-lg py-2 px-3.5 font-bold uppercase tracking-wider text-slate-700 outline-none"
                         >
                           <option value="client">Client</option>
-                          <option value="ffds">FFDS</option>
+                          <option value="ffds">{studioName}</option>
                           <option value="vendor">Vendor</option>
                         </select>
 
-                        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-md px-2 py-1">
+                        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2.5 py-1">
                           <CalendarIcon size={12} className="text-slate-400" />
                           <input
                             type="date"
@@ -569,12 +588,12 @@ export function MomReviewModal({
                                 : undefined;
                               updateDraft({ actionItems: nx });
                             }}
-                            className="text-xs bg-transparent border-none outline-none w-[100px] text-slate-700"
+                            className="text-xs font-bold bg-transparent border-none outline-none w-[120px] text-slate-700"
                           />
                         </div>
                       </div>
 
-                      <div className="flex gap-1.5 flex-wrap">
+                      <div className="flex gap-2 flex-wrap">
                         {isOwner ? (
                           <>
                             <button
@@ -585,45 +604,44 @@ export function MomReviewModal({
                                   ...nx[idx],
                                   flags: {
                                     ...nx[idx].flags,
-                                    scope: !nx[idx].flags.scope,
+                                    scope: !nx[idx].flags?.scope,
                                   },
                                 };
                                 updateDraft({ actionItems: nx });
                               }}
-                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider transition ${a.flags?.scope ? "bg-red-100 text-red-700 border border-red-200 border-dashed" : "bg-slate-100 text-slate-400 opacity-50 hover:opacity-100"}`}
+                              className={`text-xs px-3 py-1.5 rounded-md border font-bold uppercase tracking-wider transition ${a.flags?.scope ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-slate-400 border-slate-200 opacity-60 hover:opacity-100"}`}
                             >
-                              Scope
+                              Scope Impact
                             </button>
                           </>
                         ) : (
-                          // Designers only see flags if they are true, can't edit
                           <>
                             {a.flags?.scope && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-red-50 text-red-700 border border-red-100">
-                                Scope
+                              <span className="text-xs px-3 py-1.5 rounded-md font-bold uppercase tracking-wider bg-red-50 text-red-700 border border-red-100">
+                                Scope Impact
                               </span>
                             )}
                           </>
                         )}
                       </div>
                     </div>
+
                     {isFinalised && a.flags?.scope && (
-                      <div className="flex flex-wrap gap-3 border-t border-slate-200/60 pt-2 mt-1">
-                        {a.flags?.scope &&
-                          (a.linkedScopeAdditionId ? (
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 px-2 py-0.5 rounded-sm">
-                              → SA Logged
-                            </span>
-                          ) : (
-                            isOwner && (
-                              <button
-                                onClick={() => handleCreateSA(idx)}
-                                className="text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-rose-600 transition"
-                              >
-                                → Create Scope Addition
-                              </button>
-                            )
-                          ))}
+                      <div className="flex flex-wrap gap-3 border-t border-slate-200/50 pt-3 mt-1">
+                        {a.linkedScopeAdditionId ? (
+                          <span className="text-xs font-bold uppercase tracking-wider text-rose-800 bg-rose-50 border border-rose-100 px-3 py-1.5 rounded">
+                            ✓ Scope Addition Linked
+                          </span>
+                        ) : (
+                          isOwner && (
+                            <button
+                              onClick={() => handleCreateSA(idx)}
+                              className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-[#B89047] transition flex items-center gap-1"
+                            >
+                              → Initiate Scope Addition Draft
+                            </button>
+                          )
+                        )}
                       </div>
                     )}
                   </div>
@@ -645,7 +663,7 @@ export function MomReviewModal({
                       ],
                     })
                   }
-                  className="text-sm text-[#1e3a8a] font-semibold flex items-center gap-1 hover:underline"
+                  className="text-sm text-[#B89047] font-bold hover:text-slate-900 flex items-center gap-1.5 mt-2 px-1 transition"
                 >
                   <Plus size={14} /> Add Action Item
                 </button>
@@ -653,29 +671,32 @@ export function MomReviewModal({
             </div>
           </AccordionSection>
 
+          {/* 4. NOTES ACCORDION */}
           <AccordionSection
-            title={`Discussion Notes (${draft.notes?.length || 0})`}
+            title={`Discussion Notes & References (${draft.notes?.length || 0})`}
+            icon={<StickyNote size={16} className="text-slate-400" />}
             isOpen={activeSection === "notes"}
             onToggle={() =>
               setActiveSection(activeSection === "notes" ? null : "notes")
             }
           >
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               {draft.notes?.map((n, idx) => (
                 <div
                   key={n.id}
-                  className="flex gap-2 items-start bg-transparent border-none p-0"
+                  className="flex gap-2.5 items-start bg-transparent border-none p-0"
                 >
-                  <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mt-2 shrink-0"></div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#B89047] mt-2 shrink-0"></div>
                   <textarea
                     disabled={isFinalised}
                     value={n.text}
+                    placeholder="Enter discussion bullet..."
                     onChange={(e) => {
                       const nx = [...draft.notes];
                       nx[idx].text = e.target.value;
                       updateDraft({ notes: nx });
                     }}
-                    className="flex-1 bg-transparent text-sm text-slate-700 outline-none resize-none min-h-[40px] leading-relaxed"
+                    className="flex-1 bg-transparent text-sm text-slate-700 outline-none resize-none min-h-[40px] leading-relaxed placeholder-slate-400 font-semibold"
                   />
                   {!isFinalised && (
                     <button
@@ -684,7 +705,7 @@ export function MomReviewModal({
                         nx.splice(idx, 1);
                         updateDraft({ notes: nx });
                       }}
-                      className="text-slate-400 hover:text-red-500 p-1"
+                      className="text-slate-300 hover:text-red-500 p-2 transition rounded-lg hover:bg-slate-100"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -701,7 +722,7 @@ export function MomReviewModal({
                       ],
                     })
                   }
-                  className="text-sm text-[#1e3a8a] font-semibold flex items-center gap-1 hover:underline"
+                  className="text-sm text-[#B89047] font-bold hover:text-slate-900 flex items-center gap-1.5 mt-2 px-1 transition"
                 >
                   <Plus size={14} /> Add Note
                 </button>
@@ -710,38 +731,39 @@ export function MomReviewModal({
           </AccordionSection>
         </div>
 
-        {/* Footer */}
+        {/* Footer (Actions Bar) */}
         {!isFinalised ? (
-          <div className="p-4 sm:p-6 border-t border-slate-100 bg-white flex flex-col sm:flex-row gap-3">
+          <div className="p-6 border-t border-slate-200 bg-white flex flex-col sm:flex-row gap-3">
             <button
               onClick={handleSaveDraft}
               disabled={saving}
-              className="flex-1 py-3 bg-white text-slate-700 border border-slate-300 rounded-xl font-bold hover:bg-slate-50 transition"
+              className="flex-1 py-3 bg-white text-slate-900 border border-slate-200 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-slate-100/80 transition shadow-sm"
             >
-              Save as Draft
+              Save Progress
             </button>
             <button
               onClick={handleFinalise}
               disabled={saving}
-              className="flex-1 py-3 bg-[#1e3a8a] text-white rounded-xl font-bold hover:bg-[#1e3a8a]/90 shadow-md transition"
+              className="flex-1 py-3 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white hover:text-amber-400 rounded-xl font-bold text-sm uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-sm"
             >
-              Finalise MoM
+              <CheckCircle2 size={14} />
+              Finalise Document
             </button>
           </div>
         ) : (
-          <div className="p-4 sm:p-6 border-t border-slate-100 bg-slate-50 flex flex-col gap-4">
+          <div className="p-6 border-t border-slate-200 bg-[#FAF9F6] flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-indigo-900 tracking-wide text-sm">
-                  Share Protocol
+                <h3 className="font-extrabold text-slate-900 tracking-tight text-sm uppercase">
+                  Share & Sign Protocol
                 </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Acknowledge process triggers logging in Comms.
+                <p className="text-xs text-slate-400 mt-1 font-semibold">
+                  Distribute the finalized Minutes of Meeting via WhatsApp or download as a PDF document.
                 </p>
               </div>
               {mom.status === "acknowledged" && (
-                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-sm flex items-center gap-1">
-                  <CheckCircle size={12} /> Acknowledged
+                <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded flex items-center gap-1.5">
+                  <CheckCircle size={11} /> Client Signed
                 </span>
               )}
             </div>
@@ -750,192 +772,183 @@ export function MomReviewModal({
               <button
                 onClick={handleShareWhatsApp}
                 disabled={saving}
-                className="flex-1 flex justify-center items-center gap-2 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition"
+                className="flex-1 flex justify-center items-center gap-2 py-3.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-sm uppercase tracking-wider transition shadow-sm"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="w-5 h-5"
-                >
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.878-.788-1.472-1.761-1.645-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
-                </svg>
-                Send on WhatsApp
+                <Send size={14} />
+                WhatsApp Share
               </button>
               <button
                 onClick={handleDownloadPdf}
                 disabled={saving}
-                className="flex-1 flex justify-center items-center gap-2 py-3 bg-white border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition"
+                className="flex-1 flex justify-center items-center gap-2 py-3.5 bg-white border border-slate-200 text-slate-900 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-slate-100 transition shadow-sm"
               >
-                <Download size={18} />
+                <Download size={14} />
                 Download PDF
               </button>
               <button
                 onClick={handleCopyLink}
                 disabled={saving}
-                className="flex w-12 justify-center items-center py-3 bg-white border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition"
-                title="Copy Share Link"
+                className="flex w-14 justify-center items-center py-3.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 transition shadow-sm"
+                title="Copy Client Share Link"
               >
-                <Share2 size={18} />
+                <Share2 size={14} />
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Hidden printable content for PDF generation */}
+      {/* Hidden printable content for PDF generation (Sober, Print-first Theme) */}
       <div className="absolute left-[-9999px] top-[-9999px]">
-        <div ref={pdfContentRef} className="w-[800px] bg-white text-indigo-950 p-12">
+        <div ref={pdfContentRef} className="w-[210mm] bg-white text-slate-900">
           {orgData && (
             <StudioDocumentShell
               orgData={orgData}
-              docHeaderType="Minutes of Meeting"
-              docHeaderTitle={mom.meetingTitle}
+              docHeaderType={`Minutes of Meeting\nRef: ${mom.momRef}`}
+              docHeaderTitle={mom.meetingTitle || "Minutes of Meeting"}
             >
-              <div className="space-y-8 text-sm text-indigo-950 pt-4 font-sans pb-12">
-                {/* Meeting Context */}
-                <section className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 md:p-8 break-inside-avoid">
-                  <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+              <div className="space-y-8 text-sm text-slate-900 pt-4 font-sans pb-12">
+                {/* 1. Protocol Metadata Box */}
+                <div className="border border-[#d9d6cc] bg-[#FAF9F6] p-5">
+                  <div className="grid grid-cols-2 gap-y-4 text-xs">
                     <div>
-                      <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                        Minutes of Meeting
-                      </div>
-                      <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-indigo-950">
-                        {mom.meetingTitle}
-                      </h2>
-                      <p className="mt-2 text-slate-600 text-sm leading-relaxed">
-                        Recorded on{" "}
-                        {new Date(mom.createdAt).toLocaleDateString("en-GB", {
+                      <span className="text-[#666666] font-semibold block uppercase tracking-wider text-[10px]">Reference Number</span>
+                      <span className="font-extrabold text-[#1E1B4B] text-sm">{mom.momRef}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#666666] font-semibold block uppercase tracking-wider text-[10px]">Meeting Date</span>
+                      <span className="font-extrabold text-[#1E1B4B] text-sm">
+                        {mom.meetingDate ? new Date(mom.meetingDate).toLocaleDateString("en-GB", {
                           day: "numeric",
                           month: "long",
                           year: "numeric",
-                        })}
-                      </p>
+                        }) : "N/A"}
+                      </span>
                     </div>
-                    <div className="rounded-2xl border px-4 py-3 bg-[#F7F7F6] border-slate-200">
-                      <div className="text-[11px] font-bold uppercase tracking-wider opacity-70">
-                        Project
-                      </div>
-                      <div className="mt-1 font-extrabold text-sm text-indigo-950">
-                        {projectContextName || "N/A"}
-                      </div>
+                    <div>
+                      <span className="text-[#666666] font-semibold block uppercase tracking-wider text-[10px]">Project Name</span>
+                      <span className="font-extrabold text-[#1E1B4B] text-sm">{projectContextName || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#666666] font-semibold block uppercase tracking-wider text-[10px]">Meeting Type</span>
+                      <span className="font-extrabold text-[#1E1B4B] text-sm uppercase tracking-wider">
+                        {(mom.meetingType as string) === "internal" 
+                          ? "Internal Team Review" 
+                          : (mom.meetingType as string) === "vendor" 
+                            ? "Vendor Coordination" 
+                            : (mom.meetingType as string) === "client" 
+                              ? "Client Alignment" 
+                              : "Site Coordination"}
+                      </span>
                     </div>
                   </div>
-                </section>
+                </div>
 
-                {/* Attendees */}
-                <section className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 md:p-8 break-inside-avoid">
-                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-6 flex items-center gap-2">
-                    <Users size={16} className="text-indigo-500" />
-                    Meeting Attendees
-                  </div>
-                  <div className="grid grid-cols-2 gap-y-4 gap-x-8">
+                {/* Single Gold Hairline Accent divider */}
+                <div className="h-[1px] bg-[#B89047]" />
+
+                {/* 2. Attendees Section */}
+                <div>
+                  <h3 className="text-xs uppercase font-extrabold tracking-widest text-[#B89047] mb-3 flex items-center gap-2">
+                    <Users size={14} className="text-[#B89047]" />
+                    Attendees
+                  </h3>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-2 border-t border-slate-100 pt-3">
                     {mom.attendees?.map((a, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between border-b border-slate-100 pb-3"
-                      >
-                        <span className="font-bold text-indigo-900">
-                          {a.name}
-                        </span>
-                        <span className="text-[10px] uppercase tracking-wider text-slate-600 font-bold bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
-                          {a.side}
+                      <div key={i} className="flex justify-between text-xs py-1 border-b border-slate-100/60">
+                        <span className="font-bold text-slate-800">{a.name}</span>
+                        <span className="text-[#666666] font-bold uppercase tracking-wider">
+                          {a.side === "ffds" ? studioName : "Client"}
                         </span>
                       </div>
                     ))}
                   </div>
-                </section>
+                </div>
 
-                {/* Decisions */}
+                {/* 3. Decisions Section */}
                 {mom.decisions && mom.decisions.length > 0 && (
-                  <section className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 md:p-8 break-inside-avoid">
-                    <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-6 flex items-center gap-2">
-                      <Gavel size={16} className="text-emerald-500" />
-                      Decisions Recorded
-                    </div>
-                    <ul className="space-y-4">
+                  <div>
+                    <h3 className="text-xs uppercase font-extrabold tracking-widest text-[#B89047] mb-3 flex items-center gap-2">
+                      <Gavel size={14} className="text-[#B89047]" />
+                      Decisions Logged
+                    </h3>
+                    <div className="border-t border-slate-100 pt-3 space-y-3">
                       {mom.decisions.map((d, i) => (
-                        <li
-                          key={i}
-                          className="flex gap-4 items-start pb-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors p-2 rounded-lg"
-                        >
-                          <div className="bg-emerald-50 border border-emerald-100 text-emerald-600 font-bold text-xs rounded-full w-6 h-6 flex justify-center items-center shrink-0">
-                            ✓
-                          </div>
-                          <span className="leading-relaxed font-medium text-indigo-900 mt-0.5">
-                            {d.text}
-                          </span>
-                        </li>
+                        <div key={i} className="flex gap-3 items-start text-xs leading-relaxed text-[#1E1B4B]">
+                          <span className="text-[#B89047] font-extrabold select-none mt-0.5">▪</span>
+                          <span className="font-medium text-slate-800">{d.text}</span>
+                        </div>
                       ))}
-                    </ul>
-                  </section>
+                    </div>
+                  </div>
                 )}
 
-                {/* Action Items */}
+                {/* 4. Action Items Section */}
                 {mom.actionItems && mom.actionItems.length > 0 && (
-                  <section className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 md:p-8 break-inside-avoid">
-                    <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-6 flex items-center gap-2">
-                      <ListTodo size={16} className="text-blue-500" />
-                      Action Items
-                    </div>
-                    <div className="overflow-hidden rounded-2xl border border-slate-200">
-                      <table className="w-full text-sm text-left border-collapse">
+                  <div>
+                    <h3 className="text-xs uppercase font-extrabold tracking-widest text-[#B89047] mb-3 flex items-center gap-2">
+                      <ListTodo size={14} className="text-[#B89047]" />
+                      Action Items & Tasks
+                    </h3>
+                    <div className="border-t border-slate-100 pt-3">
+                      <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr className="bg-slate-50 border-b border-slate-200">
-                            <th className="py-4 px-4 border-r border-slate-200 text-[10px] uppercase tracking-wider text-slate-500 font-bold w-16 text-center">
+                          <tr className="border-b border-[#FAF9F6] bg-[#FAF9F6]">
+                            <th className="py-2.5 px-3 text-[10px] uppercase font-extrabold tracking-wider text-slate-500 w-16 text-center">
                               Ref
                             </th>
-                            <th className="py-4 px-4 border-r border-slate-200 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+                            <th className="py-2.5 px-3 text-[10px] uppercase font-extrabold tracking-wider text-slate-500">
                               Task Description
                             </th>
-                            <th className="py-4 px-4 border-r border-slate-200 text-[10px] uppercase tracking-wider text-slate-500 font-bold w-32 text-center">
+                            <th className="py-2.5 px-3 text-[10px] uppercase font-extrabold tracking-wider text-slate-500 w-28 text-center">
                               Owner
                             </th>
-                            <th className="py-4 px-4 text-[10px] uppercase tracking-wider text-slate-500 font-bold w-32 text-right">
+                            <th className="py-2.5 px-3 text-[10px] uppercase font-extrabold tracking-wider text-slate-500 w-28 text-right">
                               Due Date
                             </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {mom.actionItems.map((a, i) => (
-                            <tr
-                              key={a.id}
-                              className="group hover:bg-slate-50/50 transition-colors"
-                            >
-                              <td className="py-4 px-4 font-bold text-xs text-slate-400 text-center border-r border-slate-100 bg-slate-50/30">
+                            <tr key={a.id} className="text-xs">
+                              <td className="py-3 px-3 font-bold text-slate-400 text-center">
                                 A-{String(i + 1).padStart(2, "0")}
                               </td>
-                              <td className="py-4 px-4 font-medium text-indigo-900 border-r border-slate-100">
+                              <td className="py-3 px-3 font-medium text-slate-800 leading-relaxed">
                                 {a.text}
                                 {a.flags?.scope && (
-                                  <div className="flex gap-2 mt-2">
-                                    <span className="text-[8px] uppercase tracking-widest font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-sm">
-                                      Scope Update
-                                    </span>
-                                  </div>
+                                  <span className="ml-2 inline-block text-[9px] text-red-600 font-bold uppercase tracking-wider">
+                                    [Scope Update]
+                                  </span>
+                                )}
+                                {a.flags?.cost && (
+                                  <span className="ml-2 inline-block text-[9px] text-red-600 font-bold uppercase tracking-wider">
+                                    [Cost Impact]
+                                  </span>
+                                )}
+                                {a.flags?.drawing && (
+                                  <span className="ml-2 inline-block text-[9px] text-[#0055B3] font-bold uppercase tracking-wider">
+                                    [Drawing Keyed]
+                                  </span>
+                                )}
+                                {a.flags?.siteCondition && (
+                                  <span className="ml-2 inline-block text-[9px] text-amber-700 font-bold uppercase tracking-wider">
+                                    [Site Check]
+                                  </span>
                                 )}
                               </td>
-                              <td className="py-4 px-4 text-center border-r border-slate-100">
-                                <div className="flex justify-center items-center h-full">
-                                  <span className="text-[10px] uppercase font-bold tracking-widest text-indigo-900 bg-slate-100 border border-slate-200 px-2 pt-1 pb-[3px] rounded-md leading-none inline-flex items-center justify-center">
-                                    {a.owner}
-                                  </span>
-                                </div>
+                              <td className="py-3 px-3 text-center text-slate-600 font-bold uppercase tracking-wider">
+                                {a.owner === "ffds" ? studioName : "Client"}
                               </td>
-                              <td className="py-4 px-4 text-right">
+                              <td className="py-3 px-3 text-right font-medium text-slate-600">
                                 {a.dueDate ? (
-                                  <span className="text-indigo-900 text-xs font-mono font-bold">
-                                    {new Date(a.dueDate)
-                                      .toLocaleDateString("en-GB", {
-                                        day: "2-digit",
-                                        month: "short",
-                                        year: "numeric",
-                                      })
-                                      .toUpperCase()}
-                                  </span>
+                                  new Date(a.dueDate).toLocaleDateString("en-GB", {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  })
                                 ) : (
-                                  <span className="text-slate-400 text-xs">
-                                    -
-                                  </span>
+                                  <span className="text-slate-300 italic">-</span>
                                 )}
                               </td>
                             </tr>
@@ -943,82 +956,65 @@ export function MomReviewModal({
                         </tbody>
                       </table>
                     </div>
-                  </section>
+                  </div>
                 )}
 
-                {/* Notes */}
+                {/* 5. Discussion Notes Section */}
                 {mom.notes && mom.notes.length > 0 && (
-                  <section className="rounded-3xl border border-slate-200 bg-[#F7F7F6] p-6 md:p-8 break-inside-avoid">
-                    <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-6 flex items-center gap-2">
-                      <StickyNote size={16} className="text-slate-400" />
+                  <div>
+                    <h3 className="text-xs uppercase font-extrabold tracking-widest text-[#B89047] mb-3 flex items-center gap-2">
+                      <StickyNote size={14} className="text-[#B89047]" />
                       Discussion Notes
-                    </div>
-                    <ul className="space-y-4">
+                    </h3>
+                    <div className="border-t border-slate-100 pt-3 space-y-2">
                       {mom.notes.map((n, i) => (
-                        <li key={n.id} className="flex gap-4 items-start">
-                          <span className="text-slate-400 shrink-0 mt-0.5 text-lg leading-none">
-                            &bull;
-                          </span>
-                          <span className="text-slate-700 leading-relaxed text-sm font-medium">
-                            {n.text}
-                          </span>
-                        </li>
+                        <div key={n.id} className="flex gap-3 items-start text-xs leading-relaxed text-slate-700">
+                          <span className="text-slate-300 font-bold select-none mt-0.5">•</span>
+                          <span className="font-medium">{n.text}</span>
+                        </div>
                       ))}
-                    </ul>
-                  </section>
+                    </div>
+                  </div>
                 )}
 
-                {/* Acknowledgment */}
-                {mom.status === "acknowledged" && (
-                  <section className="mt-8 pt-8 grid grid-cols-2 gap-12 border-t border-slate-200 break-inside-avoid">
-                    <div className="space-y-8">
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        Official Acknowledgment
-                      </div>
-                      <div className="grid grid-cols-[100px_1fr] gap-y-2 text-xs">
-                        <span className="text-slate-500 font-medium">
-                          Signed By
-                        </span>
-                        <span className="font-bold text-indigo-950">
-                          {mom.acknowledgedBy}
-                        </span>
-
-                        <span className="text-slate-500 font-medium">
-                          Timestamp
-                        </span>
-                        <span className="font-medium text-slate-700">
-                          {new Date(mom.acknowledgedAt!).toLocaleString(
-                            "en-GB",
-                            {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )}
-                        </span>
-
-                        <span className="text-slate-500 font-medium">
-                          Channel
-                        </span>
-                        <span className="font-bold text-slate-700 uppercase tracking-widest">
-                          {mom.ackChannel}
-                        </span>
-                      </div>
+                {/* 6. Acknowledgment & Signature Block */}
+                <div className="h-[1px] bg-slate-200 mt-8" />
+                <div className="grid grid-cols-2 gap-12 pt-6">
+                  <div className="space-y-4">
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block">
+                      PREPARED BY
+                    </span>
+                    <div className="text-xs">
+                      <p className="font-bold text-[#1E1B4B]">{studioName}</p>
+                      <p className="text-[#666666] mt-1">Project Operations & Delivery</p>
                     </div>
-                    <div className="space-y-8 text-right flex flex-col justify-end items-end">
-                      <div className="w-48 h-16 border-b border-slate-300 relative flex items-end justify-end pb-2">
-                        <span className="text-slate-300 text-3xl font-serif italic -rotate-6 opacity-60 mr-4">
-                          Signed
-                        </span>
+                  </div>
+
+                  <div className="space-y-4 text-right">
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block">
+                      CLIENT APPROVAL
+                    </span>
+                    {mom.status === "acknowledged" ? (
+                      <div className="text-xs">
+                        <p className="font-bold text-emerald-800">✓ Approved & Signed</p>
+                        <p className="text-slate-600 mt-1">By {mom.acknowledgedBy}</p>
+                        <p className="text-slate-500 text-[10px] mt-0.5">
+                          {new Date(mom.acknowledgedAt!).toLocaleString("en-GB", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })} ({mom.ackChannel})
+                        </p>
                       </div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest w-48 text-center">
-                        Client Signature
+                    ) : (
+                      <div className="text-xs text-slate-300 italic">
+                        Pending Digital Acknowledgment via Client Portal
                       </div>
-                    </div>
-                  </section>
-                )}
+                    )}
+                  </div>
+                </div>
               </div>
             </StudioDocumentShell>
           )}
@@ -1028,24 +1024,35 @@ export function MomReviewModal({
   );
 }
 
-function AccordionSection({ title, isOpen, onToggle, children }: any) {
+interface AccordionSectionProps {
+  title: string;
+  icon: React.ReactNode;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}
+
+function AccordionSection({ title, icon, isOpen, onToggle, children }: AccordionSectionProps) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs transition-all">
       <button
         onClick={onToggle}
-        className="w-full px-5 py-4 flex justify-between items-center bg-white hover:bg-slate-50 transition"
+        className="w-full px-5 py-4 flex justify-between items-center bg-white hover:bg-slate-50/50 transition duration-150"
       >
-        <h3 className="font-bold text-indigo-900 tracking-wide text-sm">
-          {title}
-        </h3>
+        <div className="flex items-center gap-3">
+          {icon}
+          <h3 className="font-extrabold text-slate-900 tracking-wider text-sm uppercase">
+            {title}
+          </h3>
+        </div>
         <span
-          className={`text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          className={`text-slate-400 text-xs transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
         >
           ▼
         </span>
       </button>
       {isOpen && (
-        <div className="px-5 pb-5 pt-2 border-t border-slate-100 bg-slate-50/30">
+        <div className="px-5 pb-5 pt-3 border-t border-slate-100 bg-[#FAF9F6]/20">
           {children}
         </div>
       )}

@@ -21,7 +21,7 @@ const ClientOptions: React.FC<ClientOptionsProps> = ({ tiers, comparisonData, co
         <section id="options" className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 md:p-8">
             <div>
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Section 2</div>
-                <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-indigo-950">{data.title}</h2>
+                <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">{data.title}</h2>
                 <p className="mt-2 text-slate-600 max-w-3xl whitespace-pre-line">
                     {data.subtitle}
                 </p>
@@ -42,14 +42,14 @@ const ClientOptions: React.FC<ClientOptionsProps> = ({ tiers, comparisonData, co
                             <div className="flex items-center justify-between">
                                 <div>
                                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{tier.name === "Essential Elegance" ? "Option A" : tier.name === "Comfort Upgrade" ? "Option B" : "Option C"}</div>
-                                    <div className="mt-2 text-xl font-extrabold text-indigo-950">{tier.name}</div>
+                                    <div className="mt-2 text-xl font-extrabold text-slate-900">{tier.name}</div>
                                 </div>
-                                {isRecommended && <div className="px-3 py-1 rounded-full bg-indigo-950 text-white text-[11px] font-extrabold">Recommended</div>}
+                                {isRecommended && <div className="px-3 py-1 rounded-full bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-extrabold">Recommended</div>}
                             </div>
                             <p className="mt-2 text-sm text-slate-600">{details.desc}</p>
                             <div className={`mt-5 rounded-2xl p-4 ${isRecommended ? 'bg-slate-50 border border-slate-200' : 'bg-white border border-slate-200'}`}>
                                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Indicative Budget</div>
-                                <div className="mt-1 text-2xl font-extrabold text-indigo-950">{formatCurrency(tier.executionTotal)}</div>
+                                <div className="mt-1 text-2xl font-extrabold text-slate-900">{formatCurrency(tier.executionTotal)}</div>
                             </div>
                             <ul className="mt-5 text-sm text-slate-700 space-y-2 list-disc list-inside pl-2 mb-4 flex-grow">
                                 {details.features.map((f, i) => <li key={i}>{f}</li>)}

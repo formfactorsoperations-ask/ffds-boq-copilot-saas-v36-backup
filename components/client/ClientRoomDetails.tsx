@@ -38,26 +38,26 @@ const ClientRoomDetails: React.FC<ClientRoomDetailsProps> = ({ rooms, projectCon
               return sum;
           }, 0);
 
-          const roomContext = projectContext.rooms.find(r => r.name === roomName);
+          const roomContext = (projectContext.rooms || []).find(r => r.name === roomName);
           const isExpanded = expandedRooms.has(roomName);
 
           return (
             <div key={roomName} className="glass rounded-2xl overflow-hidden transition-all duration-300 border border-white/40">
               <div 
                 onClick={() => toggleRoom(roomName)}
-                className={`p-4 flex items-center justify-between cursor-pointer transition-colors ${isExpanded ? 'bg-indigo-50/50' : 'hover:bg-white/40'}`}
+                className={`p-4 flex items-center justify-between cursor-pointer transition-colors ${isExpanded ? 'bg-sky-50/50' : 'hover:bg-white/40'}`}
               >
                   <div className="flex items-center gap-4">
-                      <div className={`p-2 rounded-lg transition-transform duration-300 ${isExpanded ? 'rotate-180 bg-indigo-100 text-indigo-600' : 'text-slate-400'}`}>
+                      <div className={`p-2 rounded-lg transition-transform duration-300 ${isExpanded ? 'rotate-180 bg-sky-100 text-[#0066CC]' : 'text-slate-400'}`}>
                           <ChevronDownIcon className="w-4 h-4" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-lg text-indigo-900">{roomName}</h3>
+                        <h3 className="font-bold text-lg text-slate-800">{roomName}</h3>
                         {roomContext && <p className="text-xs text-slate-500">{roomContext.size} {roomContext.unit}</p>}
                       </div>
                   </div>
                   <div className="text-right">
-                      <p className="font-bold text-indigo-900">{formatCurrency(roomTotal)}</p>
+                      <p className="font-bold text-slate-800">{formatCurrency(roomTotal)}</p>
                       <p className="text-xs text-slate-500">{items.length} items</p>
                   </div>
               </div>
@@ -96,11 +96,11 @@ const ClientRoomDetails: React.FC<ClientRoomDetailsProps> = ({ rooms, projectCon
                                                     type="checkbox" 
                                                     checked={isSelected}
                                                     onChange={(e) => { e.stopPropagation(); onToggleOption(item.id); }}
-                                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-[#0066CC] focus:ring-[#0066CC] cursor-pointer"
                                                 />
                                             )}
                                             <div>
-                                                <p className={`font-bold text-sm ${isSelected ? 'text-indigo-900' : ''}`}>{item.name}</p>
+                                                <p className={`font-bold text-sm ${isSelected ? 'text-slate-800' : ''}`}>{item.name}</p>
                                                 <p className={`text-xs leading-relaxed mt-0.5 ${isSelected ? 'text-slate-500' : 'text-slate-400'}`}>{item.specs}</p>
                                                 {item.optional && <span className="inline-block mt-1 text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">Optional Add-on</span>}
                                             </div>
@@ -108,7 +108,7 @@ const ClientRoomDetails: React.FC<ClientRoomDetailsProps> = ({ rooms, projectCon
                                     </td>
                                     <td className="p-3 text-right align-top whitespace-nowrap text-slate-600">{item.qty.toFixed(2)} <span className="text-[10px]">{item.unit}</span></td>
                                     <td className="p-3 text-right align-top whitespace-nowrap text-slate-600">{formatCurrency(rate)}</td>
-                                    <td className="p-3 pr-6 text-right align-top font-bold whitespace-nowrap text-indigo-900">{formatCurrency(total)}</td>
+                                    <td className="p-3 pr-6 text-right align-top font-bold whitespace-nowrap text-slate-800">{formatCurrency(total)}</td>
                                     </tr>
                                 );
                                 })}

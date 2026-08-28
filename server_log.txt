@@ -1,0 +1,6 @@
+
+> ffds-boq-copilot-v36.1---execution-workspace@0.0.0 dev
+> tsx server.ts
+
+WebSocket server error: Port 24678 is already in use
+Server running on http://0.0.0.0:3000

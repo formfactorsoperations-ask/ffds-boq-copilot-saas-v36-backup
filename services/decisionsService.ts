@@ -1,4 +1,4 @@
-import { collection, doc, setDoc, updateDoc, serverTimestamp, getDocs, query, where, Timestamp, collectionGroup, getDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, serverTimestamp, getDocs, query, where, Timestamp, collectionGroup, getDoc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from './firebaseClient';
 
 export interface SignoffData {
@@ -12,6 +12,7 @@ export interface SignoffData {
 
 export interface DecisionData {
     id?: string;
+    title?: string;
     decisionText: string;
     roomName: string;
     category: 'Site Condition' | 'Client Request' | 'Design Upgrade' | 'Value Engineering';
@@ -34,6 +35,8 @@ export interface DecisionData {
     createdAt: any;
     projectId: string;
     projectName: string;
+    impactCostValue?: number;
+    impactScheduleDays?: number;
 }
 
 /**
@@ -44,8 +47,15 @@ export async function saveDecision(projectId: string, decisionData: Partial<Deci
     
     const decisionsRef = collection(db, 'projects', projectId, 'decisions');
     const newDecisionRef = doc(decisionsRef);
+    const decisionId = newDecisionRef.id;
+    
+    const randomPart = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const token = `${projectId}_${decisionId}_${randomPart}`;
+    const tokenExpiresAt = new Date();
+    tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 30);
     
     const payload: DecisionData = {
+        title: decisionData.title || '',
         decisionText: decisionData.decisionText || '',
         roomName: decisionData.roomName || '',
         category: decisionData.category as any || 'Site Condition',
@@ -57,8 +67,8 @@ export async function saveDecision(projectId: string, decisionData: Partial<Deci
         notifiedAt: null,
         drawingUploadedAt: null,
         signoffRequestSentAt: null,
-        signoffToken: null,
-        tokenExpiresAt: null,
+        signoffToken: token,
+        tokenExpiresAt: Timestamp.fromDate(tokenExpiresAt),
         clientName: decisionData.clientName || '',
         clientEmail: decisionData.clientEmail || '',
         signoff: {
@@ -71,7 +81,9 @@ export async function saveDecision(projectId: string, decisionData: Partial<Deci
         createdBy: auth.currentUser.uid,
         createdAt: serverTimestamp(),
         projectId: projectId,
-        projectName: decisionData.projectName || ''
+        projectName: decisionData.projectName || '',
+        impactCostValue: decisionData.impactCostValue || 0,
+        impactScheduleDays: decisionData.impactScheduleDays || 0
     };
     
     await setDoc(newDecisionRef, payload);
@@ -227,14 +239,16 @@ export async function recordClientSignoff(token: string, type: 'approved' | 'que
     });
 }
 
-import { deleteDoc } from 'firebase/firestore';
-
 export async function deleteDecision(projectId: string, decisionId: string) {
     const docRef = doc(db, 'projects', projectId, 'decisions', decisionId);
     await deleteDoc(docRef);
 }
 
-export async function updateDecisionText(projectId: string, decisionId: string, decisionText: string) {
+export async function updateDecisionText(projectId: string, decisionId: string, decisionText: string, title?: string, impactCostValue?: number, impactScheduleDays?: number) {
     const docRef = doc(db, 'projects', projectId, 'decisions', decisionId);
-    await updateDoc(docRef, { decisionText });
+    const updateData: any = { decisionText };
+    if (title !== undefined) updateData.title = title;
+    if (impactCostValue !== undefined) updateData.impactCostValue = impactCostValue;
+    if (impactScheduleDays !== undefined) updateData.impactScheduleDays = impactScheduleDays;
+    await updateDoc(docRef, updateData);
 }

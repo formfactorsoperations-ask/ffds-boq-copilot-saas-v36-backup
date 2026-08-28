@@ -1,17 +1,9 @@
 
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { getAi } from './aiClient';
 import { Item, BoqItem, AIStrategy, Room, MarginSuggestion, ProjectContext, CommandAction, AggregatedCategory, FullBoqItem, QuantitySuggestion, ProposalTier, ComparisonRow, AIGeneratedBoqItem, VisionAnalysisResult, TimelinePhase, MaterialSuggestion, AiComparisonResult, AIStatus, LeadProfile, DecisionBrainOutput, ProposalWriterOutput, AuditResult, ValueEngineeringSuggestion, ProfitabilityHotspot, ProjectTask, GeneratedRender, LumpsumBreakdownItem, SiteUpdateRecord, ProjectDecisionRecord } from '../types';
 import { id as generateId, formatCurrency, calculateSellPrice } from '../lib/utils';
-
-// Helper to get the AI instance
-const getAi = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.error("GEMINI_API_KEY environment variable not set");
-    throw new Error("AI services are unavailable. API key is missing.");
-  }
-  return new GoogleGenAI({ apiKey });
-};
+import { inferBasis, quantityFor, computeRoom, ratioFallback, DEFAULT_CONVENTIONS, classifyRoom, defaultCeiling, RoomGeometry } from '../lib/takeoff';
 
 // Simple check if the key is present.
 export const isAiAvailable = (): boolean => {
@@ -39,6 +31,112 @@ export const verifyApiKey = async (): Promise<AIStatus> => {
 };
 
 
+// Helper function to repair common malformed JSON issues returned by the AI
+const repairJsonString = (jsonString: string): string => {
+    let output = '';
+    let stack: ('{' | '[')[] = [];
+    let inString = false;
+    let escapeNext = false;
+    
+    for (let i = 0; i < jsonString.length; i++) {
+        const char = jsonString[i];
+        
+        if (escapeNext) {
+            output += char;
+            escapeNext = false;
+            continue;
+        }
+        
+        if (char === '\\') {
+            output += char;
+            if (inString) {
+                escapeNext = true;
+            }
+            continue;
+        }
+        
+        if (char === '"') {
+            inString = !inString;
+            output += char;
+            continue;
+        }
+        
+        if (inString) {
+            if (char === '\n') {
+                output += '\\n';
+            } else if (char === '\r') {
+                output += '\\r';
+            } else {
+                output += char;
+            }
+            continue;
+        }
+        
+        if (char === '{') {
+            stack.push('{');
+            output += char;
+        } else if (char === '[') {
+            stack.push('[');
+            output += char;
+        } else if (char === '}') {
+            if (stack.length > 0 && stack[stack.length - 1] === '{') {
+                stack.pop();
+                let trimmed = output.trimEnd();
+                if (trimmed.endsWith(',')) {
+                    output = trimmed.slice(0, -1);
+                }
+                output += char;
+            } else {
+                // Skip unmatched/extra closing brace
+                continue;
+            }
+        } else if (char === ']') {
+            if (stack.length > 0) {
+                const last = stack[stack.length - 1];
+                if (last === '[') {
+                    stack.pop();
+                    let trimmed = output.trimEnd();
+                    if (trimmed.endsWith(',')) {
+                        output = trimmed.slice(0, -1);
+                    }
+                    output += char;
+                } else if (last === '{') {
+                    stack.pop(); // pop '{'
+                    let trimmed = output.trimEnd();
+                    if (trimmed.endsWith(',')) {
+                        output = trimmed.slice(0, -1);
+                    }
+                    output += '}';
+                    
+                    if (stack.length > 0 && stack[stack.length - 1] === '[') {
+                        stack.pop(); // pop '['
+                        output += ']';
+                    }
+                }
+            } else {
+                // Skip unmatched/extra closing bracket
+                continue;
+            }
+        } else {
+            output += char;
+        }
+    }
+    
+    if (inString) {
+        output += '"';
+    }
+    while (stack.length > 0) {
+        const last = stack.pop();
+        let trimmed = output.trimEnd();
+        if (trimmed.endsWith(',')) {
+            output = trimmed.slice(0, -1);
+        }
+        output += last === '{' ? '}' : ']';
+    }
+    
+    return output;
+};
+
 // Helper function to safely parse JSON from AI response
 const parseJsonResponse = <T>(text: string, fallback: T): T => {
     let jsonString = (text || '').trim();
@@ -58,76 +156,28 @@ const parseJsonResponse = <T>(text: string, fallback: T): T => {
         if (!jsonString) return fallback;
         return JSON.parse(jsonString) as T;
     } catch (parseError) {
-        // Fallback: try to extract the first valid-looking JSON object or array by balancing brackets
+        // Fallback: try to repair the JSON by extracting and balancing
         try {
             const firstBrace = jsonString.indexOf('{');
             const firstBracket = jsonString.indexOf('[');
             
             let startIndex = -1;
-            let isObject = false;
             
             if (firstBrace !== -1 && firstBracket !== -1) {
-                if (firstBrace < firstBracket) {
-                    startIndex = firstBrace;
-                    isObject = true;
-                } else {
-                    startIndex = firstBracket;
-                    isObject = false;
-                }
+                startIndex = Math.min(firstBrace, firstBracket);
             } else if (firstBrace !== -1) {
                 startIndex = firstBrace;
-                isObject = true;
             } else if (firstBracket !== -1) {
                 startIndex = firstBracket;
-                isObject = false;
             }
             
             if (startIndex !== -1) {
-                const openChar = isObject ? '{' : '[';
-                const closeChar = isObject ? '}' : ']';
-                let depth = 0;
-                let endIndex = -1;
-                let inString = false;
-                let escapeNext = false;
-                
-                for (let i = startIndex; i < jsonString.length; i++) {
-                    const char = jsonString[i];
-                    
-                    if (escapeNext) {
-                        escapeNext = false;
-                        continue;
-                    }
-                    
-                    if (char === '\\') {
-                        escapeNext = true;
-                        continue;
-                    }
-                    
-                    if (char === '"') {
-                        inString = !inString;
-                        continue;
-                    }
-                    
-                    if (!inString) {
-                        if (char === openChar) {
-                            depth++;
-                        } else if (char === closeChar) {
-                            depth--;
-                            if (depth === 0) {
-                                endIndex = i;
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                if (endIndex !== -1) {
-                    const extracted = jsonString.substring(startIndex, endIndex + 1);
-                    return JSON.parse(extracted) as T;
-                }
+                const subStr = jsonString.substring(startIndex);
+                const repaired = repairJsonString(subStr);
+                return JSON.parse(repaired) as T;
             }
-        } catch (e2) {
-            // Ignore extraction errors
+        } catch (repairError) {
+            // Ignore repair errors and let it log below
         }
 
         console.error("Failed to parse JSON response:", parseError);
@@ -150,13 +200,40 @@ const calculateFixedQuantity = (itemName: string, roomSize: number): number | nu
 };
 
 export async function estimateQuantity(item: Item, room: Room, projectContext: ProjectContext): Promise<QuantitySuggestion> {
+    const defaultHeight = projectContext.takeoff?.defaultHeightFt || projectContext.ceilingHeight || 9;
+    const conventions = { ...DEFAULT_CONVENTIONS, ...(projectContext.takeoff?.conventions || {}) };
+    const basis = (item as any).measureBasis || inferBasis(item.name, item.unit);
+
+    if (basis) {
+        if (room.length && room.width) {
+            const kind = room.kind || classifyRoom(room.name);
+            const geom: RoomGeometry = {
+                id: room.id || room.name,
+                name: room.name,
+                kind,
+                lengthFt: room.length,
+                widthFt: room.width,
+                heightFt: room.height || defaultHeight,
+                doors: room.doors ?? (kind === 'passage' ? 0 : 1),
+                windows: room.windows ?? (kind === 'passage' || kind === 'foyer' ? 0 : 1),
+                ceiling: room.ceiling || defaultCeiling(kind),
+                source: room.dimSource || 'read',
+                rawDimension: room.rawDimension,
+                irregular: room.irregular,
+            };
+            const takeoff = computeRoom(geom, conventions);
+            const res = quantityFor(basis, takeoff);
+            if (res) return { qty: res.qty, rationale: res.derivation };
+        }
+        const fb = ratioFallback(basis, room.size);
+        if (fb) return { qty: fb.qty, rationale: fb.derivation };
+    }
+
     const fixedQty = calculateFixedQuantity(item.name, room.size);
-    if (fixedQty !== null) return { qty: fixedQty, rationale: 'Calculated using FFDS Standard Formula.' };
+    if (fixedQty !== null) return { qty: fixedQty, rationale: 'Calculated using standard room ratio.' };
     if (!isAiAvailable()) return { qty: 1, rationale: "AI not available." };
-    const ai = getAi();
-    const ceilingHeight = room.height || projectContext.ceilingHeight || 9.5;
     const prompt = `Estimate qty for item: ${item.name} (${item.unit}) in room: ${room.name} (${room.size} sqft). Context: ${projectContext.config}. Return JSON {qty, rationale}.`;
-     try {
+    try {
         const ai = getAi();
         const response = await ai.models.generateContent({
             model: 'gemini-3.5-flash',
@@ -341,7 +418,25 @@ export async function estimateRoomSizes(area: number, config: string): Promise<R
 Return JSON array {name, size, unit:'sq ft'}. DO NOT include functional or miscellaneous zones like 'Functional' or 'Others' in your response.`;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ 
+            model: 'gemini-3.5-flash', 
+            contents: prompt, 
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            name: { type: Type.STRING },
+                            size: { type: Type.NUMBER },
+                            unit: { type: Type.STRING }
+                        },
+                        required: ["name", "size", "unit"]
+                    }
+                }
+            } 
+        });
         const rooms = parseJsonResponse<Room[]>(response.text, []);
         if (rooms.length > 0) {
             rooms.push({ name: 'Functional', size: area, unit: 'sq ft' });
@@ -352,15 +447,23 @@ Return JSON array {name, size, unit:'sq ft'}. DO NOT include functional or misce
 }
 
 export async function analyzeFloorPlan(imageBase64: string, area: number): Promise<Room[]> {
-    if (!isAiAvailable()) return [];
-    const ai = getAi();
-    const imagePart = { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } };
-    const prompt = `Analyze floor plan image. Total area ${area} sqft. Identify rooms and sizes. Return JSON array {name, size, unit:'sq ft'}.`;
     try {
-        const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [imagePart, { text: prompt }] }, config: { responseMimeType: "application/json" } });
-        return parseJsonResponse<Room[]>(response.text, []);
-    } catch (e) { return []; }
+        const response = await fetch('/api/analyze-floorplan', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ imageBase64, area })
+        });
+        if (!response.ok) {
+            throw new Error('Server error analyzing floor plan');
+        }
+        const data = await response.json();
+        return data.rooms || [];
+    } catch (e) {
+        console.error("Error in analyzeFloorPlan API call:", e);
+        return [];
+    }
 }
 
 export async function generateBoqPackage(projectContext: ProjectContext, theme: string, bank: Item[]): Promise<AIGeneratedBoqItem[]> {
@@ -468,15 +571,23 @@ export async function processCommand(command: string, boq: BoqItem[], projectCon
 }
 
 export async function analyzeRoomImage(imageBase64: string): Promise<VisionAnalysisResult | null> {
-    if (!isAiAvailable()) return null;
-    const ai = getAi();
-    const imagePart = { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } };
-    const prompt = `Analyze room image. Return JSON {roomType, observations: string[], suggestedItems: {name, category, qty, unit, rationale}[]}.`;
     try {
-        const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [imagePart, { text: prompt }] }, config: { responseMimeType: "application/json" } });
-        return parseJsonResponse<VisionAnalysisResult>(response.text, null);
-    } catch (e) { return null; }
+        const response = await fetch('/api/analyze-room-image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ imageBase64 })
+        });
+        if (!response.ok) {
+            throw new Error('Server error analyzing room image');
+        }
+        const data = await response.json();
+        return data.analysis || null;
+    } catch (e) {
+        console.error("Error in analyzeRoomImage API call:", e);
+        return null;
+    }
 }
 
 export async function generateProjectTimeline(boq: FullBoqItem[]): Promise<TimelinePhase[]> {
@@ -611,12 +722,36 @@ export async function auditProject(projectContext: ProjectContext, boq: FullBoqI
     } catch (e) { return null; }
 }
 
-export async function chatWithProject(message: string, context: { boq: FullBoqItem[], projectContext: ProjectContext, leadProfile: LeadProfile }): Promise<string> {
-    if (!isAiAvailable()) return "Service unavailable";
+export async function explainNextActions(payload: { stage: number | string, subState: string, actions: any[] }): Promise<string> {
+    if (!isAiAvailable()) throw new Error("Service unavailable");
     const ai = getAi();
-    const prompt = `Chat context: Project ${context.projectContext.name}. Message: ${message}.`;
-    try { const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt }); return response.text || "Error"; } catch (e) { return "Error"; }
+    const prompt = `Explain conversationally why these are the next steps and in what order. You may not add, remove, or reorder actions. You may not state any number (₹, %, dates, counts) not present verbatim in the input. If actions is empty, say the stage is up to date.\n\nInput: ${JSON.stringify(payload)}`;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt as any });
+            const text = response.text || "";
+
+            const inputPayloadString = JSON.stringify(payload);
+            const inputNumbers = (inputPayloadString.match(/\b\d+(?:\.\d+)?\b/g) || []) as string[];
+            const outputNumbers = (text.match(/\b\d+(?:\.\d+)?\b/g) || []) as string[];
+
+            let hasHallucinatedNumber = false;
+            for (const num of outputNumbers) {
+                if (!inputNumbers.includes(num)) {
+                    hasHallucinatedNumber = true;
+                    break;
+                }
+            }
+
+            if (!hasHallucinatedNumber) {
+                return text;
+            }
+        } catch (e) {
+            if (attempt === 2) throw e;
+        }
+    }
+    throw new Error("Failed number-verification guard after 3 attempts");
 }
 
 export async function suggestValueEngineering(boq: FullBoqItem[]): Promise<ValueEngineeringSuggestion[]> {
@@ -649,7 +784,7 @@ export async function analyzeProfitability(boq: FullBoqItem[]): Promise<{ engine
     const ai = getAi();
     const prompt = `Act as an expert Commercial Quantity Surveyor.
 Analyze the following BOQ for profitability hotspots (Engines) and margin drags (Drags).
-BOQ: ${JSON.stringify(boq.map(i => ({ id: i.id, name: i.name, cost: (i.materials + i.labor) * i.qty, margin: i.margin, revenue: ((i.materials + i.labor) / (1 - (i.margin || 0.2))) * i.qty })))}
+BOQ: ${JSON.stringify(boq.map(i => ({ id: i.id, name: i.name, cost: (i.materials + i.labor) * i.qty, margin: i.margin, revenue: ((i.materials + i.labor) * (1 + (i.margin || 20) / 100)) * i.qty })))}
 
 DO NOT provide vague rationales like "this has high margin". Provide specific, actionable financial intelligence (e.g. "Labor-intensive custom joinery capping total margins despite high revenue. Consider modular transition.").
 
@@ -955,46 +1090,21 @@ export async function parseQuickDecision(rawText: string): Promise<Partial<Proje
 }
 
 export async function parseDecisionFromImage(imageBase64: string): Promise<Partial<ProjectDecisionRecord>> {
-    if (!isAiAvailable()) return { title: 'Screenshot Upload', description: 'Could not parse automatically. AI is disabled.', status: 'confirmed', requestedBy: 'client' };
-    const ai = getAi();
-    
-    const imagePart = { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } };
-    const prompt = `
-    Analyze this WhatsApp screenshot or notes image. It contains a decision discussion between a client and an interior design firm (FFDS).
-    
-    Return JSON with:
-    - title (string): A short, professional title summarizing the decision.
-    - description (string): A professional summary of the context, what was discussed, and the final conclusion.
-    - status (string): Must be 'confirmed', 'proposed', 'rejected', or 'revoked'.
-    - requestedBy (string): 'client' or 'ffds' based on who drove the decision.
-    - confirmingParty (string): The name of the person giving the nod (if visible).
-    - impactCost (string): e.g., "None", "+ Rs. 15k based on chat", etc.
-    - impactSchedule (string): e.g., "None", "Delayed", etc.
-    `;
-
     try {
-        const ai = getAi();
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: { parts: [imagePart, { text: prompt }] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        title: { type: Type.STRING },
-                        description: { type: Type.STRING },
-                        status: { type: Type.STRING },
-                        requestedBy: { type: Type.STRING },
-                        confirmingParty: { type: Type.STRING },
-                        impactCost: { type: Type.STRING },
-                        impactSchedule: { type: Type.STRING }
-                    }
-                }
-            }
+        const response = await fetch('/api/parse-decision-image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ imageBase64 })
         });
-        return parseJsonResponse<Partial<ProjectDecisionRecord>>(response.text, { title: 'Image Parse Failed', description: '', status: 'confirmed', requestedBy: 'client' });
+        if (!response.ok) {
+            throw new Error('Server error parsing decision image');
+        }
+        const data = await response.json();
+        return data.decision || { title: 'Image Parse Failed', description: '', status: 'confirmed', requestedBy: 'client' };
     } catch (error) {
+        console.error("Error in parseDecisionFromImage API call:", error);
         return { title: 'Image Parse Error', description: String(error), status: 'confirmed', requestedBy: 'client' };
     }
 }
@@ -1095,10 +1205,7 @@ export async function assessGateReadiness(projectContext: any, gateChecklist: an
     let score = 100;
     const blockers: any[] = [];
 
-    if (!gateChecklist.item_5?.done) {
-        score -= 20;
-        blockers.push({ severity: 'critical', item: 'BOQ Freeze', reason: 'BOQ is not frozen', action: 'Freeze BOQ' });
-    }
+    // Removed BOQ Freeze check because it is auto-triggered when the gate is activated
     const gfcNotFinalizedDrawings = drawingTracker?.filter((d: any) => d.approvedAt && (!d.gfc || d.gfc.status !== 'issued')) || [];
     if (!gateChecklist.item_4?.done || gfcNotFinalizedDrawings.length > 0) {
         score -= 20;
@@ -1342,7 +1449,7 @@ Keep the tone professional, concise, and focused on design and execution realiti
         const ai = getAi();
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.6-flash',
             contents: prompt,
             config: {
                 temperature: 0.7,
@@ -1365,3 +1472,782 @@ Keep the tone professional, concise, and focused on design and execution realiti
         return {};
     }
 }
+
+export interface PhaseAiBriefing {
+    operationalBriefing: string;
+    siteRisks: { risk: string; mitigation: string }[];
+    materialRecommendations: { material: string; details: string }[];
+    extraDeliverables: string[];
+}
+
+export async function generatePhaseAiBriefing(
+    phaseTitle: string,
+    currentDeliverables: string[],
+    projectContext: any,
+    boq: any[]
+): Promise<PhaseAiBriefing> {
+    if (!isAiAvailable()) {
+        return {
+            operationalBriefing: "AI services are currently unavailable.",
+            siteRisks: [],
+            materialRecommendations: [],
+            extraDeliverables: []
+        };
+    }
+
+    try {
+        const ai = getAi();
+        const boqBrief = (boq || []).length > 0 
+            ? (boq || []).map(item => `- ${item.cat}: ${item.name} (${item.qty} ${item.unit || 'nos'})`).join('\n')
+            : 'No items in BOQ';
+
+        const prompt = `
+You are a Senior interior fit-out consultant and project director for a high-end Indian interior design studio.
+Analyze the following project phase and provide an operational briefing, key site risks with mitigations, premium material recommendations, and additional checklist items.
+
+PHASE TITLE: "${phaseTitle}"
+CURRENT CHECKLIST ITEMS: ${JSON.stringify(currentDeliverables)}
+
+PROJECT DETAILS:
+- PROJECT NAME: "${projectContext?.name || 'Project'}"
+- PROJECT CONFIGURATION: "${projectContext?.config || 'N/A'}"
+- PROJECT AREA: "${projectContext?.area ? `${projectContext.area} SQFT` : 'N/A'}"
+- LOCATION: "${projectContext?.location || 'N/A'}"
+- DESIGN THEME: "${projectContext?.theme || 'Custom/Contemporary'}"
+- ROOMS IN PROJECT: "${(projectContext?.rooms || []).map((r: any) => r.name || r).join(', ') || 'N/A'}"
+
+BILL OF QUANTITIES (BOQ) ITEMS:
+${boqBrief}
+
+Provide precise, actionable interior fit-out guidance.
+CRITICAL DIRECTIONS:
+- You MUST customize your guidance specifically to the rooms, configuration, design theme, area, and exact BOQ items listed above. Do NOT use generic templates or assumptions.
+- Reference the actual rooms (e.g. if specific bedrooms, kitchen, or living room are in the project rooms list) and the actual items, categories, or materials from the BOQ.
+- ZERO structural foundation/civil plinth advice (this is strictly interior fit-out).
+- Tone is sober, premium, and professional (Indian standards/terms like BWR plywood, laminate, veneer, civil masonry, false ceiling gypsum, etc.).
+- No exclamation marks or cheesy marketing language.
+
+Return EXACTLY a JSON object with this schema:
+{
+  "operationalBriefing": "A highly precise 2-paragraph operational guide for the site supervisor about sequencing, alignments, and coordination during this phase, referencing this specific project name, theme, layout, rooms, and BOQ items.",
+  "siteRisks": [
+    { "risk": "Specific site risk (e.g., dampness on walls, service routing conflict)", "mitigation": "Concrete action step to prevent/resolve it" }
+  ],
+  "materialRecommendations": [
+    { "material": "Specific material spec (e.g. Gurjan BWR plywood 18mm)", "details": "Where to use it and why it's optimal for this step" }
+  ],
+  "extraDeliverables": [
+    "A concise, actionable checklist item to add (e.g., 'Verify laser-level reference mark on all walls')",
+    "Another checklist item",
+    "A third checklist item"
+  ]
+}
+`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.5-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.3,
+                responseMimeType: "application/json"
+            }
+        });
+
+        const text = response.text || "{}";
+        const fallback: PhaseAiBriefing = {
+            operationalBriefing: `Operational briefing for ${phaseTitle}. Ensure quality checks are conducted daily. Verify measurements before execution.`,
+            siteRisks: [
+                { risk: "Material delivery delay", mitigation: "Place orders at least 10 days in advance" },
+                { risk: "Sequence mismatch", mitigation: "Coordinate carpentry with electrical first-fix" }
+            ],
+            materialRecommendations: [
+                { material: "BWR Plywood", details: "Use IS 303 MR or BWR plywood for all carcass units" }
+            ],
+            extraDeliverables: [
+                "Verify mock-ups on-site",
+                "Approve finished laminate samples",
+                "Perform surface evenness check"
+            ]
+        };
+        return parseJsonResponse<PhaseAiBriefing>(text, fallback);
+    } catch (e) {
+        console.error("Error generating phase AI briefing:", e);
+        return {
+            operationalBriefing: `Operational briefing for ${phaseTitle}. Ensure quality checks are conducted daily. Verify measurements before execution.`,
+            siteRisks: [
+                { risk: "Material delivery delay", mitigation: "Place orders at least 10 days in advance" },
+                { risk: "Sequence mismatch", mitigation: "Coordinate carpentry with electrical first-fix" }
+            ],
+            materialRecommendations: [
+                { material: "BWR Plywood", details: "Use IS 303 MR or BWR plywood for all carcass units" }
+            ],
+            extraDeliverables: [
+                "Verify mock-ups on-site",
+                "Approve finished laminate samples",
+                "Perform surface evenness check"
+            ]
+        };
+    }
+}
+
+export interface DelayPlan {
+    catchUpPlan: string;
+    clientUpdate: string;
+}
+
+export async function generateTimelineDelayPlan(
+    delayedPhases: any[],
+    projectContext: any
+): Promise<DelayPlan> {
+    if (!isAiAvailable()) {
+        return {
+            catchUpPlan: "AI services are currently unavailable.",
+            clientUpdate: "We are tracking slightly behind on some stages and are working hard to make up for lost time."
+        };
+    }
+
+    try {
+        const ai = getAi();
+        const delayedTitles = delayedPhases.map(d => `${d.title} (Duration: ${d.durationDays} days)`).join(', ');
+
+        const prompt = `
+You are a Principal Ops Director for BOQ Copilot, a multi-tenant B2B platform for premium interior design studios.
+The following project is experiencing delays in these phases: ${delayedTitles}.
+Project: ${projectContext?.name || 'Your Premium Interior Project'}.
+
+Generate a high-fidelity operational catch-up strategy and a polite, comforting, and professional client update.
+Ensure:
+- Tone is sober, elegant, and reassuring. Speak with absolute authority and operational confidence.
+- Under NO circumstances mention internal pricing, margins, markups, or raw costing.
+- No cheesy marketing words. Avoid exclamation marks.
+- The client update should be ready to send on WhatsApp or Email, maintaining a premium brand feel.
+
+Return EXACTLY a JSON object with this schema:
+{
+  "catchUpPlan": "A highly detailed, professional 2-paragraph operational guide on how the site crew can compress sequences, increase labor, overlap procurement, or work parallel shifts to recover the lost days.",
+  "clientUpdate": "A polite, elegant, and reassuring message (around 100-150 words) to share with the client explaining the delay with absolute transparency, emphasizing our strict quality control, and giving them confidence that their hand-over is our highest priority."
+}
+`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.5-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.3,
+                responseMimeType: "application/json"
+            }
+        });
+
+        const text = response.text || "{}";
+        const fallback: DelayPlan = {
+            catchUpPlan: "Overlap plumbing and tile-cladding works. Hire extra manpower for carpentry structure first-fix. Ensure vendor signoffs on finishing materials are scheduled early.",
+            clientUpdate: "Dear Client, as we advance through the intricate finishing stages of your home, our commitment to absolute craftsmanship remains paramount. We are currently pacing slightly slower on a few details to allow proper curing and fitment. The team is parallel-tracking upcoming milestones to ensure we remain aligned with your overall schedule."
+        };
+        return parseJsonResponse<DelayPlan>(text, fallback);
+    } catch (e) {
+        console.error("Error generating timeline delay plan:", e);
+        return {
+            catchUpPlan: "Overlap plumbing and tile-cladding works. Hire extra manpower for carpentry structure first-fix. Ensure vendor signoffs on finishing materials are scheduled early.",
+            clientUpdate: "Dear Client, as we advance through the intricate finishing stages of your home, our commitment to absolute craftsmanship remains paramount. We are currently pacing slightly slower on a few details to allow proper curing and fitment. The team is parallel-tracking upcoming milestones to ensure we remain aligned with your overall schedule."
+        };
+    }
+}
+
+export interface HandoverRiskAnalysis {
+    predictedHandoverDate: string;
+    predictedDelayDays: number;
+    delayReason: string;
+    riskLevel: 'low' | 'medium' | 'high';
+    alerts: {
+        id: string;
+        title: string;
+        severity: 'low' | 'medium' | 'high';
+        description: string;
+        phase: string;
+        mitigation: string;
+    }[];
+}
+
+export async function analyzeTimelineHandoverRisks(
+    projectContext: any,
+    timelinePhases: any[],
+    calendar: any,
+    computedSchedule: any
+): Promise<HandoverRiskAnalysis> {
+    const fallback: HandoverRiskAnalysis = {
+        predictedHandoverDate: computedSchedule?.finishISO || projectContext?.targetHandoverDate || "Not set",
+        predictedDelayDays: Math.max(0, computedSchedule?.overrunWorkDays || 0),
+        delayReason: "Pacing matches normal parameters. Review upcoming major festive seasons for material or labor bottlenecks.",
+        riskLevel: 'low',
+        alerts: []
+    };
+
+    if (!isAiAvailable()) {
+        return fallback;
+    }
+
+    try {
+        const ai = getAi();
+        
+        // Structure holiday and sunday metadata to feed the LLM
+        const holidays = calendar?.holidays || [];
+        const startISO = computedSchedule?.startISO || projectContext?.startDate || "Not set";
+        const finishISO = computedSchedule?.finishISO || projectContext?.targetHandoverDate || "Not set";
+        const targetHandover = projectContext?.targetHandoverDate || "Not set";
+        
+        const activeHolidays = holidays.filter((h: any) => {
+            return h.fromISO >= startISO && h.fromISO <= finishISO;
+        });
+
+        // Compute Sundays count
+        let sundaysCount = 0;
+        if (startISO !== "Not set" && finishISO !== "Not set") {
+            const startDay = new Date(startISO).getTime();
+            const endDay = new Date(finishISO).getTime();
+            const oneDay = 24 * 60 * 60 * 1000;
+            for (let t = startDay; t <= endDay; t += oneDay) {
+                if (new Date(t).getUTCDay() === 0) {
+                    sundaysCount++;
+                }
+            }
+        }
+
+        const prompt = `
+You are the Principal Operations Director and Risk Officer for BOQ Copilot, a multi-tenant B2B interior design SaaS.
+Perform a predictive, high-fidelity timeline analysis for the project "${projectContext?.name || 'Your Project'}" to identify potential handover delays and generate actionable "Risk Alerts".
+
+PROJECT BASICS:
+- Project Start (Kickoff): ${startISO}
+- Target Handover Commitment: ${targetHandover}
+- Schedule Computed Finish: ${finishISO}
+- Computed Overrun (Working Days): ${computedSchedule?.overrunWorkDays || 0}
+- Number of Sundays in schedule (skipping Sundays as non-working): ${sundaysCount} Sundays
+- Overlapping Public Holidays in schedule (skipping as non-working):
+${activeHolidays.map((h: any) => `  * ${h.label} on ${h.fromISO} (${h.days || 1} day)`).join('\n') || "  * No overlapping public holidays"}
+
+PROJECT TIMELINE PHASES & CURRENT PROGRESS:
+${timelinePhases.map((p: any) => {
+    const status = p.stepProgress?.status || "pending";
+    const delayIndicator = p.isDelayed ? "⚠️ DELAYED" : "";
+    return `* Phase: ${p.title} (${p.durationDays} working days) | Start: ${p.startDate ? p.startDate.split('T')[0] : 'N/A'} | End: ${p.endDate ? p.endDate.split('T')[0] : 'N/A'} | Status: ${status} ${delayIndicator}`;
+}).join('\n')}
+
+YOUR ANALYTICAL INSTRUCTIONS:
+1. Check the computed finish date against the target handover date. If the computed finish is after the target, a delay is mathematically certain under current velocity.
+2. Cross-reference the phase dates with public holidays and Sunday offs. Identify potential "collateral festive delays" — in India, major holidays (like Diwali, Eid, or Christmas/New Year) cause severe labor migration and supply-chain shutdowns that typically extend 3-5 days before and after the actual holiday.
+3. Check for delayed active phases. A delay in early phases (like Civil, Plumbing, or Electrical first-fix) creates a cascading "Critical Path bottleneck" for all subsequent finishing phases (Carpentry, POP, Painting).
+4. Do NOT mention internal markups, profits, or specific dollar/rupee pricing amounts. Speak professionally with sober, premium engineering-first language.
+5. Generate a precise predicted handover date, overrun days, a summary delay reason, a consolidated riskLevel ('low' | 'medium' | 'high'), and specific, actionable alerts.
+
+Return EXACTLY a JSON object with this schema:
+{
+  "predictedHandoverDate": "YYYY-MM-DD",
+  "predictedDelayDays": number,
+  "delayReason": "A concise 1-2 sentence high-level summary of the core risk and timeline impacts.",
+  "riskLevel": "low" | "medium" | "high",
+  "alerts": [
+    {
+      "id": "risk_unique_id",
+      "title": "Clear, premium, risk-oriented title (e.g. 'Diwali Labor Migrations Risk' or 'Civil Path Cascading Bottleneck')",
+      "severity": "low" | "medium" | "high",
+      "description": "Specific explanation detailing exactly how Sundays, holidays, and sequence overlaps threaten the finish line (e.g., 'Carpentry is scheduled to begin immediately after Diwali on Nov 10, but historical labor migration typically causes a 4-day worker shortage during this festival block.')",
+      "phase": "The name of the affected phase",
+      "mitigation": "Sober, actionable mitigation step for the site team (e.g., 'Pre-order all carcass laminate sheets by Oct 28 and secure vendor commitment for labor retention bonus.')"
+    }
+  ]
+}
+`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.6-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.25,
+                responseMimeType: "application/json"
+            }
+        });
+
+        const result = parseJsonResponse<HandoverRiskAnalysis>(response.text || "{}", fallback);
+        
+        // Generate random IDs if none returned by the model
+        if (result.alerts) {
+            result.alerts = result.alerts.map((alert: any, index: number) => ({
+                ...alert,
+                id: alert.id || `risk_alert_${Date.now()}_${index}`
+            }));
+        }
+
+        return result;
+    } catch (e) {
+        console.error("Error analyzing timeline handover risks:", e);
+        return fallback;
+    }
+}
+
+export interface ExecutionPackageRiskAnalysis {
+    healthScore: number;
+    summary: string;
+    criticalBottlenecks: {
+        bundleCode: string;
+        trade: string;
+        title: string;
+        reason: string;
+        recommendation: string;
+        severity: 'low' | 'medium' | 'high';
+    }[];
+    readyToUnblock: string[];
+    sequencingAlerts: {
+        trade: string;
+        conflict: string;
+        action: string;
+    }[];
+}
+
+export async function analyzeExecutionPackageRisks(
+    bundles: any[],
+    boq: any[],
+    context: any,
+    drawings: any[] = []
+): Promise<ExecutionPackageRiskAnalysis> {
+    const fallback: ExecutionPackageRiskAnalysis = {
+        healthScore: 78,
+        summary: "Standard sequential packages. SOF material locks and GFC drawing clearances dictate unblocking flow.",
+        criticalBottlenecks: bundles.filter(b => b.status === 'blocked').slice(0, 3).map(b => ({
+            bundleCode: b.code,
+            trade: b.trade,
+            title: `${b.trade} Gate Blockers`,
+            reason: `Package is blocked due to pending gate clearances (${!b.gatekeepers?.gfc ? 'GFC Drawing Missing, ' : ''}${!b.gatekeepers?.sof ? 'SOF Lock Pending, ' : ''}${!b.gatekeepers?.payment ? 'Payment Milestone Pending' : ''}).`,
+            recommendation: `Verify site readiness and clear drawing approvals to avoid sequential delays.`,
+            severity: 'medium' as const
+        })),
+        readyToUnblock: bundles.filter(b => b.gatekeepers?.sof && b.gatekeepers?.gfc && b.gatekeepers?.payment && b.gatekeepers?.site && b.status === 'blocked').map(b => b.code),
+        sequencingAlerts: [
+            {
+                trade: "False Ceiling & Partitioning",
+                conflict: "Must follow complete electrical conduit first-fix and plumbing pressure testing.",
+                action: "Confirm electrical wall chasing and conduit signoff before closing ceiling grid."
+            },
+            {
+                trade: "Finishes & Carpentry",
+                conflict: "Carpentry carcasses must not be placed over wet screed or unprimed walls.",
+                action: "Ensure minimum 7-day curing on wet civil masonry before carcass installation."
+            }
+        ]
+    };
+
+    if (!isAiAvailable()) {
+        return fallback;
+    }
+
+    try {
+        const ai = getAi();
+        const bundleSummary = bundles.map(b => ({
+            code: b.code,
+            trade: b.trade,
+            status: b.status,
+            gates: b.gatekeepers,
+            itemsCount: b.itemIds?.length || 0,
+            value: b.totalValue
+        }));
+
+        const prompt = `
+You are the Chief of Site Operations at an ultra-premium interior architecture studio.
+Perform an Execution Gating & Sequencing Risk Analysis on the following site data:
+
+Project Type: ${context?.projectType || 'Residential 3BHK'}
+Target Handover: ${context?.targetHandoverDate || 'Not specified'}
+SOF Freeze Date: ${context?.sofFreezeDate || 'Not specified'}
+Bundles: ${JSON.stringify(bundleSummary, null, 2)}
+Total BOQ Deliverables: ${boq?.length || 0}
+Available Drawings count: ${drawings.length}
+
+Evaluate:
+1. Gating completeness (GFC, SOF, Commercial, Site)
+2. Trade sequencing risks (e.g. Civil -> MEP -> Ceiling -> Flooring -> Carpentry -> Painting)
+3. Immediate unblocking recommendations
+
+Return strictly valid JSON in this exact structure:
+{
+  "healthScore": 0-100,
+  "summary": "2-3 concise, professional sentences summarizing site execution posture",
+  "criticalBottlenecks": [
+    {
+      "bundleCode": "EB-XX",
+      "trade": "Trade name",
+      "title": "Clear punchy title",
+      "reason": "Specific root cause",
+      "recommendation": "Concrete actionable unblocking step",
+      "severity": "low" | "medium" | "high"
+    }
+  ],
+  "readyToUnblock": ["EB-01", "EB-02"],
+  "sequencingAlerts": [
+    {
+      "trade": "Trade Name",
+      "conflict": "Sequencing dependency conflict description",
+      "action": "Site supervisor action required"
+    }
+  ]
+}
+`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.7-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.2,
+                responseMimeType: "application/json"
+            }
+        });
+
+        const parsed = JSON.parse(response.text || "{}");
+        return {
+            healthScore: typeof parsed.healthScore === 'number' ? parsed.healthScore : fallback.healthScore,
+            summary: parsed.summary || fallback.summary,
+            criticalBottlenecks: Array.isArray(parsed.criticalBottlenecks) ? parsed.criticalBottlenecks : fallback.criticalBottlenecks,
+            readyToUnblock: Array.isArray(parsed.readyToUnblock) ? parsed.readyToUnblock : fallback.readyToUnblock,
+            sequencingAlerts: Array.isArray(parsed.sequencingAlerts) ? parsed.sequencingAlerts : fallback.sequencingAlerts
+        };
+    } catch (err) {
+        console.error("AI bundle risk analysis failed:", err);
+        return fallback;
+    }
+}
+
+// =========================================================================
+// AI TEMPLATE ARCHITECT & SMART TEMPLATE FUNCTIONS
+// =========================================================================
+
+export interface AiGeneratedTemplateResult {
+    configName: string;
+    description: string;
+    targetTypology: string;
+    rooms: Record<string, string[]>; // roomName -> array of item IDs from existing bank
+    newItemsNeeded?: Array<{
+        name: string;
+        cat: string;
+        specs: string;
+        unit: string;
+        materials: number;
+        labor: number;
+        margin: number;
+        areaMultiplierCoefficient: number;
+    }>;
+    designRationale: string;
+    tradeCoverageScore: number;
+}
+
+export interface AiTemplateAuditResult {
+    score: number; // 0 to 100
+    summary: string;
+    strengths: string[];
+    missingTrades: Array<{
+        trade: string;
+        roomType: string;
+        reason: string;
+        suggestedBankItemIds: string[];
+        suggestedNewItemName?: string;
+    }>;
+    tierStrategyAdvice: {
+        essential: string;
+        comfort: string;
+        harmony: string;
+    };
+}
+
+export const generateAiTemplate = async (
+    userPrompt: string,
+    bank: Item[],
+    existingConfigs: string[] = [],
+    aiStrategy: AIStrategy = 'balanced'
+): Promise<AiGeneratedTemplateResult> => {
+    const fallbackConfigName = `Custom-${Date.now().toString().slice(-4)}`;
+    const fallback: AiGeneratedTemplateResult = {
+        configName: fallbackConfigName,
+        description: `Custom package created from: "${userPrompt}"`,
+        targetTypology: 'Residential Interior',
+        rooms: {
+            'living': bank.slice(0, 3).map(i => i.id),
+            'bedroom': bank.slice(3, 6).map(i => i.id),
+            'kitchen': bank.slice(6, 9).map(i => i.id),
+            'bathroom': bank.slice(9, 12).map(i => i.id),
+            'general': bank.slice(12, 14).map(i => i.id)
+        },
+        designRationale: 'Standard turnkey allocation based on studio catalog.',
+        tradeCoverageScore: 85
+    };
+
+    if (!isAiAvailable()) return fallback;
+
+    try {
+        const ai = getAi();
+        const bankSummary = bank.map(i => ({
+            id: i.id,
+            name: i.name,
+            cat: i.cat,
+            unit: i.unit,
+            margin: i.margin
+        })).slice(0, 120);
+
+        const prompt = `
+You are the Chief Estimator and Interior Design Architect for a premier interior design SaaS studio.
+Your task is to build a complete, production-ready Standard BOQ Template Package based on the user's specification.
+
+User Specification / Prompt: "${userPrompt}"
+Existing Typology Names: ${JSON.stringify(existingConfigs)}
+
+Studio Master Item Bank (Available Items):
+${JSON.stringify(bankSummary, null, 2)}
+
+Instructions:
+1. Determine a concise, professional configuration name (e.g. "3-BHK Modern Luxury", "Compact Studio 1-RK", "Boutique Dental Clinic", "Penthouse 4-BHK", "Rental Turnkey 2-BHK").
+2. Define the room scopes needed (e.g. "living", "bedroom", "kitchen", "bathroom", "dining", "foyer", "pooja", "balcony", "general").
+3. For each room scope, assign the exact item IDs from the provided Master Item Bank that MUST be included in the "Fully Loaded Master List" (Top Harmony Model).
+4. If a critical interior item is missing from the item bank to satisfy this specific prompt, propose it in "newItemsNeeded".
+5. Calculate trade coverage and provide a short design rationale.
+
+Return strictly valid JSON matching this structure:
+{
+  "configName": "Config Name",
+  "description": "Crisp 1-2 sentence description of target clientele and scope",
+  "targetTypology": "e.g. 3BHK Luxury / Studio Apartment / Commercial Office",
+  "rooms": {
+    "living": ["bank-item-id-1", "bank-item-id-2"],
+    "bedroom": ["bank-item-id-3"],
+    "kitchen": ["bank-item-id-4"],
+    "bathroom": ["bank-item-id-5"],
+    "general": ["bank-item-id-6"]
+  },
+  "newItemsNeeded": [
+    {
+      "name": "Item Name",
+      "cat": "Category name",
+      "specs": "Brief specification",
+      "unit": "sq ft" | "nos" | "rft" | "lumpsum",
+      "materials": 1500,
+      "labor": 500,
+      "margin": 20,
+      "areaMultiplierCoefficient": 1.0
+    }
+  ],
+  "designRationale": "2-3 sentences explaining the design and trade selection",
+  "tradeCoverageScore": 92
+}
+`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.7-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.2,
+                responseMimeType: "application/json"
+            }
+        });
+
+        const parsed = JSON.parse(response.text || "{}");
+        if (parsed.configName && parsed.rooms && typeof parsed.rooms === 'object') {
+            // Ensure all room IDs exist or fallback gracefully
+            const sanitizedRooms: Record<string, string[]> = {};
+            const validBankIds = new Set(bank.map(i => i.id));
+            
+            Object.entries(parsed.rooms).forEach(([room, ids]) => {
+                if (Array.isArray(ids)) {
+                    sanitizedRooms[room] = ids.filter((id: any) => validBankIds.has(id));
+                }
+            });
+
+            return {
+                configName: parsed.configName,
+                description: parsed.description || fallback.description,
+                targetTypology: parsed.targetTypology || fallback.targetTypology,
+                rooms: Object.keys(sanitizedRooms).length > 0 ? sanitizedRooms : fallback.rooms,
+                newItemsNeeded: Array.isArray(parsed.newItemsNeeded) ? parsed.newItemsNeeded : [],
+                designRationale: parsed.designRationale || fallback.designRationale,
+                tradeCoverageScore: typeof parsed.tradeCoverageScore === 'number' ? parsed.tradeCoverageScore : 88
+            };
+        }
+        return fallback;
+    } catch (err) {
+        console.error("AI template generation failed:", err);
+        return fallback;
+    }
+};
+
+export const auditAiTemplate = async (
+    configName: string,
+    rooms: Record<string, string[]>,
+    bank: Item[],
+    aiStrategy: AIStrategy = 'balanced'
+): Promise<AiTemplateAuditResult> => {
+    const fallback: AiTemplateAuditResult = {
+        score: 82,
+        summary: `Template for ${configName} has solid primary woodwork coverage, with potential enhancements in site protection and MEP trades.`,
+        strengths: ['Comprehensive Carpentry coverage', 'Clearly segmented room scopes'],
+        missingTrades: [],
+        tierStrategyAdvice: {
+            essential: 'Focus strictly on basic modular kitchen and core wardrobes.',
+            comfort: 'Include standard false ceiling and low-height TV units.',
+            harmony: 'Include full wall panelling, profile lighting, and custom headboards.'
+        }
+    };
+
+    if (!isAiAvailable()) return fallback;
+
+    try {
+        const ai = getAi();
+        const bankMap = new Map(bank.map(i => [i.id, i]));
+        
+        const templateOverview: Record<string, string[]> = {};
+        Object.entries(rooms).forEach(([room, itemIds]) => {
+            templateOverview[room] = itemIds.map(id => {
+                const item = bankMap.get(id);
+                return item ? `${item.name} (${item.cat || 'General'})` : id;
+            });
+        });
+
+        const bankAvailableSummary = bank.map(i => ({
+            id: i.id,
+            name: i.name,
+            cat: i.cat
+        })).slice(0, 100);
+
+        const prompt = `
+You are an expert Indian Interior Design Studio QA Lead and Chief Estimator.
+Audit this Standard BOQ Template Package for omissions, trade gaps, and tier balance.
+
+Template Typology: "${configName}"
+Current Room Items:
+${JSON.stringify(templateOverview, null, 2)}
+
+Available Master Item Bank:
+${JSON.stringify(bankAvailableSummary, null, 2)}
+
+Check for common interior execution omissions:
+- General trades: Debris removal, Floor protection sheet, Deep cleaning.
+- Electrical & Plumbing: Point wiring, Sanitaryware fixing, CP fittings, Geyser plumbing.
+- Civil & Painting: POP Punning, Wall painting, Waterproofing in wet areas.
+- Lighting: Profile LED lighting, Strip lighting for wardrobes/kitchen.
+
+Return strictly valid JSON:
+{
+  "score": 85,
+  "summary": "2-3 sentences summarizing scope health and completeness",
+  "strengths": ["List of 2-3 key strengths"],
+  "missingTrades": [
+    {
+      "trade": "Electrical / Civil / Protection / etc",
+      "roomType": "general" | "living" | "kitchen" | etc,
+      "reason": "Why this item is essential to avoid client disputes during execution",
+      "suggestedBankItemIds": ["matching-id-from-bank"],
+      "suggestedNewItemName": "Optional new item name if not in bank"
+    }
+  ],
+  "tierStrategyAdvice": {
+    "essential": "Advice for base tier",
+    "comfort": "Advice for mid tier",
+    "harmony": "Advice for top tier"
+  }
+}
+`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.7-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.2,
+                responseMimeType: "application/json"
+            }
+        });
+
+        const parsed = JSON.parse(response.text || "{}");
+        return {
+            score: typeof parsed.score === 'number' ? parsed.score : fallback.score,
+            summary: parsed.summary || fallback.summary,
+            strengths: Array.isArray(parsed.strengths) ? parsed.strengths : fallback.strengths,
+            missingTrades: Array.isArray(parsed.missingTrades) ? parsed.missingTrades : [],
+            tierStrategyAdvice: parsed.tierStrategyAdvice || fallback.tierStrategyAdvice
+        };
+    } catch (err) {
+        console.error("AI template audit failed:", err);
+        return fallback;
+    }
+};
+
+export const aiSuggestRoomItems = async (
+    roomType: string,
+    configName: string,
+    currentItemIds: string[],
+    bank: Item[]
+): Promise<Array<{ item: Item; reason: string }>> => {
+    if (!isAiAvailable()) {
+        const unused = bank.filter(i => !currentItemIds.includes(i.id)).slice(0, 4);
+        return unused.map(item => ({ item, reason: 'Suggested standard deliverable for this room.' }));
+    }
+
+    try {
+        const ai = getAi();
+        const bankMap = new Map(bank.map(i => [i.id, i]));
+        const currentItems = currentItemIds.map(id => bankMap.get(id)?.name).filter(Boolean);
+        const availableItems = bank
+            .filter(i => !currentItemIds.includes(i.id))
+            .map(i => ({ id: i.id, name: i.name, cat: i.cat }))
+            .slice(0, 80);
+
+        const prompt = `
+Recommend 4 to 5 high-impact items from the available item list to add to "${roomType}" scope for a "${configName}" interior package.
+
+Current items in this room:
+${JSON.stringify(currentItems)}
+
+Available items to choose from:
+${JSON.stringify(availableItems)}
+
+Return strictly valid JSON:
+{
+  "recommendations": [
+    {
+      "bankId": "id-from-available-list",
+      "reason": "1 concise sentence why this completes the room scope"
+    }
+  ]
+}
+`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.7-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.2,
+                responseMimeType: "application/json"
+            }
+        });
+
+        const parsed = JSON.parse(response.text || "{}");
+        if (Array.isArray(parsed.recommendations)) {
+            const results: Array<{ item: Item; reason: string }> = [];
+            parsed.recommendations.forEach((rec: any) => {
+                const item = bankMap.get(rec.bankId);
+                if (item) {
+                    results.push({ item, reason: rec.reason || 'Recommended scope addition' });
+                }
+            });
+            if (results.length > 0) return results;
+        }
+        
+        // Fallback
+        return bank.filter(i => !currentItemIds.includes(i.id)).slice(0, 4).map(item => ({
+            item,
+            reason: 'Recommended scope addition'
+        }));
+    } catch (err) {
+        console.error("AI room suggestions failed:", err);
+        return bank.filter(i => !currentItemIds.includes(i.id)).slice(0, 4).map(item => ({
+            item,
+            reason: 'Recommended scope addition'
+        }));
+    }
+};
+
+
+
+

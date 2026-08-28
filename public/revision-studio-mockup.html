@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOQ Copilot — Revision Studio Overhaul Mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #FAF9F6; /* Milky White warm off-white canvas */
+      color: #1A1F26; /* Deep charcoal/ink instead of pure black */
+    }
+    h1, h2, h3, .serif-brand {
+      font-family: 'Playfair Display', serif;
+    }
+    /* Simple custom styles */
+    .border-gold-accent {
+      border-color: #D4AF37;
+    }
+    .text-gold-accent {
+      color: #AF8E53;
+    }
+    .bg-gold-light {
+      background-color: #F7F5EE;
+    }
+    /* Elegant thin line for client documents view */
+    .gold-hairline {
+      height: 1px;
+      background: linear-gradient(to right, transparent, #D4AF37 50%, transparent);
+    }
+    .scrollbar-thin::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-track {
+      background: #FAF9F6;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: #E5E3DC;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-24 text-[15px] antialiased">
+
+  <!-- NOTIFICATION TOAST -->
+  <div id="toast" class="fixed top-6 right-6 bg-[#0B1A30] border border-[#AF8E53]/30 text-white px-5 py-3 rounded-lg shadow-xl text-xs font-semibold z-50 transform translate-y-[-100px] opacity-0 transition-all duration-300 flex items-center gap-3">
+    <span class="text-[#D4AF37]">✨</span>
+    <span id="toast-message">Recalculating financial delta...</span>
+  </div>
+
+  <!-- MAIN TOP NAV HEADER -->
+  <header class="bg-[#FCFBF9] border-b border-[#EBE8DF] sticky top-0 z-40 px-8 py-3.5 shadow-2xs">
+    <div class="max-w-[1400px] mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-5">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-md bg-[#0B1A30] flex items-center justify-center text-white border border-[#D4AF37]/40">
+            <span class="serif-brand font-bold text-sm text-[#D4AF37] tracking-wider">FF</span>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold text-[#AF8E53] uppercase tracking-widest block leading-none mb-1">B2B SaaS Portal</span>
+            <span class="serif-brand text-lg font-bold text-[#0B1A30]">BOQ Copilot <span class="font-normal italic text-xs text-[#AF8E53]">- Revision Studio</span></span>
+          </div>
+        </div>
+        <div class="hidden md:block h-6 w-px bg-[#EBE8DF]"></div>
+        <div class="hidden md:flex items-center gap-3 text-xs text-slate-500 font-medium">
+          <span class="px-2.5 py-1 rounded bg-[#F1EFEA] text-slate-700 font-bold">Project: Lodha Amara 2BHK</span>
+          <span>•</span>
+          <span>Client: Ananya Sharma</span>
+        </div>
+      </div>
+
+      <!-- INTERACTIVE ROLE TOGGLE (RBAC FINANCIAL visibility constraint) -->
+      <div class="flex items-center gap-3">
+        <div class="bg-[#F1EFEA] p-1 rounded-lg flex items-center gap-1 border border-[#EBE8DF]">
+          <button id="role-owner-btn" onclick="setRole('owner')" class="px-3.5 py-1.5 text-xs font-bold rounded bg-[#FCFBF9] text-[#0B1A30] shadow-2xs transition-all flex items-center gap-1.5">
+            <span>🛡️</span> Studio Owner <span class="text-[10px] bg-sky-100 text-sky-800 px-1 py-0.2 rounded font-normal">Full visibility</span>
+          </button>
+          <button id="role-designer-btn" onclick="setRole('designer')" class="px-3.5 py-1.5 text-xs font-medium rounded text-slate-500 hover:text-slate-800 transition-all flex items-center gap-1.5">
+            <span>🎨</span> Lead Designer <span class="text-[10px] bg-[#E5E3DC] text-slate-600 px-1 py-0.2 rounded font-normal">Rupees Masked</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-[1400px] mx-auto px-8 pt-6 space-y-6">
+
+    <!-- REVISION VERSION SELECTOR & OVERVIEW PANEL -->
+    <div class="bg-white rounded-xl border border-[#EBE8DF] p-5 shadow-2xs flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5">
+      <div class="space-y-1.5">
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-sky-50 text-[#0066CC] border border-sky-100 uppercase tracking-wider">
+            Active Revision Workspace
+          </span>
+          <span class="text-xs text-slate-400">Comparing: <strong>Contract Baseline</strong> vs <strong>Annexure #1 Proposal</strong></span>
+        </div>
+        <h2 class="serif-brand text-2xl font-bold text-[#0B1A30]">
+          Revision Studio Board Overhaul
+        </h2>
+        <p class="text-xs text-slate-500">
+          A visual, board-based scope reconciliation canvas mapping current actions, estimated additions, savings, and decision states.
+        </p>
+      </div>
+
+      <!-- KEY IMPACT WIDGET (RECALCULATED DYNAMICALLY BASED ON CARD STATE) -->
+      <div class="flex items-center gap-6 bg-[#FCFBF9] p-3 rounded-lg border border-[#EBE8DF] self-stretch lg:self-auto justify-between lg:justify-start">
+        <div class="text-left space-y-0.5">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Net Contract Delta</span>
+          <div id="owner-net-delta" class="text-lg font-bold text-[#AF8E53] font-mono flex items-center gap-1">
+            <span id="delta-sign">+</span>₹<span id="delta-val">1,92,000</span>
+            <span id="delta-percentage" class="text-xs font-semibold text-slate-500 font-sans ml-1">(+13.8%)</span>
+          </div>
+          <!-- Designer Masked Element -->
+          <div id="designer-net-delta-msg" class="hidden text-xs font-semibold text-slate-400 italic">
+            🔒 Restricted to Owner
+          </div>
+        </div>
+        <div class="h-8 w-px bg-[#EBE8DF]"></div>
+        <div class="text-left space-y-0.5">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Blended Gross Margin</span>
+          <div id="owner-gm" class="text-lg font-bold text-[#0B1A30] flex items-center gap-1">
+            <span id="gm-val">24.2</span>%
+            <span id="gm-status" class="text-xs font-semibold text-emerald-600 ml-1">(+1.4 pts vs floor)</span>
+          </div>
+          <!-- Designer Masked Element -->
+          <div id="designer-gm-msg" class="hidden text-xs font-semibold text-slate-400 italic">
+            🔒 Restricted to Owner
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXPLANATION/NARRATIVE BAR (DYNAMIALLY UPDATE TO CORRESPOND WITH DRAFT STATUS) -->
+    <div class="bg-[#0B1A30] rounded-xl p-5 text-white shadow-2xs relative overflow-hidden">
+      <div class="absolute right-0 top-0 bottom-0 w-1/4 bg-white/5 skew-x-12 pointer-events-none"></div>
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] font-bold text-[#D4AF37] uppercase tracking-widest bg-[#D4AF37]/10 px-2 py-0.5 rounded border border-[#D4AF37]/20">
+            🤖 Copilot Auto-Derived Narrative
+          </span>
+        </div>
+        <span class="text-[10px] text-slate-400">Updates live with scope changes</span>
+      </div>
+      <p id="copilot-narrative" class="text-sm leading-relaxed text-slate-100 font-light">
+        "Client is upgrading the Master Bedroom with <strong class="text-[#D4AF37] font-semibold">custom floor-to-ceiling veneer wardrobes (+₹1,85,000)</strong> and upgrading Kitchen fittings to <strong class="text-[#D4AF37] font-semibold">Hettich soft-close systems (+₹42,000)</strong>, balanced by dropping Living Room lighting coves <strong class="text-emerald-300 font-semibold font-mono">(-₹35,000)</strong>. 2 items are pending review. The net variation is <strong class="text-white font-mono">+₹1,92,000</strong>."
+      </p>
+    </div>
+
+    <!-- SPECIAL MOCKUP CONTEXT FOR CO-DEVELOPMENT WITH CLIENT -->
+    <div class="bg-[#FCFBF9] border-l-4 border-[#AF8E53] p-4 rounded-r-lg text-xs leading-relaxed text-slate-600">
+      <h3 class="font-bold text-[#0B1A30] text-sm mb-1 uppercase tracking-wider">Board Display Architecture & Mapping Details (Verification Manual)</h3>
+      <p class="mb-2">
+        To address your request, we designed this high-fidelity interactive mockup representing the exact mapping between the existing state machine of <code class="bg-[#EBE8DF] px-1 rounded text-rose-600">RevisionStudio.tsx</code> and this visual Board layout.
+      </p>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2 pt-2 border-t border-[#EBE8DF]">
+        <div>
+          <strong class="text-[#0B1A30]">1. Core State Mapping:</strong>
+          <span class="block text-slate-500">Every card represents a line item in the revised BOQ. Moving cards across columns changes their <code>item.status</code> field (Added/Approved/Pending/Removed) exactly as your state system does.</span>
+        </div>
+        <div>
+          <strong class="text-[#0B1A30]">2. Complete Formula Fidelity:</strong>
+          <span class="block text-slate-500">Execution and design fees are calculated using real percentages and lumpsums. Testing moves here instantly recalculates discounts, GST (18%), and design fee offsets.</span>
+        </div>
+        <div>
+          <strong class="text-[#0B1A30]">3. RBAC Compliance Check:</strong>
+          <span class="block text-slate-500">Toggle "Lead Designer" to verify. All currency formats and margins are instantly masked. The designer sees only scope adjustments, satisfying the financial isolation rule.</span>
+        </div>
+        <div>
+          <strong class="text-[#0B1A30]">4. Real-time Payment Sync:</strong>
+          <span class="block text-slate-500">Observe how the <em>Milestone Stages</em> at the bottom scale in real-time as you drag or trigger changes, illustrating the atomic sync engine before coding.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN TWO-COLUMN WORKSPACE GRID -->
+    <div class="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
+
+      <!-- LEFT COLUMN (3/4 WIDTH on XL): THE REVISION STATUS BOARD -->
+      <div class="xl:col-span-3 flex flex-col gap-4">
+        
+        <!-- ROOM BADGE FILTERS & REVISION ACTION TRIGGER -->
+        <div class="bg-white rounded-xl border border-[#EBE8DF] p-3 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-2xs">
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-thin">
+            <span class="text-xs text-slate-400 font-bold shrink-0 mr-2">Filter Room:</span>
+            <button id="filter-all" onclick="filterByRoom('all')" class="px-3 py-1 rounded-md text-xs font-bold bg-[#0B1A30] text-white shrink-0">
+              All Rooms (6)
+            </button>
+            <button id="filter-bedroom" onclick="filterByRoom('Master Bedroom')" class="px-3 py-1 rounded-md text-xs font-semibold text-slate-600 hover:bg-[#F1EFEA] shrink-0 transition-colors">
+              Master Bedroom (2)
+            </button>
+            <button id="filter-kitchen" onclick="filterByRoom('Kitchen')" class="px-3 py-1 rounded-md text-xs font-semibold text-slate-600 hover:bg-[#F1EFEA] shrink-0 transition-colors">
+              Kitchen (2)
+            </button>
+            <button id="filter-living" onclick="filterByRoom('Living Room')" class="px-3 py-1 rounded-md text-xs font-semibold text-slate-600 hover:bg-[#F1EFEA] shrink-0 transition-colors">
+              Living Room (2)
+            </button>
+          </div>
+          
+          <button onclick="toggleAddModal(true)" class="px-3.5 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 justify-center">
+            <span>+</span> Log New Scope Change
+          </button>
+        </div>
+
+        <!-- 4-COLUMN KANBAN BOARD -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+          
+          <!-- COLUMN 1: ACTIVE IN-SCOPE -->
+          <div class="bg-[#F1EFEA]/60 rounded-xl border border-[#EBE8DF] p-3 space-y-3">
+            <div class="flex items-center justify-between border-b border-[#EBE8DF] pb-2 px-1">
+              <span class="text-xs font-bold text-[#0B1A30] uppercase tracking-wider">In Active Scope</span>
+              <span id="col-count-1" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">3 Items</span>
+            </div>
+            
+            <div id="column-in-scope" class="space-y-3 min-h-[400px]">
+              <!-- DYNAMIC CARDS WILL RENDER HERE -->
+            </div>
+          </div>
+
+          <!-- COLUMN 2: PENDING CLIENT DECISION -->
+          <div class="bg-amber-50/40 rounded-xl border border-amber-200/60 p-3 space-y-3">
+            <div class="flex items-center justify-between border-b border-amber-200 pb-2 px-1">
+              <span class="text-xs font-bold text-amber-950 uppercase tracking-wider">Pending Decision</span>
+              <span id="col-count-2" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">1 Item</span>
+            </div>
+            <div id="column-pending" class="space-y-3 min-h-[400px]">
+              <!-- DYNAMIC CARDS WILL RENDER HERE -->
+            </div>
+          </div>
+
+          <!-- COLUMN 3: VENDOR-DIRECT / AT ACTUALS -->
+          <div class="bg-blue-50/40 rounded-xl border border-blue-200/60 p-3 space-y-3">
+            <div class="flex items-center justify-between border-b border-blue-200 pb-2 px-1">
+              <span class="text-xs font-bold text-blue-950 uppercase tracking-wider">Vendor Direct</span>
+              <span id="col-count-3" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">1 Item</span>
+            </div>
+            <div id="column-vendor" class="space-y-3 min-h-[400px]">
+              <!-- DYNAMIC CARDS WILL RENDER HERE -->
+            </div>
+          </div>
+
+          <!-- COLUMN 4: DEDUCTED / DROPPED -->
+          <div class="bg-rose-50/30 rounded-xl border border-rose-200/50 p-3 space-y-3">
+            <div class="flex items-center justify-between border-b border-rose-200 pb-2 px-1">
+              <span class="text-xs font-bold text-rose-950 uppercase tracking-wider">Dropped Scope</span>
+              <span id="col-count-4" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">1 Item</span>
+            </div>
+            <div id="column-dropped" class="space-y-3 min-h-[400px]">
+              <!-- DYNAMIC CARDS WILL RENDER HERE -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN (1/4 WIDTH on XL): FINANCIAL COCKPIT & OFFSETTING CONTROLS -->
+      <div class="xl:col-span-1 flex flex-col gap-6">
+
+        <!-- FINANCIAL RECONCILIATION SUMMARY -->
+        <div class="bg-[#FCFBF9] rounded-xl border border-[#EBE8DF] p-5 shadow-2xs space-y-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 pb-2 border-b border-[#EBE8DF] flex items-center justify-between">
+            <span>Financial Reconciliation</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded bg-[#FAF9F6] text-slate-500 font-mono">OWNER VIEW</span>
+          </h3>
+
+          <div id="owner-financials" class="space-y-3 text-xs">
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500">Base Execution Value</span>
+              <span id="fin-base-exec" class="font-bold text-slate-900 font-mono">₹2,78,000</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500">Added Variations</span>
+              <span id="fin-added" class="font-bold text-emerald-600 font-mono">+₹2,27,000</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500">Deducted Savings</span>
+              <span id="fin-deducted" class="font-bold text-rose-600 font-mono">-₹35,000</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500">Discounts Offset (10%)</span>
+              <span id="fin-discounts" class="font-bold text-emerald-600 font-mono">-₹47,000</span>
+            </div>
+            <div class="border-t border-[#EBE8DF] pt-2.5 flex items-center justify-between text-sm font-bold text-[#0B1A30]">
+              <span>Net Revised Contract</span>
+              <span id="fin-net-revised" class="font-mono text-[#0066CC]">₹4,23,000</span>
+            </div>
+            <div class="pt-2 flex flex-col gap-1 text-[10px] text-slate-500">
+              <div class="flex justify-between border-t border-slate-100 pt-1.5">
+                <span>Vendor Direct (Excluded):</span>
+                <span id="fin-vendor-excl" class="font-mono font-semibold">₹95,000 est.</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Pending Decision (Excluded):</span>
+                <span id="fin-pending-excl" class="font-mono font-semibold">₹48,000 est.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- MASKED STATE FOR DESIGNERS -->
+          <div id="designer-financials-msg" class="hidden text-xs text-slate-500 bg-slate-100 p-4 rounded text-center font-medium leading-relaxed">
+            🚫 Financial data is hidden under Designer Role.<br>
+            <span class="text-[10px] text-slate-400 mt-1 block">Only Owner/Lead-partners can view rupee figures or margin percentages.</span>
+          </div>
+
+          <!-- DYNAMIC ACCENT LINE -->
+          <div class="gold-hairline my-4"></div>
+
+          <!-- DESIGN FEE REAL-TIME SCALING -->
+          <div class="space-y-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Design Fee Adjustment</h4>
+            <div id="owner-design-fee" class="space-y-2 text-xs">
+              <div class="flex justify-between">
+                <span class="text-slate-500">Design Fee Mode:</span>
+                <span class="font-semibold text-slate-800">Percentage (8%)</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-500">Original Design Fee:</span>
+                <span id="design-fee-orig" class="font-medium text-slate-700 font-mono">₹22,240</span>
+              </div>
+              <div class="flex justify-between font-bold">
+                <span class="text-slate-900">Revised Design Fee:</span>
+                <span id="design-fee-revised" class="text-[#AF8E53] font-mono">₹33,840</span>
+              </div>
+              <p class="text-[10px] text-slate-400 leading-tight">
+                Scales instantly with the revised execution base of confirmed items.
+              </p>
+            </div>
+            <div id="designer-design-fee-msg" class="hidden text-xs text-slate-400 italic">
+              🔒 Design fees hidden
+            </div>
+          </div>
+        </div>
+
+        <!-- ACTIVE VERSION & DRAFT CONTROL STATE -->
+        <div class="bg-white rounded-xl border border-[#EBE8DF] p-5 shadow-2xs space-y-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 pb-2 border-b border-[#EBE8DF]">
+            Draft Management
+          </h3>
+          <div class="space-y-2.5 text-xs text-slate-600">
+            <p>
+              Your modifications are compiled in a local draft queue. Once ready, click "Approve & Sync" to lock changes.
+            </p>
+            <div class="flex gap-2">
+              <button onclick="resetBoard()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors text-center block">
+                Reset Draft
+              </button>
+              <button onclick="triggerUndo()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors text-center block">
+                Undo Last
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- LOWER MODULE: LIVE REFLECTED PAYMENT SCHEDULE PREVIEW -->
+    <div class="bg-white rounded-xl border border-[#EBE8DF] p-6 shadow-2xs space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#EBE8DF] pb-4 gap-2">
+        <div class="space-y-1">
+          <h3 class="serif-brand text-xl font-bold text-[#0B1A30]">Real-Time Milestone Schedule Offset</h3>
+          <p class="text-xs text-slate-500">
+            Preview of payment schedule milestones scaling automatically based on the revised execution base. (Strict hard gate: E1 Material Order cleared before vendor placements).
+          </p>
+        </div>
+        <span class="text-xs font-semibold px-3 py-1 bg-gold-light text-[#AF8E53] border border-[#AF8E53]/20 rounded-md">
+          Percentage Track
+        </span>
+      </div>
+
+      <!-- MILESTONE TIMELINE TRACK (DYNAMIAL CALCULATION IN OWNER MODE) -->
+      <div id="owner-payment-milestones" class="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2">
+        
+        <!-- MILESTONE 1 -->
+        <div class="p-4 bg-[#FCFBF9] rounded-lg border border-[#EBE8DF] space-y-2 relative overflow-hidden">
+          <div class="absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">CLEARED</div>
+          <span class="text-[10px] font-bold text-[#AF8E53] uppercase tracking-wider block">Stage E1 (40%)</span>
+          <span class="font-bold text-[#0B1A30] text-sm block">Material Order Advance</span>
+          <div class="pt-2 border-t border-slate-100 flex justify-between items-baseline">
+            <span class="text-xs text-slate-500">Milestone Base:</span>
+            <span id="milestone-1-val" class="font-bold text-[#0B1A30] font-mono text-sm">₹1,69,200</span>
+          </div>
+          <span class="text-[9px] text-slate-400 block leading-tight">Hard gate cleared. Procurement permitted.</span>
+        </div>
+
+        <!-- MILESTONE 2 -->
+        <div class="p-4 bg-[#FCFBF9] rounded-lg border border-[#EBE8DF] space-y-2 relative">
+          <div class="absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">INVOICED</div>
+          <span class="text-[10px] font-bold text-[#AF8E53] uppercase tracking-wider block">Stage E2 (30%)</span>
+          <span class="font-bold text-[#0B1A30] text-sm block">Structure & First-Fix</span>
+          <div class="pt-2 border-t border-slate-100 flex justify-between items-baseline">
+            <span class="text-xs text-slate-500">Milestone Base:</span>
+            <span id="milestone-2-val" class="font-bold text-[#0B1A30] font-mono text-sm">₹1,26,900</span>
+          </div>
+          <span class="text-[9px] text-slate-400 block leading-tight">Offset variance: <span id="m2-var-val" class="text-emerald-600 font-semibold font-mono">+₹36,900</span></span>
+        </div>
+
+        <!-- MILESTONE 3 -->
+        <div class="p-4 bg-[#FCFBF9] rounded-lg border border-[#EBE8DF] space-y-2 relative">
+          <div class="absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">OPEN</div>
+          <span class="text-[10px] font-bold text-[#AF8E53] uppercase tracking-wider block">Stage E3 (20%)</span>
+          <span class="font-bold text-[#0B1A30] text-sm block">Finishing Advance</span>
+          <div class="pt-2 border-t border-slate-100 flex justify-between items-baseline">
+            <span class="text-xs text-slate-500">Milestone Base:</span>
+            <span id="milestone-3-val" class="font-bold text-[#0B1A30] font-mono text-sm">₹84,600</span>
+          </div>
+          <span class="text-[9px] text-slate-400 block leading-tight">Pending invoice trigger.</span>
+        </div>
+
+        <!-- MILESTONE 4 -->
+        <div class="p-4 bg-[#FCFBF9] rounded-lg border border-[#EBE8DF] space-y-2 relative">
+          <div class="absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">OPEN</div>
+          <span class="text-[10px] font-bold text-[#AF8E53] uppercase tracking-wider block">Stage E4 (10%)</span>
+          <span class="font-bold text-[#0B1A30] text-sm block">Completion & Handover</span>
+          <div class="pt-2 border-t border-slate-100 flex justify-between items-baseline">
+            <span class="text-xs text-slate-500">Milestone Base:</span>
+            <span id="milestone-4-val" class="font-bold text-[#0B1A30] font-mono text-sm">₹42,300</span>
+          </div>
+          <span class="text-[9px] text-slate-400 block leading-tight">Handover gate active (requires snag close-out).</span>
+        </div>
+
+      </div>
+
+      <div id="designer-payment-milestones-msg" class="hidden text-xs text-slate-500 text-center bg-slate-50 p-6 rounded border border-slate-200">
+        🔒 Payment schedules are locked and hidden in Designer View.
+      </div>
+    </div>
+
+    <!-- EXPORT & COMMUNICATION GENERATORS -->
+    <div class="bg-white rounded-xl border border-[#EBE8DF] p-6 shadow-2xs space-y-6">
+      <h3 class="serif-brand text-xl font-bold text-[#0B1A30] border-b border-[#EBE8DF] pb-3">
+        Annexure Generation & Communication Center
+      </h3>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- EXPORTS PANEL -->
+        <div class="space-y-4">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Verbatim Print Documents</h4>
+          <p class="text-xs text-slate-500 leading-relaxed">
+            Outputs strictly follow the <strong>Content-Verbatim Rule</strong>. No summary, phrasing, or formatting updates are introduced. All values are read directly from contract states.
+          </p>
+          <div class="space-y-2">
+            <button onclick="triggerExport('PDF')" class="w-full py-2.5 bg-white border border-[#EBE8DF] hover:bg-[#F1EFEA] text-slate-800 rounded-lg text-xs font-semibold flex items-center justify-between px-3 transition-colors">
+              <span class="flex items-center gap-2">📄 Client Revision Pack (PDF)</span>
+              <span class="text-[#AF8E53]">Download</span>
+            </button>
+            <button onclick="triggerExport('Excel')" class="w-full py-2.5 bg-white border border-[#EBE8DF] hover:bg-[#F1EFEA] text-slate-800 rounded-lg text-xs font-semibold flex items-center justify-between px-3 transition-colors">
+              <span class="flex items-center gap-2">📊 Detailed Itemized BOQ (Excel)</span>
+              <span class="text-emerald-700">Download</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- EMAIL DRAFTER -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Email Scripts Draft</h4>
+            <select id="email-tone" onchange="updateDrafts()" class="text-xs bg-[#F1EFEA] border border-[#EBE8DF] rounded p-1 text-[#0B1A30] font-semibold">
+              <option value="partnership">Partnership Tone</option>
+              <option value="neutral">Neutral Tone</option>
+              <option value="firm">Firm Tone</option>
+            </select>
+          </div>
+          <div class="p-3 bg-[#FCFBF9] border border-[#EBE8DF] rounded-lg h-36 overflow-y-auto text-xs font-mono text-slate-600 scrollbar-thin">
+            <div id="email-body"></div>
+          </div>
+          <button onclick="copyToClipboard('email')" class="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded text-xs transition-colors">
+            Copy Email Copy
+          </button>
+        </div>
+
+        <!-- WHATSAPP DRAFTER -->
+        <div class="space-y-3">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">WhatsApp Dispatch</h4>
+          <div class="p-3 bg-emerald-50/20 border border-emerald-200/50 rounded-lg h-36 overflow-y-auto text-xs font-mono text-slate-600 scrollbar-thin">
+            <div id="whatsapp-body"></div>
+          </div>
+          <button onclick="copyToClipboard('whatsapp')" class="w-full py-1.5 bg-emerald-100/50 hover:bg-emerald-200/50 text-emerald-800 font-semibold rounded text-xs transition-colors">
+            Copy Quick WhatsApp Text
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- BOTTOM FLOATING ACTION GATE BAR -->
+  <div class="fixed bottom-0 left-0 right-0 bg-[#FCFBF9]/95 backdrop-blur-md border-t border-[#EBE8DF] px-8 py-4 z-40 shadow-lg">
+    <div class="max-w-[1400px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2.5 text-xs">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span class="font-semibold text-slate-700">Design Complete Gate Gatekeeper Active</span>
+        <span class="text-slate-300">|</span>
+        <span class="text-slate-500">Procurements locked till Stage E1 payments clear</span>
+      </div>
+
+      <div class="flex items-center gap-3 w-full sm:w-auto">
+        <button onclick="triggerExport('Draft')" class="flex-1 sm:flex-none px-4 py-2 border border-[#EBE8DF] rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors">
+          Save Revision Draft
+        </button>
+        <button onclick="triggerApproveAndSync()" class="flex-1 sm:flex-none px-5 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 justify-center">
+          <span>✔️</span> Approve & Sync to Payments
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD MANUAL NEW ACTION DRAWER / MODAL MOCKUP -->
+  <div id="add-modal" class="hidden fixed inset-0 bg-[#0B1A30]/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl border border-[#EBE8DF] p-6 max-w-md w-full shadow-xl space-y-4">
+      <div class="flex justify-between items-center border-b border-[#EBE8DF] pb-3">
+        <h3 class="serif-brand text-lg font-bold text-[#0B1A30]">Log New Scope Change</h3>
+        <button onclick="toggleAddModal(false)" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+      </div>
+
+      <form id="add-form" onsubmit="handleAddFormSubmit(event)" class="space-y-3 text-xs text-left">
+        <div>
+          <label class="block text-slate-500 font-medium mb-1">Item Name</label>
+          <input required id="form-name" type="text" placeholder="e.g. Premium Mirror Cabinets" class="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-500 font-medium mb-1">Section (Room)</label>
+            <select id="form-section" class="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50">
+              <option value="Master Bedroom">Master Bedroom</option>
+              <option value="Kitchen">Kitchen</option>
+              <option value="Living Room">Living Room</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-500 font-medium mb-1">Unit</label>
+            <input id="form-unit" type="text" value="Unit" class="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-500 font-medium mb-1">Revised Qty</label>
+            <input required id="form-qty" type="number" value="1" min="1" class="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50">
+          </div>
+          <div>
+            <label class="block text-slate-500 font-medium mb-1">Rate (₹) - Owner view</label>
+            <input required id="form-rate" type="number" placeholder="45000" class="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-medium mb-1">Reason Category</label>
+          <select id="form-reason" class="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50">
+            <option>Design Upgrade</option>
+            <option>Client Request</option>
+            <option>Site Condition</option>
+            <option>Correction</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-slate-500 font-medium mb-1">Notes / Scope Details</label>
+          <textarea id="form-note" placeholder="Add specs/materials details here..." class="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50 h-16 resize-none"></textarea>
+        </div>
+
+        <div class="pt-2 flex justify-end gap-2">
+          <button type="button" onclick="toggleAddModal(false)" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold text-slate-700">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg font-bold">Add Action</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- STATE ENGINE & BOARD CONTROLLER SCRIPT -->
+  <script>
+    // State Definitions
+    let activeRole = 'owner'; // 'owner' or 'designer'
+    let currentRoomFilter = 'all';
+
+    // Original baseline items vs. current revision items
+    const baseItems = [
+      {
+        id: "item-1",
+        name: "Custom Floor-to-Ceiling Veneer Wardrobe",
+        section: "Master Bedroom",
+        status: "Added", // 'In-Scope', 'Pending', 'Vendor', 'Dropped' -> mapped state
+        originalQty: 0,
+        originalRate: 0,
+        originalTotal: 0,
+        revisedQty: 1,
+        revisedRate: 185000,
+        revisedTotal: 185000,
+        unit: "Unit",
+        note: "18mm CenturyPly HDMR + Smoked Walnut Veneer finish with PU polish & Hafele fittings.",
+        inclusions: ["PU finish", "Hafele soft-close"],
+        exclusions: ["Lighting inside wardrobe"],
+        reasonCategory: "Design Upgrade",
+        column: "In-Scope"
+      },
+      {
+        id: "item-2",
+        name: "Hettich Cargo Soft-Close Premium Drawer Systems",
+        section: "Kitchen",
+        status: "Modified",
+        originalQty: 1,
+        originalRate: 28000,
+        originalTotal: 28000,
+        revisedQty: 1,
+        revisedRate: 70000,
+        revisedTotal: 70000,
+        unit: "Set",
+        note: "Upgraded from standard Blum tandem drawers to Hettich Cargo InnoTech Atira.",
+        inclusions: ["Cargo basket", "Anti-slip mat"],
+        exclusions: ["Kitchen carcass modifications"],
+        reasonCategory: "Design Upgrade",
+        column: "In-Scope"
+      },
+      {
+        id: "item-3",
+        name: "Gypsum False Ceiling Peripheral Cove Lighting",
+        section: "Living Room",
+        status: "Removed",
+        originalQty: 1,
+        originalRate: 35000,
+        originalTotal: 35000,
+        revisedQty: 0,
+        revisedRate: 0,
+        revisedTotal: 0,
+        unit: "Lumpsum",
+        note: "Saint-Gobain Gyproc false ceiling with warm white LED cove channels.",
+        inclusions: [],
+        exclusions: [],
+        reasonCategory: "Client Request",
+        column: "Dropped"
+      },
+      {
+        id: "item-4",
+        name: "L-Shaped Sectional Sofa Framework in Teak Wood",
+        section: "Living Room",
+        status: "Unchanged",
+        originalQty: 1,
+        originalRate: 120000,
+        originalTotal: 120000,
+        revisedQty: 1,
+        revisedRate: 120000,
+        revisedTotal: 120000,
+        unit: "Unit",
+        note: "As per agreed design in Comfort Upgrade tier.",
+        inclusions: ["Teak framework", "Foam cushioning"],
+        exclusions: ["Upholstery fabric (client provided)"],
+        reasonCategory: "Correction",
+        column: "In-Scope"
+      },
+      {
+        id: "item-5",
+        name: "Balcony Glass Railing Upgrade",
+        section: "Living Room",
+        status: "Pending",
+        originalQty: 0,
+        originalRate: 0,
+        originalTotal: 0,
+        revisedQty: 1,
+        revisedRate: 48000,
+        revisedTotal: 48000,
+        unit: "Rft",
+        note: "12mm Toughened glass with stainless steel spigots.",
+        inclusions: ["Toughened glass", "SS spigots"],
+        exclusions: ["Masonry civil changes"],
+        reasonCategory: "Client Request",
+        column: "Pending"
+      },
+      {
+        id: "item-6",
+        name: "Premium Italian Marble Dining Top",
+        section: "Kitchen",
+        status: "Vendor Direct",
+        originalQty: 0,
+        originalRate: 0,
+        originalTotal: 0,
+        revisedQty: 1,
+        revisedRate: 95000,
+        revisedTotal: 95000,
+        unit: "Unit",
+        note: "Billed directly at vendor actuals. Studio coordinating template, delivery, and installation.",
+        inclusions: ["Polishing", "Installation coordination"],
+        exclusions: ["Marble slab procurement cost (billed directly)"],
+        reasonCategory: "Client Request",
+        column: "Vendor"
+      }
+    ];
+
+    let items = JSON.parse(JSON.stringify(baseItems));
+    let actionHistory = [];
+
+    // format currency as Indian Rupee (without raw float overflows)
+    function formatINR(amount) {
+      if (activeRole === 'designer') return "[🔒 Masked]";
+      return "₹" + Number(amount).toLocaleString('en-IN');
+    }
+
+    // Apply role change (RBAC constraint testing)
+    function setRole(role) {
+      activeRole = role;
+      document.getElementById('role-owner-btn').className = role === 'owner' 
+        ? "px-3.5 py-1.5 text-xs font-bold rounded bg-[#FCFBF9] text-[#0B1A30] shadow-2xs transition-all flex items-center gap-1.5" 
+        : "px-3.5 py-1.5 text-xs font-medium rounded text-slate-500 hover:text-slate-800 transition-all flex items-center gap-1.5";
+      
+      document.getElementById('role-designer-btn').className = role === 'designer' 
+        ? "px-3.5 py-1.5 text-xs font-bold rounded bg-[#FCFBF9] text-[#0B1A30] shadow-2xs transition-all flex items-center gap-1.5" 
+        : "px-3.5 py-1.5 text-xs font-medium rounded text-slate-500 hover:text-slate-800 transition-all flex items-center gap-1.5";
+      
+      // Toggle display of financial panels vs masks
+      if (role === 'owner') {
+        document.getElementById('owner-net-delta').classList.remove('hidden');
+        document.getElementById('designer-net-delta-msg').classList.add('hidden');
+        document.getElementById('owner-gm').classList.remove('hidden');
+        document.getElementById('designer-gm-msg').classList.add('hidden');
+        document.getElementById('owner-financials').classList.remove('hidden');
+        document.getElementById('designer-financials-msg').classList.add('hidden');
+        document.getElementById('owner-design-fee').classList.remove('hidden');
+        document.getElementById('designer-design-fee-msg').classList.add('hidden');
+        document.getElementById('owner-payment-milestones').classList.remove('hidden');
+        document.getElementById('designer-payment-milestones-msg').classList.add('hidden');
+      } else {
+        document.getElementById('owner-net-delta').classList.add('hidden');
+        document.getElementById('designer-net-delta-msg').classList.remove('hidden');
+        document.getElementById('owner-gm').classList.add('hidden');
+        document.getElementById('designer-gm-msg').classList.remove('hidden');
+        document.getElementById('owner-financials').classList.add('hidden');
+        document.getElementById('designer-financials-msg').classList.remove('hidden');
+        document.getElementById('owner-design-fee').classList.add('hidden');
+        document.getElementById('designer-design-fee-msg').classList.remove('hidden');
+        document.getElementById('owner-payment-milestones').classList.add('hidden');
+        document.getElementById('designer-payment-milestones-msg').classList.remove('hidden');
+      }
+
+      renderBoard();
+      updateFinancials();
+      showToast("Switched active view role to: " + (role === 'owner' ? "Studio Owner" : "Lead Designer"));
+    }
+
+    // Filter cards by Room
+    function filterByRoom(room) {
+      currentRoomFilter = room;
+      const rooms = ['all', 'bedroom', 'kitchen', 'living'];
+      rooms.forEach(r => {
+        const btn = document.getElementById('filter-' + r);
+        if (r === 'all' && room === 'all') {
+          btn.className = "px-3 py-1.5 rounded-md text-xs font-bold bg-[#0B1A30] text-white shrink-0";
+        } else if (room !== 'all' && r === 'bedroom' && room === 'Master Bedroom') {
+          btn.className = "px-3 py-1.5 rounded-md text-xs font-bold bg-[#0B1A30] text-white shrink-0";
+        } else if (room !== 'all' && r === 'kitchen' && room === 'Kitchen') {
+          btn.className = "px-3 py-1.5 rounded-md text-xs font-bold bg-[#0B1A30] text-white shrink-0";
+        } else if (room !== 'all' && r === 'living' && room === 'Living Room') {
+          btn.className = "px-3 py-1.5 rounded-md text-xs font-bold bg-[#0B1A30] text-white shrink-0";
+        } else {
+          btn.className = "px-3 py-1.5 rounded-md text-xs font-semibold text-slate-600 hover:bg-[#F1EFEA] shrink-0 transition-colors";
+        }
+      });
+      renderBoard();
+    }
+
+    // Toast Trigger Helper
+    function showToast(message) {
+      const t = document.getElementById('toast');
+      document.getElementById('toast-message').innerText = message;
+      t.className = t.className.replace('translate-y-[-100px] opacity-0', 'translate-y-0 opacity-100');
+      setTimeout(() => {
+        t.className = t.className.replace('translate-y-0 opacity-100', 'translate-y-[-100px] opacity-0');
+      }, 3000);
+    }
+
+    // Trigger board state changes
+    function moveCard(itemId, targetColumn) {
+      // Save state in action history for undo
+      actionHistory.push(JSON.stringify(items));
+
+      const idx = items.findIndex(i => i.id === itemId);
+      if (idx !== -1) {
+        const oldCol = items[idx].column;
+        items[idx].column = targetColumn;
+
+        // Sync status indicators based on column
+        if (targetColumn === 'In-Scope') {
+          items[idx].status = items[idx].originalTotal === 0 ? 'Added' : 'Approved';
+        } else if (targetColumn === 'Pending') {
+          items[idx].status = 'Pending';
+        } else if (targetColumn === 'Vendor') {
+          items[idx].status = 'Vendor Direct';
+        } else if (targetColumn === 'Dropped') {
+          items[idx].status = 'Removed';
+        }
+
+        renderBoard();
+        updateFinancials();
+        showToast(`Moved "${items[idx].name}" to ${targetColumn}`);
+      }
+    }
+
+    // Action Form Modal Controls
+    function toggleAddModal(show) {
+      document.getElementById('add-modal').style.display = show ? 'flex' : 'none';
+    }
+
+    function handleAddFormSubmit(e) {
+      e.preventDefault();
+      actionHistory.push(JSON.stringify(items));
+
+      const name = document.getElementById('form-name').value;
+      const section = document.getElementById('form-section').value;
+      const unit = document.getElementById('form-unit').value;
+      const qty = Number(document.getElementById('form-qty').value);
+      const rate = Number(document.getElementById('form-rate').value);
+      const reason = document.getElementById('form-reason').value;
+      const note = document.getElementById('form-note').value;
+
+      const newItem = {
+        id: "item-" + Date.now(),
+        name,
+        section,
+        status: "Added",
+        originalQty: 0,
+        originalRate: 0,
+        originalTotal: 0,
+        revisedQty: qty,
+        revisedRate: rate,
+        revisedTotal: qty * rate,
+        unit,
+        note,
+        inclusions: ["Custom Spec"],
+        exclusions: ["Civil changes"],
+        reasonCategory: reason,
+        column: "In-Scope"
+      };
+
+      items.push(newItem);
+      toggleAddModal(false);
+      document.getElementById('add-form').reset();
+      
+      renderBoard();
+      updateFinancials();
+      showToast(`Added new scope change: "${name}"`);
+    }
+
+    // Undo action
+    function triggerUndo() {
+      if (actionHistory.length > 0) {
+        items = JSON.parse(actionHistory.pop());
+        renderBoard();
+        updateFinancials();
+        showToast("Last draft action undone successfully.");
+      } else {
+        showToast("No draft actions left in history queue.");
+      }
+    }
+
+    // Reset board
+    function resetBoard() {
+      if (confirm("Are you sure you want to clear your current revision drafts and revert to base baseline?")) {
+        actionHistory = [];
+        items = JSON.parse(JSON.stringify(baseItems));
+        renderBoard();
+        updateFinancials();
+        showToast("Reverted all draft adjustments to initial contract state.");
+      }
+    }
+
+    // Recalculate Financial values based on card positions
+    function updateFinancials() {
+      // Base items original values sum
+      let baseExec = 278000; // Fixed Original Baseline from baseItems (Ceiling ₹35k, Sofa ₹120k, Drawers ₹28k, Dining Top ₹95k)
+      let addedVal = 0;
+      let deductedVal = 0;
+      let vendorVal = 0;
+      let pendingVal = 0;
+
+      items.forEach(item => {
+        // Evaluate dynamic sums
+        const currentVal = item.revisedQty * item.revisedRate;
+        const originalVal = item.originalTotal;
+
+        if (item.column === 'In-Scope') {
+          if (item.originalTotal === 0) {
+            addedVal += currentVal; // Completely new
+          } else if (currentVal > originalVal) {
+            addedVal += (currentVal - originalVal); // Value development upgrade
+          } else if (currentVal < originalVal) {
+            deductedVal += (originalVal - currentVal); // Savings
+          }
+        } else if (item.column === 'Dropped') {
+          deductedVal += originalVal; // Full drop from scope
+        } else if (item.column === 'Pending') {
+          pendingVal += currentVal;
+          if (originalVal > 0) {
+            deductedVal += originalVal; // If it was original and now pending, remove from active total
+          }
+        } else if (item.column === 'Vendor') {
+          vendorVal += currentVal;
+          if (originalVal > 0) {
+            deductedVal += originalVal; // Billed to vendor direct, so deduct from studio active billing
+          }
+        }
+      });
+
+      const rawRevisedContract = baseExec + addedVal - deductedVal;
+      const discountDeduction = Math.round(rawRevisedContract * 0.1); // 10% Goodwill discount offset
+      const netRevisedTotal = Math.max(0, rawRevisedContract - discountDeduction);
+      const netDelta = netRevisedTotal - Math.round(baseExec * 0.9); // compared with original discounted base
+      const isIncrease = netDelta >= 0;
+
+      // Design fee: 8% on confirmed active execution base
+      const designFeeRevised = Math.round(rawRevisedContract * 0.08);
+
+      // Update Owner View Rupee Display States
+      document.getElementById('fin-base-exec').innerText = formatINR(baseExec);
+      document.getElementById('fin-added').innerText = "+" + formatINR(addedVal);
+      document.getElementById('fin-deducted').innerText = "-" + formatINR(deductedVal);
+      document.getElementById('fin-discounts').innerText = "-" + formatINR(discountDeduction);
+      document.getElementById('fin-net-revised').innerText = formatINR(netRevisedTotal);
+      document.getElementById('fin-vendor-excl').innerText = formatINR(vendorVal) + " est.";
+      document.getElementById('fin-pending-excl').innerText = formatINR(pendingVal) + " est.";
+
+      document.getElementById('design-fee-revised').innerText = formatINR(designFeeRevised);
+
+      // Update Top Impact Summary
+      document.getElementById('delta-sign').innerText = isIncrease ? "+" : "-";
+      document.getElementById('delta-val').innerText = Math.abs(netDelta).toLocaleString('en-IN');
+      const percentDiff = ((netDelta / (baseExec * 0.9)) * 100).toFixed(1);
+      document.getElementById('delta-percentage').innerText = `(${isIncrease ? "+" : ""}${percentDiff}%)`;
+      
+      // Highlight delta values accordingly
+      const deltaWidgetVal = document.getElementById('owner-net-delta');
+      if (isIncrease) {
+        deltaWidgetVal.className = "text-lg font-bold text-amber-600 font-mono flex items-center gap-1";
+      } else {
+        deltaWidgetVal.className = "text-lg font-bold text-emerald-600 font-mono flex items-center gap-1";
+      }
+
+      // Scaling Payment Milestones
+      const e1 = Math.round(netRevisedTotal * 0.4);
+      const e2 = Math.round(netRevisedTotal * 0.3);
+      const e3 = Math.round(netRevisedTotal * 0.2);
+      const e4 = Math.round(netRevisedTotal * 0.1);
+
+      document.getElementById('milestone-1-val').innerText = formatINR(e1);
+      document.getElementById('milestone-2-val').innerText = formatINR(e2);
+      document.getElementById('milestone-3-val').innerText = formatINR(e3);
+      document.getElementById('milestone-4-val').innerText = formatINR(e4);
+
+      // M2 Offset variance
+      const m2Orig = Math.round((baseExec * 0.9) * 0.3);
+      const m2Var = e2 - m2Orig;
+      document.getElementById('m2-var-val').innerText = (m2Var >= 0 ? "+" : "-") + formatINR(Math.abs(m2Var));
+      document.getElementById('m2-var-val').className = m2Var >= 0 ? "text-amber-600 font-semibold font-mono" : "text-emerald-600 font-semibold font-mono";
+
+      // AI Narrative updates live
+      const itemAddedCount = items.filter(i => i.column === 'In-Scope' && i.originalTotal === 0).length;
+      const itemDroppedCount = items.filter(i => i.column === 'Dropped').length;
+      document.getElementById('copilot-narrative').innerHTML = `
+        "Current draft revisions configure <strong class='text-white font-semibold'>${itemAddedCount} added scope item(s)</strong> and 
+        <strong class='text-[#D4AF37] font-semibold'>${itemDroppedCount} dropped item(s)</strong>. Confirmed Execution Net is 
+        <strong class='text-[#D4AF37] font-semibold font-mono'>${formatINR(netRevisedTotal)}</strong>. 
+        Owner calculations register a delta variation of 
+        <strong class='${isIncrease ? 'text-amber-300' : 'text-emerald-300'} font-bold font-mono'>${isIncrease ? '+' : '-'}${formatINR(Math.abs(netDelta))}</strong> across the project baseline scope."
+      `;
+
+      updateDrafts();
+    }
+
+    // Render the interactive Kanban columns
+    function renderBoard() {
+      const cols = {
+        'In-Scope': document.getElementById('column-in-scope'),
+        'Pending': document.getElementById('column-pending'),
+        'Vendor': document.getElementById('column-vendor'),
+        'Dropped': document.getElementById('column-dropped')
+      };
+
+      // Clear current renders
+      Object.keys(cols).forEach(k => cols[k].innerHTML = '');
+
+      let colCounts = { 'In-Scope': 0, 'Pending': 0, 'Vendor': 0, 'Dropped': 0 };
+
+      // Filter and render cards
+      items.forEach(item => {
+        if (currentRoomFilter !== 'all' && item.section !== currentRoomFilter) return;
+
+        colCounts[item.column]++;
+
+        const card = document.createElement('div');
+        // Beautiful elegant styling mimicking a polished physical card in Milky White motif
+        card.className = "bg-white p-4 rounded-xl border border-[#EBE8DF] shadow-2xs hover:shadow-xs transition-all space-y-2 relative group text-left";
+
+        let statusBadge = '';
+        if (item.column === 'In-Scope') {
+          if (item.originalTotal === 0) {
+            statusBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">+ ADDED</span>`;
+          } else if (item.revisedQty * item.revisedRate !== item.originalTotal) {
+            statusBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-100">~ REVISED</span>`;
+          } else {
+            statusBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600">UNCHANGED</span>`;
+          }
+        } else if (item.column === 'Pending') {
+          statusBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-200">AWAITING CLIENT</span>`;
+        } else if (item.column === 'Vendor') {
+          statusBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-blue-50 text-blue-800 border border-blue-200">VENDOR DIRECT</span>`;
+        } else if (item.column === 'Dropped') {
+          statusBadge = `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-rose-50 text-rose-800 border border-rose-200 line-through">- DROPPED</span>`;
+        }
+
+        const formattedVal = formatINR(item.revisedQty * item.revisedRate);
+        const originalValText = item.originalTotal > 0 && item.column !== 'Dropped' && item.revisedQty * item.revisedRate !== item.originalTotal
+          ? `<span class="text-[10px] text-slate-400 line-through font-mono block">Was ${formatINR(item.originalTotal)}</span>`
+          : '';
+
+        // Generate drop-down actions inside card for simulation
+        let actionDropdown = `
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
+            <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Quick Switch:</span>
+            <div class="flex gap-1">
+              ${item.column !== 'In-Scope' ? `<button onclick="moveCard('${item.id}', 'In-Scope')" title="Approve & include in contract" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-slate-700 border border-slate-200">Scope</button>` : ''}
+              ${item.column !== 'Pending' ? `<button onclick="moveCard('${item.id}', 'Pending')" title="Mark as pending decision" class="p-1 bg-amber-50 hover:bg-amber-100 rounded text-amber-800 border border-amber-200">Wait</button>` : ''}
+              ${item.column !== 'Vendor' ? `<button onclick="moveCard('${item.id}', 'Vendor')" title="Mark billed at actuals" class="p-1 bg-blue-50 hover:bg-blue-100 rounded text-blue-800 border border-blue-200">Vendor</button>` : ''}
+              ${item.column !== 'Dropped' ? `<button onclick="moveCard('${item.id}', 'Dropped')" title="Drop from project scope" class="p-1 bg-rose-50 hover:bg-rose-100 rounded text-rose-800 border border-rose-200">Drop</button>` : ''}
+            </div>
+          </div>
+        `;
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-2">
+            <div class="space-y-1">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                ${statusBadge}
+                <span class="text-[10px] font-bold text-slate-400 uppercase">${item.section}</span>
+              </div>
+              <h4 class="font-bold text-[#0B1A30] text-sm leading-snug group-hover:text-[#0066CC] transition-colors">${item.name}</h4>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">${item.note}</p>
+          
+          <div class="flex items-baseline justify-between pt-1">
+            <span class="text-[10px] text-slate-400 font-medium">Est. Value:</span>
+            <div class="text-right">
+              ${originalValText}
+              <span class="font-bold text-[#0B1A30] text-sm font-mono">${formattedVal}</span>
+              <span class="text-[10px] text-slate-500 font-sans block">${item.revisedQty} ${item.unit}</span>
+            </div>
+          </div>
+
+          ${actionDropdown}
+        `;
+
+        cols[item.column].appendChild(card);
+      });
+
+      // Update Column counter elements
+      document.getElementById('col-count-1').innerText = colCounts['In-Scope'] + " item(s)";
+      document.getElementById('col-count-2').innerText = colCounts['Pending'] + " item(s)";
+      document.getElementById('col-count-3').innerText = colCounts['Vendor'] + " item(s)";
+      document.getElementById('col-count-4').innerText = colCounts['Dropped'] + " item(s)";
+    }
+
+    // Dynamic Draft Communications Updating
+    function updateDrafts() {
+      const tone = document.getElementById('email-tone').value;
+      
+      // Calculate draft values
+      let baseVal = 278000;
+      let addedSum = 0;
+      let droppedSum = 0;
+      items.forEach(i => {
+        if (i.column === 'In-Scope') {
+          if (i.originalTotal === 0) addedSum += (i.revisedQty * i.revisedRate);
+          else if (i.revisedQty * i.revisedRate > i.originalTotal) addedSum += ((i.revisedQty * i.revisedRate) - i.originalTotal);
+          else if (i.revisedQty * i.revisedRate < i.originalTotal) droppedSum += (i.originalTotal - (i.revisedQty * i.revisedRate));
+        } else if (i.column === 'Dropped') {
+          droppedSum += i.originalTotal;
+        }
+      });
+      const netVal = baseVal + addedSum - droppedSum;
+      const finalNetVal = Math.round(netVal * 0.9);
+      const deltaVal = finalNetVal - Math.round(baseVal * 0.9);
+
+      const isIncrease = deltaVal >= 0;
+      const deltaText = isIncrease 
+        ? "an addition of " + formatINR(Math.abs(deltaVal)) 
+        : "a net saving of " + formatINR(Math.abs(deltaVal));
+
+      let emailBody = "";
+      let waBody = "";
+
+      if (tone === "partnership") {
+        emailBody = `Dear Client,\n\nFollowing up on our recent design reviews, we have reconciled the project scope to align with your finalized layout options. Our mutual goal is complete clarity with zero surprises.\n\nThe net contract value has adjusted by ${deltaText}. The revised estimated execution total now stands at ${formatINR(finalNetVal)} (inclusive of our 10% goodwill concession).\n\nThe design fee has updated to ${formatINR(Math.round(netVal * 0.08))} based on active deliverables.\n\nWe have generated the official Annexure #1 PDF for your print review. Let us know if you wish to adjust any items before procurement commences.\n\nWarm regards,\nForm Factors Design Studio`;
+        waBody = `Hi Ananya! 👋 We've visualised the updated scope options on the board. The net change represents ${deltaText} (${formatINR(finalNetVal)} revised total). Detailed PDF and Excel records have been generated. Let me know if you would like to swap anything! 🚀`;
+      } else if (tone === "neutral") {
+        emailBody = `Dear Client,\n\nPlease find attached the draft BOQ reconciliation pack for Lodha Amara 2BHK.\n\nTotal added variations stand at ${formatINR(addedSum)}, balanced by scope deductions of ${formatINR(droppedSum)}. The net variance on your contract value is ${deltaText}.\n\nThis updates your confirmed project total to ${formatINR(finalNetVal)}. We request you to review the itemized cards and confirm your approval.\n\nBest regards,\nForm Factors Design Studio`;
+        waBody = `Hello! The draft BOQ revisions have been compiled. Net variance is ${deltaText} (confirmed total: ${formatINR(finalNetVal)}). Please check the client portal or attached documents and confirm. Thank you!`;
+      } else {
+        emailBody = `Dear Client,\n\nAttached is the final revised scope Annexure for your immediate sign-off.\n\nTo prevent site delays and ensure procurement schedules are held, the discussed alterations are now locked. The net variation reflects ${deltaText}. The adjusted total is ${formatINR(finalNetVal)}.\n\nNote: As per project policies, no procurement of new items (such as veneer wardrobes) can occur until the corresponding Stage E1 Material Order payment variance of ${formatINR(Math.round(finalNetVal * 0.4))} clears.\n\nRegards,\nForm Factors Design Studio`;
+        waBody = `Hi, the finalized scope changes have been published. Net variation is ${deltaText}. Please provide your formal confirmation on the portal so we can invoice the balance and lock in procurement rates. 📄⏳`;
+      }
+
+      document.getElementById('email-body').innerText = emailBody;
+      document.getElementById('whatsapp-body').innerText = waBody;
+    }
+
+    function copyToClipboard(type) {
+      const elementId = type === 'email' ? 'email-body' : 'whatsapp-body';
+      const text = document.getElementById(elementId).innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        showToast("Copied verbatim " + type + " script draft to clipboard!");
+      });
+    }
+
+    // Verify trigger simulation
+    function triggerExport(type) {
+      showToast(`Generating ${type} verbatim export using stored database states...`);
+    }
+
+    function triggerApproveAndSync() {
+      showToast("Approve & Sync atomic trigger activated: Updating project financials, locking Annexure #1 version baseline, and triggering payment milestone invoice recalculations.");
+    }
+
+    // Initialize Page
+    items = JSON.parse(JSON.stringify(baseItems));
+    renderBoard();
+    updateFinancials();
+  </script>
+
+</body>
+</html>

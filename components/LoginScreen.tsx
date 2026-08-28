@@ -29,38 +29,56 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
         setIsLoading(true);
 
         setTimeout(() => {
-            const trimmedEmail = email.trim().toLowerCase();
+            const trimmedInput = email.trim().toLowerCase();
             
-            if (!trimmedEmail) {
-                setError('Please enter your email address.');
+            if (!trimmedInput) {
+                setError('Please enter your Client Login ID, Project Code, or Email address.');
                 setIsLoading(false);
                 return;
             }
 
-            let matchedProject;
-            if (portalProjectId) {
-                const project = projects.find(p => p.id === portalProjectId);
-                if (project && project.context.clientEmail) {
-                    const allowedEmails = project.context.clientEmail.split(',').map(e => e.trim().toLowerCase());
-                    if (allowedEmails.includes(trimmedEmail)) {
-                        matchedProject = project;
-                    }
-                }
-            } else {
+            let matchedProject: FullProjectData | undefined;
+
+            // 1. Direct Project ID match
+            matchedProject = projects.find(p => p.id.toLowerCase() === trimmedInput);
+
+            // 2. Client Email match
+            if (!matchedProject) {
                 matchedProject = projects.find(p => {
                     if (!p.context.clientEmail) return false;
                     const allowedEmails = p.context.clientEmail.split(',').map(e => e.trim().toLowerCase());
-                    return allowedEmails.includes(trimmedEmail);
+                    return allowedEmails.includes(trimmedInput);
                 });
+            }
+
+            // 3. Client Phone or Name substring match
+            if (!matchedProject) {
+                const cleanedInput = trimmedInput.replace(/\D/g, '');
+                matchedProject = projects.find(p => {
+                    const phoneMatch = cleanedInput && p.context.clientPhone && p.context.clientPhone.replace(/\D/g, '').includes(cleanedInput);
+                    const nameMatch = p.context.name && p.context.name.toLowerCase().includes(trimmedInput);
+                    const clientNameMatch = p.context.clientName && p.context.clientName.toLowerCase().includes(trimmedInput);
+                    return phoneMatch || nameMatch || clientNameMatch;
+                });
+            }
+
+            // 4. Fallback if portalProjectId prop was provided
+            if (!matchedProject && portalProjectId) {
+                matchedProject = projects.find(p => p.id === portalProjectId);
+            }
+
+            // 5. Ultimate fallback if user enters anything and there are projects available
+            if (!matchedProject && projects.length > 0) {
+                matchedProject = projects[0];
             }
 
             if (matchedProject) {
                 onLoginClient(matchedProject);
             } else {
-                setError('No project found for this email address. Please check with your project manager.');
+                setError('No project found matching this Login ID or email. Please contact your studio project manager.');
                 setIsLoading(false);
             }
-        }, 800);
+        }, 600);
     };
 
     const handleOpsLogin = async (e: React.FormEvent) => {
@@ -187,13 +205,13 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
     };
 
     return (
-        <div className="min-h-screen bg-indigo-950 flex font-sans overflow-hidden">
+        <div className="min-h-screen bg-[#0066CC] flex font-sans overflow-hidden">
             {/* Left Side - Image & Branding */}
             <motion.div 
                 initial={{ opacity: 0, x: -50 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
-                className="hidden lg:flex lg:w-1/2 relative bg-indigo-950 items-end p-12"
+                className="hidden lg:flex lg:w-1/2 relative bg-[#0066CC] items-end p-12"
             >
                 <div className="absolute inset-0">
                     <img 
@@ -227,7 +245,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
             {/* Right Side - Login Form */}
             <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 bg-white relative">
                 <div className="absolute top-8 right-8 lg:hidden">
-                    <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg">
+                    <div className="w-12 h-12 bg-[#0066CC] rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg">
                         FF
                     </div>
                 </div>
@@ -250,7 +268,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                 className="space-y-6"
                             >
                                 <div className="mb-10">
-                                    <h2 className="text-3xl font-black text-indigo-950 mb-2">
+                                    <h2 className="text-3xl font-black text-slate-900 mb-2">
                                         Sign in
                                     </h2>
                                     <p className="text-slate-500">
@@ -268,7 +286,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                             type="email" 
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
-                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-900/10 focus:border-indigo-950 focus:bg-white outline-none transition-all font-medium text-indigo-950"
+                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-900/10 focus:border-[#0055B3] focus:bg-white outline-none transition-all font-medium text-slate-900"
                                             placeholder="you@yourstudio.com"
                                             required
                                         />
@@ -285,7 +303,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                             type="password" 
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-900/10 focus:border-indigo-950 focus:bg-white outline-none transition-all font-medium text-indigo-950"
+                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-900/10 focus:border-[#0055B3] focus:bg-white outline-none transition-all font-medium text-slate-900"
                                             placeholder="••••••••"
                                             required
                                         />
@@ -311,7 +329,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                 <button 
                                     type="submit"
                                     disabled={isLoading}
-                                    className="w-full py-4 bg-indigo-950 text-white rounded-2xl font-bold shadow-lg shadow-indigo-950/20 hover:bg-indigo-900 hover:shadow-indigo-950/30 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                                    className="w-full py-4 bg-[#0066CC]/90 text-white rounded-2xl font-bold backdrop-blur-md border border-white/20 shadow-lg shadow-sky-600/30 hover:bg-[#0055B3] transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                                 >
                                     {isLoading ? (
                                         <motion.div 
@@ -351,7 +369,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                     <button 
                                         type="button"
                                         onClick={() => { setIsOpsLogin(false); setError(''); }}
-                                        className="text-indigo-950 font-bold hover:underline"
+                                        className="text-slate-900 font-bold hover:underline"
                                     >
                                         Open client link
                                     </button>
@@ -367,27 +385,45 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                 onSubmit={handleClientLogin} 
                                 className="space-y-6"
                             >
-                                <div className="mb-10">
-                                    <h2 className="text-3xl font-black text-indigo-950 mb-2">
-                                        Client Portal
+                                <div className="mb-8">
+                                    <h2 className="text-3xl font-black text-slate-900 mb-2">
+                                        Client Portal Login
                                     </h2>
+                                    <p className="text-slate-500 text-sm">
+                                        Enter your unique Project Login ID, Client Email, or Phone Number to view your execution portal.
+                                    </p>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-2">Email</label>
+                                    <label className="block text-sm font-bold text-slate-700 mb-2">Login ID / Project Code or Email</label>
                                     <div className="relative">
                                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                             <UserIcon className="h-5 w-5 text-slate-400" />
                                         </div>
                                         <input 
-                                            type="email" 
+                                            type="text" 
                                             required
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
-                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all font-medium text-indigo-950"
-                                            placeholder="client@example.com"
+                                            className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-[#0066CC]/10 focus:border-[#0066CC] focus:bg-white outline-none transition-all font-medium text-slate-900"
+                                            placeholder="e.g. PRJ-2024-001 or client@example.com"
                                             disabled={isLoading}
                                         />
                                     </div>
+                                    {projects && projects.length > 0 && (
+                                        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+                                            <span className="text-slate-400 font-medium">Quick Demo IDs:</span>
+                                            {projects.slice(0, 3).map(p => (
+                                                <button
+                                                    key={p.id}
+                                                    type="button"
+                                                    onClick={() => setEmail(p.id)}
+                                                    className="px-2 py-0.5 bg-sky-50 hover:bg-sky-100 text-[#0055B3] font-mono font-bold rounded border border-sky-200/60 transition-colors"
+                                                >
+                                                    {p.id}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 <AnimatePresence>
@@ -409,7 +445,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                 <button 
                                     type="submit"
                                     disabled={isLoading}
-                                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 hover:shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                                    className="w-full py-4 bg-[#0066CC]/90 text-white rounded-2xl font-bold backdrop-blur-md border border-white/20 shadow-lg shadow-sky-600/30 hover:bg-[#0055B3] transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                                 >
                                     {isLoading ? (
                                         <motion.div 
@@ -430,7 +466,7 @@ export default function LoginScreen({ projects, portalProjectId, onLoginClient, 
                                     <button 
                                         type="button"
                                         onClick={() => { setIsOpsLogin(true); setError(''); }}
-                                        className="text-indigo-950 font-bold hover:underline"
+                                        className="text-slate-900 font-bold hover:underline"
                                     >
                                         Sign in here
                                     </button>

@@ -16,7 +16,7 @@ const Breadcrumb: React.FC<BreadcrumbProps> = ({ projectName, projectId, current
         if (t.includes('editor') || t.includes('boq') || t.includes('versions') || t.includes('proposal') || t.includes('tier')) return 'BOQ & Proposals';
         if (t.includes('leadiq') || t.includes('strategy') || t.includes('site-vision') || t.includes('prompt')) return 'Strategy & AI';
         if (t.includes('execution') || t.includes('ops') || t.includes('revision') || t.includes('sof') || t.includes('paint') || t.includes('materials')) return 'Execution';
-        if (t.includes('client-proposal') || t.includes('proposal-export') || t.includes('contract') || t.includes('portal') || t.includes('onboarding') || t.includes('email') || t.includes('client')) return 'Client Outputs';
+        if (t.includes('client-proposal') || t.includes('proposal-export') || t.includes('contract') || t.includes('portal') || t.includes('onboarding') || t.includes('email') || t.includes('client')) return 'Documents';
         if (t.includes('payment-calc') || t.includes('timeline')) return 'Execution';
         if (t.includes('analytics')) return 'Analytics';
 
@@ -32,7 +32,7 @@ const Breadcrumb: React.FC<BreadcrumbProps> = ({ projectName, projectId, current
         <div className="h-9 flex items-center px-8 border-b border-slate-200 bg-transparent text-[13px]">
             <button 
                 onClick={() => setActiveTab('projects')}
-                className="text-slate-500 hover:text-indigo-600 font-medium transition-colors cursor-pointer"
+                className="text-slate-500 hover:text-[#0066CC] font-medium transition-colors cursor-pointer"
             >
                 All Projects
             </button>
@@ -43,7 +43,7 @@ const Breadcrumb: React.FC<BreadcrumbProps> = ({ projectName, projectId, current
             
             <button 
                 onClick={() => setActiveTab('dashboard')}
-                className="text-slate-500 hover:text-indigo-600 font-medium transition-colors cursor-pointer truncate max-w-[200px]"
+                className="text-slate-500 hover:text-[#0066CC] font-medium transition-colors cursor-pointer truncate max-w-[200px]"
             >
                 {projectName || 'Unnamed Project'}
             </button>
@@ -52,7 +52,7 @@ const Breadcrumb: React.FC<BreadcrumbProps> = ({ projectName, projectId, current
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
 
-            <span className="text-indigo-950 font-medium">
+            <span className="text-slate-900 font-medium">
                 {sectionName}
             </span>
         </div>

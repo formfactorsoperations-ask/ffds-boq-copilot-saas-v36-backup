@@ -206,8 +206,8 @@ export const calculateBoqTotalsAndValidateRules = onDocumentWritten("organizatio
     if (afterData) {
         // Calculate fields for this item just to ensure it's up to date based on the existing per-item formula
         const qty = afterData.qty || 0;
-        const unitCost = afterData.unitCost || 0;
-        const marginPct = afterData.marginPct || 0;
+        const unitCost = afterData.unitCost !== undefined ? afterData.unitCost : ((afterData.materials || afterData.baseRate || 0) + (afterData.labor || 0));
+        const marginPct = afterData.marginPct !== undefined ? afterData.marginPct : (afterData.marginOverride ?? afterData.margin ?? 0);
         const taxPct = afterData.taxPct || 0;
 
         const baseCost = qty * unitCost;
@@ -215,8 +215,22 @@ export const calculateBoqTotalsAndValidateRules = onDocumentWritten("organizatio
         const taxAmt = (baseCost + marginAmt) * (taxPct / 100);
         const finalCost = baseCost + marginAmt + taxAmt;
 
-        if (afterData.baseCost !== baseCost || afterData.finalCost !== finalCost) {
-            await change.after.ref.update({ baseCost, marginAmt, taxAmt, finalCost });
+        if (
+            afterData.unitCost !== unitCost ||
+            afterData.marginPct !== marginPct ||
+            afterData.baseCost !== baseCost ||
+            afterData.marginAmt !== marginAmt ||
+            afterData.taxAmt !== taxAmt ||
+            afterData.finalCost !== finalCost
+        ) {
+            await change.after.ref.update({
+                unitCost,
+                marginPct,
+                baseCost,
+                marginAmt,
+                taxAmt,
+                finalCost
+            });
             return; // let the subsequent trigger recalculate the totals
         }
     }
@@ -293,7 +307,7 @@ export const calculateBoqTotalsAndValidateRules = onDocumentWritten("organizatio
          roomName: k, // Optional: look up real name if you have it
          baseCost: byRoomMap[k].baseCost,
          marginAmt: byRoomMap[k].marginAmt,
-         marginPct: byRoomMap[k].baseCost > 0 ? (byRoomMap[k].marginAmt / byRoomMap[k].baseCost) * 100 : 0
+         marginPct: (byRoomMap[k].baseCost + byRoomMap[k].marginAmt) > 0 ? (byRoomMap[k].marginAmt / (byRoomMap[k].baseCost + byRoomMap[k].marginAmt)) * 100 : 0
     }));
 
     const byCategory = Object.keys(byCategoryMap).map(k => ({
@@ -301,11 +315,11 @@ export const calculateBoqTotalsAndValidateRules = onDocumentWritten("organizatio
          baseCost: byCategoryMap[k].baseCost,
          marginAmt: byCategoryMap[k].marginAmt,
          itemCount: byCategoryMap[k].itemCount,
-         marginPct: byCategoryMap[k].baseCost > 0 ? (byCategoryMap[k].marginAmt / byCategoryMap[k].baseCost) * 100 : 0
+         marginPct: (byCategoryMap[k].baseCost + byCategoryMap[k].marginAmt) > 0 ? (byCategoryMap[k].marginAmt / (byCategoryMap[k].baseCost + byCategoryMap[k].marginAmt)) * 100 : 0
     }));
 
     const marginAnalytics = {
-         blendedMarginPct: totalFirmBase > 0 ? (totalFirmMargin / totalFirmBase) * 100 : 0,
+         blendedMarginPct: (totalFirmBase + totalFirmMargin) > 0 ? (totalFirmMargin / (totalFirmBase + totalFirmMargin)) * 100 : 0,
          totalFirmBase,
          totalFirmMargin,
          byRoom,

@@ -121,11 +121,11 @@ const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ boq, projectConte
   return (
     <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-200">
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 bg-white border border-slate-200 text-indigo-600 rounded-full shadow-sm">
+        <div className="p-2 bg-white border border-slate-200 text-[#0066CC] rounded-full shadow-sm">
           <BrainIcon className="w-5 h-5" />
         </div>
         <div>
-          <h3 className="text-xl font-light tracking-tight text-indigo-950 leading-none">Scenario Simulator</h3>
+          <h3 className="text-xl font-light tracking-tight text-slate-900 leading-none">Scenario Simulator</h3>
           <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-1">Impact modeling</p>
         </div>
       </div>
@@ -141,7 +141,7 @@ const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ boq, projectConte
             <div className="flex bg-slate-100 p-1 rounded-xl mb-8">
                 <button 
                     onClick={() => setActiveLever('margin')}
-                    className={`flex-1 py-2.5 text-[10px] uppercase tracking-[0.2em] font-bold rounded-lg transition-all ${activeLever === 'margin' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`flex-1 py-2.5 text-[10px] uppercase tracking-[0.2em] font-bold rounded-lg transition-all ${activeLever === 'margin' ? 'bg-white text-[#0066CC] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                     Exec. Margin
                 </button>
@@ -163,7 +163,7 @@ const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ boq, projectConte
             <div className="px-2">
                 <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-[0.2em]">
                     <span>{label}</span>
-                    <span className="text-indigo-950 text-lg font-mono tracking-tighter">{sliderValue > 0 && activeLever !== 'design' ? '+' : ''}{sliderValue}{suffix}</span>
+                    <span className="text-slate-900 text-lg font-mono tracking-tighter">{sliderValue > 0 && activeLever !== 'design' ? '+' : ''}{sliderValue}{suffix}</span>
                 </div>
                 <input 
                     type="range" 
@@ -172,7 +172,7 @@ const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ boq, projectConte
                     step={step}
                     value={sliderValue}
                     onChange={(e) => setSliderValue(Number(e.target.value))}
-                    className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-[#0066CC]"
                 />
                 <div className="flex justify-between text-[10px] text-slate-400 mt-3 font-mono font-bold">
                     <span>{min}{suffix}</span>
@@ -212,14 +212,14 @@ const ResultCard: React.FC<{
     const isNeutral = variant === 'neutral';
     
     return (
-        <div className={`p-6 rounded-2xl border ${isNeutral ? 'bg-[#f0f2f5] border-slate-200' : 'bg-indigo-950 border-indigo-900 shadow-xl'}`}>
+        <div className={`p-6 rounded-2xl border ${isNeutral ? 'bg-[#f0f2f5] border-slate-200' : 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 border-sky-900 shadow-xl'}`}>
             <h4 className={`text-[10px] font-bold uppercase tracking-[0.2em] mb-6 ${isNeutral ? 'text-slate-400' : 'text-slate-400'}`}>{title}</h4>
             
             <div className="space-y-6">
                 <div>
                     <p className={`text-[9px] uppercase tracking-widest font-bold mb-1 ${isNeutral ? 'text-slate-500' : 'text-slate-500'}`}>Total Profit</p>
                     <div className="flex items-end gap-2">
-                        <p className={`text-3xl font-light tracking-tighter ${isNeutral ? 'text-indigo-950' : deltaProfit && deltaProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        <p className={`text-3xl font-light tracking-tighter ${isNeutral ? 'text-slate-900' : deltaProfit && deltaProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {formatCurrency(profit)}
                         </p>
                     </div>
@@ -230,7 +230,7 @@ const ResultCard: React.FC<{
                     )}
                 </div>
 
-                <div className={`pt-4 border-t ${isNeutral ? 'border-slate-300' : 'border-indigo-900'}`}>
+                <div className={`pt-4 border-t ${isNeutral ? 'border-slate-300' : 'border-sky-900'}`}>
                     <div className="flex justify-between text-xs mb-2">
                         <span className={isNeutral ? 'text-slate-500' : 'text-slate-400'}>Revenue</span>
                         <span className={`font-mono ${isNeutral ? 'font-bold text-slate-700' : 'font-light text-slate-200'}`}>{formatCurrency(revenue)}</span>

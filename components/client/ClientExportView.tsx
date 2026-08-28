@@ -18,6 +18,7 @@ import ClientRoomwise from './ClientRoomwise';
 import ClientMaterialSpecs from './ClientMaterialSpecs';
 import ClientLevel3Contract from './ClientLevel3Contract';
 import ClientMaterials from './ClientMaterials';
+import ClientBookletProposal from './ClientBookletProposal';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
 
@@ -26,9 +27,12 @@ interface ClientExportViewProps {
     projectContext: ProjectContext;
     comparisonData: AiComparisonResult;
     timelinePhases: TimelinePhase[];
+    setTimelinePhases?: React.Dispatch<React.SetStateAction<TimelinePhase[]>>;
+    bank?: any[];
+    isClientViewOnly?: boolean;
     paymentMilestones: PaymentMilestone[];
-    tasks: ProjectTask[];
-    currentRevisionBoq: any[];
+    tasks?: ProjectTask[];
+    currentRevisionBoq?: any[];
     decisionBrainOutput?: DecisionBrainOutput | null;
     level: ProposalLevel;
     materialSuggestions: MaterialSuggestion[];
@@ -37,6 +41,7 @@ interface ClientExportViewProps {
     onVisibilityChange?: (visibility: Record<string, boolean>) => void;
     onUpdatePaymentSchedule?: (milestones: PaymentMilestone[], config: { signupDate?: string, possessionDate?: string }) => void;
     setProjectContext?: React.Dispatch<React.SetStateAction<ProjectContext>>;
+    proposalFormat?: 'classic' | 'booklet';
 }
 
 interface SectionVisibilityModalProps {
@@ -49,10 +54,10 @@ interface SectionVisibilityModalProps {
 const SectionVisibilityModal: React.FC<SectionVisibilityModalProps> = ({ isOpen, onClose, visibility, onChange }) => {
     if (!isOpen) return null;
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-indigo-950/60 backdrop-blur-md backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
                 <div className="p-4 border-b flex justify-between items-center bg-slate-50">
-                    <h3 className="font-bold text-indigo-900">Section Visibility</h3>
+                    <h3 className="font-bold text-slate-800">Section Visibility</h3>
                     <button onClick={onClose}><CloseIcon className="w-5 h-5 text-slate-500" /></button>
                 </div>
                 <div className="p-4 max-h-[60vh] overflow-y-auto">
@@ -62,7 +67,7 @@ const SectionVisibilityModal: React.FC<SectionVisibilityModalProps> = ({ isOpen,
                                 type="checkbox" 
                                 checked={visibility[key]} 
                                 onChange={(e) => onChange({...visibility, [key]: e.target.checked})}
-                                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                                className="w-4 h-4 text-[#0066CC] rounded focus:ring-[#0066CC] border-gray-300"
                             />
                             <span className="text-sm font-medium text-slate-700 capitalize">{key.replace(/_/g, ' ')}</span>
                         </label>
@@ -79,7 +84,7 @@ const SectionWrapper: React.FC<{ id: string; onEdit?: (id: string) => void; chil
         {onEdit && (
             <button 
                 onClick={(e) => { e.stopPropagation(); onEdit(id); }}
-                className={`absolute z-20 p-2 bg-white/90 backdrop-blur rounded-full text-slate-400 hover:text-indigo-600 hover:bg-white shadow-sm border border-slate-200 transition-all opacity-0 group-hover/section:opacity-100 print:hidden ${editButtonClass}`}
+                className={`absolute z-20 p-2 bg-white/90 backdrop-blur rounded-full text-slate-400 hover:text-[#0066CC] hover:bg-white shadow-sm border border-slate-200 transition-all opacity-0 group-hover/section:opacity-100 print:hidden ${editButtonClass}`}
                 title="Edit Section Text"
             >
                 <PencilIcon className="w-3.5 h-3.5" />
@@ -96,12 +101,12 @@ const ScanFirstSection: React.FC<{ title: string; cue: string; children: React.R
     >
         <summary className="flex items-center justify-between p-2 cursor-pointer list-none outline-none select-none [&::-webkit-details-marker]:hidden mb-2 rounded-xl hover:bg-slate-50 transition-colors">
             <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:text-slate-600 group-open:bg-indigo-600 group-open:text-white transition-all shadow-sm border border-slate-200 group-open:border-indigo-600 shrink-0">
+                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:text-slate-600 group-open:bg-[#0066CC] group-open:text-white transition-all shadow-sm border border-slate-200 group-open:border-[#0066CC] shrink-0">
                     <ChevronDownIcon className="w-5 h-5 transition-transform duration-300 group-open:rotate-180" />
                 </div>
                 <div>
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">{cue}</span>
-                    <span className="text-lg md:text-xl font-bold text-slate-700 group-open:text-indigo-950 leading-none">{title}</span>
+                    <span className="text-lg md:text-xl font-bold text-slate-700 group-open:text-slate-900 leading-none">{title}</span>
                 </div>
             </div>
         </summary>
@@ -137,12 +142,12 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
         footerText: orgData?.footerText || `${orgData?.orgName || 'Your Studio Name'} · ${orgData?.tagline || fetchedSettings?.clientPortalConfig?.introMessage || 'Minimal Design. Maximum Impact.'}`,
         address: orgData?.officeAddress || 'Studio Office, City',
         email: orgData?.contactEmail || fetchedSettings?.clientPortalConfig?.supportContact || 'hello@studio.com',
-        primaryColor: orgData?.themeColor || '#4f46e5',
-        accentColor: orgData?.accentColor || orgData?.themeColor || '#4f46e5',
+        primaryColor: orgData?.themeColor || '#0066CC',
+        accentColor: orgData?.accentColor || orgData?.themeColor || '#0066CC',
         ...fetchedSettings
     }), [orgData, fetchedSettings]);
 
-    const { level, onEditSection, tiers = [], projectContext, timelinePhases = [], paymentMilestones = [], setProjectContext, clientBudget, onVisibilityChange, onUpdatePaymentSchedule } = props;
+    const { level, onEditSection, tiers = [], projectContext, timelinePhases = [], paymentMilestones = [], setProjectContext, clientBudget, onVisibilityChange, onUpdatePaymentSchedule, setTimelinePhases, bank = [], isClientViewOnly = false, proposalFormat } = props;
     const proposalType = (projectContext.proposalType || 'TURNKEY') as string;
     const [isSectionConfigOpen, setIsSectionConfigOpen] = useState(false);
     
@@ -223,6 +228,23 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
             total: finalExecutionTotal
         }
     };
+
+    if (proposalFormat === 'booklet' && !isL3) {
+        return (
+            <ClientBookletProposal
+                tiers={tiers}
+                projectContext={projectContext}
+                timelinePhases={timelinePhases}
+                paymentMilestones={paymentMilestones}
+                level={level}
+                settings={settings}
+                paymentStructure={paymentStructure}
+                onEditSection={onEditSection}
+                setProjectContext={setProjectContext}
+                isClientViewOnly={isClientViewOnly}
+            />
+        );
+    }
 
     return (
         <div className="vnext-proposal-wrapper pb-10 md:pb-0 bg-white min-h-screen relative" style={{ '--color-primary': settings.primaryColor, '--color-accent': settings.accentColor } as React.CSSProperties}>
@@ -321,7 +343,10 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                         {visibleSections.timeline && (
                             <ScanFirstSection title="Schedule" cue="Timeline">
                                 <SectionWrapper id="timeline" onEdit={onEditSection}>
-                                    <ClientTimeline timelinePhases={timelinePhases} content={content.timeline} />
+                                    <ClientTimeline 
+                                        timelinePhases={timelinePhases} 
+                                        content={content.timeline} 
+                                    />
                                 </SectionWrapper>
                             </ScanFirstSection>
                         )}
@@ -443,7 +468,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                             <SectionWrapper id="l2_risk" onEdit={onEditSection}>
                                 {/* L2 Risk Content or Footer Actions */}
                                 <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200">
-                                    <h3 className="font-bold text-indigo-900 mb-2">Execution Readiness</h3>
+                                    <h3 className="font-bold text-slate-800 mb-2">Execution Readiness</h3>
                                     <p className="text-sm text-slate-600">By approving this Level 2 document, you confirm the scope and specifications are final.</p>
                                 </div>
                             </SectionWrapper>
@@ -471,34 +496,34 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
             {/* Footer */}
             <div id="terms" className="page-break-before rounded-3xl border border-slate-200 bg-white p-8 md:p-12 print-only-block hidden print:block">
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Annexure A</div>
-                <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-indigo-950 border-b-2 border-indigo-950 pb-4">Standard Terms & Conditions</h2>
+                <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 border-b-2 border-[#0055B3] pb-4">Standard Terms & Conditions</h2>
                 
                 <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-12 text-xs text-slate-600 leading-relaxed">
                     <div className="space-y-6">
                         <div>
-                            <h4 className="font-bold text-indigo-950 uppercase tracking-wide mb-2">1. Validity of Proposal</h4>
+                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">1. Validity of Proposal</h4>
                             <p>This proposal is valid for {settings?.clientPortalConfig?.validityDays || 15} days from the date of issue. Prices are subject to change based on market fluctuations in raw material costs beyond this period.</p>
                         </div>
                         <div>
-                            <h4 className="font-bold text-indigo-950 uppercase tracking-wide mb-2">2. Scope of Work</h4>
+                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">2. Scope of Work</h4>
                             <p>The scope is limited to the items explicitly mentioned in the "Room-wise Breakdown". Any additional work requested during execution will be billed separately as "Extra Items" at prevailing rates.</p>
                         </div>
                         <div>
-                            <h4 className="font-bold text-indigo-950 uppercase tracking-wide mb-2">3. Payment Terms</h4>
+                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">3. Payment Terms</h4>
                             <p>Work will proceed only upon receipt of payments as per the agreed milestone schedule. Delays in payment may lead to site stoppage and revision of the handover date.</p>
                         </div>
                     </div>
                     <div className="space-y-6">
                         <div>
-                            <h4 className="font-bold text-indigo-950 uppercase tracking-wide mb-2">4. Design Approvals</h4>
+                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">4. Design Approvals</h4>
                             <p>All designs, material selections, and drawings must be signed off by the client before production begins. Changes requested after sign-off may incur additional costs and time.</p>
                         </div>
                         <div>
-                            <h4 className="font-bold text-indigo-950 uppercase tracking-wide mb-2">5. Site Access & Utilities</h4>
+                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">5. Site Access & Utilities</h4>
                             <p>The client must ensure continuous access to the site, along with provision for electricity and water required for execution. Any society/government permissions are the client's responsibility unless mentioned otherwise.</p>
                         </div>
                         <div>
-                            <h4 className="font-bold text-indigo-950 uppercase tracking-wide mb-2">6. Warranty</h4>
+                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">6. Warranty</h4>
                             <p>{orgData?.orgName || 'The Studio'} provides a 5-year limited warranty on modular carpentry and a 1-year service warranty on general contracting work. Manufacturer warranties apply for hardware and appliances.</p>
                         </div>
                     </div>
@@ -510,7 +535,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
             </div>
 
             {/* Footer */}
-            <div className="bg-indigo-950 text-slate-400 py-12 text-center print:hidden">
+            <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-slate-400 py-12 text-center print:hidden">
                 <SectionWrapper id="footer" onEdit={onEditSection}>
                     <p className="font-bold text-white text-lg mb-2">{settings.companyName}</p>
                     <p className="text-sm">{settings.tagline}</p>

@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOQ Copilot — Redesigned Client Portal (Sidebar & Direct Chat V3)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#F0F7FF',
+              100: '#E0EFFE',
+              500: '#0066CC',
+              600: '#0055B3',
+              700: '#004499',
+              900: '#0A2540',
+            },
+            gold: {
+              400: '#F59E0B',
+              500: '#D97706',
+              600: '#B45309',
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #F8FAFC;
+      color: #0F172A;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
+    }
+    .sidebar-link {
+      display: flex;
+      items-center: center;
+      gap: 0.75rem;
+      padding: 0.625rem 0.875rem;
+      border-radius: 0.75rem;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: #475569;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .sidebar-link:hover {
+      background-color: #F1F5F9;
+      color: #0F172A;
+    }
+    .sidebar-link.active {
+      background-color: #0066CC;
+      color: #FFFFFF;
+      box-shadow: 0 4px 12px rgba(0, 102, 204, 0.2);
+    }
+    .sidebar-link.active i {
+      color: #FFFFFF !important;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#F8FAFC] antialiased flex flex-col lg:flex-row">
+
+  <!-- LEFT SIDEBAR NAVIGATION -->
+  <aside class="w-full lg:w-72 bg-white border-r border-slate-200/90 flex flex-col shrink-0 lg:min-h-screen sticky top-0 z-30">
+    
+    <!-- Studio Header -->
+    <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-[#0A2540] text-amber-400 flex items-center justify-center font-black text-lg shadow-sm border border-amber-500/30">
+          F
+        </div>
+        <div>
+          <span class="text-[10px] font-extrabold uppercase tracking-widest text-[#0066CC] bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
+            Form Factors
+          </span>
+          <h2 class="text-xs font-black text-slate-900 tracking-tight leading-tight mt-0.5">
+            Lodha Amara 2BHK
+          </h2>
+        </div>
+      </div>
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse hidden lg:block" title="Site Active"></span>
+    </div>
+
+    <!-- Navigation Menu Links -->
+    <nav class="p-3 space-y-1 flex-1 overflow-y-auto custom-scroll">
+      
+      <div class="px-3 pt-2 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+        Main Portal
+      </div>
+
+      <a onclick="switchTab('dashboard')" id="nav-dashboard" class="sidebar-link active">
+        <i data-lucide="layout-dashboard" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Dashboard</span>
+      </a>
+
+      <a onclick="switchTab('chat')" id="nav-chat" class="sidebar-link">
+        <i data-lucide="message-square-text" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Studio Direct Chat</span>
+        <span class="px-1.5 py-0.5 rounded-full bg-sky-600 text-white text-[10px] font-bold">2</span>
+      </a>
+
+      <a onclick="switchTab('site')" id="nav-site" class="sidebar-link">
+        <i data-lucide="camera" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Live Site Photo Feed</span>
+        <span class="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">New</span>
+      </a>
+
+      <div class="px-3 pt-4 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+        Design & Approvals
+      </div>
+
+      <a onclick="switchTab('renders')" id="nav-renders" class="sidebar-link">
+        <i data-lucide="box" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">3D Renders & Views</span>
+      </a>
+
+      <a onclick="switchTab('approvals')" id="nav-approvals" class="sidebar-link">
+        <i data-lucide="check-square" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Pending Sign-offs</span>
+        <span class="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold">1</span>
+      </a>
+
+      <a onclick="switchTab('materials')" id="nav-materials" class="sidebar-link">
+        <i data-lucide="layers" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Material Palette</span>
+      </a>
+
+      <div class="px-3 pt-4 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+        Commercial & Scope
+      </div>
+
+      <a onclick="switchTab('boq')" id="nav-boq" class="sidebar-link">
+        <i data-lucide="clipboard-list" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Project Scope & BOQ</span>
+      </a>
+
+      <a onclick="switchTab('payments')" id="nav-payments" class="sidebar-link">
+        <i data-lucide="wallet" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Payments & Invoices</span>
+      </a>
+
+    </nav>
+
+    <!-- Sidebar Bottom: Client Profile & Quick Direct Contact -->
+    <div class="p-3 border-t border-slate-100 bg-slate-50/80 space-y-2">
+      <div class="p-2.5 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between shadow-2xs">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-full bg-amber-100 border border-amber-300 text-amber-900 font-bold text-xs flex items-center justify-center">
+            AS
+          </div>
+          <div>
+            <p class="text-xs font-extrabold text-slate-900 leading-tight">Anand Sharma</p>
+            <p class="text-[10px] text-slate-500">Client ID: #CL-8821</p>
+          </div>
+        </div>
+        <button onclick="toggleModal('contact-modal')" class="p-1.5 hover:bg-slate-100 text-slate-500 rounded-lg cursor-pointer" title="Studio Hotline">
+          <i data-lucide="phone" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <button onclick="toggleModal('bank-modal')" class="w-full py-2 bg-[#0A2540] hover:bg-slate-800 text-amber-400 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs">
+        <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
+        <span>View Studio Bank Details</span>
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOP HEADER BAR -->
+    <header class="bg-white border-b border-slate-200/90 sticky top-0 z-20 shadow-2xs">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+        
+        <!-- Left Title Context -->
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-extrabold text-slate-900">Lodha Amara, Flat 1204 (2BHK)</span>
+            <span class="px-2 py-0.5 bg-emerald-50 text-emerald-800 rounded text-[10px] font-bold border border-emerald-200">
+              Stage 3: Millwork & Polishing
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-500">Handover Target: <strong class="text-slate-800">October 15, 2026</strong></p>
+        </div>
+
+        <!-- Right Direct Interaction Buttons -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          <button onclick="switchTab('chat')" class="px-3.5 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs">
+            <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+            <span>Chat with Studio Team</span>
+          </button>
+
+          <button onclick="requestSiteVisit()" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-500"></i>
+            <span>Request Site Visit</span>
+          </button>
+        </div>
+
+      </div>
+      <!-- Gold Hairline Branding Line -->
+      <div class="h-[2px] bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500"></div>
+    </header>
+
+    <!-- CONTENT BODY -->
+    <main class="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+
+      <!-- VIEW 1: DASHBOARD -->
+      <div id="view-dashboard" class="tab-view space-y-6">
+        
+        <!-- Hero Project Progress Summary -->
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <span class="text-[10px] font-extrabold uppercase tracking-widest text-[#0066CC]">Site Work Status</span>
+              <h2 class="text-xl font-black text-slate-900 mt-0.5">Your Home Execution is 68% Complete</h2>
+              <p class="text-xs text-slate-600">Custom woodwork carcass installed. Veneer polishing in living room underway.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="text-right">
+                <p class="text-2xl font-black text-[#0066CC]">68%</p>
+                <p class="text-[10px] font-bold text-slate-500 uppercase">On Schedule</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Room Completion meters -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+              <div class="flex justify-between font-extrabold text-slate-900 mb-1">
+                <span>Living Room</span>
+                <span class="text-emerald-600">85%</span>
+              </div>
+              <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-emerald-500 h-full rounded-full" style="width: 85%;"></div>
+              </div>
+            </div>
+
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+              <div class="flex justify-between font-extrabold text-slate-900 mb-1">
+                <span>Master Bed</span>
+                <span class="text-sky-600">65%</span>
+              </div>
+              <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-sky-500 h-full rounded-full" style="width: 65%;"></div>
+              </div>
+            </div>
+
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+              <div class="flex justify-between font-extrabold text-slate-900 mb-1">
+                <span>Modular Kitchen</span>
+                <span class="text-sky-600">70%</span>
+              </div>
+              <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-sky-500 h-full rounded-full" style="width: 70%;"></div>
+              </div>
+            </div>
+
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+              <div class="flex justify-between font-extrabold text-slate-900 mb-1">
+                <span>Guest Room</span>
+                <span class="text-amber-600">50%</span>
+              </div>
+              <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-amber-500 h-full rounded-full" style="width: 50%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2-Column Section: Chat Teaser & Quick Actions -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          <!-- Left: Studio Direct Chat Teaser -->
+          <div class="lg:col-span-7 bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div class="flex items-center gap-2">
+                <i data-lucide="message-square-text" class="w-4 h-4 text-[#0066CC]"></i>
+                <h3 class="text-sm font-extrabold text-slate-900">Direct Studio Messages</h3>
+              </div>
+              <button onclick="switchTab('chat')" class="text-xs font-bold text-[#0066CC] hover:underline cursor-pointer">Open Full Chat →</button>
+            </div>
+
+            <div class="space-y-3">
+              <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                <div class="flex justify-between items-center text-[11px]">
+                  <span class="font-extrabold text-slate-900">Priya Nair (Lead Designer)</span>
+                  <span class="text-slate-400">10:45 AM</span>
+                </div>
+                <p class="text-xs text-slate-600">Hi Anand! We've uploaded the living room veneer polish coat 1 photos. Please review and let us know if you need any adjustments.</p>
+              </div>
+
+              <div class="p-3 bg-sky-50 rounded-2xl border border-sky-100 space-y-1">
+                <div class="flex justify-between items-center text-[11px]">
+                  <span class="font-extrabold text-[#0066CC]">Rajesh Verma (Site Supervisor)</span>
+                  <span class="text-slate-400">Yesterday</span>
+                </div>
+                <p class="text-xs text-slate-600">Modular kitchen quartz countertop edge beveling is complete. Acrylic shutter fitting scheduled tomorrow morning.</p>
+              </div>
+            </div>
+
+            <!-- Quick Reply Box -->
+            <div class="flex items-center gap-2 pt-2">
+              <input type="text" id="dashboard-quick-msg" placeholder="Type a message to studio..." class="flex-1 px-3 py-2 bg-slate-100 rounded-xl text-xs border border-slate-200 outline-none focus:border-[#0066CC]">
+              <button onclick="sendQuickMsg()" class="px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-bold cursor-pointer">Send</button>
+            </div>
+          </div>
+
+          <!-- Right: Pending Approval & Financial Gate -->
+          <div class="lg:col-span-5 space-y-4">
+            
+            <!-- Pending Sign-off Card -->
+            <div class="bg-amber-50/70 border border-amber-200 rounded-3xl p-5 space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold text-amber-950 uppercase tracking-wider">Pending Action</span>
+                <span class="px-2 py-0.5 bg-amber-500 text-white rounded text-[10px] font-bold">Action Required</span>
+              </div>
+              <div>
+                <p class="text-xs font-extrabold text-slate-900">Master Bedroom Headboard Fabric</p>
+                <p class="text-xs text-slate-600">Option B (Warm Oatmeal Velvet) recommended.</p>
+              </div>
+              <button onclick="switchTab('approvals')" class="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-xs">
+                Review & Approve Selection →
+              </button>
+            </div>
+
+            <!-- Payment Summary Card -->
+            <div class="bg-white border border-slate-200 rounded-3xl p-5 space-y-3">
+              <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+                <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Next Payment Gate</span>
+                <span class="text-xs font-bold text-amber-600">Due Sep 05</span>
+              </div>
+              <div class="flex justify-between items-baseline">
+                <div>
+                  <p class="text-xs font-bold text-slate-900">E3 — Finishing Advance (20%)</p>
+                  <p class="text-[11px] text-slate-500">Upon veneer delivery to site</p>
+                </div>
+                <span class="text-base font-black text-slate-900">₹3,70,000</span>
+              </div>
+              <button onclick="toggleModal('bank-modal')" class="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer">
+                View Studio NEFT / RTGS Details
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- VIEW 2: STUDIO DIRECT CHAT -->
+      <div id="view-chat" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl border border-slate-200 shadow-2xs overflow-hidden flex flex-col h-[600px]">
+          
+          <!-- Chat Header -->
+          <div class="p-4 bg-slate-900 text-white flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 font-black text-sm flex items-center justify-center">
+                FF
+              </div>
+              <div>
+                <h3 class="text-xs font-extrabold">Form Factors Studio Team</h3>
+                <p class="text-[10px] text-slate-300">Priya Nair (Lead Designer) & Rajesh Verma (Site Ops)</p>
+              </div>
+            </div>
+            <button onclick="requestSiteVisit()" class="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all cursor-pointer">
+              📅 Request Site Visit
+            </button>
+          </div>
+
+          <!-- Chat Feed -->
+          <div id="chat-messages-body" class="flex-1 p-4 overflow-y-auto space-y-3 custom-scroll bg-slate-50/60 text-xs">
+            <div class="p-3 bg-white border border-slate-200 rounded-2xl max-w-[80%] text-slate-800 shadow-2xs space-y-1">
+              <div class="flex justify-between items-center text-[10px] text-slate-400 font-bold">
+                <span>Priya Nair (Lead Designer)</span>
+                <span>09:30 AM</span>
+              </div>
+              <p>Good morning Anand! Living room veneer polishing coat 1 is done. Please review the new photos uploaded in the Site Feed tab.</p>
+            </div>
+
+            <div class="p-3 bg-[#0066CC] text-white rounded-2xl max-w-[80%] ml-auto shadow-2xs space-y-1">
+              <div class="flex justify-between items-center text-[10px] text-sky-200 font-bold">
+                <span>Anand Sharma (You)</span>
+                <span>09:42 AM</span>
+              </div>
+              <p>Thanks Priya! The veneer coat looks great. Will the PU clear coat change the shade significantly?</p>
+            </div>
+
+            <div class="p-3 bg-white border border-slate-200 rounded-2xl max-w-[80%] text-slate-800 shadow-2xs space-y-1">
+              <div class="flex justify-between items-center text-[10px] text-slate-400 font-bold">
+                <span>Rajesh Verma (Site Supervisor)</span>
+                <span>10:05 AM</span>
+              </div>
+              <p>Hello sir! The PU matte topcoat will protect the wood without darkening it further. You are welcome to inspect it in person tomorrow at 11 AM if you'd like!</p>
+            </div>
+          </div>
+
+          <!-- Chat Input Footer -->
+          <div class="p-3 border-t border-slate-200 bg-white flex items-center gap-2">
+            <input type="text" id="chat-input-full" placeholder="Ask a question or send a note to Priya & Rajesh..." class="flex-1 px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs outline-none focus:border-[#0066CC]" onkeydown="if(event.key==='Enter') sendFullChatMessage()">
+            <button onclick="sendFullChatMessage()" class="px-4 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5">
+              <span>Send</span>
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- VIEW 3: LIVE SITE FEED -->
+      <div id="view-site" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-base font-extrabold text-slate-900">Live Site Photo Feed</h3>
+              <p class="text-xs text-slate-500">Real-time uploads from site supervisor Rajesh Verma</p>
+            </div>
+            <span class="px-2.5 py-1 bg-emerald-50 text-emerald-800 rounded-lg text-xs font-bold border border-emerald-200">
+              14 Photos Logged
+            </span>
+          </div>
+
+          <div class="space-y-4">
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+              <div class="flex justify-between items-center">
+                <span class="text-xs font-extrabold text-slate-900">Living Room Veneer Polish — Coat 1</span>
+                <span class="text-[11px] text-slate-400 font-mono">Today, 11:30 AM</span>
+              </div>
+              <p class="text-xs text-slate-600">Super Walnut veneer polishing coat 1 completed on the main wall panel.</p>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=400&q=80" alt="Site Photo 1" class="rounded-xl h-32 w-full object-cover border border-slate-200 hover:opacity-90 cursor-pointer" onclick="openLightbox(this.src)">
+                <img src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=400&q=80" alt="Site Photo 2" class="rounded-xl h-32 w-full object-cover border border-slate-200 hover:opacity-90 cursor-pointer" onclick="openLightbox(this.src)">
+                <img src="https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=400&q=80" alt="Site Photo 3" class="rounded-xl h-32 w-full object-cover border border-slate-200 hover:opacity-90 cursor-pointer" onclick="openLightbox(this.src)">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 4: 3D RENDERS -->
+      <div id="view-renders" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <h3 class="text-base font-extrabold text-slate-900">Approved 3D Views</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50 cursor-pointer" onclick="openLightbox('https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=80')">
+              <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=600&q=80" alt="Living Render" class="h-48 w-full object-cover">
+              <div class="p-3">
+                <p class="text-xs font-bold text-slate-900">Living Room — 3D Perspective</p>
+                <p class="text-[10px] text-emerald-700 font-bold">Approved ✓</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 5: APPROVALS -->
+      <div id="view-approvals" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <h3 class="text-base font-extrabold text-slate-900">Pending Sign-offs & MOMs</h3>
+          <div id="approval-card" class="p-5 bg-amber-50/80 border border-amber-200 rounded-2xl space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-extrabold text-amber-950 uppercase tracking-wider">Master Bed Headboard Fabric</span>
+              <span class="text-[11px] text-amber-800 font-bold">Due Today</span>
+            </div>
+            <p class="text-xs text-slate-700">Option B (Warm Oatmeal Velvet) recommended by designer Priya Nair.</p>
+            <div class="flex justify-between items-center pt-2 border-t border-amber-200">
+              <span class="text-[11px] text-slate-500">1-click audit sign-off</span>
+              <button onclick="approveAction()" id="approve-action-btn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer">
+                Approve Option B
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 6: MATERIAL PALETTE -->
+      <div id="view-materials" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <h3 class="text-base font-extrabold text-slate-900">Approved Material Palette</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <p class="font-extrabold text-slate-900">Super Walnut Natural Veneer</p>
+              <p class="text-[11px] text-slate-500">Living Room TV Unit</p>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <p class="font-extrabold text-slate-900">Kalinga Stone Calacatta Quartz</p>
+              <p class="text-[11px] text-slate-500">Modular Kitchen</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 7: BOQ SCOPE -->
+      <div id="view-boq" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <h3 class="text-base font-extrabold text-slate-900">Project Scope (BOQ)</h3>
+            <span class="text-xs font-black text-slate-900">Total: ₹18,50,000</span>
+          </div>
+          <div class="space-y-2 text-xs">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between">
+              <div>
+                <p class="font-extrabold text-slate-900">Living Room False Ceiling & Cove</p>
+                <p class="text-[11px] text-slate-500">Gyproc Board + LED Channel • 220 sq.ft</p>
+              </div>
+              <span class="font-extrabold text-slate-900">₹66,000</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 8: PAYMENTS -->
+      <div id="view-payments" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <h3 class="text-base font-extrabold text-slate-900">Payment Milestones</h3>
+            <button onclick="toggleModal('bank-modal')" class="px-3 py-1.5 bg-[#0066CC] text-white rounded-xl text-xs font-bold">
+              Bank Details
+            </button>
+          </div>
+          <div class="space-y-3 text-xs">
+            <div class="p-4 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between">
+              <div>
+                <p class="font-extrabold text-slate-900">E1 — Material Order Advance (40%)</p>
+                <p class="text-[11px] text-slate-500">Paid Jun 10, 2026 • Receipt #RCT-1002</p>
+              </div>
+              <span class="font-black text-emerald-800">₹7,40,000 Paid ✓</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- BANK DETAILS MODAL -->
+  <div id="bank-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 border border-slate-200 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <h3 class="text-sm font-extrabold text-slate-900">Form Factors Design Studio Bank Details</h3>
+        <button onclick="toggleModal('bank-modal')" class="text-slate-400 hover:text-slate-600 text-sm font-bold">✕</button>
+      </div>
+      <div class="space-y-2 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200">
+        <p><span class="text-slate-500">Account Name:</span> <strong>Form Factors Design Studio Pvt Ltd</strong></p>
+        <p><span class="text-slate-500">Bank:</span> <strong>HDFC Bank Ltd</strong></p>
+        <p><span class="text-slate-500">Account Number:</span> <strong class="font-mono">50200049281102</strong></p>
+        <p><span class="text-slate-500">IFSC Code:</span> <strong class="font-mono">HDFC0000128</strong></p>
+      </div>
+      <button onclick="toggleModal('bank-modal')" class="w-full py-2 bg-slate-900 text-white rounded-xl text-xs font-bold">Close Window</button>
+    </div>
+  </div>
+
+  <!-- CONTACT STUDIO MODAL -->
+  <div id="contact-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 border border-slate-200 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <h3 class="text-sm font-extrabold text-slate-900">Contact Studio Team</h3>
+        <button onclick="toggleModal('contact-modal')" class="text-slate-400 hover:text-slate-600 text-sm font-bold">✕</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-center">
+          <div>
+            <p class="font-bold text-slate-900">Lead Designer: Priya Nair</p>
+            <p class="text-slate-500">+91 98200 11223</p>
+          </div>
+          <a href="tel:+919820011223" class="px-3 py-1 bg-emerald-600 text-white rounded-lg font-bold">Call</a>
+        </div>
+      </div>
+      <button onclick="toggleModal('contact-modal')" class="w-full py-2 bg-slate-900 text-white rounded-xl text-xs font-bold">Close Window</button>
+    </div>
+  </div>
+
+  <!-- LIGHTBOX MODAL -->
+  <div id="lightbox" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden" onclick="toggleModal('lightbox')">
+    <img id="lightbox-img" src="" class="rounded-2xl max-h-[85vh] max-w-[90vw] object-contain border border-slate-700 shadow-2xl">
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function switchTab(viewId) {
+      document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+      document.querySelectorAll('.tab-view').forEach(v => v.classList.add('hidden'));
+
+      const activeLink = document.getElementById('nav-' + viewId);
+      const activeView = document.getElementById('view-' + viewId);
+
+      if (activeLink) activeLink.classList.add('active');
+      if (activeView) activeView.classList.remove('hidden');
+    }
+
+    function toggleModal(id) {
+      document.getElementById(id).classList.toggle('hidden');
+    }
+
+    function openLightbox(src) {
+      document.getElementById('lightbox-img').src = src;
+      toggleModal('lightbox');
+    }
+
+    function sendQuickMsg() {
+      const input = document.getElementById('dashboard-quick-msg');
+      if (input && input.value.trim()) {
+        alert("Message sent to studio team: " + input.value);
+        input.value = '';
+      }
+    }
+
+    function sendFullChatMessage() {
+      const input = document.getElementById('chat-input-full');
+      const body = document.getElementById('chat-messages-body');
+      if (input && input.value.trim()) {
+        const div = document.createElement('div');
+        div.className = 'p-3 bg-[#0066CC] text-white rounded-2xl max-w-[80%] ml-auto shadow-2xs space-y-1';
+        div.innerHTML = `<div class="flex justify-between items-center text-[10px] text-sky-200 font-bold"><span>Anand Sharma (You)</span><span>Just now</span></div><p>${input.value}</p>`;
+        body.appendChild(div);
+        input.value = '';
+        body.scrollTop = body.scrollHeight;
+      }
+    }
+
+    function requestSiteVisit() {
+      alert("Site visit request submitted to Rajesh Verma for tomorrow. Studio will confirm via WhatsApp.");
+    }
+
+    function approveAction() {
+      const card = document.getElementById('approval-card');
+      const btn = document.getElementById('approve-action-btn');
+      if (card && btn) {
+        card.className = "p-5 bg-emerald-50/80 border border-emerald-200 rounded-2xl space-y-3 transition-all";
+        btn.outerHTML = `<span class="text-xs font-bold text-emerald-800 bg-emerald-100 px-3 py-1.5 rounded-xl border border-emerald-300">✓ Approved by Anand Sharma</span>`;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 
 import { useState, useEffect, useRef, Dispatch, SetStateAction } from 'react';
+import pako from 'pako';
 
 const COMPRESSION_PREFIX = "LZ:";
 const IDB_NAME = 'FFDS_Storage_DB';
@@ -43,15 +44,13 @@ const idbGet = async (key: string): Promise<string | undefined> => {
 };
 
 export function useLocalStorage<T>(key: string, initialValue: T, enabled: boolean = true): [T, Dispatch<SetStateAction<T>>] {
-    const pako = (window as any).pako;
-    
     // --- PARSER ---
     const parse = (item: string | null): T => {
         if (!item) return initialValue;
         
         try {
             // Check for compression prefix
-            if (item.startsWith(COMPRESSION_PREFIX) && pako) {
+            if (item.startsWith(COMPRESSION_PREFIX)) {
                 try {
                     const base64 = item.slice(COMPRESSION_PREFIX.length);
                     const binaryString = atob(base64);
@@ -125,8 +124,8 @@ export function useLocalStorage<T>(key: string, initialValue: T, enabled: boolea
             try {
                 let stringToStore = JSON.stringify(value);
                 
-                // Compress if pako exists and size > 500 bytes
-                if (pako && stringToStore.length > 500) {
+                // Compress if size > 500 bytes
+                if (stringToStore.length > 500) {
                     try {
                         const compressed = pako.deflate(stringToStore);
                         let binary = '';
@@ -170,7 +169,7 @@ export function useLocalStorage<T>(key: string, initialValue: T, enabled: boolea
         return () => {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
         };
-    }, [key, value, enabled, pako]);
+    }, [key, value, enabled]);
 
     return [value, setValue];
 }

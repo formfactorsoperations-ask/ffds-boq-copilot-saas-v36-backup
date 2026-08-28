@@ -50,7 +50,7 @@ export function generateProjectFeed(projectContext: ProjectContext, activeProjec
         timestamp: m.date ? new Date(m.date).getTime() : now,
         route: 'payment-calc'
       });
-            const isCompleted = projectContext.lifecycle?.stage === 'completed' || projectContext.status === 'completed';
+      const isCompleted = (projectContext.lifecycle?.stage || 1) >= 6;
       
       if ((m.status === 'invoiced' || (m as any).status === 'advance_requested') && !isCompleted) {
          items.push({
@@ -71,7 +71,8 @@ export function calculateActionProtocol(projectContext: ProjectContext, activePr
   const now = new Date();
   
   // -- STAGE-BASED RULES --
-  const isExecution = ['won', 'execution'].includes(projectContext.status || '');
+  const currentStageNum = projectContext.lifecycle?.stage || 1;
+  const isExecution = currentStageNum >= 4 && currentStageNum < 6;
   const isApproved = !!projectContext.approvedTierId;
   const project = projectContext as any;
 
@@ -110,7 +111,7 @@ export function calculateActionProtocol(projectContext: ProjectContext, activePr
   }
 
   // -- PENDING PAYMENT MILESTONES --
-  const isCompleted = projectContext.lifecycle?.stage === 'completed' || projectContext.status === 'completed';
+  const isCompleted = (projectContext.lifecycle?.stage || 1) >= 6;
   if (milestones && !isCompleted) {
     milestones.forEach(m => {
       if (m.status === 'invoiced' || (m as any).status === 'advance_requested') {
@@ -195,22 +196,9 @@ export function calculateActionProtocol(projectContext: ProjectContext, activePr
 
   // -- ACTIVE JOURNEY STEPS --
   if (journey && journey.activeSteps && journey.activeSteps.length > 0) {
-      const currentStage = projectContext.lifecycle?.stage || 'pre_sales';
-      let currentPhaseNo = 1;
-      let currentPhaseLabel = 'Pre-Sales';
-      if (currentStage === 'design') {
-          currentPhaseNo = 2;
-          currentPhaseLabel = 'Design';
-      } else if (currentStage === 'execution') {
-          currentPhaseNo = 3;
-          currentPhaseLabel = 'Execution';
-      } else if (currentStage === 'handover') {
-          currentPhaseNo = 4;
-          currentPhaseLabel = 'Handover';
-      } else if (currentStage === 'completed') {
-          currentPhaseNo = 4;
-          currentPhaseLabel = 'Handover';
-      }
+      const currentStageNum = projectContext.lifecycle?.stage || 1;
+      let currentPhaseNo: number = currentStageNum;
+      let currentPhaseLabel = ['Initial Consultation', 'Scope & Strategy', 'Proposal & Revisions', 'Agreement & Design', 'Execution', 'Handover & Closeout'][currentStageNum - 1] || 'Initial Consultation';
 
       const projectAny = projectContext as any;
       if (projectAny.currentPhase) {

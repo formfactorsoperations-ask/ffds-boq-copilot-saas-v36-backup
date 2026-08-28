@@ -4,15 +4,17 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "NODE_OPTIONS=--max-old-space-size=4096 vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "NODE_OPTIONS=--max-old-space-size=2048 vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^2.11.0",
     "@supabase/supabase-js": "^2.90.1",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/express": "^5.0.6",
     "@types/node": "^22.19.20",
+    "@types/pako": "^2.0.4",
     "@vitejs/plugin-react": "^5.2.0",
     "cors": "^2.8.6",
     "d3": "^7.9.0",
@@ -25,13 +27,16 @@
     "firebase": "^12.7.0",
     "framer-motion": "^11.3.19",
     "html2pdf.js": "^0.14.0",
+    "idb-keyval": "^6.3.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.0.1",
     "pako": "^2.1.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.3",
+    "react-glass-ui": "^1.2.2",
     "recharts": "^3.8.1",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.22.4",
     "typescript": "~5.8.2",
     "vite": "^6.4.3",
@@ -41,7 +46,6 @@
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",
     "@testing-library/react": "^16.3.2",
-    "@types/pako": "^2.0.4",
     "jsdom": "^29.1.1",
     "puppeteer": "^25.1.0",
     "vitest": "^4.1.9"

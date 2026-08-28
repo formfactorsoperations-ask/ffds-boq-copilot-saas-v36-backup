@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../services/firebaseClient';
 import { SiteVisitType, SiteVisit, MOM } from '../types';
-import { Calendar, Clock, MapPin, X, Users, Loader2, Video, FileText, CheckCircle2, ChevronRight, Download } from 'lucide-react';
-import { updateCalendarEventNotes } from '../services/siteVisitService';
+import { Calendar, Clock, MapPin, X, Users, Loader2, Video, FileText, CheckCircle2, ChevronRight, Download, Trash2 } from 'lucide-react';
+import { updateCalendarEventNotes, syncSiteVisitToCalendar } from '../services/siteVisitService';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import { MomCaptureModal } from '../components/ops/MomCaptureModal';
 import { MomReviewModal } from '../components/ops/MomReviewModal';
+import { connectGoogleCalendar } from '../services/googleCalendarService';
+import { getCachedAccessToken } from '../services/authService';
 
 export default function SiteVisitHistory({ 
   projectId, 
@@ -58,19 +60,19 @@ export default function SiteVisitHistory({
   }, [projectId, studioId]);
 
   return (
-    <div className="fixed inset-0 bg-indigo-950/50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl flex flex-col max-h-[90vh]">
         
         <div className="p-5 border-b flex items-center justify-between bg-slate-50 rounded-t-xl">
            <div>
-             <h2 className="text-xl font-bold text-indigo-950">Site Log & Meetings History</h2>
+             <h2 className="text-xl font-bold text-slate-900">Site Log & Meetings History</h2>
              <p className="text-sm text-slate-500 mt-1">{projectContext?.name}</p>
            </div>
            
            <div className="flex items-center gap-3">
               <div className="relative">
                  <select 
-                   className="appearance-none bg-indigo-600 text-white font-bold text-sm px-4 py-2 pr-8 rounded-lg shadow-sm outline-none cursor-pointer hover:bg-indigo-700 transition"
+                   className="appearance-none bg-[#0066CC] text-white font-bold text-sm px-4 py-2 pr-8 rounded-lg shadow-sm outline-none cursor-pointer hover:bg-[#0055B3] transition"
                    value=""
                    onChange={(e) => {
                       const v = visits.find(v => v.id === e.target.value);
@@ -139,18 +141,33 @@ export default function SiteVisitHistory({
   );
 }
 
-import { syncSiteVisitToCalendar } from '../services/siteVisitService';
-import { connectGoogleCalendar } from '../services/googleCalendarService';
-import { getCachedAccessToken } from '../services/authService';
-
 function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, onCaptureClick, onReviewClick }: { key?: string | number, visit: SiteVisit, mom?: MOM, settings: any, projectId: string, studioId: string, projectContext: any, onCaptureClick: () => void, onReviewClick: (momId: string) => void }) {
-  const isSite = visit.type === 'site_visit';
+  const isSite = visit.type === 'site_visit' || visit.type === 'measurement_survey';
   const dDate = visit.date?.toDate ? visit.date.toDate() : new Date(visit.date);
   
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesInput, setNotesInput] = useState(visit.notes || "");
   const [savingNotes, setSavingNotes] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const performDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const { deleteDoc, doc } = await import('firebase/firestore');
+      if (mom?.id) {
+        await deleteDoc(doc(db, `organizations/${studioId}/projects/${projectId}/moms`, mom.id));
+      }
+      await deleteDoc(doc(db, `organizations/${studioId}/projects/${projectId}/siteVisits`, visit.id));
+    } catch (e) {
+      console.error("Failed to delete event:", e);
+      alert("Failed to delete event.");
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
 
   const saveNotes = async () => {
     setSavingNotes(true);
@@ -205,26 +222,57 @@ function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, 
 
   return (
     <div className={`bg-white rounded-xl shadow-sm border overflow-hidden ${visit.status === 'cancelled' ? 'opacity-60 grayscale' : ''}`}>
-      <div className={`p-4 border-b flex items-center justify-between ${isSite ? 'bg-orange-50/50 border-orange-100' : 'bg-blue-50/50 border-blue-100'}`}>
+      <div className={`p-4 border-b flex items-center justify-between ${
+        isSite 
+          ? 'bg-orange-50/50 border-orange-100' 
+          : visit.type === 'internal_meeting'
+          ? 'bg-violet-50/50 border-violet-100'
+          : visit.type === 'vendor_meeting'
+          ? 'bg-amber-50/50 border-amber-100'
+          : 'bg-blue-50/50 border-blue-100'
+      }`}>
          <div className="flex items-center gap-3">
-           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl shadow-sm ${isSite ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
-              {isSite ? '🏗️' : '🤝'}
+           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl shadow-sm ${
+             isSite 
+               ? 'bg-orange-100 text-orange-600' 
+               : visit.type === 'internal_meeting'
+               ? 'bg-violet-100 text-violet-600'
+               : visit.type === 'vendor_meeting'
+               ? 'bg-amber-100 text-amber-600'
+               : 'bg-blue-100 text-blue-600'
+           }`}>
+              {visit.type === 'site_visit' ? '🏗️' : visit.type === 'measurement_survey' ? '📐' : visit.type === 'internal_meeting' ? '👥' : visit.type === 'vendor_meeting' ? '🏭' : '🤝'}
            </div>
            <div>
-             <h3 className="font-bold text-indigo-950">{visit.title}</h3>
+             <h3 className="font-bold text-slate-900">{visit.title}</h3>
              <div className="flex items-center gap-2 mt-0.5 mt-1 text-xs font-semibold text-slate-500 tracking-wide uppercase">
                 <span>Phase: {visit.phaseTitle} (Step {visit.phaseStepNumber})</span>
                 {visit.status === 'cancelled' && <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded">Cancelled</span>}
              </div>
            </div>
          </div>
-         <div className="text-right">
-            <div className="flex items-center justify-end gap-1.5 font-bold text-slate-700">
-              <Calendar size={14} className="text-slate-400"/> {dDate.toLocaleDateString()}
-            </div>
-            <div className="flex items-center justify-end gap-1.5 text-sm text-slate-500 mt-1">
-              <Clock size={14}/> {visit.startTime} ({visit.durationMinutes}m)
-            </div>
+         <div className="flex items-center gap-4">
+           <div className="text-right">
+              <div className="flex items-center justify-end gap-1.5 font-bold text-slate-700">
+                <Calendar size={14} className="text-slate-400"/> {dDate.toLocaleDateString()}
+              </div>
+              <div className="flex items-center justify-end gap-1.5 text-sm text-slate-500 mt-1">
+                <Clock size={14}/> {visit.startTime} ({visit.durationMinutes}m)
+              </div>
+           </div>
+           
+           <button
+             onClick={() => setShowDeleteConfirm(true)}
+             disabled={isDeleting}
+             title="Delete Meeting / Event"
+             className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+           >
+             {isDeleting ? (
+               <Loader2 size={16} className="animate-spin text-red-600" />
+             ) : (
+               <Trash2 size={16} />
+             )}
+           </button>
          </div>
       </div>
             <div className="p-4 grid grid-cols-3 gap-6">
@@ -233,7 +281,7 @@ function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, 
                <div className="flex items-center justify-between mb-1.5">
                    <h4 className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1"><FileText size={12}/> Notes / Agenda</h4>
                    {(!mom) ? (
-                       <button onClick={onCaptureClick} className="text-[10px] uppercase font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md hover:bg-indigo-100 flex items-center gap-1">
+                       <button onClick={onCaptureClick} className="text-[10px] uppercase font-bold text-[#0066CC] bg-sky-50 px-2.5 py-1 rounded-md hover:bg-sky-100 flex items-center gap-1">
                            <FileText size={12}/> Create MoM
                        </button>
                    ) : (
@@ -246,14 +294,14 @@ function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, 
             </div>
             
             {mom && (
-               <div className="bg-indigo-50/50 border border-indigo-100 rounded-lg p-3 space-y-4 mt-4">
-                  <div className="flex justify-between items-center border-b border-indigo-100 pb-2">
+               <div className="bg-sky-50/50 border border-sky-100 rounded-lg p-3 space-y-4 mt-4">
+                  <div className="flex justify-between items-center border-b border-sky-100 pb-2">
                      <div>
-                         <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1">
-                           <CheckCircle2 size={14} className="text-indigo-500" />
+                         <p className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1">
+                           <CheckCircle2 size={14} className="text-[#0066CC]" />
                            Minutes of Meeting Generated
                          </p>
-                         <p className="text-[10px] text-indigo-600 mt-0.5">Ref: {mom.momRef} | Status: {mom.status}</p>
+                         <p className="text-[10px] text-[#0066CC] mt-0.5">Ref: {mom.momRef} | Status: {mom.status}</p>
                      </div>
                   </div>
                   
@@ -342,6 +390,39 @@ function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, 
             </div>
          </div>
       </div>
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 z-[110] flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/80 w-full max-w-md p-6 space-y-4 text-left">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="p-2 bg-red-50 rounded-full">
+                <Trash2 size={20} />
+              </div>
+              <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Delete Logged Event</h3>
+            </div>
+            
+            <p className="text-xs text-slate-500 leading-relaxed text-slate-600">
+              Are you sure you want to delete this logged event <span className="font-semibold text-slate-700">({visit.title})</span>? This will also permanently delete any associated Minutes of Meeting (MoM) {mom ? `(${mom.momRef})` : ""}. This action cannot be undone.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                type="button"
+                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={performDelete}
+                type="button"
+                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm hover:shadow transition"
+              >
+                Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

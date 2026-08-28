@@ -1,60 +1,104 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
+import SuccessWithNextToast from './components/SuccessWithNextToast';
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import Sidebar from "./components/Header";
 import Breadcrumb from "./components/Breadcrumb";
-import Dashboard from "./components/Dashboard";
-import StudioDashboard from "./components/StudioDashboard";
-import ProjectListTab from "./components/ProjectListTab";
-import BankTab from "./components/BankTab";
-import TemplateEditorTab from "./components/TemplateEditorTab";
-import AIStrategyTab from "./components/AIStrategyTab";
-import ProjectSetupWizard from "./components/ProjectSetupWizard";
-import PhaseTransitionWidget from "./components/PhaseTransitionWidget";
-import LeadBrainTab from "./components/LeadBrainTab";
-import TimelineTab from "./components/TimelineTab";
-import MaterialTab from "./components/MaterialTab";
-import SOFBoardTab from "./components/SOFBoardTab";
-import ContractTab from "./components/ContractTab";
-import ExecutionAgreementPage from "./components/client/ExecutionAgreementPage";
-import DesignCompleteGate from "./components/ops/DesignCompleteGate";
-import OnboardingKitPage from "./components/client/OnboardingKitPage";
-import EmailDraftsTab from "./components/EmailDraftsTab";
-import SiteOpsTab from "./components/SiteOpsTab";
-import ClientTab from "./components/ClientTab";
-import AnalyticsTab from "./components/AnalyticsTab";
-import OperationsTab from "./components/OperationsTab";
+import { ProjectWorkspace } from "./components/ProjectWorkspace";
+import { JourneyProvider } from "./services/journeyEngine";
+import LockedState from "./components/LockedState";
+import { diffHistory, appendHistory } from "./lib/projectHistory";
 import ProjectContextCard from "./components/ProjectContextCard";
-import PaymentCalculatorTab from "./components/PaymentCalculatorTab";
-import RevisionStudio from "./components/RevisionStudio";
-import ClientPortal from "./components/ClientPortal";
-import LoginScreen from "./components/LoginScreen";
-import TeamTab from "./components/TeamTab";
-import SubscriptionTab from "./components/SubscriptionTab";
-import StudioSetupWizard from "./components/StudioSetupWizard";
-import StudioSettingsTab from "./components/studio/StudioSettingsTab";
-import StudioSettingsShell from "./components/StudioSettingsShell";
-import SuperAdminDashboard from "./components/SuperAdminDashboard";
-import SignoffPage from "./components/SignoffPage";
-import AgreementSignoffPage from "./components/AgreementSignoffPage";
-import SelectionConfirmPage from "./pages/SelectionConfirmPage";
-import { CommunicationTracker } from "./components/ops/CommunicationTrackerPage";
-import TermsDocketPage from "./components/client/TermsDocketPage";
-import HandoverDocketPage from "./components/client/HandoverDocketPage";
-import PaymentSchedulePage from "./components/client/PaymentSchedulePage";
-import { EngagementLifecycleWidget } from "./components/ops/EngagementLifecycleWidget";
-import { MomAcknowledgePage } from "./components/client/MomAcknowledgePage";
-import ProjectJourneyPage from "./components/ops/journey/ProjectJourneyPage";
-import ManualStepCompleter from "./components/ops/journey/ManualStepCompleter";
-import DrawingTrackerModule from "./components/ops/DrawingTrackerModule";
-import ScopeAdditionsModule from "./components/ops/ScopeAdditionsModule";
-import SupervisorMobileApp from "./components/SupervisorMobileApp";
-import WeeklyProgressReportTab from "./components/WeeklyProgressReportTab";
 import { useOrg } from "./contexts/OrgContext";
+import PageTitleBlock from "./components/PageTitleBlock";
+import { PageHeaderProvider } from "./contexts/PageHeaderContext";
+import { BackgroundBeamsWithCollision } from "./components/ui/background-beams-with-collision";
+import StudioHome from "./components/StudioHome";
+
+// Helper for resilient lazy loading of dynamic modules with automatic single retry and window reload fallback
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+) {
+  return lazy(async () => {
+    try {
+      return await factory();
+    } catch (error) {
+      console.warn("Dynamic import failed, retrying after backoff...", error);
+      await new Promise(res => setTimeout(res, 500));
+      try {
+        return await factory();
+      } catch (retryErr) {
+        console.error("Dynamic import failed after retry:", retryErr);
+        const hasReloaded = sessionStorage.getItem("chunk_reload_done");
+        if (!hasReloaded) {
+          sessionStorage.setItem("chunk_reload_done", "true");
+          window.location.reload();
+          return new Promise(() => {}) as any;
+        }
+        throw retryErr;
+      }
+    }
+  });
+}
+
+// Lazy-loaded Views & Tabs to reduce bundle size and memory footprint during compilation
+const DocumentsHub = lazyWithRetry(() => import("./components/DocumentsHub"));
+const TemplatesAndBankTab = lazyWithRetry(() => import("./components/TemplatesAndBankTab"));
+const Dashboard = lazyWithRetry(() => import("./components/Dashboard"));
+const StudioDashboard = lazyWithRetry(() => import("./components/StudioDashboard"));
+const ProjectListTab = lazyWithRetry(() => import("./components/ProjectListTab"));
+const BankTab = lazyWithRetry(() => import("./components/BankTab"));
+const TemplateEditorTab = lazyWithRetry(() => import("./components/TemplateEditorTab"));
+const AIStrategyTab = lazyWithRetry(() => import("./components/AIStrategyTab"));
+const ProjectSetupWizard = lazyWithRetry(() => import("./components/ProjectSetupWizard"));
+const LeadBrainTab = lazyWithRetry(() => import("./components/LeadBrainTab"));
+const TimelineTab = lazyWithRetry(() => import("./components/TimelineTab"));
+const MaterialTab = lazyWithRetry(() => import("./components/MaterialTab"));
+const SOFBoardTab = lazyWithRetry(() => import("./components/SOFBoardTab"));
+const ExecutionAgreementPage = lazyWithRetry(() => import("./components/client/ExecutionAgreementPage"));
+const DesignCompleteGate = lazyWithRetry(() => import("./components/ops/DesignCompleteGate"));
+const OnboardingKitPage = lazyWithRetry(() => import("./components/client/OnboardingKitPage"));
+const EmailDraftsTab = lazyWithRetry(() => import("./components/EmailDraftsTab"));
+const SiteOpsTab = lazyWithRetry(() => import("./components/SiteOpsTab"));
+const ClientTab = lazyWithRetry(() => import("./components/client/ClientTab"));
+const AnalyticsTab = lazyWithRetry(() => import("./components/AnalyticsTab"));
+const OperationsTab = lazyWithRetry(() => import("./components/OperationsTab"));
+const ProjectHistory = lazyWithRetry(() => import("./components/ProjectHistory"));
+const PaymentCalculatorTab = lazyWithRetry(() => import("./components/PaymentCalculatorTab"));
+const RevisionStudio = lazyWithRetry(() => import("./components/RevisionStudio"));
+const ClientPortal = lazyWithRetry(() => import("./components/ClientPortal"));
+const ClientsDirectory = lazyWithRetry(() => import("./components/ClientsDirectory"));
+const StudioReports = lazyWithRetry(() => import("./components/StudioReports"));
+
+const LoginScreen = lazyWithRetry(() => import("./components/LoginScreen"));
+const TeamTab = lazyWithRetry(() => import("./components/TeamTab"));
+const SubscriptionTab = lazyWithRetry(() => import("./components/SubscriptionTab"));
+const StudioSetupWizard = lazyWithRetry(() => import("./components/StudioSetupWizard"));
+const StudioSettingsTab = lazyWithRetry(() => import("./components/studio/StudioSettingsTab"));
+const StudioSettingsShell = lazyWithRetry(() => import("./components/StudioSettingsShell"));
+const SuperAdminDashboard = lazyWithRetry(() => import("./components/SuperAdminDashboard"));
+const SignoffPage = lazyWithRetry(() => import("./components/SignoffPage"));
+const AgreementSignoffPage = lazyWithRetry(() => import("./components/AgreementSignoffPage"));
+const SelectionConfirmPage = lazyWithRetry(() => import("./pages/SelectionConfirmPage"));
+const CommunicationTracker = lazyWithRetry(() => import("./components/ops/CommunicationTrackerPage").then(module => ({ default: module.CommunicationTracker })));
+const TermsDocketPage = lazyWithRetry(() => import("./components/client/TermsDocketPage"));
+const HandoverDocketPage = lazyWithRetry(() => import("./components/client/HandoverDocketPage"));
+const PaymentSchedulePage = lazyWithRetry(() => import("./components/client/PaymentSchedulePage"));
+const SnagListReportPage = lazyWithRetry(() => import("./components/client/SnagListReportPage"));
+const QualityChecklistReportPage = lazyWithRetry(() => import("./components/client/QualityChecklistReportPage"));
+const EngagementLifecycleWidget = lazyWithRetry(() => import("./components/ops/EngagementLifecycleWidget").then(module => ({ default: module.EngagementLifecycleWidget })));
+const MomAcknowledgePage = lazyWithRetry(() => import("./components/client/MomAcknowledgePage").then(module => ({ default: module.MomAcknowledgePage })));
+const ProjectJourneyPage = lazyWithRetry(() => import("./components/ops/journey/ProjectJourneyPage"));
+const ManualStepCompleter = lazyWithRetry(() => import("./components/ops/journey/ManualStepCompleter"));
+const DrawingTrackerModule = lazyWithRetry(() => import("./components/ops/DrawingTrackerModule"));
+const ScopeAdditionsModule = lazyWithRetry(() => import("./components/ops/ScopeAdditionsModule"));
+const SupervisorMobileApp = lazyWithRetry(() => import("./components/SupervisorMobileApp"));
 
 import {
   FullProjectData,
   ProjectContext,
+  ProjectStatus,
+  HistoryEvent,
   ProposalTier,
   Item,
   AIStrategy,
@@ -71,6 +115,8 @@ import {
   ExecutionBundleStatus,
 } from "./types";
 import { db } from "./services/dbService";
+import { db as firestoreDb } from "./services/firebaseClient";
+import { collection, doc, getDocs, writeBatch, serverTimestamp } from "firebase/firestore";
 import { verifyApiKey } from "./services/geminiService";
 import { id as generateId, calculateSellPrice } from "./lib/utils";
 import { initCommunicationLog } from "./services/communicationTrackerService";
@@ -100,7 +146,18 @@ export default function App() {
   // Global State
   console.log("App.tsx is rendering...");
   const { orgData, currentUserAuth, currentRole, teamMembers } = useOrg();
-  const [activeTab, setActiveTab] = useState("projects");
+  const [activeTab, setActiveTab] = useState("home");
+  const [showWizardOverride, setShowWizardOverride] = useState(false);
+  useEffect(() => {
+    const handleTabChange = (e: any) => {
+        if (e.detail) {
+            setActiveTab(e.detail);
+        }
+    };
+    window.addEventListener('change-tab', handleTabChange);
+    return () => window.removeEventListener('change-tab', handleTabChange);
+  }, []);
+
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIStatus>("checking");
 
@@ -113,6 +170,7 @@ export default function App() {
 
   // Active Project State
   const [activeInternalId, setActiveInternalId] = useState<string | null>(null);
+  const [projectArchitecture, setProjectArchitecture] = useState<'legacy' | 'canonical'>('canonical');
   const [projectContext, setProjectContext] =
     useState<ProjectContext>(DEFAULT_CONTEXT);
   const [tiers, setTiers] = useState<ProposalTier[]>([]);
@@ -176,16 +234,23 @@ export default function App() {
   // --- INITIALIZATION ---
   useEffect(() => {
     const init = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const signoffQueryToken = urlParams.get("signoff");
-      if (signoffQueryToken) {
-        setSignoffToken(signoffQueryToken);
-        setAppMode("signoff");
-        setIsDataLoaded(true);
-        return;
+      const searchStr = window.location.search;
+      const hashStr = window.location.hash;
+      const urlParams = new URLSearchParams(searchStr);
+      
+      // Also extract params if in hash (e.g. #/?agreementSignoff=... or #?agreementSignoff=...)
+      let hashParams = new URLSearchParams();
+      if (hashStr.includes("?")) {
+        hashParams = new URLSearchParams(hashStr.substring(hashStr.indexOf("?")));
       }
 
-      const agreementQueryToken = urlParams.get("agreementSignoff");
+      const signoffQueryToken = urlParams.get("signoff") || hashParams.get("signoff");
+      const agreementQueryToken = 
+        urlParams.get("agreementSignoff") || hashParams.get("agreementSignoff") ||
+        urlParams.get("agreement") || hashParams.get("agreement") ||
+        urlParams.get("contractSignoff") || hashParams.get("contractSignoff");
+      const pinQuery = urlParams.get("pin") || hashParams.get("pin");
+
       if (agreementQueryToken) {
         setAgreementSignoffToken(agreementQueryToken);
         setAppMode("agreement_signoff");
@@ -193,14 +258,75 @@ export default function App() {
         return;
       }
 
-      const path = window.location.pathname;
-      if (path.startsWith("/signoff/")) {
-        const token = path.split("/")[2];
-        if (token) {
-          setSignoffToken(token);
-          setAppMode("signoff");
+      if (pinQuery) {
+        setAgreementSignoffToken(pinQuery);
+        setAppMode("agreement_signoff");
+        setIsDataLoaded(true);
+        return;
+      }
+
+      if (signoffQueryToken) {
+        const isAgreementToken = 
+          signoffQueryToken.includes("AGREEMENT") ||
+          signoffQueryToken.startsWith("EXEC") ||
+          signoffQueryToken.startsWith("DESIGN_") ||
+          signoffQueryToken.startsWith("TERMS_") ||
+          signoffQueryToken.startsWith("PROPOSAL_") ||
+          signoffQueryToken.startsWith("HANDOVER_") ||
+          signoffQueryToken.startsWith("SEC-");
+
+        if (isAgreementToken) {
+          setAgreementSignoffToken(signoffQueryToken);
+          setAppMode("agreement_signoff");
           setIsDataLoaded(true);
-          return; // short circuit, no need to load full ops environment for public signoff link
+          return;
+        }
+
+        setSignoffToken(signoffQueryToken);
+        setAppMode("signoff");
+        setIsDataLoaded(true);
+        return;
+      }
+
+      const path = window.location.pathname;
+      const cleanHash = hashStr.replace(/^#\/?/, '/');
+      const testPaths = [path, cleanHash];
+
+      for (const p of testPaths) {
+        if (p.startsWith("/agreement-signoff/") || p.startsWith("/agreement/")) {
+          const token = p.split("/")[2]?.split("?")[0];
+          if (token) {
+            setAgreementSignoffToken(token);
+            setAppMode("agreement_signoff");
+            setIsDataLoaded(true);
+            return;
+          }
+        }
+
+        if (p.startsWith("/signoff/")) {
+          const token = p.split("/")[2]?.split("?")[0];
+          if (token) {
+            const isAgreementToken = 
+              token.includes("AGREEMENT") ||
+              token.startsWith("EXEC") ||
+              token.startsWith("DESIGN_") ||
+              token.startsWith("TERMS_") ||
+              token.startsWith("PROPOSAL_") ||
+              token.startsWith("HANDOVER_") ||
+              token.startsWith("SEC-");
+
+            if (isAgreementToken) {
+              setAgreementSignoffToken(token);
+              setAppMode("agreement_signoff");
+              setIsDataLoaded(true);
+              return;
+            }
+
+            setSignoffToken(token);
+            setAppMode("signoff");
+            setIsDataLoaded(true);
+            return;
+          }
         }
       }
       if (path.startsWith("/selection-confirm/")) {
@@ -293,8 +419,7 @@ export default function App() {
           storedProjects = projectsResult.value;
         } else {
           console.warn("Failed to load projects from DB, falling back to local memory:", projectsResult.reason);
-          const p = localStorage.getItem("ffds_project_library");
-          storedProjects = p ? JSON.parse(p) : [];
+          storedProjects = [];
         }
 
       } catch (e) {
@@ -394,6 +519,38 @@ export default function App() {
     init();
   }, []);
 
+  // Re-fetch all data when tenantId changes (multi-tenant isolation safety)
+  useEffect(() => {
+    if (!orgData?.tenantId) return;
+    
+    // Skip if data is not loaded yet (since init() will load it anyway)
+    if (!isDataLoaded) return;
+
+    async function reloadTenantData() {
+      console.log(`Tenant changed to ${orgData?.tenantId} - reloading library...`);
+      try {
+        const [bankResult, draftBankResult, templatesResult, projectsResult] = await Promise.allSettled([
+          db.getBank(),
+          db.getDraftBank(),
+          db.getTemplates(),
+          db.getProjects()
+        ]);
+
+        if (bankResult.status === 'fulfilled') setBank(bankResult.value);
+        if (draftBankResult.status === 'fulfilled') setDraftBank(draftBankResult.value);
+        if (templatesResult.status === 'fulfilled') setTemplates(templatesResult.value || INITIAL_TEMPLATES);
+        if (projectsResult.status === 'fulfilled') {
+          setProjectLibrary(projectsResult.value);
+          console.log(`Successfully reloaded ${projectsResult.value.length} projects for tenant ${orgData?.tenantId}`);
+        }
+      } catch (err) {
+        console.error("Error reloading tenant data:", err);
+      }
+    }
+    
+    reloadTenantData();
+  }, [orgData?.tenantId, isDataLoaded]);
+
   // Refresh Project Library on Tab Switch with Smart Merge
   useEffect(() => {
     if (activeTab === "projects") {
@@ -487,6 +644,7 @@ export default function App() {
     return tiers.map((tier) => {
       let totalSell = 0;
       let totalCost = 0;
+      let activeItemCount = 0;
 
       tier.boq.forEach((b) => {
         const item = bankMap.get(b.bankId);
@@ -495,25 +653,36 @@ export default function App() {
 
         if (item) {
           const effectiveMaterials = b.baseRate !== undefined ? b.baseRate : item.materials;
-          const cost = (effectiveMaterials + item.labor) * b.qty;
+          const effectiveLabor = b.labor !== undefined ? b.labor : item.labor;
+          const cost = (effectiveMaterials + effectiveLabor) * b.qty;
           const margin = b.marginOverride ?? item.margin;
           itemCost = cost;
           itemSell =
-            calculateSellPrice(effectiveMaterials, item.labor, margin) * b.qty;
+            calculateSellPrice(effectiveMaterials, effectiveLabor, margin) * b.qty;
         } else {
           // Safe calculation if item is completely missing from bank and adHocItems
           const margin = b.marginOverride ?? 0;
-          if (b.selectedRate) {
+          const effectiveMaterials = b.materials !== undefined ? b.materials : (b.baseRate !== undefined ? b.baseRate : 0);
+          const effectiveLabor = b.labor !== undefined ? b.labor : 0;
+          if (effectiveMaterials > 0 || effectiveLabor > 0) {
+            const cost = (effectiveMaterials + effectiveLabor) * b.qty;
+            itemCost = cost;
+            itemSell = calculateSellPrice(effectiveMaterials, effectiveLabor, margin) * b.qty;
+          } else if (b.selectedRate) {
             itemSell = b.selectedRate * b.qty;
-            itemCost = itemSell / (1 + margin);
+            itemCost = itemSell * (1 - margin / 100);
           } else {
             itemCost = 0;
             itemSell = 0;
           }
         }
 
-        totalCost += itemCost;
-        totalSell += itemSell;
+        const status = b.boqStatus;
+        if (status !== 'deleted' && status !== 'substituted' && status !== 'excluded' && status !== 'client_procured') {
+          totalCost += itemCost;
+          totalSell += itemSell;
+          activeItemCount++;
+        }
       });
 
       // Design Fee Calc
@@ -538,7 +707,7 @@ export default function App() {
           totalSell,
           totalCost,
           totalGm,
-          itemCount: tier.boq?.length || 0,
+          itemCount: activeItemCount,
           totalRevenue,
           designFee,
           blendedGm,
@@ -557,6 +726,7 @@ export default function App() {
 
         const updatedProject: FullProjectData = {
           id: activeInternalId,
+          architecture: projectArchitecture,
           lastModified: Date.now(),
           context: projectContext,
           tiers: tiersWithCalculatedSummaries, // Use calculated tiers
@@ -589,7 +759,53 @@ export default function App() {
     leadProfile,
     decisionBrainOutput,
     activeInternalId,
+    projectArchitecture,
   ]);
+
+  // Track project history changes via pure diff engine
+  const prevContextRef = useRef<{ id: string | null; context: ProjectContext } | null>(null);
+
+  // Prevent infinite loops and concurrent auto-promotion attempts
+  const isPromotingRef = useRef<Record<string, boolean>>({});
+  const lastPromoteAttemptRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    if (activeInternalId && projectContext) {
+      // If we switched projects or just initialized, establish baseline without diff
+      if (
+        prevContextRef.current === null ||
+        prevContextRef.current.id !== activeInternalId
+      ) {
+        prevContextRef.current = { id: activeInternalId, context: projectContext };
+        return;
+      }
+
+      const prev = prevContextRef.current.context;
+      // If identical reference, nothing changed
+      if (prev === projectContext) return;
+
+      const diffs = diffHistory(prev, projectContext, currentRole || "You");
+      
+      // Update baseline immediately
+      prevContextRef.current = { id: activeInternalId, context: projectContext };
+
+      if (diffs.length > 0) {
+        console.log("DIFF HISTORY TRIGGERED DIFFS: ", diffs);
+        const updatedHistory = appendHistory(projectContext.history, diffs);
+        // Pre-update the ref to avoid double triggers on the resulting state update
+        prevContextRef.current = {
+          id: activeInternalId,
+          context: { ...projectContext, history: updatedHistory },
+        };
+        setProjectContext((prevCtx) => {
+          if ((prevCtx.history?.length || 0) === updatedHistory.length) return prevCtx;
+          return { ...prevCtx, history: updatedHistory };
+        });
+      }
+    } else {
+      prevContextRef.current = null;
+    }
+  }, [projectContext, activeInternalId, currentRole]);
 
   // Auto-save Project to DB
   useEffect(() => {
@@ -598,8 +814,9 @@ export default function App() {
         "Auto-save useEffect triggered for project:",
         activeInternalId,
       );
-      const projectToSave: FullProjectData = {
+        const projectToSave: FullProjectData = {
         id: activeInternalId,
+        architecture: projectArchitecture,
         lastModified: Date.now(),
         context: projectContext,
         tiers: tiersWithCalculatedSummaries, // SAVE CALCULATED TIERS
@@ -629,7 +846,103 @@ export default function App() {
     leadProfile,
     decisionBrainOutput,
     activeInternalId,
+    projectArchitecture,
   ]);
+
+  // Auto-promote project to Stage 5 (Execution) ONLY if project is 'won' and all Stage 4 design gates are completed
+  useEffect(() => {
+    if (!activeInternalId || !orgData?.tenantId || !projectContext) return;
+    
+    // Only consider auto-promoting if the project is currently 'won' (Stage 4)
+    // Never auto-promote projects that are draft, lead, proposal_sent, negotiation, work_paused, completed, or lost
+    if (projectContext.status !== 'won') return;
+
+    const currentStage = projectContext.lifecycle?.stage || 1;
+    if (currentStage >= 5) return;
+
+    // Prevent concurrent promotion attempts or rapid retries (within 5 seconds) on errors/stale state
+    const now = Date.now();
+    const lastAttempt = lastPromoteAttemptRef.current[activeInternalId] || 0;
+    if (isPromotingRef.current[activeInternalId] || (now - lastAttempt < 5000)) {
+      return;
+    }
+
+    const checkAndPromote = async () => {
+      const projectId = activeInternalId;
+      if (isPromotingRef.current[projectId]) return;
+
+      isPromotingRef.current[projectId] = true;
+      lastPromoteAttemptRef.current[projectId] = Date.now();
+
+      try {
+        const orgId = orgData.tenantId;
+
+        // 1. Check Onboarding Kit completion
+        const onboardingCompleted = !!(projectContext.onboardingData || projectContext.onboardingContent);
+
+        // 2. Check Payment Schedule completion
+        const paymentScheduleCompleted = !!(projectContext.paymentMilestones && projectContext.paymentMilestones.length > 0);
+
+        // 3. Check Design Gate completion
+        const gateSnap = await getDocs(collection(firestoreDb, `organizations/${orgId}/projects/${projectId}/designGate`));
+        const gateDoc = gateSnap.docs.find(d => d.id === 'main');
+        const gateData = gateDoc?.data();
+        const designGateCompleted = !!(gateData && gateData.gateActivated);
+
+        // 4. Check Drawing Tracker completion
+        const drawingsSnap = await getDocs(collection(firestoreDb, `organizations/${orgId}/projects/${projectId}/drawingTracker`));
+        const drawings = drawingsSnap.docs.map(d => d.data());
+        const drawingsCompleted = drawings.length > 0 ? drawings.every((d: any) => d.approvedAt != null) : false;
+
+        if (onboardingCompleted && paymentScheduleCompleted && designGateCompleted && drawingsCompleted) {
+          console.log(`Auto-promoting project ${projectId} to Stage 5 (Execution). All approvals verified.`);
+          
+          // Import advance dynamically
+          const { advance } = await import('./services/lifecycleService');
+          
+          // Advance directly to Stage 5 (the service will auto-activate the design gate)
+          const updatedLifecycle = await advance(orgId, projectId, { type: 'ADVANCE', toStage: 5 });
+
+          // Update project context in state
+          const updatedCtx: ProjectContext = {
+            ...projectContext,
+            status: 'execution',
+            lifecycle: updatedLifecycle,
+          };
+          setProjectContext(updatedCtx);
+
+          // Update project library
+          setProjectLibrary((prev) =>
+            prev.map((p) => (p.id === projectId ? { ...p, context: updatedCtx, lastModified: Date.now() } : p))
+          );
+
+          // Update firestore document to enable the Execution tab
+          const batch = writeBatch(firestoreDb);
+          batch.set(doc(firestoreDb, `organizations/${orgId}/projects`, projectId), {
+            status: 'execution',
+            'context.status': 'execution',
+            'context.lifecycle': updatedLifecycle
+          }, { merge: true });
+
+          // Trigger live feed event
+          const feedRef = doc(collection(firestoreDb, `organizations/${orgId}/projects/${projectId}/liveFeed`));
+          batch.set(feedRef, {
+            type: 'milestone',
+            text: `⚡ Project auto-promoted to Execution stage (Stage 5) after verifying all approvals!`,
+            timestamp: serverTimestamp()
+          });
+
+          await batch.commit();
+        }
+      } catch (err) {
+        console.error("Failed to auto-promote project to execution:", err);
+      } finally {
+        isPromotingRef.current[projectId] = false;
+      }
+    };
+
+    checkAndPromote();
+  }, [activeInternalId, projectContext?.status, projectContext?.paymentMilestones, projectContext?.onboardingData, projectContext?.lifecycle?.stage, orgData?.tenantId]);
 
   const activeCalculatedTier = useMemo(() => {
     return tiersWithCalculatedSummaries.find((t) => t.id === activeTierId);
@@ -728,8 +1041,9 @@ export default function App() {
 
   // --- HANDLERS ---
 
-  const handleOpenProject = (project: FullProjectData) => {
+  const handleOpenProject = (project: FullProjectData, targetTab?: string) => {
     setActiveInternalId(project.id);
+    setProjectArchitecture(project.architecture || 'legacy');
     setProjectContext(project.context || DEFAULT_CONTEXT);
     setTiers(project.tiers || []);
     setActiveTierId(project.activeTierId || null);
@@ -738,12 +1052,13 @@ export default function App() {
     setTimelinePhases(project.timeline || []);
     setLeadProfile(project.leadProfile || DEFAULT_LEAD_PROFILE);
     setDecisionBrainOutput(project.decisionBrainOutput || null);
-    setActiveTab("dashboard");
+    setActiveTab(targetTab || "dashboard");
   };
 
   const handleCreateNewProject = () => {
     const newId = generateId();
     setActiveInternalId(newId);
+    setProjectArchitecture('canonical');
     setProjectContext(DEFAULT_CONTEXT);
     setTiers([]);
     setActiveTierId(null);
@@ -769,6 +1084,7 @@ export default function App() {
     // 2. If deleting the currently active project, reset the workspace
     if (activeInternalId === id) {
       setActiveInternalId(null);
+      setProjectArchitecture('canonical');
       setProjectContext(DEFAULT_CONTEXT);
       setTiers([]);
       setActiveTierId(null);
@@ -790,6 +1106,7 @@ export default function App() {
     const duplicated: FullProjectData = {
       ...clonedProject,
       id: generateId(),
+      architecture: clonedProject.architecture || 'legacy',
       context: { ...contextToUse, name: `${contextToUse.name} (Copy)` },
       lastModified: Date.now(),
     };
@@ -801,11 +1118,164 @@ export default function App() {
     await db.saveProject(duplicated);
   };
 
+  const handleProjectStatusChange = async (
+    projectId: string,
+    newStatus: ProjectStatus,
+    note?: string,
+  ) => {
+    const validStatuses: ProjectStatus[] = [
+      'lead',
+      'draft',
+      'proposal_sent',
+      'negotiation',
+      'won',
+      'execution',
+      'work_paused',
+      'completed',
+      'lost',
+    ];
+    const sanitizedStatus: ProjectStatus = validStatuses.includes(newStatus)
+      ? newStatus
+      : 'draft';
+
+    let targetStage = 1;
+    if (sanitizedStatus === 'lead') targetStage = 1;
+    else if (sanitizedStatus === 'draft') targetStage = 2;
+    else if (sanitizedStatus === 'proposal_sent' || sanitizedStatus === 'negotiation') targetStage = 3;
+    else if (sanitizedStatus === 'won') targetStage = 4;
+    else if (sanitizedStatus === 'execution' || sanitizedStatus === 'work_paused') targetStage = 5;
+    else if (sanitizedStatus === 'completed') targetStage = 6;
+    else if (sanitizedStatus === 'lost') targetStage = 0;
+
+    const existingProject = projectLibrary.find((p) => p.id === projectId);
+    const prevContext = existingProject?.context || (activeInternalId === projectId ? projectContext : undefined);
+    const prevStatus = prevContext?.status && validStatuses.includes(prevContext.status)
+      ? prevContext.status
+      : 'draft';
+
+    const historyEntry: HistoryEvent = {
+      id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      at: Date.now(),
+      actor: orgData?.role || 'Ops Director',
+      category: 'stage',
+      summary: `Status updated from "${prevStatus}" to "${sanitizedStatus}"`,
+      detail: note || null,
+    };
+
+    const newHistory = [historyEntry, ...(prevContext?.history || [])].slice(0, 50);
+
+    const updatedContext: ProjectContext = {
+      ...(prevContext || projectContext),
+      status: sanitizedStatus,
+      currentStage: targetStage > 0 ? targetStage : prevContext?.currentStage,
+      lifecycle: {
+        ...(prevContext?.lifecycle || { stage: 1, subState: 'active', gates: {} as any, enteredStageAt: Date.now(), updatedAt: Date.now() }),
+        stage: (targetStage > 0 ? targetStage : (prevContext?.lifecycle?.stage || 1)) as any,
+        updatedAt: Date.now(),
+      },
+      history: newHistory,
+      ...(sanitizedStatus === 'proposal_sent' && !prevContext?.proposalSentAt ? { proposalSentAt: new Date().toISOString() } : {}),
+      ...(sanitizedStatus === 'completed' ? { handoverDate: Date.now(), journeySummary: { ...(prevContext?.journeySummary || { done: 10, total: 10, pct: 100, active: 0, phaseProgress: [] }), pct: 100 } } : {}),
+      ...(sanitizedStatus === 'execution' ? { executionApprovedByFFDS: true } : {}),
+    };
+
+    let updatedActiveProject = existingProject?.activeProject || (activeInternalId === projectId ? activeProject : null);
+    if ((sanitizedStatus === 'execution' || sanitizedStatus === 'won' || sanitizedStatus === 'work_paused') && !updatedActiveProject) {
+      const projectTiers = existingProject?.tiers || (activeInternalId === projectId ? tiers : []);
+      const approvedTier = projectTiers.find((t) => t.id === updatedContext.approvedTierId) || projectTiers[0];
+      updatedActiveProject = {
+        tierId: approvedTier?.id || 'tier_1',
+        budget: 0,
+        startDate: new Date().toISOString().split('T')[0],
+        expenses: [],
+        status: sanitizedStatus === 'work_paused' ? 'work_paused' : 'active',
+        executionData: {
+          bundles: [],
+          actions: [],
+          procurement: [],
+          lastUpdated: Date.now(),
+          updates: [
+            {
+              id: `upd_${Date.now()}`,
+              timestamp: Date.now(),
+              text: `Project transitioned to ${sanitizedStatus === 'won' ? 'Won' : sanitizedStatus === 'work_paused' ? 'Work Paused' : 'Execution'}. Site mobilization and procurement tracking active.`,
+              author: orgData?.role || 'Ops Director',
+              type: 'progress',
+            },
+          ],
+          blockers: sanitizedStatus === 'work_paused' ? [
+            {
+              id: `blk_${Date.now()}`,
+              type: 'decision',
+              description: note || 'Site work paused pending client/site resolution.',
+              impactLevel: 'critical',
+              blockedBundleIds: [],
+              owner: 'ops',
+              financialImpact: 0,
+              daysDelayed: 0,
+              resolved: false,
+            },
+          ] : [],
+          decisions: [],
+          sofItems: [],
+        },
+      };
+    }
+
+    // 1. Update active view state if currently inside this project's workspace
+    if (activeInternalId === projectId) {
+      setProjectContext(updatedContext);
+      if (updatedActiveProject) {
+        setActiveProject(updatedActiveProject);
+      }
+    }
+
+    // 2. Build complete project structure to persist
+    const baseProject: FullProjectData = existingProject || ({
+      id: projectId,
+      architecture: projectArchitecture,
+      lastModified: Date.now(),
+      context: updatedContext,
+      tiers: (activeInternalId === projectId ? tiersWithCalculatedSummaries : []) || [],
+      activeTierId: activeInternalId === projectId ? activeTierId : null,
+      activeProject: updatedActiveProject,
+      materials: (activeInternalId === projectId ? materialSuggestions : []) || [],
+      timeline: (activeInternalId === projectId ? timelinePhases : []) || [],
+      leadProfile: (activeInternalId === projectId ? leadProfile : DEFAULT_LEAD_PROFILE),
+      decisionBrainOutput: (activeInternalId === projectId ? decisionBrainOutput : null),
+    } as FullProjectData);
+
+    const projectToPersist: FullProjectData = {
+      ...baseProject,
+      context: updatedContext,
+      activeProject: updatedActiveProject || baseProject.activeProject,
+      lastModified: Date.now(),
+    };
+
+    // 3. Update projectLibrary synchronously so boards, filters, and cards reflect instantly
+    setProjectLibrary((prev) => {
+      const idx = prev.findIndex((p) => p.id === projectId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = projectToPersist;
+        return next;
+      }
+      return [projectToPersist, ...prev];
+    });
+
+    // 4. Persist project changes to database
+    await db.saveProject(projectToPersist);
+  };
+
   const handleQuickProjectUpdate = async (
     projectId: string,
     field: string,
     value: any,
   ) => {
+    if (field === 'status') {
+      return handleProjectStatusChange(projectId, value as ProjectStatus);
+    }
+
     setProjectLibrary((prev) =>
       prev.map((p) => {
         if (p.id === projectId) {
@@ -841,6 +1311,7 @@ export default function App() {
     if (!activeInternalId) return;
     const projectData: FullProjectData = {
       id: activeInternalId,
+      architecture: projectArchitecture,
       lastModified: Date.now(),
       context: projectContext,
       tiers,
@@ -941,7 +1412,7 @@ export default function App() {
         doc.body.innerHTML = "";
         doc.body.appendChild(proposalWrapper);
         doc.body.className = "luxe-proposal-active";
-        doc.title = `${projectContext.name || "Unnamed Project"} - FFDS Proposal`;
+        doc.title = `${projectContext.name || "Unnamed Project"} - Proposal`;
       }
       doc
         .querySelectorAll(
@@ -980,7 +1451,7 @@ export default function App() {
 
                                 // Reset to base state (remove all possible active/specific classes)
                                 c.classList.remove(
-                                    'border-2', 'border-indigo-900', 'bg-white', 'shadow-lg', 'scale-[1.02]', 'z-10', 'ring-2', 'ring-slate-100', // Active
+                                    'border-2', 'border-sky-900', 'bg-white', 'shadow-lg', 'scale-[1.02]', 'z-10', 'ring-2', 'ring-slate-100', // Active
                                     'border-slate-200', 'shadow-sm', 'hover:border-slate-400', // Rec Inactive
                                     'border', 'border-slate-200', 'bg-[#F7F7F6]', 'hover:bg-white', 'hover:shadow-sm' // Def Inactive
                                 );
@@ -989,7 +1460,7 @@ export default function App() {
 
                                 if (cId === selectedId) {
                                     // Set Active Styling
-                                    c.classList.add('border-2', 'border-indigo-900', 'bg-white', 'shadow-lg', 'scale-[1.02]', 'z-10', 'ring-2', 'ring-slate-100');
+                                    c.classList.add('border-2', 'border-sky-900', 'bg-white', 'shadow-lg', 'scale-[1.02]', 'z-10', 'ring-2', 'ring-slate-100');
                                     if(badge) badge.classList.remove('hidden');
                                     if(recBadge) recBadge.classList.add('hidden'); // Hide Rec badge if active
                                     if(priceContainer) priceContainer.classList.add('bg-slate-50', 'border', 'border-slate-200');
@@ -997,7 +1468,7 @@ export default function App() {
                                     if(cta) {
                                         cta.textContent = 'Showing Room-wise Scope Below ↓';
                                         cta.classList.remove('text-slate-400', 'group-hover:text-slate-600');
-                                        cta.classList.add('text-indigo-600');
+                                        cta.classList.add('text-[#0066CC]');
                                     }
                                 } else {
                                     // Set Inactive Styling
@@ -1014,7 +1485,7 @@ export default function App() {
                                     if(cta) {
                                         cta.textContent = 'Click to View Detailed Scope';
                                         cta.classList.add('text-slate-400', 'group-hover:text-slate-600');
-                                        cta.classList.remove('text-indigo-600');
+                                        cta.classList.remove('text-[#0066CC]');
                                     }
                                 }
                             });
@@ -1205,19 +1676,34 @@ export default function App() {
   const MotionDiv = motion.div as any;
 
   // Render Logic
-  const isProjectTab = ![
+    const isProjectTab = ![
+    "home",
+    "reports",
     "projects",
+    "clients",
     "bank",
     "templates",
     "ai-settings",
-    "team",
-    "subscription",
     "setup-wizard",
     "studio-settings",
     "terms-and-payment",
+    "communication-templates",
     "saas-dashboard",
+    "admin-templates-bank",
   ].includes(activeTab);
   const hasProjectData = !!activeInternalId;
+
+  // Top Header layout (sidebar width is 0px)
+  const sidebarWidth = '0px';
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const PROJECT_WORKFLOW_ROUTES = [
     "dashboard",
@@ -1226,7 +1712,10 @@ export default function App() {
     "timeline",
     "payment-calc",
     "materials",
-    "contract",
+    "execution-agreement",
+    "terms-docket",
+    "handover-docket",
+    "payment-schedule",
     "client-portal",
     "onboarding",
     "emails",
@@ -1234,6 +1723,7 @@ export default function App() {
     "analytics",
     "site-ops",
     "ops",
+    "snaglist",
   ];
 
   const showFloatingBar =
@@ -1241,86 +1731,79 @@ export default function App() {
 
   if (appMode === "loading" || !isDataLoaded) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-8">
-          <motion.svg
-            width="160"
-            height="160"
-            viewBox="0 0 160 160"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 6, ease: "linear", repeat: Infinity }}
-          >
-            <defs>
-              <linearGradient
-                id="ring-gradient"
-                x1="0%"
-                y1="0%"
-                x2="100%"
-                y2="100%"
-              >
-                <stop offset="0%" stopColor="#d97706" /> {/* amber-600 */}
-                <stop offset="30%" stopColor="#fbbf24" /> {/* amber-400 */}
-                <stop offset="70%" stopColor="#a78bfa" /> {/* violet-400 */}
-                <stop offset="100%" stopColor="#818cf8" /> {/* indigo-400 */}
-              </linearGradient>
-            </defs>
-            <motion.circle
-              cx="80"
-              cy="80"
-              r="76"
-              stroke="url(#ring-gradient)"
-              strokeWidth="1"
-              strokeOpacity="0.3"
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            />
-            <motion.circle
-              cx="80"
-              cy="80"
-              r="62"
-              stroke="url(#ring-gradient)"
-              strokeWidth="2"
-              strokeOpacity="0.5"
-              animate={{ scale: [1, 1.05, 1], rotate: [0, -360] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-              style={{ originX: "50%", originY: "50%" }}
-              strokeDasharray="120 40 80 40"
-              strokeLinecap="round"
-            />
-            <motion.circle
-              cx="80"
-              cy="80"
-              r="46"
-              stroke="url(#ring-gradient)"
-              strokeWidth="4"
-              strokeOpacity="0.9"
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: 0.3,
-              }}
-              strokeLinecap="round"
-              strokeDasharray="250 40"
-            />
-          </motion.svg>
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#f8fafc] select-none overflow-hidden relative">
+        {/* Soft high-tech background grids & glowing spots */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.05)_1px,transparent_1px)] bg-[size:24px_24px] opacity-40" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.08)_0%,transparent_65%)]" />
 
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.8 }}
-            className="flex flex-col items-center gap-1.5"
-          >
-            <div className="text-[11px] font-black tracking-[0.2em] text-indigo-900 uppercase">
-              Establishing Studio Workspace
+        <div className="relative flex flex-col items-center justify-center z-10">
+          {/* GLASS ARC REACTOR HOUSING */}
+          <div className="relative w-36 h-36 flex items-center justify-center bg-white/70 backdrop-blur-xl rounded-full border border-slate-200/80 shadow-[0_12px_40px_rgba(31,38,135,0.06),inset_0_0_20px_rgba(255,255,255,0.6)]">
+            
+            {/* Outer HUD Ring (Slow Counter-Clockwise Rotation) */}
+            <motion.div 
+              animate={{ rotate: -360 }}
+              transition={{ duration: 25, ease: "linear", repeat: Infinity }}
+              className="absolute w-32 h-32 rounded-full border border-dashed border-[#0066CC]/15" 
+            />
+            
+            {/* Outer Segmented Ring with Gaps */}
+            <motion.div 
+              animate={{ rotate: 360 }}
+              transition={{ duration: 10, ease: "linear", repeat: Infinity }}
+              className="absolute w-28 h-28 rounded-full border-2 border-[#0066CC]/20 border-t-transparent border-b-transparent" 
+            />
+            
+            {/* Golden/Brass Outer Containment Ring - matching the gold theme palette */}
+            <motion.div 
+              animate={{ rotate: -360 }}
+              transition={{ duration: 15, ease: "linear", repeat: Infinity }}
+              className="absolute w-24 h-24 rounded-full border-4 border-double border-amber-500/25 opacity-80" 
+            />
+
+            {/* 8 Radial Magnetic Coils (Glow Core Panels in Gold/Indigo) */}
+            <motion.div 
+              animate={{ rotate: 360 }}
+              transition={{ duration: 18, ease: "linear", repeat: Infinity }}
+              className="absolute inset-0 flex items-center justify-center"
+            >
+              {[...Array(8)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute w-2.5 h-5 bg-[#0066CC]/15 rounded-[1px] border border-sky-400/20"
+                  style={{
+                    transform: `rotate(${i * 45}deg) translateY(-26px)`,
+                    boxShadow: '0 0 6px rgba(99,102,241,0.1)'
+                  }}
+                />
+              ))}
+            </motion.div>
+
+            {/* Inner High-Frequency Plasma Flux (Very Fast Spin) */}
+            <motion.div 
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1.2, ease: "linear", repeat: Infinity }}
+              className="absolute w-14 h-14 rounded-full border border-[#0066CC] border-l-transparent border-r-transparent shadow-[0_0_12px_rgba(99,102,241,0.2)]" 
+            />
+
+            {/* Main Core: Highly Concentrated Glow Core */}
+            <div className="relative w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-[0_0_20px_rgba(99,102,241,0.35),0_0_40px_rgba(99,102,241,0.15),inset_0_0_2px_rgba(99,102,241,0.5)] border border-sky-100">
+              <motion.div 
+                animate={{ scale: [1, 1.8, 1], opacity: [0.4, 0, 0.4] }}
+                transition={{ duration: 2, ease: "easeInOut", repeat: Infinity }}
+                className="w-6 h-6 rounded-full bg-sky-50 border border-sky-200 absolute" 
+              />
+              <motion.div 
+                animate={{ scale: [0.9, 1.1, 0.9] }}
+                transition={{ duration: 1.5, ease: "easeInOut", repeat: Infinity }}
+                className="w-4 h-4 rounded-full bg-[#0066CC]/20 border border-sky-400" 
+              />
             </div>
-            <div className="text-[9px] font-bold tracking-[0.3em] text-slate-400 uppercase">
-              Execution Engine
-            </div>
-          </motion.div>
+
+            {/* Fine HUD Crosshair lines */}
+            <div className="absolute w-36 h-[1px] bg-slate-400/5" />
+            <div className="absolute h-36 w-[1px] bg-slate-400/5" />
+          </div>
         </div>
       </div>
     );
@@ -1424,7 +1907,7 @@ export default function App() {
 
   if (isClientView && clientViewData) {
     return (
-      <div className="p-4 md:p-8">
+      <div className="pt-3 pb-8 px-4 lg:px-6">
         <ClientTab
           tiers={clientViewData.tiers.map((t) => ({
             ...t,
@@ -1443,7 +1926,13 @@ export default function App() {
 
   console.log("App render returned JSX!");
   return (
-    <div className="min-h-screen overflow-x-hidden relative">
+    <PageHeaderProvider route={activeTab}>
+      <div className={`min-h-screen overflow-x-hidden relative ${isProjectTab && hasProjectData ? "md:h-screen md:overflow-hidden" : ""}`}>
+        {/* Global Background Beams with Collision Animation */}
+        <div className="fixed inset-0 pointer-events-none z-[50] overflow-hidden">
+          <BackgroundBeamsWithCollision className="w-full h-full min-h-screen bg-transparent pointer-events-none" />
+        </div>
+        <div className="relative z-10 w-full min-h-screen">
       {orgData.isSetupComplete === false ? (
         <div className="w-full bg-slate-50 min-h-screen flex items-center justify-center">
           <StudioSetupWizard onComplete={() => setActiveTab("projects")} />
@@ -1451,7 +1940,7 @@ export default function App() {
       ) : (
         <>
           <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200 sticky top-0 z-[60]">
-            <div className="font-bold text-lg text-indigo-900">FORM FACTORS</div>
+            <div className="font-bold text-lg text-slate-800">FORM FACTORS</div>
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="p-2 -mr-2 text-slate-600"
@@ -1465,7 +1954,7 @@ export default function App() {
           </div>
 
           <div
-            className={`fixed inset-0 bg-indigo-950/50 z-[70] md:hidden transition-opacity ${isMobileMenuOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+            className={`fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/50 z-[70] md:hidden transition-opacity ${isMobileMenuOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
             onClick={() => setIsMobileMenuOpen(false)}
           />
 
@@ -1485,66 +1974,102 @@ export default function App() {
             pendingCommsCount={projectContext.commsSummary?.pendingCount || 0}
             commsHealthScore={projectContext.commsSummary?.healthScore || 0}
             projectContext={projectContext}
-            className={`transition-transform duration-300 md:translate-x-0 z-[80] w-64 ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
+            autoCollapse={false}
+            isHidden={isProjectTab && hasProjectData}
+            className={`transition-transform duration-300 z-[80] ${isMobileMenuOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0"}`}
           />
+          
+          <main
+            className={`w-full transition-[margin,width] duration-300 relative flex flex-col bg-[#F4F7FB] ${isProjectTab && hasProjectData ? "md:h-screen md:overflow-hidden" : "min-h-screen"}`}
+            style={{
+              marginLeft: 'var(--sidebar-w, 0px)',
+              width: 'calc(100% - var(--sidebar-w, 0px))',
+            }}
+          >
+            {/* MOBILE ONLY TOP NAVBAR */}
+            <div className="md:hidden h-14 shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-4 sticky top-0 z-[60]">
+               <button
+                  className="p-2 -ml-2 text-slate-500 hover:text-slate-900"
+                  onClick={() => setIsMobileMenuOpen(true)}
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                <span className="text-[10px] font-mono font-black text-slate-800 uppercase tracking-widest">
+                  FORM FACTORS DESIGN STUDIO
+                </span>
+            </div>
 
-          <main className="md:ml-64 w-full md:w-[calc(100%-16rem)] relative min-h-screen flex flex-col bg-slate-50">
-            {isProjectTab &&
-              hasProjectData &&
-              activeTab !== "studio-settings" && (
-                <div className="print:hidden">
-                  <Breadcrumb
-                    projectName={projectContext?.name || "Untitled Project"}
-                    projectId={activeInternalId!}
-                    currentSection={activeTab}
-                    setActiveTab={setActiveTab}
-                  />
-                </div>
-              )}
-            {activeTab === "studio-settings" && (
-              <div className="print:hidden">
-                <div className="h-9 flex items-center px-8 border-b border-slate-200 bg-transparent text-[13px]">
-                  <span className="text-slate-500 font-medium">Studio</span>
-                  <svg
-                    className="w-3.5 h-3.5 mx-2 text-slate-300"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                  <span className="text-indigo-950 font-medium">Settings</span>
-                </div>
-              </div>
-            )}
-            <div className="print:hidden">{/* Floating UI Removed */}</div>
-
-            <div
-              className={`flex-grow ${activeTab === "client" || activeTab === "client-boq-pack" ? "" : "p-2 sm:p-4 md:p-8"}`}
-            >
-              <AnimatePresence mode="wait">
+            {/* PROJECT WORKSPACE WRAPPER */}
+            {/* ACTIVE_WORKSPACE_BLOCK */}
+            {isProjectTab && hasProjectData ? (
+              <JourneyProvider
+                projectId={activeInternalId!}
+                projectContext={projectContext}
+                setProjectContext={setProjectContext}
+              >
+                <ProjectWorkspace
+                  projectId={activeInternalId!}
+                  projectContext={projectContext}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  currentRole={orgData?.role || "Admin"}
+                  setProjectContext={setProjectContext}
+                  isWizard={tiers.length === 0}
+                  onStatusChange={(status, note) => handleProjectStatusChange(activeInternalId!, status, note)}
+                  onLeaveProject={(targetTab?: string) => {
+                    setActiveProject(null);
+                    localStorage.removeItem("ffds_client_project_id");
+                    if (targetTab) {
+                      setActiveTab(targetTab);
+                    } else {
+                      setActiveTab('projects');
+                    }
+                  }}
+                >
+                <div className={`flex-grow h-full overflow-y-auto ${activeTab === "client" || activeTab === "client-boq-pack" ? "" : "pt-3 pb-8 px-4 lg:px-6"}`}>
+                  <AnimatePresence mode="wait">
                 <MotionDiv
                   key={activeTab}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 0 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
                 >
+                  <Suspense fallback={
+                    <div className="p-12 flex flex-col items-center justify-center text-slate-400 space-y-3">
+                      <div className="w-6 h-6 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs font-semibold uppercase tracking-wider">Loading View...</span>
+                    </div>
+                  }>
                   {/* MANUAL STEP COMPLETER PROMPT */}
-                  {activeInternalId && (
-                    <ManualStepCompleter
-                      projectId={activeInternalId}
-                      projectContext={projectContext}
-                      activeTab={activeTab}
+                      {activeInternalId && (
+                        <ManualStepCompleter
+                          projectId={activeInternalId}
+                          projectContext={projectContext}
+                          activeTab={activeTab}
+                          // ACTIVE_FLOW_MARKER
+                        />
+                      )}
+
+                  {/* GLOBAL TABS - SECTION 1 */}
+                  {activeTab === "home" && (
+                    <StudioHome
+                      projects={projectLibrary}
+                      onOpenProject={handleOpenProject}
+                      onCreateNew={handleCreateNewProject}
+                      onNavigate={setActiveTab}
+                      role={orgData?.role || "Admin"}
+                      userName={currentUserAuth?.displayName || currentUserAuth?.email || "there"}
+                      // ACTIVE_STUDIO_HOME
                     />
                   )}
-
-                  {/* GLOBAL TABS */}
+                  {activeTab === "reports" && (
+                    <StudioReports
+                      projects={projectLibrary}
+                      onNavigate={setActiveTab}
+                      // ACTIVE_STUDIO_REPORTS
+                    />
+                  )}
                   {activeTab === "projects" && (
                     <ProjectListTab
                       projects={projectLibrary}
@@ -1554,11 +2079,39 @@ export default function App() {
                       onDeleteProject={handleDeleteProject}
                       onDuplicateProject={handleDuplicateProject}
                       onQuickUpdate={handleQuickProjectUpdate}
+                      onStatusChange={handleProjectStatusChange}
+                      // ACTIVE_PROJECTS
                     />
                   )}
-                  {activeTab === "bank" && (
+                  {activeTab === "clients" && (
+                    <ClientsDirectory
+                      projects={projectLibrary}
+                      onOpenProject={handleOpenProject}
+                      onCreateNew={handleCreateNewProject}
+                      // ACTIVE_CLIENTS
+                    />
+                  )}
+                  {activeTab === "admin-templates-bank" && (
+                    <TemplatesAndBankTab
+                      bank={bank}
+                      setBank={setBank}
+                      templates={templates}
+                      setTemplates={setTemplates}
+                      isDraftBankMode={isDraftBankMode}
+                      setIsDraftBankMode={setIsDraftBankMode}
+                      draftBank={draftBank}
+                      setDraftBank={setDraftBank}
+                      aiStrategy={aiStrategy}
+                      highlightedBankItemId={highlightedBankItemId}
+                      setHighlightedBankItemId={setHighlightedBankItemId}
+                      projects={projectLibrary}
+                      // ACTIVE_ADMIN_TEMPLATES_BANK
+                    />
+                  )}
+{activeTab === "bank" && (
                     <div className="space-y-4">
-                      <div className="flex justify-end gap-3 items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm max-w-7xl mx-auto">
+                      {/* ACTIVE_BANK */}
+                      <div className="flex justify-end gap-3 items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full">
                         <div className="text-sm font-medium text-slate-700">
                           Currently Editing:{" "}
                           <span
@@ -1595,7 +2148,7 @@ export default function App() {
                                 );
                               }
                             }}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-sm transition-colors"
+                            className="px-4 py-2 bg-[#0066CC] text-white rounded-lg text-sm font-bold hover:bg-[#0055B3] shadow-sm transition-colors"
                           >
                             Publish Draft to Live
                           </button>
@@ -1612,7 +2165,7 @@ export default function App() {
                                 setIsDraftBankMode(true);
                               }
                             }}
-                            className="px-4 py-2 bg-indigo-950 text-white rounded-lg text-sm font-bold hover:bg-indigo-900 shadow-sm transition-colors"
+                            className="px-4 py-2 bg-[#0066CC]/90 text-white rounded-lg text-sm font-bold hover:bg-[#0055B3] backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 transition-all"
                           >
                             Sync Draft from Live
                           </button>
@@ -1624,6 +2177,7 @@ export default function App() {
                         aiStrategy={aiStrategy}
                         highlightedBankItemId={highlightedBankItemId}
                         onHighlightClear={() => setHighlightedBankItemId(null)}
+                        projects={projectLibrary}
                       />
                     </div>
                   )}
@@ -1632,12 +2186,14 @@ export default function App() {
                       bank={bank}
                       templates={templates}
                       setTemplates={setTemplates}
+                      // ACTIVE_TEMPLATES
                     />
                   )}
                   {activeTab === "ai-settings" && (
                     <AIStrategyTab
                       aiStrategy={aiStrategy}
                       setAiStrategy={setAiStrategy}
+                      // ACTIVE_AI_SETTINGS
                     />
                   )}
 
@@ -1646,9 +2202,8 @@ export default function App() {
                   {[
                     "studio-settings",
                     "terms-and-payment",
-                    "team",
-                    "subscription",
                     "setup-wizard",
+                    "communication-templates",
                   ].includes(activeTab) && (
                     <StudioSettingsShell
                       activeTab={activeTab}
@@ -1657,15 +2212,16 @@ export default function App() {
                       onImportProject={handleLoadProject}
                       onClearProject={handleClearProject}
                       confirmReset={confirmReset}
+                      // ACTIVE_SAAS_SETTINGS_BLOCK_1
                     />
                   )}
 
-                  {/* PROJECT TABS - Only render if project exists */}
+                  {/* PROJECT TABS - Only render if project exists - BLOCK 1 */}
                   {isProjectTab && hasProjectData ? (
                     <>
-                      {/* Dashboard or Wizard */}
+                      {/* Dashboard or Wizard - BLOCK 1 */}
                       {activeTab === "dashboard" &&
-                        (tiers.length === 0 ? (
+                        (tiers.length === 0 || showWizardOverride ? (
                           <div className="flex justify-center items-center h-full">
                             <ProjectSetupWizard
                               setTiers={setTiers}
@@ -1677,14 +2233,18 @@ export default function App() {
                               setMaterialSuggestions={setMaterialSuggestions}
                               setTimelinePhases={setTimelinePhases}
                               leadProfile={leadProfile}
+                              /* BLOCK_1_MARKER */
                               setLeadProfile={setLeadProfile}
                               setDecisionBrainOutput={setDecisionBrainOutput}
                               templates={templates}
+                              onComplete={() => setShowWizardOverride(false)}
+                              onCancel={tiers.length > 0 ? () => setShowWizardOverride(false) : undefined}
                             />
                           </div>
                         ) : (
                           <div className="space-y-6">
                             <Dashboard
+                              onModifyBrief={() => setShowWizardOverride(true)}
                               activeTier={activeCalculatedTier}
                               setActiveTab={setActiveTab}
                               fullBoq={
@@ -1699,18 +2259,32 @@ export default function App() {
                               tiers={tiersWithCalculatedSummaries}
                               bank={bank}
                               projectId={activeInternalId}
-                            />
-
-                            <ProjectContextCard
-                              projectContext={projectContext}
-                              setProjectContext={setProjectContext}
-                              aiStrategy={aiStrategy}
-                              onSaveProject={handleDownloadBackup}
-                              projectId={activeInternalId || undefined}
+                              projectArchitecture={projectArchitecture}
+                              onUpgradeArchitecture={async () => {
+                                  if (activeInternalId) {
+                                      const fullProject: FullProjectData = {
+                                          id: activeInternalId,
+                                          architecture: projectArchitecture,
+                                          lastModified: Date.now(),
+                                          context: projectContext,
+                                          tiers: tiersWithCalculatedSummaries,
+                                          activeTierId,
+                                          activeProject,
+                                          materials: materialSuggestions,
+                                          timeline: timelinePhases,
+                                          leadProfile,
+                                          decisionBrainOutput,
+                                      };
+                                      await db.upgradeLegacyProject(fullProject);
+                                      setProjectArchitecture('canonical');
+                                      alert("Project architecture upgraded successfully! Backend rules and triggers will now run.");
+                                  }
+                              }}
                             />
                           </div>
                         ))}
 
+                      {/* IN_BLOCK_1_TABS */}
                       {activeTab === "project-journey" && (
                         <ProjectJourneyPage
                           projectId={activeInternalId!}
@@ -1720,6 +2294,7 @@ export default function App() {
                         />
                       )}
 
+                      {/* IN_BLOCK_1_STUDIO_DASHBOARD */}
                       {activeTab === "boq-editor" && (
                         <StudioDashboard
                           projectContext={projectContext}
@@ -1732,15 +2307,43 @@ export default function App() {
                           onViewInBank={handleViewInBank}
                           onSaveProject={handleDownloadBackup}
                           projectId={activeInternalId || ""}
+                          projectArchitecture={projectArchitecture}
+                          onUpgradeArchitecture={async () => {
+                                  if (activeInternalId) {
+                                      const fullProject: FullProjectData = {
+                                          id: activeInternalId,
+                                          architecture: projectArchitecture,
+                                          lastModified: Date.now(),
+                                          context: projectContext,
+                                          tiers: tiersWithCalculatedSummaries,
+                                          activeTierId,
+                                          activeProject,
+                                          materials: materialSuggestions,
+                                          timeline: timelinePhases,
+                                          leadProfile,
+                                          decisionBrainOutput,
+                                      };
+                                      await db.upgradeLegacyProject(fullProject);
+                                      setProjectArchitecture('canonical');
+                                      alert("Project architecture upgraded successfully! Backend rules and triggers will now run.");
+                                  }
+                              }}
                         />
                       )}
                       {activeTab === "leadiq" && (
                         <LeadBrainTab
                           projectContext={projectContext}
+                          setProjectContext={setProjectContext}
                           leadProfile={leadProfile}
                           setLeadProfile={setLeadProfile}
                           onStrategyChange={setDecisionBrainOutput}
                           setActiveTab={setActiveTab}
+                          aiStrategy={aiStrategy}
+                          projectId={activeInternalId || undefined}
+                          tiers={tiers}
+                          setTiers={setTiers}
+                          activeTierId={activeTierId}
+                          bank={bank}
                         />
                       )}
                       {activeTab === "drawing-tracker" && (
@@ -1752,6 +2355,7 @@ export default function App() {
                           }
                         />
                       )}
+                      {/* IN_BLOCK_1_SCOPE_ADDITIONS */}
                       {activeTab === "scope-additions" && (
                         <ScopeAdditionsModule
                           projectId={activeInternalId!}
@@ -1764,6 +2368,7 @@ export default function App() {
                         <TimelineTab
                           projectId={activeInternalId}
                           projectContext={projectContext}
+                          setProjectContext={setProjectContext}
                           boq={
                             activeProject ? executionBoq : fullBoqForActiveTier
                           }
@@ -1777,13 +2382,21 @@ export default function App() {
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           activeTier={activeCalculatedTier}
+                          tiers={tiersWithCalculatedSummaries}
                           allProjects={projectLibrary} // NEW: Passing full library for global calculation
+                          bank={bank}
+                          fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
+                          setBoq={setBoqForActiveTier}
+                          aiStrategy={aiStrategy}
                         />
                       )}
                       {activeTab === "materials" && (
-                        <SOFBoardTab
+                        <MaterialTab
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
+                          activeTier={activeCalculatedTier || undefined}
+                          bank={bank}
+                          projectId={activeInternalId!}
                         />
                       )}
 
@@ -1798,12 +2411,26 @@ export default function App() {
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           tenantId={orgData?.tenantId}
+                          projectId={activeInternalId || (projectContext as any).id || ''}
+                        />
+                      )}
+                      {activeTab === "snaglist" && (
+                        <SnagListReportPage
+                          projectContext={projectContext}
+                          onBack={() => setActiveTab("docs")}
+                        />
+                      )}
+                      {activeTab === "checklist" && (
+                        <QualityChecklistReportPage
+                          projectContext={projectContext}
+                          onBack={() => setActiveTab("docs")}
                         />
                       )}
                       {activeTab === "handover-docket" && (
                         <HandoverDocketPage
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
+                          projectId={activeInternalId || (projectContext as any).id || ''}
                         />
                       )}
                       {activeTab === "payment-schedule" && (
@@ -1813,42 +2440,24 @@ export default function App() {
                           activeTier={activeCalculatedTier}
                         />
                       )}
-                      {activeTab === "contract" && (
-                        <ContractTab
-                          projectId={activeInternalId || ""}
-                          tiers={tiersWithCalculatedSummaries}
-                          activeTier={activeCalculatedTier}
-                          timelinePhases={timelinePhases}
-                          bank={bank}
-                          projectContext={projectContext}
-                          setProjectContext={setProjectContext}
-                        />
-                      )}
                       {activeTab === "execution-agreement" && (
                         <ExecutionAgreementPage
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           tenantId={orgData?.tenantId}
+                          projectId={activeInternalId || (projectContext as any).id || ''}
                           activeTier={activeCalculatedTier}
                           fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
                         />
                       )}
                       {activeTab === "design-gate" && (
                         <DesignCompleteGate
-                          projectId={activeInternalId || ""}
                           projectContext={projectContext}
+                          setProjectContext={setProjectContext}
                           fullBoq={
                             activeProject ? executionBoq : fullBoqForActiveTier
                           }
-                        />
-                      )}
-                      {activeTab === "weekly-report" && (
-                        <WeeklyProgressReportTab
-                          projectContext={projectContext}
-                          setProjectContext={setProjectContext}
-                          activeTier={activeCalculatedTier}
-                          projectId={activeInternalId || undefined}
-                          projectData={projectLibrary.find(p => p.id === activeInternalId) || undefined}
+                          currentRole={currentRole}
                         />
                       )}
                       {activeTab === "client-portal" && (
@@ -1866,6 +2475,12 @@ export default function App() {
                             decisionBrainOutput: decisionBrainOutput,
                           }}
                           bank={bank}
+                          onProjectUpdate={(updated) => {
+                            // Approvals recorded while the studio previews the
+                            // portal must persist — otherwise a sign-off taken
+                            // in-office is lost on tab change.
+                            setProjectContext(updated.context);
+                          }}
                         />
                       )}
                       {activeTab === "onboarding" && (
@@ -1878,6 +2493,23 @@ export default function App() {
                         <EmailDraftsTab
                           projectContext={projectContext}
                           tiers={tiersWithCalculatedSummaries}
+                        />
+                      )}
+                      {activeTab === "docs" && (
+                        <DocumentsHub
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          projectId={activeInternalId!}
+                          projectData={{
+                            id: activeInternalId!,
+                            lastModified: Date.now(),
+                            context: projectContext,
+                            tiers: tiersWithCalculatedSummaries,
+                            materials: materialSuggestions,
+                            timeline: timelinePhases,
+                            activeTierId: activeTierId,
+                          } as any}
+                          onNavigate={(route) => setActiveTab(route)}
                         />
                       )}
                       {activeTab === "comms-tracker" && (
@@ -1936,7 +2568,8 @@ export default function App() {
                       )}
                       {(activeTab === "site-ops" ||
                         activeTab === "update-client-feed" ||
-                        activeTab === "record-decision") && (
+                        activeTab === "record-decision" ||
+                        activeTab === "mom-action-tracker") && (
                         <SiteOpsTab
                           key={activeTab}
                           projectContext={projectContext}
@@ -1948,12 +2581,15 @@ export default function App() {
                           projectId={activeInternalId!}
                           activeProject={activeProject}
                           onProjectUpdate={setActiveProject}
+                          onNavigateToTab={setActiveTab}
                           initialModule={
                             activeTab === "update-client-feed"
                               ? "client-updates"
                               : activeTab === "record-decision"
                                 ? "decision-tracker"
-                                : "execution"
+                                : activeTab === "mom-action-tracker"
+                                  ? "action-tracker"
+                                  : "execution"
                           }
                           onAddCalculatedItem={(
                             name,
@@ -2005,6 +2641,13 @@ export default function App() {
                           bank={bank}
                           setBank={setBank} // NEW: Pass bank setter for dynamic creation
                           setActiveTab={setActiveTab}
+                          projects={projectLibrary}
+                        />
+                      )}
+                      {activeTab === "history" && (
+                        <ProjectHistory
+                          projectContext={projectContext}
+                          activeInternalId={activeInternalId}
                         />
                       )}
                     </>
@@ -2025,13 +2668,662 @@ export default function App() {
                       </div>
                     )
                   )}
+                  </Suspense>
                 </MotionDiv>
               </AnimatePresence>
-            </div>
-            <div className="print:hidden">{/* Sidekick Removed */}</div>
+                </div>
+              </ProjectWorkspace>
+              <SuccessWithNextToast projectId={activeInternalId || undefined} projectContext={projectContext} />
+              </JourneyProvider>
+            ) : (
+              <div className={`flex-grow h-full overflow-y-auto ${activeTab === "client" || activeTab === "client-boq-pack" ? "" : "pt-3 pb-8 px-4 lg:px-6"}`}>
+                  {activeTab !== "client" && activeTab !== "client-boq-pack" && (
+                    <PageTitleBlock route={activeTab} />
+                  )}
+                  <AnimatePresence mode="wait">
+                <MotionDiv
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 0 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                >
+                  <Suspense fallback={
+                    <div className="p-12 flex flex-col items-center justify-center text-slate-400 space-y-3">
+                      <div className="w-6 h-6 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs font-semibold uppercase tracking-wider">Loading View...</span>
+                    </div>
+                  }>
+                  {/* MANUAL STEP COMPLETER PROMPT */}
+                  {activeInternalId && (
+                    <ManualStepCompleter
+                      projectId={activeInternalId}
+                      projectContext={projectContext}
+                      activeTab={activeTab}
+                    />
+                  )}
+
+                  {/* GLOBAL TABS */}
+                  {activeTab === "home" && (
+                    <StudioHome
+                      projects={projectLibrary}
+                      onOpenProject={handleOpenProject}
+                      onCreateNew={handleCreateNewProject}
+                      onNavigate={setActiveTab}
+                      role={orgData?.role || "Admin"}
+                      userName={currentUserAuth?.displayName || currentUserAuth?.email || "there"}
+                    />
+                  )}
+                  {activeTab === "reports" && (
+                    <StudioReports
+                      projects={projectLibrary}
+                      onNavigate={setActiveTab}
+                    />
+                  )}
+                  {activeTab === "projects" && (
+                    <ProjectListTab
+                      projects={projectLibrary}
+                      activeProjectId={activeInternalId}
+                      onOpenProject={handleOpenProject}
+                      onCreateNew={handleCreateNewProject}
+                      onDeleteProject={handleDeleteProject}
+                      onDuplicateProject={handleDuplicateProject}
+                      onQuickUpdate={handleQuickProjectUpdate}
+                      onStatusChange={handleProjectStatusChange}
+                    />
+                  )}
+                  {activeTab === "clients" && (
+                    <ClientsDirectory
+                      projects={projectLibrary}
+                      onOpenProject={handleOpenProject}
+                      onCreateNew={handleCreateNewProject}
+                    />
+                  )}
+                  {activeTab === "admin-templates-bank" && (
+                    <TemplatesAndBankTab
+                      bank={bank}
+                      setBank={setBank}
+                      templates={templates}
+                      setTemplates={setTemplates}
+                      isDraftBankMode={isDraftBankMode}
+                      setIsDraftBankMode={setIsDraftBankMode}
+                      draftBank={draftBank}
+                      setDraftBank={setDraftBank}
+                      aiStrategy={aiStrategy}
+                      highlightedBankItemId={highlightedBankItemId}
+                      setHighlightedBankItemId={setHighlightedBankItemId}
+                      projects={projectLibrary}
+                    />
+                  )}
+{activeTab === "bank" && (
+                    <div className="space-y-4">
+                      <div className="flex justify-end gap-3 items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full">
+                        <div className="text-sm font-medium text-slate-700">
+                          Currently Editing:{" "}
+                          <span
+                            className={
+                              isDraftBankMode
+                                ? "text-amber-600 font-bold"
+                                : "text-emerald-600 font-bold"
+                            }
+                          >
+                            {isDraftBankMode
+                              ? "Draft Sandbox"
+                              : "Live Item Bank"}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setIsDraftBankMode(!isDraftBankMode)}
+                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${isDraftBankMode ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"}`}
+                        >
+                          Switch to{" "}
+                          {isDraftBankMode ? "Live Bank" : "Draft Sandbox"}
+                        </button>
+                        {isDraftBankMode && (
+                          <button
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  "Are you sure you want to completely overwrite the LIVE item bank with your Draft sandbox? This will affect new projects and prices.",
+                                )
+                              ) {
+                                setBank(draftBank);
+                                setIsDraftBankMode(false);
+                                alert(
+                                  "Draft successfully published to Live Bank!",
+                                );
+                              }
+                            }}
+                            className="px-4 py-2 bg-[#0066CC] text-white rounded-lg text-sm font-bold hover:bg-[#0055B3] shadow-sm transition-colors"
+                          >
+                            Publish Draft to Live
+                          </button>
+                        )}
+                        {!isDraftBankMode && (
+                          <button
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  "This will wipe your current Sandbox Draft and mirror the Live Bank. Continue?",
+                                )
+                              ) {
+                                setDraftBank(bank);
+                                setIsDraftBankMode(true);
+                              }
+                            }}
+                            className="px-4 py-2 bg-[#0066CC]/90 text-white rounded-lg text-sm font-bold hover:bg-[#0055B3] backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 transition-all"
+                          >
+                            Sync Draft from Live
+                          </button>
+                        )}
+                      </div>
+                      <BankTab
+                        bank={isDraftBankMode ? draftBank : bank}
+                        setBank={isDraftBankMode ? setDraftBank : setBank}
+                        aiStrategy={aiStrategy}
+                        highlightedBankItemId={highlightedBankItemId}
+                        onHighlightClear={() => setHighlightedBankItemId(null)}
+                        projects={projectLibrary}
+                      />
+                    </div>
+                  )}
+                  {activeTab === "templates" && (
+                    <TemplateEditorTab
+                      bank={bank}
+                      templates={templates}
+                      setTemplates={setTemplates}
+                    />
+                  )}
+                  {activeTab === "ai-settings" && (
+                    <AIStrategyTab
+                      aiStrategy={aiStrategy}
+                      setAiStrategy={setAiStrategy}
+                    />
+                  )}
+
+                  {/* SAAS SETTINGS */}
+                  {activeTab === "saas-dashboard" && <SuperAdminDashboard />}
+                  {[
+                    "studio-settings",
+                    "terms-and-payment",
+                    "setup-wizard",
+                    "communication-templates",
+                  ].includes(activeTab) && (
+                    <StudioSettingsShell
+                      activeTab={activeTab}
+                      setActiveTab={setActiveTab}
+                      onDownloadBackup={handleDownloadBackup}
+                      onImportProject={handleLoadProject}
+                      onClearProject={handleClearProject}
+                      confirmReset={confirmReset}
+                    />
+                  )}
+
+                  {/* PROJECT TABS - Only render if project exists - BLOCK 2 */}
+                  {isProjectTab && hasProjectData ? (
+                    <>
+                      {/* Dashboard or Wizard - BLOCK 2 */}
+                      {activeTab === "dashboard" &&
+                        (tiers.length === 0 || showWizardOverride ? (
+                          <div className="flex justify-center items-center h-full">
+                            <ProjectSetupWizard
+                              setTiers={setTiers}
+                              bank={bank}
+                              projectContext={projectContext}
+                              setProjectContext={setProjectContext}
+                              setActiveTierId={setActiveTierId}
+                              setAiStrategy={setAiStrategy}
+                              setMaterialSuggestions={setMaterialSuggestions}
+                              setTimelinePhases={setTimelinePhases}
+                              leadProfile={leadProfile}
+                              setLeadProfile={setLeadProfile}
+                              setDecisionBrainOutput={setDecisionBrainOutput}
+                              templates={templates}
+                              onComplete={() => setShowWizardOverride(false)}
+                              onCancel={tiers.length > 0 ? () => setShowWizardOverride(false) : undefined}
+                            />
+                          </div>
+                        ) : (
+                          <div className="space-y-6">
+                            <Dashboard
+                              onModifyBrief={() => setShowWizardOverride(true)}
+                              activeTier={activeCalculatedTier}
+                              setActiveTab={setActiveTab}
+                              fullBoq={
+                                activeProject
+                                  ? executionBoq
+                                  : fullBoqForActiveTier
+                              }
+                              projectContext={projectContext}
+                              setProjectContext={setProjectContext}
+                              activeProject={activeProject}
+                              setActiveProject={setActiveProject}
+                              tiers={tiersWithCalculatedSummaries}
+                              bank={bank}
+                              projectId={activeInternalId}
+                              projectArchitecture={projectArchitecture}
+                              onUpgradeArchitecture={async () => {
+                                  if (activeInternalId) {
+                                      const fullProject: FullProjectData = {
+                                          id: activeInternalId,
+                                          architecture: projectArchitecture,
+                                          lastModified: Date.now(),
+                                          context: projectContext,
+                                          tiers: tiersWithCalculatedSummaries,
+                                          activeTierId,
+                                          activeProject,
+                                          materials: materialSuggestions,
+                                          timeline: timelinePhases,
+                                          leadProfile,
+                                          decisionBrainOutput,
+                                      };
+                                      await db.upgradeLegacyProject(fullProject);
+                                      setProjectArchitecture('canonical');
+                                      alert("Project architecture upgraded successfully! Backend rules and triggers will now run.");
+                                  }
+                              }}
+                            />
+
+                            <ProjectContextCard
+                              projectContext={projectContext}
+                              setProjectContext={setProjectContext}
+                              aiStrategy={aiStrategy}
+                              onSaveProject={handleDownloadBackup}
+                              projectId={activeInternalId || undefined}
+                              hideExecutionControls={true}
+                            />
+                          </div>
+                        ))}
+
+                      {/* IN_BLOCK_2_TABS */}
+                      {activeTab === "project-journey" && (
+                        <ProjectJourneyPage
+                          projectId={activeInternalId!}
+                          projectContext={projectContext}
+                          onClose={() => setActiveTab("projects")} // Fallback just in case
+                          onNavigate={setActiveTab}
+                        />
+                      )}
+
+                      {activeTab === "boq-editor" && (
+                        <StudioDashboard
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          tiers={tiersWithCalculatedSummaries}
+                          setTiers={setTiers}
+                          activeTierId={activeTierId}
+                          bank={bank}
+                          aiStrategy={aiStrategy}
+                          onViewInBank={handleViewInBank}
+                          onSaveProject={handleDownloadBackup}
+                          projectId={activeInternalId || ""}
+                          projectArchitecture={projectArchitecture}
+                          onUpgradeArchitecture={async () => {
+                                  if (activeInternalId) {
+                                      const fullProject: FullProjectData = {
+                                          id: activeInternalId,
+                                          architecture: projectArchitecture,
+                                          lastModified: Date.now(),
+                                          context: projectContext,
+                                          tiers: tiersWithCalculatedSummaries,
+                                          activeTierId,
+                                          activeProject,
+                                          materials: materialSuggestions,
+                                          timeline: timelinePhases,
+                                          leadProfile,
+                                          decisionBrainOutput,
+                                      };
+                                      await db.upgradeLegacyProject(fullProject);
+                                      setProjectArchitecture('canonical');
+                                      alert("Project architecture upgraded successfully! Backend rules and triggers will now run.");
+                                  }
+                              }}
+                        />
+                      )}
+                      {activeTab === "leadiq" && (
+                        <LeadBrainTab
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          leadProfile={leadProfile}
+                          setLeadProfile={setLeadProfile}
+                          onStrategyChange={setDecisionBrainOutput}
+                          setActiveTab={setActiveTab}
+                          aiStrategy={aiStrategy}
+                          projectId={activeInternalId || undefined}
+                          tiers={tiers}
+                          setTiers={setTiers}
+                          activeTierId={activeTierId}
+                          bank={bank}
+                        />
+                      )}
+                      {activeTab === "drawing-tracker" && (
+                        <DrawingTrackerModule
+                          projectId={activeInternalId!}
+                          projectContext={projectContext}
+                          fullBoq={
+                            activeProject ? executionBoq : fullBoqForActiveTier
+                          }
+                        />
+                      )}
+                      {activeTab === "scope-additions" && (
+                        <ScopeAdditionsModule
+                          projectId={activeInternalId!}
+                          projectContext={projectContext}
+                          bank={bank}
+                          setProjectContext={setProjectContext}
+                        />
+                      )}
+                      {activeTab === "timeline" && (
+                        <TimelineTab
+                          projectId={activeInternalId}
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          boq={
+                            activeProject ? executionBoq : fullBoqForActiveTier
+                          }
+                          phases={timelinePhases}
+                          setPhases={setTimelinePhases}
+                        />
+                      )}
+                      
+                      {activeTab === "payment-calc" && (
+                        <PaymentCalculatorTab
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          activeTier={activeCalculatedTier}
+                          tiers={tiersWithCalculatedSummaries}
+                          allProjects={projectLibrary} // NEW: Passing full library for global calculation
+                          bank={bank}
+                          fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
+                          setBoq={setBoqForActiveTier}
+                          aiStrategy={aiStrategy}
+                        />
+                      )}
+                      {activeTab === "materials" && (
+                        <MaterialTab
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          activeTier={activeCalculatedTier || undefined}
+                          bank={bank}
+                          projectId={activeInternalId!}
+                        />
+                      )}
+
+                      {(activeTab === "terms-docket" || activeTab === "payment-schedule") && (
+                        <div className="mb-6">
+                          <EngagementLifecycleWidget projectContext={projectContext} setProjectContext={setProjectContext} />
+                        </div>
+                      )}
+
+                      {activeTab === "terms-docket" && (
+                        <TermsDocketPage
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          tenantId={orgData?.tenantId}
+                          projectId={activeInternalId || (projectContext as any).id || ''}
+                        />
+                      )}
+                      {activeTab === "snaglist" && (
+                        <SnagListReportPage
+                          projectContext={projectContext}
+                          onBack={() => setActiveTab("docs")}
+                        />
+                      )}
+                      {activeTab === "checklist" && (
+                        <QualityChecklistReportPage
+                          projectContext={projectContext}
+                          onBack={() => setActiveTab("docs")}
+                        />
+                      )}
+                      {activeTab === "handover-docket" && (
+                        <HandoverDocketPage
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          projectId={activeInternalId || (projectContext as any).id || ''}
+                        />
+                      )}
+                      {activeTab === "payment-schedule" && (
+                        <PaymentSchedulePage
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          activeTier={activeCalculatedTier}
+                        />
+                      )}
+                      {activeTab === "execution-agreement" && (
+                        <ExecutionAgreementPage
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          tenantId={orgData?.tenantId}
+                          projectId={activeInternalId || (projectContext as any).id || ''}
+                          activeTier={activeCalculatedTier}
+                          fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
+                        />
+                      )}
+                      {activeTab === "design-gate" && (
+                        <DesignCompleteGate
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          fullBoq={
+                            activeProject ? executionBoq : fullBoqForActiveTier
+                          }
+                          currentRole={currentRole}
+                        />
+                      )}
+                      {activeTab === "client-portal" && (
+                        <ClientPortal
+                          projectData={{
+                            id: activeInternalId!,
+                            lastModified: Date.now(),
+                            context: projectContext,
+                            tiers: tiersWithCalculatedSummaries,
+                            materials: materialSuggestions,
+                            timeline: timelinePhases,
+                            activeTierId: activeTierId,
+                            activeProject: activeProject,
+                            leadProfile: leadProfile,
+                            decisionBrainOutput: decisionBrainOutput,
+                          }}
+                          bank={bank}
+                          onProjectUpdate={(updated) => {
+                            // Approvals recorded while the studio previews the
+                            // portal must persist — otherwise a sign-off taken
+                            // in-office is lost on tab change.
+                            setProjectContext(updated.context);
+                          }}
+                        />
+                      )}
+                      {activeTab === "onboarding" && (
+                        <OnboardingKitPage
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                        />
+                      )}
+                      {activeTab === "emails" && (
+                        <EmailDraftsTab
+                          projectContext={projectContext}
+                          tiers={tiersWithCalculatedSummaries}
+                        />
+                      )}
+                      {activeTab === "docs" && (
+                        <DocumentsHub
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          projectId={activeInternalId!}
+                          projectData={{
+                            id: activeInternalId!,
+                            lastModified: Date.now(),
+                            context: projectContext,
+                            tiers: tiersWithCalculatedSummaries,
+                            materials: materialSuggestions,
+                            timeline: timelinePhases,
+                            activeTierId: activeTierId,
+                          } as any}
+                          onNavigate={(route) => setActiveTab(route)}
+                        />
+                      )}
+                      {activeTab === "comms-tracker" && (
+                        <CommunicationTracker
+                          projectId={activeInternalId!}
+                          studioId={orgData?.tenantId || "demo-tenant-01"}
+                          projectContext={projectContext}
+                          teamMembers={[]}
+                          currentUserName={
+                            currentUserAuth?.displayName ||
+                            currentUserAuth?.email ||
+                            "Unknown User"
+                          }
+                          currentUserId={currentUserAuth?.uid || "unknown"}
+                        />
+                      )}
+                      {activeTab === "client" && (
+                        <ClientTab
+                          tiers={tiersWithCalculatedSummaries}
+                          bank={bank}
+                          materialSuggestions={materialSuggestions}
+                          timelinePhases={timelinePhases}
+                          setTimelinePhases={setTimelinePhases}
+                          projectContext={projectContext}
+                          decisionBrainOutput={decisionBrainOutput}
+                          leadProfile={leadProfile}
+                          setProjectContext={setProjectContext}
+                          onExportHtml={handleExportHtml}
+                        />
+                      )}
+                      {activeTab === "revision-studio" && (
+                        <RevisionStudio
+                          tiers={tiersWithCalculatedSummaries}
+                          approvedTierId={projectContext.approvedTierId}
+                          activeTierId={activeTierId}
+                          bank={bank}
+                          setBank={setBank}
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          setTiers={setTiers}
+                          setActiveTierId={setActiveTierId}
+                        />
+                      )}
+                      {activeTab === "analytics" && (
+                        <AnalyticsTab
+                          boq={
+                            activeProject ? executionBoq : fullBoqForActiveTier
+                          }
+                          setBoq={setBoqForActiveTier}
+                          bank={bank}
+                          activeTab={activeTab}
+                          aiStrategy={aiStrategy}
+                          tiers={tiersWithCalculatedSummaries}
+                          projectContext={projectContext}
+                        />
+                      )}
+                      {(activeTab === "site-ops" ||
+                        activeTab === "update-client-feed" ||
+                        activeTab === "record-decision" ||
+                        activeTab === "mom-action-tracker") && (
+                        <SiteOpsTab
+                          key={activeTab}
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          decisionBrainOutput={decisionBrainOutput}
+                          boq={
+                            activeProject ? executionBoq : fullBoqForActiveTier
+                          }
+                          projectId={activeInternalId!}
+                          activeProject={activeProject}
+                          onProjectUpdate={setActiveProject}
+                          onNavigateToTab={setActiveTab}
+                          initialModule={
+                            activeTab === "update-client-feed"
+                              ? "client-updates"
+                              : activeTab === "record-decision"
+                                ? "decision-tracker"
+                                : activeTab === "mom-action-tracker"
+                                  ? "action-tracker"
+                                  : "execution"
+                          }
+                          onAddCalculatedItem={(
+                            name,
+                            cat,
+                            qty,
+                            unit,
+                            roomId,
+                          ) => {
+                            if (!activeTierId) return;
+                            const newBankItem: Item = {
+                              id: generateId(),
+                              name,
+                              cat,
+                              specs: "Added from Site Ops calculator",
+                              unit,
+                              materials: 0,
+                              labor: 0,
+                              margin: 0,
+                            };
+                            setBank((prev) => [...prev, newBankItem]);
+
+                            const newBoqItem: BoqItem = {
+                              id: generateId(),
+                              bankId: newBankItem.id,
+                              qty,
+                              roomId,
+                              rationale: "Calculated value",
+                            };
+                            setTiers((prev) =>
+                              prev.map((tier) => {
+                                if (tier.id !== activeTierId) return tier;
+                                return {
+                                  ...tier,
+                                  boq: [...tier.boq, newBoqItem],
+                                };
+                              }),
+                            );
+                          }}
+                        />
+                      )}
+                      {activeTab === "ops" && (
+                        <OperationsTab
+                          tiers={tiersWithCalculatedSummaries}
+                          setTiers={setTiers}
+                          activeTierId={activeTierId}
+                          setActiveTierId={setActiveTierId}
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          bank={bank}
+                          setBank={setBank} // NEW: Pass bank setter for dynamic creation
+                          setActiveTab={setActiveTab}
+                          projects={projectLibrary}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    /* Fallback if project tab requested but no project active */
+                    isProjectTab &&
+                    !hasProjectData && (
+                      <div className="flex flex-col items-center justify-center h-[50vh]">
+                        <p className="text-slate-400 mb-4">
+                          No active project selected.
+                        </p>
+                        <button
+                          onClick={() => setActiveTab("projects")}
+                          className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold"
+                        >
+                          Go to Projects
+                        </button>
+                      </div>
+                    )
+                  )}
+                  </Suspense>
+                </MotionDiv>
+              </AnimatePresence>
+              </div>
+            )}
           </main>
         </>
       )}
+      {!(isProjectTab && hasProjectData) && (
+        <SuccessWithNextToast projectId={activeInternalId || undefined} projectContext={projectContext} />
+      )}
+        </div>
     </div>
+    </PageHeaderProvider>
   );
 }

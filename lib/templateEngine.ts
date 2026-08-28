@@ -376,13 +376,77 @@ export const EMAIL_TEMPLATE_LIBRARY: CommunicationTemplateItem[] = [
     title: "Action Required: Execution Agreement Signoff",
     isRequired: true,
     email: {
-      subject: "Action Required: Execution Agreement for {projectName}",
-      body: "Dear {clientName},\n\nPlease review and sign the Execution Agreement for your project {projectName}.\n\nThe contract value stands at {amount}.\n\nPlease find the PDF copy of the Execution Agreement and Terms & Conditions attached to this email.\n\nYou can review the full terms, inclusions, and payment schedules online and sign digitally by clicking the link below. No login required.\n\nReview & Sign Link: {signoffUrl}\n\nIf you have questions, reply to this email or call us at {studioPhone}.\n\nWarm regards,\nTeam {studioName}"
+      subject: "Action Required: Execution Agreement for {projectName} | {studioName}",
+      body: "Dear {clientName},\n\nWe have prepared the official Integrated Interior Execution Agreement for your project {projectName}.\n\nContract Milestone Valuation: {amount}\nDocument Access PIN: {pinCode}\n\nSecurity Advisory: All contract records are digitally sealed and protected under the Information Technology Act. You can review the complete scope, room-by-room inclusions, stage-gate payment milestones, and affix your digital signature securely using the link below:\n\nReview & Sign Link: {signoffUrl}\n\n🛡️ Anti-Phishing Direct Verification: If you prefer not to click links in emails, you can open your browser, visit the official studio portal directly, select \"Verify Document by PIN\", and enter your Access PIN: {pinCode}.\n\nIf you have questions, reply to this email or call us directly at {studioPhone}.\n\nWarm regards,\nTeam {studioName}"
     },
     whatsapp: {
-      body: "Dear {clientName}, please review and sign the Execution Agreement for {projectName} ({amount}) here: {signoffUrl} — {studioName}"
+      body: "Dear {clientName}, please review and sign the Execution Agreement for {projectName} ({amount}). Direct sign link: {signoffUrl} | Document Access PIN: {pinCode} — {studioName}"
     },
-    variables: ["clientName", "projectName", "amount", "signoffUrl", "studioPhone", "studioName"],
+    variables: ["clientName", "projectName", "amount", "docTitle", "signoffUrl", "pinCode", "docketHash", "studioPhone", "studioName", "studioEmail"],
+    isCustomised: false
+  },
+  {
+    key: "design_agreement_request",
+    phase: "design",
+    category: "Design Contracts",
+    title: "Action Required: Design Agreement Signoff",
+    isRequired: true,
+    email: {
+      subject: "Action Required: Design Agreement for {projectName} | {studioName}",
+      body: "Dear {clientName},\n\nWe are pleased to share the Design Agreement for {projectName}.\n\nDesign Fee: {amount}\nDocument Access PIN: {pinCode}\n\nPlease review the design deliverables, revision policy, and sign digitally using the link below:\n\nReview & Sign Link: {signoffUrl}\n\n🛡️ Direct Verification: You can also verify and sign directly on our studio portal using your Access PIN: {pinCode}.\n\nWarm regards,\nTeam {studioName}"
+    },
+    whatsapp: {
+      body: "Dear {clientName}, the Design Agreement for {projectName} is ready for authorization ({amount}): {signoffUrl} | PIN: {pinCode} — {studioName}"
+    },
+    variables: ["clientName", "projectName", "amount", "docTitle", "signoffUrl", "pinCode", "docketHash", "studioPhone", "studioName", "studioEmail"],
+    isCustomised: false
+  },
+  {
+    key: "terms_agreement_request",
+    phase: "execution",
+    category: "Legal & Governance",
+    title: "Action Required: Terms & Conditions Authorization",
+    isRequired: true,
+    email: {
+      subject: "Action Required: Terms & Conditions Docket — {projectName} | {studioName}",
+      body: "Dear {clientName},\n\nPlease review and authorize the Terms & Conditions Governance Docket for your project {projectName}.\n\nDocument Access PIN: {pinCode}\n\nReview & Sign Link: {signoffUrl}\n\n🛡️ Direct Verification PIN: {pinCode}\n\nWarm regards,\nTeam {studioName}"
+    },
+    whatsapp: {
+      body: "Dear {clientName}, please review the Terms & Conditions for {projectName}: {signoffUrl} | PIN: {pinCode} — {studioName}"
+    },
+    variables: ["clientName", "projectName", "amount", "docTitle", "signoffUrl", "pinCode", "docketHash", "studioPhone", "studioName", "studioEmail"],
+    isCustomised: false
+  },
+  {
+    key: "proposal_agreement_request",
+    phase: "design",
+    category: "Onboarding & Acquisition",
+    title: "Action Required: Commercial Proposal Authorization",
+    isRequired: true,
+    email: {
+      subject: "Action Required: Scope & Commercial Proposal — {projectName} | {studioName}",
+      body: "Dear {clientName},\n\nPlease review and approve the Commercial Proposal & Scope Authorization for {projectName}.\n\nEstimated Valuation: {amount}\nDocument Access PIN: {pinCode}\n\nReview & Sign Link: {signoffUrl}\n\nWarm regards,\nTeam {studioName}"
+    },
+    whatsapp: {
+      body: "Dear {clientName}, your proposal for {projectName} is ready for authorization: {signoffUrl} | PIN: {pinCode} — {studioName}"
+    },
+    variables: ["clientName", "projectName", "amount", "docTitle", "signoffUrl", "pinCode", "docketHash", "studioPhone", "studioName", "studioEmail"],
+    isCustomised: false
+  },
+  {
+    key: "handover_agreement_request",
+    phase: "execution",
+    category: "Handover",
+    title: "Action Required: Handover & Warranty Docket Signoff",
+    isRequired: true,
+    email: {
+      subject: "Action Required: Project Handover & Warranty Docket — {projectName} | {studioName}",
+      body: "Dear {clientName},\n\nCongratulations on reaching completion for {projectName}! Please review and execute the Handover Docket & Warranty Certificate.\n\nDocument Access PIN: {pinCode}\n\nReview & Sign Link: {signoffUrl}\n\nWarm regards,\nTeam {studioName}"
+    },
+    whatsapp: {
+      body: "Dear {clientName}, your Handover & Warranty Docket for {projectName} is ready for signoff: {signoffUrl} | PIN: {pinCode} — {studioName}"
+    },
+    variables: ["clientName", "projectName", "amount", "docTitle", "signoffUrl", "pinCode", "docketHash", "studioPhone", "studioName", "studioEmail"],
     isCustomised: false
   }
 ];

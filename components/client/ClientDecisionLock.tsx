@@ -72,8 +72,8 @@ const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ level, decision
         <section id="decision-lock" className="py-12 border-t border-slate-200 bg-slate-50/50 rounded-3xl mt-8 scroll-mt-20">
             <div className="px-6 md:px-10">
                 <div className="mb-10 text-center md:text-left">
-                    <span className="inline-block px-3 py-1 bg-indigo-950 text-white text-xs font-bold rounded-full mb-3 uppercase tracking-widest shadow-sm">Next Step</span>
-                    <h2 className="text-3xl font-extrabold text-indigo-950 mb-2">Select Your Path Forward</h2>
+                    <span className="inline-block px-3 py-1 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white text-xs font-bold rounded-full mb-3 uppercase tracking-widest shadow-sm">Next Step</span>
+                    <h2 className="text-3xl font-extrabold text-slate-900 mb-2">Select Your Path Forward</h2>
                     <p className="text-slate-600 text-sm max-w-2xl mx-auto md:mx-0">
                         To move from "Estimate" to "Action", please confirm your preferred engagement model. This allows us to allocate the right design team and resources immediately.
                     </p>
@@ -87,7 +87,7 @@ const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ level, decision
                             <details className="group md:hidden" open>
                                 <summary className="list-none p-5 flex items-center justify-between cursor-pointer select-none">
                                     <div>
-                                        <h3 className="text-lg font-bold text-indigo-950 leading-tight">{opt.title}</h3>
+                                        <h3 className="text-lg font-bold text-slate-900 leading-tight">{opt.title}</h3>
                                         <p className="text-xs text-slate-500 mt-1 line-clamp-1">{opt.description}</p>
                                     </div>
                                     <div className="ml-3 text-slate-400 group-open:rotate-180 transition-transform">
@@ -118,7 +118,7 @@ const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ level, decision
                                         href={`https://wa.me/${targetPhone}?text=${opt.waMessage}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-indigo-950 text-white font-bold text-sm rounded-xl shadow-lg hover:bg-blue-900 transition-all"
+                                        className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white font-bold text-sm rounded-xl shadow-lg hover:bg-blue-900 transition-all"
                                     >
                                         <span>{opt.buttonText}</span>
                                         <ArrowRightIcon className="w-4 h-4" />
@@ -130,7 +130,7 @@ const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ level, decision
                             <div className="hidden md:block p-8">
                                 <div className="flex flex-col md:flex-row gap-8">
                                     <div className="flex-grow">
-                                        <h3 className="text-xl font-bold text-indigo-950 mb-2">{opt.title}</h3>
+                                        <h3 className="text-xl font-bold text-slate-900 mb-2">{opt.title}</h3>
                                         <p className="text-sm text-slate-600 leading-relaxed mb-6">{opt.description}</p>
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -177,7 +177,7 @@ const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ level, decision
                                             href={`https://wa.me/${targetPhone}?text=${opt.waMessage}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-indigo-950 text-white font-bold text-sm rounded-xl shadow-lg hover:bg-blue-900 hover:scale-[1.02] transition-all group"
+                                            className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white font-bold text-sm rounded-xl shadow-lg hover:bg-blue-900 hover:scale-[1.02] transition-all group"
                                         >
                                             <span>{opt.buttonText}</span>
                                             <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform" />

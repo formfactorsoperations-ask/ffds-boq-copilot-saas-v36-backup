@@ -1,41 +1,50 @@
 export function generateWhatsAppDigest(pulse: any): string {
-    let text = `*Weekly Update: Week ${pulse?.weekNumber || ''}*\n\n`;
-    text += pulse?.executiveBriefing ? `${pulse.executiveBriefing}\n\n` : '';
+    const weekNumber = pulse?.weekNumber || '';
+    let text = `*Weekly Update: Week ${weekNumber}*\n\n`;
     
-    if (pulse?.roomProgress && Object.keys(pulse.roomProgress).length > 0) {
-        text += "*Site Progress:*\n";
-        for (const [room, pct] of Object.entries(pulse.roomProgress)) {
-            text += `- ${room}: ${pct}%\n`;
-        }
-        text += "\n";
-    }
-
-    if (pulse?.manualActions && pulse.manualActions.length > 0) {
-        text += "*Action Items:*\n";
-        pulse.manualActions.forEach((a: any) => {
-            text += `- [${a.assignee === 'client' ? 'Client' : 'Studio'}] ${a.text}\n`;
-        });
-        text += "\n";
-    }
-
-    if (pulse?.openItems) {
-        if (pulse.openItems.client && pulse.openItems.client.length > 0) {
-            text += "*Waiting on You:*\n";
-            pulse.openItems.client.forEach((a: any) => {
-                text += `- ${a.text}\n`;
-            });
-            text += "\n";
+    // Headline from narrative first sentence
+    const narrativeText = pulse?.narrative?.weekAtAGlance || pulse?.executiveBriefing || '';
+    if (narrativeText) {
+        const firstSentence = narrativeText.split(/[.!?]/)[0];
+        if (firstSentence) {
+            text += `${firstSentence.trim()}.\n\n`;
         }
     }
 
-    if (pulse?.corrections && pulse.corrections.length > 0) {
-        text += "*Note (Corrections):*\n";
-        pulse.corrections.forEach((c: any) => {
-            if (c.state === 'active') {
-                text += `- ${c.fieldPath.split('.').pop()}: changed to ${c.newValue} (${c.reason})\n`;
-            }
-        });
+    const overlay = pulse?.overlay || {};
+    
+    // Site progress deltas
+    if (overlay.siteProgress && Object.keys(overlay.siteProgress).length > 0) {
+        const deltas = Object.entries(overlay.siteProgress)
+            .map(([room, prog]: [string, any]) => {
+                const diff = (prog.pct || 0) - (prog.previousPct || 0);
+                if (diff > 0) return `${room}: +${diff}%`;
+                return null;
+            })
+            .filter(Boolean);
+            
+        if (deltas.length > 0) {
+            text += `*Site Progress:*\n`;
+            deltas.forEach(d => text += `- ${d}\n`);
+            text += `\n`;
+        }
     }
+
+    // Actions needed
+    const clientActions = [
+        ...(pulse?.openItems?.client || []),
+        ...(pulse?.manualActions || []).filter((a: any) => a.assignee === 'client')
+    ];
+
+    if (clientActions.length > 0) {
+        text += `*Action Items:*\n`;
+        clientActions.forEach(a => {
+            text += `- ${a.text}\n`;
+        });
+        text += `\n`;
+    }
+
+    text += `*View full report:* https://example.com/report`; // Need an actual link if available or placeholder
 
     return text.trim();
 }

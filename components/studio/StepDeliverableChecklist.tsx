@@ -91,14 +91,14 @@ export function StepDeliverableChecklist({ step, projectId, onUpdateDeliverable,
             {/* Header */}
             <div className="bg-slate-50 px-6 py-4 flex items-center justify-between border-b border-slate-200">
                 <div className="flex items-center gap-3">
-                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold text-sm">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-[#0055B3] font-bold text-sm">
                         {step.stepNumber}
                     </span>
-                    <h3 className="font-bold text-indigo-900">{step.title}</h3>
+                    <h3 className="font-bold text-slate-800">{step.title}</h3>
                 </div>
                 <div>
                    {step.status === 'completed' && <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">Completed</span>}
-                   {step.status === 'in_progress' && <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1 rounded-full">In Progress</span>}
+                   {step.status === 'in_progress' && <span className="bg-sky-100 text-sky-800 text-xs font-bold px-3 py-1 rounded-full">In Progress</span>}
                    {step.status === 'not_started' && <span className="bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1 rounded-full">Not Started</span>}
                 </div>
             </div>
@@ -117,11 +117,11 @@ export function StepDeliverableChecklist({ step, projectId, onUpdateDeliverable,
                                         {d.checked ? (
                                             <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                                         ) : (
-                                            <Circle className="w-6 h-6 text-slate-300 hover:text-indigo-400" />
+                                            <Circle className="w-6 h-6 text-slate-300 hover:text-sky-400" />
                                         )}
                                     </button>
                                     <div>
-                                        <p className={`font-medium ${d.checked ? 'text-slate-500 line-through' : 'text-indigo-900'}`}>
+                                        <p className={`font-medium ${d.checked ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
                                             {d.label}
                                         </p>
                                         {d.checked && d.checkedBy && (
@@ -131,7 +131,7 @@ export function StepDeliverableChecklist({ step, projectId, onUpdateDeliverable,
                                 </div>
                                 <div className="ml-4 flex-shrink-0 flex items-center gap-2">
                                     {d.fileUrl ? (
-                                        <a href={d.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg font-medium transition-colors">
+                                        <a href={d.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-[#0066CC] hover:text-[#0055B3] bg-sky-50 px-3 py-1.5 rounded-lg font-medium transition-colors">
                                             <Download className="w-4 h-4" />
                                             {d.fileName}
                                         </a>
@@ -151,7 +151,7 @@ export function StepDeliverableChecklist({ step, projectId, onUpdateDeliverable,
                                             <button 
                                                 onClick={() => fileInputRefs.current[d.id]?.click()}
                                                 disabled={uploadingId === d.id}
-                                                className="flex items-center gap-2 text-sm text-slate-600 hover:text-indigo-950 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
+                                                className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
                                             >
                                                 {uploadingId === d.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                                                 Upload
@@ -163,7 +163,7 @@ export function StepDeliverableChecklist({ step, projectId, onUpdateDeliverable,
                             
                             {uploadingId === d.id && (
                                 <div className="mt-4 bg-slate-100 h-2 rounded-full overflow-hidden">
-                                     <div className="bg-indigo-500 h-full" style={{ width: `${uploadProgress}%` }}></div>
+                                     <div className="bg-[#0066CC] h-full" style={{ width: `${uploadProgress}%` }}></div>
                                 </div>
                             )}
                         </div>
@@ -194,19 +194,19 @@ export function StepDeliverableChecklist({ step, projectId, onUpdateDeliverable,
                                 <button
                                     onClick={() => setShowConfirm(true)}
                                     disabled={!canComplete}
-                                    className="px-6 py-3 bg-indigo-950 disabled:bg-slate-300 text-white font-bold rounded-xl disabled:cursor-not-allowed transition-colors shadow-sm"
+                                    className="px-6 py-3 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 disabled:bg-slate-300 text-white font-bold rounded-xl disabled:cursor-not-allowed transition-colors shadow-sm"
                                 >
                                     Mark Step Complete
                                 </button>
                                 {!canComplete && tooltip && (
-                                    <div className="absolute bottom-full mb-2 right-0 hidden group-hover:block bg-indigo-900 text-white text-xs font-medium px-3 py-2 rounded-lg whitespace-nowrap">
+                                    <div className="absolute bottom-full mb-2 right-0 hidden group-hover:block bg-sky-900 text-white text-xs font-medium px-3 py-2 rounded-lg whitespace-nowrap">
                                         {tooltip}
                                     </div>
                                 )}
                             </div>
                         ) : (
                             <div className="flex items-center gap-4 bg-slate-50 p-4 border border-slate-200 rounded-xl animate-fade-in">
-                                <p className="font-medium text-indigo-900">Complete Step {step.stepNumber}: {step.title}? This will trigger the payment milestone.</p>
+                                <p className="font-medium text-slate-800">Complete Step {step.stepNumber}: {step.title}? This will trigger the payment milestone.</p>
                                 <button onClick={() => setShowConfirm(false)} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg">Cancel</button>
                                 <button onClick={() => { setShowConfirm(false); onCompleteStep(step.stepNumber); }} className="px-4 py-2 bg-emerald-500 text-white font-bold rounded-lg hover:bg-emerald-600">Yes, Complete</button>
                             </div>

@@ -103,7 +103,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "agreement_signed", n: 13, phase: 2, title: "Agreement Signed",
     description: "Main execution contract shared and signed.",
     illustration: "agreement_signed", statusSource: "auto",
-    autoRule: 'communicationLog["contract_sent"].status === "sent"', linkedFeature: "Contracts", linkedTab: "contract", prerequisiteIds: ["payment_schedule_sent"]
+    autoRule: 'communicationLog["contract_sent"].status === "sent"', linkedFeature: "Contracts", linkedTab: "execution-agreement", prerequisiteIds: ["payment_schedule_sent"]
   },
   {
     id: "design_fee_received", n: 14, phase: 2, title: "Design Fee Received",
@@ -238,3 +238,13 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     autoRule: "project.handoverDate exists AND all paymentMilestones status === 'PAID'", linkedFeature: "Project Settings", linkedTab: "dashboard", prerequisiteIds: ["keys_handed_over"]
   }
 ];
+
+
+export const STAGE_LABELS: Record<number, string> = {
+  1: "Initial Consultation",
+  2: "Scope & Strategy",
+  3: "Proposal & Revisions",
+  4: "Agreement & Design",
+  5: "Execution",
+  6: "Handover & Closeout"
+};

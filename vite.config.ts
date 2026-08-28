@@ -1,52 +1,66 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
       server: {
         port: 3000,
-        host: '0.0.0.0',
-        hmr: false,
+        host: '0.0.0.0'
       },
       build: {
         sourcemap: false,
         outDir: 'dist',
         emptyOutDir: true,
+        reportCompressedSize: false,
+        chunkSizeWarningLimit: 5000,
+        target: 'esnext',
+        minify: false,
+        cssCodeSplit: true,
+        rollupOptions: {
+          maxParallelFileOps: 1,
+          output: {
+            manualChunks: {
+              'vendor-react': ['react', 'react-dom'],
+              'vendor-framer': ['framer-motion'],
+              'vendor-icons': ['lucide-react'],
+              'vendor-firebase': ['firebase/app', 'firebase/firestore', 'firebase/auth'],
+              'vendor-excel': ['exceljs', 'xlsx'],
+              'vendor-pdf': ['jspdf', 'jspdf-autotable'],
+              'vendor-charts': ['recharts', 'd3']
+            }
+          }
+        }
+      },
+      optimizeDeps: {
+        include: [
+          'react',
+          'react-dom',
+          'react/jsx-runtime',
+          'framer-motion',
+          'lucide-react',
+          '@google/genai',
+          'firebase/app',
+          'firebase/firestore',
+          'firebase/auth',
+          'd3',
+          'recharts',
+          'date-fns',
+          'deep-object-diff',
+          'idb-keyval',
+          'file-saver',
+          'pako',
+          'exceljs',
+          'xlsx',
+          'jspdf',
+          'jspdf-autotable'
+        ]
       },
       plugins: [
-        react(),
-        VitePWA({
-          registerType: 'autoUpdate',
-          devOptions: {
-            enabled: false
-          },
-          workbox: {
-            maximumFileSizeToCacheInBytes: 10000000 // 10MB
-          },
-          manifest: {
-            name: 'FFDS Execution Hub',
-            short_name: 'FFDS Hub',
-            description: 'Site execution and project management portal for Form Factors Design Studio',
-            theme_color: '#0f172a',
-            background_color: '#ffffff',
-            display: 'standalone',
-            icons: [
-              {
-                src: '/pwa-192x192.png',
-                sizes: '192x192',
-                type: 'image/png'
-              },
-              {
-                src: '/pwa-512x512.png',
-                sizes: '512x512',
-                type: 'image/png'
-              }
-            ]
-          }
-        })
+        tailwindcss(),
+        react()
       ],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
@@ -54,8 +68,9 @@ export default defineConfig(({ mode }) => {
       },
       resolve: {
         alias: {
-          '@': path.resolve(__dirname, '.'),
+          '@': path.resolve(process.cwd(), '.'),
         }
       }
     };
 });
+

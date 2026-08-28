@@ -1,5 +1,41 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { usePageHeader } from '../contexts/PageHeaderContext';
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  History,
+  CheckCircle2,
+  RefreshCw,
+  FileText,
+  Edit3,
+  Sparkles,
+  PlusCircle,
+  Trash2,
+  ArrowRight,
+  Copy,
+  Check,
+  Layers,
+  LayoutGrid,
+  Send,
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  Clock,
+  ShieldAlert,
+  PieChart,
+  HelpCircle,
+  FileSpreadsheet,
+  Lock,
+  AlertTriangle,
+  MessageSquare,
+  ChevronRight,
+  Share2,
+  Eye,
+  Sliders,
+  FileCheck,
+  Download,
+  X,
+  ChevronDown
+} from "lucide-react";
 import Card from "./shared/Card";
 import {
   ProposalTier,
@@ -48,6 +84,7 @@ export default function RevisionStudio({
 }: RevisionStudioProps) {
   const { orgData } = useOrg();
   const [activeTab, setActiveTab] = useState("actions");
+  const [showBaselineModal, setShowBaselineModal] = useState(false);
   const [showDetailedClientView, setShowDetailedClientView] = useState(false);
   const [isWhatsappCopied, setIsWhatsappCopied] = useState(false);
   const [actions, setActions] = useState<RevisionAction[]>(
@@ -116,6 +153,141 @@ export default function RevisionStudio({
 
   const showToast = (msg: string) => setToastMessage(msg);
 
+  const [selectedTierId, setSelectedTierId] = useState<string | null>(
+    () => approvedTierId || activeTierId || (tiers && tiers[0]?.id) || null
+  );
+
+  // Keep selectedTierId updated if approvedTierId or activeTierId props change externally (e.g. from TierManager sync)
+  useEffect(() => {
+    if (approvedTierId) {
+      setSelectedTierId(approvedTierId);
+    } else if (activeTierId) {
+      setSelectedTierId(activeTierId);
+    }
+  }, [approvedTierId, activeTierId]);
+
+  const currentSelectedTier = useMemo(() => {
+    return (
+      (tiers || []).find((t) => t.id === selectedTierId) ||
+      (tiers || []).find((t) => t.id === approvedTierId) ||
+      (tiers || []).find((t) => t.id === activeTierId) ||
+      (tiers && tiers[0]) ||
+      null
+    );
+  }, [tiers, selectedTierId, approvedTierId, activeTierId]);
+
+  const availableVersions = useMemo(() => {
+    return (tiers || []).map((t) => {
+      const isApproved = t.id === (projectContext?.approvedTierId || approvedTierId);
+      const isActive = t.id === activeTierId;
+      const isCurrentSelected = t.id === currentSelectedTier?.id;
+
+      const executionValue = t.summary?.totalSell || t.summary?.totalRevenue || 0;
+      const designValue =
+        t.summary?.designFee ||
+        (projectContext?.designFeeType === "fixed_lumpsum"
+          ? projectContext.designFee || 0
+          : projectContext?.designFeeType === "fixed_sqft"
+          ? (projectContext.designFee || 0) * (projectContext.area || 0)
+          : executionValue *
+            ((projectContext?.financials?.designFeePercentage ||
+              projectContext?.designFee ||
+              8) /
+              100));
+
+      let lifecycleBadge: string = t.lifecycleTag || "";
+      if (!lifecycleBadge) {
+        if (isApproved) {
+          lifecycleBadge = t.name.toLowerCase().includes("annexure")
+            ? "Approved Annexure"
+            : t.name.toLowerCase().includes("revision")
+            ? "Approved Revision"
+            : "Approved Contract";
+        } else if (isActive) {
+          lifecycleBadge = "Active Option";
+        } else {
+          lifecycleBadge = "Option";
+        }
+      } else if (isApproved && lifecycleBadge === "Approved while booking") {
+        lifecycleBadge = t.name.toLowerCase().includes("annexure")
+          ? "Approved Annexure"
+          : t.name.toLowerCase().includes("revision")
+          ? "Approved Revision"
+          : "Approved Contract";
+      }
+
+      return {
+        id: t.id,
+        name: t.name,
+        timestamp: t.timestamp,
+        lifecycleTag: lifecycleBadge,
+        executionValue,
+        designValue,
+        itemCount: t.boq?.length || 0,
+        isApproved,
+        isActive,
+        isCurrentSelected,
+      };
+    });
+  }, [
+    tiers,
+    projectContext?.approvedTierId,
+    approvedTierId,
+    projectContext?.designFeeType,
+    projectContext?.designFee,
+    projectContext?.area,
+    projectContext?.financials?.designFeePercentage,
+    activeTierId,
+    currentSelectedTier?.id,
+  ]);
+
+  const handleSetAsActiveBaseline = (tierId: string) => {
+    const targetTier = (tiers || []).find((t) => t.id === tierId);
+    if (!targetTier) return;
+
+    setSelectedTierId(tierId);
+    if (setActiveTierId) setActiveTierId(tierId);
+
+    if (setProjectContext) {
+      setProjectContext((prev) => {
+        const prevFinancials = prev.financials || ({} as any);
+        const execVal =
+          targetTier.summary?.totalSell || targetTier.summary?.totalRevenue || 0;
+        const desVal = targetTier.summary?.designFee || 0;
+        return {
+          ...prev,
+          approvedTierId: tierId,
+          boqRevisions: [],
+          financials: {
+            ...prevFinancials,
+            approvedExecutionValue: execVal,
+            approvedDesignValue: desVal,
+          },
+        };
+      });
+    }
+    setActions([]);
+    showToast(
+      `Set "${targetTier.name}" as the active baseline and synchronized project financials.`,
+    );
+  };
+
+  const handleSyncFromTier = (tierId: string) => {
+    const targetTier = (tiers || []).find((t) => t.id === tierId);
+    if (!targetTier) return;
+    setSelectedTierId(tierId);
+    setActions([]);
+    if (setProjectContext) {
+      setProjectContext((prev) => ({
+        ...prev,
+        boqRevisions: [],
+      }));
+    }
+    showToast(
+      `Reset draft actions and synced clean baseline from "${targetTier.name}".`,
+    );
+  };
+
   const [manualForm, setManualForm] = useState({
     type: "REVISE_QTY" as ActionType,
     targetItemId: "",
@@ -132,18 +304,15 @@ export default function RevisionStudio({
 
   // 1. Derive Baseline BOQ
   const baselineBoq = useMemo(() => {
-    const tierId = approvedTierId || activeTierId;
-    if (!tierId) return [];
-    const tier = tiers.find((t) => t.id === tierId);
-    if (!tier) return [];
+    if (!currentSelectedTier) return [];
 
     const bankMap = new Map(bank.map((i) => [i.id, i]));
     if (projectContext?.adHocItems) {
       projectContext.adHocItems.forEach((i) => bankMap.set(i.id, i));
     }
 
-    return (tier.boq || []).map((boqItem) => {
-      const initialBankItem = INITIAL_BANK.find(i => i.id === boqItem.bankId);
+    return (currentSelectedTier.boq || []).map((boqItem) => {
+      const initialBankItem = INITIAL_BANK.find((i) => i.id === boqItem.bankId);
       const bankItem = bankMap.get(boqItem.bankId) || initialBankItem;
       let rate = 0;
       if (bankItem) {
@@ -199,7 +368,7 @@ export default function RevisionStudio({
         exclusions: boqItem.exclusions || [],
       };
     });
-  }, [tiers, bank, approvedTierId, activeTierId, projectContext?.adHocItems]);
+  }, [currentSelectedTier, bank, projectContext?.adHocItems]);
 
   // 2. Derive Current Revision BOQ
   const currentRevisionBoq = useMemo(() => {
@@ -292,6 +461,21 @@ export default function RevisionStudio({
     () => baselineBoq.reduce((sum: number, item: any) => sum + item.total, 0),
     [baselineBoq],
   );
+
+  usePageHeader({
+    actions: currentSelectedTier ? (
+      <button
+        onClick={() => setShowBaselineModal(true)}
+        className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/80 rounded-xl text-xs font-bold text-emerald-950 flex items-center gap-1.5 transition-all shadow-2xs hover:scale-[1.01] cursor-pointer"
+        title="Click to view locked contractual Baseline BOQ scope"
+      >
+        <Lock className="w-3.5 h-3.5 text-emerald-600" />
+        <span>Contract Baseline: {currentSelectedTier.name}</span>
+        <span className="text-emerald-300">•</span>
+        <span className="text-emerald-700">{formatINR(originalTotal)}</span>
+      </button>
+    ) : null
+  }, [currentSelectedTier?.name, originalTotal]);
   const rawRevisedExecutionTotal = useMemo(
     () =>
       currentRevisionBoq.reduce((sum: number, item: any) => {
@@ -655,7 +839,7 @@ export default function RevisionStudio({
           <span className="line-through text-slate-400 mr-2">
             {action.oldValue}
           </span>
-          <span className="text-indigo-600 font-medium">
+          <span className="text-[#0066CC] font-medium">
             ➔ {action.newValue}
           </span>
         </>
@@ -667,7 +851,7 @@ export default function RevisionStudio({
           <span className="line-through text-slate-400 mr-2">
             {formatINR(action.oldValue)}
           </span>
-          <span className="text-indigo-600 font-medium">
+          <span className="text-[#0066CC] font-medium">
             ➔ {formatINR(action.newValue)}
           </span>
         </>
@@ -679,7 +863,7 @@ export default function RevisionStudio({
           <div className="line-through text-slate-400">
             {action.oldValue.item} ({formatINR(action.oldValue.rate)})
           </div>
-          <div className="text-indigo-600 font-medium">
+          <div className="text-[#0066CC] font-medium">
             ➔ {action.newValue.item} ({formatINR(action.newValue.rate)})
           </div>
         </div>
@@ -699,136 +883,218 @@ export default function RevisionStudio({
 
   const renderBaseline = () => (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
         <div>
-          <h3 className="text-lg font-semibold text-indigo-900">Baseline BOQ</h3>
-          <p className="text-sm text-slate-500">
-            The single source of truth. Locked and read-only.
+          <div className="flex items-center gap-2">
+            <Lock className="w-4 h-4 text-slate-500" />
+            <h3 className="text-lg font-bold text-slate-900">Baseline BOQ</h3>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Contractual Source of Truth. Locked & read-only approved scope.
           </p>
         </div>
-        <div className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-semibold flex items-center gap-1">
-          <svg
-            className="w-3 h-3"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-            />
-          </svg>
-          Approved Baseline
+        <div className="flex items-center gap-3">
+          <div className="px-3.5 py-1.5 bg-emerald-50 border border-emerald-200/80 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Approved Baseline</span>
+          </div>
+          <div className="px-3.5 py-1.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold">
+            {baselineBoq.length} Line Items
+          </div>
         </div>
       </div>
-      <Card className="p-0 border border-slate-200">
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            Total Baseline Value
+          </div>
+          <div className="text-2xl font-extrabold text-slate-900">
+            {formatINR(originalTotal)}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">Excl. taxes & milestone deductions</div>
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            Total Scope Sections
+          </div>
+          <div className="text-2xl font-extrabold text-slate-900">
+            {new Set(baselineBoq.map((i: any) => i.section)).size}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">Space & trade breakdown</div>
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            Active Baseline Version
+          </div>
+          <div className="text-base font-bold text-[#0066CC] truncate">
+            {currentSelectedTier?.name || "Contract Baseline"}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">Approved contract specification</div>
+        </div>
+      </div>
+
+      <Card className="p-0 border border-slate-200/80 shadow-sm overflow-hidden rounded-2xl">
         <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
-            <tr>
-              <th className="px-4 py-3 font-medium">Section</th>
-              <th className="px-4 py-3 font-medium">Item</th>
-              <th className="px-4 py-3 font-medium text-right">Qty</th>
-              <th className="px-4 py-3 font-medium text-right">Rate (₹)</th>
-              <th className="px-4 py-3 font-medium text-right">Total (₹)</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {baselineBoq.map((item: any, idx: number) => (
-              <tr key={idx} className="hover:bg-slate-50">
-                <td className="px-4 py-2 text-slate-600">{item.section}</td>
-                <td className="px-4 py-2 font-medium text-indigo-900">
-                  {item.item}
-                </td>
-                <td className="px-4 py-2 text-right text-slate-600">
-                  {item.qty} {item.unit}
-                </td>
-                <td className="px-4 py-2 text-right text-slate-600">
-                  {formatINR(item.rate)}
-                </td>
-                <td className="px-4 py-2 text-right font-medium text-slate-700">
-                  {formatINR(item.total)}
-                </td>
+          <table className="w-full text-sm text-left">
+            <thead className="bg-slate-100/70 text-slate-700 border-b border-slate-200 text-xs uppercase tracking-wider font-semibold">
+              <tr>
+                <th className="px-5 py-3.5">Section</th>
+                <th className="px-5 py-3.5">Item Name & Details</th>
+                <th className="px-5 py-3.5 text-right">Quantity</th>
+                <th className="px-5 py-3.5 text-right">Rate (₹)</th>
+                <th className="px-5 py-3.5 text-right">Total Amount (₹)</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {baselineBoq.map((item: any, idx: number) => (
+                <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="px-5 py-3 text-xs font-semibold text-slate-600">
+                    <span className="px-2.5 py-1 bg-slate-100 rounded-md">
+                      {item.section}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 font-semibold text-slate-800">
+                    {item.item}
+                  </td>
+                  <td className="px-5 py-3 text-right text-slate-600 font-medium">
+                    {item.qty} <span className="text-xs text-slate-400 font-normal">{item.unit}</span>
+                  </td>
+                  <td className="px-5 py-3 text-right text-slate-600 font-medium">
+                    {formatINR(item.rate)}
+                  </td>
+                  <td className="px-5 py-3 text-right font-bold text-slate-900">
+                    {formatINR(item.total)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Card>
     </div>
   );
 
   const renderActionEntry = () => {
-    return (
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-1 space-y-6">
-          <Card className="p-4 border border-slate-200 bg-white shadow-sm">
-            <h4 className="font-semibold text-indigo-900 mb-4">
-              Natural Language Input
-            </h4>
-            <textarea
-              className="w-full h-24 p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
-              placeholder="e.g. Remove partition in entrance, add arch design, update MB wardrobe size to 84 sqft..."
-              value={nlInput}
-              onChange={(e) => setNlInput(e.target.value)}
-            />
-            <button className="mt-3 w-full py-2 bg-indigo-50 text-indigo-700 rounded-lg font-medium text-sm hover:bg-indigo-100 transition-colors flex items-center justify-center gap-2">
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
-              Parse Intent (Coming Soon)
-            </button>
-          </Card>
+    const actionTypes: { type: ActionType; label: string; icon: any; color: string }[] = [
+      { type: "ADD", label: "+ Add Item", icon: PlusCircle, color: "hover:border-emerald-500 hover:text-emerald-700 hover:bg-emerald-50" },
+      { type: "REVISE_QTY", label: "✎ Revise Qty", icon: Edit3, color: "hover:border-amber-500 hover:text-amber-700 hover:bg-amber-50" },
+      { type: "REVISE_RATE", label: "⚡ Revise Rate", icon: TrendingUp, color: "hover:border-[#0066CC] hover:text-[#0055B3] hover:bg-sky-50" },
+      { type: "REPLACE", label: "⇄ Replace Item", icon: RefreshCw, color: "hover:border-blue-500 hover:text-blue-700 hover:bg-blue-50" },
+      { type: "REMOVE", label: "⛔ Remove", icon: Trash2, color: "hover:border-rose-500 hover:text-rose-700 hover:bg-rose-50" },
+      { type: "MARK_PENDING", label: "❓ Mark Pending", icon: HelpCircle, color: "hover:border-purple-500 hover:text-purple-700 hover:bg-purple-50" },
+      { type: "APPROVE_PENDING", label: "✓ Approve Pending", icon: CheckCircle2, color: "hover:border-emerald-500 hover:text-emerald-700 hover:bg-emerald-50" },
+      { type: "MARK_VENDOR", label: "🏬 Vendor Direct", icon: FileText, color: "hover:border-slate-500 hover:text-slate-700 hover:bg-slate-100" },
+    ];
 
-          <Card className="p-4 border border-slate-200 bg-white shadow-sm">
-            <h4 className="font-semibold text-indigo-900 mb-4">
-              Manual Action Entry
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1 space-y-5">
+          {/* Version & Target Scope Control Panel */}
+          {availableVersions.length > 0 && (
+            <Card className="p-4 border border-slate-200/90 bg-white shadow-xs rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-slate-800 text-xs font-bold">
+                  <History className="w-3.5 h-3.5 text-[#0066CC]" />
+                  <span>Proposal / Version Target:</span>
+                </div>
+                {currentSelectedTier && (
+                  <span className="text-[11px] font-extrabold text-[#0055B3] bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">
+                    {formatINR(currentSelectedTier.executionValue)}
+                  </span>
+                )}
+              </div>
+
+              <div className="relative">
+                <select
+                  value={selectedTierId || ""}
+                  onChange={(e) => setSelectedTierId(e.target.value)}
+                  className="w-full appearance-none bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-slate-900 font-bold text-xs pl-3 pr-8 py-2 rounded-xl focus:ring-2 focus:ring-[#0066CC] transition-all cursor-pointer"
+                >
+                  {availableVersions.map((ver) => (
+                    <option key={ver.id} value={ver.id}>
+                      {ver.name} ({formatINR(ver.executionValue)}) {ver.isApproved ? "— [APPROVED BASELINE]" : ver.lifecycleTag ? `— [${ver.lifecycleTag}]` : ""}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                {currentSelectedTier &&
+                  currentSelectedTier.id !== projectContext?.approvedTierId ? (
+                    <button
+                      onClick={() => handleSetAsActiveBaseline(currentSelectedTier.id)}
+                      className="flex-1 py-1.5 px-2 text-[11px] font-bold text-white bg-[#0066CC] hover:bg-[#0055B3] rounded-lg shadow-2xs transition-all flex items-center justify-center gap-1"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Set Active Baseline</span>
+                    </button>
+                  ) : (
+                    <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2 py-1 rounded-md flex items-center gap-1 border border-emerald-200/60">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      Active Contract Baseline
+                    </span>
+                  )}
+
+                {actions.length > 0 && currentSelectedTier && (
+                  <button
+                    onClick={() => handleSyncFromTier(currentSelectedTier.id)}
+                    className="py-1.5 px-2.5 text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all flex items-center gap-1"
+                    title="Clear draft actions"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Reset ({actions.length})</span>
+                  </button>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* Manual Action Form */}
+          <Card className="p-5 border border-slate-200/80 bg-white shadow-sm rounded-2xl">
+            <h4 className="font-bold text-slate-900 text-sm mb-3.5">
+              Scope Workbench & Action Entry
             </h4>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Action Type
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Select Action Mode
                 </label>
-                <select
-                  className="w-full p-2 border border-slate-200 rounded-lg text-sm"
-                  value={manualForm.type}
-                  onChange={(e) =>
-                    setManualForm({
-                      ...manualForm,
-                      type: e.target.value as ActionType,
-                    })
-                  }
-                >
-                  <option value="ADD">Add New Item</option>
-                  <option value="REMOVE">Remove Item</option>
-                  <option value="REPLACE">Replace Item</option>
-                  <option value="REVISE_QTY">Revise Quantity</option>
-                  <option value="REVISE_RATE">Revise Rate</option>
-                  <option value="MARK_PENDING">Mark Pending Decision</option>
-                  <option value="APPROVE_PENDING">Approve Pending Item</option>
-                  <option value="MARK_VENDOR">Mark Vendor Direct</option>
-                </select>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {actionTypes.map((act) => {
+                    const isSelected = manualForm.type === act.type;
+                    return (
+                      <button
+                        key={act.type}
+                        type="button"
+                        onClick={() =>
+                          setManualForm({
+                            ...manualForm,
+                            type: act.type,
+                          })
+                        }
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all border text-left flex items-center gap-1.5 ${
+                          isSelected
+                            ? "bg-[#0066CC] border-[#0066CC] text-white shadow-xs"
+                            : `bg-slate-50/80 border-slate-200 text-slate-700 ${act.color}`
+                        }`}
+                      >
+                        <act.icon className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{act.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {manualForm.type !== "ADD" && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
-                    Target Item
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Select Target BOQ Item
                   </label>
                   <select
-                    className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-medium bg-slate-50/50 focus:ring-2 focus:ring-[#0066CC]"
                     value={manualForm.targetItemId}
                     onChange={(e) =>
                       setManualForm({
@@ -837,12 +1103,12 @@ export default function RevisionStudio({
                       })
                     }
                   >
-                    <option value="">Select item...</option>
+                    <option value="">Select item from current BOQ...</option>
                     {currentRevisionBoq
                       .filter((i: any) => i.status !== "Removed")
                       .map((item: any, idx: number) => (
                         <option key={idx} value={item.id}>
-                          {item.section} - {item.item}
+                          [{item.section}] {item.item} ({formatINR(item.total)})
                         </option>
                       ))}
                   </select>
@@ -852,13 +1118,13 @@ export default function RevisionStudio({
               {manualForm.type === "ADD" && (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">
-                      Section
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Target Space / Section
                     </label>
                     <input
                       type="text"
-                      className="w-full p-2 border border-slate-200 rounded-lg text-sm"
-                      placeholder="e.g. Living Room"
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                      placeholder="e.g. Living Room, Master Bedroom"
                       value={manualForm.newSection}
                       onChange={(e) =>
                         setManualForm({
@@ -869,13 +1135,13 @@ export default function RevisionStudio({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">
-                      Item Name
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      New Item Description
                     </label>
                     <input
                       type="text"
-                      className="w-full p-2 border border-slate-200 rounded-lg text-sm"
-                      placeholder="e.g. False Ceiling"
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                      placeholder="e.g. Cove lighting with Philips LED strip"
                       value={manualForm.newItemName}
                       onChange={(e) =>
                         setManualForm({
@@ -887,13 +1153,13 @@ export default function RevisionStudio({
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                         Unit
                       </label>
                       <input
                         type="text"
-                        className="w-full p-2 border border-slate-200 rounded-lg text-sm"
-                        placeholder="sqft"
+                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                        placeholder="sqft / RFT"
                         value={manualForm.newUnit}
                         onChange={(e) =>
                           setManualForm({
@@ -904,12 +1170,12 @@ export default function RevisionStudio({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                         Qty
                       </label>
                       <input
                         type="number"
-                        className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
                         value={manualForm.newQty}
                         onChange={(e) =>
                           setManualForm({
@@ -920,12 +1186,12 @@ export default function RevisionStudio({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                         Rate (₹)
                       </label>
                       <input
                         type="number"
-                        className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
                         value={manualForm.newRate}
                         onChange={(e) =>
                           setManualForm({
@@ -941,12 +1207,12 @@ export default function RevisionStudio({
 
               {manualForm.type === "REVISE_QTY" && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
-                    New Quantity
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Updated Quantity
                   </label>
                   <input
                     type="number"
-                    className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
                     value={manualForm.newQty}
                     onChange={(e) =>
                       setManualForm({
@@ -960,12 +1226,12 @@ export default function RevisionStudio({
 
               {manualForm.type === "REVISE_RATE" && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
-                    New Rate (₹)
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Updated Rate (₹)
                   </label>
                   <input
                     type="number"
-                    className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
                     value={manualForm.newRate}
                     onChange={(e) =>
                       setManualForm({
@@ -980,12 +1246,13 @@ export default function RevisionStudio({
               {manualForm.type === "REPLACE" && (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">
-                      New Item Name
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Replacement Item Name
                     </label>
                     <input
                       type="text"
-                      className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                      placeholder="e.g. Veneer Paneling instead of Laminate"
                       value={manualForm.newItemName}
                       onChange={(e) =>
                         setManualForm({
@@ -995,31 +1262,49 @@ export default function RevisionStudio({
                       }
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">
-                      New Rate (₹)
-                    </label>
-                    <input
-                      type="number"
-                      className="w-full p-2 border border-slate-200 rounded-lg text-sm"
-                      value={manualForm.newRate}
-                      onChange={(e) =>
-                        setManualForm({
-                          ...manualForm,
-                          newRate: Number(e.target.value),
-                        })
-                      }
-                    />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        New Qty
+                      </label>
+                      <input
+                        type="number"
+                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                        value={manualForm.newQty}
+                        onChange={(e) =>
+                          setManualForm({
+                            ...manualForm,
+                            newQty: Number(e.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        New Rate (₹)
+                      </label>
+                      <input
+                        type="number"
+                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                        value={manualForm.newRate}
+                        onChange={(e) =>
+                          setManualForm({
+                            ...manualForm,
+                            newRate: Number(e.target.value),
+                          })
+                        }
+                      />
+                    </div>
                   </div>
                 </>
               )}
 
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Reason Category
                 </label>
                 <select
-                  className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-medium bg-slate-50/50"
                   value={manualForm.reasonCategory}
                   onChange={(e) =>
                     setManualForm({
@@ -1028,22 +1313,22 @@ export default function RevisionStudio({
                     })
                   }
                 >
-                  <option>Design Upgrade</option>
-                  <option>Site Condition</option>
-                  <option>Client Request</option>
-                  <option>Value Engineering</option>
-                  <option>Correction</option>
+                  <option value="Client Preference">Client Preference</option>
+                  <option value="Site Condition">Site Condition</option>
+                  <option value="Design Refinement">Design Refinement</option>
+                  <option value="Budget Alignment">Budget Alignment</option>
+                  <option value="Vendor Substitution">Vendor Substitution</option>
                 </select>
               </div>
 
               {(manualForm.type === "ADD" || manualForm.type === "REPLACE") && (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Inclusions (One per line)
                     </label>
                     <textarea
-                      className="w-full p-2 border border-slate-200 rounded-lg text-sm h-20 resize-none"
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs h-16 resize-none focus:ring-2 focus:ring-[#0066CC]"
                       placeholder="Premium hardware&#10;Soft-close hinges"
                       value={manualForm.inclusions}
                       onChange={(e) =>
@@ -1055,11 +1340,11 @@ export default function RevisionStudio({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Exclusions (One per line)
                     </label>
                     <textarea
-                      className="w-full p-2 border border-slate-200 rounded-lg text-sm h-20 resize-none"
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs h-16 resize-none focus:ring-2 focus:ring-[#0066CC]"
                       placeholder="Civil modifications&#10;Electrical wiring"
                       value={manualForm.exclusions}
                       onChange={(e) =>
@@ -1074,13 +1359,13 @@ export default function RevisionStudio({
               )}
 
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Notes (Optional)
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Revision Notes (Optional Context)
                 </label>
                 <input
                   type="text"
-                  className="w-full p-2 border border-slate-200 rounded-lg text-sm"
-                  placeholder="Add context..."
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                  placeholder="e.g. Agreed in site meeting on 12th Oct"
                   value={manualForm.note}
                   onChange={(e) =>
                     setManualForm({ ...manualForm, note: e.target.value })
@@ -1089,83 +1374,93 @@ export default function RevisionStudio({
               </div>
 
               <button
-                className="w-full py-2 bg-indigo-600 text-white rounded-lg font-medium text-sm hover:bg-indigo-700 transition-colors"
+                className="w-full py-3 bg-[#0066CC] text-white rounded-xl font-bold text-xs hover:bg-[#0055B3] transition-all shadow-sm flex items-center justify-center gap-2"
                 onClick={handleApplyManualAction}
               >
-                Apply Change
+                <PlusCircle className="w-4 h-4" />
+                <span>Apply Change Action</span>
               </button>
             </div>
           </Card>
         </div>
 
-        <div className="col-span-2 space-y-6">
-          <div className="flex justify-between items-center">
-            <h4 className="font-semibold text-indigo-900">
-              Current Revision Preview
-            </h4>
-            {actions.length > 0 && (
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={handleUndo}
-                  className="text-sm text-slate-500 hover:text-rose-600 flex items-center gap-1"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
-                    />
-                  </svg>
-                  Undo Last Action
-                </button>
-                <button
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        "Are you sure you want to delete all revision actions? This cannot be undone.",
-                      )
-                    ) {
-                      setActions([]);
-                      showToast("All actions deleted");
-                    }
-                  }}
-                  className="text-sm text-slate-500 hover:text-rose-600 flex items-center gap-1"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                  Clear All
-                </button>
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-slate-900 text-sm">
+                  Live Revised BOQ Preview
+                </h4>
+                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold">
+                  {actions.length} Staged Actions
+                </span>
               </div>
-            )}
+              <p className="text-xs text-slate-500 mt-0.5">
+                Real-time calculated BOQ impact with staged modifications.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 ${
+                  netDelta > 0
+                    ? "bg-amber-50 text-amber-800 border border-amber-200"
+                    : netDelta < 0
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                {netDelta > 0 ? (
+                  <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
+                ) : netDelta < 0 ? (
+                  <TrendingDown className="w-3.5 h-3.5 text-emerald-600" />
+                ) : null}
+                <span>
+                  {netDelta === 0
+                    ? "No Net Change"
+                    : `${netDelta > 0 ? "+" : ""}${formatINR(netDelta)}`}
+                </span>
+              </div>
+
+              {actions.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleUndo}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Undo Last</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Are you sure you want to delete all revision actions? This cannot be undone.",
+                        )
+                      ) {
+                        setActions([]);
+                        showToast("All actions cleared.");
+                      }
+                    }}
+                    className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Clear All</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-          <Card className="p-0 overflow-hidden border border-slate-200 h-[600px] flex flex-col">
+
+          <Card className="p-0 overflow-hidden border border-slate-200/80 shadow-sm rounded-2xl h-[820px] flex flex-col bg-white">
             <div className="overflow-y-auto flex-grow">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 text-slate-600 sticky top-0 border-b border-slate-200 z-10">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-100/80 text-slate-700 sticky top-0 border-b border-slate-200 z-10 font-bold uppercase tracking-wider">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Item</th>
-                    <th className="px-4 py-3 font-medium text-right">Qty</th>
-                    <th className="px-4 py-3 font-medium text-right">
-                      Total (₹)
-                    </th>
-                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3">Item Description</th>
+                    <th className="px-4 py-3 text-right">Qty & Unit</th>
+                    <th className="px-4 py-3 text-right">Revised Amount (₹)</th>
+                    <th className="px-4 py-3">Status Tag</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1173,64 +1468,64 @@ export default function RevisionStudio({
                     const sectionItems = currentRevisionBoq.filter((r: any) => r.section === section);
                     return (
                       <React.Fragment key={section}>
-                        <tr className="bg-slate-100/50">
-                          <td colSpan={4} className="px-4 py-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        <tr className="bg-slate-50/90 font-bold border-y border-slate-200/60">
+                          <td colSpan={4} className="px-4 py-2 text-[11px] text-slate-700 uppercase tracking-wider">
                             {section}
                           </td>
                         </tr>
                         {sectionItems.map((item: any, idx: number) => {
-                          let rowClass = "hover:bg-slate-50";
+                          let rowClass = "hover:bg-slate-50/80";
                           if (item.status === "Added")
-                            rowClass += " bg-emerald-50/50";
+                            rowClass += " bg-emerald-50/40";
                           if (item.status === "Removed")
-                            rowClass += " bg-rose-50/50 opacity-50 line-through";
+                            rowClass += " bg-rose-50/40 opacity-50 line-through";
                           if (item.status === "Revised" || item.status === "Replaced")
-                            rowClass += " bg-amber-50/50";
+                            rowClass += " bg-amber-50/40";
                           if (item.status === "Pending Decision")
-                            rowClass += " bg-purple-50/50";
+                            rowClass += " bg-purple-50/40";
 
                           return (
                             <tr key={`${section}-${idx}`} className={rowClass}>
                               <td className="px-4 py-3 pl-6">
-                                <div className="font-medium text-indigo-900">
+                                <div className="font-semibold text-slate-800">
                                   {item.item}
                                 </div>
                                 {item.note && (
-                                  <div className="text-xs text-slate-500 mt-0.5 italic">
+                                  <div className="text-[11px] text-slate-500 mt-0.5 italic">
                                     "{item.note}"
                                   </div>
                                 )}
                                 {item.status === "Vendor Direct" && (
-                                  <div className="text-[10px] text-slate-400 mt-0.5 font-semibold">
+                                  <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
                                     Billed at actuals — estimate only
                                   </div>
                                 )}
                                 {item.status === "Pending Decision" && (
-                                  <div className="text-[10px] text-purple-500 mt-0.5 font-semibold">
+                                  <div className="text-[10px] text-purple-600 font-semibold mt-0.5">
                                     Awaiting client confirmation
                                   </div>
                                 )}
                               </td>
-                              <td className="px-4 py-3 text-right text-slate-600">
-                                {item.qty} {item.unit}
+                              <td className="px-4 py-3 text-right text-slate-600 font-medium">
+                                {item.qty} <span className="text-[10px] text-slate-400">{item.unit}</span>
                               </td>
-                              <td className="px-4 py-3 text-right font-medium text-slate-700">
+                              <td className="px-4 py-3 text-right font-bold text-slate-900">
                                 {formatINR(item.total)}
                               </td>
-                              <td className="px-4 py-3 border-l border-slate-100/50">
+                              <td className="px-4 py-3 border-l border-slate-100">
                                 <span
-                                  className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                                     item.status === "Approved"
-                                      ? "bg-slate-100 text-slate-500"
+                                      ? "bg-slate-100 text-slate-600"
                                       : item.status === "Added"
-                                        ? "bg-emerald-100 text-emerald-700"
+                                        ? "bg-emerald-100 text-emerald-800"
                                         : item.status === "Removed"
-                                          ? "bg-rose-100 text-rose-700 font-semibold"
+                                          ? "bg-rose-100 text-rose-800 font-semibold"
                                           : item.status === "Vendor Direct"
-                                            ? "bg-slate-100 text-slate-600"
+                                            ? "bg-slate-100 text-slate-700"
                                             : item.status === "Pending Decision"
-                                              ? "border border-purple-300 text-purple-700 bg-purple-50"
-                                              : "bg-amber-100 text-amber-700"
+                                              ? "border border-purple-300 text-purple-800 bg-purple-50"
+                                              : "bg-amber-100 text-amber-800"
                                   }`}
                                 >
                                   {item.status === "Vendor Direct"
@@ -1257,127 +1552,133 @@ export default function RevisionStudio({
 
   const renderChangeLog = () => (
     <div className="space-y-6">
-      <Card className="p-0 overflow-hidden border border-slate-200">
-        <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-          <h3 className="font-semibold text-indigo-900">
-            Structured Change Log
-          </h3>
+      <Card className="p-0 overflow-hidden border border-slate-200/80 shadow-sm rounded-2xl bg-white">
+        <div className="p-4 sm:p-5 border-b border-slate-200/80 bg-slate-50/80 flex justify-between items-center flex-wrap gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <History className="w-4 h-4 text-[#0066CC]" />
+              <h3 className="font-bold text-slate-900 text-sm">
+                Structured Audit & Change Log
+              </h3>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Complete chronological audit trail of all revision actions applied to this project.
+            </p>
+          </div>
           <button
             onClick={() => exportToExcel("internal")}
-            className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-xs font-medium shadow-sm hover:bg-slate-50"
+            className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2"
           >
-            Export Log
+            <Download className="w-3.5 h-3.5 text-slate-500" />
+            <span>Export Log to Excel</span>
           </button>
         </div>
         <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-white text-slate-500 border-b border-slate-200">
-            <tr>
-              <th className="px-4 py-3 font-medium">Time</th>
-              <th className="px-4 py-3 font-medium">Action</th>
-              <th className="px-4 py-3 font-medium">Item</th>
-              <th className="px-4 py-3 font-medium">Change Detail</th>
-              <th className="px-4 py-3 font-medium">Reason</th>
-              <th className="px-4 py-3 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {actions.length === 0 ? (
+          <table className="w-full text-xs text-left">
+            <thead className="bg-slate-100/60 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider">
               <tr>
-                <td
-                  colSpan={6}
-                  className="px-4 py-8 text-center text-slate-400"
-                >
-                  No actions recorded yet.
-                </td>
+                <th className="px-4 py-3">Timestamp</th>
+                <th className="px-4 py-3">Action Type</th>
+                <th className="px-4 py-3">Target / New Item</th>
+                <th className="px-4 py-3">Change Variance</th>
+                <th className="px-4 py-3">Reason Category</th>
+                <th className="px-4 py-3 text-right">Manage</th>
               </tr>
-            ) : (
-              [...actions].reverse().map((action) => (
-                <tr key={action.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 text-xs text-slate-500">
-                    {new Date(action.timestamp).toLocaleTimeString()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-[10px] font-bold tracking-wider">
-                      {action.type}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-medium text-indigo-900">
-                    {action.item}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {formatChangeDetail(action)}
-                  </td>
-                  <td className="px-4 py-3 text-slate-500">
-                    {action.reasonCategory}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            "Delete this specific revision action?",
-                          )
-                        ) {
-                          setActions((prev) =>
-                            prev.filter((a) => a.id !== action.id),
-                          );
-                          showToast("Action deleted successfully.");
-                        }
-                      }}
-                      className="text-slate-400 hover:text-rose-500 p-1 rounded hover:bg-rose-50 transition-colors"
-                      title="Delete Action"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {actions.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-4 py-12 text-center text-slate-400 font-medium"
+                  >
+                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-40 text-slate-400" />
+                    No revision actions recorded yet in this workspace session.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                [...actions].reverse().map((action) => (
+                  <tr key={action.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-4 py-3 text-slate-500 font-mono text-[11px]">
+                      {new Date(action.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold tracking-wider uppercase border border-slate-200/60">
+                        {action.type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-slate-900">
+                      {action.item}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 font-medium">
+                      {formatChangeDetail(action)}
+                    </td>
+                    <td className="px-4 py-3 text-slate-500 font-medium">
+                      <span className="px-2 py-0.5 bg-sky-50 text-[#0055B3] rounded-md text-[10px] font-bold">
+                        {action.reasonCategory || "Uncategorized"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "Delete this specific revision action?",
+                            )
+                          ) {
+                            setActions((prev) =>
+                              prev.filter((a) => a.id !== action.id),
+                            );
+                            showToast("Action deleted successfully.");
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Delete Action"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </Card>
 
-      <Card className="p-0 overflow-hidden border border-slate-200">
-        <div className="p-4 border-b border-slate-200 bg-slate-50">
-          <h3 className="font-semibold text-indigo-900">
-            Generated Scope Annexures
-          </h3>
+      <Card className="p-0 overflow-hidden border border-slate-200/80 shadow-sm rounded-2xl bg-white">
+        <div className="p-4 sm:p-5 border-b border-slate-200/80 bg-slate-50/80">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-[#0066CC]" />
+            <h3 className="font-bold text-slate-900 text-sm">
+              Generated Scope Annexures
+            </h3>
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Annexures created upon syncing revisions into distinct version tiers.
+          </p>
         </div>
-        <div className="p-4">
+        <div className="p-5">
           {tiers.filter((t) => t.name.startsWith("Annexure")).length === 0 ? (
-            <p className="text-sm text-slate-500 italic">
-              No scope annexures generated yet. Sync a revision to create one.
-            </p>
+            <div className="text-center py-6 text-slate-400 text-xs italic">
+              No scope annexures generated yet. Click "Sync Revision as New Tier" when staged changes are complete.
+            </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {tiers
                 .filter((t) => t.name.startsWith("Annexure"))
                 .map((tier, index) => (
                   <div
                     key={`${tier.id}-${index}`}
-                    className="flex items-center justify-between p-3 border border-slate-200 rounded-lg bg-white shadow-sm"
+                    className="flex items-center justify-between p-4 border border-slate-200/80 rounded-xl bg-slate-50/50 hover:bg-white transition-all shadow-2xs"
                   >
                     <div>
-                      <h4 className="font-medium text-indigo-900">
+                      <h4 className="font-bold text-slate-900 text-xs">
                         {tier.name}
                       </h4>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                         {tier.summary?.itemCount || 0} items •{" "}
-                        {formatINR(tier.summary?.totalSell || 0)}
+                        <span className="font-bold text-slate-800">{formatINR(tier.summary?.totalSell || 0)}</span>
                       </p>
                     </div>
                     <button
@@ -1395,22 +1696,10 @@ export default function RevisionStudio({
                           }
                         }
                       }}
-                      className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-md transition-colors"
+                      className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors"
                       title="Delete Annexure"
                     >
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
@@ -2942,45 +3231,52 @@ export default function RevisionStudio({
 
     return (
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-lg border border-slate-200 shadow-sm mb-4 gap-4">
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            <span className="font-semibold text-indigo-900">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm gap-4">
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="font-bold text-slate-900 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200/60">
               {totalChangesCount} changes from original scope
             </span>
-            <div className="hidden md:block h-4 w-px bg-slate-300"></div>
+            <div className="hidden md:block h-4 w-px bg-slate-200"></div>
             {clientData.netSaving > 0 ? (
-              <span className="font-bold text-emerald-600">
+              <span className="font-bold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200/80 flex items-center gap-1.5">
+                <TrendingDown className="w-3.5 h-3.5 text-emerald-600" />
                 Net saving: {formatINR(clientData.netSaving)}
               </span>
             ) : clientData.netSaving < 0 ? (
-              <span className="font-bold text-amber-600">
+              <span className="font-bold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200/80 flex items-center gap-1.5">
+                <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
                 Net addition: {formatINR(Math.abs(clientData.netSaving))}
               </span>
             ) : (
-              <span className="font-bold text-slate-600">No net change</span>
+              <span className="font-bold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">No net change</span>
             )}
-            <div className="hidden md:block h-4 w-px bg-slate-300"></div>
+            <div className="hidden md:block h-4 w-px bg-slate-200"></div>
             <button
               onClick={() => setShowDetailedClientView(!showDetailedClientView)}
-              className="text-indigo-600 hover:text-indigo-800 font-medium underline"
+              className="text-[#0066CC] hover:text-[#0055B3] font-bold underline transition-colors flex items-center gap-1"
             >
-              {showDetailedClientView
-                ? "Show summarized view"
-                : "Show detailed view"}
+              <Eye className="w-3.5 h-3.5" />
+              <span>
+                {showDetailedClientView
+                  ? "Switch to summarized view"
+                  : "Switch to itemized view"}
+              </span>
             </button>
           </div>
           <div className="flex gap-2 shrink-0">
             <button
               onClick={exportToPDF}
-              className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-xs font-medium shadow-sm hover:bg-slate-50"
+              className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold shadow-2xs hover:bg-slate-50 transition-all flex items-center gap-1.5"
             >
-              Export to PDF
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Export PDF</span>
             </button>
             <button
               onClick={() => exportToExcel("client")}
-              className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium shadow-sm hover:bg-indigo-700"
+              className="px-3.5 py-2 bg-[#0066CC] text-white rounded-xl text-xs font-bold shadow-2xs hover:bg-[#0055B3] transition-all flex items-center gap-1.5"
             >
-              Export to Excel
+              <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
+              <span>Export Excel</span>
             </button>
           </div>
         </div>
@@ -2989,28 +3285,31 @@ export default function RevisionStudio({
           <div className="space-y-6">
             {(clientData.variable.pending.length > 0 ||
               clientData.variable.actuals.length > 0) && (
-              <div className="bg-amber-50 rounded-lg border border-amber-200 overflow-hidden shadow-sm">
-                <div className="px-4 py-3 bg-amber-100/50 border-b border-amber-200">
-                  <h4 className="font-bold text-amber-900">
-                    Items not yet in your confirmed total
-                  </h4>
+              <div className="bg-amber-50/70 rounded-2xl border border-amber-200/80 overflow-hidden shadow-xs">
+                <div className="px-5 py-3.5 bg-amber-100/60 border-b border-amber-200/80 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <HelpCircle className="w-4 h-4 text-amber-800" />
+                    <h4 className="font-bold text-amber-950 text-xs uppercase tracking-wider">
+                      Estimates & Items Pending Confirmation
+                    </h4>
+                  </div>
                 </div>
-                <div className="divide-y divide-amber-100/50">
+                <div className="divide-y divide-amber-100/60 bg-white">
                   {clientData.variable.actuals.map((item, idx) => (
                     <div
                       key={`act-${idx}`}
-                      className="px-4 py-3 flex justify-between items-center bg-white"
+                      className="px-5 py-3.5 flex justify-between items-center hover:bg-slate-50/80 transition-colors"
                     >
                       <div className="flex flex-col">
-                        <span className="font-medium text-indigo-900">
+                        <span className="font-bold text-slate-800 text-xs">
                           {item.item}
                         </span>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-200">
                           Vendor-direct at actuals
                         </span>
-                        <span className="font-bold text-indigo-900">
+                        <span className="font-bold text-slate-900 text-xs">
                           Est. {formatINR(item.revTotal)}
                         </span>
                       </div>
@@ -3019,68 +3318,69 @@ export default function RevisionStudio({
                   {clientData.variable.pending.map((item, idx) => (
                     <div
                       key={`pen-${idx}`}
-                      className="px-4 py-3 flex justify-between items-center bg-white"
+                      className="px-5 py-3.5 flex justify-between items-center hover:bg-slate-50/80 transition-colors"
                     >
                       <div className="flex flex-col">
-                        <span className="font-medium text-indigo-900">
+                        <span className="font-bold text-slate-800 text-xs">
                           {item.item}
                         </span>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">
-                          Pending your confirmation
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                          Pending client confirmation
                         </span>
-                        <span className="font-bold text-indigo-900">
+                        <span className="font-bold text-slate-900 text-xs">
                           Est. {formatINR(item.revTotal)}
                         </span>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="px-4 py-3 bg-amber-100/30 text-xs text-amber-800 border-t border-amber-200">
-                  These estimates are subject to change. We will confirm costs
-                  with you before proceeding.
-                  <span className="font-bold ml-1">
-                    Your maximum total if all estimates are confirmed:{" "}
-                    {formatINR(maximumTotal)}
+                <div className="px-5 py-3 bg-amber-100/40 text-xs text-amber-900 border-t border-amber-200/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <span>These estimates are subject to formal confirmation before placement.</span>
+                  <span className="font-bold bg-amber-200/60 px-3 py-1 rounded-lg text-amber-950">
+                    Max Total if confirmed: {formatINR(maximumTotal)}
                   </span>
                 </div>
               </div>
             )}
 
             {clientData.reductions.length > 0 && (
-              <div className="bg-white rounded-lg border border-emerald-200 overflow-hidden shadow-sm">
-                <div className="px-4 py-3 bg-emerald-50 border-b border-emerald-200 flex justify-between items-center">
-                  <h4 className="font-bold text-emerald-900">
-                    Scope reductions
-                  </h4>
-                  <span className="font-bold text-emerald-600">
+              <div className="bg-white rounded-2xl border border-emerald-200/80 overflow-hidden shadow-xs">
+                <div className="px-5 py-3.5 bg-emerald-50/80 border-b border-emerald-200/80 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <TrendingDown className="w-4 h-4 text-emerald-700" />
+                    <h4 className="font-bold text-emerald-950 text-xs uppercase tracking-wider">
+                      Scope Reductions & Value Engineering
+                    </h4>
+                  </div>
+                  <span className="font-extrabold text-emerald-700 text-sm">
                     −{formatINR(clientData.totalReductionValue)}
                   </span>
                 </div>
-                <div className="divide-y divide-emerald-50">
+                <div className="divide-y divide-slate-100">
                   {clientData.reductions.map((item, idx) => (
                     <div
                       key={`red-${idx}`}
-                      className="px-4 py-3 flex justify-between items-center hover:bg-slate-50"
+                      className="px-5 py-3.5 flex justify-between items-center hover:bg-slate-50/80 transition-colors"
                     >
-                      <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
-                        <span className="font-medium text-indigo-900">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <span className="font-bold text-slate-800 text-xs">
                           {item.item}
                         </span>
                         {item.reasonCategory && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full w-fit">
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 bg-slate-100 text-slate-600 rounded-full w-fit">
                             {item.reasonCategory}
                           </span>
                         )}
                       </div>
-                      <div className="flex flex-col md:flex-row items-end md:items-center gap-1 md:gap-6">
-                        <span className="text-xs md:text-sm text-slate-500">
+                      <div className="flex items-center gap-4 text-xs">
+                        <span className="text-slate-500 font-medium hidden sm:inline">
                           {item.revTotal === 0
                             ? "Removed from scope"
                             : formatINR(item.revTotal)}
                         </span>
-                        <span className="font-bold text-emerald-600 md:w-24 text-right">
+                        <span className="font-bold text-emerald-600 text-right">
                           −{formatINR(item.origTotal - item.revTotal)}
                         </span>
                       </div>
@@ -3091,31 +3391,36 @@ export default function RevisionStudio({
             )}
 
             {clientData.additions.length > 0 && (
-              <div className="bg-white rounded-lg border border-rose-200 overflow-hidden shadow-sm">
-                <div className="px-4 py-3 bg-rose-50 border-b border-rose-200 flex justify-between items-center">
-                  <h4 className="font-bold text-rose-900">Scope additions</h4>
-                  <span className="font-bold text-amber-600">
+              <div className="bg-white rounded-2xl border border-rose-200/80 overflow-hidden shadow-xs">
+                <div className="px-5 py-3.5 bg-rose-50/80 border-b border-rose-200/80 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-rose-700" />
+                    <h4 className="font-bold text-rose-950 text-xs uppercase tracking-wider">
+                      Scope Additions & Design Enhancements
+                    </h4>
+                  </div>
+                  <span className="font-extrabold text-amber-700 text-sm">
                     +{formatINR(clientData.totalAdditionValue)}
                   </span>
                 </div>
-                <div className="divide-y divide-rose-50">
+                <div className="divide-y divide-slate-100">
                   {clientData.additions.map((item, idx) => (
                     <div
                       key={`add-${idx}`}
-                      className="px-4 py-3 flex justify-between items-center hover:bg-slate-50"
+                      className="px-5 py-3.5 flex justify-between items-center hover:bg-slate-50/80 transition-colors"
                     >
-                      <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
-                        <span className="font-medium text-indigo-900">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <span className="font-bold text-slate-800 text-xs">
                           {item.item}
                         </span>
                         {item.reasonCategory && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full w-fit">
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 bg-slate-100 text-slate-600 rounded-full w-fit">
                             {item.reasonCategory}
                           </span>
                         )}
                       </div>
-                      <div className="flex justify-end gap-6 md:w-32">
-                        <span className="font-bold text-amber-600 text-right">
+                      <div className="flex justify-end gap-6">
+                        <span className="font-bold text-amber-700 text-right text-xs">
                           +{formatINR(item.revTotal - item.origTotal)}
                         </span>
                       </div>
@@ -3126,10 +3431,10 @@ export default function RevisionStudio({
             )}
           </div>
         ) : (
-          <Card className="p-0 overflow-hidden border border-slate-200">
+          <Card className="p-0 overflow-hidden border border-slate-200/80 shadow-sm rounded-2xl bg-white">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-indigo-900 text-white">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-900 text-white font-bold uppercase tracking-wider text-[11px]">
                   <tr>
                     <th className="px-4 py-3 font-medium text-xs uppercase tracking-wider">
                       Item
@@ -3179,7 +3484,7 @@ export default function RevisionStudio({
 
                     return (
                       <React.Fragment key={section}>
-                        <tr className="bg-amber-400 text-indigo-950 font-bold">
+                        <tr className="bg-slate-100/90 text-slate-800 font-bold border-y border-slate-200">
                           <td colSpan={3} className="px-4 py-2 uppercase">
                             {section}
                           </td>
@@ -3273,7 +3578,7 @@ export default function RevisionStudio({
                               </td>
                               <td className="px-4 py-3 text-xs text-slate-600">
                                 {item.reasonCategory && (
-                                  <span className="font-semibold text-indigo-900 block mb-0.5">
+                                  <span className="font-semibold text-slate-800 block mb-0.5">
                                     [{item.reasonCategory}]
                                   </span>
                                 )}
@@ -3297,26 +3602,29 @@ export default function RevisionStudio({
   const renderClientSpecs = () => {
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-xl font-bold text-indigo-900">
-              Detailed Specs & Inclusions
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
-              Clear breakdown of what is included and excluded per item.
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-[#0066CC]" />
+              <h2 className="text-lg font-bold text-slate-900">
+                Detailed Specifications & Material Inclusions
+              </h2>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Itemized technical inclusions, hardware grades, and exclusions for total clarity.
             </p>
           </div>
         </div>
 
-        <Card className="p-6 overflow-hidden border-slate-200 shadow-sm rounded-2xl">
+        <Card className="p-0 overflow-hidden border border-slate-200/80 shadow-sm rounded-2xl bg-white">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full text-left text-xs">
               <thead>
-                <tr className="bg-slate-50 text-slate-600 border-b border-slate-200">
-                  <th className="px-4 py-3 font-semibold w-1/4">Item</th>
-                  <th className="px-4 py-3 font-semibold w-1/4">Section</th>
-                  <th className="px-4 py-3 font-semibold w-1/4">Inclusions</th>
-                  <th className="px-4 py-3 font-semibold w-1/4">Exclusions</th>
+                <tr className="bg-slate-100/80 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider">
+                  <th className="px-5 py-3.5 w-1/4">Space / Section</th>
+                  <th className="px-5 py-3.5 w-1/4">Scope Item</th>
+                  <th className="px-5 py-3.5 w-1/4">Material & Hardware Inclusions</th>
+                  <th className="px-5 py-3.5 w-1/4">Explicit Exclusions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -3325,36 +3633,49 @@ export default function RevisionStudio({
                   .map((item: any, idx: number) => (
                     <tr
                       key={idx}
-                      className="hover:bg-slate-50 transition-colors"
+                      className="hover:bg-slate-50/80 transition-colors"
                     >
-                      <td className="px-4 py-4 font-medium text-indigo-900 align-top">
+                      <td className="px-5 py-4 font-bold text-slate-700 align-top">
+                        <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-slate-800 text-[11px] font-semibold border border-slate-200/60 inline-block">
+                          {item.section}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 font-bold text-slate-900 align-top text-xs">
                         {item.item}
-                      </td>
-                      <td className="px-4 py-4 text-slate-500 align-top">
-                        {item.section}
-                      </td>
-                      <td className="px-4 py-4 align-top">
-                        {item.inclusions && item.inclusions.length > 0 ? (
-                          <ul className="list-disc pl-4 space-y-1 text-slate-600 text-xs">
-                            {item.inclusions.map((inc: string, i: number) => (
-                              <li key={i}>{inc}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <span className="text-slate-400 italic text-xs">
-                            Standard specs apply
+                        {item.unit && (
+                          <span className="block text-[10px] text-slate-400 font-normal mt-0.5">
+                            {item.qty} {item.unit}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-4 align-top">
-                        {item.exclusions && item.exclusions.length > 0 ? (
-                          <ul className="list-disc pl-4 space-y-1 text-slate-600 text-xs">
-                            {item.exclusions.map((exc: string, i: number) => (
-                              <li key={i}>{exc}</li>
+                      <td className="px-5 py-4 align-top">
+                        {item.inclusions && item.inclusions.length > 0 ? (
+                          <ul className="space-y-1.5 text-slate-700 text-xs font-medium">
+                            {item.inclusions.map((inc: string, i: number) => (
+                              <li key={i} className="flex items-start gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                                <span>{inc}</span>
+                              </li>
                             ))}
                           </ul>
                         ) : (
-                          <span className="text-slate-400 italic text-xs">
+                          <span className="text-slate-400 italic text-[11px] font-normal">
+                            Standard studio specifications apply
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 align-top">
+                        {item.exclusions && item.exclusions.length > 0 ? (
+                          <ul className="space-y-1.5 text-slate-700 text-xs font-medium">
+                            {item.exclusions.map((exc: string, i: number) => (
+                              <li key={i} className="flex items-start gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                                <span>{exc}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="text-slate-400 italic text-[11px] font-normal">
                             None specified
                           </span>
                         )}
@@ -3437,20 +3758,23 @@ export default function RevisionStudio({
 
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-indigo-900">
-              Client Pack Generation
-            </h3>
-            <p className="text-sm text-slate-500">
-              End-to-end BOQ and Design Fee communication.
+            <div className="flex items-center gap-2">
+              <Share2 className="w-5 h-5 text-[#0066CC]" />
+              <h3 className="text-lg font-bold text-slate-900">
+                Client Communication & Commercial Pack
+              </h3>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              End-to-end BOQ revision summary, design fee impact, WhatsApp messaging, and PDF exports.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 bg-slate-50/80 p-2 rounded-xl border border-slate-200/60 text-xs">
             {(!projectContext?.designFeeType ||
               projectContext?.designFeeType === "percentage") && (
-              <>
-                <label className="text-sm font-medium text-slate-700">
+              <div className="flex items-center gap-2">
+                <label className="font-semibold text-slate-700">
                   Design Fee %:
                 </label>
                 <input
@@ -3459,184 +3783,155 @@ export default function RevisionStudio({
                   onChange={(e) =>
                     setDesignFeePercentage(Number(e.target.value))
                   }
-                  className="w-20 p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  className="w-16 p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 text-center focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
                 />
-              </>
+              </div>
             )}
             {projectContext?.designFeeType === "fixed_lumpsum" && (
-              <span className="text-sm font-medium text-slate-700">
-                Fixed Design Fee: {formatINR(projectContext.designFee || 0)}
+              <span className="font-semibold text-slate-700">
+                Fixed Fee: <strong className="text-slate-900">{formatINR(projectContext.designFee || 0)}</strong>
               </span>
             )}
             {projectContext?.designFeeType === "fixed_sqft" && (
-              <span className="text-sm font-medium text-slate-700">
-                Fixed Design Fee:{" "}
-                {formatINR(
-                  (projectContext.designFee || 0) * (projectContext.area || 0),
-                )}
+              <span className="font-semibold text-slate-700">
+                Fixed Fee:{" "}
+                <strong className="text-slate-900">
+                  {formatINR(
+                    (projectContext.designFee || 0) * (projectContext.area || 0),
+                  )}
+                </strong>
               </span>
             )}
-            <div className="h-6 w-px bg-slate-300 mx-1"></div>
-            <label className="text-sm font-medium text-slate-700">
-              Initiation Fee Paid:
-            </label>
-            <input
-              type="number"
-              value={initiationFee}
-              onChange={(e) => setInitiationFee(Number(e.target.value))}
-              className="w-24 p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-            />
+            <div className="h-4 w-px bg-slate-300"></div>
+            <div className="flex items-center gap-2">
+              <label className="font-semibold text-slate-700">
+                Initiation Fee Paid:
+              </label>
+              <input
+                type="number"
+                value={initiationFee}
+                onChange={(e) => setInitiationFee(Number(e.target.value))}
+                className="w-24 p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 text-center focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+              />
+            </div>
           </div>
         </div>
 
         {/* Executive Summary & Tone */}
-        <div className="grid grid-cols-1 gap-6">
-          <Card className="p-6 border border-slate-200 bg-white shadow-sm flex flex-col items-end">
-            <div className="flex justify-between items-center mb-4 w-full">
-              <h4 className="font-semibold text-indigo-900 uppercase tracking-wider text-sm">
-                Executive Summary
+        <Card className="p-5 border border-slate-200/80 bg-white shadow-sm rounded-2xl">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#0066CC]" />
+              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                Client Executive Summary & Copy Generator
               </h4>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 font-medium">
-                  Tone:
-                </span>
-                <select
-                  value={summaryTone}
-                  onChange={(e) => setSummaryTone(e.target.value)}
-                  className="p-1.5 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-slate-50"
-                >
-                  <option value="Partnership">Partnership Tone</option>
-                  <option value="Neutral">Neutral Tone</option>
-                  <option value="Firm">Firm Tone</option>
-                  <option value="Payment-aligned">Payment-aligned Tone</option>
-                </select>
-              </div>
             </div>
-            <textarea
-              value={customSummary || defaultSummary}
-              onChange={(e) => setCustomSummary(e.target.value)}
-              className="w-full h-24 p-3 border border-slate-200 rounded-lg text-sm text-slate-700 leading-relaxed focus:ring-2 focus:ring-indigo-500 mb-4"
-              placeholder="Enter custom summary..."
-            />
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 font-semibold">
+                Tone Persona:
+              </span>
+              <select
+                value={summaryTone}
+                onChange={(e) => setSummaryTone(e.target.value)}
+                className="p-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:ring-2 focus:ring-[#0066CC] bg-slate-50 focus:outline-none"
+              >
+                <option value="Partnership">Partnership Tone</option>
+                <option value="Neutral">Neutral Tone</option>
+                <option value="Firm">Firm Tone</option>
+                <option value="Payment-aligned">Payment-aligned Tone</option>
+              </select>
+            </div>
+          </div>
+          <textarea
+            value={customSummary || defaultSummary}
+            onChange={(e) => setCustomSummary(e.target.value)}
+            className="w-full h-24 p-3 border border-slate-200/80 rounded-xl text-xs text-slate-700 leading-relaxed focus:ring-2 focus:ring-[#0066CC] focus:outline-none mb-3 bg-slate-50/50"
+            placeholder="Enter custom executive summary for the client..."
+          />
+          <div className="flex justify-end">
             <button
               onClick={handleCopyWhatsapp}
-              className={`px-4 py-2 border rounded-lg text-sm font-medium shadow-sm transition-all flex items-center gap-2 ${
+              className={`px-4 py-2 border rounded-xl text-xs font-bold shadow-2xs transition-all flex items-center gap-2 ${
                 isWhatsappCopied
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                  : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-indigo-950"
+                  ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
               }`}
             >
               {isWhatsappCopied ? (
                 <>
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  Copied ✓
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <span>Copied to Clipboard ✓</span>
                 </>
               ) : (
                 <>
-                  <svg
-                    className="w-4 h-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-                    <path d="M3 21l1.65 -3.8a9 9 0 1 1 3.4 2.9l-5.05 .9" />
-                    <path d="M9 10a.5 .5 0 0 0 1 0v-1a.5 .5 0 0 0 -1 0v1a5 5 0 0 0 5 5h1a.5 .5 0 0 0 0 -1h-1a.5 .5 0 0 0 0 1" />
-                  </svg>
-                  Copy WhatsApp message
+                  <MessageSquare className="w-4 h-4 text-emerald-600" />
+                  <span>Copy WhatsApp Message</span>
                 </>
               )}
             </button>
-          </Card>
-        </div>
+          </div>
+        </Card>
 
         {/* Impact Visibility */}
-        <div className="grid grid-cols-2 gap-6">
-          <Card className="p-6 border-2 border-indigo-900 bg-indigo-900 text-white shadow-lg relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">
-              🏗️
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <Card className="p-6 border border-slate-800 bg-slate-900 text-white shadow-md rounded-2xl relative overflow-hidden">
+            <div className="flex items-center gap-2 mb-4 text-slate-300">
+              <Layers className="w-4 h-4 text-[#0066CC]" />
+              <h4 className="font-bold uppercase tracking-wider text-xs">
+                BOQ Execution Value Impact
+              </h4>
             </div>
-            <h4 className="font-semibold text-slate-200 mb-4 uppercase tracking-wider text-xs">
-              BOQ Impact
-            </h4>
             <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Original BOQ Total</span>
-                <span className="font-medium">{formatINR(originalTotal)}</span>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400 font-medium">Original Baseline BOQ</span>
+                <span className="font-bold text-slate-200">{formatINR(originalTotal)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">
-                  Revised BOQ (Pre-discount)
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400 font-medium">
+                  Revised BOQ (Gross)
                 </span>
-                <span className="font-medium">
+                <span className="font-bold text-slate-200">
                   {formatINR(rawRevisedExecutionTotal)}
                 </span>
               </div>
               {asActualsTotal > 0 && (
-                <>
-                  <div className="flex justify-between text-sm text-slate-400">
-                    <span>As Actuals (Vendor Direct)</span>
-                    <span className="font-medium">
-                      {formatINR(asActualsTotal)}
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-400 mt-1 leading-tight mb-2">
-                    Billed at actuals. Vendor quotes shared before purchase.
-                  </div>
-                </>
+                <div className="flex justify-between text-xs text-slate-400 border-l-2 border-slate-700 pl-2">
+                  <span>As Actuals (Vendor Direct)</span>
+                  <span className="font-bold">
+                    {formatINR(asActualsTotal)}
+                  </span>
+                </div>
               )}
               {pendingDecisionTotal > 0 && (
-                <>
-                  <div className="flex justify-between text-sm text-amber-500">
-                    <span>Pending Decision (Excluded)</span>
-                    <span className="font-medium">
-                      {formatINR(pendingDecisionTotal)}
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-400 mt-1 leading-tight">
-                    Items marked pending confirmation are excluded from your
-                    confirmed total. They will be added to your invoice only
-                    after you confirm the scope.
-                  </div>
-                </>
+                <div className="flex justify-between text-xs text-amber-400 border-l-2 border-amber-500/50 pl-2">
+                  <span>Pending Client Decision (Excluded)</span>
+                  <span className="font-bold">
+                    {formatINR(pendingDecisionTotal)}
+                  </span>
+                </div>
               )}
               {executionDiscountVal > 0 && (
-                <div className="flex justify-between text-sm text-emerald-400">
+                <div className="flex justify-between text-xs text-emerald-400">
                   <span>Discounts Applied</span>
-                  <span className="font-medium">
+                  <span className="font-bold">
                     -{formatINR(executionDiscountVal)}
                   </span>
                 </div>
               )}
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-300 font-medium">
-                  Net Revised BOQ
+              <div className="pt-3 border-t border-slate-800 flex justify-between items-center">
+                <span className="font-semibold text-slate-300 text-xs">
+                  Net Revised Execution BOQ
                 </span>
-                <span className="font-bold text-white">
+                <span className="font-bold text-white text-base">
                   {formatINR(revisedTotal)}
                 </span>
               </div>
-              <div className="pt-3 border-t border-slate-700 flex justify-between items-center">
-                <span className="font-medium text-slate-300">
-                  Net BOQ Variance
+              <div className="pt-2 flex justify-between items-center">
+                <span className="font-semibold text-slate-400 text-xs">
+                  Net Scope Variance
                 </span>
                 <span
-                  className={`text-xl font-bold px-3 py-1 rounded-lg ${netDelta > 0 ? "bg-rose-500/20 text-rose-300" : "bg-emerald-500/20 text-emerald-300"}`}
+                  className={`text-sm font-bold px-2.5 py-1 rounded-lg ${netDelta > 0 ? "bg-rose-500/20 text-rose-300" : "bg-emerald-500/20 text-emerald-300"}`}
                 >
                   {netDelta > 0 ? "+" : ""}
                   {formatINR(netDelta)}
@@ -3645,92 +3940,70 @@ export default function RevisionStudio({
             </div>
           </Card>
 
-          <Card className="p-6 border-2 border-indigo-600 bg-indigo-600 text-white shadow-lg relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">
-              💎
+          <Card className="p-6 border border-sky-900 bg-gradient-to-br from-[#004D99] to-[#0066CC] text-white shadow-md rounded-2xl relative overflow-hidden">
+            <div className="flex items-center gap-2 mb-4 text-sky-200">
+              <TrendingUp className="w-4 h-4 text-amber-300" />
+              <h4 className="font-bold uppercase tracking-wider text-xs">
+                Design Fee Impact
+              </h4>
             </div>
-            <h4 className="font-semibold text-indigo-200 mb-4 uppercase tracking-wider text-xs">
-              Design Fee Impact
-            </h4>
             <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-indigo-300">
+              <div className="flex justify-between text-xs">
+                <span className="text-sky-200 font-medium">
                   Original Design Fee{" "}
                   {!projectContext?.designFeeType ||
                   projectContext?.designFeeType === "percentage"
                     ? `(${designFeePercentage}%)`
                     : "(Fixed)"}
                 </span>
-                <span className="font-medium">
+                <span className="font-bold text-white">
                   {formatINR(originalDesignFee)}
                 </span>
               </div>
               {(!projectContext?.designFeeType ||
                 projectContext?.designFeeType === "percentage") && (
                 <>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-indigo-300">Revised BOQ Base</span>
-                    <span className="font-medium">
+                  <div className="flex justify-between text-xs text-sky-100">
+                    <span>Revised BOQ Base</span>
+                    <span className="font-semibold">
                       {formatINR(rawRevisedExecutionTotal)}
                     </span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-indigo-300">
-                      As Actuals (Vendor Direct)
-                    </span>
-                    <span className="font-medium">
-                      {formatINR(asActualsTotal)}
-                    </span>
-                  </div>
-                  {pendingDecisionTotal > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-indigo-300">
-                        Pending Decision (Excluded)
-                      </span>
-                      <span className="font-medium text-amber-300">
-                        {formatINR(pendingDecisionTotal)}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-sm">
-                    <span className="text-indigo-300">Total Design Base</span>
-                    <span className="font-medium">
+                  <div className="flex justify-between text-xs text-sky-100">
+                    <span>Total Design Base</span>
+                    <span className="font-semibold">
                       {formatINR(rawRevisedDesignBaseTotal)}
                     </span>
                   </div>
                 </>
               )}
-              <div className="flex justify-between text-sm">
-                <span className="text-indigo-300">
-                  Revised Fee (Pre-discount)
-                </span>
-                <span className="font-medium">
+              <div className="flex justify-between text-xs text-sky-100">
+                <span>Revised Fee (Gross)</span>
+                <span className="font-semibold">
                   {formatINR(rawRevisedDesignFee)}
                 </span>
               </div>
               {designDiscountVal > 0 && (
-                <div className="flex justify-between text-sm text-emerald-300">
+                <div className="flex justify-between text-xs text-emerald-300">
                   <span>Discounts Applied</span>
-                  <span className="font-medium">
+                  <span className="font-semibold">
                     -{formatINR(designDiscountVal)}
                   </span>
                 </div>
               )}
-              <div className="flex justify-between text-sm">
-                <span className="text-indigo-200 font-medium">
-                  Net Revised Fee
+              <div className="pt-3 border-t border-white/20 flex justify-between items-center">
+                <span className="font-semibold text-sky-100 text-xs">
+                  Net Revised Design Fee
                 </span>
-                <span className="font-bold text-white">
+                <span className="font-bold text-white text-base">
                   {formatINR(revisedDesignFee)}
                 </span>
               </div>
-              <div className="pt-3 border-t border-indigo-500 flex justify-between items-center">
-                <span className="font-medium text-indigo-200">
+              <div className="pt-2 flex justify-between items-center">
+                <span className="font-semibold text-sky-200 text-xs">
                   Net Fee Variance
                 </span>
-                <span
-                  className={`text-xl font-bold px-3 py-1 rounded-lg ${designFeeDelta > 0 ? "bg-white/20 text-white" : "bg-white/20 text-white"}`}
-                >
+                <span className="text-sm font-bold px-2.5 py-1 bg-white/20 text-white rounded-lg">
                   {designFeeDelta > 0 ? "+" : ""}
                   {formatINR(designFeeDelta)}
                 </span>
@@ -3741,24 +4014,23 @@ export default function RevisionStudio({
 
         {/* Section Breakdown */}
         {sectionBreakdown.length > 0 && (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {sectionBreakdown.map((s) => (
               <Card
                 key={s.section}
-                className="p-4 border border-slate-200 bg-slate-50"
+                className="p-3.5 border border-slate-200/80 bg-slate-50/60 rounded-xl"
               >
-                <div className="flex justify-between items-center mb-2">
-                  <div className="font-medium text-indigo-900">{s.section}</div>
+                <div className="flex justify-between items-center mb-1">
+                  <div className="font-bold text-slate-800 text-xs">{s.section}</div>
                   <div
-                    className={`text-sm font-semibold ${s.delta > 0 ? "text-rose-600" : "text-emerald-600"}`}
+                    className={`text-xs font-bold ${s.delta > 0 ? "text-rose-600" : "text-emerald-600"}`}
                   >
                     {s.delta > 0 ? "+" : ""}
                     {formatINR(s.delta)}
                   </div>
                 </div>
-                <div className="text-xs text-slate-500">
-                  Original: {formatINR(s.original)} → Revised:{" "}
-                  {formatINR(s.revised)}
+                <div className="text-[11px] text-slate-500 font-medium">
+                  {formatINR(s.original)} → <span className="font-bold text-slate-800">{formatINR(s.revised)}</span>
                 </div>
               </Card>
             ))}
@@ -3766,53 +4038,51 @@ export default function RevisionStudio({
         )}
 
         {/* Export Actions */}
-        <div className="grid grid-cols-2 gap-6 mt-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <Card
-            className="p-6 border border-slate-200 bg-white shadow-sm hover:border-indigo-400 hover:shadow-md transition-all group cursor-pointer"
+            className="p-5 border border-slate-200/80 bg-white shadow-2xs hover:border-[#0066CC] hover:shadow-md transition-all group cursor-pointer rounded-2xl flex items-center justify-between"
             onClick={exportToPDF}
           >
-            <div className="text-3xl mb-4 group-hover:scale-110 transition-transform">
-              📄
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-sky-50 text-[#0066CC] flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform">
+                <Download className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 text-xs">
+                  Client Review PDF Annexure
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Print-ready document with scope summary & payment impact.
+                </p>
+              </div>
             </div>
-            <h4 className="font-semibold text-indigo-900 mb-2">
-              Client Review PDF
-            </h4>
-            <p className="text-sm text-slate-500 mb-4">
-              Clean PDF with summary, section breakdown, and design fee impact.
-            </p>
-            <div className="flex items-center gap-2 text-indigo-600 text-sm font-medium">
-              <span>Download PDF</span>
-              <span className="group-hover:translate-x-1 transition-transform">
-                →
-              </span>
-            </div>
+            <ArrowRight className="w-4 h-4 text-[#0066CC] group-hover:translate-x-1 transition-transform" />
           </Card>
 
           <Card
-            className="p-6 border border-slate-200 bg-white shadow-sm hover:border-emerald-400 hover:shadow-md transition-all group cursor-pointer"
+            className="p-5 border border-slate-200/80 bg-white shadow-2xs hover:border-emerald-500 hover:shadow-md transition-all group cursor-pointer rounded-2xl flex items-center justify-between"
             onClick={() => exportToExcel("client")}
           >
-            <div className="text-3xl mb-4 group-hover:scale-110 transition-transform">
-              📊
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 text-xs">
+                  Detailed Itemized Excel
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Full itemized spreadsheet breakdown of baseline vs revised.
+                </p>
+              </div>
             </div>
-            <h4 className="font-semibold text-indigo-900 mb-2">
-              Detailed Excel
-            </h4>
-            <p className="text-sm text-slate-500 mb-4">
-              Full itemized breakdown of all changes for client records.
-            </p>
-            <div className="flex items-center gap-2 text-emerald-600 text-sm font-medium">
-              <span>Download Excel</span>
-              <span className="group-hover:translate-x-1 transition-transform">
-                →
-              </span>
-            </div>
+            <ArrowRight className="w-4 h-4 text-emerald-600 group-hover:translate-x-1 transition-transform" />
           </Card>
         </div>
 
         {/* Sync to Payments */}
         {setProjectContext && (
-          <div className="mt-6 flex justify-end">
+          <div className="mt-4 flex justify-end">
             <button
               onClick={() => {
                 const newAdHocItems = currentRevisionBoq
@@ -3841,6 +4111,8 @@ export default function RevisionStudio({
                   });
                 }
 
+                const newTierId = "tier_" + Math.random().toString(36).substring(2, 9);
+
                 setProjectContext((prev) => {
                   const prevFinancials: FinancialConfig = prev.financials || {
                     initiationFeePaid: initiationFee,
@@ -3855,6 +4127,25 @@ export default function RevisionStudio({
                     approvedDesignValue: originalNetDesign,
                     designFeePercentage: designFeePercentage,
                   };
+
+                  const snapshots = prevFinancials.paymentSnapshots || [];
+                  const updatedSnapshots = [...snapshots];
+                  if (prev.approvedTierId) {
+                    const previousTier = tiers.find(t => t.id === prev.approvedTierId);
+                    const previousName = previousTier?.name || "Previous Version";
+                    if (!updatedSnapshots.some(s => s.tierId === prev.approvedTierId)) {
+                      updatedSnapshots.push({
+                        tierId: prev.approvedTierId,
+                        tierName: previousName,
+                        timestamp: Date.now(),
+                        approvedExecutionValue: prevFinancials.approvedExecutionValue ?? 0,
+                        approvedDesignValue: prevFinancials.approvedDesignValue ?? 0,
+                        milestones: prev.paymentMilestones || [],
+                        billablePercent: prevFinancials.billablePercent,
+                        executionGstEnabled: prevFinancials.executionGstEnabled,
+                      });
+                    }
+                  }
 
                   const newRevision = {
                     id: Math.random().toString(36).substring(2, 9),
@@ -3879,12 +4170,15 @@ export default function RevisionStudio({
 
                   return {
                     ...prev,
+                    approvedTierId: newTierId,
+                    boqRevisions: [],
                     adHocItems: mergedAdHocItems,
                     financials: {
                       ...prevFinancials,
                       approvedExecutionValue: rawRevisedExecutionTotal,
                       approvedDesignValue: rawRevisedDesignFee,
                       designFeePercentage: designFeePercentage,
+                      paymentSnapshots: updatedSnapshots,
                       paymentRevisions: [
                         ...(prevFinancials.paymentRevisions || []),
                         newRevision,
@@ -3893,16 +4187,26 @@ export default function RevisionStudio({
                   };
                 });
 
+                setSelectedTierId(newTierId);
+                if (setActiveTierId) {
+                  setActiveTierId(newTierId);
+                }
+                setActions([]);
+
                 if (setTiers) {
                   const dateStr = new Date().toLocaleDateString("en-GB", {
                     day: "2-digit",
                     month: "short",
                     year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
                   });
                   const newTier: ProposalTier = {
-                    id: "tier_" + Math.random().toString(36).substring(2, 9),
+                    id: newTierId,
                     name: `Annexure - BOQ Revision (${dateStr})`,
                     timestamp: Date.now(),
+                    parentTierId: selectedTierId || approvedTierId || activeTierId,
+                    lifecycleTag: "Revised after design",
                     projectContext: { ...projectContext },
                     boq: currentRevisionBoq
                       .filter(
@@ -3910,37 +4214,43 @@ export default function RevisionStudio({
                       )
                       .map((b: any) => ({
                         id: b.id,
-                        bankId: b.bankId || b.id, // Fallback if no bankId
+                        bankId: b.bankId || b.id,
                         roomId: b.section,
                         qty: b.qty,
                         marginOverride:
                           b.marginOverride !== undefined
                             ? b.marginOverride
                             : undefined,
-                        selectedRate: b.rate, // capture revised rate
-                        rationale: b.item // PRESAVE NAME FOR LEGACY ITEMS
+                        selectedRate: b.rate,
+                        rationale: b.item
                       })),
                     summary: {
                       totalSell: rawRevisedExecutionTotal,
-                      totalCost: rawRevisedExecutionTotal * 0.7, // approximation
-                      totalGm: 30, // approximation
+                      totalCost: rawRevisedExecutionTotal * 0.7,
+                      totalGm: 30,
                       itemCount: currentRevisionBoq.length,
                       totalRevenue: rawRevisedExecutionTotal,
                       designFee: 0,
                       blendedGm: 30,
                     },
                   };
-                  setTiers((prev) => [...prev, newTier]);
+                  setTiers((prev) => prev.map(t => {
+                    if (t.id === approvedTierId) {
+                      return { ...t, lifecycleTag: 'Superseded' };
+                    }
+                    return t;
+                  }).concat(newTier));
                 }
 
                 showToast(
                   "Successfully synced revised values to Payment Calculator and created a new scope Annexure version.",
                 );
               }}
-              className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-md hover:bg-indigo-700 transition-all flex items-center gap-2"
+              className="px-6 py-3 bg-[#0066CC] text-white font-bold rounded-xl shadow-md hover:bg-[#0055B3] transition-all flex items-center gap-2 text-xs"
             >
-              <span>Approve & Sync to Payments</span>
-              <span>→</span>
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Approve Revision & Sync to Payment Calculator</span>
+              <ArrowRight className="w-4 h-4 ml-1" />
             </button>
           </div>
         )}
@@ -3963,7 +4273,7 @@ export default function RevisionStudio({
             <div className="mt-6 space-y-6 flex flex-col">
               {designMilestones.length > 0 && (
                 <Card className="p-6 border border-slate-200 bg-white shadow-sm overflow-hidden">
-                  <h4 className="font-semibold text-indigo-900 uppercase tracking-wider text-sm mb-4">
+                  <h4 className="font-semibold text-slate-800 uppercase tracking-wider text-sm mb-4">
                     Design fee schedule
                   </h4>
                   <div className="bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col">
@@ -3985,11 +4295,11 @@ export default function RevisionStudio({
                       if (current.deductedInitiationFee > 0) {
                         rows.push(
                           <div key={`${idx}-gross`} style={rowStyle}>
-                            <span className="font-medium text-indigo-900">
+                            <span className="font-medium text-slate-800">
                               {m.name} (Gross)
                             </span>
                             <div className="flex items-center gap-3">
-                              <span className="font-semibold text-indigo-950">
+                              <span className="font-semibold text-slate-900">
                                 {formatINR(
                                   Math.round(
                                     current.revisedTotal +
@@ -4049,11 +4359,11 @@ export default function RevisionStudio({
                       } else {
                         rows.push(
                           <div key={`${idx}`} style={rowStyle}>
-                            <span className="font-medium text-indigo-900">
+                            <span className="font-medium text-slate-800">
                               {m.name}
                             </span>
                             <div className="flex items-center gap-3">
-                              <span className="font-semibold text-indigo-950">
+                              <span className="font-semibold text-slate-900">
                                 {formatINR(Math.round(current.revisedTotal))}
                               </span>
                               <span
@@ -4073,7 +4383,7 @@ export default function RevisionStudio({
 
               {executionMilestones.length > 0 && (
                 <Card className="p-6 border border-slate-200 bg-white shadow-sm overflow-x-auto w-full">
-                  <h4 className="font-semibold text-indigo-900 uppercase tracking-wider text-sm mb-6">
+                  <h4 className="font-semibold text-slate-800 uppercase tracking-wider text-sm mb-6">
                     Payment journey
                   </h4>
                   <div
@@ -4202,7 +4512,7 @@ export default function RevisionStudio({
         {/* Communication Drafts */}
         <div className="grid grid-cols-1 gap-6 mt-6">
           <Card className="p-6 border border-slate-200 bg-white shadow-sm">
-            <h4 className="font-semibold text-indigo-900 uppercase tracking-wider text-sm mb-4">
+            <h4 className="font-semibold text-slate-800 uppercase tracking-wider text-sm mb-4">
               Communication Drafts
             </h4>
 
@@ -4261,7 +4571,7 @@ export default function RevisionStudio({
                       }
                       navigator.clipboard.writeText(emailBody);
                     }}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                    className="text-xs text-[#0066CC] hover:text-[#0055B3] font-medium"
                   >
                     Copy Email
                   </button>
@@ -4364,64 +4674,119 @@ export default function RevisionStudio({
 
   return (
     <div className="h-full flex flex-col bg-slate-50/50 relative">
-      <div className="bg-white border-b border-slate-200 px-8 py-6">
-        <h1 className="text-2xl font-bold text-indigo-900 mb-2">
-          Revision Studio
-        </h1>
-        <p className="text-slate-500">
-          BOQ Revision Workflow Engine & Change Management
-        </p>
-      </div>
-
-      <div className="flex-grow p-8 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-8">
-          <div className="flex space-x-1 bg-slate-200/50 p-1 rounded-xl w-fit">
+      {/* Main Full-Width Workspace (Uses maximum available screen real estate) */}
+      <div className="flex-grow p-4 sm:p-5 overflow-y-auto">
+        <div className="w-full space-y-4">
+          {/* Streamlined 3-Tab Navigation Bar */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-slate-200/70 p-1.5 rounded-2xl border border-slate-200 w-full">
             {[
-              { id: "baseline", label: "1. Baseline BOQ" },
-              { id: "actions", label: "2. Revision Actions" },
-              { id: "log", label: "3. Change Log" },
-              { id: "client-view", label: "4. Client Presentation View" },
-              { id: "client-specs", label: "5. Detailed Specs & Inclusions" },
-              { id: "client-pack", label: "6. Export & Communications" },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === tab.id
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-slate-600 hover:text-indigo-950 hover:bg-slate-200/50"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+              { id: "actions", label: "1. Revision Workbench", icon: Edit3 },
+              {
+                id: "client-presentation",
+                label: "2. Client Presentation & Specs",
+                icon: FileText,
+              },
+              { id: "export-comms", label: "3. Export & Communications", icon: Share2 },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
+                    isActive
+                      ? "bg-white text-[#0055B3] shadow-xs border border-slate-200/90"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
+                  }`}
+                >
+                  <Icon
+                    className={`w-4 h-4 ${
+                      isActive ? "text-[#0066CC]" : "text-slate-400"
+                    }`}
+                  />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
 
+          {/* Active Tab Content */}
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.15 }}
           >
-            {activeTab === "baseline" && renderBaseline()}
             {activeTab === "actions" && renderActionEntry()}
-            {activeTab === "log" && renderChangeLog()}
-            {activeTab === "client-view" && renderClientView()}
-            {activeTab === "client-specs" && renderClientSpecs()}
-            {activeTab === "client-pack" && renderClientPack()}
+            {activeTab === "client-presentation" && (
+              <div className="space-y-6">
+                {renderClientView()}
+                {renderClientSpecs()}
+              </div>
+            )}
+            {activeTab === "export-comms" && (
+              <div className="space-y-6">
+                {renderClientPack()}
+                {renderChangeLog()}
+              </div>
+            )}
           </motion.div>
         </div>
       </div>
+
+      {/* Baseline Scope Modal Window */}
+      <AnimatePresence>
+        {showBaselineModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 sm:p-6"
+            onClick={() => setShowBaselineModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <Lock className="w-4 h-4 text-emerald-400" />
+                  <div>
+                    <h3 className="font-bold text-xs sm:text-sm text-white">
+                      Approved Contractual Baseline BOQ — {currentSelectedTier?.name}
+                    </h3>
+                    <p className="text-[11px] text-slate-300">
+                      Locked source of truth • Baseline Total: {formatINR(originalTotal)}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowBaselineModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-5 overflow-y-auto space-y-6 flex-grow">
+                {renderBaseline()}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Toast Notification */}
       <AnimatePresence>
         {toastMessage && (
           <motion.div
-            initial={{ opacity: 0, y: 50 }}
+            initial={{ opacity: 0, y: -50 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-6 right-6 bg-indigo-950 text-white px-6 py-3 rounded-lg shadow-xl font-medium text-sm z-50 flex items-center gap-3"
+            exit={{ opacity: 0, y: -50 }}
+            className="fixed top-6 right-6 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-xl shadow-xl font-medium text-sm z-[100] flex items-center gap-3"
           >
             <span>✨</span>
             {toastMessage}

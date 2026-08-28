@@ -5,8 +5,10 @@ import { formatCurrency } from '../lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 import { estimateQuantity, isAiAvailable } from '../services/geminiService';
 import { SparklesIcon, ListIcon, GridIcon, CheckIcon } from './Icons';
-import { ADDON_BUNDLES, calculateQuantity } from '../lib/standardPackages';
+import { ADDON_BUNDLES, calculateQuantity, getSmartDefaultCoefficient } from '../lib/standardPackages';
 import { INITIAL_BANK } from '../constants';
+import { useStudioSettings } from '../hooks/useStudioSettings';
+import { useOrg } from '../contexts/OrgContext';
 
 interface AddItemModalProps {
   isOpen: boolean;
@@ -21,6 +23,22 @@ type Stage = 'select' | 'review';
 type Mode = 'items' | 'bundles';
 
 const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAdd, room, projectContext }) => {
+  const { orgData } = useOrg();
+  const { settings } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
+
+  const allBundles = useMemo(() => {
+    const custom = settings?.customBundles || [];
+    const mappedCustom = custom.map(b => ({
+      id: b.id,
+      name: b.name,
+      icon: '📦',
+      description: b.description || 'Custom User Bundle',
+      itemIds: b.itemIds,
+      isCustom: true
+    }));
+    return [...mappedCustom, ...ADDON_BUNDLES];
+  }, [settings?.customBundles]);
+
   const [stage, setStage] = useState<Stage>('select');
   const [mode, setMode] = useState<Mode>('items');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -63,6 +81,20 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
         // If bundle already set the quantity, don't overwrite/re-estimate
         if (quantities[item.id] && quantities[item.id].qty > 0) return;
 
+        const coeff = item.areaMultiplierCoefficient || getSmartDefaultCoefficient(item);
+        if (coeff !== undefined && room.size > 0) {
+            const calculatedQty = Number((room.size * coeff).toFixed(2));
+            setQuantities(prev => ({
+                ...prev,
+                [item.id]: {
+                    qty: calculatedQty,
+                    rationale: `Area Multiplier Default: ${room.size} ${room.unit || 'sq ft'} × ${coeff}`,
+                    isLoading: false
+                }
+            }));
+            return;
+        }
+
         setQuantities(prev => ({...prev, [item.id]: { qty: 1, rationale: '', isLoading: true }}));
         const suggestion: QuantitySuggestion = await estimateQuantity(item, room, projectContext);
         setQuantities(prev => ({...prev, [item.id]: { qty: suggestion.qty || 1, rationale: suggestion.rationale || 'Could not estimate.', isLoading: false }}));
@@ -70,7 +102,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
   };
 
   const handleSelectBundle = (bundleId: string) => {
-      const bundle = ADDON_BUNDLES.find(b => b.id === bundleId);
+      const bundle = allBundles.find(b => b.id === bundleId);
       if (!bundle) return;
 
       const newQuantities: any = {};
@@ -136,7 +168,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 bg-indigo-950/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <MotionDiv
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -154,13 +186,13 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                   <div className="flex bg-white rounded-lg p-1 border border-slate-200">
                       <button 
                         onClick={() => setMode('items')} 
-                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === 'items' ? 'bg-indigo-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === 'items' ? 'bg-sky-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
                       >
                           Individual Items
                       </button>
                       <button 
                         onClick={() => setMode('bundles')} 
-                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${mode === 'bundles' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${mode === 'bundles' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
                       >
                           <SparklesIcon className="w-3 h-3" /> Smart Bundles
                       </button>
@@ -180,7 +212,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                 {filteredBank.map(item => (
                     <div key={item.id} onClick={() => toggleItemSelection(item.id)} className={`p-3 border rounded-lg cursor-pointer transition-all flex justify-between items-center ${selectedItems.has(item.id) ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-200' : 'bg-white hover:border-blue-300'}`} >
                         <div>
-                            <p className="font-bold text-sm text-indigo-900">{item.name}</p>
+                            <p className="font-bold text-sm text-slate-800">{item.name}</p>
                             <p className="text-xs text-slate-500">{item.cat} • {item.specs}</p>
                         </div>
                         <div className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100">
@@ -193,25 +225,64 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
             )}
 
             {stage === 'select' && mode === 'bundles' && (
-                <div className="flex-grow overflow-y-auto p-6 bg-slate-50/50">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {ADDON_BUNDLES.map(bundle => (
-                            <div 
-                                key={bundle.id} 
-                                onClick={() => handleSelectBundle(bundle.id)}
-                                className="bg-white border-2 border-indigo-100 rounded-xl p-5 hover:border-indigo-500 hover:shadow-lg transition-all cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="text-2xl bg-indigo-50 w-10 h-10 flex items-center justify-center rounded-full group-hover:scale-110 transition-transform">{bundle.icon}</div>
-                                    <h4 className="font-bold text-indigo-900">{bundle.name}</h4>
-                                </div>
-                                <p className="text-xs text-slate-500 mb-4 h-8">{bundle.description}</p>
-                                <div className="flex justify-between items-center border-t border-slate-100 pt-3">
-                                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">{bundle.itemIds.length} Items</span>
-                                    <span className="text-xs font-bold text-slate-400 group-hover:text-indigo-600 transition-colors">Select & Review →</span>
-                                </div>
+                <div className="flex-grow overflow-y-auto p-6 bg-slate-50/50 space-y-6">
+                    {/* Render Custom Bundles Section */}
+                    {allBundles.some(b => b.isCustom) && (
+                        <div className="space-y-3">
+                            <h4 className="text-xs font-extrabold uppercase tracking-widest text-amber-600 flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                Custom Studio Bundles
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {allBundles.filter(b => b.isCustom).map(bundle => (
+                                    <div 
+                                        key={bundle.id} 
+                                        onClick={() => handleSelectBundle(bundle.id)}
+                                        className="bg-white border-2 border-amber-100 hover:border-amber-500 rounded-xl p-5 hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden"
+                                    >
+                                        <div className="absolute top-0 right-0 bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-bl">
+                                            Custom
+                                        </div>
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <div className="text-2xl bg-amber-50 w-10 h-10 flex items-center justify-center rounded-full group-hover:scale-110 transition-transform">{bundle.icon}</div>
+                                            <h4 className="font-bold text-slate-900 pr-10">{bundle.name}</h4>
+                                        </div>
+                                        <p className="text-xs text-slate-500 mb-4 h-8 leading-relaxed line-clamp-2">{bundle.description}</p>
+                                        <div className="flex justify-between items-center border-t border-slate-100 pt-3">
+                                            <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded border border-amber-200/60">{bundle.itemIds.length} Items</span>
+                                            <span className="text-xs font-bold text-slate-400 group-hover:text-amber-700 transition-colors">Select & Review →</span>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
+                        </div>
+                    )}
+
+                    {/* Render Standard Templates Section */}
+                    <div className="space-y-3">
+                        <h4 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#0066CC]"></span>
+                            Standard Templates
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {allBundles.filter(b => !b.isCustom).map(bundle => (
+                                <div 
+                                    key={bundle.id} 
+                                    onClick={() => handleSelectBundle(bundle.id)}
+                                    className="bg-white border-2 border-sky-50 hover:border-[#0066CC] rounded-xl p-5 hover:shadow-lg transition-all cursor-pointer group"
+                                >
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="text-2xl bg-sky-50 w-10 h-10 flex items-center justify-center rounded-full group-hover:scale-110 transition-transform">{bundle.icon}</div>
+                                        <h4 className="font-bold text-slate-800">{bundle.name}</h4>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mb-4 h-8 leading-relaxed line-clamp-2">{bundle.description}</p>
+                                    <div className="flex justify-between items-center border-t border-slate-100 pt-3">
+                                        <span className="text-xs font-bold text-[#0066CC] bg-sky-50 px-2 py-1 rounded">{bundle.itemIds.length} Items</span>
+                                        <span className="text-xs font-bold text-slate-400 group-hover:text-[#0066CC] transition-colors">Select & Review →</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
@@ -227,10 +298,10 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <label className="text-xs font-semibold uppercase text-slate-400">Qty</label>
-                                    <input type="number" min="0" value={quantities[item.id]?.qty || 0} disabled={quantities[item.id]?.isLoading} onChange={e => handleQuantityChange(item.id, parseFloat(e.target.value))} className="w-20 p-1.5 border border-slate-300 rounded text-center font-bold text-indigo-900" />
+                                    <input type="number" min="0" value={quantities[item.id]?.qty || 0} disabled={quantities[item.id]?.isLoading} onChange={e => handleQuantityChange(item.id, parseFloat(e.target.value))} className="w-20 p-1.5 border border-slate-300 rounded text-center font-bold text-slate-800" />
                                 </div>
                            </div>
-                           <div className="mt-2 text-xs text-indigo-700 italic bg-indigo-50 border border-indigo-100 p-2 rounded-md flex gap-2">
+                           <div className="mt-2 text-xs text-[#0055B3] italic bg-sky-50 border border-sky-100 p-2 rounded-md flex gap-2">
                             {quantities[item.id]?.isLoading ? (
                                 <span className="animate-pulse">AI is calculating...</span>
                             ) : (
@@ -259,7 +330,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                     Cancel
                 </button>
                 {stage === 'select' ? (
-                    <button onClick={handleNext} disabled={selectedItems.size === 0} className="px-6 py-2 bg-indigo-950 text-white font-bold rounded-lg shadow-md hover:bg-indigo-950 disabled:bg-slate-300 disabled:shadow-none transition-all text-sm">
+                    <button onClick={handleNext} disabled={selectedItems.size === 0} className="px-6 py-2 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white font-bold rounded-lg shadow-md hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 disabled:bg-slate-300 disabled:shadow-none transition-all text-sm">
                         Review Selection ({selectedItems.size})
                     </button>
                 ) : (

@@ -35,6 +35,7 @@ export interface OrganizationContext {
     };
     defaultPaymentSchedules?: { title: string; percentage: number }[];
     procurementLeadTimeWeeks?: number;
+    poApprovalThreshold?: number;
 }
 
 export type UserRole = 'Super Admin' | 'Admin' | 'Ops Director' | 'Site Supervisor' | 'Vendor';
@@ -62,6 +63,7 @@ export type ProjectStatus = 'lead' | 'draft' | 'proposal_sent' | 'negotiation' |
 export type ProposalLevel = 'LEVEL_1' | 'LEVEL_1_5' | 'LEVEL_2' | 'LEVEL_3';
 
 export interface Room {
+    id?: string;
     name: string;
     size: number;
     unit: 'sq ft';
@@ -69,6 +71,17 @@ export interface Room {
     width?: number;
     height?: number;
     notes?: string;
+
+    /* ── plan takeoff ────────────────────────────────────────────────────────
+       Populated when a floor plan is read. length/width already existed but were
+       never filled; quantities derive from them, so they are the important half. */
+    kind?: import('./lib/takeoff').RoomKind;
+    doors?: number;
+    windows?: number;
+    ceiling?: import('./lib/takeoff').CeilingDesign;
+    dimSource?: import('./lib/takeoff').DimSource;
+    rawDimension?: string;
+    irregular?: boolean;
 }
 
 export interface DesignScope {
@@ -244,6 +257,17 @@ export interface PaymentRevision {
     reason?: string;
 }
 
+export interface PaymentSnapshot {
+    tierId: string;
+    tierName: string;
+    timestamp: number;
+    approvedExecutionValue: number;
+    approvedDesignValue: number;
+    milestones: PaymentMilestone[];
+    billablePercent?: number;
+    executionGstEnabled?: boolean;
+}
+
 export interface FinancialConfig {
     initiationFeePaid: number;
     billablePercent: number; // 0 to 100
@@ -256,6 +280,7 @@ export interface FinancialConfig {
     approvedDesignValue?: number; // Revised/approved design fee
     designFeePercentage?: number; // Persist design fee percentage for revisions
     paymentRevisions?: PaymentRevision[];
+    paymentSnapshots?: PaymentSnapshot[];
 }
 
 export type ActionType = 'ADD' | 'REMOVE' | 'REPLACE' | 'REVISE_QTY' | 'REVISE_RATE' | 'MARK_VENDOR' | 'MARK_PENDING' | 'APPROVE_PENDING';
@@ -397,6 +422,7 @@ export interface ProjectDecisionRecord {
     roomId?: string; // Newly added
     photoUrl?: string; // Newly added
     status: 'pending' | 'confirmed' | 'changed' | 'proposed' | 'revoked' | 'rejected';
+    selectedOption?: string;
     
     // Legacy fields (kept for backward compatibility if needed)
     description?: string;
@@ -408,28 +434,20 @@ export interface ProjectDecisionRecord {
 }
 
 export interface ProjectLifecycle {
-    stage: 'pre_sales' | 'design' | 'execution' | 'handover' | 'completed';
-    subState?: string;
-    gate?: {
-        done: number;
-        total: number;
+    stage: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+    subState: string;
+    enteredStageAt: number;
+    gates: {
+        proposalAccepted: { done: boolean; at: number | null; reference: string | null };
+        contractSigned: { done: boolean; at: number | null; reference: string | null };
+        designGateActive: { done: boolean; at: number | null; reference: string | null };
+        handoverComplete: { done: boolean; at: number | null; reference: string | null };
     };
-    updatedAt: string;
+    updatedAt: number;
     updatedBy?: string;
 }
 
 
-export interface ReportCorrection {
-    id: string;
-    fieldPath: string; // e.g. 'paymentPlan[0].status' or 'healthLabel'
-    originalValue: any;
-    correctedValue: any;
-    reason: string;
-    correctedBy: string;
-    correctedAt: number;
-    mismatchTaskId?: string;
-    state: 'active' | 'retired';
-}
 
 export interface MismatchTask {
     id: string;
@@ -443,44 +461,114 @@ export interface MismatchTask {
     createdBy: string;
 }
 
-export interface WeeklyPulseReport {
-  photos?: string[];
-  corrections?: ReportCorrection[];
-  id: string;
-  weekNumber: number;
-  startDate: string;
-  endDate: string;
-  publishedAt?: string;
-  executiveBriefing: string;
-  nextWeekPlan?: string;
-  manualActions?: { id: string; text: string; assignee: 'client'|'studio' }[];
-  roomProgress?: Record<string, number>;
-  revisions?: { id: string; drawing: string; change: string; category: string; charge: string }[];
-  selections?: { id: string; category: string; selectedCount: number; totalCount: number; pendingText: string }[];
-  status?: 'building' | 'published';
-  syncCount?: number;
-  syncedAt?: number;
-  paymentPlan?: any[];
-  avgClearanceDays?: number;
-  healthLabel?: 'On Track' | 'At Risk' | 'Delayed';
-  deltas?: Record<string, number>;
-  activities?: { date: string, text: string }[];
-  velocity?: { clientAvgHours?: number; studioAvgHours?: number; coveragePercent: number; };
-  categoryProgress?: { category: string; percentage: number; roomsCovered: number; totalRooms: number; }[];
-  openItems?: { client: { text: string; date?: string; type: string }[]; studio: { text: string; date?: string; type: string }[]; };
-  revisionLedger?: { clientRequested: number; siteCondition: number; internalRefinement: number; unclassified: number; chargeableSummary: string[]; };
-  sectionVisibility: {
-    weekAtGlance: boolean;
-    governance: boolean;
-    designProgress: boolean;
-    revisions: boolean;
-    financials: boolean;
-    siteProgress: boolean;
-    selections: boolean;
-    upcomingPlan: boolean;
-    actionRequired: boolean;
-  };
-  studioNotes: Record<string, string>;
+
+// ---------------------------------------------------------------------------
+// STUDIO MEMORY — an append-only ledger of what actually happened, across every
+// project. Benchmarks are computed from it; nothing here is ever edited in place.
+// ---------------------------------------------------------------------------
+export type ObservationType =
+    | 'rate_actual'       // real spend, optionally against a quote
+    | 'margin_realised'   // a whole project's revenue vs actual cost
+    | 'payment_cycle'
+    | 'stage_duration'
+    | 'vendor_delivery';
+
+/** measured = taken from the books. recalled = a human typed it from memory. */
+export type ObservationConfidence = 'measured' | 'recalled';
+
+/** How the money was bought. Mirrors POScope in the procurement spec. */
+export type CostType = 'subcontract' | 'material' | 'labour' | 'uncategorised';
+
+export interface ObservationDims {
+    category?: string;
+    roomId?: string;
+    bankId?: string;
+    costType?: CostType;
+    vendorId?: string;
+    vendorName?: string;
+    config?: string;
+    city?: string;
+    clientName?: string;
+}
+
+export interface Observation {
+    id: string;
+    type: ObservationType;
+    at: number;
+    source: 'historical' | 'live';
+    confidence: ObservationConfidence;
+    projectId: string;
+    projectName?: string;
+    dims: ObservationDims;
+    quoted?: number;
+    actual?: number;
+    days?: number;
+    unit?: string;
+    note?: string;
+}
+
+
+export type HistoryCategory = 'stage' | 'money' | 'design' | 'docs' | 'scope';
+
+export interface HistoryEvent {
+    id: string;
+    at: number;
+    actor: string;
+    category: HistoryCategory;
+    summary: string;
+    detail?: string | null;
+}
+
+export interface ManualOverrideMeta {
+    isOverride: boolean;
+    recordedBy: string;
+    recordedAt: string;
+    overrideReason: string;
+    approvalMedium: 'paper_wet_ink' | 'email_confirmation' | 'whatsapp_approval' | 'in_person_verbal';
+    attachmentUrl?: string;
+}
+
+export interface DigitalSignatureDocket {
+    signatoryName: string;
+    signatoryEmail?: string;
+    signatoryPhone?: string;
+    signatoryRole?: string;
+    signedAt: string; // ISO
+    signatureType: 'draw' | 'type' | 'upload' | 'manual_override';
+    signatureDataUrl?: string; // canvas png or svg string
+    typedFont?: string;
+    ipAddress: string;
+    userAgent?: string;
+    docketHash: string; // Verification hash
+    verified: boolean;
+    legalAffirmation: boolean;
+    manualOverride?: ManualOverrideMeta;
+    /** The DocumentIssue this signature was taken against. */
+    issueId?: string;
+    /** Hash of the exact content shown at signing time. */
+    contentHash?: string;
+    /** How the signatory engaged with the record before signing. */
+    readingEvidence?: import('./types').ReadingEvidence;
+    /** Staff member present when signed on a studio device, in person. */
+    witnessedBy?: string;
+}
+
+export interface SignoffRecord {
+    status: 'pending' | 'sent' | 'signed' | 'disputed';
+    token?: string;
+    sentAt?: any;
+    signedAt?: any;
+    signedBy?: string;
+    tcAcknowledgedAt?: number;
+    tcRef?: string;
+    clientName?: string;
+    clientEmail?: string;
+    ipAddress?: string;
+    refId?: string;
+    signatureType?: 'draw' | 'type' | 'upload' | 'manual_override';
+    signatureDataUrl?: string;
+    docket?: DigitalSignatureDocket;
+    manualOverride?: ManualOverrideMeta;
 }
 
 export interface ProjectContext {
@@ -491,16 +579,25 @@ export interface ProjectContext {
     rooms: Room[];
     adHocItems?: Item[];
     ceilingHeight?: number;
+    takeoff?: {
+        defaultHeightFt?: number;
+        statedCarpetSft?: number;
+        conventions?: Partial<import('./lib/takeoff').TakeoffConventions>;
+        computedAt?: number;
+    };
     designFee?: number;
     designFeeType?: DesignFeeType;
     designScope?: DesignScope;
     propertyStatus?: PropertyStatus;
     proposalType?: ProposalType;
+    proposalMode?: 'single' | 'tiered';
     gstRate?: number;
     theme?: string; // e.g., 'Modern Minimalist', 'Japandi'
     clientName?: string;
     clientEmail?: string;
     clientPhone?: string;
+    activeProposalFormat?: 'classic' | 'booklet';
+    showScopePricing?: boolean;
     coverStyle?: 'minimal' | 'bold' | 'photo'; // Newly added property
     logoImage?: string;
     logoHeight?: number;
@@ -518,33 +615,12 @@ export interface ProjectContext {
     onboardingContent?: OnboardingContent;
     proposalDecision?: ProposalDecision;
     contractContent?: ContractContent;
-    contractSignoff?: {
-        status: 'pending' | 'sent' | 'signed' | 'disputed';
-        token?: string;
-        sentAt?: any;
-        signedAt?: any;
-        clientName?: string;
-        ipAddress?: string;
-        refId?: string;
-    };
-    handoverSignoff?: {
-        status: 'pending' | 'sent' | 'signed' | 'disputed';
-        token?: string;
-        sentAt?: any;
-        signedAt?: any;
-        clientName?: string;
-        ipAddress?: string;
-        refId?: string;
-    };
-    designAgreementSignoff?: {
-        status: 'pending' | 'sent' | 'signed' | 'disputed';
-        token?: string;
-        sentAt?: any;
-        signedAt?: any;
-        clientName?: string;
-        ipAddress?: string;
-        refId?: string;
-    };
+    contractSignoff?: SignoffRecord;
+    executionSignoff?: SignoffRecord;
+    handoverSignoff?: SignoffRecord;
+    designAgreementSignoff?: SignoffRecord;
+    proposalSignoff?: SignoffRecord;
+    termsSignoff?: SignoffRecord;
     floorplanImage?: string;
     paymentMilestones?: PaymentMilestone[];
     designPaymentStages?: {
@@ -562,7 +638,12 @@ export interface ProjectContext {
     activeProposalMode?: ProposalType;
     electricalPointsPlan?: { id: string; roomId: string; roomName: string; item: string; qty: number; notes: string }[];
     assignedSupervisors?: string[]; // Array of team member IDs or emails
+    qualityChecklist?: QualityChecklistState;
     
+    // Project tagging & classification
+    isDummy?: boolean; // If true, explicitly marked as dummy/sample/demo project. If false, explicitly marked as actual client project.
+    projectCategory?: 'actual' | 'dummy'; // Explicit project category classification
+
     // Execution Intelligence Fields
     sofFreezeDate?: string;
     targetHandoverDate?: string;
@@ -584,7 +665,7 @@ export interface ProjectContext {
         total: number;
         pct: number;
         active: number;
-        phaseProgress: { done: number; total: number }[];
+        phaseProgress: { done: number; total: number; pct?: number }[];
     };
     
     // Status-Driven BOQ Totals (Calculated by Cloud Function)
@@ -615,12 +696,47 @@ export interface ProjectContext {
     termsDockets?: TermsDocket[];
     paymentSchedules?: PaymentSchedule[];
     lifecycle?: ProjectLifecycle;
+    /** Issued documents, clause queries and view stamps. See documentIssueEngine. */
+    documents?: ProjectDocumentState;
     engagement?: ProjectEngagement;
     weeklyReportCommentaries?: Record<string, string>;
-    weeklyPulseReports?: WeeklyPulseReport[];
     weeklyRoomProgress?: Record<string, Record<string, { progress: number; stage: string }>>;
     weeklyDrawingProgress?: Record<string, Record<string, string>>;
+    itemExecutionStatuses?: Record<string, 'pending' | 'in_progress' | 'completed'>;
     executionApprovedByFFDS?: boolean;
+    autoStageCompletion?: boolean;
+    /** Design → Execution handoff checkpoint (soft gate). Single source of truth. */
+    designGate?: DesignGateState;
+    /** Human-readable audit trail of meaningful project changes (capped ring buffer). */
+    history?: HistoryEvent[];
+    procurementModes?: Record<string, ProcurementMode>;
+    weeklyReports?: WeeklyReport[];
+    snagList?: SnagItem[];
+    learnedSnags?: Array<{ text: string; severity: 'low' | 'medium' | 'high'; count: number }>;
+}
+
+export interface QualityChecklistState {
+    checkedState: Record<string, Record<string, boolean>>; // roomId -> checkId -> checked (boolean)
+    elecVerified: Record<string, boolean>; // roomId -> checked (boolean)
+    customChecks?: Array<{ id: string; roomId: string; label: string; checked: boolean }>;
+    notesState?: Record<string, string>; // roomId -> note text
+    naState?: Record<string, Record<string, boolean>>; // roomId -> checkId -> isNA (boolean)
+}
+
+export interface SnagItem {
+    id: string;
+    roomId: string;
+    roomName: string;
+    description: string;
+    severity: 'low' | 'medium' | 'high';
+    status: 'open' | 'in_progress' | 'resolved' | 'verified';
+    raisedBy: 'designer' | 'site_supervisor' | 'client' | 'owner';
+    raisedAt: number;
+    resolvedAt?: number;
+    resolvedBy?: string;
+    notes?: string;
+    image?: string;
+    assignedTo?: string;
 }
 
 export interface SiteUpdateRecord {
@@ -683,6 +799,7 @@ export interface Item {
     margin: number;
     // Optional derived properties if used in certain contexts
     totalCost?: number;
+    areaMultiplierCoefficient?: number;
 }
 
 export interface LumpsumBreakdownItem {
@@ -736,6 +853,7 @@ export interface BoqItem {
     calcMultiplier?: number;
     // Trust-First Revision System Fields
     baseRate?: number;
+    baseLabor?: number;
     selectedRate?: number;
     inclusions?: string[];
     exclusions?: string[];
@@ -754,10 +872,21 @@ export interface BoqItem {
     rateSnapshotAt?: any | null; // Timestamp
     commercialNote?: string;
     successorItemId?: string | null;
+
+    // Custom Overrides & Smart Multipliers
+    name?: string;
+    specs?: string;
+    materials?: number;
+    labor?: number;
+    areaMultiplierCoefficient?: number;
 }
 
-export interface FullBoqItem extends Item, BoqItem {
-    // Merged properties from Item and BoqItem
+export interface FullBoqItem extends Omit<Item, 'name' | 'specs' | 'materials' | 'labor'>, Omit<BoqItem, 'name' | 'specs' | 'materials' | 'labor'> {
+    // Merged properties with resolved conflicts
+    name: string;
+    specs: string;
+    materials: number;
+    labor: number;
     category?: string;
 }
 
@@ -773,6 +902,100 @@ export interface ProjectTask {
     linkedMaterialIds: string[];
     description?: string;
     room?: string;
+}
+
+// ---------------------------------------------------------------------------
+// SCHEDULE — one dependency graph across the whole project lifecycle.
+//
+// Replaces three parallel models: TimelinePhase (AI-generated, startDay-based),
+// TimelinePhaseData (Firestore design steps) and ProjectTask (rich, but never
+// called by anything). Durations are WORKING days; the calendar decides what
+// that means in real dates, per Execution Agreement clause 5.4.2.
+// ---------------------------------------------------------------------------
+export type ScheduleTaskKind = 'design' | 'procurement' | 'execution' | 'milestone';
+export type ScheduleGate = 'sof' | 'gfc' | 'payment' | 'site';
+export type ScheduleStatus = 'pending' | 'in_progress' | 'completed' | 'blocked';
+
+/** Non-working days. Sundays and 2nd Saturdays are the Indian site norm. */
+export interface WorkCalendar {
+    /** Mon..Sun — true = a working day. */
+    workWeek: boolean[];
+    observeSecondSaturday: boolean;
+    holidays: { fromISO: string; days: number; label: string }[];
+}
+
+export interface ScheduleTask {
+    id: string;
+    title: string;
+    kind: ScheduleTaskKind;
+    trade?: string;
+    room?: string;
+    /** Links an execution task to the bundle whose gates control it. */
+    bundleId?: string;
+    dependencies: string[];
+    /** Duration in WORKING days. Milestones use 0. */
+    workDays: number;
+    /** Earliest the task may start regardless of dependencies (ISO date). */
+    notBeforeISO?: string;
+    /** Frozen when the Design Gate closes; absent until then. */
+    baselineStartISO?: string;
+    baselineWorkDays?: number;
+    actualStartISO?: string;
+    actualEndISO?: string;
+    status: ScheduleStatus;
+    /** Gate state for execution tasks. A false gate blocks the start. */
+    gates?: Partial<Record<ScheduleGate, boolean>>;
+    /** Procurement: order-by is derived by pulling this back from the start. */
+    leadTimeDays?: number;
+    /** A date promised to a client or vendor — recompute reports, never moves. */
+    pinned?: boolean;
+    milestoneLabel?: string;
+    note?: string;
+}
+
+/** A recorded disruption. Scope is per trade or the whole site. */
+export interface ScheduleHold {
+    id: string;
+    scope: 'site' | 'trade';
+    /** Trade name when scope is 'trade'. */
+    target?: string;
+    fromISO: string;
+    /** Working days lost. */
+    workDays: number;
+    reason: string;
+    note?: string;
+    by?: string;
+    at: number;
+    liftedAt?: number;
+}
+
+/**
+ * A point-in-time event drawn on the schedule — a meeting, a site visit, a
+ * signed decision. Not a task: it has no duration and nothing depends on it,
+ * but it explains *why* a bar moved when you look back at the project.
+ */
+export interface ScheduleMarker {
+    id: string;
+    atISO: string;
+    kind: 'site_visit' | 'client_meeting' | 'mom' | 'decision';
+    title: string;
+    detail?: string;
+    /** MOM-004, or the visit's phase title. */
+    ref?: string;
+    /** Open action items carried by the meeting. */
+    openActions?: number;
+}
+
+export interface ProjectSchedule {
+    tasks: ScheduleTask[];
+    holds: ScheduleHold[];
+    calendar: WorkCalendar;
+    /** Frozen at Design Gate close; null means no baseline yet. */
+    baselineAt: number | null;
+    targetHandoverISO?: string;
+    projectStartISO?: string;
+    /** Meetings and visits, loaded from their own collections. Read-only here. */
+    markers?: ScheduleMarker[];
 }
 
 export interface MarginSuggestion {
@@ -818,6 +1041,14 @@ export interface DrawingRound {
     status: "not_issued" | "not_started" | "issued" | "in_review" | "approved" | "site_hold";
 }
 
+export interface DrawingComment {
+    id: string;
+    text: string;
+    author: string;
+    at: number;
+    kind?: 'note' | 'client';
+}
+
 export interface DrawingTrackerItem {
     id: string;
     name: string;
@@ -829,6 +1060,9 @@ export interface DrawingTrackerItem {
     approvedAt: number | null;
     rounds: DrawingRound[];
     roomName?: string; // Optional room contextualization based on triggers
+    driveUrl?: string; // AutoCAD, PDF or Google Drive URL link
+    targetDate?: string; // Target Release Date (YYYY-MM-DD)
+    priority?: 'high' | 'normal' | 'low';
     gfc?: {
         status: "pending" | "issued" | "superseded";
         issuedAt: number | null;
@@ -836,6 +1070,7 @@ export interface DrawingTrackerItem {
         boqVersionRef: string | null;
         clientApprovalRef: any | null;
     };
+    comments?: DrawingComment[];
 }
 
 export interface AggregatedCategory {
@@ -868,6 +1103,9 @@ export interface ProposalTier {
     fullBoq?: FullBoqItem[]; // Optional extended prop for views
     executionTotal?: number; // Optional extended prop for views
     groupedBoq?: { [key: string]: FullBoqItem[] }; // Optional extended prop for views
+    parentTierId?: string; // Links this tier to its parent for diffs
+    lifecycleTag?: 'Draft' | 'Approved while booking' | 'Revised after design' | 'Superseded' | 'Current contract'; 
+    assumedMargin?: number; // Used for What-if scenarios and discount headroom
 }
 
 export interface ComparisonRow {
@@ -1023,6 +1261,41 @@ export interface DesignGateDoc {
     stage3InvoiceId?: string | null;
     readinessScore: number;
     lastAssessedAt?: any;
+    override?: {
+        approvedBy: string;
+        reason: string;
+        approvedAt: number;
+    } | null;
+}
+
+// ---------------------------------------------------------------------------
+// Design Gate — the Design → Execution handoff checkpoint. Soft-gate model:
+// the checklist is advisory (never hard-locks Execution); the only hard lock
+// is on BOQ rates after an explicit freeze. Stored on ProjectContext.designGate
+// and persisted through dbService, so it works in Local and Cloud alike.
+// ---------------------------------------------------------------------------
+export interface DesignGateItem {
+    key: string;
+    /** Whether the studio has confirmed this item manually. */
+    done: boolean;
+    confirmedAt?: number | null;
+    confirmedBy?: string | null;
+    /** Optional supporting reference — e.g. client sign-off email/WhatsApp link. */
+    reference?: string | null;
+    /** Manual override state if user explicitly forced checked or unchecked */
+    manualOverride?: 'checked' | 'unchecked' | null;
+}
+
+export interface DesignGateState {
+    items: DesignGateItem[];
+    activated: boolean;
+    activatedAt?: number | null;
+    activatedBy?: string | null;
+    stage3InvoiceId?: string | null;
+    /** Recorded when the user activates with items still outstanding (soft-override). */
+    proceedAnyway?: { reason: string; by: string; at: number } | null;
+    /** Audit trail of design-phase reopens after a premature freeze. */
+    reopened?: { reason: string; by: string; at: number }[];
 }
 
 export interface ExecutionBundleGate {
@@ -1154,9 +1427,38 @@ export interface GeneratedRender {
     style: string;
 }
 
+export interface CanonicalProjectRecord {
+    version: number;
+    approvedAt: number;
+    approvedBy?: string;
+    projectContext: ProjectContext; // The official snapshot of project details
+}
+
+export interface CanonicalBOQ {
+    version: number;
+    approvedAt: number;
+    approvedBy?: string;
+    items: FullBoqItem[]; // The officially approved BOQ baseline
+    totalValue: number;
+}
+
+export interface CanonicalPaymentLedger {
+    milestones: PaymentMilestone[];
+    paymentsReceived: { id: string; amount: number; date: string; reference?: string }[];
+    totalPaid: number;
+    totalDue: number;
+}
+
+export interface CanonicalStatus {
+    stage: 'lead' | 'design' | 'execution' | 'handover' | 'completed' | 'paused' | 'lost';
+    subState?: string;
+    lastUpdatedAt: number;
+}
+
 export interface FullProjectData {
     id: string;
     tenantId?: string; // Multi-tenant isolation
+    architecture?: 'legacy' | 'canonical'; // For differentiating old/new implementations
     lastModified: number;
     context: ProjectContext;
     tiers: ProposalTier[];
@@ -1168,6 +1470,14 @@ export interface FullProjectData {
     decisionBrainOutput: DecisionBrainOutput | null;
     renders?: GeneratedRender[];
     totalChangeRequestCost?: number;
+    
+    // Canonical Data Models
+    canonical?: {
+        projectRecord?: CanonicalProjectRecord;
+        boq?: CanonicalBOQ;
+        paymentLedger?: CanonicalPaymentLedger;
+        status?: CanonicalStatus;
+    };
 }
 
 export interface ChatMessage {
@@ -1176,7 +1486,7 @@ export interface ChatMessage {
     timestamp: number;
 }
 
-export type SiteVisitType = "site_visit" | "client_meeting";
+export type SiteVisitType = "site_visit" | "client_meeting" | "internal_meeting" | "vendor_meeting" | "measurement_survey";
 
 export interface MOMAttendee {
     name: string;
@@ -1439,4 +1749,286 @@ export interface ProjectEngagement {
   acknowledgedVia: "WhatsApp" | "email" | null;
   lockedSnapshot: any | null;
   history?: any[];
+}
+
+// ---------------------------------------------------------------------------
+// PROCUREMENT — purchase orders raised against BOQ-derived budget envelopes.
+// An "envelope" is a room × category budget computed from the BOQ; POs are
+// tagged to one. Nothing here stores a budget or a sell price.
+// ---------------------------------------------------------------------------
+
+/** How a package is bought. Split = separate material and labour vendors.
+ *  Turnkey = one subcontractor covers material, hardware and labour. */
+export type ProcurementMode = 'split' | 'turnkey';
+
+/** What a given purchase order covers. */
+export type POScope = 'material' | 'labour' | 'turnkey';
+
+export type POStatus =
+  | 'draft'
+  | 'pending_approval'
+  | 'issued'
+  | 'received'
+  | 'closed'
+  | 'cancelled';
+
+export type POPaymentType = 'advance' | 'part' | 'final';
+
+export interface Vendor {
+    id: string;
+    name: string;
+    /** A vendor may supply more than one thing. */
+    supplies: POScope[];
+    categories?: string[];        // matches Item.cat, e.g. 'Carpentry'
+    phone?: string;
+    email?: string;
+    gstin?: string;
+    paymentTerms?: string;        // free text, e.g. "50% advance"
+    defaultLeadDays?: number;
+    notes?: string;
+    active: boolean;
+    createdAt: number;
+}
+
+export interface POLine {
+    id: string;
+    description: string;
+    unit?: string;
+    qty: number;
+    rate: number;
+    amount: number;               // qty × rate, stored so a PO prints identically forever
+    materialSelectionId?: string; // optional link back to a MaterialSelection
+}
+
+export interface POPayment {
+    id: string;
+    type: POPaymentType;
+    amount: number;
+    paidOn: string;               // ISO date
+    mode?: string;                // 'bank' | 'upi' | 'cash' | 'cheque'
+    reference?: string;
+    note?: string;
+}
+
+export interface PurchaseOrder {
+    id: string;
+    poNumber: string;
+    projectId: string;
+    vendorId: string;
+    vendorName: string;           // denormalised so a printed PO never changes
+    scope: POScope;
+    status: POStatus;
+
+    /** Envelope tag — roomId is the room NAME, matching BoqItem.roomId convention. */
+    roomId: string;
+    category: string;
+
+    lines: POLine[];
+    subtotal: number;
+    taxRate: number;              // percent, e.g. 18
+    total: number;                // subtotal + tax, stored
+
+    expectedDelivery?: string;    // ISO date
+    terms?: string;
+    notes?: string;
+    issuedAt?: number | null;
+
+    // Lightweight receipt — deliberately not a GRN document
+    receivedAt?: number | null;
+    receivedNote?: string | null;
+
+    // The vendor's actual bill. A bill is fields on the PO, not its own object.
+    billNumber?: string | null;
+    billAmount?: number | null;
+    billDate?: string | null;
+
+    /** Payments attach to the PO, so an advance can exist before any bill. */
+    payments: POPayment[];
+
+    createdBy?: string;
+    approvedBy?: string | null;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface WeeklyReport {
+    id: string;
+    weekOf: string;             // ISO date of the Monday
+    weekNumber: number;
+    thisWeek: string;           // narrative
+    nextWeek: string;
+    roomProgress?: Record<string, { progress: number; stage: string }>;
+    drawingProgress?: any;
+    photos: string[];           // data URLs or storage refs
+    asks: { kind: 'decision' | 'payment'; label: string; detail: string }[];
+    publishedAt?: number | null;
+    sharedVia?: string[];
+}
+
+
+// ---------------------------------------------------------------------------
+// CLIENT DOCUMENTS — the record a client is actually shown and asked to sign.
+//
+// A signature is worth exactly as much as the evidence that the signer read the
+// record. Everything below exists to produce that evidence: an immutable, hashed
+// snapshot of what was released, proof of how it was read, and a channel for the
+// client to question a clause rather than simply go quiet.
+// ---------------------------------------------------------------------------
+
+/** Every client-facing document in the engagement. */
+export type ClientDocumentKind =
+  | 'terms_docket'
+  | 'payment_schedule'
+  | 'execution_agreement'
+  | 'onboarding_kit'
+  | 'handover_docket'
+  | 'variation_order';
+
+/** Lifecycle of one document, from the client's point of view. */
+export type DocumentState =
+  | 'draft'      // studio is still editing; not in the client's vault
+  | 'issued'     // released, never opened
+  | 'viewed'     // client has opened the current issue
+  | 'queried'    // client asked about a clause — ball is with the studio
+  | 'amended'    // re-issued after the client last read it
+  | 'signed'     // client executed
+  | 'executed';  // studio counter-signed
+
+/**
+ * A section the client must acknowledge individually before the signature pad
+ * unlocks. Keep this list short — six is a sensible ceiling. Ticking through
+ * fifteen boxes of boilerplate trains people to click without reading, which
+ * destroys the very evidence this exists to create.
+ */
+export interface MaterialSection {
+    /** Matches TermsSection.n or a clause ref such as "4.2". */
+    ref: string;
+    title: string;
+    /** Plain-English restatement shown beside the tick box. */
+    plainSummary: string;
+    /** Seconds the section must be on screen before the box enables. Default 4. */
+    minDwellSeconds?: number;
+}
+
+/**
+ * An immutable release. The client reads and signs THIS — never a live render
+ * that would silently change when Studio Settings are edited next month.
+ */
+export interface DocumentIssue {
+    id: string;
+    kind: ClientDocumentKind;
+    /** Increments on every re-issue. */
+    version: number;
+    /** Human reference, e.g. FFDS-TD-2026-418. */
+    reference: string;
+    issuedAt: number;
+    issuedBy: string;
+    /** Frozen payload the renderer consumes. Shape depends on `kind`. */
+    snapshot: any;
+    /** Deterministic hash of `snapshot`. Printed on the signature certificate. */
+    contentHash: string;
+    materialSections: MaterialSection[];
+    /** Set when this issue replaces an earlier one — drives the redline. */
+    supersedes?: string | null;
+    supersededAt?: number | null;
+
+    /**
+     * The client's signature on THIS issue.
+     *
+     * A signed document is never edited in place — that would destroy the
+     * evidence chain the whole reading-room design exists to create. Every
+     * issue therefore carries its own signature, which is what lets an
+     * addendum be signed separately without disturbing the agreement it varies.
+     */
+    clientSignature?: DigitalSignatureDocket | null;
+    /** Studio-side execution. An agreement signed by one party is a request. */
+    counterSignature?: DigitalSignatureDocket | null;
+
+    // ── Addendum chain ────────────────────────────────────────────────────
+    /**
+     * Issue id of the SIGNED document this one varies. Unlike `supersedes`,
+     * the parent stays live and signed — an addendum sits alongside it,
+     * exactly as a contract variation does on paper.
+     */
+    addendumTo?: string | null;
+    /** Clause refs in the parent that this addendum changes. */
+    amendsClauses?: string[];
+    /** Plain-English statement of what is changing, and why. */
+    amendmentSummary?: string | null;
+
+    // ── Delivery ──────────────────────────────────────────────────────────
+    /** How the studio sent it, for the audit trail. */
+    releasedVia?: ('portal' | 'email' | 'whatsapp')[];
+    releaseNote?: string | null;
+    /** Nudges the studio has sent since release. */
+    reminders?: { at: number; by: string; via: string }[];
+
+    /**
+     * Set when an issue is retired without being signed — currently used to
+     * retire snapshots built by the old rebuilt-document renderers. The issue
+     * stays in history so the trail still shows what the client was sent.
+     */
+    withdrawnAt?: number | null;
+    withdrawnReason?: string | null;
+}
+
+/** Proof the signatory actually engaged with the record. */
+export interface ReadingEvidence {
+    issueId: string;
+    contentHash: string;
+    openedAt: number;
+    signedAt: number;
+    totalDwellSeconds: number;
+    maxScrollPercent: number;
+    sectionsAcknowledged: {
+        ref: string;
+        acknowledgedAt: number;
+        dwellSeconds: number;
+    }[];
+    documentDownloaded: boolean;
+    device: string;
+    viewport: string;
+}
+
+/**
+ * A question against one clause. The alternative to a client silently not
+ * signing — which tells the studio nothing about why.
+ */
+export interface ClauseQuery {
+    id: string;
+    issueId: string;
+    documentKind: ClientDocumentKind;
+    clauseRef: string;
+    /** Verbatim, so the studio sees the exact words the client was reading. */
+    clauseExcerpt: string;
+    raisedBy: string;
+    raisedAt: number;
+    question: string;
+    status: 'open' | 'answered' | 'amended' | 'withdrawn';
+    replies: {
+        at: number;
+        by: string;
+        side: 'studio' | 'client';
+        text: string;
+    }[];
+    /** Set when the studio resolved it by re-issuing the document. */
+    resolvedByIssueId?: string | null;
+}
+
+/** Hangs off ProjectContext under `documents`. */
+export interface ProjectDocumentState {
+    issues: DocumentIssue[];
+    queries: ClauseQuery[];
+    /** kind → last time the client opened the current issue. */
+    lastViewedAt?: Partial<Record<ClientDocumentKind, number>>;
+}
+
+/** One field-level difference between two issues, for the redline. */
+export interface IssueDiffEntry {
+    path: string;
+    /** Client-readable, e.g. "Clause 4.2 — payment grace period". */
+    label: string;
+    before: string;
+    after: string;
+    changeType: 'added' | 'removed' | 'changed';
 }

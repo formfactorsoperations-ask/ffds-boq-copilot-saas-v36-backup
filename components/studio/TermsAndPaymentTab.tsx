@@ -130,6 +130,15 @@ export default function TermsAndPaymentTab() {
 
     return (
         <div className="space-y-8 pb-16">
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-start gap-3">
+                <div className="mt-0.5">
+                    <CheckCircle2 className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                    <h4 className="font-bold">Defaults for new projects — existing projects are not affected.</h4>
+                    <p className="text-sm mt-1">Changes made here will only apply to new projects created after saving. Per-project schedules are never overridden by template changes.</p>
+                </div>
+            </div>
             
             {/* --- TERMS EDITOR --- */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
@@ -193,7 +202,7 @@ export default function TermsAndPaymentTab() {
                                     <button onClick={() => { const l = [...terms.snagCategories]; l.splice(idx,1); updateTerms('snagCategories', l); }} className="text-red-400 hover:text-red-600 p-2"><Trash2 className="w-4 h-4" /></button>
                                 </div>
                             ))}
-                            <button onClick={() => updateTerms('snagCategories', [...terms.snagCategories, {label:'', resolveDays: 0}])} className="mt-2 flex items-center gap-2 text-sm text-[#1e3a8a] font-bold px-4 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100"><Plus className="w-4 h-4" /> Add Category</button>
+                            <button onClick={() => updateTerms('snagCategories', [...terms.snagCategories, {label:'', resolveDays: 0}])} className="mt-2 flex items-center gap-2 text-sm text-[#1e3a8a] font-bold px-4 py-2 rounded-lg bg-sky-50 hover:bg-sky-100"><Plus className="w-4 h-4" /> Add Category</button>
                         </div>
                     </div>
 
@@ -208,7 +217,7 @@ export default function TermsAndPaymentTab() {
                                     <button onClick={() => { const l = [...terms.warrantyPeriods]; l.splice(idx,1); updateTerms('warrantyPeriods', l); }} className="text-red-400 hover:text-red-600 p-2"><Trash2 className="w-4 h-4" /></button>
                                 </div>
                             ))}
-                            <button onClick={() => updateTerms('warrantyPeriods', [...terms.warrantyPeriods, {trade:'', months: 0}])} className="mt-2 flex items-center gap-2 text-sm text-[#1e3a8a] font-bold px-4 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100"><Plus className="w-4 h-4" /> Add Warranty</button>
+                            <button onClick={() => updateTerms('warrantyPeriods', [...terms.warrantyPeriods, {trade:'', months: 0}])} className="mt-2 flex items-center gap-2 text-sm text-[#1e3a8a] font-bold px-4 py-2 rounded-lg bg-sky-50 hover:bg-sky-100"><Plus className="w-4 h-4" /> Add Warranty</button>
                         </div>
                     </div>
 
@@ -229,7 +238,7 @@ export default function TermsAndPaymentTab() {
                                 const newSections = [...(terms.sections || [])];
                                 newSections.push({ n: newSections.length + 1, title: 'New Section', blocks: [] });
                                 updateTerms('sections', newSections);
-                            }} className="flex items-center gap-2 text-sm text-[#1e3a8a] font-bold px-4 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100">
+                            }} className="flex items-center gap-2 text-sm text-[#1e3a8a] font-bold px-4 py-2 rounded-lg bg-sky-50 hover:bg-sky-100">
                                 <Plus className="w-4 h-4" /> Add Section
                             </button>
                         </div>
@@ -271,7 +280,7 @@ export default function TermsAndPaymentTab() {
                                         {sec.blocks.map((block, bIdx) => (
                                             <div key={bIdx} className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-3 relative">
                                                 <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2">
-                                                    <span className="text-xs font-bold uppercase text-[#1e3a8a] bg-indigo-50 px-2 py-1 rounded">{block.type}</span>
+                                                    <span className="text-xs font-bold uppercase text-[#1e3a8a] bg-sky-50 px-2 py-1 rounded">{block.type}</span>
                                                     <button onClick={() => {
                                                         const list = [...terms.sections];
                                                         list[sIdx].blocks.splice(bIdx, 1);
@@ -382,7 +391,7 @@ export default function TermsAndPaymentTab() {
                     <div className="flex gap-2">
                         <button
                             onClick={() => setPaymentStr(JSON.parse(JSON.stringify(FFDS_PAYMENT_STRUCTURE_DEFAULTS)))}
-                            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition"
+                            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-sky-200 text-[#0055B3] hover:bg-sky-50 transition"
                         >
                             Load FFDS Defaults
                         </button>
@@ -420,7 +429,7 @@ export default function TermsAndPaymentTab() {
                                     </div>
                                 </div>
                             ))}
-                            <button onClick={() => addPaymentStage('designStages')} className="flex items-center gap-2 text-sm text-[#1e3a8a] font-bold px-4 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100"><Plus className="w-4 h-4" /> Add Design Stage</button>
+                            <button onClick={() => addPaymentStage('designStages')} className="flex items-center gap-2 text-sm text-[#1e3a8a] font-bold px-4 py-2 rounded-lg bg-sky-50 hover:bg-sky-100"><Plus className="w-4 h-4" /> Add Design Stage</button>
                         </div>
                     </div>
 
@@ -448,7 +457,7 @@ export default function TermsAndPaymentTab() {
                                     </div>
                                 </div>
                             ))}
-                            <button onClick={() => addPaymentStage('executionStages')} className="flex items-center gap-2 text-sm text-[#1e3a8a] font-bold px-4 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100"><Plus className="w-4 h-4" /> Add Execution Stage</button>
+                            <button onClick={() => addPaymentStage('executionStages')} className="flex items-center gap-2 text-sm text-[#1e3a8a] font-bold px-4 py-2 rounded-lg bg-sky-50 hover:bg-sky-100"><Plus className="w-4 h-4" /> Add Execution Stage</button>
                         </div>
                     </div>
 
@@ -498,7 +507,7 @@ export default function TermsAndPaymentTab() {
                     onClick={handleSave} 
                     disabled={!dValid || !eValid || saveStatus === 'saving'}
                     className={`px-8 py-3 rounded-xl font-bold text-white transition-all shadow-md active:scale-95 flex items-center gap-2
-                        ${(!dValid || !eValid) ? 'bg-slate-300 cursor-not-allowed text-slate-500' : 'bg-[#1e3a8a] hover:bg-indigo-800'}`}
+                        ${(!dValid || !eValid) ? 'bg-slate-300 cursor-not-allowed text-slate-500' : 'bg-[#1e3a8a] hover:bg-sky-800'}`}
                 >
                     {saveStatus === 'saving' ? 'Saving...' : 'Save Terms & Payment Structure'}
                 </button>

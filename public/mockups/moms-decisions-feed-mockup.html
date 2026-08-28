@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Execution & Ops - Full UI Impact & MOMs/Feed Overhaul</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons (Vanilla) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #F8FAFC;
+    }
+    .active-pillar {
+      background-color: #0066CC;
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(0, 102, 204, 0.25);
+      font-weight: 700;
+    }
+    .inactive-pillar {
+      color: #475569;
+    }
+    .inactive-pillar:hover {
+      color: #0F172A;
+      background-color: rgba(255, 255, 255, 0.9);
+    }
+    .active-subpill {
+      background-color: #0066CC;
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(0, 102, 204, 0.2);
+    }
+    .inactive-subpill {
+      color: #64748B;
+    }
+    .inactive-subpill:hover {
+      color: #0F172A;
+      background-color: rgba(255, 255, 255, 0.85);
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="text-slate-800 antialiased p-3 sm:p-6 lg:p-8">
+
+  <div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- Top Design Impact Overview Banner -->
+    <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-6 shadow-lg border border-slate-700/80">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="bg-[#0066CC] text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">Interactive UX Impact Mockup</span>
+            <span class="text-xs text-slate-300 font-medium">Stage 5: Execution & Ops System</span>
+          </div>
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white">How the Overhaul Fits Seamlessly into Execution & Ops</h1>
+          <p class="text-xs sm:text-sm text-slate-300 max-w-3xl mt-1 leading-relaxed">
+            See how the entire <strong>Execution & Ops</strong> screen behaves with the proposed overhaul. <strong>Zero breaking changes</strong> to the other 4 pillars, while transforming the cluttered 3-tier MOMs tab into a clean, 1-tier communication hub.
+          </p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button onclick="switchPillar('moms')" class="px-4 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-xs font-bold rounded-xl text-white shadow-sm transition-all flex items-center gap-2">
+            <i data-lucide="eye" class="w-4 h-4"></i> View Overhauled MOMs/Feed
+          </button>
+          <button onclick="switchPillar('workspace')" class="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-xs font-semibold rounded-xl text-white transition-all flex items-center gap-2 border border-white/10">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i> View Control Room
+          </button>
+        </div>
+      </div>
+
+      <!-- Comparison Cards: Before vs After Impact -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-5 pt-5 border-t border-slate-700/60 text-xs">
+        <div class="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/60 flex flex-col justify-between">
+          <div>
+            <div class="font-bold text-sky-300 flex items-center gap-1.5 mb-1">
+              <i data-lucide="layout-grid" class="w-4 h-4 text-[#0066CC]"></i> 1. Top 5-Pillar Nav Preserved
+            </div>
+            <p class="text-slate-300 text-[11px] leading-relaxed">The main 5 pillars (Site Control Room, 3D Renders, MOMs/Feed, Quality/Snags, Procurement) remain unchanged and stable.</p>
+          </div>
+          <span class="text-[10px] text-emerald-400 font-bold mt-2">✓ 100% Navigation Compatibility</span>
+        </div>
+
+        <div class="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/60 flex flex-col justify-between">
+          <div>
+            <div class="font-bold text-amber-300 flex items-center gap-1.5 mb-1">
+              <i data-lucide="layers" class="w-4 h-4 text-amber-400"></i> 2. Sub-Tab Nesting Flattened (1-Tier Nav)
+            </div>
+            <p class="text-slate-300 text-[11px] leading-relaxed">No more nested sub-sub menus. 4 distinct, un-cluttered tabs: <strong>Daily Feed</strong>, <strong>Weekly Pulse Reports</strong> (with <em>+ Issue Week Report</em> & AI Draft), <strong>MOMs</strong>, and <strong>Decisions</strong>.</p>
+          </div>
+          <span class="text-[10px] text-amber-300 font-bold mt-2">✓ 100% Feature Retention & Zero Clutter</span>
+        </div>
+
+        <div class="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/60 flex flex-col justify-between">
+          <div>
+            <div class="font-bold text-emerald-300 flex items-center gap-1.5 mb-1">
+              <i data-lucide="zap" class="w-4 h-4 text-emerald-400"></i> 3. Immediate Daily Operations
+            </div>
+            <p class="text-slate-300 text-[11px] leading-relaxed">Site supervisors & designers can post photos, check room milestones, or log meeting items in 1 click.</p>
+          </div>
+          <span class="text-[10px] text-emerald-300 font-bold mt-2">✓ Instant 1-Click Posting</span>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- FULL APPLICATION SHELL SIMULATION -->
+    <div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+      
+      <!-- Top Project Header & Breadcrumbs -->
+      <div class="p-4 sm:p-6 border-b border-slate-100 bg-slate-50/50 space-y-4">
+        
+        <!-- Project Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <button class="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 flex items-center gap-1">
+              <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i> Back
+            </button>
+            <div class="flex items-center gap-2">
+              <h2 class="text-sm sm:text-base font-extrabold text-slate-900">Test Project for T&C</h2>
+              <span class="text-xs text-slate-400">|</span>
+              <span class="text-xs text-slate-600">Client: <strong class="text-slate-800">Test Client</strong></span>
+              <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full">WON</span>
+              <span class="text-xs text-slate-500 font-medium">650 SQFT</span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <div class="bg-sky-50 text-[#0066CC] border border-sky-100 px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5">
+              <span>59% Onboarding Kit Sent</span>
+              <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stage Steps (1 to 6) -->
+        <div class="hidden md:flex items-center justify-between gap-1 text-[11px] font-semibold text-slate-400 pt-2 border-t border-slate-200/60 overflow-x-auto">
+          <div class="flex items-center gap-1.5 text-slate-500">
+            <span class="w-4 h-4 rounded-full bg-slate-200 text-[9px] flex items-center justify-center font-bold">1</span>
+            <span>Initial Consultation</span>
+          </div>
+          <div class="text-slate-300">—</div>
+          <div class="flex items-center gap-1.5 text-slate-500">
+            <span class="w-4 h-4 rounded-full bg-slate-200 text-[9px] flex items-center justify-center font-bold">2</span>
+            <span>Scope & Strategy</span>
+          </div>
+          <div class="text-slate-300">—</div>
+          <div class="flex items-center gap-1.5 text-slate-500">
+            <span class="w-4 h-4 rounded-full bg-slate-200 text-[9px] flex items-center justify-center font-bold">3</span>
+            <span>Proposal & Revisions</span>
+          </div>
+          <div class="text-slate-300">—</div>
+          <div class="flex items-center gap-1.5 text-slate-500">
+            <span class="w-4 h-4 rounded-full bg-slate-200 text-[9px] flex items-center justify-center font-bold">4</span>
+            <span>Agreement & Design</span>
+          </div>
+          <div class="text-slate-300">—</div>
+          <div class="flex items-center gap-1.5 bg-[#0066CC] text-white px-3 py-1 rounded-full shadow-xs">
+            <span class="w-4 h-4 rounded-full bg-white text-[#0066CC] text-[9px] flex items-center justify-center font-bold">5</span>
+            <span class="font-bold">Execution</span>
+          </div>
+          <div class="text-slate-300">—</div>
+          <div class="flex items-center gap-1.5 text-slate-400">
+            <span class="w-4 h-4 rounded-full bg-slate-100 text-[9px] flex items-center justify-center font-bold">6</span>
+            <span>Handover & Closeout</span>
+          </div>
+        </div>
+
+        <!-- Stage Secondary Tabs -->
+        <div class="flex items-center gap-2 pt-1">
+          <button class="bg-[#0066CC] text-white px-3.5 py-1.5 rounded-full text-xs font-bold shadow-xs">
+            • Execution & Ops
+          </button>
+          <button class="bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 px-3.5 py-1.5 rounded-full text-xs font-semibold">
+            Project Management & Client Portal
+          </button>
+          <button class="bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 px-3.5 py-1.5 rounded-full text-xs font-semibold">
+            SOF & Selections
+          </button>
+          <button class="bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 px-3.5 py-1.5 rounded-full text-xs font-semibold">
+            Scope Additions
+          </button>
+        </div>
+
+      </div>
+
+      <!-- MAIN STAGE 5 CONTAINER -->
+      <div class="p-4 sm:p-6 lg:p-8 space-y-6">
+
+        <!-- Stage 5 Header Title & Subtitle -->
+        <div class="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
+          <div>
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight">Execution & Ops</h1>
+            <p class="text-xs text-slate-500 font-medium mt-0.5">Site progress, trade packages and client updates</p>
+          </div>
+          <span class="text-xs text-slate-400 font-medium">Lodha Amara 2BHK &bull; Floor 14</span>
+        </div>
+
+        <!-- THE 5-PILLAR NAVIGATION BAR (Milky White Theme) -->
+        <div class="flex flex-wrap items-center bg-slate-50/90 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs w-full gap-1.5">
+          
+          <!-- Pillar 1: Site Control Room -->
+          <button id="pillar-btn-workspace" onclick="switchPillar('workspace')" class="inactive-pillar flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+            <span>Site Control Room</span>
+          </button>
+
+          <!-- Pillar 2: 3D Renders & Drawings -->
+          <button id="pillar-btn-vault" onclick="switchPillar('vault')" class="inactive-pillar flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer">
+            <i data-lucide="image" class="w-4 h-4 text-amber-500"></i>
+            <span>3D Renders & Drawings</span>
+          </button>
+
+          <!-- Pillar 3: MOMs, Decisions & Feed (OVERHAULED!) -->
+          <button id="pillar-btn-moms" onclick="switchPillar('moms')" class="active-pillar flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer relative">
+            <i data-lucide="message-square" class="w-4 h-4 text-sky-200"></i>
+            <span>MOMs, Decisions & Feed</span>
+            <span class="bg-amber-400 text-slate-900 text-[9px] font-black px-1.5 py-0.2 rounded-full uppercase tracking-widest ml-1">Overhauled</span>
+          </button>
+
+          <!-- Pillar 4: Quality & Snag List -->
+          <button id="pillar-btn-quality" onclick="switchPillar('quality')" class="inactive-pillar flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer">
+            <i data-lucide="clipboard-list" class="w-4 h-4 text-emerald-500"></i>
+            <span>Quality & Snag List</span>
+          </button>
+
+          <!-- Pillar 5: Procurement -->
+          <button id="pillar-btn-procurement" onclick="switchPillar('procurement')" class="inactive-pillar flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer">
+            <i data-lucide="indian-rupee" class="w-4 h-4 text-rose-500"></i>
+            <span>Procurement</span>
+          </button>
+
+        </div>
+
+
+        <!-- ========================================================================= -->
+        <!-- PILLAR 1 CONTENT: SITE CONTROL ROOM (Existing Workspace - Unchanged!) -->
+        <!-- ========================================================================= -->
+        <div id="pillar-content-workspace" class="hidden space-y-6">
+          
+          <div class="bg-slate-50/60 rounded-2xl border border-slate-200/80 p-5 space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="bg-sky-50 text-[#0066CC] border border-sky-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Site Control Room</span>
+                  <span class="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">7 Pending Checks</span>
+                </div>
+                <h3 class="text-xl font-bold text-slate-900 tracking-tight">Trade Packages & Site Readiness</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Track trade packages, gatekeeper checks, and site execution status.</p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                  <i data-lucide="zap" class="w-3.5 h-3.5"></i> Smart Auto-Unblock
+                </button>
+                <button class="bg-[#0066CC] text-white px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i> + Add Package
+                </button>
+              </div>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 pt-2">
+              <div class="bg-white p-3.5 rounded-xl border border-slate-200/70">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Packages</span>
+                <div class="text-xl font-extrabold text-slate-900 mt-1">7</div>
+                <span class="text-[10px] text-slate-400">29 BOQ items</span>
+              </div>
+              <div class="bg-white p-3.5 rounded-xl border border-slate-200/70">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Execution</span>
+                <div class="text-xl font-extrabold text-emerald-600 mt-1">0</div>
+                <span class="text-[10px] text-slate-400">On-site in progress</span>
+              </div>
+              <div class="bg-white p-3.5 rounded-xl border border-slate-200/70">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ready to Start</span>
+                <div class="text-xl font-extrabold text-amber-600 mt-1">0</div>
+                <span class="text-[10px] text-slate-400">All 4 gates cleared</span>
+              </div>
+              <div class="bg-white p-3.5 rounded-xl border border-slate-200/70">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gated / Blocked</span>
+                <div class="text-xl font-extrabold text-rose-600 mt-1">7</div>
+                <span class="text-[10px] text-rose-500 font-semibold">7 GFC &bull; 7 SOF</span>
+              </div>
+              <div class="bg-[#0066CC] text-white p-3.5 rounded-xl shadow-xs">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-sky-100">Total Deliverables QA</span>
+                <div class="text-xl font-extrabold text-white mt-1">0%</div>
+                <span class="text-[10px] text-sky-100 font-medium">Itemized QA</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-8 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+            [Trade Package Grid & BOQ Deliverables Table is preserved here without changes]
+          </div>
+
+        </div>
+
+
+        <!-- ========================================================================= -->
+        <!-- PILLAR 3 CONTENT: OVERHAULED MOMS, DECISIONS & FEED WORKSPACE -->
+        <!-- ========================================================================= -->
+        <div id="pillar-content-moms" class="space-y-6">
+
+          <!-- Clean Context Header & Direct 1-Click Action Bar -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="bg-sky-50 text-[#0066CC] border border-sky-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Communications HQ</span>
+                <span class="text-xs text-slate-400">Chronological & Real-time</span>
+              </div>
+              <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">Site Communications, MOMs & Client Approvals</h2>
+              <p class="text-xs text-slate-500 mt-0.5">Post daily site progress photos, review meeting minutes, and track signed client approvals.</p>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button id="btn-action-primary" class="bg-[#0066CC] hover:bg-[#0055B3] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer">
+                <i data-lucide="camera" class="w-4 h-4"></i>
+                <span>+ Post Site Update</span>
+              </button>
+              <button class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer">
+                <i data-lucide="share-2" class="w-4 h-4 text-slate-500"></i>
+                <span>WhatsApp Summary</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- THE STREAMLINED SUBVIEW NAVIGATION (Clean single-tier tabs with zero nested sub-menus!) -->
+          <div class="bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80 flex flex-wrap items-center gap-1.5 w-full">
+            
+            <!-- Sub-Tab 1: Daily Site Feed -->
+            <button id="subtab-btn-feed" onclick="switchSubTab('feed')" class="active-subpill flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer">
+              <i data-lucide="camera" class="w-4 h-4 text-sky-200"></i>
+              <span>Daily Site Feed</span>
+              <span class="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-1">12 Updates</span>
+            </button>
+
+            <!-- Sub-Tab 2: Weekly Pulse Reports (RESTORED & PROMINENT) -->
+            <button id="subtab-btn-reports" onclick="switchSubTab('reports')" class="inactive-subpill flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer">
+              <i data-lucide="file-text" class="w-4 h-4 text-[#0066CC]"></i>
+              <span>Weekly Pulse Reports</span>
+              <span class="bg-sky-100 text-[#0066CC] text-[10px] font-bold px-2 py-0.5 rounded-full ml-1">6 Issued</span>
+            </button>
+
+            <!-- Sub-Tab 3: MOMs & Action Items -->
+            <button id="subtab-btn-moms" onclick="switchSubTab('moms')" class="inactive-subpill flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer">
+              <i data-lucide="users" class="w-4 h-4 text-emerald-500"></i>
+              <span>MOMs & Action Items</span>
+              <span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full ml-1">3 Pending</span>
+            </button>
+
+            <!-- Sub-Tab 4: Decisions & Sign-offs -->
+            <button id="subtab-btn-decisions" onclick="switchSubTab('decisions')" class="inactive-subpill flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer">
+              <i data-lucide="shield-check" class="w-4 h-4 text-amber-500"></i>
+              <span>Decisions & Sign-offs</span>
+              <span class="bg-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full ml-1">8 Logged</span>
+            </button>
+
+          </div>
+
+
+          <!-- ========================================== -->
+          <!-- SUBVIEW 1: SITE FEED & PROGRESS (Unified) -->
+          <!-- ========================================== -->
+          <div id="subview-feed" class="space-y-6">
+            
+            <!-- Quick Stats -->
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
+              <div class="bg-slate-50/80 rounded-2xl p-3.5 border border-slate-200/70">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Site Updates</span>
+                <div class="text-xl font-extrabold text-slate-900 mt-1">12 Entries</div>
+                <div class="text-[10px] text-emerald-600 font-semibold mt-0.5 flex items-center gap-1">
+                  <i data-lucide="check-circle-2" class="w-3 h-3"></i> Last posted today 11:30 AM
+                </div>
+              </div>
+
+              <div class="bg-slate-50/80 rounded-2xl p-3.5 border border-slate-200/70">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Site Photos Captured</span>
+                <div class="text-xl font-extrabold text-slate-900 mt-1">46 Photos</div>
+                <div class="text-[10px] text-slate-500 font-medium mt-0.5">Live on Client Portal</div>
+              </div>
+
+              <div class="bg-slate-50/80 rounded-2xl p-3.5 border border-slate-200/70">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Weekly Client Digest</span>
+                <div class="text-xl font-extrabold text-[#0066CC] mt-1">Week 6 Ready</div>
+                <div class="text-[10px] text-slate-500 font-medium mt-0.5">Auto-generated summary</div>
+              </div>
+
+              <div class="bg-sky-50/70 rounded-2xl p-3.5 border border-sky-100 flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-[#0066CC]">WhatsApp Broadcast</span>
+                  <i data-lucide="sparkles" class="w-3.5 h-3.5 text-[#0066CC]"></i>
+                </div>
+                <button class="w-full mt-2 bg-[#0066CC] hover:bg-[#0055B3] text-white py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all">
+                  <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Copy Client Message
+                </button>
+              </div>
+            </div>
+
+            <!-- Feed Grid: Left Timeline + Right Room Progress -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              <!-- LEFT: Feed Posts -->
+              <div class="lg:col-span-2 space-y-4">
+                
+                <div class="flex items-center justify-between gap-3 bg-white p-2 rounded-xl border border-slate-200/80">
+                  <div class="flex items-center gap-1.5 overflow-x-auto">
+                    <button class="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold">All Rooms (12)</button>
+                    <button class="px-3 py-1 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-medium">Living Room (5)</button>
+                    <button class="px-3 py-1 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-medium">Master Bed (4)</button>
+                    <button class="px-3 py-1 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-medium">Kitchen (3)</button>
+                  </div>
+                  <span class="text-xs text-slate-400 font-medium whitespace-nowrap">Sorted by Newest</span>
+                </div>
+
+                <!-- Feed Post 1 -->
+                <div class="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs space-y-3">
+                  <div class="flex items-start justify-between">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-full bg-sky-100 text-[#0066CC] font-bold flex items-center justify-center text-xs">
+                        SS
+                      </div>
+                      <div>
+                        <h4 class="text-sm font-bold text-slate-900">Master Bedroom: Wardrobe Carcass Assembly Finished</h4>
+                        <p class="text-xs text-slate-400">Ramesh Kumar (Site Supervisor) &bull; Today at 11:30 AM</p>
+                      </div>
+                    </div>
+                    <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                      On Schedule
+                    </span>
+                  </div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    Completed the primary 18mm HDHMR carcass assembly for the 8ft master wardrobe. Internal soft-close hinges installed. Checked diagonal levels; alignment is perfectly true. Ready for laminate shutter fabrication tomorrow.
+                  </p>
+                  <!-- Photos -->
+                  <div class="grid grid-cols-3 gap-2">
+                    <div class="h-28 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden group cursor-pointer relative">
+                      <img src="https://images.unsplash.com/photo-1513694203232-719a280e022f?w=400&auto=format&fit=crop&q=80" alt="Wardrobe" class="w-full h-full object-cover">
+                      <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-semibold transition-all">Expand</div>
+                    </div>
+                    <div class="h-28 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden group cursor-pointer relative">
+                      <img src="https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=400&auto=format&fit=crop&q=80" alt="Hinges check" class="w-full h-full object-cover">
+                      <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-semibold transition-all">Expand</div>
+                    </div>
+                    <div class="h-28 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden group cursor-pointer relative">
+                      <img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=400&auto=format&fit=crop&q=80" alt="Laser level" class="w-full h-full object-cover">
+                      <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-semibold transition-all">Expand</div>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
+                    <div class="flex items-center gap-2">
+                      <span class="bg-slate-100 text-slate-600 text-[10px] font-medium px-2 py-0.5 rounded">#Carpentry</span>
+                      <span class="bg-slate-100 text-slate-600 text-[10px] font-medium px-2 py-0.5 rounded">#MasterBed</span>
+                    </div>
+                    <button class="text-[#0066CC] hover:underline font-semibold flex items-center gap-1">
+                      <i data-lucide="share" class="w-3.5 h-3.5"></i> Share with Client
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Feed Post 2 -->
+                <div class="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs space-y-3">
+                  <div class="flex items-start justify-between">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">
+                        DS
+                      </div>
+                      <div>
+                        <h4 class="text-sm font-bold text-slate-900">Living Room: False Ceiling Framing Inspection Completed</h4>
+                        <p class="text-xs text-slate-400">Deepa Shah (Project Lead) &bull; Yesterday at 4:15 PM</p>
+                      </div>
+                    </div>
+                    <span class="bg-sky-50 text-[#0066CC] border border-sky-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                      Inspection Passed
+                    </span>
+                  </div>
+                  <p class="text-xs text-slate-600 leading-relaxed">
+                    Verified GI channel grid spacing (450mm c/c) and perimeter level marking for cove lighting. AC copper piping pressure tested at 350 PSI for 24 hours with zero drop. Approved for gypsum board fixing.
+                  </p>
+                </div>
+
+              </div>
+
+              <!-- RIGHT: Embedded Room Progress (Replaces the clunky separate dashboard!) -->
+              <div class="space-y-4">
+                
+                <div class="bg-slate-50/80 rounded-2xl border border-slate-200/80 p-5 space-y-4">
+                  <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">Room-by-Room Status</h4>
+                    <span class="text-[10px] font-semibold text-[#0066CC]">68% Overall</span>
+                  </div>
+
+                  <!-- Room 1 -->
+                  <div class="space-y-1.5">
+                    <div class="flex justify-between text-xs font-semibold text-slate-800">
+                      <span>Living & Dining</span>
+                      <span class="text-emerald-600">85%</span>
+                    </div>
+                    <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div class="bg-emerald-500 h-full rounded-full" style="width: 85%"></div>
+                    </div>
+                    <div class="text-[10px] text-slate-400">Current: Gypsum board finishing</div>
+                  </div>
+
+                  <!-- Room 2 -->
+                  <div class="space-y-1.5">
+                    <div class="flex justify-between text-xs font-semibold text-slate-800">
+                      <span>Master Bedroom</span>
+                      <span class="text-[#0066CC]">60%</span>
+                    </div>
+                    <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div class="bg-[#0066CC] h-full rounded-full" style="width: 60%"></div>
+                    </div>
+                    <div class="text-[10px] text-slate-400">Current: Wardrobe carcass assembly</div>
+                  </div>
+
+                  <!-- Room 3 -->
+                  <div class="space-y-1.5">
+                    <div class="flex justify-between text-xs font-semibold text-slate-800">
+                      <span>Modular Kitchen</span>
+                      <span class="text-amber-500">45%</span>
+                    </div>
+                    <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div class="bg-amber-500 h-full rounded-full" style="width: 45%"></div>
+                    </div>
+                    <div class="text-[10px] text-slate-400">Current: Dado tiling complete</div>
+                  </div>
+
+                </div>
+
+                <!-- Weekly Target Milestones -->
+                <div class="bg-white rounded-2xl border border-slate-200/80 p-5 space-y-3">
+                  <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <i data-lucide="flag" class="w-3.5 h-3.5 text-amber-500"></i>
+                    This Week's Target Milestones
+                  </h4>
+                  <ul class="space-y-2 text-xs">
+                    <li class="flex items-center gap-2 text-slate-700">
+                      <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i>
+                      <span class="line-through text-slate-400">Complete Master wardrobe carcasses</span>
+                    </li>
+                    <li class="flex items-center gap-2 text-slate-700">
+                      <i data-lucide="circle" class="w-4 h-4 text-slate-300 shrink-0"></i>
+                      <span>Living room primer coat & electrical wiring</span>
+                    </li>
+                    <li class="flex items-center gap-2 text-slate-700">
+                      <i data-lucide="circle" class="w-4 h-4 text-slate-300 shrink-0"></i>
+                      <span>Kitchen quartz countertop template check</span>
+                    </li>
+                  </ul>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <!-- ========================================================================= -->
+          <!-- SUBVIEW 2: WEEKLY PULSE REPORTS (Restored & Prominent with Issue Week Report) -->
+          <!-- ========================================================================= -->
+          <div id="subview-reports" class="hidden space-y-6">
+            
+            <!-- Quick Stats & Context -->
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
+              <div class="bg-slate-50/80 rounded-2xl p-3.5 border border-slate-200/70">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Pulse Reports</span>
+                <div class="text-xl font-extrabold text-slate-900 mt-1">6 Reports</div>
+                <div class="text-[10px] text-emerald-600 font-semibold mt-0.5 flex items-center gap-1">
+                  <i data-lucide="check-circle-2" class="w-3 h-3"></i> Week 6 issued on 17 Aug
+                </div>
+              </div>
+
+              <div class="bg-slate-50/80 rounded-2xl p-3.5 border border-slate-200/70">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Site Week</span>
+                <div class="text-xl font-extrabold text-[#0066CC] mt-1">Week 6 of 12</div>
+                <div class="text-[10px] text-slate-500 font-medium mt-0.5">Phase: Carpentry & First-Fix</div>
+              </div>
+
+              <div class="bg-slate-50/80 rounded-2xl p-3.5 border border-slate-200/70">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Room Photos Attached</span>
+                <div class="text-xl font-extrabold text-slate-900 mt-1">24 Photos</div>
+                <div class="text-[10px] text-slate-500 font-medium mt-0.5">Categorized by room</div>
+              </div>
+
+              <div class="bg-sky-50/80 rounded-2xl p-3.5 border border-sky-100 flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-[#0066CC]">Client Portal Sync</span>
+                  <span class="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded">LIVE</span>
+                </div>
+                <button onclick="openPreviewReportModal()" class="w-full mt-2 bg-white hover:bg-sky-50 text-[#0066CC] border border-sky-200 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer">
+                  <i data-lucide="eye" class="w-3.5 h-3.5"></i> Preview Client PDF
+                </button>
+              </div>
+            </div>
+
+            <!-- Report Header Bar & Issue Button (Matching Exact User Feature) -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-sky-50 border border-sky-200 text-[#0066CC] flex items-center justify-center font-bold">
+                  <i data-lucide="activity" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                    Weekly Progress Reports
+                    <span class="bg-sky-50 text-[#0066CC] text-[10px] font-bold px-2 py-0.5 rounded-md border border-sky-200">Official Client Deliverable</span>
+                  </h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Compile and send clean weekly progress reports with room photo updates to the client.</p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 shrink-0">
+                <button onclick="openIssueReportModal(true)" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer">
+                  <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-500"></i>
+                  <span>Auto-Draft with AI</span>
+                </button>
+                <button onclick="openIssueReportModal(false)" class="px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-2 transition-all cursor-pointer">
+                  <i data-lucide="plus" class="w-4 h-4"></i>
+                  <span>+ ISSUE WEEK REPORT</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- PAST PULSE REPORTS SECTION -->
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-700">Past Pulse Reports</h4>
+                  <span class="bg-slate-200 text-slate-700 text-[10px] font-black px-2 py-0.5 rounded-full">6 Created</span>
+                </div>
+                <span class="text-xs text-slate-400 font-medium">Sorted by Week Number (Desc)</span>
+              </div>
+
+              <!-- Report Card 1: Week 6 (Latest / Expanded) -->
+              <div class="bg-white rounded-2xl border-2 border-sky-200/80 p-5 shadow-xs space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-slate-100">
+                  <div class="space-y-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="bg-[#0066CC] text-white text-xs font-black px-2.5 py-0.5 rounded-md">WEEK 6</span>
+                      <span class="text-sm font-bold text-slate-900">Carpentry Framework & False Ceiling Leveling</span>
+                      <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <i data-lucide="check" class="w-3 h-3"></i> ISSUED & SENT
+                      </span>
+                    </div>
+                    <p class="text-xs text-slate-400 flex items-center gap-2">
+                      <span><strong class="text-slate-600">Period:</strong> 11 Aug 2026 – 17 Aug 2026</span>
+                      <span>&bull;</span>
+                      <span><strong class="text-slate-600">Issued by:</strong> Deepa Shah (Project Lead)</span>
+                      <span>&bull;</span>
+                      <span><strong class="text-slate-600">Overall Stage:</strong> Carpentry & Framework (68%)</span>
+                    </p>
+                  </div>
+
+                  <!-- Actions -->
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <button onclick="openPreviewReportModal()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer">
+                      <i data-lucide="eye" class="w-3.5 h-3.5 text-slate-500"></i> Preview
+                    </button>
+                    <button onclick="alert('Downloading Week 6 PDF Report (Lodha_Amara_Week_6_Pulse_Report.pdf)...')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer">
+                      <i data-lucide="file-down" class="w-3.5 h-3.5 text-slate-500"></i> PDF
+                    </button>
+                    <button onclick="simulateCopyWhatsApp('Week 6')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer">
+                      <i data-lucide="message-circle" class="w-3.5 h-3.5 text-emerald-600"></i> WhatsApp
+                    </button>
+                    <button onclick="openIssueReportModal(false)" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-all cursor-pointer">
+                      <i data-lucide="edit-3" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Executive Summary Box -->
+                <div class="bg-slate-50/90 rounded-xl p-3.5 border border-slate-200/60 space-y-1.5">
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Executive Summary for Client:</span>
+                  <p class="text-xs text-slate-700 leading-relaxed">
+                    Great progress across all zones this week. Completed the 18mm HDHMR carcass assembly for the master bedroom wardrobe. Living room false ceiling GI framing passed laser alignment check. AC copper piping pressure tested at 350 PSI for 24 hours with zero leakage. Kitchen quartz countertop fabrication commenced.
+                  </p>
+                </div>
+
+                <!-- Room Progress Breakdown Grid with Photos -->
+                <div class="space-y-2">
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Room-by-Room Status & Attached Site Photos:</span>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    
+                    <!-- Room 1 -->
+                    <div class="p-3 bg-white rounded-xl border border-slate-200/80 space-y-2.5">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-800">Living & Dining</span>
+                        <span class="text-xs font-extrabold text-emerald-600">85%</span>
+                      </div>
+                      <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div class="bg-emerald-500 h-full rounded-full" style="width: 85%"></div>
+                      </div>
+                      <span class="text-[10px] text-slate-500 font-medium block">Stage: Plastering & Gypsum</span>
+                      <div class="grid grid-cols-2 gap-1.5 pt-1">
+                        <div class="h-16 rounded-lg bg-slate-100 overflow-hidden border border-slate-200">
+                          <img src="https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&auto=format&fit=crop&q=80" alt="Living" class="w-full h-full object-cover">
+                        </div>
+                        <div class="h-16 rounded-lg bg-slate-100 overflow-hidden border border-slate-200">
+                          <img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=300&auto=format&fit=crop&q=80" alt="Ceiling" class="w-full h-full object-cover">
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Room 2 -->
+                    <div class="p-3 bg-white rounded-xl border border-slate-200/80 space-y-2.5">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-800">Master Bedroom</span>
+                        <span class="text-xs font-extrabold text-[#0066CC]">60%</span>
+                      </div>
+                      <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div class="bg-[#0066CC] h-full rounded-full" style="width: 60%"></div>
+                      </div>
+                      <span class="text-[10px] text-slate-500 font-medium block">Stage: Carpentry & Framework</span>
+                      <div class="grid grid-cols-2 gap-1.5 pt-1">
+                        <div class="h-16 rounded-lg bg-slate-100 overflow-hidden border border-slate-200">
+                          <img src="https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&auto=format&fit=crop&q=80" alt="Wardrobe" class="w-full h-full object-cover">
+                        </div>
+                        <div class="h-16 rounded-lg bg-slate-100 overflow-hidden border border-slate-200 flex items-center justify-center bg-slate-50 text-[10px] text-slate-400 font-semibold">
+                          +1 Photo
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Room 3 -->
+                    <div class="p-3 bg-white rounded-xl border border-slate-200/80 space-y-2.5">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-800">Modular Kitchen</span>
+                        <span class="text-xs font-extrabold text-amber-600">45%</span>
+                      </div>
+                      <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div class="bg-amber-500 h-full rounded-full" style="width: 45%"></div>
+                      </div>
+                      <span class="text-[10px] text-slate-500 font-medium block">Stage: Tiling & Flooring</span>
+                      <div class="grid grid-cols-2 gap-1.5 pt-1">
+                        <div class="h-16 rounded-lg bg-slate-100 overflow-hidden border border-slate-200">
+                          <img src="https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=300&auto=format&fit=crop&q=80" alt="Kitchen" class="w-full h-full object-cover">
+                        </div>
+                        <div class="h-16 rounded-lg bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400 font-medium">
+                          1 Photo
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                <!-- Next Week Targets -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Next Week Targets:</span>
+                    <span class="text-slate-700 font-medium">&bull; Master laminate pressing &bull; Living room primer &bull; Quartz countertop fixing</span>
+                  </div>
+                  <span class="text-[10px] text-slate-400">Published to Client Portal &bull; WhatsApp broadcasted</span>
+                </div>
+              </div>
+
+              <!-- Report Card 2: Week 5 -->
+              <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="space-y-1">
+                  <div class="flex items-center gap-2">
+                    <span class="bg-slate-100 text-slate-700 text-xs font-bold px-2.5 py-0.5 rounded-md">WEEK 5</span>
+                    <span class="text-sm font-bold text-slate-900">False Ceiling Framing & Electrical Rough-In</span>
+                    <span class="bg-slate-100 text-slate-600 text-[10px] font-medium px-2 py-0.5 rounded-full">Archived</span>
+                  </div>
+                  <p class="text-xs text-slate-500">Period: 4 Aug 2026 – 10 Aug 2026 &bull; 4 Rooms &bull; 8 Photos &bull; Gypsum Framing 50%</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="openPreviewReportModal()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all">
+                    <i data-lucide="eye" class="w-3.5 h-3.5"></i> View
+                  </button>
+                  <button onclick="alert('Downloading Week 5 PDF...')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all">
+                    <i data-lucide="file-down" class="w-3.5 h-3.5"></i> PDF
+                  </button>
+                </div>
+              </div>
+
+              <!-- Report Card 3: Week 4 -->
+              <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="space-y-1">
+                  <div class="flex items-center gap-2">
+                    <span class="bg-slate-100 text-slate-700 text-xs font-bold px-2.5 py-0.5 rounded-md">WEEK 4</span>
+                    <span class="text-sm font-bold text-slate-900">Civil Masonry, Wall Chasing & Core Plumbing</span>
+                    <span class="bg-slate-100 text-slate-600 text-[10px] font-medium px-2 py-0.5 rounded-full">Archived</span>
+                  </div>
+                  <p class="text-xs text-slate-500">Period: 28 Jul 2026 – 3 Aug 2026 &bull; 3 Rooms &bull; 6 Photos &bull; Civil 100%</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="openPreviewReportModal()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all">
+                    <i data-lucide="eye" class="w-3.5 h-3.5"></i> View
+                  </button>
+                  <button onclick="alert('Downloading Week 4 PDF...')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all">
+                    <i data-lucide="file-down" class="w-3.5 h-3.5"></i> PDF
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
+              <div class="bg-slate-50/80 rounded-2xl p-3.5 border border-slate-200/70">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Meetings Recorded</span>
+                <div class="text-xl font-extrabold text-slate-900 mt-1">4 Protocols</div>
+                <div class="text-[10px] text-slate-500 font-medium mt-0.5">Signed by Client & Studio</div>
+              </div>
+              <div class="bg-amber-50/70 rounded-2xl p-3.5 border border-amber-100">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-amber-800">Pending Actions</span>
+                <div class="text-xl font-extrabold text-amber-900 mt-1">3 Tasks</div>
+                <div class="text-[10px] text-amber-700 font-medium mt-0.5">2 Studio &bull; 1 Client</div>
+              </div>
+              <div class="bg-emerald-50/70 rounded-2xl p-3.5 border border-emerald-100">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Resolved Actions</span>
+                <div class="text-xl font-extrabold text-emerald-900 mt-1">11 Done</div>
+                <div class="text-[10px] text-emerald-700 font-medium mt-0.5">100% On-time resolution</div>
+              </div>
+              <div class="bg-[#0066CC] text-white rounded-2xl p-3.5 shadow-xs flex flex-col justify-between">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-sky-100">Record New Meeting</span>
+                <button class="w-full mt-2 bg-white text-[#0066CC] hover:bg-sky-50 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all">
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i> + Record MoM (AI / Manual)
+                </button>
+              </div>
+            </div>
+
+            <!-- Master-Detail 2-Column Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              <!-- LEFT: Protocols List (4 Cols) -->
+              <div class="lg:col-span-4 space-y-3">
+                <div class="flex items-center justify-between">
+                  <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">Meeting Protocols</h4>
+                  <span class="text-xs text-slate-400">4 recorded</span>
+                </div>
+
+                <div class="space-y-2.5">
+                  <div class="bg-sky-50/80 border-2 border-[#0066CC] rounded-2xl p-4 cursor-pointer shadow-xs transition-all space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-[10px] font-bold text-[#0066CC] uppercase tracking-wider bg-sky-100/80 px-2 py-0.5 rounded">Site Coordination #4</span>
+                      <span class="text-xs text-slate-500 font-medium">18 Aug 2026</span>
+                    </div>
+                    <h5 class="text-sm font-bold text-slate-900">Carpentry & Electrical Pre-Fixing Alignment</h5>
+                    <p class="text-xs text-slate-600 line-clamp-2">Discussed wardrobe internal layout, switchboard elevations in master bed, and kitchen countertop clearance...</p>
+                    <div class="flex items-center justify-between pt-1 text-[11px] text-slate-500 border-t border-sky-100">
+                      <span class="text-amber-700 font-semibold">2 Actions Open</span>
+                      <span class="text-slate-400">Attendees: 4</span>
+                    </div>
+                  </div>
+
+                  <div class="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-4 cursor-pointer transition-all space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded">Client Review #3</span>
+                      <span class="text-xs text-slate-500 font-medium">11 Aug 2026</span>
+                    </div>
+                    <h5 class="text-sm font-bold text-slate-900">Veneer Selection & Lighting Mood Board</h5>
+                    <p class="text-xs text-slate-500 line-clamp-2">Selected American Walnut veneer for TV unit. Client approved 3000K warm white recessed lights...</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- RIGHT: Selected Meeting Details & Embedded Tasks (8 Cols) -->
+              <div class="lg:col-span-8 bg-white rounded-2xl border border-slate-200/80 p-6 space-y-5 shadow-2xs">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                  <div>
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="bg-sky-50 text-[#0066CC] border border-sky-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full">Site Meeting #4</span>
+                      <span class="text-xs text-slate-400">Held on 18 Aug 2026 &bull; 10:00 AM - 11:30 AM</span>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-900">Carpentry & Electrical Pre-Fixing Alignment</h3>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all">
+                      <i data-lucide="download" class="w-3.5 h-3.5"></i> Export PDF
+                    </button>
+                    <button class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all">
+                      <i data-lucide="send" class="w-3.5 h-3.5"></i> Share with Attendees
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Action Items -->
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <i data-lucide="check-square" class="w-4 h-4 text-[#0066CC]"></i>
+                      Action Items & Deliverables (3 Tasks)
+                    </h4>
+                    <button class="text-xs text-[#0066CC] font-semibold hover:underline flex items-center gap-1">
+                      <i data-lucide="plus" class="w-3 h-3"></i> Add Task
+                    </button>
+                  </div>
+
+                  <div class="p-3.5 rounded-xl border border-amber-200 bg-amber-50/40 flex items-start justify-between gap-3">
+                    <div class="flex items-start gap-3">
+                      <input type="checkbox" class="mt-1 w-4 h-4 rounded text-[#0066CC] border-slate-300">
+                      <div>
+                        <p class="text-xs font-bold text-slate-900">Provide updated electrical DWG with 2 additional sockets behind Master TV unit</p>
+                        <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-1">
+                          <span class="font-semibold text-slate-700">Assignee: Deepa (Studio)</span>
+                          <span>&bull;</span>
+                          <span class="text-amber-800 font-semibold">Due: 22 Aug 2026</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">Pending</span>
+                  </div>
+
+                  <div class="p-3.5 rounded-xl border border-amber-200 bg-amber-50/40 flex items-start justify-between gap-3">
+                    <div class="flex items-start gap-3">
+                      <input type="checkbox" class="mt-1 w-4 h-4 rounded text-[#0066CC] border-slate-300">
+                      <div>
+                        <p class="text-xs font-bold text-slate-900">Confirm laminate code for kitchen overhead cabinets</p>
+                        <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-1">
+                          <span class="font-semibold text-slate-700">Assignee: Client</span>
+                          <span>&bull;</span>
+                          <span class="text-amber-800 font-semibold">Due: 21 Aug 2026</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">Client Action</span>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <!-- ========================================== -->
+          <!-- SUBVIEW 3: DECISIONS & SIGNOFFS LOG -->
+          <!-- ========================================== -->
+          <div id="subview-decisions" class="hidden space-y-6">
+            
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/80 p-3 rounded-2xl border border-slate-200/80">
+              <div class="flex items-center gap-2 overflow-x-auto">
+                <span class="text-xs font-bold text-slate-500 uppercase text-[10px] tracking-wider mr-1">Filter:</span>
+                <button class="px-3 py-1.5 bg-[#0066CC] text-white text-xs font-semibold rounded-xl">All Decisions (8)</button>
+                <button class="px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-100 text-xs font-medium rounded-xl border border-slate-200">Awaiting Sign-off (2)</button>
+                <button class="px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-100 text-xs font-medium rounded-xl border border-slate-200">Approved (6)</button>
+              </div>
+              <button class="bg-[#0066CC] hover:bg-[#0055B3] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs shrink-0">
+                <i data-lucide="plus" class="w-4 h-4"></i> + Log Site Decision
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              <!-- Decision 1 -->
+              <div class="bg-white rounded-2xl border-2 border-amber-200 p-5 shadow-xs space-y-3">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <span class="bg-amber-100 text-amber-900 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">
+                      Pending Client Sign-Off
+                    </span>
+                    <h4 class="text-sm font-bold text-slate-900 mt-2">Kitchen Quartz Countertop Upgrade to 20mm</h4>
+                    <p class="text-xs text-slate-500">Logged by Deepa Shah &bull; 19 Aug 2026</p>
+                  </div>
+                  <span class="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-100">+₹18,500</span>
+                </div>
+                
+                <p class="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  Client requested thicker 20mm edge profile with 45-degree chamfer for island counter. Quarry sample approved on site.
+                </p>
+
+                <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                  <span class="bg-slate-100 text-slate-600 text-[10px] font-medium px-2 py-0.5 rounded">#Kitchen</span>
+                  <button class="bg-emerald-600 text-white hover:bg-emerald-700 px-3 py-1 rounded-lg font-semibold flex items-center gap-1">
+                    <i data-lucide="check" class="w-3.5 h-3.5"></i> Mark Signed
+                  </button>
+                </div>
+              </div>
+
+              <!-- Decision 2 -->
+              <div class="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-3">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <span class="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">
+                      Client Approved & Signed
+                    </span>
+                    <h4 class="text-sm font-bold text-slate-900 mt-2">Living Room TV Wall American Walnut Veneer</h4>
+                    <p class="text-xs text-slate-500">Approved via WhatsApp &bull; 15 Aug 2026</p>
+                  </div>
+                  <span class="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded">No Cost Delta</span>
+                </div>
+                
+                <p class="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  Sample #V-402 (Natural Matte PU Polish) verified and signed on site with the client.
+                </p>
+
+                <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                  <span class="bg-slate-100 text-slate-600 text-[10px] font-medium px-2 py-0.5 rounded">#LivingRoom</span>
+                  <button class="text-slate-500 hover:text-slate-900 font-semibold flex items-center gap-1">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i> View Signature
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <!-- ========================================================================= -->
+        <!-- PILLAR 4 CONTENT: QUALITY & SNAG LIST (Preserved) -->
+        <!-- ========================================================================= -->
+        <div id="pillar-content-quality" class="hidden space-y-6">
+          <div class="bg-slate-50/60 rounded-2xl border border-slate-200/80 p-5">
+            <h3 class="text-lg font-bold text-slate-900">Quality & Handover Checklist & Defect Tracker</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Verify finishes and track room defects room-by-room.</p>
+          </div>
+          <div class="p-8 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+            [Quality Checklist & Snag List is preserved here without changes]
+          </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- PILLAR 2 & 5 CONTENT (Preserved) -->
+        <!-- ========================================================================= -->
+        <div id="pillar-content-vault" class="hidden p-8 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+          [3D Renders Vault & Drawing Revisions is preserved here without changes]
+        </div>
+
+        <div id="pillar-content-procurement" class="hidden p-8 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+          [Procurement, Material Bills & PO Orders is preserved here without changes]
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+    <!-- ========================================================================= -->
+    <!-- INTERACTIVE MODAL 1: ISSUE / EDIT WEEKLY PROGRESS REPORT -->
+    <!-- ========================================================================= -->
+    <div id="modal-issue-report" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-6 hidden">
+      <div class="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 custom-scroll space-y-5 p-6 sm:p-8">
+        
+        <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-sky-50 border border-sky-200 text-[#0066CC] flex items-center justify-center font-bold">
+              <i data-lucide="file-plus" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="text-lg font-extrabold text-slate-900">Issue Weekly Progress Report</h3>
+              <p class="text-xs text-slate-500">Draft official progress update, attach room photos, and publish to client portal.</p>
+            </div>
+          </div>
+          <button onclick="closeIssueReportModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Form Grid -->
+        <div class="space-y-4 text-xs">
+          
+          <!-- Row 1: Week Number & Date Range -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1 uppercase text-[10px] tracking-wider">Report Week</label>
+              <input type="number" value="6" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1 uppercase text-[10px] tracking-wider">Week Start Date</label>
+              <input type="date" value="2026-08-11" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-medium text-slate-900">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1 uppercase text-[10px] tracking-wider">Week End Date</label>
+              <input type="date" value="2026-08-17" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-medium text-slate-900">
+            </div>
+          </div>
+
+          <!-- Row 2: AI Auto-Draft Assistant -->
+          <div class="bg-sky-50/70 border border-sky-200/80 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-[#0066CC] text-white flex items-center justify-center shadow-xs">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-slate-900">Gemini AI Report Assistant</h4>
+                <p class="text-[11px] text-slate-500">Auto-draft executive summary using 12 site feed posts & trade packages from this week.</p>
+              </div>
+            </div>
+            <button onclick="simulateAiDraft()" class="px-3.5 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0">
+              <i data-lucide="wand-2" class="w-3.5 h-3.5"></i> Auto-Draft Content
+            </button>
+          </div>
+
+          <!-- Row 3: Executive Summary Textarea -->
+          <div>
+            <label class="block font-bold text-slate-700 mb-1 uppercase text-[10px] tracking-wider">Executive Summary for Client</label>
+            <textarea id="report-summary-input" rows="3" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 leading-relaxed focus:bg-white focus:outline-[#0066CC]" placeholder="Summarize key milestones achieved across site, material deliveries, and inspections passed...">Great progress across all zones this week. Completed the 18mm HDHMR carcass assembly for the master bedroom wardrobe. Living room false ceiling GI framing passed laser alignment check. AC copper piping pressure tested at 350 PSI for 24 hours with zero leakage. Kitchen quartz countertop fabrication commenced.</textarea>
+          </div>
+
+          <!-- Row 4: Room Progress Breakdown & Photo Uploads -->
+          <div class="space-y-3 pt-2">
+            <span class="block font-bold text-slate-800 uppercase text-[10px] tracking-wider">Room-by-Room Progress & Site Photos</span>
+            
+            <!-- Room 1 -->
+            <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-900">Living & Dining Room</span>
+                <span class="font-extrabold text-[#0066CC] bg-sky-100/80 px-2 py-0.5 rounded text-[11px]">85% Complete</span>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="text-[10px] text-slate-400 block mb-0.5">Execution Stage</label>
+                  <select class="w-full bg-white border border-slate-200 rounded-lg p-1.5 text-xs font-medium">
+                    <option selected>Plastering & Gypsum</option>
+                    <option>Carpentry & Framework</option>
+                    <option>Painting / Wallpapers</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-[10px] text-slate-400 block mb-0.5">Progress Slider (0-100%)</label>
+                  <input type="range" min="0" max="100" value="85" class="w-full accent-[#0066CC]">
+                </div>
+              </div>
+              <div class="flex items-center gap-2 pt-1">
+                <button class="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 font-semibold flex items-center gap-1 hover:bg-slate-50">
+                  <i data-lucide="camera" class="w-3 h-3 text-sky-500"></i> + Add Room Photos (2 selected)
+                </button>
+              </div>
+            </div>
+
+            <!-- Room 2 -->
+            <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-900">Master Bedroom</span>
+                <span class="font-extrabold text-[#0066CC] bg-sky-100/80 px-2 py-0.5 rounded text-[11px]">60% Complete</span>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="text-[10px] text-slate-400 block mb-0.5">Execution Stage</label>
+                  <select class="w-full bg-white border border-slate-200 rounded-lg p-1.5 text-xs font-medium">
+                    <option selected>Carpentry & Framework</option>
+                    <option>Veneering / Laminates</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-[10px] text-slate-400 block mb-0.5">Progress Slider (0-100%)</label>
+                  <input type="range" min="0" max="100" value="60" class="w-full accent-[#0066CC]">
+                </div>
+              </div>
+              <div class="flex items-center gap-2 pt-1">
+                <button class="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 font-semibold flex items-center gap-1 hover:bg-slate-50">
+                  <i data-lucide="camera" class="w-3 h-3 text-sky-500"></i> + Add Room Photos (2 selected)
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Row 5: Next Week Goals -->
+          <div>
+            <label class="block font-bold text-slate-700 mb-1 uppercase text-[10px] tracking-wider">Next Week Target Milestones</label>
+            <input type="text" value="Master wardrobe laminate pressing, Living room primer coat, Kitchen countertop fixing" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium text-slate-800">
+          </div>
+
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="flex items-center justify-between pt-4 border-t border-slate-100">
+          <button onclick="closeIssueReportModal()" class="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-900 cursor-pointer">
+            Cancel
+          </button>
+          <div class="flex items-center gap-2">
+            <button onclick="openPreviewReportModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer">
+              Preview PDF
+            </button>
+            <button onclick="saveAndIssueReport()" class="px-5 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i> Save & Publish Report
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+
+    <!-- ========================================================================= -->
+    <!-- INTERACTIVE MODAL 2: FORMAL CLIENT REPORT PREVIEW (PDF View) -->
+    <!-- ========================================================================= -->
+    <div id="modal-preview-report" class="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-6 hidden">
+      <div class="bg-white rounded-3xl max-w-3xl w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200 custom-scroll space-y-6 p-6 sm:p-10">
+        
+        <!-- Document Action Toolbar -->
+        <div class="flex items-center justify-between pb-4 border-b border-slate-200">
+          <div class="flex items-center gap-2">
+            <span class="bg-sky-50 text-[#0066CC] border border-sky-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Client Document View</span>
+            <span class="text-xs text-slate-400">Lodha Amara 2BHK</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="alert('Downloading Week 6 PDF...')" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print / PDF
+            </button>
+            <button onclick="simulateCopyWhatsApp('Week 6')" class="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="message-circle" class="w-3.5 h-3.5 text-emerald-600"></i> WhatsApp
+            </button>
+            <button onclick="closePreviewReportModal()" class="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- FORMAL PRINT-READY REPORT CONTAINER (Sober Studio Aesthetic) -->
+        <div class="border border-slate-200/90 rounded-2xl p-6 sm:p-8 bg-white space-y-6 text-slate-900 shadow-2xs">
+          
+          <!-- Document Header -->
+          <div class="flex items-start justify-between pb-4 border-b-2 border-slate-900">
+            <div>
+              <span class="text-xs font-bold uppercase tracking-widest text-[#0066CC]">Weekly Site Pulse Report</span>
+              <h2 class="text-xl font-black text-slate-900 tracking-tight mt-0.5">Week 6 Execution Digest</h2>
+              <p class="text-xs text-slate-500 font-medium mt-0.5">Lodha Amara 2BHK &bull; Floor 14 &bull; Client: Test Client</p>
+            </div>
+            <div class="text-right">
+              <span class="text-xs font-bold text-slate-900">Period: 11 Aug – 17 Aug 2026</span>
+              <p class="text-[11px] text-slate-400 mt-0.5">Issued: 18 Aug 2026</p>
+              <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mt-1">VERIFIED ON SITE</span>
+            </div>
+          </div>
+
+          <!-- Section 1: Executive Summary -->
+          <div class="space-y-1.5">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-900">1. Executive Site Summary</h4>
+            <p class="text-xs text-slate-700 leading-relaxed">
+              Great progress across all zones this week. Completed the 18mm HDHMR carcass assembly for the master bedroom wardrobe. Living room false ceiling GI framing passed laser alignment check. AC copper piping pressure tested at 350 PSI for 24 hours with zero leakage. Kitchen quartz countertop fabrication commenced.
+            </p>
+          </div>
+
+          <!-- Section 2: Room Breakdown & Status -->
+          <div class="space-y-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-900">2. Room-by-Room Execution Progress</h4>
+            
+            <div class="space-y-3 text-xs">
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div class="flex justify-between font-bold">
+                  <span>Living & Dining Area (Gypsum Plastering & Framing)</span>
+                  <span class="text-emerald-700">85% Complete</span>
+                </div>
+                <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                  <div class="bg-emerald-600 h-full rounded-full" style="width: 85%"></div>
+                </div>
+              </div>
+
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div class="flex justify-between font-bold">
+                  <span>Master Bedroom (Wardrobe Carcass Assembly)</span>
+                  <span class="text-[#0066CC]">60% Complete</span>
+                </div>
+                <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                  <div class="bg-[#0066CC] h-full rounded-full" style="width: 60%"></div>
+                </div>
+              </div>
+
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div class="flex justify-between font-bold">
+                  <span>Modular Kitchen (Dado Tiling Complete)</span>
+                  <span class="text-amber-700">45% Complete</span>
+                </div>
+                <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                  <div class="bg-amber-600 h-full rounded-full" style="width: 45%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Attached Site Photos -->
+          <div class="space-y-2">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-900">3. Site Photo Gallery (Week 6)</h4>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="h-24 rounded-xl overflow-hidden border border-slate-200">
+                <img src="https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&auto=format&fit=crop&q=80" alt="Wardrobe" class="w-full h-full object-cover">
+              </div>
+              <div class="h-24 rounded-xl overflow-hidden border border-slate-200">
+                <img src="https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&auto=format&fit=crop&q=80" alt="Inspection" class="w-full h-full object-cover">
+              </div>
+              <div class="h-24 rounded-xl overflow-hidden border border-slate-200">
+                <img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=300&auto=format&fit=crop&q=80" alt="Laser Level" class="w-full h-full object-cover">
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 4: Next Week Targets -->
+          <div class="space-y-1.5 pt-2 border-t border-slate-100">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-900">4. Key Targets for Next Week (Week 7)</h4>
+            <ul class="list-disc pl-4 text-xs text-slate-700 space-y-1">
+              <li>Master bedroom wardrobe laminate pressing and edge-banding</li>
+              <li>Living room primer coat application and switchboard backbox installation</li>
+              <li>Modular kitchen quartz countertop template verification & fixing</li>
+            </ul>
+          </div>
+
+          <!-- Signature block -->
+          <div class="flex items-center justify-between pt-6 border-t border-slate-200 text-xs text-slate-500">
+            <div>
+              <span class="font-bold text-slate-900 block">Deepa Shah</span>
+              <span>Project Lead &bull; Interior Operations</span>
+            </div>
+            <div class="text-right">
+              <span class="font-bold text-slate-900 block">Test Client</span>
+              <span>Client Acknowledgment (Portal Verified)</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+
+  <script>
+    // Main 5-Pillar Switcher
+    function switchPillar(pillarKey) {
+      const pillars = ['workspace', 'vault', 'moms', 'quality', 'procurement'];
+      
+      // Hide all pillar contents
+      pillars.forEach(key => {
+        const el = document.getElementById('pillar-content-' + key);
+        if (el) el.classList.add('hidden');
+        
+        const btn = document.getElementById('pillar-btn-' + key);
+        if (btn) {
+          btn.className = "inactive-pillar flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer";
+        }
+      });
+
+      // Show active pillar content
+      const activeEl = document.getElementById('pillar-content-' + pillarKey);
+      if (activeEl) activeEl.classList.remove('hidden');
+
+      const activeBtn = document.getElementById('pillar-btn-' + pillarKey);
+      if (activeBtn) {
+        activeBtn.className = "active-pillar flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer";
+      }
+
+      lucide.createIcons();
+    }
+
+    // Sub-Tab Switcher inside MOMs & Feed (4 Tabs)
+    function switchSubTab(subTabKey) {
+      const subtabs = ['feed', 'reports', 'moms', 'decisions'];
+      
+      subtabs.forEach(key => {
+        const el = document.getElementById('subview-' + key);
+        if (el) el.classList.add('hidden');
+
+        const btn = document.getElementById('subtab-btn-' + key);
+        if (btn) {
+          btn.className = "inactive-subpill flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer";
+        }
+      });
+
+      const activeEl = document.getElementById('subview-' + subTabKey);
+      if (activeEl) activeEl.classList.remove('hidden');
+
+      const activeBtn = document.getElementById('subtab-btn-' + subTabKey);
+      if (activeBtn) {
+        activeBtn.className = "active-subpill flex-1 min-w-[160px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer";
+      }
+
+      // Update primary action button
+      const actionBtn = document.getElementById('btn-action-primary');
+      if (actionBtn) {
+        if (subTabKey === 'feed') {
+          actionBtn.innerHTML = '<i data-lucide="camera" class="w-4 h-4"></i><span>+ Post Site Update</span>';
+          actionBtn.onclick = function() { alert('Opening Post Site Update form...'); };
+        } else if (subTabKey === 'reports') {
+          actionBtn.innerHTML = '<i data-lucide="plus" class="w-4 h-4"></i><span>+ ISSUE WEEK REPORT</span>';
+          actionBtn.onclick = function() { openIssueReportModal(false); };
+        } else if (subTabKey === 'moms') {
+          actionBtn.innerHTML = '<i data-lucide="plus" class="w-4 h-4"></i><span>+ Record Meeting</span>';
+          actionBtn.onclick = function() { alert('Opening Record MoM dialog...'); };
+        } else if (subTabKey === 'decisions') {
+          actionBtn.innerHTML = '<i data-lucide="shield-check" class="w-4 h-4"></i><span>+ Log Site Decision</span>';
+          actionBtn.onclick = function() { alert('Opening Log Decision modal...'); };
+        }
+      }
+
+      lucide.createIcons();
+    }
+
+    // Modal Control Functions
+    function openIssueReportModal(isAi) {
+      const modal = document.getElementById('modal-issue-report');
+      if (modal) {
+        modal.classList.remove('hidden');
+        if (isAi) {
+          simulateAiDraft();
+        }
+      }
+      lucide.createIcons();
+    }
+
+    function closeIssueReportModal() {
+      const modal = document.getElementById('modal-issue-report');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function openPreviewReportModal() {
+      const modal = document.getElementById('modal-preview-report');
+      if (modal) modal.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closePreviewReportModal() {
+      const modal = document.getElementById('modal-preview-report');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function simulateAiDraft() {
+      const textarea = document.getElementById('report-summary-input');
+      if (textarea) {
+        textarea.value = "🤖 [AI Drafted via Gemini from 12 site posts]: Week 6 focus was carpentry carcass assembly and ceiling alignment. Master wardrobe 18mm HDHMR carcass is 100% complete and true to laser level. False ceiling GI perimeter channel spacing passed inspection at 450mm c/c. AC pressure holding steady at 350 PSI. On track for next week laminate pressing.";
+        textarea.classList.add('bg-amber-50');
+        setTimeout(() => textarea.classList.remove('bg-amber-50'), 1000);
+      }
+    }
+
+    function saveAndIssueReport() {
+      alert('Report saved & published to Client Portal! WhatsApp broadcast link ready.');
+      closeIssueReportModal();
+      switchSubTab('reports');
+    }
+
+    function simulateCopyWhatsApp(weekName) {
+      const msg = `*Lodha Amara 2BHK - Weekly Progress Report (${weekName})*\n\n✅ Executive Summary:\nGreat progress across all zones this week. Wardrobe carcass assembly complete, false ceiling inspection passed.\n\n📊 Status: Living Room (85%), Master Bed (60%), Kitchen (45%)\n\nView live report & photos: https://client.portal/updates/week-6`;
+      navigator.clipboard.writeText(msg);
+      alert('Copied WhatsApp summary message to clipboard!\n\n' + msg);
+    }
+
+    // Initialize icons
+    lucide.createIcons();
+  </script>
+</body>
+</html>

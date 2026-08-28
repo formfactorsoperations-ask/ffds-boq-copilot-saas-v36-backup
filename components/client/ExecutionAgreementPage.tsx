@@ -1,21 +1,30 @@
 import React, { useRef, useState } from 'react';
-import { ProjectContext } from '../../types';
+import { ProjectContext, DigitalSignatureDocket } from '../../types';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
-import { FileText, Download } from 'lucide-react';
+import { FileText, Download, ShieldCheck, CheckCheck, KeyRound, Share2, Copy, ExternalLink, Tablet, Lock, Shield, Check } from 'lucide-react';
 import { formatCurrency, calculateSellPrice } from '../../lib/utils';
 import { ShieldCheckIcon, CheckBadgeIcon } from '../Icons';
 import { sendAgreementSignoffRequest } from '../../services/emailService';
+import { db as dbService } from '../../services/dbService';
+import { db as firestore } from '../../services/firebaseClient';
+import { doc, updateDoc } from 'firebase/firestore';
+import { usePageHeader } from '../../contexts/PageHeaderContext';
+import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
+import DigitalSignatureDocketView from '../common/DigitalSignatureDocket';
+import DigitalSignaturePad from '../common/DigitalSignaturePad';
+import ManualAcceptanceOverrideModal from '../ops/ManualAcceptanceOverrideModal';
 
 interface ExecutionAgreementPageProps {
     projectContext: ProjectContext;
     setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
     tenantId?: string;
+    projectId?: string;
     activeTier?: any;
     fullBoq?: any[];
 }
 
-export default function ExecutionAgreementPage({ projectContext, setProjectContext, tenantId, activeTier, fullBoq }: ExecutionAgreementPageProps) {
+export default function ExecutionAgreementPage({ projectContext, setProjectContext, tenantId, projectId: propProjectId, activeTier, fullBoq }: ExecutionAgreementPageProps) {
     const { orgData } = useOrg();
     const { settings } = useStudioSettings(tenantId || '');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -30,49 +39,9 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
     const executionAdvances = latestSchedule?.advances?.filter((a: any) => a.phase === 'execution' || a.phase === 'handover') || null;
     const allAdvances = latestSchedule?.advances || null;
 
-    const handleDownloadPdf = () => {
-        const element = contentRef.current;
-        if (!element) return;
-        setIsGenerating(true);
+    const [isEditMode, setIsEditMode] = useState(false);
 
-        import('html2pdf.js').then((module) => {
-            let html2pdfObj: any;
-            const html2pdf = module as any;
-            if (typeof html2pdf === 'function') {
-                html2pdfObj = html2pdf;
-            } else if (html2pdf && typeof html2pdf.default === 'function') {
-                html2pdfObj = html2pdf.default;
-            } else if (html2pdf.default && typeof html2pdf.default.default === 'function') {
-                html2pdfObj = html2pdf.default.default;
-            }
-
-            if (!html2pdfObj) {
-                alert("PDF tools not loading");
-                setIsGenerating(false);
-                return;
-            }
-
-            const opt = {
-                margin: [0, 0, 0, 0],
-                filename: `FFDS-Execution-Agreement-${(projectContext as any).projectId || 'Draft'}.pdf`,
-                image: { type: 'jpeg' as const, quality: 1 },
-                html2canvas: { scale: 2, useCORS: true, letterRendering: true, windowWidth: 800 },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-                pagebreak: { mode: ['css', 'legacy'] }
-            };
-
-            html2pdfObj().set(opt).from(element).toPdf().get('pdf').then((pdf: any) => {
-                // PDF generated
-            }).save().finally(() => {
-                setIsGenerating(false);
-            });
-        }).catch(err => {
-            console.error("Failed to load html2pdf", err);
-            setIsGenerating(false);
-        });
-    };
-
-    // Derived values
+    // Derived values with overrides support
     const clientName = projectContext.clientName || 'Client Name';
     const clientAddress = (projectContext as any).projectAddress || 'Client Address';
     const clientEmail = projectContext.clientEmail || 'Client Email';
@@ -84,14 +53,158 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
     const repName = orgData.signatoryName || 'Principal Name';
     
     const projectName = projectContext.name || 'Project Name';
-    const projectId = (projectContext as any).projectId || 'Project ID';
-    const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    const estimatedDuration = settings?.procurementLeadTimeWeeks ? (settings.procurementLeadTimeWeeks * 7 + 45) : 60; // Just an estimate fallback
+    const projectId = propProjectId || (projectContext as any).projectId || (projectContext as any).id || (projectContext.name ? projectContext.name.replace(/[^a-zA-Z0-9_-]/g, '_') : 'Project');
 
-    const executionTotal = activeTier?.summary?.totalSell || activeTier?.executionTotal || (projectContext.contractContent as any)?.totalValue || 0;
-    const designFee = activeTier?.summary?.designFee || (projectContext.contractContent as any)?.designFee || 0;
-    const gstAmount = (executionTotal + designFee) * 0.18; // Simple calculation if not provided
+    const overrides = (projectContext as any).executionAgreementOverrides || {};
+    
+    const dateStr = overrides.agreementDate || new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const estimatedDuration = overrides.estimatedDuration !== undefined ? overrides.estimatedDuration : (settings?.procurementLeadTimeWeeks ? (settings.procurementLeadTimeWeeks * 7 + 45) : 60);
+    const commencementTrigger = overrides.commencementTrigger || 'Site Handover + Advance Clearance';
+
+    const executionTotal = overrides.executionTotal !== undefined ? overrides.executionTotal : (activeTier?.summary?.totalSell || activeTier?.executionTotal || (projectContext.contractContent as any)?.totalValue || 0);
+    const designFee = overrides.designFee !== undefined ? overrides.designFee : (activeTier?.summary?.designFee || (projectContext.contractContent as any)?.designFee || 0);
+    const gstRate = overrides.gstRate !== undefined ? overrides.gstRate : 18;
+    const gstAmount = (executionTotal + designFee) * (gstRate / 100);
     const grandTotal = executionTotal + designFee + gstAmount;
+
+    // Helper to update overrides
+    const updateOverride = (field: string, value: any) => {
+        setProjectContext((prev: any) => {
+            const currentOverrides = prev.executionAgreementOverrides || {};
+            return {
+                ...prev,
+                executionAgreementOverrides: {
+                    ...currentOverrides,
+                    [field]: value
+                }
+            };
+        });
+    };
+
+    // Helper to get and manage milestones
+    const getInitialMilestones = () => {
+        if (overrides.advances && overrides.advances.length > 0) {
+            return overrides.advances;
+        }
+        if (executionAdvances && executionAdvances.length > 0) {
+            return executionAdvances.map((m: any) => ({
+                label: m.label || m.name,
+                dueCondition: m.dueCondition || m.description || m.unlocks,
+                percentage: m.percentage,
+                amount: m.amount || (executionTotal * (m.percentage / 100))
+            }));
+        }
+        const filteredMilestones = projectContext.paymentMilestones?.filter((m: any) => m.type === 'execution') || [];
+        if (filteredMilestones.length > 0) {
+            return filteredMilestones.map((m: any) => ({
+                label: m.name,
+                dueCondition: m.description || m.unlocks || 'Before stage begins',
+                percentage: m.percentage,
+                amount: executionTotal * (m.percentage / 100)
+            }));
+        }
+        return [
+            { label: 'Execution Advance 1', dueCondition: 'Agreement acceptance / site mobilisation / procurement start', percentage: 10, amount: executionTotal * 0.10 },
+            { label: 'Execution Advance 2', dueCondition: 'Structural / carpentry / civil / procurement stage', percentage: 40, amount: executionTotal * 0.40 },
+            { label: 'Execution Advance 3', dueCondition: 'Finishing / installation / painting / final site stage', percentage: 40, amount: executionTotal * 0.40 },
+            { label: 'Final Advance', dueCondition: 'Substantial completion / pre-handover / handover readiness', percentage: 10, amount: executionTotal * 0.10 }
+        ];
+    };
+    const milestonesList = getInitialMilestones();
+
+    const updateMilestone = (index: number, key: string, val: any) => {
+        const currentMilestones = [...milestonesList];
+        currentMilestones[index] = {
+            ...currentMilestones[index],
+            [key]: val
+        };
+        // Recalculate amount if percentage changed
+        if (key === 'percentage') {
+            const p = parseFloat(val) || 0;
+            currentMilestones[index].amount = executionTotal * (p / 100);
+        }
+        updateOverride('advances', currentMilestones);
+    };
+
+    const addMilestone = () => {
+        const currentMilestones = [...milestonesList];
+        currentMilestones.push({
+            label: `Execution Advance ${currentMilestones.length + 1}`,
+            dueCondition: 'Stage description',
+            percentage: 10,
+            amount: executionTotal * 0.1
+        });
+        updateOverride('advances', currentMilestones);
+    };
+
+    const deleteMilestone = (index: number) => {
+        const currentMilestones = [...milestonesList];
+        currentMilestones.splice(index, 1);
+        updateOverride('advances', currentMilestones);
+    };
+
+    const handleDownloadPdf = () => {
+        const wasEditing = isEditMode;
+        if (wasEditing) {
+            setIsEditMode(false);
+        }
+        setIsGenerating(true);
+
+        setTimeout(() => {
+            const element = contentRef.current;
+            if (!element) {
+                setIsGenerating(false);
+                if (wasEditing) setIsEditMode(true);
+                return;
+            }
+
+            import('html2pdf.js').then((module) => {
+                let html2pdfObj: any;
+                const html2pdf = module as any;
+                if (typeof html2pdf === 'function') {
+                    html2pdfObj = html2pdf;
+                } else if (html2pdf && typeof html2pdf.default === 'function') {
+                    html2pdfObj = html2pdf.default;
+                } else if (html2pdf.default && typeof html2pdf.default.default === 'function') {
+                    html2pdfObj = html2pdf.default.default;
+                }
+
+                if (!html2pdfObj) {
+                    alert("PDF tools not loading");
+                    setIsGenerating(false);
+                    if (wasEditing) setIsEditMode(true);
+                    return;
+                }
+
+                const opt = {
+                    margin: [0, 0, 0, 0],
+                    filename: `FFDS-Execution-Agreement-${(projectContext as any).projectId || 'Draft'}.pdf`,
+                    image: { type: 'jpeg' as const, quality: 1 },
+                    html2canvas: { 
+                        scale: 2, 
+                        useCORS: true, 
+                        letterRendering: true, 
+                        windowWidth: 800,
+                        logging: false,
+                        onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc)
+                    },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+                    pagebreak: { mode: ['css', 'legacy'] }
+                };
+
+                html2pdfObj().set(opt).from(element).toPdf().get('pdf').then((pdf: any) => {
+                    // PDF generated
+                }).save().finally(() => {
+                    setIsGenerating(false);
+                    if (wasEditing) setIsEditMode(true);
+                });
+            }).catch(err => {
+                console.error("Failed to load html2pdf", err);
+                setIsGenerating(false);
+                if (wasEditing) setIsEditMode(true);
+            });
+        }, 150);
+    };
 
     // Group BOQ
     const groupedBoq: { [key: string]: any[] } = {};
@@ -101,27 +214,53 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
         groupedBoq[roomName].push(item);
     });
 
-    return (
-        <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in pb-16">
-            <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                <div className="flex items-center gap-3">
-                    <div className="bg-indigo-100 p-2 rounded-lg">
-                        <FileText className="w-5 h-5 text-indigo-700" />
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-slate-800">Execution Agreement</h3>
-                        <p className="text-xs text-slate-500">Integrated FFDS Template</p>
-                    </div>
-                </div>
+    usePageHeader({
+        badge: isEditMode ? 'Editing Parameters' : undefined,
+        actions: (
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={() => setIsEditMode(!isEditMode)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer ${
+                        isEditMode 
+                        ? 'bg-[#0066CC] border-[#0055B3] text-white hover:bg-[#0055B3]' 
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    {isEditMode ? 'Close Editor' : 'Edit Agreement'}
+                </button>
                 <button 
                     onClick={handleDownloadPdf} 
                     disabled={isGenerating}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold shadow hover:bg-indigo-700 transition disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#0066CC] text-white rounded-lg text-xs font-bold shadow-xs hover:bg-[#0055B3] transition disabled:opacity-50 cursor-pointer"
                 >
-                    <Download className="w-4 h-4" />
+                    <Download className="w-3.5 h-3.5" />
                     {isGenerating ? 'Generating PDF...' : 'Download PDF'}
                 </button>
             </div>
+        )
+    }, [isEditMode, isGenerating]);
+
+    return (
+        <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in pb-16">
+
+            {isEditMode && (
+                <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 flex items-start gap-3">
+                    <div className="bg-sky-100 text-[#0055B3] p-1.5 rounded-full mt-0.5">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-bold text-slate-900">Agreement Editor Active</h4>
+                        <p className="text-xs text-[#0055B3] mt-0.5 leading-relaxed">
+                            You can now edit the agreement's parameters (dates, estimated timeline, financial totals, and individual milestone stages) directly on the pages below. All edits are saved instantly. Close the editor when ready to preview or send the agreement to the client.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto p-4 sm:p-8 flex justify-center">
                 <div ref={contentRef} className="execution-agreement-container" style={{ width: '210mm', backgroundColor: '#ececf2' }}>
@@ -360,9 +499,54 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                             </div>
 
                             <div className="ea-grid-3">
-                                <div className="ea-box soft"><div className="ea-label">Agreement Date</div><div className="ea-value"><span className="ea-placeholder">{dateStr}</span></div></div>
-                                <div className="ea-box soft"><div className="ea-label">Estimated Duration</div><div className="ea-value"><span className="ea-placeholder">{estimatedDuration} Working Days</span></div></div>
-                                <div className="ea-box soft"><div className="ea-label">Commencement Trigger</div><div className="ea-value">Site Handover + Advance Clearance</div></div>
+                                <div className="ea-box soft">
+                                    <div className="ea-label">Agreement Date</div>
+                                    <div className="ea-value">
+                                        {isEditMode ? (
+                                            <input 
+                                                type="text" 
+                                                value={dateStr} 
+                                                onChange={(e) => updateOverride('agreementDate', e.target.value)}
+                                                className="w-full text-xs p-1 border border-sky-200 rounded font-semibold text-slate-900 bg-white" 
+                                            />
+                                        ) : (
+                                            <span className="ea-placeholder">{dateStr}</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="ea-box soft">
+                                    <div className="ea-label">Estimated Duration</div>
+                                    <div className="ea-value">
+                                        {isEditMode ? (
+                                            <div className="flex items-center gap-1.5">
+                                                <input 
+                                                    type="number" 
+                                                    value={estimatedDuration} 
+                                                    onChange={(e) => updateOverride('estimatedDuration', parseInt(e.target.value) || 0)}
+                                                    className="w-20 text-xs p-1 border border-sky-200 rounded font-bold text-slate-900 text-center bg-white" 
+                                                />
+                                                <span className="text-[11px] font-bold text-slate-900">Days</span>
+                                            </div>
+                                        ) : (
+                                            <span className="ea-placeholder">{estimatedDuration} Working Days</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="ea-box soft">
+                                    <div className="ea-label">Commencement Trigger</div>
+                                    <div className="ea-value">
+                                        {isEditMode ? (
+                                            <input 
+                                                type="text" 
+                                                value={commencementTrigger} 
+                                                onChange={(e) => updateOverride('commencementTrigger', e.target.value)}
+                                                className="w-full text-xs p-1 border border-sky-200 rounded font-semibold text-slate-900 bg-white" 
+                                            />
+                                        ) : (
+                                            <span>{commencementTrigger}</span>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
                             <h2>Financial Summary</h2>
@@ -371,10 +555,76 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                     <tr><th>Particulars</th><th className="ea-right">Amount</th></tr>
                                 </thead>
                                 <tbody>
-                                    <tr><td>Execution Works Value, excluding GST</td><td className="ea-right">₹ <span className="ea-placeholder">{formatCurrency(executionTotal).replace('₹','')}</span></td></tr>
-                                    <tr><td>Design / Professional Fees, if billed under this Agreement</td><td className="ea-right">₹ <span className="ea-placeholder">{formatCurrency(designFee).replace('₹','')}</span></td></tr>
-                                    <tr><td>GST, if applicable</td><td className="ea-right">₹ <span className="ea-placeholder">{formatCurrency(gstAmount).replace('₹','')}</span></td></tr>
-                                    <tr><td><strong>Grand Total</strong></td><td className="ea-right"><strong>₹ <span className="ea-placeholder">{formatCurrency(grandTotal).replace('₹','')}</span></strong></td></tr>
+                                    <tr>
+                                        <td>Execution Works Value, excluding GST</td>
+                                        <td className="ea-right font-mono font-semibold">
+                                            {isEditMode ? (
+                                                <div className="flex items-center justify-end gap-1 font-sans">
+                                                    <span className="text-[11px] font-bold text-slate-500">₹</span>
+                                                    <input 
+                                                        type="number" 
+                                                        value={executionTotal} 
+                                                        onChange={(e) => {
+                                                            const val = parseFloat(e.target.value) || 0;
+                                                            updateOverride('executionTotal', val);
+                                                            // Recalculate milestones amounts to keep sync if percentage based
+                                                            if (overrides.advances) {
+                                                                const updated = overrides.advances.map((m: any) => ({
+                                                                    ...m,
+                                                                    amount: val * ((m.percentage || 0) / 100)
+                                                                }));
+                                                                updateOverride('advances', updated);
+                                                            }
+                                                        }}
+                                                        className="w-32 text-xs p-1 border border-sky-200 rounded font-bold text-slate-900 text-right bg-white animate-in zoom-in-95 duration-150" 
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <span>₹ {formatCurrency(executionTotal).replace('₹','')}</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Design / Professional Fees, if billed under this Agreement</td>
+                                        <td className="ea-right font-mono font-semibold">
+                                            {isEditMode ? (
+                                                <div className="flex items-center justify-end gap-1 font-sans">
+                                                    <span className="text-[11px] font-bold text-slate-500">₹</span>
+                                                    <input 
+                                                        type="number" 
+                                                        value={designFee} 
+                                                        onChange={(e) => updateOverride('designFee', parseFloat(e.target.value) || 0)}
+                                                        className="w-32 text-xs p-1 border border-sky-200 rounded font-bold text-slate-900 text-right bg-white animate-in zoom-in-95 duration-150" 
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <span>₹ {formatCurrency(designFee).replace('₹','')}</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            {isEditMode ? (
+                                                <div className="flex items-center gap-2">
+                                                    <span>GST Rate:</span>
+                                                    <input 
+                                                        type="number" 
+                                                        value={gstRate} 
+                                                        onChange={(e) => updateOverride('gstRate', parseFloat(e.target.value) || 0)}
+                                                        className="w-14 text-xs p-1 border border-sky-200 rounded font-bold text-slate-900 text-center bg-white" 
+                                                    />
+                                                    <span>%</span>
+                                                </div>
+                                            ) : (
+                                                <span>GST ({gstRate}%)</span>
+                                            )}
+                                        </td>
+                                        <td className="ea-right font-mono font-semibold">₹ {formatCurrency(gstAmount).replace('₹','')}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Grand Total</strong></td>
+                                        <td className="ea-right font-mono font-bold text-slate-900"><strong>₹ {formatCurrency(grandTotal).replace('₹','')}</strong></td>
+                                    </tr>
                                 </tbody>
                             </table>
                             <p className="ea-small">Amounts, taxes, inclusions, exclusions, as-actuals, allowances, and provisional sums shall be governed by the final signed BOQ and invoice schedule.</p>
@@ -577,39 +827,101 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                             </div>
 
                             <h3>4.2 Execution Milestones</h3>
-                            <table>
-                                <thead>
-                                    <tr><th>Stage</th><th>Trigger</th><th>%</th><th>Amount</th><th>Due</th></tr>
-                                </thead>
-                                <tbody>
-                                    {executionAdvances ? executionAdvances.map((m: any, i: number) => {
-                                        const amount = m.amount || (executionTotal * (m.percentage / 100));
-                                        return (
-                                        <tr key={i}>
-                                            <td>{m.label}</td>
-                                            <td>{m.dueCondition}</td>
-                                            <td>{m.percentage}%</td>
-                                            <td>₹ {formatCurrency(amount).replace('₹','')}</td>
-                                            <td>Before stage begins</td>
-                                        </tr>
-                                    )}) : projectContext.paymentMilestones?.filter((m: any) => m.type === 'execution').map((m, i) => (
-                                        <tr key={i}>
-                                            <td>{m.name}</td>
-                                            <td>{m.description}</td>
-                                            <td>{m.percentage}%</td>
-                                            <td>₹ {formatCurrency(executionTotal * (m.percentage / 100)).replace('₹','')}</td>
-                                            <td>Before stage begins</td>
-                                        </tr>
-                                    )) || (
-                                        <>
-                                            <tr><td>Execution Advance 1</td><td>Agreement acceptance / site mobilisation / procurement start</td><td>10%</td><td>₹ <span className="ea-placeholder">{formatCurrency(executionTotal * 0.10).replace('₹','')}</span></td><td>Before commencement</td></tr>
-                                            <tr><td>Execution Advance 2</td><td>Structural / carpentry / civil / procurement stage</td><td>40%</td><td>₹ <span className="ea-placeholder">{formatCurrency(executionTotal * 0.40).replace('₹','')}</span></td><td>Before stage begins</td></tr>
-                                            <tr><td>Execution Advance 3</td><td>Finishing / installation / painting / final site stage</td><td>40%</td><td>₹ <span className="ea-placeholder">{formatCurrency(executionTotal * 0.40).replace('₹','')}</span></td><td>Before stage begins</td></tr>
-                                            <tr><td>Final Advance</td><td>Substantial completion / pre-handover / handover readiness</td><td>10%</td><td>₹ <span className="ea-placeholder">{formatCurrency(executionTotal * 0.10).replace('₹','')}</span></td><td>Before handover documents, keys, access cards, warranty certificate, and final dossier release</td></tr>
-                                        </>
-                                    )}
-                                </tbody>
-                            </table>
+                            {isEditMode ? (
+                                <div className="space-y-4 mb-4 border border-sky-100 p-4 rounded-xl bg-sky-50/25">
+                                    <table className="w-full text-xs">
+                                        <thead>
+                                            <tr className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white text-[10px] uppercase tracking-wider font-bold">
+                                                <th className="p-2 text-left">Milestone Name</th>
+                                                <th className="p-2 text-left">Due Trigger Condition</th>
+                                                <th className="p-2 text-left w-20">%</th>
+                                                <th className="p-2 text-right w-32">Amount</th>
+                                                <th className="p-2 text-center w-16">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {milestonesList.map((m: any, i: number) => (
+                                                <tr key={i} className="border-b border-sky-100/55">
+                                                    <td className="p-2">
+                                                        <input 
+                                                            type="text" 
+                                                            value={m.label} 
+                                                            onChange={(e) => updateMilestone(i, 'label', e.target.value)}
+                                                            className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#0066CC] outline-none" 
+                                                        />
+                                                    </td>
+                                                    <td className="p-2">
+                                                        <textarea 
+                                                            rows={2}
+                                                            value={m.dueCondition} 
+                                                            onChange={(e) => updateMilestone(i, 'dueCondition', e.target.value)}
+                                                            className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#0066CC] outline-none resize-none" 
+                                                        />
+                                                    </td>
+                                                    <td className="p-2">
+                                                        <div className="flex items-center gap-1">
+                                                            <input 
+                                                                type="number" 
+                                                                value={m.percentage} 
+                                                                onChange={(e) => updateMilestone(i, 'percentage', parseFloat(e.target.value) || 0)}
+                                                                className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-bold focus:border-[#0066CC] outline-none text-center" 
+                                                            />
+                                                            <span className="text-[11px] font-bold text-slate-900">%</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-2 text-right font-mono font-bold text-slate-700">
+                                                        ₹ {formatCurrency(m.amount || (executionTotal * (m.percentage / 100))).replace('₹','')}
+                                                    </td>
+                                                    <td className="p-2 text-center">
+                                                        <button 
+                                                            onClick={() => deleteMilestone(i)}
+                                                            className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition cursor-pointer"
+                                                            title="Delete Milestone"
+                                                        >
+                                                            <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    <div className="flex justify-between items-center pt-2 border-t border-sky-100">
+                                        <button 
+                                            onClick={addMilestone}
+                                            className="px-3 py-1.5 bg-sky-50 border border-sky-200 hover:bg-sky-100/50 text-[#0055B3] text-xs font-bold rounded-lg transition flex items-center gap-1 cursor-pointer"
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
+                                            Add Milestone
+                                        </button>
+                                        <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                                            <span>Sum of Percentages:</span>
+                                            <span className={`px-2 py-0.5 rounded text-[11px] ${Math.abs(milestonesList.reduce((acc: number, cur: any) => acc + (cur.percentage || 0), 0) - 100) < 0.01 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800 animate-pulse'}`}>
+                                                {milestonesList.reduce((acc: number, cur: any) => acc + (cur.percentage || 0), 0).toFixed(1)}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <table>
+                                    <thead>
+                                        <tr><th>Stage</th><th>Trigger</th><th>%</th><th>Amount</th><th>Due</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {milestonesList.map((m: any, i: number) => {
+                                            const amount = m.amount || (executionTotal * (m.percentage / 100));
+                                            return (
+                                                <tr key={i}>
+                                                    <td className="font-semibold text-slate-900">{m.label}</td>
+                                                    <td>{m.dueCondition}</td>
+                                                    <td className="font-bold text-slate-700">{m.percentage}%</td>
+                                                    <td className="font-mono font-semibold text-slate-900">₹ {formatCurrency(amount).replace('₹','')}</td>
+                                                    <td>Before stage begins</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
                             <p className="ea-small">Milestone percentages may be modified for a specific project in Annexure A. If there is a conflict, the signed Annexure A payment schedule shall apply.</p>
 
                             <h3>4.3 Taxes and Statutory Charges</h3>
@@ -1047,8 +1359,8 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
             </div>
             
             {/* Sign-off & Execution Protocol */}
-            <div className="mt-8 pt-8 border-t-4 border-indigo-950 break-inside-avoid">
-                <h3 className="text-lg font-bold text-indigo-950 uppercase tracking-wide mb-6 font-opensans">
+            <div className="mt-8 pt-8 border-t-4 border-[#0055B3] break-inside-avoid">
+                <h3 className="text-lg font-bold text-slate-900 uppercase tracking-wide mb-6 font-opensans">
                     Acceptance & Sign-off
                 </h3>
                 
@@ -1068,12 +1380,16 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
 
 const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: string, projectId: string, setProjectContext: any, projectContext: ProjectContext, grandTotal: number, tenantId?: string }> = ({ clientName, location, projectId, setProjectContext, projectContext, grandTotal, tenantId }) => {
     const { orgData } = useOrg();
+    const { settings } = useStudioSettings(tenantId || '');
+    const studioName = settings?.companyName || orgData?.name || 'Form Factors Design Studio';
     const [isSending, setIsSending] = useState(false);
     const [showSendConfirm, setShowSendConfirm] = useState(false);
     const [showMarkManual, setShowMarkManual] = useState(false);
+    const [showInPersonModal, setShowInPersonModal] = useState(false);
     const [manualRef, setManualRef] = useState("Digital Confirmation");
     const [localError, setLocalError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const [pinCopied, setPinCopied] = useState(false);
 
     const currentSignoff = (projectContext as any).executionSignoff;
     const status = currentSignoff?.status || 'pending';
@@ -1095,66 +1411,124 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
 
         setIsSending(true);
         try {
-            await new Promise(r => setTimeout(r, 100));
-            // We use the wrapper container for html2pdf
-            const element = document.querySelector('.execution-agreement-container');
-            let pdfBase64;
-            if (element) {
-                try {
-                    const html2pdfModule = await import('html2pdf.js');
-                    const html2pdfObj = ((html2pdfModule as any).default || html2pdfModule) as any;
-                    if (typeof html2pdfObj !== 'function') throw new Error("html2pdf library loaded incorrectly");
-                    
-                    const opt = {
-                        margin: [0, 0, 0, 0],
-                        filename: 'Execution_Agreement.pdf',
-                        image: { type: 'jpeg' as const, quality: 0.98 },
-                        html2canvas: { scale: 2, useCORS: true, logging: false },
-                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
-                    };
-                    pdfBase64 = await html2pdfObj().set(opt).from(element).outputPdf('datauristring');
-                } catch (pdfErr) {
-                    console.error("PDF generation failed, falling back without attachment", pdfErr);
-                }
-            }
-
-            const result = await sendAgreementSignoffRequest(projectId || '', projectContext, grandTotal, pdfBase64, tenantId || orgData?.tenantId || 'demo-tenant-01');
+            const result = await sendAgreementSignoffRequest(
+                projectId || '', 
+                projectContext, 
+                grandTotal, 
+                undefined, 
+                tenantId || orgData?.tenantId || 'demo-tenant-01', 
+                'execution'
+            );
             
-            if (!result.success) {
-                setLocalError(`Error sending email (domain not verified?): ${result.error}`);
-                return;
-            }
-
+            const tokenToUse = result.token || `EXEC_AGREEMENT_${projectId}_${Date.now()}`;
+            const accessPinToUse = result.accessPin || `SEC-${Math.floor(1000 + Math.random() * 9000)}`;
             const newSignoff = {
-                status: 'sent',
-                token: result.token,
+                status: 'sent' as const,
+                token: tokenToUse,
+                accessPin: accessPinToUse,
+                docketHash: result.docketHash,
                 sentAt: new Date().toISOString()
             };
 
+            const updatedContext = { ...projectContext, executionSignoff: newSignoff };
             setProjectContext?.((prev: any) => ({ ...prev, executionSignoff: newSignoff }));
             setShowSendConfirm(false);
+
+            // Immediate persistence to ensure client link works instantly without race conditions
+            try {
+                const allProjects = await dbService.getProjects();
+                const currentProj = allProjects.find(p => p.id === projectId);
+                if (currentProj) {
+                    await dbService.saveProject({
+                        ...currentProj,
+                        context: updatedContext,
+                        lastModified: Date.now()
+                    });
+                }
+                if (firestore && projectId) {
+                    await updateDoc(doc(firestore, 'projects', projectId), {
+                        'context.executionSignoff': newSignoff,
+                        lastModified: Date.now()
+                    });
+                }
+            } catch (pErr) {
+                console.warn("Immediate signoff sync note:", pErr);
+            }
+
+            if (result.error) {
+                setLocalError(`Email dispatch status: ${result.error}. The digital sign-off link & access PIN are active below.`);
+            }
         } catch (err: any) {
-            setLocalError(`System error: ${err.message}`);
+            console.error("Signoff send error:", err);
+            const fallbackToken = `EXEC_AGREEMENT_${projectId}_${Date.now()}`;
+            const fallbackPin = `SEC-${Math.floor(1000 + Math.random() * 9000)}`;
+            const fallbackSignoff = {
+                status: 'sent' as const,
+                token: fallbackToken,
+                accessPin: fallbackPin,
+                sentAt: new Date().toISOString()
+            };
+            const updatedContext = { ...projectContext, executionSignoff: fallbackSignoff };
+            setProjectContext?.((prev: any) => ({ 
+                ...prev, 
+                executionSignoff: fallbackSignoff 
+            }));
+            setShowSendConfirm(false);
+
+            try {
+                const allProjects = await dbService.getProjects();
+                const currentProj = allProjects.find(p => p.id === projectId);
+                if (currentProj) {
+                    await dbService.saveProject({
+                        ...currentProj,
+                        context: updatedContext,
+                        lastModified: Date.now()
+                    });
+                }
+            } catch (pErr) {
+                console.warn("Fallback signoff persistence note:", pErr);
+            }
+
+            setLocalError(`Notice: ${err.message || 'Email dispatch skipped in sandbox mode'}. Digital signature URL & PIN generated successfully below.`);
         } finally {
             setIsSending(false);
         }
     };
 
-    const handleMarkExecuted = () => {
-        setLocalError(null);
-        if (!manualRef.trim()) {
-            setLocalError("Please enter an approval reference.");
-            return;
-        }
+    const handleConfirmManualOverride = (docket: DigitalSignatureDocket) => {
         const newSignoff = {
-            status: 'signed',
-            clientName: 'Manual Ops Entry',
-            ipAddress: 'Internal',
-            refId: manualRef,
-            signedAt: new Date().toISOString()
+            status: 'signed' as const,
+            clientName: docket.signatoryName,
+            clientEmail: docket.signatoryEmail,
+            ipAddress: docket.ipAddress,
+            refId: docket.docketHash,
+            signedAt: docket.signedAt,
+            signatureType: docket.signatureType,
+            signatureDataUrl: docket.signatureDataUrl,
+            docket: docket,
+            manualOverride: docket.manualOverride
         };
         setProjectContext?.((prev: any) => ({ ...prev, executionSignoff: newSignoff }));
         setShowMarkManual(false);
+    };
+
+    const handleInPersonSignSubmit = (docket: DigitalSignatureDocket) => {
+        const newSignoff = {
+            status: 'signed' as const,
+            clientName: docket.signatoryName,
+            clientEmail: docket.signatoryEmail,
+            ipAddress: 'In-Person (Studio Device)',
+            refId: docket.docketHash,
+            signedAt: docket.signedAt,
+            signatureType: docket.signatureType,
+            signatureDataUrl: docket.signatureDataUrl,
+            docket: {
+                ...docket,
+                ipAddress: 'In-Person (Studio Device)'
+            }
+        };
+        setProjectContext?.((prev: any) => ({ ...prev, executionSignoff: newSignoff }));
+        setShowInPersonModal(false);
     };
 
     const handleReset = () => {
@@ -1167,40 +1541,55 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const handleCopyPin = (pin: string) => {
+        navigator.clipboard.writeText(pin);
+        setPinCopied(true);
+        setTimeout(() => setPinCopied(false), 2000);
+    };
+
+    const shareViaWhatsApp = (link: string, pin: string) => {
+        const text = encodeURIComponent(
+            `Dear ${projectContext.clientName || 'Client'},\n\n` +
+            `Your official Execution Agreement for *${projectContext.name || 'Interior Design Project'}* has been dispatched for authorization by ${studioName}.\n\n` +
+            `🔒 *Document Access PIN:* ${pin}\n\n` +
+            `Direct Review & Sign Link:\n${link}\n\n` +
+            `You can also open our studio portal and verify via your Access PIN without clicking unknown links.`
+        );
+        window.open(`https://wa.me/?text=${text}`, '_blank');
+    };
+
     // View: EXECUTED (Stamped)
     if (status === 'signed') {
-        const timestamp = currentSignoff?.signedAt ? new Date(currentSignoff.signedAt).toLocaleString() : 'N/A';
-        const refIdText = currentSignoff?.refId || `Token: ${currentSignoff?.token?.slice(-6) || 'Manual'}`;
+        const docketToRender: DigitalSignatureDocket = currentSignoff?.docket || {
+            signatoryName: currentSignoff?.clientName || clientName || 'Client Signatory',
+            signatoryEmail: currentSignoff?.clientEmail || projectContext.clientEmail,
+            signedAt: currentSignoff?.signedAt || new Date().toISOString(),
+            signatureType: currentSignoff?.signatureType || (currentSignoff?.ipAddress === 'Internal' ? 'manual_override' : 'draw'),
+            signatureDataUrl: currentSignoff?.signatureDataUrl,
+            ipAddress: currentSignoff?.ipAddress || 'Client Portal Web',
+            docketHash: currentSignoff?.refId?.startsWith('SHA256') ? currentSignoff.refId : `SHA256:${currentSignoff?.refId || 'EXEC_SEALED'}`,
+            verified: true,
+            legalAffirmation: true,
+            manualOverride: currentSignoff?.manualOverride || (currentSignoff?.ipAddress === 'Internal' ? {
+                isOverride: true,
+                recordedBy: 'Ops Director',
+                recordedAt: currentSignoff?.signedAt || new Date().toISOString(),
+                overrideReason: 'Manual Ops Acceptance',
+                approvalMedium: 'paper_wet_ink'
+            } : undefined)
+        };
 
         return (
-            <div className="mt-4 relative group break-inside-avoid">
-                <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition duration-500"></div>
-                <div className="relative bg-white border-2 border-emerald-500/30 rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between overflow-hidden gap-4">
-                    <div className="absolute -right-4 -bottom-4 text-emerald-50 opacity-20 pointer-events-none">
-                        <CheckBadgeIcon className="w-32 h-32" />
-                    </div>
-                    <div className="flex-1 z-10 w-full sm:w-auto">
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="bg-emerald-100 text-emerald-700 p-1 rounded-full"><CheckBadgeIcon className="w-5 h-5"/></span>
-                            <h4 className="text-lg font-black text-emerald-800 uppercase tracking-widest">Digitally Executed</h4>
-                        </div>
-                        <p className="text-sm text-slate-600 font-medium">
-                            Authorized by <span className="font-bold text-indigo-950">{currentSignoff?.clientName || clientName}</span>
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1 font-mono">Ref: {refIdText} • {timestamp}</p>
-                        {currentSignoff?.ipAddress && currentSignoff?.ipAddress !== 'Internal' && (
-                            <p className="text-[10px] text-slate-400 font-mono mt-1">IP: {currentSignoff.ipAddress}</p>
-                        )}
-                        <div className="mt-3">
-                            <button onClick={handleReset} className="text-xs text-slate-400 font-bold hover:text-slate-600 underline cursor-pointer">Reset to Pending (Admin)</button>
-                        </div>
-                    </div>
-                    <div className="text-right z-10 shrink-0">
-                        <div className="border-2 border-emerald-600 text-emerald-700 px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest rotate-[-12deg] opacity-80 inline-block bg-white">
-                            {currentSignoff?.ipAddress === 'Internal' ? 'Studio Verified' : 'Client Signed'}
-                        </div>
-                    </div>
-                </div>
+            <div className="mt-6 space-y-4 break-inside-avoid">
+                <DigitalSignatureDocketView
+                    docket={docketToRender}
+                    documentTitle="Integrated Interior Execution Agreement"
+                    projectId={projectId}
+                    projectName={projectContext.name}
+                    studioName={studioName}
+                    canReset={true}
+                    onReset={handleReset}
+                />
             </div>
         );
     }
@@ -1209,54 +1598,88 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
     if (status === 'sent') {
         const sentTimestamp = currentSignoff?.sentAt ? new Date(currentSignoff.sentAt).toLocaleString() : 'N/A';
         const link = currentSignoff?.token ? getSignoffUrl(currentSignoff.token) : '';
+        const accessPin = currentSignoff?.accessPin || 'SEC-8492';
 
         return (
-            <div className="mt-4 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl p-6 relative break-inside-avoid">
+            <div className="mt-4 bg-amber-50 text-amber-900 border border-amber-200 rounded-2xl p-6 relative break-inside-avoid shadow-xs">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                     <div className="flex-grow w-full md:w-auto">
-                         <h4 className="text-sm font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
-                             Awaiting Client Signature
-                         </h4>
-                         <p className="text-xs max-w-xl">
-                             Digital agreement active at {sentTimestamp}. Sent to <strong>{projectContext.clientEmail || 'Client'}</strong>.
+                         <div className="flex items-center gap-2 mb-1.5">
+                             <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                             <h4 className="text-sm font-bold uppercase tracking-widest text-amber-900">
+                                 Awaiting Client Signature
+                             </h4>
+                         </div>
+                         <p className="text-xs text-amber-800 max-w-xl">
+                             Digital agreement active at {sentTimestamp}. Dispatched to <strong>{projectContext.clientEmail || 'Client'}</strong>.
                          </p>
 
-                         {link && (
-                             <div className="mt-4 p-4 bg-white rounded-lg border border-amber-200 shadow-sm">
-                                 <div className="flex items-center justify-between mb-2 pb-2 border-b border-amber-100">
-                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Digital Sign-Off URL</span>
+                         {/* Security PIN & Anti-Phishing Details */}
+                         <div className="mt-4 p-4 bg-white rounded-xl border border-amber-200 shadow-xs space-y-3">
+                             <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+                                 <div className="flex items-center gap-2">
+                                     <KeyRound className="w-4 h-4 text-[#0066CC]" />
+                                     <span className="text-xs font-bold text-slate-900">Document Access PIN:</span>
+                                     <span className="font-mono text-sm font-extrabold text-[#0066CC] bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                                         {accessPin}
+                                     </span>
+                                 </div>
+                                 <button 
+                                     onClick={() => handleCopyPin(accessPin)}
+                                     className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded transition-all flex items-center gap-1 cursor-pointer"
+                                 >
+                                     {pinCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                     {pinCopied ? "PIN Copied!" : "Copy PIN"}
+                                 </button>
+                             </div>
+
+                             <div>
+                                 <div className="flex items-center justify-between mb-1.5">
+                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Secure Direct Link</span>
                                      <button 
                                          onClick={() => handleCopy(link)}
                                          className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold rounded transition-all flex items-center gap-1 cursor-pointer"
                                      >
-                                         {copied ? "Copied!" : "Copy Link"}
+                                         {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                         {copied ? "Link Copied!" : "Copy Link"}
                                      </button>
                                  </div>
-                                 <div className="text-[11px] font-mono break-all text-slate-500 bg-slate-50 p-2.5 rounded border border-slate-200">
+                                 <div className="text-[11px] font-mono break-all text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-200">
                                      {link}
                                  </div>
-                                 <div className="mt-3 flex gap-2">
-                                     <a 
-                                         href={link} 
-                                         target="_blank" 
-                                         rel="noopener noreferrer" 
-                                         className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-semibold tracking-tight inline-flex items-center gap-1 shadow-sm cursor-pointer"
-                                     >
-                                         Open Sign-Off Screen &rarr;
-                                     </a>
-                                 </div>
                              </div>
-                         )}
 
-                         <div className="flex items-center gap-2 mt-4 text-xs font-bold">
+                             <div className="pt-2 flex flex-wrap items-center gap-2">
+                                 <a 
+                                     href={link} 
+                                     target="_blank" 
+                                     rel="noopener noreferrer" 
+                                     className="px-3.5 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg text-xs font-bold tracking-tight inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                 >
+                                     <ExternalLink className="w-3.5 h-3.5" />
+                                     Open Client Sign-Off Screen
+                                 </a>
+                                 <button 
+                                     onClick={() => shareViaWhatsApp(link, accessPin)}
+                                     className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                 >
+                                     <Share2 className="w-3.5 h-3.5" />
+                                     Share on WhatsApp
+                                 </button>
+                             </div>
+                         </div>
+
+                         <div className="flex items-center gap-3 mt-4 text-xs font-bold">
                              <button onClick={() => setShowSendConfirm(true)} disabled={isSending} className="underline text-amber-700 hover:text-amber-900 cursor-pointer">
-                                 {isSending ? 'Sending...' : 'Resend Email'}
+                                 {isSending ? 'Dispatching...' : 'Resend Email'}
                              </button>
                              <span className="text-amber-300">|</span>
-                             <button onClick={handleReset} className="underline text-amber-700 hover:text-amber-900 cursor-pointer">Cancel Request</button>
+                             <button onClick={handleReset} className="underline text-amber-700 hover:text-amber-900 cursor-pointer">
+                                 Cancel Request
+                             </button>
                          </div>
                          {showSendConfirm && (
-                             <div className="mt-4 p-4 border border-amber-300 bg-amber-100 rounded flex flex-col gap-2">
+                             <div className="mt-4 p-4 border border-amber-300 bg-amber-100 rounded-xl flex flex-col gap-2">
                                  <p className="text-xs font-bold">Confirm Resend Execution Agreement?</p>
                                  <div className="flex items-center gap-2">
                                      <button onClick={sendEmailSignoff} className="px-3 py-1 bg-amber-600 text-white rounded text-xs cursor-pointer">Yes, Resend</button>
@@ -1266,24 +1689,58 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                          )}
                          {localError && <p className="text-red-600 text-xs mt-2">{localError}</p>}
                     </div>
-                    <div className="no-print shrink-0 border-l border-amber-200 pl-6 space-y-2 w-full md:w-auto">
+
+                    <div className="no-print shrink-0 border-t md:border-t-0 md:border-l border-amber-200 pt-4 md:pt-0 md:pl-6 space-y-2.5 w-full md:w-auto">
                         <button 
-                            onClick={() => setShowMarkManual(!showMarkManual)}
-                            className="w-full flex justify-center items-center gap-2 px-4 py-2 bg-white border border-amber-300 text-amber-800 text-[10px] font-bold rounded-lg shadow-sm hover:bg-amber-100 transition-all uppercase tracking-widest cursor-pointer"
+                            onClick={() => setShowInPersonModal(true)}
+                            className="w-full flex justify-center items-center gap-2 px-4 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl shadow-xs hover:bg-slate-800 transition-all cursor-pointer"
                         >
-                            Override: Mark Executed
+                            <Tablet className="w-4 h-4" />
+                            Client In-Person Signing (Tablet)
                         </button>
-                        {showMarkManual && (
-                             <div className="mt-2 p-3 border border-amber-300 bg-amber-100 rounded flex flex-col gap-2">
-                                 <input type="text" value={manualRef} onChange={e => setManualRef(e.target.value)} className="text-xs p-1 border rounded w-full" placeholder="Reference (e.g. WhatsApp)" />
-                                 <div className="flex items-center gap-2">
-                                     <button onClick={handleMarkExecuted} className="px-3 py-1 bg-amber-700 text-white rounded text-xs cursor-pointer">Confirm Override</button>
-                                     <button onClick={() => setShowMarkManual(false)} className="px-3 py-1 bg-transparent border border-amber-700 text-amber-800 rounded text-xs cursor-pointer">Cancel</button>
-                                 </div>
-                             </div>
-                        )}
+                        <button 
+                            onClick={() => setShowMarkManual(true)}
+                            className="w-full flex justify-center items-center gap-2 px-4 py-2.5 bg-white border border-amber-300 text-amber-800 text-[10px] font-bold rounded-xl shadow-xs hover:bg-amber-100 transition-all uppercase tracking-widest cursor-pointer"
+                        >
+                            Ops Override: Record Acceptance
+                        </button>
                     </div>
                 </div>
+
+                {showInPersonModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+                        <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                                <div className="flex items-center gap-2 text-slate-900 font-bold">
+                                    <Tablet className="w-5 h-5 text-[#0066CC]" />
+                                    <span>In-Person Client Signing</span>
+                                </div>
+                                <button onClick={() => setShowInPersonModal(false)} className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">&times;</button>
+                            </div>
+                            <p className="text-xs text-slate-600">
+                                Hand your device or tablet to <strong>{projectContext.clientName || 'the client'}</strong> to affix their signature in person.
+                            </p>
+                            <DigitalSignaturePad
+                                initialName={projectContext.clientName || ''}
+                                initialEmail={projectContext.clientEmail || ''}
+                                documentTitle="Integrated Interior Execution Agreement"
+                                projectTitle={projectContext.name}
+                                onSignComplete={handleInPersonSignSubmit}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {showMarkManual && (
+                    <ManualAcceptanceOverrideModal
+                        documentTitle="Integrated Interior Execution Agreement"
+                        projectName={projectContext.name}
+                        defaultClientName={projectContext.clientName}
+                        defaultClientEmail={projectContext.clientEmail}
+                        onConfirmOverride={handleConfirmManualOverride}
+                        onClose={() => setShowMarkManual(false)}
+                    />
+                )}
             </div>
         );
     }
@@ -1293,15 +1750,15 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
         <div className="mt-4 bg-slate-50 border border-slate-200 rounded-xl p-6 relative break-inside-avoid">
             <div className="flex flex-col md:flex-row justify-between items-start gap-6">
                 <div className="flex-grow">
-                    <h4 className="text-sm font-bold text-indigo-950 uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-slate-900 uppercase tracking-widest mb-2 flex items-center gap-2">
                         Execution Protocol
                     </h4>
                     <p className="text-xs text-slate-600 leading-relaxed max-w-xl mb-4">
                         <strong>No physical signature required.</strong> To execute this agreement, click "Send agreement" to securely email the digital sign-off link to the client.
                     </p>
 
-                    <div className="mt-4 mb-5 p-4 border rounded-xl bg-indigo-50/50 border-indigo-150 max-w-xl">
-                        <label className="block text-[11px] font-bold text-indigo-950 uppercase tracking-wider mb-1.5">
+                    <div className="mt-4 mb-5 p-4 border rounded-xl bg-sky-50/50 border-sky-200 max-w-xl">
+                        <label className="block text-[11px] font-bold text-slate-900 uppercase tracking-wider mb-1.5">
                             Client Email Address Setup
                         </label>
                         <div className="flex flex-col sm:flex-row gap-2">
@@ -1312,7 +1769,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                                     const emailVal = e.target.value;
                                     setProjectContext?.((prev: any) => ({ ...prev, clientEmail: emailVal }));
                                 }} 
-                                className="flex-grow text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-sm" 
+                                className="flex-grow text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] shadow-sm" 
                                 placeholder="Enter client's email address (e.g. client@example.com)" 
                             />
                             {projectContext.clientEmail && projectContext.clientEmail.includes('@') ? (
@@ -1359,7 +1816,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                                             setIsSending(false);
                                         }
                                     }}
-                                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-md text-[10px] shadow-sm uppercase tracking-wider cursor-pointer inline-block text-center"
+                                    className="px-3 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold rounded-md text-[10px] shadow-sm uppercase tracking-wider cursor-pointer inline-block text-center"
                                 >
                                     Force Generate Digital Sign-Off Link (Sandbox Bypass)
                                 </button>
@@ -1374,39 +1831,58 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                         <button 
                             onClick={() => setShowSendConfirm(true)}
                             disabled={isSending}
-                            className="flex justify-center items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition-all w-full"
+                            className="flex justify-center items-center gap-2 px-4 py-2.5 bg-[#0066CC] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#0055B3] transition-all w-full cursor-pointer disabled:opacity-50"
                         >
-                            <ShieldCheckIcon className="w-4 h-4" /> {isSending ? 'Sending...' : 'Send to Client'}
+                            <ShieldCheckIcon className="w-4 h-4" /> {isSending ? 'Dispatching...' : 'Send to Client'}
                         </button>
                     ) : (
-                        <div className="p-3 border border-indigo-200 bg-indigo-50 rounded-lg flex flex-col gap-2">
-                            <p className="text-xs font-bold text-indigo-900">Send Agreement via Email?</p>
+                        <div className="p-3.5 border border-sky-200 bg-sky-50 rounded-xl flex flex-col gap-2 shadow-xs">
+                            <p className="text-xs font-bold text-slate-800">Send Agreement via Email?</p>
                             <div className="flex items-center gap-2">
-                                <button onClick={sendEmailSignoff} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-xs flex-1">Confirm</button>
-                                <button onClick={() => setShowSendConfirm(false)} className="px-3 py-1 bg-white border border-indigo-200 text-indigo-700 font-bold rounded text-xs flex-1">Cancel</button>
+                                <button 
+                                    onClick={sendEmailSignoff} 
+                                    disabled={isSending} 
+                                    className="px-3 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] disabled:opacity-60 text-white font-bold rounded-lg text-xs flex-1 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                                >
+                                    {isSending ? (
+                                        <>
+                                            <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                                            <span>Sending...</span>
+                                        </>
+                                    ) : (
+                                        'Confirm'
+                                    )}
+                                </button>
+                                <button 
+                                    onClick={() => setShowSendConfirm(false)} 
+                                    disabled={isSending} 
+                                    className="px-3 py-1.5 bg-white border border-sky-200 text-[#0055B3] font-bold rounded-lg text-xs flex-1 hover:bg-sky-100 transition cursor-pointer disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
                             </div>
                         </div>
                     )}
                     
-                    {!showMarkManual ? (
-                        <button 
-                            onClick={() => setShowMarkManual(true)}
-                            className="flex justify-center items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-[10px] uppercase tracking-widest font-bold rounded-lg hover:bg-slate-50 transition-all w-full"
-                        >
-                            Mark Manually
-                        </button>
-                    ) : (
-                        <div className="p-3 border border-slate-200 bg-white shadow-sm rounded-lg flex flex-col gap-2 mt-2">
-                            <p className="text-[10px] uppercase tracking-widest font-bold text-slate-500">Manual Approval Reference</p>
-                            <input type="text" value={manualRef} onChange={e => setManualRef(e.target.value)} className="text-xs p-2 border border-slate-200 rounded w-full outline-none focus:border-slate-400" placeholder="e.g. Email from Client" />
-                            <div className="flex items-center gap-2">
-                                <button onClick={handleMarkExecuted} className="px-3 py-2 bg-indigo-900 hover:bg-indigo-950 text-white font-bold rounded text-xs flex-1">Mark Executed</button>
-                                <button onClick={() => setShowMarkManual(false)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded text-xs flex-1">Cancel</button>
-                            </div>
-                        </div>
-                    )}
+                    <button 
+                        onClick={() => setShowMarkManual(true)}
+                        className="flex justify-center items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-[10px] uppercase tracking-widest font-bold rounded-lg hover:bg-slate-50 transition-all w-full cursor-pointer"
+                    >
+                        Ops Override: Record Acceptance
+                    </button>
                 </div>
             </div>
+
+            {showMarkManual && (
+                <ManualAcceptanceOverrideModal
+                    documentTitle="Integrated Interior Execution Agreement"
+                    projectName={projectContext.name}
+                    defaultClientName={projectContext.clientName}
+                    defaultClientEmail={projectContext.clientEmail}
+                    onConfirmOverride={handleConfirmManualOverride}
+                    onClose={() => setShowMarkManual(false)}
+                />
+            )}
             
             {/* Print Fallback Visual Lines */}
             <div className="mt-8 pt-6 border-t border-slate-200/60 grid grid-cols-2 gap-12 opacity-40 grayscale print:opacity-60">

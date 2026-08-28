@@ -120,3 +120,54 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
         calculateMilestoneTotal
     };
 }
+
+export function getSingleProjectValue(p: any): number {
+    if (!p) return 0;
+    const status = p.context?.status || "draft";
+    const isWonOrDelivered = ["won", "execution", "work_paused", "completed"].includes(status);
+
+    if (isWonOrDelivered) {
+        const activeTierId = p.activeTierId || p.context?.approvedTierId;
+        let activeTier = p.tiers?.find((t: any) => t.id === activeTierId);
+        if (!activeTier) {
+            activeTier = p.tiers?.find((t: any) => t.name === "Comfort Upgrade") || p.tiers?.[0];
+        }
+
+        try {
+            const financials = calculateProjectFinancials(p.context, activeTier);
+            if (typeof financials?.currentProjectValue === "number" && financials.currentProjectValue > 0) {
+                return financials.currentProjectValue;
+            }
+        } catch (e) {
+            console.error("Error calculating financials for project", p.id, e);
+        }
+    }
+
+    // Fallbacks:
+    const grandTotal = p.context?.grandTotal || p.grandTotal;
+    if (typeof grandTotal === "number" && grandTotal > 0) {
+        return grandTotal;
+    }
+
+    const designFee = p.context?.engagement?.designFee || p.context?.financials?.approvedDesignValue || 0;
+    const executionValue = p.context?.engagement?.executionValue || p.context?.financials?.approvedExecutionValue || 0;
+    if (designFee + executionValue > 0) {
+        return designFee + executionValue;
+    }
+
+    const activeTierId = p.activeTierId || p.context?.approvedTierId;
+    const activeTier = p.tiers?.find((t: any) => t.id === activeTierId) || p.tiers?.[0];
+    if (activeTier) {
+        const tierTotal = (activeTier.summary?.totalSell || 0) + (activeTier.summary?.designFee || 0);
+        if (tierTotal > 0) {
+            return tierTotal;
+        }
+    }
+
+    const basicDesignFee = p.context?.designFee || p.context?.financials?.projectedCashValue || 0;
+    if (basicDesignFee > 0) {
+        return basicDesignFee;
+    }
+
+    return 0;
+}

@@ -1,15 +1,35 @@
 import React from 'react';
+import { showSuccessWithNext } from '../SuccessWithNextToast';
+import LockedState from '../LockedState';
 import { ProjectContext } from '../../types';
 import { Download, Rocket, Edit3 } from 'lucide-react';
 import { useOrg } from '../../contexts/OrgContext';
 import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
+import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 
 interface OnboardingKitPageProps {
     projectContext: ProjectContext;
     setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
 }
 
-export default function OnboardingKitPage({ projectContext }: OnboardingKitPageProps) {
+export default function OnboardingKitPage({ projectContext, setProjectContext }: OnboardingKitPageProps) {
+    const isContractSigned = projectContext?.executionSignoff?.status === 'signed' || projectContext?.contractSignoff?.status === 'signed';
+    const isDesignAgreementSigned = projectContext?.designAgreementSignoff?.status === 'signed';
+    
+    if (!isContractSigned || !isDesignAgreementSigned) {
+        return (
+            <div className="w-full space-y-6">
+                <LockedState 
+                    title="Booking Pack Locked" 
+                    prerequisite="Contract & Design Agreement" 
+                    why="The Booking Pack can only be generated after both the Execution Contract and Design Agreement are signed by the client." 
+                    actionLabel="Go to Agreements" 
+                    onAction={() => window.dispatchEvent(new CustomEvent('change-tab', { detail: 'execution-agreement' }))}
+                />
+            </div>
+        );
+    }
+
     const { orgData } = useOrg();
     
     const studioName = orgData?.orgName || 'Form Factors Design Studio';
@@ -45,12 +65,17 @@ export default function OnboardingKitPage({ projectContext }: OnboardingKitPageP
                 margin: 0,
                 filename: `Onboarding_Kit_${projectName.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true },
+                html2canvas: { 
+                    scale: 2, 
+                    useCORS: true,
+                    logging: false,
+                    onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc, 'onboarding-kit-render')
+                },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
 
             setTimeout(() => {
-                html2pdfObj().set(opt).from(el).save();
+                html2pdfObj().set(opt).from(el).save().then(() => showSuccessWithNext('Kit sent / generated successfully'));
             }, 300);
         });
     };
@@ -60,7 +85,7 @@ export default function OnboardingKitPage({ projectContext }: OnboardingKitPageP
             <div className="flex-none p-6 border-b border-slate-200 bg-white flex justify-between items-center z-10 sticky top-0 shadow-sm">
                 <div>
                     <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                        <Rocket className="w-6 h-6 text-indigo-600" />
+                        <Rocket className="w-6 h-6 text-[#0066CC]" />
                         Onboarding Kit
                     </h2>
                     <p className="text-xs text-slate-500 mt-1">Generate formal onboarding documentation setting the rules of engagement.</p>
@@ -78,14 +103,14 @@ export default function OnboardingKitPage({ projectContext }: OnboardingKitPageP
                             if (btn) {
                                 if (!isEditable) {
                                     btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M20 6L9 17l-5-5"></path></svg> Done Editing';
-                                    btn.classList.replace('bg-white', 'bg-indigo-600');
+                                    btn.classList.replace('bg-white', 'bg-[#0066CC]');
                                     btn.classList.replace('text-slate-700', 'text-white');
-                                    el.classList.add('outline-dashed', 'outline-2', 'outline-indigo-400', 'p-4', 'rounded-lg', 'bg-indigo-50/10');
+                                    el.classList.add('outline-dashed', 'outline-2', 'outline-sky-400', 'p-4', 'rounded-lg', 'bg-sky-50/10');
                                 } else {
                                     btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path></svg> Edit Document';
-                                    btn.classList.replace('bg-indigo-600', 'bg-white');
+                                    btn.classList.replace('bg-[#0066CC]', 'bg-white');
                                     btn.classList.replace('text-white', 'text-slate-700');
-                                    el.classList.remove('outline-dashed', 'outline-2', 'outline-indigo-400', 'p-4', 'rounded-lg', 'bg-indigo-50/10');
+                                    el.classList.remove('outline-dashed', 'outline-2', 'outline-sky-400', 'p-4', 'rounded-lg', 'bg-sky-50/10');
                                 }
                             }
                         }}
@@ -188,7 +213,7 @@ export default function OnboardingKitPage({ projectContext }: OnboardingKitPageP
                                         <div>
                                             <div className="font-bold">Kickoff & Brief Freeze <span className="text-xs font-normal text-slate-500 ml-2">Week 1</span></div>
                                             <p className="text-sm text-slate-600 mt-1">We sit together, walk through your lifestyle, storage needs, and inspirations, and freeze the design brief in writing.</p>
-                                            <p className="text-xs font-semibold text-indigo-700 mt-2">Your part: both decision-makers attend; bring the checklist in Section C.</p>
+                                            <p className="text-xs font-semibold text-[#0055B3] mt-2">Your part: both decision-makers attend; bring the checklist in Section C.</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-4 p-4 border border-slate-200 rounded-lg items-start">
@@ -196,7 +221,7 @@ export default function OnboardingKitPage({ projectContext }: OnboardingKitPageP
                                         <div>
                                             <div className="font-bold">Site Measurement & Survey <span className="text-xs font-normal text-slate-500 ml-2">Week 1–2</span></div>
                                             <p className="text-sm text-slate-600 mt-1">Our team measures the apartment, photographs every wall, and verifies electrical and plumbing positions against the builder plan.</p>
-                                            <p className="text-xs font-semibold text-indigo-700 mt-2">Your part: arrange flat access and society entry permissions for our team.</p>
+                                            <p className="text-xs font-semibold text-[#0055B3] mt-2">Your part: arrange flat access and society entry permissions for our team.</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-4 p-4 border border-slate-200 rounded-lg items-start">
@@ -204,7 +229,7 @@ export default function OnboardingKitPage({ projectContext }: OnboardingKitPageP
                                         <div>
                                             <div className="font-bold">Concept & Space Planning <span className="text-xs font-normal text-slate-500 ml-2">Week 2–4</span></div>
                                             <p className="text-sm text-slate-600 mt-1">Furniture layouts, zoning options, and the design direction — presented and refined with you until the layout is locked.</p>
-                                            <p className="text-xs font-semibold text-indigo-700 mt-2">Your part: consolidated feedback as one list per review (see Section D, Rule 1).</p>
+                                            <p className="text-xs font-semibold text-[#0055B3] mt-2">Your part: consolidated feedback as one list per review (see Section D, Rule 1).</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-4 p-4 border border-slate-200 rounded-lg items-start">
@@ -212,7 +237,7 @@ export default function OnboardingKitPage({ projectContext }: OnboardingKitPageP
                                         <div>
                                             <div className="font-bold">Design Development & 3D <span className="text-xs font-normal text-slate-500 ml-2">Week 4–8</span></div>
                                             <p className="text-sm text-slate-600 mt-1">Detailed designs and 3D visuals room by room, with materials, finishes, and lighting resolved. Unlocks the D2 milestone.</p>
-                                            <p className="text-xs font-semibold text-indigo-700 mt-2">Your part: material & finish selections, recorded on your Client Portal.</p>
+                                            <p className="text-xs font-semibold text-[#0055B3] mt-2">Your part: material & finish selections, recorded on your Client Portal.</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-4 p-4 border border-slate-200 rounded-lg items-start">
@@ -220,7 +245,7 @@ export default function OnboardingKitPage({ projectContext }: OnboardingKitPageP
                                         <div>
                                             <div className="font-bold">Technical Drawings & BOQ Lock <span className="text-xs font-normal text-slate-500 ml-2">Week 8–11</span></div>
                                             <p className="text-sm text-slate-600 mt-1">Good-for-Construction drawings and the final Bill of Quantities. When every drawing is approved, the design phase formally closes — this is the Design Complete milestone, and it unlocks D3.</p>
-                                            <p className="text-xs font-semibold text-indigo-700 mt-2">Your part: final drawing approvals on the portal — these are your sign-offs.</p>
+                                            <p className="text-xs font-semibold text-[#0055B3] mt-2">Your part: final drawing approvals on the portal — these are your sign-offs.</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-4 p-4 border border-slate-200 rounded-lg items-start">
@@ -228,7 +253,7 @@ export default function OnboardingKitPage({ projectContext }: OnboardingKitPageP
                                         <div>
                                             <div className="font-bold">Execution & Handover <span className="text-xs font-normal text-slate-500 ml-2">~12–14 weeks on site</span></div>
                                             <p className="text-sm text-slate-600 mt-1">Material orders, site work, installation, and finishing — through to your final walkthrough, Handover Docket, and Warranty Certificate.</p>
-                                            <p className="text-xs font-semibold text-indigo-700 mt-2">Your part: E1 clears before any vendor order is placed; site decisions via the group.</p>
+                                            <p className="text-xs font-semibold text-[#0055B3] mt-2">Your part: E1 clears before any vendor order is placed; site decisions via the group.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -304,7 +329,7 @@ export default function OnboardingKitPage({ projectContext }: OnboardingKitPageP
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr className="bg-slate-50 border-b border-slate-200"><td colSpan={5} className="py-1 px-3 font-bold text-[10px] text-indigo-900 uppercase">Design Fees — ₹{(designFee || 0).toLocaleString('en-IN')}</td></tr>
+                                        <tr className="bg-slate-50 border-b border-slate-200"><td colSpan={5} className="py-1 px-3 font-bold text-[10px] text-slate-800 uppercase">Design Fees — ₹{(designFee || 0).toLocaleString('en-IN')}</td></tr>
                                         <tr className="border-b border-slate-100">
                                             <td className="py-2 px-3 font-semibold">D1 · Sign-up & Concept</td>
                                             <td className="py-2 px-3">Agreement signed</td>
@@ -326,7 +351,7 @@ export default function OnboardingKitPage({ projectContext }: OnboardingKitPageP
                                             <td className="py-2 px-3 text-right font-mono">₹{Math.round(designFee * 0.35).toLocaleString('en-IN')}</td>
                                             <td className="py-2 px-3 text-right text-slate-400 font-semibold">Upcoming</td>
                                         </tr>
-                                        <tr className="bg-slate-50 border-b border-slate-200"><td colSpan={5} className="py-1 px-3 font-bold text-[10px] text-indigo-900 uppercase">Execution Fees — on final BOQ value</td></tr>
+                                        <tr className="bg-slate-50 border-b border-slate-200"><td colSpan={5} className="py-1 px-3 font-bold text-[10px] text-slate-800 uppercase">Execution Fees — on final BOQ value</td></tr>
                                         <tr className="border-b border-slate-100">
                                             <td className="py-2 px-3 font-semibold">E1 · Material Order Advance</td>
                                             <td className="py-2 px-3">Before vendor orders are placed</td>
@@ -459,13 +484,13 @@ export default function OnboardingKitPage({ projectContext }: OnboardingKitPageP
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6 border border-dashed border-slate-300 rounded-xl bg-slate-50">
                                     <div>
-                                        <div className="text-[10px] font-bold text-indigo-900 uppercase tracking-widest mb-4">For the Client</div>
+                                        <div className="text-[10px] font-bold text-slate-800 uppercase tracking-widest mb-4">For the Client</div>
                                         <div className="h-10 border-b-2 border-slate-300 mb-2"></div>
                                         <div className="font-bold text-sm">{clientName}</div>
                                         <div className="text-[10px] text-slate-500 mt-1">Acknowledged on portal or in writing</div>
                                     </div>
                                     <div>
-                                        <div className="text-[10px] font-bold text-indigo-900 uppercase tracking-widest mb-4">For {studioName}</div>
+                                        <div className="text-[10px] font-bold text-slate-800 uppercase tracking-widest mb-4">For {studioName}</div>
                                         <div className="h-10 border-b-2 border-slate-300 mb-2"></div>
                                         <div className="font-bold text-sm">Authorised Signatory</div>
                                         <div className="text-[10px] text-slate-500 mt-1">{orgData?.officeAddress || 'Design Studio'}</div>

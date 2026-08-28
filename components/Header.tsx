@@ -1,27 +1,30 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronUp, LayoutDashboard, FileEdit, Brain, Wrench, Send, Settings, Globe } from 'lucide-react';
 import { 
-  SparklesIcon,
-  CompareIcon,
-  AnalyticsIcon,
-  DashboardIcon,
-  BOQIcon,
-  BrainIcon,
-  EnvelopeIcon,
-  HardHatIcon,
-  ListIcon,
-  BuildingOfficeIcon,
-  ClipboardListIcon,
-  CalculatorIcon,
-  PhotoIcon
-} from './Icons';
+  Home, 
+  Building2, 
+  Target, 
+  BarChart3, 
+  Settings, 
+  Library, 
+  Users, 
+  CreditCard, 
+  Globe, 
+  PanelLeftClose, 
+  PanelLeft,
+  Database,
+  LogOut,
+  ChevronDown,
+  Sparkles,
+  ChevronRight,
+  ShieldCheck,
+  Cloud,
+  HardDrive
+} from 'lucide-react';
 import { AIStatus } from '../types';
 import AIStatusIndicator from './AIStatusIndicator';
 import { useOrg } from '../contexts/OrgContext';
 import { FFDSLogo } from './FFDSLogo';
-import { db as firestoreDb } from '../services/firebaseClient';
 import { db } from '../services/dbService';
 import CloudConfigModal from './CloudConfigModal';
 import { ProjectContext } from '../types';
@@ -36,390 +39,418 @@ interface SidebarProps {
   pendingCommsCount?: number;
   commsHealthScore?: number;
   projectContext?: ProjectContext;
+  autoCollapse?: boolean;
+  isHidden?: boolean;
 }
 
-// Custom Icons for consistency - Colorful Versions
-const VisionIcon = () => <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">👁️</span>;
-const TimelineIcon = () => <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📅</span>;
-const MaterialIcon = () => <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🎨</span>;
-const ClientIcon = () => <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">💼</span>;
-const BankIcon = () => <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📚</span>;
-const StrategyIcon = () => <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🧠</span>;
-const PromptIcon = () => <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">💬</span>;
-const ExecutionIcon = () => <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🚧</span>;
-const ContractIcon = () => <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📜</span>;
-const OnboardingIcon = () => <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🤝</span>;
-const GlobeIcon = () => <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🌍</span>;
-
 const TABS = [
-  { id: 'projects', label: 'My Projects', icon: <BuildingOfficeIcon className="w-5 h-5 text-slate-700" />, group: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor'] },
-  { id: 'project-journey', label: 'Project Journey', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🗺️</span>, group: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor'] },
-  { id: 'dashboard', label: 'Dashboard', icon: <DashboardIcon className="w-5 h-5 text-blue-500" />, group: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor', 'Vendor'] },
+  { id: 'home', label: 'Home', icon: Home, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor', 'Designer'] },
+  { id: 'projects', label: 'Projects', icon: Building2, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor', 'Designer'] },
+  { id: 'clients', label: 'Clients', icon: Users, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor', 'Designer'] },
+  { id: 'reports', label: 'Reports', icon: BarChart3, section: 'STUDIO', roles: ['Admin', 'Ops Director'] },
   
-  { id: 'boq-editor', label: 'Studio Editor', icon: <BOQIcon className="w-5 h-5 text-indigo-500" />, group: 'BOQ & Proposals', roles: ['Admin', 'Ops Director'] },
-  { id: 'ops', label: 'Versions', icon: <CompareIcon className="w-5 h-5 text-teal-500" />, group: 'BOQ & Proposals', roles: ['Admin', 'Ops Director'] },
-  { id: 'payment-calc', label: 'Payment Calc', icon: <CalculatorIcon className="w-5 h-5 text-indigo-500" />, group: 'BOQ & Proposals', roles: ['Admin', 'Ops Director'] },
+  { id: 'studio-settings', label: 'Studio Settings', icon: Settings, section: 'STUDIO ADMIN', roles: ['Admin', 'Ops Director'] },
+  { id: 'admin-templates-bank', label: 'Templates & Bank', icon: Library, section: 'STUDIO ADMIN', roles: ['Admin', 'Ops Director'] },
   
-  { id: 'leadiq', label: 'LeadIQ War Room', icon: <BrainIcon className="w-5 h-5 text-fuchsia-500" />, group: 'Strategy & AI', roles: ['Admin', 'Ops Director'] },
-  
-  { id: 'revision-studio', label: 'Revision Studio (V1)', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🔄</span>, group: 'Design', roles: ['Admin', 'Ops Director'] },
-  { id: 'drawing-tracker', label: 'Drawing Tracker', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📐</span>, group: 'Design', roles: ['Admin', 'Ops Director', 'Site Supervisor'] },
-  { id: 'scope-additions', label: 'Scope Additions', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">➕</span>, group: 'Design', roles: ['Admin', 'Ops Director', 'Site Supervisor'] },
-  { id: 'site-ops', label: 'Execution & Ops', icon: <HardHatIcon className="w-5 h-5 text-amber-500" />, group: 'Execution', roles: ['Admin', 'Ops Director', 'Site Supervisor'] },
-  { id: 'timeline', label: 'Timeline', icon: <TimelineIcon />, group: 'Execution', roles: ['Admin', 'Ops Director', 'Site Supervisor'] },
-  { id: 'materials', label: 'SOF & Selections', icon: <MaterialIcon />, group: 'Execution', roles: ['Admin', 'Ops Director', 'Site Supervisor', 'Vendor'] },
-  
-  { id: 'terms-docket', label: 'Terms Docket', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📜</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
-  { id: 'payment-schedule', label: 'Payment Schedule', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📋</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
-  { id: 'handover-docket', label: 'Handover Docket', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🏆</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
-  { id: 'client', label: 'Client Proposal', icon: <ClientIcon />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
-  { id: 'weekly-report', label: 'Weekly Progress Report', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📈</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director', 'Site Supervisor'] },
-  { id: 'client-portal', label: 'Client Portal Preview', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">🌐</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
-  { id: 'onboarding', label: 'Onboarding Kit', icon: <OnboardingIcon />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
-  { id: 'contract', label: 'Contract', icon: <ContractIcon />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
-  { id: 'execution-agreement', label: 'Execution Agreement', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">✍️</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
-  { id: 'emails', label: 'Email Scripts', icon: <EnvelopeIcon className="w-5 h-5 text-indigo-500" />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
-  { id: 'comms-tracker', label: 'Comms Tracker', icon: <span className="text-lg grayscale-0 filter hover:brightness-110 transition-all">📬</span>, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
-  { id: 'analytics', label: 'Analytics', icon: <AnalyticsIcon className="w-5 h-5 text-amber-500" />, group: 'Client Outputs', roles: ['Admin', 'Ops Director'] },
-  
-  { id: 'templates', label: 'Std. Templates', icon: <ListIcon className="w-5 h-5 text-orange-500" />, group: 'Admin', roles: ['Admin', 'Ops Director'] },
-  { id: 'bank', label: 'Item Bank', icon: <BankIcon />, group: 'Admin', roles: ['Admin'] },
-  { id: 'ai-settings', label: 'AI Strategy', icon: <StrategyIcon />, group: 'Admin', roles: ['Admin'] },
-  { id: 'terms-and-payment', label: 'Terms & Payment', icon: <Settings className="w-5 h-5 text-slate-500" />, group: 'Admin', roles: ['Admin', 'Ops Director'] },
-
-  { id: 'studio-settings', label: 'Studio Settings', icon: <Settings className="w-5 h-5 text-slate-500" />, group: 'Pinned', roles: ['Admin', 'Ops Director'] },
-  { id: 'saas-dashboard', label: 'Platform Admin', icon: <GlobeIcon />, group: 'Pinned', roles: ['Super Admin'] },
+  { id: 'saas-dashboard', label: 'Platform Admin', icon: Globe, section: 'PLATFORM', roles: ['Super Admin'] },
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, aiStatus, logo, onLogout, className, pendingCommsCount = 0, commsHealthScore = 0, projectContext }) => {
+const TAB_THEMES: Record<string, { iconColor: string; bgLight: string; borderColor: string; activeGradient: string }> = {
+  'home': { iconColor: 'text-sky-600', bgLight: 'bg-sky-50', borderColor: 'border-sky-100', activeGradient: 'from-sky-500 to-sky-600' },
+  'projects': { iconColor: 'text-[#0066CC]', bgLight: 'bg-sky-50', borderColor: 'border-sky-100', activeGradient: 'from-sky-500 to-[#0066CC]' },
+  'clients': { iconColor: 'text-blue-500', bgLight: 'bg-blue-50', borderColor: 'border-blue-100', activeGradient: 'from-blue-500 to-blue-600' },
+  'reports': { iconColor: 'text-cyan-600', bgLight: 'bg-cyan-50', borderColor: 'border-cyan-100', activeGradient: 'from-cyan-500 to-cyan-600' },
+  'studio-settings': { iconColor: 'text-slate-600', bgLight: 'bg-slate-100', borderColor: 'border-slate-200', activeGradient: 'from-slate-500 to-slate-600' },
+  'admin-templates-bank': { iconColor: 'text-teal-600', bgLight: 'bg-teal-50', borderColor: 'border-teal-100', activeGradient: 'from-teal-500 to-teal-600' },
+  'saas-dashboard': { iconColor: 'text-rose-500', bgLight: 'bg-rose-50', borderColor: 'border-rose-100', activeGradient: 'from-rose-500 to-rose-600' },
+};
+
+const Sidebar: React.FC<SidebarProps> = ({ 
+  activeTab, 
+  setActiveTab, 
+  aiStatus, 
+  logo, 
+  onLogout, 
+  className, 
+  projectContext,
+  autoCollapse = false,
+  isHidden = false
+}) => {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const { orgData, currentRole, currentUserAuth } = useOrg();
   
-  const { topTabs, pinnedTabs, navGroups } = React.useMemo(() => {
-    const allowed = TABS.filter(tab => {
-        if (tab.id === 'saas-dashboard') {
-            return currentUserAuth?.email === 'formfactors.operations@gmail.com';
-        }
-        if (tab.roles) {
-            if (currentRole === 'Super Admin' && currentUserAuth?.email === 'formfactors.operations@gmail.com') return true;
-            if (currentRole === 'Super Admin' && currentUserAuth?.email !== 'formfactors.operations@gmail.com') return false; // Safety
-            return tab.roles.includes(currentRole as any);
-        }
-        return true;
-    });
-    const top = allowed.filter(tab => tab.group !== 'Pinned');
-    const pinned = allowed.filter(tab => tab.group === 'Pinned');
-    
-    const grouped = top.reduce((acc, tab) => {
-      if (!acc[tab.group]) {
-        acc[tab.group] = [];
+  const isCloud = db.isCloud;
+  const activeLogo = logo || orgData?.orgLogo || orgData?.customLogo || (orgData as any)?.logoUrl;
+  const userInitial = orgData?.orgName?.charAt(0).toUpperCase() || 
+                      currentUserAuth?.displayName?.charAt(0).toUpperCase() || 
+                      currentUserAuth?.email?.charAt(0).toUpperCase() || 
+                      'S';
+  const userName = currentUserAuth?.displayName || 
+                   (currentUserAuth?.email ? currentUserAuth.email.split('@')[0] : 'Studio User');
+
+  // Stored user preference
+  const [userPref, setUserPref] = useState<boolean | null>(() => {
+    const stored = localStorage.getItem('ffds_sidebar_collapsed');
+    if (stored === 'true') return true;
+    if (stored === 'false') return false;
+    return null;
+  });
+
+  // Global Font, Theme & Compact Layout sync
+  useEffect(() => {
+    const applyPersonalization = () => {
+      const font = localStorage.getItem('ffds_global_font') || 'jakarta';
+      const theme = localStorage.getItem('ffds_global_theme') || 'milky-white';
+      const compact = localStorage.getItem('ffds_compact_mode') === 'true';
+
+      const fontClasses = ['font-choice-jakarta', 'font-choice-opensans', 'font-choice-playfair', 'font-choice-system'];
+      fontClasses.forEach(cls => document.body.classList.remove(cls));
+      document.body.classList.add(`font-choice-${font}`);
+
+      const themeClasses = ['theme-milky-white', 'theme-dark-blue', 'theme-light-blue', 'theme-light-orange'];
+      themeClasses.forEach(cls => document.body.classList.remove(cls));
+      document.body.classList.add(`theme-${theme}`);
+
+      if (compact) {
+        document.body.classList.add('compact-density');
+      } else {
+        document.body.classList.remove('compact-density');
       }
-      acc[tab.group].push(tab);
-      return acc;
-    }, {} as Record<string, typeof TABS>);
-    
-    const getGroupIcon = (groupName: string, fallback: React.ReactNode) => {
-      const lower = groupName.toLowerCase();
-      if (lower.includes('overview') || lower.includes('project') || lower.includes('studio')) return <LayoutDashboard className="w-5 h-5 text-blue-500" />;
-      if (lower.includes('boq') || lower.includes('management') || lower.includes('proposal')) return <FileEdit className="w-5 h-5 text-indigo-500" />;
-      if (lower.includes('strategy') || lower.includes('ai')) return <Brain className="w-5 h-5 text-fuchsia-500" />;
-      if (lower.includes('design')) return <span className="text-lg w-5 h-5 flex items-center justify-center grayscale-0 filter hover:brightness-110 transition-all">📐</span>;
-      if (lower.includes('execution') || lower.includes('site')) return <Wrench className="w-5 h-5 text-amber-500" />;
-      if (lower.includes('client')) return <Send className="w-5 h-5 text-teal-500" />;
-      if (lower.includes('admin') && lower.includes('platform')) return <Globe className="w-5 h-5 text-indigo-400" />;
-      if (lower.includes('admin')) return <Settings className="w-5 h-5 text-slate-500" />;
-      
-      return fallback;
+      window.dispatchEvent(new Event('resize'));
     };
 
-    const groups = Object.entries(grouped || {}).map(([groupName, tabs]) => ({
-      id: groupName.toLowerCase().replace(/\s+/g, '-'),
-      label: groupName,
-      icon: getGroupIcon(groupName, tabs[0].icon),
-      children: tabs
-    }));
-    
-    return { topTabs: top, pinnedTabs: pinned, navGroups: groups };
-  }, [currentRole]);
+    applyPersonalization();
+    window.addEventListener('storage', applyPersonalization);
+    window.addEventListener('ffds_personalization_change', applyPersonalization);
+    return () => {
+      window.removeEventListener('storage', applyPersonalization);
+      window.removeEventListener('ffds_personalization_change', applyPersonalization);
+    };
+  }, []);
 
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Effective collapsed state
+  const collapsed = userPref !== null ? userPref : !!autoCollapse;
+  const isExpanded = !collapsed || isHovered;
+
+  const toggleSidebar = () => {
+    const next = !collapsed;
+    setUserPref(next);
+    localStorage.setItem('ffds_sidebar_collapsed', String(next));
+    window.dispatchEvent(new Event('sidebar-toggle'));
+  };
+
+  // Set CSS variable `--sidebar-w` on `<html>`
   useEffect(() => {
-    const parentGroup = navGroups.find(g => g.children.some(c => c.id === activeTab));
-    if (parentGroup) {
-      setOpenGroup(parentGroup.id);
-    }
-  }, [activeTab, navGroups]);
+    const handleResize = () => {
+      const isMobile = window.innerWidth < 768;
+      if (isHidden || isMobile) {
+        document.documentElement.style.setProperty('--sidebar-w', '0px');
+      } else {
+        const widthStr = collapsed ? '72px' : '250px';
+        document.documentElement.style.setProperty('--sidebar-w', widthStr);
+      }
+      window.dispatchEvent(new Event('sidebar-toggle'));
+    };
 
-  const MotionNav = motion.nav as any;
-  const MotionDiv = motion.div as any;
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [collapsed, isHidden]);
 
-  const isCloud = db.isCloud;
+  // Filter allowed tabs based on role and operations email
+  const allowedTabs = React.useMemo(() => {
+    return TABS.filter(tab => {
+      if (tab.id === 'saas-dashboard') {
+        return currentUserAuth?.email === 'formfactors.operations@gmail.com';
+      }
+      if (tab.roles) {
+        if (currentRole === 'Super Admin' && currentUserAuth?.email === 'formfactors.operations@gmail.com') return true;
+        if (currentRole === 'Super Admin' && currentUserAuth?.email !== 'formfactors.operations@gmail.com') return false;
+        return tab.roles.includes(currentRole as any);
+      }
+      return true;
+    });
+  }, [currentRole, currentUserAuth?.email]);
+
+  // Group tabs by section
+  const sections = React.useMemo(() => {
+    const grouped: Record<string, typeof TABS> = {};
+    allowedTabs.forEach(tab => {
+      const sec = tab.section || 'STUDIO';
+      if (!grouped[sec]) grouped[sec] = [];
+      grouped[sec].push(tab);
+    });
+    return Object.entries(grouped);
+  }, [allowedTabs]);
+
+  if (isHidden) return null;
 
   return (
     <>
-    <MotionNav 
-        className={`fixed top-0 left-0 h-full w-64 glass-light p-4 flex flex-col overflow-hidden z-[100] print:hidden ${className || ''}`}
-    >
-      {/* Top Scrollable Area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col gap-6 -mx-2 px-2 pb-4">
-        {/* Header with Custom Logo Support */}
-        <div className="px-1 pt-2">
-          <div className="flex items-center gap-3">
-              <FFDSLogo className="" mode="icon" customLogo={logo} />
-              {!logo && (
-                  <div className="flex flex-col">
-                      <span 
-                          className="font-extrabold text-lg tracking-tight block leading-none"
-                          style={{ color: orgData.themeColor || '#1e293b' }}
-                      >
-                          {orgData.orgName.split(' ').slice(0, 2).join(' ').toUpperCase() || 'STUDIO'}
-                      </span>
-                      <span className="text-[10px] font-bold tracking-widest text-slate-500 uppercase mt-0.5">
-                          {orgData.orgName.split(' ').slice(2).join(' ') || 'OS'}
-                      </span>
+      <aside 
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={`fixed top-0 left-0 bottom-0 z-[100] glass-light border-r border-sky-100 text-slate-800 flex flex-col justify-between transition-all duration-300 ${
+          isExpanded ? 'w-[250px] shadow-2xl md:shadow-sm' : 'w-[72px] shadow-sm'
+        } ${className || ''}`}
+      >
+        {/* Top Section: Brand & Navigation */}
+        <div className="flex flex-col flex-1 min-h-0">
+          
+          {/* Header Brand & Dedicated Logo Space */}
+          {isExpanded ? (
+            <div className="p-3.5 border-b border-sky-100 flex items-center justify-between gap-2 shrink-0 bg-transparent">
+              <div className="flex items-center gap-2.5 min-w-0">
+                {/* Studio Logo Container Slot */}
+                <div className="w-10 h-10 rounded-xl bg-white border border-sky-100 shadow-sm flex items-center justify-center p-1.5 shrink-0 overflow-hidden">
+                  {activeLogo ? (
+                    <img src={activeLogo} alt="Studio Logo" className="max-w-full max-h-full object-contain" />
+                  ) : (
+                    <FFDSLogo mode="icon" className="w-full h-full" />
+                  )}
+                </div>
+                
+                <div className="flex flex-col min-w-0">
+                  <span className="font-['Plus_Jakarta_Sans'] text-xs font-black tracking-tight text-slate-900 truncate uppercase">
+                    {orgData?.orgName ? orgData.orgName : "STUDIO COPILOT"}
+                  </span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[9px] font-mono font-extrabold text-[#0055B3] uppercase bg-sky-100/90 border border-sky-200/80 px-2 py-0.5 rounded-md">
+                      {currentRole}
+                    </span>
                   </div>
-              )}
-              {logo && (
-                   <div>
-                      <span className="font-extrabold text-lg tracking-tight text-indigo-900 block leading-none">{orgData.orgName || 'PROJECT'}</span>
-                      <span className="text-[10px] font-bold tracking-widest text-slate-500 uppercase">Copilot</span>
+                </div>
+              </div>
+
+              {/* Collapse Toggle Button */}
+              <motion.button
+                whileHover={{ scale: 1.1, rotate: -5 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={toggleSidebar}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-[#0055B3] hover:bg-sky-50 border border-transparent hover:border-sky-200 transition-all shrink-0 cursor-pointer"
+                title="Collapse Sidebar"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </motion.button>
+            </div>
+          ) : (
+            <div className="p-3 border-b border-slate-200 flex flex-col items-center gap-2 shrink-0 bg-white/90">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 shadow-xs flex items-center justify-center p-1 shrink-0 overflow-hidden">
+                {activeLogo ? (
+                  <img src={activeLogo} alt="Studio Logo" className="max-w-full max-h-full object-contain" />
+                ) : (
+                  <FFDSLogo mode="icon" className="w-full h-full" />
+                )}
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.1, rotate: 5 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={toggleSidebar}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-[#0055B3] hover:bg-sky-50 transition-all cursor-pointer"
+                title="Expand Sidebar"
+              >
+                <PanelLeft className="w-4 h-4 text-[#0066CC]" />
+              </motion.button>
+            </div>
+          )}
+
+          {/* Active Project Banner (if inside a project) */}
+          {projectContext?.name && isExpanded && (
+            <motion.div 
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mx-3 mt-3 p-2.5 rounded-xl bg-gradient-to-r from-sky-500/10 via-amber-500/10 to-sky-500/10 border border-sky-200/80 flex items-center justify-between gap-2 shrink-0 shadow-2xs"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="w-2 h-2 rounded-full bg-[#0066CC] animate-pulse" />
+                  <span className="text-[9px] font-mono font-black text-[#0055B3] uppercase tracking-wider">
+                    ACTIVE WORKSPACE
+                  </span>
+                </div>
+                <p className="text-xs font-black text-slate-900 truncate font-['Plus_Jakarta_Sans']">
+                  {projectContext.name}
+                </p>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setActiveTab('dashboard')}
+                className="p-1.5 rounded-lg bg-[#0066CC] text-white hover:bg-[#0055B3] transition-all cursor-pointer shadow-xs"
+                title="Go to Project Dashboard"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </motion.button>
+            </motion.div>
+          )}
+
+          {/* Navigation Items (Scrollable List) */}
+          <div className={`flex-1 overflow-y-auto scrollbar-none ${isExpanded ? 'p-3' : 'px-2 py-3'} space-y-4`}>
+            {sections.map(([sectionName, sectionTabs]) => (
+              <div key={sectionName} className="space-y-1.5">
+                {isExpanded && (
+                  <div className="flex items-center gap-1.5 px-2 py-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#0066CC]" />
+                    <p className="text-[10px] font-mono font-black uppercase tracking-widest text-slate-500">
+                      {sectionName}
+                    </p>
                   </div>
-              )}
+                )}
+                {sectionTabs.map(tab => {
+                  const isActive = activeTab === tab.id;
+                  const Icon = tab.icon;
+                  const theme = TAB_THEMES[tab.id] || { iconColor: 'text-[#0066CC]', bgLight: 'bg-sky-100/90', borderColor: 'border-sky-200', activeGradient: 'from-[#0066CC] to-[#0055B3]' };
+
+                  return (
+                    <motion.button
+                      key={tab.id}
+                      whileHover={{ scale: 1.02, x: !isExpanded ? 0 : 4 }}
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => setActiveTab(tab.id)}
+                      title={!isExpanded ? tab.label : undefined}
+                      className={`relative w-full group flex transition-all duration-200 outline-none cursor-pointer rounded-xl text-xs ${
+                        isActive
+                          ? 'text-sky-900 bg-white shadow-sm border border-sky-100/60'
+                          : 'text-slate-500 hover:text-slate-800 hover:bg-sky-50/50'
+                      } ${!isExpanded ? 'flex-col items-center justify-center py-2.5 px-1' : 'flex-row items-center gap-3 px-3 py-2'}`}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId="verticalSidebarActiveBar"
+                          className={`absolute bg-sky-500 ${
+                            !isExpanded 
+                              ? 'top-0 left-2 right-2 h-0.5 rounded-b-full' 
+                              : 'left-0 top-2 bottom-2 w-1 rounded-r-full'
+                          }`}
+                          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                        />
+                      )}
+                      {/* Plush Icon */}
+                      <div className={`transition-all shrink-0 flex items-center justify-center ${
+                        isActive 
+                           ? `${theme.iconColor} drop-shadow-sm`
+                          : `${theme.iconColor} opacity-70 group-hover:opacity-100`
+                      }`}>
+                        <Icon className="w-5 h-5 stroke-[1.8]" />
+                      </div>
+
+                      {isExpanded && (
+                        <span className={`truncate font-['Plus_Jakarta_Sans'] ${isActive ? 'font-black tracking-tight' : 'font-bold tracking-tight text-slate-600 group-hover:text-slate-900'}`}>
+                          {tab.label}
+                        </span>
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Navigation Links */}
-        <div className="space-y-2 flex-1">
-          {navGroups.map(group => {
-            const isOpen = openGroup === group.id;
-            const hasActiveChild = group.children.some(c => c.id === activeTab);
-            
-            return (
-              <div key={group.id} className="flex flex-col">
+        {/* Bottom Section: Utility & User Profile */}
+        <div className={`border-t border-slate-200/80 bg-transparent shrink-0 flex flex-col ${isExpanded ? 'p-3 gap-2.5' : 'p-2 py-4'}`}>
+          {isExpanded ? (
+            <div className="flex flex-col gap-2.5">
+              
+              {/* Cloud Sync & AI Status */}
+              <div className="flex items-center justify-between px-1">
                 <button
-                  onClick={() => setOpenGroup(isOpen ? null : group.id)}
-                  title={group.label}
-                  className={`relative w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 group outline-none border-l-2 ${
-                    hasActiveChild && isOpen 
-                      ? 'border-blue-600 bg-slate-50 text-indigo-950' 
-                      : hasActiveChild 
-                        ? 'border-transparent text-indigo-950 bg-slate-100/80 shadow-sm' 
-                        : 'border-transparent text-slate-500 hover:text-indigo-900 hover:bg-slate-50/80'
+                  onClick={() => setIsConfigOpen(true)}
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[9px] font-bold border transition-all cursor-pointer ${
+                    isCloud
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-300'
+                      : 'bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <span className={`relative z-10 w-5 h-5 flex items-center justify-center transition-transform group-hover:scale-110 ${hasActiveChild && !isOpen ? 'scale-110' : ''}`}>
-                      {group.icon}
-                    </span>
-                    <span className="relative z-10 flex-1 text-left">{group.label}</span>
-                  </div>
-                  <span className="relative z-10">
-                    {isOpen ? <ChevronUp className="w-4 h-4 opacity-50" /> : <ChevronDown className="w-4 h-4 opacity-50" />}
-                  </span>
+                  {isCloud ? <Cloud className="w-2.5 h-2.5" /> : <HardDrive className="w-2.5 h-2.5" />}
+                  <span>{isCloud ? 'CLOUD' : 'LOCAL'}</span>
                 </button>
-                
-                <AnimatePresence>
-                  {isOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden"
+                <div className="scale-95 origin-right">
+                  <AIStatusIndicator status={aiStatus} />
+                </div>
+              </div>
+
+              {/* User Profile, Logout & Collapse */}
+              <div className="flex items-center justify-between px-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#0055B3] to-sky-600 text-white flex items-center justify-center font-black text-xs shadow-sm shrink-0">
+                    {userInitial}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[11px] font-extrabold text-slate-900 truncate font-['Plus_Jakarta_Sans']">
+                      {userName}
+                    </span>
+                    <span className="text-[9px] font-mono font-bold text-slate-500 uppercase truncate">
+                      {currentRole}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {onLogout && (
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={onLogout}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                      title="Sign Out"
                     >
-                      <div className="pl-4 pr-1 py-1 space-y-1">
-                        {group.children.map(tab => {
-                          const isActive = activeTab === tab.id;
-                          return (
-                            <button
-                              key={tab.id}
-                              onClick={() => setActiveTab(tab.id)}
-                              className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 group outline-none ${isActive ? 'text-blue-700' : 'text-slate-500 hover:text-indigo-900'}`}
-                            >
-                              {isActive && (
-                                  <MotionDiv
-                                      layoutId="activeTab"
-                                      className="absolute inset-0 bg-blue-50/50 shadow-sm border border-blue-100 rounded-xl"
-                                      initial={false}
-                                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                                  />
-                              )}
-                              <span className={`relative z-10 w-5 h-5 flex items-center justify-center transition-transform group-hover:scale-110 ${isActive ? 'scale-110' : ''}`}>
-                                  {tab.icon}
-                              </span>
-                              <span className="relative z-10 flex-1 text-left">{tab.label}</span>
-                              {tab.id === 'project-journey' && projectContext?.journeySummary && (
-                                  <span className={`relative z-10 inline-flex items-center justify-center px-2 py-0.5 ml-auto text-xs font-bold rounded-full ${projectContext.journeySummary.pct === 100 ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100/80 text-amber-600 border border-amber-200'}`}>
-                                      {projectContext.journeySummary.pct === 100 ? '✓' : (projectContext.journeySummary.active || 0)}
-                                  </span>
-                              )}
-                              {tab.id === 'comms-tracker' && pendingCommsCount > 0 && (
-                                <span className="relative z-10 inline-flex items-center justify-center px-2 py-0.5 ml-auto text-xs font-bold text-white bg-rose-500 rounded-full">
-                                  {pendingCommsCount}
-                                </span>
-                              )}
-                              {tab.id === 'comms-tracker' && pendingCommsCount === 0 && commsHealthScore === 100 && (
-                                <span className="relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-xs font-bold text-emerald-600 bg-emerald-100 rounded-full">
-                                  ✓
-                                </span>
-                              )}
-                              {tab.id === 'boq-editor' && (
-                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  projectContext?.boqFrozen ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-amber-600 bg-amber-100/80 border border-amber-200'
-                                }`}>
-                                  {projectContext?.boqFrozen ? 'Frozen' : 'WIP'}
-                                </span>
-                              )}
-                              {tab.id === 'materials' && (
-                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  projectContext?.sofFreezeDate ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-amber-600 bg-amber-100/80 border border-amber-200'
-                                }`}>
-                                  {projectContext?.sofFreezeDate ? 'Frozen' : 'WIP'}
-                                </span>
-                              )}
-                              {tab.id === 'contract' && (
-                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  projectContext?.contractSignoff?.status === 'signed' ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200'
-                                  : projectContext?.contractSignoff?.status === 'sent' ? 'text-blue-600 bg-blue-100/80 border border-blue-200'
-                                  : 'text-slate-500 bg-slate-100 border border-slate-200'
-                                }`}>
-                                  {projectContext?.contractSignoff?.status === 'signed' ? 'Signed' : projectContext?.contractSignoff?.status === 'sent' ? 'Sent' : 'Draft'}
-                                </span>
-                              )}
-                              {tab.id === 'execution-agreement' && (
-                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  (projectContext as any)?.executionSignoff?.status === 'signed' ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200'
-                                  : (projectContext as any)?.executionSignoff?.status === 'sent' ? 'text-blue-600 bg-blue-100/80 border border-blue-200'
-                                  : 'text-slate-500 bg-slate-100 border border-slate-200'
-                                }`}>
-                                  {(projectContext as any)?.executionSignoff?.status === 'signed' ? 'Signed' : (projectContext as any)?.executionSignoff?.status === 'sent' ? 'Sent' : 'Draft'}
-                                </span>
-                              )}
-                              {tab.id === 'client' && (
-                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  projectContext?.approvedTierId ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-rose-600 bg-rose-100/80 border border-rose-200'
-                                }`}>
-                                  {projectContext?.approvedTierId ? 'Approved' : 'Pending'}
-                                </span>
-                              )}
-                              {tab.id === 'timeline' && (
-                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  projectContext?.timelinePhases?.length ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-amber-600 bg-amber-100/80 border border-amber-200'
-                                }`}>
-                                  {projectContext?.timelinePhases?.length ? 'Set' : 'Pending'}
-                                </span>
-                              )}
-                              {tab.id === 'terms-docket' && (
-                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  projectContext?.designAgreementSignoff?.status === 'signed' ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200'
-                                  : projectContext?.designAgreementSignoff?.status === 'sent' ? 'text-blue-600 bg-blue-100/80 border border-blue-200'
-                                  : 'text-slate-500 bg-slate-100 border border-slate-200'
-                                }`}>
-                                  {projectContext?.designAgreementSignoff?.status === 'signed' ? 'Signed' : projectContext?.designAgreementSignoff?.status === 'sent' ? 'Sent' : 'Draft'}
-                                </span>
-                              )}
-                              {tab.id === 'payment-schedule' && (
-                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  (projectContext?.engagement?.status === 'issued' || projectContext?.engagement?.status === 'acknowledged')
-                                    ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200' : 'text-amber-600 bg-amber-100/80 border border-amber-200'
-                                }`}>
-                                  {projectContext?.engagement?.status === 'acknowledged' ? 'Ack' : projectContext?.engagement?.status === 'issued' ? 'Issued' : 'Draft'}
-                                </span>
-                              )}
-                              {tab.id === 'handover-docket' && (
-                                <span className={`relative z-10 inline-flex items-center justify-center px-1.5 py-0.5 ml-auto text-[10px] font-bold rounded-lg ${
-                                  projectContext?.handoverSignoff?.status === 'signed' ? 'text-emerald-600 bg-emerald-100/80 border border-emerald-200'
-                                  : projectContext?.handoverSignoff?.status === 'sent' ? 'text-blue-600 bg-blue-100/80 border border-blue-200'
-                                  : 'text-slate-500 bg-slate-100 border border-slate-200'
-                                }`}>
-                                  {projectContext?.handoverSignoff?.status === 'signed' ? 'Signed' : projectContext?.handoverSignoff?.status === 'sent' ? 'Sent' : 'Draft'}
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
+                      <LogOut className="w-4 h-4" />
+                    </motion.button>
                   )}
-                </AnimatePresence>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={toggleSidebar}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+                    title="Collapse Sidebar"
+                  >
+                    <PanelLeftClose className="w-4 h-4" />
+                  </motion.button>
+                </div>
               </div>
-            );
-          })}
-        </div>
-
-        {/* Pinned Navigation Links Moved to Scrollable */}
-        <div className="mt-auto pt-4 border-t border-slate-100 space-y-1 pb-2">
-          {pinnedTabs.map(tab => {
-            const isActive = activeTab === tab.id || (tab.id === 'studio-settings' && ['team', 'subscription', 'setup-wizard'].includes(activeTab));
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 group outline-none ${isActive ? 'text-blue-700' : 'text-slate-500 hover:text-indigo-900'}`}
-              >
-                {isActive && (
-                    <MotionDiv
-                        layoutId="activeTab"
-                        className="absolute inset-0 bg-blue-50/50 shadow-sm border border-blue-100 rounded-xl"
-                        initial={false}
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    />
-                )}
-                <span className={`relative z-10 w-5 h-5 flex items-center justify-center transition-transform group-hover:scale-110 ${isActive ? 'scale-110' : ''}`}>
-                    {tab.icon}
-                </span>
-                <span className="relative z-10">{tab.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Bottom Pinned Area - Compacted */}
-      <div className="flex-shrink-0 border-t border-slate-100 pt-3 mt-1 flex flex-col gap-2">
-          <div className="flex items-center gap-3 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
-              <div className="w-8 h-8 rounded-full border-2 border-white shadow-sm flex items-center justify-center text-white font-bold text-xs shrink-0" style={{ backgroundColor: orgData.themeColor || '#0f172a' }}>
-                  {orgData.orgName?.charAt(0).toUpperCase() || 'S'}
-              </div>
-              <div className="overflow-hidden flex-1">
-                  <p className="text-xs font-bold text-indigo-900 truncate" title={orgData.orgName || 'Studio Admin'}>{orgData.orgName || 'Studio Admin'}</p>
-                  <p className="text-[10px] text-slate-400 font-medium truncate">Role: {currentRole}</p>
-                  {currentUserAuth?.email && (
-                      <p className="text-[9px] text-slate-400 truncate" title={currentUserAuth.email}>{currentUserAuth.email}</p>
-                  )}
-              </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-2">
-            <div 
-              onClick={() => setIsConfigOpen(true)}
-              className={`cursor-pointer px-2 py-1.5 rounded-lg flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all hover:scale-105 active:scale-95 ${isCloud ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'}`}
-              title="Click to Configure Database"
-            >
-                <span className={`w-1.5 h-1.5 rounded-full ${isCloud ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
-                {isCloud ? 'Cloud' : 'Local'}
             </div>
-
-            {onLogout && (
-              <button 
-                onClick={onLogout}
-                className="px-2 py-1.5 rounded-lg flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all hover:scale-105 active:scale-95 bg-slate-50 text-slate-600 border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200"
+          ) : (
+            <div className="flex flex-col items-center gap-4">
+              {/* Compact Combined Avatar & Indicators */}
+              <div className="relative">
+                <div 
+                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-800 to-sky-700 text-white flex items-center justify-center shadow-sm shrink-0 cursor-pointer border-2 border-transparent hover:border-sky-300 transition-all"
+                  title={`${userName} (${currentRole})`}
+                >
+                  <span className="font-black text-sm">{userInitial}</span>
+                </div>
+                {/* AI Status Dot */}
+                <div 
+                  className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${aiStatus === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-rose-500'}`} 
+                  title={aiStatus === 'online' ? 'System Online' : 'System Offline'} 
+                />
+                {/* Cloud Sync Icon */}
+                <div 
+                  onClick={() => setIsConfigOpen(true)}
+                  className={`absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center cursor-pointer shadow-sm ${isCloud ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200' : 'bg-amber-100 text-amber-600 hover:bg-amber-200'}`} 
+                  title={isCloud ? 'Cloud Sync Active' : 'Local Storage'}
+                >
+                  {isCloud ? <Cloud className="w-2.5 h-2.5" /> : <HardDrive className="w-2.5 h-2.5" />}
+                </div>
+              </div>
+              
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={toggleSidebar}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-[#0066CC] hover:bg-sky-50 transition-all cursor-pointer"
+                title="Expand Sidebar"
               >
-                Logout
-              </button>
-            )}
-          </div>
-          
-          <div className="flex justify-between items-center px-1">
-             <div className="transform scale-90 origin-left">
-                <AIStatusIndicator status={aiStatus} />
-             </div>
-             <p className="text-[9px] text-slate-400 font-medium">v36.1 • Milky White</p>
-          </div>
-      </div>
-    </MotionNav>
-
-    <CloudConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} />
+                <PanelLeft className="w-4 h-4" />
+              </motion.button>
+            </div>
+          )}
+        </div>
+      </aside>
+      
+      <CloudConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} />
     </>
   );
 };

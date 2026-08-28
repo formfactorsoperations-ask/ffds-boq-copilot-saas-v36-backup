@@ -16,11 +16,31 @@ interface RoomCardProps {
   onDelete: (itemId: string) => void;
   onAddItem: (room: Room) => void;
   onViewInBank: (bankId: string) => void;
+  selectedItemIds?: Set<string>;
+  onSelectItemToggle?: (itemId: string) => void;
+  onSaveAsBundle?: (itemIds: string[], defaultName?: string) => void;
 }
 
-const RoomCard: React.FC<RoomCardProps> = ({ room, items, allRooms, searchQuery, onUpdate, onBulkUpdate, onDelete, onAddItem, onViewInBank }) => {
+const RoomCard: React.FC<RoomCardProps> = ({ 
+  room, 
+  items, 
+  allRooms, 
+  searchQuery, 
+  onUpdate, 
+  onBulkUpdate, 
+  onDelete, 
+  onAddItem, 
+  onViewInBank,
+  selectedItemIds,
+  onSelectItemToggle,
+  onSaveAsBundle
+}) => {
   const [isMarkupOpen, setIsMarkupOpen] = useState(false);
+  const [isBulkActionsOpen, setIsBulkActionsOpen] = useState(false);
   const [markupValue, setMarkupValue] = useState(20);
+  const [bulkMarkupValue, setBulkMarkupValue] = useState(20);
+  const [bulkSearchWord, setBulkSearchWord] = useState('');
+  const [bulkReplaceWord, setBulkReplaceWord] = useState('');
 
   const roomTotal = useMemo(() => {
     return items.reduce((total, item) => {
@@ -82,13 +102,13 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, items, allRooms, searchQuery,
                 🏠
             </div>
             <div>
-                <h4 className="font-bold text-lg text-indigo-900 leading-tight">{room.name}</h4>
+                <h4 className="font-bold text-lg text-slate-800 leading-tight">{room.name}</h4>
                 {room.size > 0 && <p className="text-xs font-medium text-slate-500 bg-white/30 inline-block px-2 py-0.5 rounded-md mt-0.5 border border-white/30">{room.size} {room.unit}</p>}
             </div>
         </div>
         <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end">
             <div className="text-right">
-                <p className="font-black text-lg text-indigo-900 tracking-tight">{formatCurrency(roomTotal)}</p>
+                <p className="font-black text-lg text-slate-800 tracking-tight">{formatCurrency(roomTotal)}</p>
                 <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
                     {searchActive ? `${matchedItems.size} of ${items.length} match` : `${items.length} items`}
                 </p>
@@ -98,23 +118,143 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, items, allRooms, searchQuery,
                 {items.length > 0 && (
                     <>
                         <button 
-                            onClick={() => setIsMarkupOpen(!isMarkupOpen)}
+                            onClick={() => {
+                                setIsMarkupOpen(!isMarkupOpen);
+                                setIsBulkActionsOpen(false);
+                            }}
                             className="px-3 py-2 bg-white text-slate-600 font-bold rounded-xl shadow-sm border border-slate-200 hover:bg-slate-50 transition-all text-xs whitespace-nowrap">
-                            Set markup
+                            Set margin
+                        </button>
+
+                        <button 
+                            onClick={() => {
+                                setIsBulkActionsOpen(!isBulkActionsOpen);
+                                setIsMarkupOpen(false);
+                            }}
+                            className="px-3 py-2 bg-sky-50 hover:bg-sky-100 text-[#0055B3] font-bold rounded-xl shadow-sm border border-sky-100 hover:border-sky-200 transition-all text-xs flex items-center gap-1 whitespace-nowrap">
+                            ⚡ Bulk Actions
                         </button>
                         
                         {isMarkupOpen && (
                             <div className="absolute top-full right-0 mt-2 p-4 bg-white rounded-xl shadow-xl border border-slate-200 z-50 w-64 origin-top-right animate-in fade-in zoom-in duration-200">
-                                <label className="block text-xs font-bold text-slate-700 mb-2 whitespace-normal break-words">Set markup % for all items in this room</label>
+                                <label className="block text-xs font-bold text-slate-700 mb-2 whitespace-normal break-words">Set margin % for all items in this room</label>
                                 <input 
                                    type="number" 
                                    value={markupValue}
                                    onChange={e => setMarkupValue(Number(e.target.value))}
-                                   className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 focus:outline-none focus:border-indigo-500" 
+                                   className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 focus:outline-none focus:border-[#0066CC]" 
                                 />
                                 <div className="flex justify-end gap-2 text-xs">
                                     <button onClick={() => setIsMarkupOpen(false)} className="px-3 py-1.5 text-slate-500 hover:text-slate-700 font-medium">Cancel</button>
-                                    <button onClick={handleApplyMarkup} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-sm">Apply</button>
+                                    <button onClick={handleApplyMarkup} className="px-3 py-1.5 bg-[#0066CC] text-white rounded-lg hover:bg-[#0055B3] font-bold shadow-sm">Apply</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {isBulkActionsOpen && (
+                            <div className="absolute top-full right-0 mt-2 p-5 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 w-80 origin-top-right animate-in fade-in zoom-in duration-200">
+                                <h5 className="font-bold text-slate-800 text-xs uppercase tracking-wider mb-3">Room Bulk Actions</h5>
+                                
+                                <div className="space-y-4 text-xs">
+                                    {/* Margin / Markup override */}
+                                    <div className="border-b border-slate-100 pb-3">
+                                        <label className="block font-bold text-slate-700 mb-1.5">Apply Margin % to Room Items</label>
+                                        <div className="flex gap-2">
+                                            <input 
+                                               type="number" 
+                                               value={bulkMarkupValue}
+                                               onChange={e => setBulkMarkupValue(Number(e.target.value))}
+                                               className="w-20 border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:border-[#0066CC]" 
+                                            />
+                                            <button 
+                                               onClick={() => {
+                                                   if (onBulkUpdate) {
+                                                       const updates = items.map(i => ({ itemId: i.id, updates: { marginOverride: bulkMarkupValue } }));
+                                                       onBulkUpdate(updates);
+                                                       setIsBulkActionsOpen(false);
+                                                   }
+                                               }}
+                                               className="flex-grow px-3 py-1 bg-[#0066CC] text-white font-bold rounded-lg hover:bg-[#0055B3] shadow-sm"
+                                            >
+                                               Apply Margin
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Find and Replace Specification Swapping */}
+                                    <div className="border-b border-slate-100 pb-3">
+                                        <label className="block font-bold text-slate-700 mb-1.5">Spec Swap / Upgrade Materials</label>
+                                        <div className="space-y-2">
+                                            <input 
+                                               type="text" 
+                                               placeholder="Find text (e.g. Commercial)"
+                                               value={bulkSearchWord}
+                                               onChange={e => setBulkSearchWord(e.target.value)}
+                                               className="w-full border border-slate-300 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#0066CC]" 
+                                            />
+                                            <input 
+                                               type="text" 
+                                               placeholder="Replace with (e.g. Marine Grade)"
+                                               value={bulkReplaceWord}
+                                               onChange={e => setBulkReplaceWord(e.target.value)}
+                                               className="w-full border border-slate-300 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#0066CC]" 
+                                            />
+                                            <div className="flex justify-between items-center gap-2">
+                                                <button 
+                                                   onClick={() => {
+                                                       setBulkSearchWord("Commercial");
+                                                       setBulkReplaceWord("Marine Grade");
+                                                   }}
+                                                   className="text-[10px] text-[#0066CC] hover:underline font-semibold"
+                                                >
+                                                   Quick Plywood Upgrade
+                                                </button>
+                                                <button 
+                                                   onClick={() => {
+                                                       if (!bulkSearchWord.trim()) return;
+                                                       if (onBulkUpdate) {
+                                                           const updates = items.map(i => {
+                                                               const oldSpecs = i.specs || '';
+                                                               const regex = new RegExp(bulkSearchWord, 'gi');
+                                                               if (regex.test(oldSpecs)) {
+                                                                   const newSpecs = oldSpecs.replace(regex, bulkReplaceWord);
+                                                                   return { itemId: i.id, updates: { specs: newSpecs } };
+                                                               }
+                                                               return null;
+                                                           }).filter(Boolean) as any[];
+                                                           
+                                                           if (updates.length > 0) {
+                                                               onBulkUpdate(updates);
+                                                               alert(`Successfully updated ${updates.length} specifications in this room!`);
+                                                           } else {
+                                                               alert(`No items matching "${bulkSearchWord}" found in this room.`);
+                                                           }
+                                                           setIsBulkActionsOpen(false);
+                                                       }
+                                                   }}
+                                                   className="px-3 py-1.5 bg-[#0066CC] text-white font-bold rounded-lg hover:bg-[#0055B3] shadow-sm"
+                                                >
+                                                   Swap Specs
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Save Room as Custom Bundle */}
+                                    {onSaveAsBundle && (
+                                        <div>
+                                            <label className="block font-bold text-slate-700 mb-1.5">Save Room as Custom Bundle</label>
+                                            <button 
+                                               onClick={() => {
+                                                   onSaveAsBundle(items.map(i => i.bankId), `${room.name} Set`);
+                                                   setIsBulkActionsOpen(false);
+                                               }}
+                                               className="w-full px-3 py-2 border-2 border-sky-100 hover:border-[#0066CC] text-[#0055B3] hover:bg-sky-50/20 font-bold rounded-xl transition-all"
+                                            >
+                                               📦 Save Set ({items.length} items)
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -124,7 +264,7 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, items, allRooms, searchQuery,
                 {room.name !== 'Unassigned' && (
                     <button 
                         onClick={() => onAddItem(room)}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600/90 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 hover:scale-105 transition-all text-xs backdrop-blur-sm whitespace-nowrap">
+                        className="flex items-center gap-2 px-4 py-2 bg-[#0066CC]/90 text-white font-bold rounded-xl shadow-lg shadow-sky-600/20 hover:bg-[#0055B3] hover:scale-105 transition-all text-xs backdrop-blur-sm whitespace-nowrap">
                         <AddToCartIcon className="w-3.5 h-3.5"/> Add Item
                     </button>
                 )}
@@ -150,6 +290,8 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, items, allRooms, searchQuery,
                                 onUpdate={onUpdate}
                                 onDelete={onDelete}
                                 onViewInBank={onViewInBank}
+                                isSelected={selectedItemIds?.has(item.id)}
+                                onSelectToggle={onSelectItemToggle ? () => onSelectItemToggle(item.id) : undefined}
                             />
                         </MotionDiv>
                     )})}
@@ -159,7 +301,7 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, items, allRooms, searchQuery,
             <div className="py-8 text-center border-2 border-dashed border-white/40 rounded-2xl bg-white/10">
                 <p className="text-slate-500 font-medium mb-3 text-sm">This room is empty.</p>
                  {room.name !== 'Unassigned' && (
-                    <button onClick={() => onAddItem(room)} className="text-indigo-600 text-xs font-bold hover:text-indigo-800 hover:bg-indigo-50/50 px-3 py-1.5 rounded-lg transition-colors">
+                    <button onClick={() => onAddItem(room)} className="text-[#0066CC] text-xs font-bold hover:text-[#0055B3] hover:bg-sky-50/50 px-3 py-1.5 rounded-lg transition-colors">
                         + Add items
                     </button>
                  )}

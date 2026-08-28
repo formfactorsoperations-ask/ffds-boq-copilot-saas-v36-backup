@@ -96,7 +96,7 @@ export const createMoMFromNotes = async (
             })),
             scopeFlagSummary: momData.scopeFlagSummary || null,
             aiGenerated: true,
-            aiModel: "gemini-2.5-flash",
+            aiModel: "gemini-3.6-flash",
             aiConfidence: momData.confidence || 0.9,
         };
 

@@ -26,31 +26,31 @@ const ClientDiscountShowcase: React.FC<ClientDiscountShowcaseProps> = ({ discoun
 
     return (
         <section className="mb-8 break-inside-avoid">
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-900 to-teal-900 text-white shadow-xl p-6 md:p-8">
+            <div className="relative overflow-hidden rounded-2xl bg-slate-900 text-white shadow-xl p-6 md:p-8">
                 
                 {/* Decorative Background Elements */}
                 <div className="absolute top-0 right-0 p-8 opacity-10">
-                    <SparklesIcon className="w-40 h-40 text-emerald-400" />
+                    <SparklesIcon className="w-40 h-40 text-slate-800" />
                 </div>
-                <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl"></div>
+                <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-slate-800 rounded-full blur-3xl"></div>
 
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-emerald-800/50 pb-6 mb-6">
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-slate-800 pb-6 mb-6">
                     <div>
                         <div className="flex items-center gap-2 mb-2">
-                            <span className="p-1.5 bg-emerald-500/20 text-emerald-300 rounded-lg shadow-sm backdrop-blur-sm border border-emerald-500/30">
+                            <span className="p-1.5 bg-slate-800/50 text-slate-300 rounded border border-slate-700">
                                 <SparklesIcon className="w-4 h-4" />
                             </span>
-                            <span className="text-xs font-bold text-emerald-300 uppercase tracking-widest">Pricing Advantage</span>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Pricing Advantage</span>
                         </div>
                         <h3 className="text-2xl font-bold text-white">Value & Savings Unlocked</h3>
-                        <p className="text-sm text-emerald-100/80 mt-1 max-w-lg">
+                        <p className="text-sm text-slate-400 mt-1 max-w-lg">
                             The following preferential adjustments have been applied to your project baseline.
                         </p>
                     </div>
 
                     {/* Total Savings Badge */}
                     <div className="bg-white/10 backdrop-blur-md border border-white/10 px-6 py-4 rounded-2xl text-center shadow-lg min-w-[160px]">
-                        <p className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider mb-1">Total Savings</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Savings</p>
                         <p className="text-3xl font-black text-white tracking-tight">
                             {formatCurrency(totalSavings)}
                         </p>
@@ -61,16 +61,16 @@ const ClientDiscountShowcase: React.FC<ClientDiscountShowcaseProps> = ({ discoun
                     {discounts.map((discount, idx) => {
                         const amount = getDiscountValue(discount);
                         return (
-                            <div key={discount.id} className="relative bg-white text-indigo-900 p-4 rounded-xl flex items-center justify-between shadow-sm group border-l-4 border-emerald-500">
+                            <div key={discount.id} className="relative bg-slate-50 text-slate-800 p-4 rounded-lg flex items-center justify-between shadow-sm border border-slate-200 border-l-4 border-l-slate-400">
                                 {/* Ticket Perforation Visuals */}
-                                <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-teal-900 rounded-full"></div>
+                                <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-slate-900 rounded-full border-l border-slate-200"></div>
 
                                 <div className="pl-2">
                                     <div className="flex items-center gap-2 mb-1">
-                                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded text-white ${discount.target === 'design' ? 'bg-blue-600' : 'bg-slate-600'}`}>
+                                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded text-white ${discount.target === 'design' ? 'bg-slate-200 text-slate-600' : 'bg-slate-200 text-slate-600'}`}>
                                             {discount.target === 'design' ? 'Design Fee' : 'Execution'}
                                         </span>
-                                        <h4 className="font-bold text-indigo-950 text-sm">{discount.name}</h4>
+                                        <h4 className="font-bold text-slate-900 text-sm">{discount.name}</h4>
                                     </div>
                                     <div className="flex items-center gap-1.5 text-xs text-slate-500">
                                         <CheckBadgeIcon className="w-3 h-3 text-emerald-600" />

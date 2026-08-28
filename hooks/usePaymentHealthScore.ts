@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/firebaseClient';
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 
@@ -14,6 +14,8 @@ export interface PaymentHealth {
     loading: boolean;
     paymentMilestones?: any[];
 }
+
+import pako from 'pako';
 
 export function calculateLocalPaymentHealth(paymentMilestones?: any[], legacySteps?: any[], legacyPayments?: any[]): PaymentHealth {
     let expectedReceived = 0;
@@ -164,16 +166,13 @@ export async function fetchPaymentHealthScore(projectId: string, studioId: strin
         let projectData = projectSnap.data();
         if (projectData.isCompressed && projectData.compressedData) {
             try {
-                if (typeof window !== 'undefined' && (window as any).pako) {
-                    const pako = (window as any).pako;
-                    const binaryString = atob(projectData.compressedData);
-                    const len = binaryString.length;
-                    const bytes = new Uint8Array(len);
-                    for (let i = 0; i < len; i++) {
-                        bytes[i] = binaryString.charCodeAt(i);
-                    }
-                    projectData = JSON.parse(pako.inflate(bytes, { to: 'string' }));
+                const binaryString = atob(projectData.compressedData);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
                 }
+                projectData = JSON.parse(pako.inflate(bytes, { to: 'string' }));
             } catch (e) {
                 console.warn("Failed to decompress project for payment health", e);
             }
@@ -204,9 +203,10 @@ export function usePaymentHealthScore(projectId: string | null | undefined, stud
         loading: true,
     });
 
+    const localMilestonesStr = useMemo(() => JSON.stringify(localMilestones || []), [localMilestones]);
+
     useEffect(() => {
         let mounted = true;
-        const localMilestonesStr = JSON.stringify(localMilestones || []);
 
         if (localMilestones && localMilestones.length > 0) {
             setHealth(calculateLocalPaymentHealth(localMilestones));
@@ -225,7 +225,7 @@ export function usePaymentHealthScore(projectId: string | null | undefined, stud
         });
 
         return () => { mounted = false; };
-    }, [projectId, studioId, JSON.stringify(localMilestones || [])]);
+    }, [projectId, studioId, localMilestonesStr]);
 
     return health;
 }

@@ -1,286 +1,325 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Item, AIStrategy } from '../types';
+import { Item, AIStrategy, FullProjectData } from '../types';
 import { splitCost, isAiAvailable } from '../services/geminiService';
 import { formatCurrency, calculateSellPrice } from '../lib/utils';
 import { DeleteIcon, WandIcon } from './Icons';
 import { UOM_OPTIONS } from '../constants';
+import { Sparkles, Copy, Trash2, Building2 } from 'lucide-react';
 
 interface BankItemCardProps {
   item: Item;
   onUpdate: (id: string, updatedItem: Item) => void;
   onDelete: (id: string) => void;
+  onDuplicate?: (item: Item) => void;
   aiStrategy: AIStrategy;
   isHighlighted?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
   viewMode?: 'grid' | 'list';
-  gridTemplate?: string; // Passed from parent for strict alignment in list view
+  gridTemplate?: string;
+  projects?: FullProjectData[];
+  onViewProjectUsage?: (item: Item) => void;
 }
 
-// --- HELPER: Fast Transparent Input ---
-// Allows editing without "click to edit" mode switching. Looks like text, acts like input.
 const FastInput: React.FC<{
-    value: string | number;
-    onChange: (val: string | number) => void;
-    type?: 'text' | 'number';
-    className?: string;
-    placeholder?: string;
-    onBlur?: () => void;
-}> = ({ value, onChange, type = 'text', className = "", placeholder, onBlur }) => {
-    const [localValue, setLocalValue] = useState(value);
+  value: string | number;
+  onChange: (val: string | number) => void;
+  type?: 'text' | 'number';
+  className?: string;
+  placeholder?: string;
+  onBlur?: () => void;
+}> = ({ value, onChange, type = 'text', className = '', placeholder, onBlur }) => {
+  const [localValue, setLocalValue] = useState(value);
 
-    useEffect(() => { setLocalValue(value); }, [value]);
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        setLocalValue(val);
-        // Instant update for text, debounced could be added if needed but raw speed is requested
-        if (type === 'number') {
-            const num = parseFloat(val);
-            if (!isNaN(num)) onChange(num);
-            else if (val === '') onChange(0);
-        } else {
-            onChange(val);
-        }
-    };
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setLocalValue(val);
+    if (type === 'number') {
+      const num = parseFloat(val);
+      if (!isNaN(num)) onChange(num);
+      else if (val === '') onChange(0);
+    } else {
+      onChange(val);
+    }
+  };
 
-    return (
-        <input 
-            type={type}
-            value={localValue}
-            onChange={handleChange}
-            onBlur={onBlur}
-            placeholder={placeholder}
-            className={`bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 rounded px-1.5 py-0.5 outline-none transition-all w-full text-indigo-900 placeholder:text-slate-300 ${className}`}
-        />
-    );
+  return (
+    <input
+      type={type}
+      value={localValue}
+      onChange={handleChange}
+      onBlur={onBlur}
+      placeholder={placeholder}
+      className={`bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-sky-400 focus:ring-2 focus:ring-sky-100 rounded px-1.5 py-0.5 outline-none transition-all w-full text-slate-800 placeholder:text-slate-300 ${className}`}
+    />
+  );
 };
 
-const BankItemCard: React.FC<BankItemCardProps> = ({ item, onUpdate, onDelete, aiStrategy, isHighlighted, viewMode = 'grid', gridTemplate }) => {
+const BankItemCard: React.FC<BankItemCardProps> = ({
+  item,
+  onUpdate,
+  onDelete,
+  onDuplicate,
+  aiStrategy,
+  isHighlighted,
+  isSelected,
+  onToggleSelect,
+  viewMode = 'grid',
+  gridTemplate,
+  projects = [],
+  onViewProjectUsage,
+}) => {
   const [isSplitting, setIsSplitting] = useState(false);
 
-  // Memoized calculations
-  const totalCost = useMemo(() => (item.materials || 0) + (item.labor || 0), [item.materials, item.labor]);
-  const sellPrice = useMemo(() => calculateSellPrice(item.materials, item.labor, item.margin), [item.materials, item.labor, item.margin]);
+  const totalCost = useMemo(
+    () => (item.materials || 0) + (item.labor || 0),
+    [item.materials, item.labor]
+  );
+  const sellPrice = useMemo(
+    () => calculateSellPrice(item.materials, item.labor, item.margin),
+    [item.materials, item.labor, item.margin]
+  );
+
+  // Compute matched projects count
+  const projectCount = useMemo(() => {
+    if (!projects || projects.length === 0) return 0;
+    const targetId = item.id;
+    const targetName = (item.name || '').trim().toLowerCase();
+    const matched = new Set<string>();
+
+    projects.forEach((proj) => {
+      proj.tiers?.forEach((tier) => {
+        tier.boq?.forEach((boqItem) => {
+          if (
+            (boqItem.bankId && boqItem.bankId === targetId) ||
+            (boqItem.name && boqItem.name.trim().toLowerCase() === targetName)
+          ) {
+            matched.add(proj.id);
+          }
+        });
+      });
+
+      proj.canonical?.boq?.items?.forEach((cItem) => {
+        if (
+          (cItem.bankId && cItem.bankId === targetId) ||
+          (cItem.name && cItem.name.trim().toLowerCase() === targetName)
+        ) {
+          matched.add(proj.id);
+        }
+      });
+    });
+
+    return matched.size;
+  }, [item, projects]);
 
   const handleUpdate = (field: keyof Item, value: any) => {
     onUpdate(item.id, { ...item, [field]: value });
   };
 
-  // Logic to split Total Cost into Material (65%) and Labor (35%) automatically
   const handleTotalCostChange = (newTotal: number) => {
-      const materials = Math.round(newTotal * 0.65);
-      const labor = Math.round(newTotal * 0.35);
-      onUpdate(item.id, { ...item, materials, labor });
+    const materials = Math.round(newTotal * 0.65);
+    const labor = Math.round(newTotal * 0.35);
+    onUpdate(item.id, { ...item, materials, labor });
   };
 
-  // Smart Reverse Calculation: Update Sell Price -> Updates Margin
   const handleSellPriceChange = (newSellPrice: number) => {
-      const cost = totalCost;
-      if (cost > 0) {
-          const newMargin = ((newSellPrice / cost) - 1) * 100;
-          handleUpdate('margin', parseFloat(newMargin.toFixed(2)));
-      }
+    const cost = totalCost;
+    if (cost > 0) {
+      const newMargin = ((newSellPrice / cost) - 1) * 100;
+      handleUpdate('margin', parseFloat(newMargin.toFixed(2)));
+    }
   };
 
-  // AI Helper
   const handleCostSplit = async () => {
-      if (!isAiAvailable()) return;
-      setIsSplitting(true);
+    if (!isAiAvailable()) return;
+    setIsSplitting(true);
+    try {
       const { materials, labor } = await splitCost(item, totalCost, aiStrategy);
       onUpdate(item.id, { ...item, materials, labor });
+    } catch (e) {
+      console.error(e);
+    } finally {
       setIsSplitting(false);
-  }
-
-  // --- LIST VIEW ---
-  if (viewMode === 'list') {
-      return (
-        <div 
-            id={`bank-item-${item.id}`}
-            className={`grid gap-4 p-2 items-center hover:bg-slate-50 transition-colors group relative ${isHighlighted ? 'bg-indigo-50 border-l-4 border-indigo-500' : 'border-l-4 border-transparent'}`}
-            style={{ gridTemplateColumns: gridTemplate }}
-        >
-            {/* 1. Name & Specs */}
-            <div className="flex flex-col justify-center pl-2 space-y-1">
-                <FastInput 
-                    value={item.name} 
-                    onChange={v => handleUpdate('name', v)} 
-                    className="font-bold text-sm" 
-                    placeholder="Item Name"
-                />
-                <FastInput 
-                    value={item.specs} 
-                    onChange={v => handleUpdate('specs', v)} 
-                    className="text-[11px] text-slate-500 bg-slate-50/50" 
-                    placeholder="Public Concept Specs (L1/L2 Proposal)"
-                />
-                <FastInput 
-                    value={item.internalSpecs || ''} 
-                    onChange={v => handleUpdate('internalSpecs', v)} 
-                    className="text-[11px] text-slate-500 italic bg-amber-50/30 border-l-2 border-amber-200 pl-1.5" 
-                    placeholder="Internal Execution Docs (Post-Signoff/Portal Data, won't show in L1/L2)"
-                />
-            </div>
-
-            {/* 2. Category */}
-            <div>
-                <FastInput value={item.cat} onChange={v => handleUpdate('cat', v)} className="text-xs font-medium text-slate-600 bg-slate-100/50 rounded-md text-center" />
-            </div>
-
-            {/* 3. Unit */}
-            <div>
-                <select 
-                    value={item.unit} 
-                    onChange={e => handleUpdate('unit', e.target.value)}
-                    className="w-full bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-indigo-400 rounded px-1 py-0.5 text-xs text-slate-600 font-medium outline-none cursor-pointer text-center appearance-none"
-                >
-                    {UOM_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-            </div>
-
-            {/* 4. Total Cost (Smart Driver) */}
-            <div className="relative group/total bg-blue-50/50 rounded-md">
-                <FastInput 
-                    type="number" 
-                    value={totalCost} 
-                    onChange={(v) => handleTotalCostChange(Number(v))} 
-                    className="text-right text-xs font-bold text-blue-700"
-                />
-                <span className="absolute right-8 top-1/2 -translate-y-1/2 text-[9px] text-blue-300 pointer-events-none opacity-0 group-hover/total:opacity-100">Tot</span>
-            </div>
-
-            {/* 5. Material Cost */}
-            <div className="relative group/cost">
-                <FastInput 
-                    type="number" 
-                    value={item.materials} 
-                    onChange={v => handleUpdate('materials', v)} 
-                    className="text-right text-xs font-mono text-slate-600"
-                />
-                <span className="absolute right-8 top-1/2 -translate-y-1/2 text-[9px] text-slate-300 pointer-events-none opacity-0 group-hover/cost:opacity-100">Mat</span>
-            </div>
-
-            {/* 6. Labor Cost */}
-            <div className="relative group/cost">
-                <FastInput 
-                    type="number" 
-                    value={item.labor} 
-                    onChange={v => handleUpdate('labor', v)} 
-                    className="text-right text-xs font-mono text-slate-600"
-                />
-                <span className="absolute right-8 top-1/2 -translate-y-1/2 text-[9px] text-slate-300 pointer-events-none opacity-0 group-hover/cost:opacity-100">Lab</span>
-            </div>
-
-            {/* 7. Margin % */}
-            <div className="relative">
-                <FastInput 
-                    type="number" 
-                    value={item.margin} 
-                    onChange={v => handleUpdate('margin', v)} 
-                    className={`text-right text-xs font-bold font-mono ${item.margin < 15 ? 'text-amber-600' : 'text-emerald-600'}`}
-                />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">%</span>
-            </div>
-
-            {/* 8. Sell Price (Reverse Calc) */}
-            <div>
-                <FastInput 
-                    type="number" 
-                    value={parseFloat(sellPrice.toFixed(0))} 
-                    onChange={v => handleSellPriceChange(v as number)} 
-                    className="text-right text-sm font-bold text-indigo-950 font-mono bg-slate-50/50"
-                />
-            </div>
-
-            {/* 9. Actions */}
-            <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
-                    onClick={() => onDelete(item.id)} 
-                    className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                    title="Delete Item"
-                >
-                    <DeleteIcon className="w-4 h-4" />
-                </button>
-            </div>
-        </div>
-      );
-  }
+    }
+  };
 
   const MotionDiv = motion.div as any;
 
-  // --- GRID VIEW ---
   return (
-    <MotionDiv 
-        id={`bank-item-${item.id}`}
-        layout
-        className={`bg-white rounded-2xl p-5 border shadow-sm hover:shadow-lg transition-all group relative ${isHighlighted ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-slate-100 hover:border-indigo-200'}`}
+    <MotionDiv
+      id={`bank-item-${item.id}`}
+      layout
+      className={`bg-white rounded-2xl p-5 border shadow-2xs hover:shadow-md transition-all group relative flex flex-col justify-between ${
+        isSelected
+          ? 'border-[#0066CC] ring-2 ring-sky-100 bg-sky-50/20'
+          : isHighlighted
+          ? 'border-amber-400 ring-2 ring-amber-100 bg-amber-50/20'
+          : 'border-slate-200/80 hover:border-sky-300'
+      }`}
     >
-        <div className="flex justify-between items-start mb-3">
-            <div className="bg-slate-100 text-slate-500 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">
-                {item.cat}
-            </div>
-            <button onClick={() => onDelete(item.id)} className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <DeleteIcon className="w-4 h-4" />
+      <div>
+        {/* Top bar with Selection checkbox, category tag, and actions */}
+        <div className="flex justify-between items-center mb-3">
+          <div className="flex items-center gap-2">
+            {onToggleSelect && (
+              <input
+                type="checkbox"
+                checked={isSelected || false}
+                onChange={() => onToggleSelect(item.id)}
+                className="rounded border-slate-300 text-[#0066CC] focus:ring-[#0066CC] cursor-pointer"
+              />
+            )}
+            <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-200/60">
+              {item.cat || 'General'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={handleCostSplit}
+              disabled={isSplitting}
+              className="p-1 text-purple-600 hover:bg-purple-50 rounded transition-colors"
+              title="AI Cost Split"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${isSplitting ? 'animate-spin' : ''}`} />
             </button>
+            {onDuplicate && (
+              <button
+                type="button"
+                onClick={() => onDuplicate(item)}
+                className="p-1 text-slate-400 hover:text-[#0066CC] hover:bg-sky-50 rounded transition-colors"
+                title="Duplicate Item"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onDelete(item.id)}
+              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+              title="Delete Item"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
-        <FastInput 
-            value={item.name} 
-            onChange={v => handleUpdate('name', v)} 
-            className="font-bold text-base text-indigo-950 mb-1" 
-            placeholder="Item Name"
-        />
-        
-        <FastInput 
-            value={item.specs} 
-            onChange={v => handleUpdate('specs', v)} 
-            className="text-[11px] text-slate-500 mb-1"
-            placeholder="Public Concept Specs (L1/L2 Proposal)"
-        />
-
-        <FastInput 
-            value={item.internalSpecs || ''} 
-            onChange={v => handleUpdate('internalSpecs', v)} 
-            className="text-[11px] text-slate-500 italic bg-amber-50/50 border-l-2 border-amber-200 pl-1.5 mb-4"
-            placeholder="Internal Execution Docs (Post-Signoff/Portal Data, won't show in L1/L2)"
-        />
-
-        <div className="grid grid-cols-2 gap-2 mb-4 bg-slate-50 p-2 rounded-xl border border-slate-100">
-            <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-0.5">Cost</label>
-                <div className="font-mono text-xs text-slate-600 font-semibold">{formatCurrency(totalCost)}</div>
-            </div>
-            <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-0.5">Margin</label>
-                <FastInput 
-                    type="number" 
-                    value={item.margin} 
-                    onChange={v => handleUpdate('margin', v)} 
-                    className="text-xs font-bold text-emerald-600 bg-white"
-                />
-            </div>
+        {/* Item Name & Linked Projects Badge */}
+        <div className="mb-1">
+          <FastInput
+            value={item.name}
+            onChange={(v) => handleUpdate('name', v)}
+            className="font-extrabold text-sm text-slate-900"
+            placeholder="Item Name (e.g. Wardrobe)"
+          />
+          {projectCount > 0 && (
+            <button
+              type="button"
+              onClick={() => onViewProjectUsage && onViewProjectUsage(item)}
+              className="inline-flex items-center gap-1 px-2 py-0.5 mt-1 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[#0066CC] rounded-full text-[10px] font-extrabold transition-colors cursor-pointer"
+              title={`Used in ${projectCount} project(s). Click to view details.`}
+            >
+              <Building2 className="w-3 h-3" />
+              {projectCount} {projectCount === 1 ? 'Project' : 'Projects'}
+            </button>
+          )}
         </div>
 
-        <div className="flex justify-between items-end border-t border-slate-100 pt-3">
-            <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-0.5">Unit</label>
-                <select 
-                    value={item.unit} 
-                    onChange={e => handleUpdate('unit', e.target.value)}
-                    className="text-xs font-medium text-slate-600 bg-transparent outline-none cursor-pointer"
-                >
-                    {UOM_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
+        {/* Specs */}
+        <FastInput
+          value={item.specs}
+          onChange={(v) => handleUpdate('specs', v)}
+          className="text-[11px] text-slate-500 mb-1"
+          placeholder="Public Concept Specs (L1/L2 Proposal)"
+        />
+
+        {/* Internal Specs */}
+        <FastInput
+          value={item.internalSpecs || ''}
+          onChange={(v) => handleUpdate('internalSpecs', v)}
+          className="text-[11px] text-slate-500 italic bg-amber-50/40 border-l-2 border-amber-300 pl-1.5 mb-3"
+          placeholder="Internal Execution Docs (Post-Signoff/Portal Data)"
+        />
+
+        {/* Cost & Margin Metrics */}
+        <div className="grid grid-cols-3 gap-2 mb-3 bg-slate-50 p-2 rounded-xl border border-slate-100">
+          <div>
+            <label className="text-[9px] font-extrabold text-slate-400 uppercase block mb-0.5">
+              Cost
+            </label>
+            <div className="font-mono text-xs text-blue-700 font-bold">
+              {formatCurrency(totalCost)}
             </div>
-            <div className="text-right">
-                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-0.5">Sell Price</label>
-                <FastInput 
-                    type="number" 
-                    value={parseFloat(sellPrice.toFixed(0))} 
-                    onChange={v => handleSellPriceChange(v as number)} 
-                    className="text-lg font-black text-indigo-950 bg-transparent text-right p-0"
-                />
+          </div>
+          <div>
+            <label className="text-[9px] font-extrabold text-slate-400 uppercase block mb-0.5">
+              Margin
+            </label>
+            <div className="flex items-center gap-0.5">
+              <FastInput
+                type="number"
+                value={item.margin}
+                onChange={(v) => handleUpdate('margin', v)}
+                className={`text-xs font-bold font-mono bg-white ${
+                  (item.margin || 0) < 15 ? 'text-rose-600' : 'text-emerald-600'
+                }`}
+              />
+              <span className="text-[10px] text-slate-400">%</span>
             </div>
+          </div>
+          <div>
+            <label
+              className="text-[9px] font-extrabold text-slate-400 uppercase block mb-0.5"
+              title="Area Coefficient Multiplier"
+            >
+              Coeff
+            </label>
+            <FastInput
+              type="number"
+              value={item.areaMultiplierCoefficient || 1}
+              onChange={(v) => handleUpdate('areaMultiplierCoefficient', v)}
+              className="text-xs font-bold text-[#0066CC] bg-white font-mono"
+            />
+          </div>
         </div>
+      </div>
+
+      {/* Footer with Unit and Selling Price */}
+      <div className="flex justify-between items-end border-t border-slate-100 pt-3">
+        <div>
+          <label className="text-[9px] font-extrabold text-slate-400 uppercase block mb-0.5">
+            Unit
+          </label>
+          <select
+            value={item.unit}
+            onChange={(e) => handleUpdate('unit', e.target.value)}
+            className="text-xs font-bold text-slate-600 bg-transparent outline-none cursor-pointer uppercase"
+          >
+            {UOM_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="text-right">
+          <label className="text-[9px] font-extrabold text-slate-400 uppercase block mb-0.5">
+            Sell Price
+          </label>
+          <FastInput
+            type="number"
+            value={parseFloat(sellPrice.toFixed(0))}
+            onChange={(v) => handleSellPriceChange(v as number)}
+            className="text-base font-black text-slate-900 bg-transparent text-right p-0 font-mono"
+          />
+        </div>
+      </div>
     </MotionDiv>
   );
 };

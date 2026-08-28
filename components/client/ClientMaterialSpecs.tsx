@@ -166,17 +166,31 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
     const handleOverride = (category: string, colKey: string, newValue: string) => {
         if (!setProjectContext) return;
         setProjectContext((prev: any) => {
-            const content = prev.proposalContent || {};
-            const materials = content.materials || {};
+            const activeMode = prev.activeProposalMode || 'TURNKEY';
+            const modeContent = prev.proposalContentByMode?.[activeMode] || prev.proposalContent || {};
+            const materials = modeContent.materials || {};
             const overs = materials.overrides ? { ...materials.overrides } : {};
             if (!overs[category]) overs[category] = {};
             overs[category][colKey] = newValue;
+
+            const updatedModeContent = {
+                ...modeContent,
+                materials: { ...materials, overrides: overs }
+            };
+
+            const newProposalContentByMode = {
+                ...(prev.proposalContentByMode || {}),
+                [activeMode]: updatedModeContent
+            };
+
+            const mainUpdate = activeMode === 'TURNKEY'
+                ? { proposalContent: updatedModeContent }
+                : {};
+
             return {
                 ...prev,
-                proposalContent: {
-                    ...content,
-                    materials: { ...materials, overrides: overs }
-                }
+                proposalContentByMode: newProposalContentByMode,
+                ...mainUpdate
             };
         });
     };
@@ -191,7 +205,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     {isLevel2 ? 'Technical Specs' : (isSingleTier ? 'Specification Sheet' : 'Section 6')}
                 </div>
-                <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-indigo-950">
+                <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
                     {sectionTitle}
                 </h2>
                 {!isLevel2 && (
@@ -211,15 +225,15 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                         <tr className="bg-slate-50 border-b border-slate-200">
                             {isLevel2 ? (
                                 <>
-                                    <th className="py-4 px-6 font-bold text-indigo-900 w-1/4 border-r border-slate-200">Category</th>
-                                    <th className="py-4 px-6 font-bold text-indigo-900 w-1/2 border-r border-slate-200">Proposed Material/Brand</th>
-                                    <th className="py-4 px-6 font-bold text-indigo-900 w-1/4">Notes</th>
+                                    <th className="py-4 px-6 font-bold text-slate-800 w-1/4 border-r border-slate-200">Category</th>
+                                    <th className="py-4 px-6 font-bold text-slate-800 w-1/2 border-r border-slate-200">Proposed Material/Brand</th>
+                                    <th className="py-4 px-6 font-bold text-slate-800 w-1/4">Notes</th>
                                 </>
                             ) : (
                                 <>
-                                    <th className={`py-4 px-6 font-bold text-indigo-900 border-r border-slate-200 ${isSingleTier ? 'w-1/3' : 'w-1/4'}`}>Category</th>
+                                    <th className={`py-4 px-6 font-bold text-slate-800 border-r border-slate-200 ${isSingleTier ? 'w-1/3' : 'w-1/4'}`}>Category</th>
                                     {tiers.map((tier, idx) => (
-                                        <th key={tier.id} className={`py-4 px-6 font-bold text-indigo-900 min-w-[200px] ${idx !== tiers.length - 1 ? 'border-r border-slate-200' : ''}`}>
+                                        <th key={tier.id} className={`py-4 px-6 font-bold text-slate-800 min-w-[200px] ${idx !== tiers.length - 1 ? 'border-r border-slate-200' : ''}`}>
                                             {!isSingleTier && (
                                                 <span className="block text-[10px] font-normal text-slate-500 uppercase tracking-wide mb-1">Option {String.fromCharCode(65 + idx)}</span>
                                             )}
@@ -233,7 +247,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                     <tbody className="divide-y divide-slate-100">
                         {finalRows.map((row: any, idx) => (
                             <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                                <td className="py-4 px-6 font-bold text-indigo-950 border-r border-slate-100 bg-slate-50/30">
+                                <td className="py-4 px-6 font-bold text-slate-900 border-r border-slate-100 bg-slate-50/30">
                                     {row.category}
                                 </td>
                                 {isLevel2 ? (
@@ -243,7 +257,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                                contentEditable={!!setProjectContext} 
                                                suppressContentEditableWarning
                                                onBlur={(e) => handleOverride(row.category, 'material', e.currentTarget.innerText)}
-                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-indigo-500' : ''}`}
+                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-[#0066CC]' : ''}`}
                                             >{overrides[row.category]?.['material'] ?? row.material}</div>
                                         </td>
                                         <td className="py-4 px-6 text-slate-500 leading-relaxed align-top text-xs">
@@ -251,7 +265,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                                contentEditable={!!setProjectContext} 
                                                suppressContentEditableWarning
                                                onBlur={(e) => handleOverride(row.category, 'notes', e.currentTarget.innerText)}
-                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-indigo-500' : ''}`}
+                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-[#0066CC]' : ''}`}
                                             >{overrides[row.category]?.['notes'] ?? row.notes}</div>
                                         </td>
                                     </>
@@ -262,7 +276,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                                contentEditable={!!setProjectContext} 
                                                suppressContentEditableWarning
                                                onBlur={(e) => handleOverride(row.category, tier.name, e.currentTarget.innerText)}
-                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-indigo-500' : ''}`}
+                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-[#0066CC]' : ''}`}
                                             >{overrides[row.category]?.[tier.name] ?? row[tier.name]}</div>
                                         </td>
                                     ))
@@ -277,7 +291,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
             <div className="md:hidden mt-6 space-y-4">
                 {finalRows.map((row: any, idx) => (
                     <div key={idx} className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
-                        <h4 className="font-bold text-indigo-950 text-sm mb-4 border-b border-slate-200 pb-2">{row.category}</h4>
+                        <h4 className="font-bold text-slate-900 text-sm mb-4 border-b border-slate-200 pb-2">{row.category}</h4>
                         <div className="space-y-4">
                             {isLevel2 ? (
                                 <>
@@ -287,7 +301,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                            contentEditable={!!setProjectContext} 
                                            suppressContentEditableWarning
                                            onBlur={(e) => handleOverride(row.category, 'material', e.currentTarget.innerText)}
-                                           className={`text-sm font-bold text-indigo-900 whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-200 p-1 rounded outline-none focus:ring-2 focus:ring-indigo-500' : ''}`}
+                                           className={`text-sm font-bold text-slate-800 whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-200 p-1 rounded outline-none focus:ring-2 focus:ring-[#0066CC]' : ''}`}
                                         >{overrides[row.category]?.['material'] ?? row.material}</div>
                                     </div>
                                     <div>
@@ -296,7 +310,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                            contentEditable={!!setProjectContext} 
                                            suppressContentEditableWarning
                                            onBlur={(e) => handleOverride(row.category, 'notes', e.currentTarget.innerText)}
-                                           className={`text-sm text-slate-600 whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-200 p-1 rounded outline-none focus:ring-2 focus:ring-indigo-500' : ''}`}
+                                           className={`text-sm text-slate-600 whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-200 p-1 rounded outline-none focus:ring-2 focus:ring-[#0066CC]' : ''}`}
                                         >{overrides[row.category]?.['notes'] ?? row.notes}</div>
                                     </div>
                                 </>
@@ -308,7 +322,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                            contentEditable={!!setProjectContext} 
                                            suppressContentEditableWarning
                                            onBlur={(e) => handleOverride(row.category, tier.name, e.currentTarget.innerText)}
-                                           className={`text-sm text-indigo-900 font-medium bg-white p-2 rounded-lg border border-slate-100 shadow-sm whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 outline-none focus:ring-2 focus:ring-indigo-500' : ''}`}
+                                           className={`text-sm text-slate-800 font-medium bg-white p-2 rounded-lg border border-slate-100 shadow-sm whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 outline-none focus:ring-2 focus:ring-[#0066CC]' : ''}`}
                                         >{overrides[row.category]?.[tier.name] ?? row[tier.name]}</div>
                                     </div>
                                 ))

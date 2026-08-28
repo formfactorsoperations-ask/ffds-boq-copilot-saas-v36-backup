@@ -1,3 +1,59 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+:root {
+  --sidebar-w: 16rem;
+}
+
+/* Mobile Layout Safety */
+.flex-grow, .flex-1 {
+  min-width: 0;
+}
+
+p, h1, h2, h3, h4, h5, h6, span {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+
+@media (max-width: 768px) {
+  table {
+    display: block;
+    overflow-x: auto;
+    width: 100%;
+  }
+}
+
+@media (min-width: 768px) {
+  .main-content-layout {
+    margin-left: var(--sidebar-w, 256px) !important;
+    width: calc(100% - var(--sidebar-w, 256px)) !important;
+  }
+}
+
+
+
+
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+@keyframes flipTextChar {
+  0% {
+    transform: rotateX(0deg);
+  }
+  35% {
+    transform: rotateX(360deg);
+  }
+  100% {
+    transform: rotateX(360deg);
+  }
+}
+
+.flip-char {
+  display: inline-block;
+  backface-visibility: hidden;
+  animation: flipTextChar var(--flip-duration, 2.2s) cubic-bezier(0.4, 0, 0.2, 1) var(--flip-delay, 0s) var(--flip-iteration, infinite);
+}

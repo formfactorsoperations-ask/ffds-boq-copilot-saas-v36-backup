@@ -53,8 +53,20 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
     } else {
         if (latestSchedule?.advances) {
             isSplitStructure = true;
-            designAdvances = latestSchedule.advances.filter(a => a.phase === 'design');
-            executionAdvances = latestSchedule.advances.filter(a => a.phase === 'execution' || a.phase === 'handover' || a.isHandoverAdvance);
+            designAdvances = latestSchedule.advances
+                .filter(a => a.phase === 'design')
+                .sort((a, b) => {
+                    const numA = parseInt((a.advanceCode || a.code || '').replace(/\D/g, '') || '0', 10);
+                    const numB = parseInt((b.advanceCode || b.code || '').replace(/\D/g, '') || '0', 10);
+                    return (numA && numB) ? numA - numB : 0;
+                });
+            executionAdvances = latestSchedule.advances
+                .filter(a => a.phase === 'execution' || a.phase === 'handover' || a.isHandoverAdvance)
+                .sort((a, b) => {
+                    const numA = parseInt((a.advanceCode || a.code || '').replace(/\D/g, '') || '0', 10);
+                    const numB = parseInt((b.advanceCode || b.code || '').replace(/\D/g, '') || '0', 10);
+                    return (numA && numB) ? numA - numB : 0;
+                });
         } else {
             oldFormatMilestones = settings?.paymentMilestones?.milestones || [];
         }
@@ -76,12 +88,12 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                             </span>
                         )}
                         {showingStudioDefaults && (
-                            <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                            <span className="bg-sky-100 text-[#0055B3] text-[10px] px-2 py-0.5 rounded-full font-bold">
                                 Preview
                             </span>
                         )}
                     </div>
-                    <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-indigo-950">{data.title}</h2>
+                    <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">{data.title}</h2>
                     <p className="mt-2 text-slate-600 max-w-2xl text-sm leading-relaxed whitespace-pre-line">
                         {data.subtitle}
                     </p>
@@ -91,13 +103,13 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                     <div className="flex bg-slate-100 p-1 rounded-xl shrink-0">
                         <button
                             onClick={() => setViewMode('project')}
-                            className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${viewMode === 'project' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${viewMode === 'project' ? 'bg-white shadow-sm text-[#0055B3]' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             Project Schedule
                         </button>
                         <button
                             onClick={() => setViewMode('studio_defaults')}
-                            className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-2 ${viewMode === 'studio_defaults' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-2 ${viewMode === 'studio_defaults' ? 'bg-white shadow-sm text-[#0055B3]' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             Preview New Defaults
                         </button>
@@ -122,11 +134,11 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                                 <div className="space-y-3">
                                     {designAdvances.map((adv: any, idx: number) => (
                                         <div key={`d-${idx}`} className="flex flex-col sm:flex-row items-stretch sm:items-center p-4 border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow bg-white gap-4">
-                                            <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 font-black text-xl rounded-xl w-16 flex justify-center items-center py-3 shrink-0">
+                                            <div className="bg-sky-50 border border-sky-100 text-[#0055B3] font-black text-xl rounded-xl w-16 flex justify-center items-center py-3 shrink-0">
                                                 {adv.percentage || adv.pct}%
                                             </div>
                                             <div className="flex flex-col flex-1 pl-2">
-                                                <h4 className="font-bold text-indigo-950">{adv.advanceCode || adv.code} &middot; {adv.label || adv.name}</h4>
+                                                <h4 className="font-bold text-slate-900">{adv.advanceCode || adv.code} &middot; {adv.label || adv.name}</h4>
                                                 <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 mt-1 text-sm">
                                                     <span className="font-semibold text-slate-700">Trigger:</span>
                                                     <span className="text-slate-600">{adv.dueCondition || adv.trigger}</span>
@@ -147,11 +159,11 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                                 <div className="space-y-3">
                                     {executionAdvances.map((adv: any, idx: number) => (
                                         <div key={`e-${idx}`} className="flex flex-col sm:flex-row items-stretch sm:items-center p-4 border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow bg-white gap-4">
-                                            <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 font-black text-xl rounded-xl w-16 flex justify-center items-center py-3 shrink-0">
+                                            <div className="bg-sky-50 border border-sky-100 text-[#0055B3] font-black text-xl rounded-xl w-16 flex justify-center items-center py-3 shrink-0">
                                                 {adv.percentage || adv.pct}%
                                             </div>
                                             <div className="flex flex-col flex-1 pl-2">
-                                                <h4 className="font-bold text-indigo-950">{adv.advanceCode || adv.code} &middot; {adv.label || adv.name}</h4>
+                                                <h4 className="font-bold text-slate-900">{adv.advanceCode || adv.code} &middot; {adv.label || adv.name}</h4>
                                                 <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 mt-1 text-sm">
                                                     <span className="font-semibold text-slate-700">Trigger:</span>
                                                     <span className="text-slate-600">{adv.dueCondition || adv.trigger}</span>
@@ -168,11 +180,11 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                     <div className="space-y-4">
                         {oldFormatMilestones.map((milestone: any, idx: number) => (
                             <div key={idx} className="flex flex-col sm:flex-row items-stretch sm:items-center p-4 border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow bg-white gap-4">
-                                <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 font-black text-xl md:text-2xl rounded-xl w-20 flex justify-center items-center py-4 shrink-0">
+                                <div className="bg-sky-50 border border-sky-100 text-[#0055B3] font-black text-xl md:text-2xl rounded-xl w-20 flex justify-center items-center py-4 shrink-0">
                                     {milestone.percent}%
                                 </div>
                                 <div className="flex flex-col flex-1 pl-2">
-                                    <h3 className="font-bold text-indigo-950 text-lg">{milestone.label}</h3>
+                                    <h3 className="font-bold text-slate-900 text-lg">{milestone.label}</h3>
                                     <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 mt-1 text-sm">
                                         <span className="font-semibold text-slate-700">Trigger:</span>
                                         <span className="text-slate-600">{milestone.trigger || milestone.description}</span>
@@ -189,7 +201,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
 
             {settings?.paymentMilestones?.paymentNote && (
                 <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600 shadow-inner">
-                    <span className="font-bold text-indigo-900">Note: </span>
+                    <span className="font-bold text-slate-800">Note: </span>
                     {settings.paymentMilestones.paymentNote}
                 </div>
             )}
@@ -217,12 +229,12 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                 <div className="space-y-8">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">For {settings?.companyName || orgData.orgName || 'Studio'}</div>
                     <div className="h-20 border-b border-slate-300 w-64"></div>
-                    <div className="text-xs font-bold text-indigo-950">Authorized Signatory</div>
+                    <div className="text-xs font-bold text-slate-900">Authorized Signatory</div>
                 </div>
                 <div className="space-y-8">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Accepted & Approved By</div>
                     <div className="h-20 border-b border-slate-300 w-64"></div>
-                    <div className="text-xs font-bold text-indigo-950">Client Signature & Date</div>
+                    <div className="text-xs font-bold text-slate-900">Client Signature & Date</div>
                 </div>
             </div>
 

@@ -156,7 +156,7 @@ export const TEMPLATE_TURNKEY: ProposalContent = {
         subtitle: "Each option changes finish level, detailing, and civil scope. Core functionality remains intact."
     },
     process: {
-        title: "How FFDS takes you from ideas to a locked plan (before execution)",
+        title: "How we take you from ideas to a locked plan (before execution)",
         subtitle: "This is the part that protects your budget and timeline. We resolve decisions on paper first, then move to site. You will always know what is next, what is pending, and what is being executed.",
         steps: [
             { id: 1, title: "Discovery & Brief Freeze", desc: "Site measure check, lifestyle needs, storage priorities, budget comfort, and must-haves. We freeze the brief so scope does not drift later.", tags: ["Kick-off call", "Site verification", "Requirements sheet"] },
@@ -167,7 +167,7 @@ export const TEMPLATE_TURNKEY: ProposalContent = {
     },
     fees: {
         title: "How Design & Execution Fees Work",
-        subtitle: "At FFDS, design is not treated as an add-on. It is the framework that controls scope, cost overruns, and execution quality.",
+        subtitle: "For us, design is not treated as an add-on. It is the framework that controls scope, cost overruns, and execution quality.",
         card1: { 
             label: "DESIGN FEE", 
             value: "8-10% of final execution value", 
@@ -194,7 +194,7 @@ export const TEMPLATE_TURNKEY: ProposalContent = {
     },
     cta: {
         title: "What we are deciding right now",
-        subtitle: "At this stage, you are not locking final materials, exact quantities, or final vendor selections. The decision required now is whether FFDS should proceed with design development and detailed planning, after which scope and final costing are frozen transparently.",
+        subtitle: "At this stage, you are not locking final materials, exact quantities, or final vendor selections. The decision required now is whether we should proceed with design development and detailed planning, after which scope and final costing are frozen transparently.",
         nextStepsTitle: "Next 3 steps",
         steps: [
             "Confirm intent to proceed",

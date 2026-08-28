@@ -14,6 +14,21 @@ interface SOFBoardTabProps {
 }
 
 export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBoardTabProps) {
+    React.useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const focus = params.get('focus');
+        if (focus) {
+            setTimeout(() => {
+                const el = document.getElementById(focus);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('ring-2', 'ring-[#0066CC]', 'ring-offset-2');
+                    setTimeout(() => el.classList.remove('ring-2', 'ring-[#0066CC]', 'ring-offset-2'), 3000);
+                }
+            }, 500);
+        }
+    }, []);
+
     const [viewMode, setViewMode] = useState<'kanban' | 'rooms' | 'financials' | 'client_presentation'>('kanban');
     const [selections, setSelections] = useState<MaterialSelection[]>(projectContext.materialSelections || []);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -82,7 +97,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
         { id: 'sent_for_approval', label: 'Client Review', icon: <Clock size={16} />, color: 'bg-amber-100 text-amber-700' },
         { id: 'approved', label: 'Approved', icon: <CheckCircle size={16} />, color: 'bg-emerald-100 text-emerald-700' },
         { id: 'ordered', label: 'Ordered', icon: <ShoppingCart size={16} />, color: 'bg-blue-100 text-blue-700' },
-        { id: 'delivered', label: 'Delivered', icon: <Package size={16} />, color: 'bg-indigo-100 text-indigo-700' },
+        { id: 'delivered', label: 'Delivered', icon: <Package size={16} />, color: 'bg-sky-100 text-[#0055B3]' },
     ];
 
     const getColumnItems = (colId: string) => {
@@ -104,39 +119,35 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
 
     return (
         <div className="max-w-[1400px] mx-auto p-6 space-y-6">
-            <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <div>
-                    <h2 className="text-2xl font-bold text-slate-900">SOF & Selections Board</h2>
-                    <p className="text-sm text-slate-500 mt-1">Track material selections, financials, and scope changes.</p>
-                </div>
+            <div className="flex justify-end items-center bg-white p-3 rounded-2xl shadow-sm border border-slate-200">
                 <div className="flex bg-slate-100 p-1 rounded-lg">
                     <button 
                         onClick={() => setViewMode('kanban')}
-                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'kanban' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}
+                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'kanban' ? 'bg-white shadow-sm text-[#0055B3]' : 'text-slate-500'}`}
                     >
                         Kanban Board
                     </button>
                     <button 
                         onClick={() => setViewMode('rooms')}
-                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'rooms' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}
+                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'rooms' ? 'bg-white shadow-sm text-[#0055B3]' : 'text-slate-500'}`}
                     >
                         By Room
                     </button>
                     <button 
                         onClick={() => setViewMode('financials')}
-                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'financials' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}
+                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'financials' ? 'bg-white shadow-sm text-[#0055B3]' : 'text-slate-500'}`}
                     >
                         Financials & Scope
                     </button>
                     <button 
                         onClick={() => setViewMode('client_presentation')}
-                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'client_presentation' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}
+                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'client_presentation' ? 'bg-white shadow-sm text-[#0055B3]' : 'text-slate-500'}`}
                     >
                         Client Presentation
                     </button>
                     <button 
                         onClick={() => setShowAddModal(true)}
-                        className="ml-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2"
+                        className="ml-2 bg-[#0066CC] hover:bg-[#0055B3] text-white px-4 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2"
                     >
                         <Plus size={16} /> Add Item
                     </button>
@@ -166,10 +177,10 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, scale: 0.95 }}
-                                            className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 group hover:border-indigo-300 transition-colors"
+                                            className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 group hover:border-sky-300 transition-colors"
                                         >
                                             <div className="flex justify-between items-start mb-2">
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-[#0066CC] bg-sky-50 px-2 py-1 rounded-md">
                                                     {item.category}
                                                 </span>
                                                 <span className="text-[10px] font-bold text-slate-400 truncate max-w-[100px]">
@@ -195,7 +206,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                                                     <option value="ordered">Ordered</option>
                                                     <option value="delivered">Delivered</option>
                                                 </select>
-                                                <button className="text-[10px] font-bold text-indigo-600 hover:underline">View Details</button>
+                                                <button className="text-[10px] font-bold text-[#0066CC] hover:underline">View Details</button>
                                             </div>
                                         </motion.div>
                                     ))}
@@ -324,7 +335,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                                                         value={item.allowancePrice || ''}
                                                         onChange={(e) => updateFinancials(item.id, 'allowancePrice', parseFloat(e.target.value) || 0)}
                                                         placeholder="0"
-                                                        className="w-24 px-2 py-1 bg-white border border-slate-200 rounded text-slate-900 font-mono text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                                                        className="w-24 px-2 py-1 bg-white border border-slate-200 rounded text-slate-900 font-mono text-sm focus:outline-none focus:border-[#0066CC] transition-colors"
                                                     />
                                                 </td>
                                                 <td className="py-4 px-6">
@@ -333,7 +344,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                                                         value={item.quotedPrice || ''}
                                                         onChange={(e) => updateFinancials(item.id, 'quotedPrice', parseFloat(e.target.value) || 0)}
                                                         placeholder="0"
-                                                        className="w-24 px-2 py-1 bg-white border border-slate-200 rounded text-slate-900 font-mono text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                                                        className="w-24 px-2 py-1 bg-white border border-slate-200 rounded text-slate-900 font-mono text-sm focus:outline-none focus:border-[#0066CC] transition-colors"
                                                     />
                                                 </td>
                                                 <td className="py-4 px-6">
@@ -407,14 +418,14 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
 
             {viewMode === 'client_presentation' && (
                 <div className="space-y-6">
-                    <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-xl flex items-center justify-between">
+                    <div className="bg-white text-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
                         <div>
-                            <h2 className="text-3xl font-bold font-serif mb-2">Material Selections</h2>
-                            <p className="text-slate-400">Review and approve materials selected for your project.</p>
+                            <h2 className="text-2xl font-bold font-serif mb-1">Material Selections</h2>
+                            <p className="text-slate-500 text-sm">Review and approve materials selected for your project.</p>
                         </div>
                         <div className="text-right">
-                            <p className="text-sm text-slate-400 mb-1">Items for Review</p>
-                            <p className="text-4xl font-bold">{selections.filter(s => s.status === 'sent_for_approval').length}</p>
+                            <p className="text-xs text-slate-500 mb-0.5 font-medium uppercase tracking-wider">Items for Review</p>
+                            <p className="text-3xl font-bold text-indigo-600">{selections.filter(s => s.status === 'sent_for_approval').length}</p>
                         </div>
                     </div>
                     
@@ -430,7 +441,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                                         </div>
                                     )}
                                     <div className="absolute top-4 right-4">
-                                        <span className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md ${item.status === 'approved' ? 'bg-emerald-500/90 text-white' : 'bg-white/90 text-indigo-900'}`}>
+                                        <span className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md ${item.status === 'approved' ? 'bg-emerald-500/90 text-white' : 'bg-white/90 text-slate-800'}`}>
                                             {item.status === 'approved' ? 'Approved' : 'Pending Review'}
                                         </span>
                                     </div>
@@ -438,7 +449,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                                 <div className="p-6 flex flex-col flex-1">
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
-                                            <p className="text-xs font-bold uppercase tracking-wider text-indigo-500 mb-1">{item.category} • {item.roomId}</p>
+                                            <p className="text-xs font-bold uppercase tracking-wider text-[#0066CC] mb-1">{item.category} • {item.roomId}</p>
                                             <h3 className="text-xl font-bold text-slate-900">{item.itemName}</h3>
                                         </div>
                                     </div>
@@ -450,7 +461,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                                             <div className="flex gap-3">
                                                 <button 
                                                     onClick={() => updateSelectionStatus(item.id, 'approved')}
-                                                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                                                    className="flex-1 bg-[#0066CC] hover:bg-[#0055B3] text-white py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
                                                 >
                                                     <CheckCircle size={16} /> Approve
                                                 </button>
@@ -493,7 +504,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                         >
                             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                                 <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                                    <PlusCircle className="text-indigo-600" /> Fast Add Selection
+                                    <PlusCircle className="text-[#0066CC]" /> Fast Add Selection
                                 </h3>
                                 <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 bg-white p-2 rounded-full shadow-sm">
                                     <X size={20} />
@@ -509,7 +520,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                                             <button
                                                 key={room}
                                                 onClick={() => setNewSelection(prev => ({ ...prev, roomId: room }))}
-                                                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all border ${newSelection.roomId === room ? 'bg-indigo-600 text-white border-indigo-600 shadow-md scale-105' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'}`}
+                                                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all border ${newSelection.roomId === room ? 'bg-[#0066CC] text-white border-[#0066CC] shadow-md scale-105' : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300 hover:bg-sky-50'}`}
                                             >
                                                 {room}
                                             </button>
@@ -520,15 +531,15 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                                 {/* 2. Category Selection (Tiles) */}
                                 <div className={`transition-opacity duration-300 ${!newSelection.roomId ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
                                     <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 block">2. Select Category</label>
-                                    <div className="grid grid-cols-4 gap-3">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                         {PRESET_CATEGORIES.map(cat => (
                                             <button
                                                 key={cat.id}
                                                 onClick={() => setNewSelection(prev => ({ ...prev, category: cat.id }))}
-                                                className={`flex flex-col items-center justify-center p-4 rounded-2xl transition-all border ${newSelection.category === cat.id ? 'bg-indigo-50 border-indigo-500 shadow-md ring-2 ring-indigo-200 scale-105' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-slate-50'}`}
+                                                className={`flex flex-col items-center justify-center p-4 rounded-2xl transition-all border ${newSelection.category === cat.id ? 'bg-sky-50 border-[#0066CC] shadow-md ring-2 ring-sky-200 scale-105' : 'bg-white border-slate-200 text-slate-600 hover:border-sky-300 hover:bg-slate-50'}`}
                                             >
                                                 <span className="text-2xl mb-2">{cat.icon}</span>
-                                                <span className={`text-xs font-bold ${newSelection.category === cat.id ? 'text-indigo-700' : 'text-slate-600'}`}>{cat.id}</span>
+                                                <span className={`text-xs font-bold ${newSelection.category === cat.id ? 'text-[#0055B3]' : 'text-slate-600'}`}>{cat.id}</span>
                                             </button>
                                         ))}
                                     </div>
@@ -545,7 +556,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                                                 placeholder="e.g. Master Bed Headboard"
                                                 value={newSelection.itemName}
                                                 onChange={(e) => setNewSelection(prev => ({ ...prev, itemName: e.target.value }))}
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#0066CC] focus:ring-2 focus:ring-sky-200 transition-all"
                                                 autoFocus
                                             />
                                         </div>
@@ -558,7 +569,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                                                     placeholder="0"
                                                     value={newSelection.allowancePrice}
                                                     onChange={(e) => setNewSelection(prev => ({ ...prev, allowancePrice: e.target.value }))}
-                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-4 py-3 text-sm font-bold font-mono text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-4 py-3 text-sm font-bold font-mono text-slate-900 focus:outline-none focus:border-[#0066CC] focus:ring-2 focus:ring-sky-200 transition-all"
                                                 />
                                             </div>
                                         </div>
@@ -571,7 +582,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                                 <button 
                                     onClick={handleAddSelection}
                                     disabled={!newSelection.roomId || !newSelection.category || !newSelection.itemName}
-                                    className="bg-indigo-600 disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-indigo-700 text-white px-8 py-3 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                                    className="bg-[#0066CC] disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-[#0055B3] text-white px-8 py-3 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
                                 >
                                     <Plus size={18} /> Add Selection
                                 </button>

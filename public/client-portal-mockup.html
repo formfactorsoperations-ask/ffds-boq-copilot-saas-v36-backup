@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOQ Copilot — Revamped Client Portal Mockup</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons (Vanilla) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#F0F7FF',
+              100: '#E0EFFE',
+              500: '#0066CC',
+              600: '#0055B3',
+              700: '#004499',
+              900: '#0A2540',
+            },
+            gold: {
+              400: '#F59E0B',
+              500: '#D97706',
+              600: '#B45309',
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #F8FAFC;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
+    }
+    .tab-btn.active {
+      background-color: #0066CC;
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(0, 102, 204, 0.25);
+    }
+    .tab-btn.inactive {
+      background-color: #FFFFFF;
+      color: #64748B;
+      border: 1px solid #E2E8F0;
+    }
+    .tab-btn.inactive:hover {
+      background-color: #F1F5F9;
+      color: #0F172A;
+    }
+  </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen bg-[#FBFBFE] pb-16">
+
+  <!-- TOP BRANDING & CLIENT PORTAL NAVBAR -->
+  <header class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 gap-4">
+        
+        <!-- Left: Studio Logo & Client Title -->
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center font-black text-lg shadow-md border border-amber-500/30">
+            F
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-extrabold uppercase tracking-widest text-[#0066CC] bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
+                Form Factors Design Studio
+              </span>
+              <span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Site Active
+              </span>
+            </div>
+            <h1 class="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
+              Lodha Amara 2BHK — Client Portal
+            </h1>
+          </div>
+        </div>
+
+        <!-- Right: Client User Profile & Quick Actions -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          <button onclick="toggleAIModal()" class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span>Ask Studio AI</span>
+          </button>
+          
+          <div class="h-6 w-px bg-slate-200 hidden sm:block"></div>
+
+          <div class="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200/80">
+            <div class="w-7 h-7 rounded-lg bg-sky-600 text-white font-bold text-xs flex items-center justify-center">
+              AS
+            </div>
+            <div class="hidden md:block text-left pr-2">
+              <p class="text-xs font-bold text-slate-900 leading-tight">Anand Sharma</p>
+              <p class="text-[10px] text-slate-500">Client ID: #CL-8821</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <!-- Gold Hairline Branding Line -->
+    <div class="h-[2px] bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500"></div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+
+    <!-- HERO PROJECT PROGRESS BANNER -->
+    <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-96 h-96 bg-sky-50/50 rounded-full blur-3xl -z-0 pointer-events-none"></div>
+
+      <div class="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+        
+        <!-- Left: Project Status Header -->
+        <div class="lg:col-span-7 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200/80 rounded-lg text-xs font-extrabold uppercase tracking-wider">
+              Finishing & Custom Millwork Phase
+            </span>
+            <span class="text-xs font-bold text-slate-500">
+              Expected Handover: <strong class="text-slate-900">Oct 15, 2026</strong>
+            </span>
+          </div>
+
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Your Home Transformation is <span class="text-[#0066CC]">68% Complete</span>
+          </h2>
+
+          <!-- Overall Progress Meter -->
+          <div class="space-y-1.5 max-w-xl">
+            <div class="flex justify-between text-xs font-bold">
+              <span class="text-slate-600">Overall Execution Progress</span>
+              <span class="text-[#0066CC]">68% (Stage 3 of 4)</span>
+            </div>
+            <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
+              <div class="h-full bg-gradient-to-r from-[#0066CC] to-sky-400 rounded-full transition-all duration-1000" style="width: 68%;"></div>
+            </div>
+            <div class="flex justify-between text-[11px] text-slate-400 font-medium">
+              <span>Civil & Electrical Done</span>
+              <span>Millwork Installation In Progress</span>
+              <span>Deep Clean & Handover</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Fast Stats Grid -->
+        <div class="lg:col-span-5 grid grid-cols-2 gap-3">
+          <div class="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80">
+            <div class="flex items-center gap-2 text-slate-500 mb-1">
+              <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
+              <span class="text-xs font-bold">Active Phase</span>
+            </div>
+            <p class="text-sm font-extrabold text-slate-900">E3 — Finishing Advance</p>
+            <p class="text-[10px] text-emerald-700 font-bold mt-0.5">Cleared & Scheduled</p>
+          </div>
+
+          <div class="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80">
+            <div class="flex items-center gap-2 text-slate-500 mb-1">
+              <i data-lucide="camera" class="w-4 h-4 text-sky-600"></i>
+              <span class="text-xs font-bold">Site Log</span>
+            </div>
+            <p class="text-sm font-extrabold text-slate-900">14 New Photos</p>
+            <p class="text-[10px] text-slate-500 font-medium mt-0.5">Updated 2 hours ago</p>
+          </div>
+
+          <div class="p-3.5 bg-amber-50/60 rounded-2xl border border-amber-200/80">
+            <div class="flex items-center gap-2 text-amber-800 mb-1">
+              <i data-lucide="file-check" class="w-4 h-4 text-amber-600"></i>
+              <span class="text-xs font-bold">Pending Sign-off</span>
+            </div>
+            <p class="text-sm font-extrabold text-amber-900">1 MOM Approval</p>
+            <p class="text-[10px] text-amber-700 font-bold mt-0.5">Action required today</p>
+          </div>
+
+          <div class="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80">
+            <div class="flex items-center gap-2 text-slate-500 mb-1">
+              <i data-lucide="shield-check" class="w-4 h-4 text-indigo-600"></i>
+              <span class="text-xs font-bold">Site Supervisor</span>
+            </div>
+            <p class="text-sm font-extrabold text-slate-900">Rajesh Verma</p>
+            <p class="text-[10px] text-sky-700 font-bold mt-0.5">+91 98201 44321</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- NAVIGATION TAB BAR -->
+    <div class="flex items-center gap-2 overflow-x-auto pb-1 custom-scroll">
+      <button onclick="switchTab('overview')" id="tab-overview" class="tab-btn active px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap">
+        <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+        <span>Overview</span>
+      </button>
+
+      <button onclick="switchTab('site')" id="tab-site" class="tab-btn inactive px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap">
+        <i data-lucide="hard-hat" class="w-4 h-4"></i>
+        <span>Live Site & Room Progress</span>
+        <span class="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px]">Live</span>
+      </button>
+
+      <button onclick="switchTab('renders')" id="tab-renders" class="tab-btn inactive px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap">
+        <i data-lucide="box" class="w-4 h-4"></i>
+        <span>3D Renders & Selections</span>
+      </button>
+
+      <button onclick="switchTab('payments')" id="tab-payments" class="tab-btn inactive px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap">
+        <i data-lucide="credit-card" class="w-4 h-4"></i>
+        <span>Payments & Milestones</span>
+      </button>
+
+      <button onclick="switchTab('moms')" id="tab-moms" class="tab-btn inactive px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap">
+        <i data-lucide="file-text" class="w-4 h-4"></i>
+        <span>MOMs & Sign-offs</span>
+        <span class="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px]">1 Pending</span>
+      </button>
+    </div>
+
+    <!-- TAB 1: OVERVIEW -->
+    <div id="content-overview" class="tab-content space-y-6">
+      
+      <!-- Room Completion Meters Card Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold text-slate-900">Living & Dining</span>
+            <span class="text-xs font-extrabold text-emerald-600">85%</span>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-2">
+            <div class="bg-emerald-500 h-2 rounded-full" style="width: 85%;"></div>
+          </div>
+          <p class="text-[11px] text-slate-500">False ceiling completed, TV unit veneer polishing in progress.</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold text-slate-900">Master Bedroom</span>
+            <span class="text-xs font-extrabold text-sky-600">65%</span>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-2">
+            <div class="bg-sky-500 h-2 rounded-full" style="width: 65%;"></div>
+          </div>
+          <p class="text-[11px] text-slate-500">Wardrobe carcass installed. Fluted panel backing underway.</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold text-slate-900">Modular Kitchen</span>
+            <span class="text-xs font-extrabold text-sky-600">70%</span>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-2">
+            <div class="bg-sky-500 h-2 rounded-full" style="width: 70%;"></div>
+          </div>
+          <p class="text-[11px] text-slate-500">Quartz countertop fitted, acrylic shutter fitting scheduled tomorrow.</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold text-slate-900">Guest Bedroom</span>
+            <span class="text-xs font-extrabold text-amber-600">50%</span>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-2">
+            <div class="bg-amber-500 h-2 rounded-full" style="width: 50%;"></div>
+          </div>
+          <p class="text-[11px] text-slate-500">First coat putty completed. Study desk framework ready.</p>
+        </div>
+
+      </div>
+
+      <!-- Two-column Section: Live Site Activity & Upcoming Milestones -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left: Live Site Update Feed -->
+        <div class="lg:col-span-7 bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <i data-lucide="activity" class="w-4 h-4 text-[#0066CC]"></i>
+                Live Site Feed & Updates
+              </h3>
+              <p class="text-xs text-slate-500">Real-time photos & site notes uploaded by supervisor</p>
+            </div>
+            <button onclick="switchTab('site')" class="text-xs font-bold text-[#0066CC] hover:underline flex items-center gap-1 cursor-pointer">
+              <span>View All Updates</span>
+              <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <div class="space-y-4">
+            
+            <!-- Feed Item 1 -->
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span class="text-xs font-bold text-slate-900">Living Room Veneer Polish First Coat</span>
+                </div>
+                <span class="text-[11px] text-slate-400 font-mono">Today, 11:30 AM</span>
+              </div>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                Super Walnut veneer polishing coat 1 applied on the main accent wall. Drying in progress before clear PU topcoat tomorrow.
+              </p>
+              <div class="grid grid-cols-3 gap-2">
+                <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=400&q=80" alt="Site Photo 1" class="rounded-xl object-cover h-24 w-full border border-slate-200 hover:opacity-90 transition-opacity cursor-pointer" onclick="openPhotoModal(this.src)">
+                <img src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=400&q=80" alt="Site Photo 2" class="rounded-xl object-cover h-24 w-full border border-slate-200 hover:opacity-90 transition-opacity cursor-pointer" onclick="openPhotoModal(this.src)">
+                <img src="https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=400&q=80" alt="Site Photo 3" class="rounded-xl object-cover h-24 w-full border border-slate-200 hover:opacity-90 transition-opacity cursor-pointer" onclick="openPhotoModal(this.src)">
+              </div>
+            </div>
+
+            <!-- Feed Item 2 -->
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+                  <span class="text-xs font-bold text-slate-900">Modular Kitchen Quartz Slab Inspection</span>
+                </div>
+                <span class="text-[11px] text-slate-400 font-mono">Yesterday, 04:15 PM</span>
+              </div>
+              <p class="text-xs text-slate-600">
+                Kalinga Stone Calacatta White quartz slab delivered to site and dry-fitted. Bevel edge routing completed cleanly.
+              </p>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Right: Milestones & Digital Sign-off Banner -->
+        <div class="lg:col-span-5 space-y-4">
+          
+          <!-- Action Required Banner -->
+          <div class="bg-gradient-to-br from-amber-50 to-orange-50/50 rounded-3xl p-5 border border-amber-200/90 shadow-2xs space-y-3">
+            <div class="flex items-center gap-2 text-amber-800">
+              <i data-lucide="alert-circle" class="w-5 h-5 text-amber-600"></i>
+              <h4 class="text-sm font-extrabold">Action Required: MOM Acknowledgment</h4>
+            </div>
+            <p class="text-xs text-amber-900/80 leading-relaxed">
+              Please review and digitally acknowledge the site meeting minutes from Aug 18 regarding false ceiling lighting layouts.
+            </p>
+            <button onclick="switchTab('moms')" class="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm">
+              <span>Review & Sign-Off MOM</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <!-- Financial Snapshot Box -->
+          <div class="bg-white rounded-3xl p-5 border border-slate-200 shadow-2xs space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h4 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Payment Milestone Summary</h4>
+              <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">70% Paid</span>
+            </div>
+
+            <div class="space-y-2">
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-500 font-medium">Total Project Estimate</span>
+                <span class="font-extrabold text-slate-900">₹18,50,000</span>
+              </div>
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-500 font-medium">Paid To Date (D1–D3, E1–E2)</span>
+                <span class="font-bold text-emerald-600">₹12,95,000</span>
+              </div>
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-500 font-medium">Next Gate (E3 Finishing)</span>
+                <span class="font-bold text-amber-600">₹3,70,000 (Due Sep 05)</span>
+              </div>
+            </div>
+
+            <button onclick="switchTab('payments')" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer">
+              View Detailed Invoices & Receipts
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- TAB 2: LIVE SITE & ROOM PROGRESS -->
+    <div id="content-site" class="tab-content space-y-6 hidden">
+      <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+        <h3 class="text-base font-extrabold text-slate-900">Room-by-Room Site Execution Status</h3>
+        <p class="text-xs text-slate-500">Track granular trade stages for each room in your residence.</p>
+        
+        <div class="space-y-4">
+          <!-- Living Room Detail -->
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="text-sm font-extrabold text-slate-900">Living Room — 85% Complete</h4>
+              <span class="text-xs text-emerald-600 font-bold">On Schedule</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">✓ Civil & POP (100%)</div>
+              <div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">✓ Electrical First-Fix (100%)</div>
+              <div class="p-2 rounded-xl bg-sky-50 text-sky-800 font-bold border border-sky-200">⚡ Veneer Polish (80%)</div>
+              <div class="p-2 rounded-xl bg-slate-100 text-slate-500 font-medium">⏳ Lighting Fixtures (Pending)</div>
+            </div>
+          </div>
+
+          <!-- Master Bedroom Detail -->
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="text-sm font-extrabold text-slate-900">Master Bedroom — 65% Complete</h4>
+              <span class="text-xs text-sky-600 font-bold">In Active Execution</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">✓ Carcass Fitting (100%)</div>
+              <div class="p-2 rounded-xl bg-sky-50 text-sky-800 font-bold border border-sky-200">⚡ Fluted Panels (60%)</div>
+              <div class="p-2 rounded-xl bg-slate-100 text-slate-500 font-medium">⏳ Headboard Cushion (Scheduled)</div>
+              <div class="p-2 rounded-xl bg-slate-100 text-slate-500 font-medium">⏳ Wardrobe Shutters (In Shop)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: 3D RENDERS & SELECTIONS -->
+    <div id="content-renders" class="tab-content space-y-6 hidden">
+      <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+        <div class="flex justify-between items-center">
+          <div>
+            <h3 class="text-base font-extrabold text-slate-900">Approved 3D Perspectives & Material Samples</h3>
+            <p class="text-xs text-slate-500">Click any render to view full high-resolution 4K perspective.</p>
+          </div>
+          <span class="px-2.5 py-1 bg-emerald-50 text-emerald-800 rounded-lg text-xs font-extrabold border border-emerald-200">
+            Design Frozen & Approved
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="group rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 cursor-pointer" onclick="openPhotoModal('https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=80')">
+            <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=600&q=80" alt="Living Render" class="h-48 w-full object-cover group-hover:scale-105 transition-transform">
+            <div class="p-3">
+              <p class="text-xs font-extrabold text-slate-900">Living Room — Perspective 01</p>
+              <p class="text-[11px] text-slate-500">Super Walnut Veneer + Italian Marble</p>
+            </div>
+          </div>
+
+          <div class="group rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 cursor-pointer" onclick="openPhotoModal('https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=80')">
+            <img src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=600&q=80" alt="Master Bed Render" class="h-48 w-full object-cover group-hover:scale-105 transition-transform">
+            <div class="p-3">
+              <p class="text-xs font-extrabold text-slate-900">Master Bedroom — Perspective 02</p>
+              <p class="text-[11px] text-slate-500">Beige Fabric Headboard + Brass Hairlines</p>
+            </div>
+          </div>
+
+          <div class="group rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 cursor-pointer" onclick="openPhotoModal('https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1200&q=80')">
+            <img src="https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=600&q=80" alt="Kitchen Render" class="h-48 w-full object-cover group-hover:scale-105 transition-transform">
+            <div class="p-3">
+              <p class="text-xs font-extrabold text-slate-900">Modular Kitchen — Perspective 03</p>
+              <p class="text-[11px] text-slate-500">Kalinga Stone Quartz + Acrylic Shutters</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: PAYMENTS & MILESTONES -->
+    <div id="content-payments" class="tab-content space-y-6 hidden">
+      <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+        <h3 class="text-base font-extrabold text-slate-900">Fee Tranches & Payment Milestones</h3>
+        
+        <div class="space-y-3">
+          <!-- Milestone 1 -->
+          <div class="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">✓</div>
+              <div>
+                <p class="text-xs font-extrabold text-slate-900">E1 — Material Order Advance (40%)</p>
+                <p class="text-[11px] text-slate-500">Paid on Jun 10, 2026 • Receipt #RCT-1002</p>
+              </div>
+            </div>
+            <span class="text-xs font-black text-emerald-700">₹7,40,000 Cleared</span>
+          </div>
+
+          <!-- Milestone 2 -->
+          <div class="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">✓</div>
+              <div>
+                <p class="text-xs font-extrabold text-slate-900">E2 — Structure & First-Fix (30%)</p>
+                <p class="text-[11px] text-slate-500">Paid on Jul 15, 2026 • Receipt #RCT-1048</p>
+              </div>
+            </div>
+            <span class="text-xs font-black text-emerald-700">₹5,55,000 Cleared</span>
+          </div>
+
+          <!-- Milestone 3 -->
+          <div class="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs">!</div>
+              <div>
+                <p class="text-xs font-extrabold text-slate-900">E3 — Finishing Advance (20%)</p>
+                <p class="text-[11px] text-amber-800 font-medium">Due Sep 05, 2026 upon veneer delivery</p>
+              </div>
+            </div>
+            <span class="text-xs font-black text-amber-700">₹3,70,000 Upcoming</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: MOMS & SIGN-OFFS -->
+    <div id="content-moms" class="tab-content space-y-6 hidden">
+      <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <h3 class="text-base font-extrabold text-slate-900">Minutes of Meeting & Change Sign-offs</h3>
+            <p class="text-xs text-slate-500">Digital audit log for all site discussions & scope amendments.</p>
+          </div>
+          <span class="px-2.5 py-1 bg-amber-100 text-amber-900 font-extrabold rounded-lg text-xs">
+            1 Pending Action
+          </span>
+        </div>
+
+        <div id="mom-card" class="p-5 rounded-2xl bg-amber-50/50 border border-amber-200 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold text-amber-900 uppercase tracking-wider">MOM #14 — Lighting Layout Adjustment</span>
+            <span class="text-[11px] text-slate-500 font-mono">Site Visit: Aug 18, 2026</span>
+          </div>
+          <p class="text-xs text-slate-700 leading-relaxed">
+            Agreed to add 2 additional cove light channels in Living Room false ceiling and relocate master bed reading light points by 150mm. Total scope addition: ₹8,500.
+          </p>
+
+          <div class="flex items-center justify-between pt-2 border-t border-amber-200/60">
+            <span class="text-[11px] text-slate-500 font-medium">Sign-off stokes IP & timestamp for legal audit log.</span>
+            <button onclick="acknowledgeMOM()" id="mom-btn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm">
+              Digitally Acknowledge MOM
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- AI STUDIO CONCIERGE CHAT MODAL -->
+  <div id="ai-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col h-[520px]">
+      
+      <!-- Modal Header -->
+      <div class="p-4 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-xs font-extrabold">Studio Project Assistant</h3>
+            <p class="text-[10px] text-slate-300">Instant answers regarding your site, materials & timeline</p>
+          </div>
+        </div>
+        <button onclick="toggleAIModal()" class="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Chat Body -->
+      <div id="chat-body" class="flex-1 p-4 overflow-y-auto space-y-3 custom-scroll bg-slate-50/50 text-xs">
+        <div class="p-3 bg-white border border-slate-200 rounded-2xl max-w-[85%] text-slate-800 shadow-2xs">
+          Hello Anand! I am your studio AI assistant for <strong>Lodha Amara 2BHK</strong>. You can ask me about your project completion, material brands, or upcoming site visits!
+        </div>
+      </div>
+
+      <!-- Chat Input -->
+      <div class="p-3 border-t border-slate-200 bg-white flex items-center gap-2">
+        <input type="text" id="chat-input" placeholder="Ask about timeline, veneer polish, or invoices..." class="flex-1 px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs outline-none focus:border-[#0066CC]" onkeydown="if(event.key==='Enter') sendChatMessage()">
+        <button onclick="sendChatMessage()" class="p-2 bg-[#0066CC] hover:bg-sky-700 text-white rounded-xl cursor-pointer">
+          <i data-lucide="send" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PHOTO MODAL -->
+  <div id="photo-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden" onclick="closePhotoModal()">
+    <div class="max-w-4xl max-h-[90vh] relative">
+      <img id="photo-modal-img" src="" class="rounded-2xl max-h-[85vh] object-contain border border-slate-700 shadow-2xl">
+      <p class="text-center text-xs text-slate-400 mt-2">Click anywhere to close preview</p>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    // Tab Switcher
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.classList.add('inactive');
+      });
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+      });
+
+      const activeBtn = document.getElementById('tab-' + tabId);
+      const activeContent = document.getElementById('content-' + tabId);
+
+      if (activeBtn) {
+        activeBtn.classList.remove('inactive');
+        activeBtn.classList.add('active');
+      }
+      if (activeContent) {
+        activeContent.classList.remove('hidden');
+      }
+    }
+
+    // Acknowledge MOM
+    function acknowledgeMOM() {
+      const card = document.getElementById('mom-card');
+      const btn = document.getElementById('mom-btn');
+      if (card && btn) {
+        card.className = "p-5 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-3 transition-all";
+        btn.outerHTML = `<span class="text-xs font-extrabold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-xl border border-emerald-300 flex items-center gap-1">✓ Digitally Acknowledged (IP: 103.22.41.11)</span>`;
+      }
+    }
+
+    // Photo Modal
+    function openPhotoModal(src) {
+      const modal = document.getElementById('photo-modal');
+      const img = document.getElementById('photo-modal-img');
+      img.src = src;
+      modal.classList.remove('hidden');
+    }
+    function closePhotoModal() {
+      document.getElementById('photo-modal').classList.add('hidden');
+    }
+
+    // AI Concierge
+    function toggleAIModal() {
+      const modal = document.getElementById('ai-modal');
+      modal.classList.toggle('hidden');
+    }
+
+    function sendChatMessage() {
+      const input = document.getElementById('chat-input');
+      const body = document.getElementById('chat-body');
+      const text = input.value.trim();
+      if (!text) return;
+
+      // User Message
+      const userDiv = document.createElement('div');
+      userDiv.className = 'p-[#0066CC] p-3 bg-[#0066CC] text-white rounded-2xl max-w-[85%] ml-auto text-xs font-medium shadow-2xs';
+      userDiv.innerText = text;
+      body.appendChild(userDiv);
+
+      input.value = '';
+      body.scrollTop = body.scrollHeight;
+
+      // Bot Response Simulation
+      setTimeout(() => {
+        const botDiv = document.createElement('div');
+        botDiv.className = 'p-3 bg-white border border-slate-200 rounded-2xl max-w-[85%] text-slate-800 text-xs shadow-2xs space-y-1';
+        
+        let response = "Your project is currently at 68% execution. Veneer polishing in the living room is underway, and modular kitchen acrylic shutters will be fitted tomorrow.";
+        if (text.toLowerCase().includes("handover") || text.toLowerCase().includes("finish")) {
+          response = "Expected handover is on Oct 15, 2026. All major civil & electrical works are already completed!";
+        } else if (text.toLowerCase().includes("payment") || text.toLowerCase().includes("invoice")) {
+          response = "Your next milestone payment (E3 Finishing Advance of ₹3,70,000) is due on Sep 05, 2026.";
+        }
+
+        botDiv.innerHTML = `<strong>Studio Assistant:</strong><p>${response}</p>`;
+        body.appendChild(botDiv);
+        body.scrollTop = body.scrollHeight;
+      }, 600);
+    }
+  </script>
+</body>
+</html>

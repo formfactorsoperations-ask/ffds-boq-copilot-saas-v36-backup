@@ -1,32 +1,39 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { ProjectContext, FullBoqItem } from '../../types';
+import { generateId } from '../../lib/utils';
 import Card from '../shared/Card';
-import { CheckCircle, Bolt, LayoutList, Printer, Plus, Trash2, Edit2 } from 'lucide-react';
+import { 
+  CheckCircle, 
+  Bolt, 
+  LayoutList, 
+  Printer, 
+  Plus, 
+  Trash2, 
+  Edit2, 
+  Check, 
+  FileCheck2, 
+  PlusCircle, 
+  ChevronRight, 
+  Sparkles, 
+  ClipboardCheck,
+  AlertCircle,
+  FolderOpen
+} from 'lucide-react';
 
 interface PreHandoverChecklistProps {
     projectContext: ProjectContext;
     setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
     boq: FullBoqItem[];
-}
-
-interface RoomChecklist {
-    roomName: string;
-    roomId: string;
-    electricalPoints: {
-        rawItems: FullBoqItem[];
-        totalPoints: number;
-        breakdown: { name: string; qty: number }[];
-    };
-    standardChecks: { id: string; label: string; checked: boolean }[];
+    onNavigateToTab?: (tab: string) => void;
 }
 
 const STANDARD_CHECKS = [
-    { id: 'paint', label: 'Final Paint Touch-ups (Skirting & Cornice)' },
-    { id: 'hardware', label: 'Cabinet Shutters Aligned & Hardware Tight' },
-    { id: 'clean', label: 'Deep Cleaning (Inside Cabinets & Floor)' },
-    { id: 'electrical', label: 'All Switchboards Clean & Straight' },
-    { id: 'plumbing', label: 'Angle Cocks & Drain Lines Leak-tested' },
-    { id: 'debris', label: 'Site Debris Cleared & Handed Over' },
+    { id: 'paint', label: 'Final Paint Touch-ups (Skirting, Grooves & Cornice)', category: 'Finishes & Paint' },
+    { id: 'hardware', label: 'Cabinet Shutters Aligned & Hardware Tightened', category: 'Woodwork & Hardware' },
+    { id: 'clean', label: 'Deep Cleaning (Inside Cabinets, Drawers & Floors)', category: 'Cleaning & Handover' },
+    { id: 'electrical', label: 'All Switchboards Clean, Straight & Plate Covers Snapped', category: 'Electrical & Fixtures' },
+    { id: 'plumbing', label: 'Angle Cocks, Faucets & Drain Lines Leak-tested', category: 'Plumbing & Sanitary' },
+    { id: 'debris', label: 'Site Debris Cleared & Surface Protection Removed', category: 'Cleaning & Handover' },
 ];
 
 const STANDARD_ELECTRICAL_ITEMS = [
@@ -37,12 +44,33 @@ const STANDARD_ELECTRICAL_ITEMS = [
     "AC Point", "Geyser Point", "Exhaust Point"
 ];
 
-const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectContext, setProjectContext, boq }) => {
+const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectContext, setProjectContext, boq, onNavigateToTab }) => {
     
-    // Initialize or sync electricalPointsPlan
+    // Switch between checklist & electrical table views
+    const [viewMode, setViewMode] = useState<'checklist' | 'electrical-plan'>('checklist');
+    const [activeRoomId, setActiveRoomId] = useState<string>('');
+    const [newCustomCheck, setNewCustomCheck] = useState<string>('');
+    const [showPrintWarning, setShowPrintWarning] = useState(false);
+
+    // Initial state sync / bootstrap qualityChecklist if empty
+    useEffect(() => {
+        if (!projectContext.qualityChecklist) {
+            setProjectContext(prev => ({
+                ...prev,
+                qualityChecklist: {
+                    checkedState: {},
+                    elecVerified: {},
+                    customChecks: [],
+                    notesState: {},
+                    naState: {}
+                }
+            }));
+        }
+    }, [projectContext.qualityChecklist, setProjectContext]);
+
+    // Bootstrap electricalPointsPlan from BOQ
     useEffect(() => {
         if (!projectContext.electricalPointsPlan || projectContext.electricalPointsPlan.length === 0) {
-            // Generate initial plan from boq
             const initialPlan: { id: string; roomId: string; roomName?: string; item: string; qty: number; notes: string }[] = [];
             
             boq.forEach(item => {
@@ -53,14 +81,11 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                       item.name?.toLowerCase().includes('light');
                  if (isElectrical) {
                       const rId = item.roomId || 'unassigned';
-                      const existingNameMatch = projectContext.rooms.find(r => r.id === rId);
-                      const roomName = existingNameMatch ? existingNameMatch.name : (rId === 'unassigned' ? 'General / Unassigned' : rId);
-                      
                       initialPlan.push({
-                          id: crypto.randomUUID(),
+                          id: generateId(),
                           roomId: rId,
                           item: item.name,
-                          qty: item.qty,
+                          qty: item.qty || 1,
                           notes: ''
                       });
                  }
@@ -72,82 +97,305 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
         }
     }, [boq, projectContext.rooms, projectContext.electricalPointsPlan, setProjectContext]);
 
-    // Group and calculate checklists per room
-    const checklists = useMemo(() => {
-        const rooms: Record<string, RoomChecklist> = {};
+    // Resolve persistent state values cleanly and defensively
+    const checkedState = (projectContext.qualityChecklist?.checkedState && typeof projectContext.qualityChecklist.checkedState === 'object')
+        ? projectContext.qualityChecklist.checkedState
+        : {};
+    const elecVerified = (projectContext.qualityChecklist?.elecVerified && typeof projectContext.qualityChecklist.elecVerified === 'object')
+        ? projectContext.qualityChecklist.elecVerified
+        : {};
+    const customChecks = Array.isArray(projectContext.qualityChecklist?.customChecks)
+        ? projectContext.qualityChecklist.customChecks
+        : [];
+    const notesState = (projectContext.qualityChecklist?.notesState && typeof projectContext.qualityChecklist.notesState === 'object')
+        ? projectContext.qualityChecklist.notesState
+        : {};
+    const naState = (projectContext.qualityChecklist?.naState && typeof projectContext.qualityChecklist.naState === 'object')
+        ? projectContext.qualityChecklist.naState
+        : {};
 
-        // Initialize rooms based on projectContext
-        projectContext.rooms.forEach(r => {
-            rooms[r.id] = {
-                roomId: r.id,
-                roomName: r.name,
-                electricalPoints: { rawItems: [], totalPoints: 0, breakdown: [] },
-                standardChecks: STANDARD_CHECKS.map(c => ({ ...c, checked: false }))
+    // Helper to calculate total electrical points per room from plan
+    const roomElectricalCounts = useMemo(() => {
+        const counts: Record<string, { total: number; items: { name: string; qty: number }[] }> = {};
+        const plan = projectContext.electricalPointsPlan || [];
+        
+        plan.forEach(ep => {
+            if (!ep) return;
+            const rId = ep.roomId || 'unassigned';
+            if (!counts[rId]) {
+                counts[rId] = { total: 0, items: [] };
+            }
+            const qty = typeof ep.qty === 'number' ? ep.qty : parseInt(ep.qty as any) || 0;
+            counts[rId].total += (isNaN(qty) ? 0 : qty);
+            
+            const epItemName = ep.item || '';
+            const existing = counts[rId].items.find(i => i.name === epItemName);
+            if (existing) {
+                existing.qty += (isNaN(qty) ? 0 : qty);
+            } else {
+                counts[rId].items.push({ name: epItemName, qty: (isNaN(qty) ? 0 : qty) });
+            }
+        });
+        return counts;
+    }, [projectContext.electricalPointsPlan]);
+
+    // Resolve room contexts
+    const rooms = useMemo(() => {
+        return projectContext.rooms || [];
+    }, [projectContext.rooms]);
+
+    // Set first room active if none set
+    useEffect(() => {
+        if (rooms.length > 0 && !activeRoomId) {
+            setActiveRoomId(rooms[0].id || rooms[0].name);
+        }
+    }, [rooms, activeRoomId]);
+
+    // Group checks by room for calculations
+    const roomSummaries = useMemo(() => {
+        return rooms.map(room => {
+            const rId = room.id || room.name;
+            const roomChecks = (checkedState[rId] && typeof checkedState[rId] === 'object') ? checkedState[rId] : {};
+            const roomNAs = (naState[rId] && typeof naState[rId] === 'object') ? naState[rId] : {};
+            
+            const applicableStandardChecks = STANDARD_CHECKS.filter(c => !roomNAs[c.id]);
+            const standardCheckedCount = applicableStandardChecks.filter(c => !!roomChecks[c.id]).length;
+            
+            const roomCustoms = customChecks.filter(c => c && c.roomId === rId);
+            const customCheckedCount = roomCustoms.filter(c => c.checked).length;
+            
+            const totalChecksCount = applicableStandardChecks.length + roomCustoms.length;
+            const checkedCount = standardCheckedCount + customCheckedCount;
+            const pct = totalChecksCount > 0 ? Math.round((checkedCount / totalChecksCount) * 100) : 100;
+            const isElecVerified = !!elecVerified[rId];
+
+            return {
+                id: rId,
+                name: room.name,
+                totalChecksCount,
+                checkedCount,
+                pct,
+                isElecVerified,
+                electricalCount: roomElectricalCounts[rId]?.total || 0,
+                electricalBreakdown: roomElectricalCounts[rId]?.items || [],
+                customsCount: roomCustoms.length
             };
         });
+    }, [rooms, checkedState, customChecks, elecVerified, roomElectricalCounts, naState]);
 
-        // Add items from electricalPointsPlan
-        const ePlan = projectContext.electricalPointsPlan || [];
-        ePlan.forEach(ep => {
-            if (!rooms[ep.roomId]) {
-                const manualMatch = projectContext.rooms.find(r => r.id === ep.roomId);
-                const resolvedName = manualMatch ? manualMatch.name : (ep.roomName || (ep.roomId === 'unassigned' ? 'General / Unassigned' : ep.roomId));
-                rooms[ep.roomId] = {
-                    roomId: ep.roomId,
-                    roomName: resolvedName,
-                    electricalPoints: { rawItems: [], totalPoints: 0, breakdown: [] },
-                    standardChecks: STANDARD_CHECKS.map(c => ({ ...c, checked: false }))
-                };
-            }
-            
-            rooms[ep.roomId].electricalPoints.totalPoints += ep.qty;
-            
-            const existingBd = rooms[ep.roomId].electricalPoints.breakdown.find(b => b.name === ep.item);
-            if (existingBd) {
-                existingBd.qty += ep.qty;
-            } else {
-                rooms[ep.roomId].electricalPoints.breakdown.push({ name: ep.item, qty: ep.qty });
-            }
+    // Project Overall Stats
+    const projectOverallStats = useMemo(() => {
+        let total = 0;
+        let checked = 0;
+        
+        roomSummaries.forEach(s => {
+            total += s.totalChecksCount;
+            checked += s.checkedCount;
         });
 
-        // Filter out empty rooms (no electrical points and no checks done, but usually we just show all context rooms)
-        // Let's sort to put rooms with electrical points first
-        return Object.values(rooms).sort((a, b) => b.electricalPoints.totalPoints - a.electricalPoints.totalPoints);
-    }, [projectContext.rooms, projectContext.electricalPointsPlan]);
+        const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+        const verifiedRoomsCount = roomSummaries.filter(s => s.pct === 100).length;
+        const totalElectricalPoints = (Object.values(roomElectricalCounts) as any[]).reduce((sum, current) => sum + (current.total || 0), 0);
+        const verifiedElectricalRoomsCount = roomSummaries.filter(s => s.isElecVerified).length;
 
-    // Local State for checklist tracking (ideally persists to DB, but doing basic local state for now)
-    const [viewMode, setViewMode] = useState<'checklist' | 'electrical-plan'>('checklist');
-    const [checkedState, setCheckedState] = useState<Record<string, Record<string, boolean>>>({});
-    const [elecVerified, setElecVerified] = useState<Record<string, boolean>>({});
-    const [showPrintWarning, setShowPrintWarning] = useState(false);
+        return {
+            total,
+            checked,
+            pct,
+            verifiedRoomsCount,
+            totalElectricalPoints,
+            verifiedElectricalRoomsCount
+        };
+    }, [roomSummaries, roomElectricalCounts]);
 
-    const handlePrintClick = () => {
-        if (window !== window.parent) {
-            setShowPrintWarning(true);
-            setTimeout(() => setShowPrintWarning(false), 8000);
-        } else {
-            window.print();
-        }
-    };
-
+    // Action: Toggle Standard Checklist Checkbox
     const toggleCheck = (roomId: string, checkId: string) => {
-        setCheckedState(prev => ({
-            ...prev,
-            [roomId]: {
-                ...(prev[roomId] || {}),
-                [checkId]: !prev[roomId]?.[checkId]
+        setProjectContext(prev => {
+            const currentChecklist = prev.qualityChecklist || { checkedState: {}, elecVerified: {}, customChecks: [], notesState: {} };
+            const roomChecks = { ...(currentChecklist.checkedState?.[roomId] || {}) };
+            roomChecks[checkId] = !roomChecks[checkId];
+
+            return {
+                ...prev,
+                qualityChecklist: {
+                    ...currentChecklist,
+                    checkedState: {
+                        ...(currentChecklist.checkedState || {}),
+                        [roomId]: roomChecks
+                    }
+                }
+            };
+        });
+    };
+
+    // Action: Toggle Standard Checklist Checkbox N/A state
+    const toggleNA = (roomId: string, checkId: string, e?: React.MouseEvent) => {
+        if (e) {
+            e.stopPropagation(); // Avoid triggering card toggle check
+        }
+        setProjectContext(prev => {
+            const currentChecklist = prev.qualityChecklist || { checkedState: {}, elecVerified: {}, customChecks: [], notesState: {}, naState: {} };
+            const roomNAs = { ...(currentChecklist.naState?.[roomId] || {}) };
+            roomNAs[checkId] = !roomNAs[checkId];
+
+            const roomChecks = { ...(currentChecklist.checkedState?.[roomId] || {}) };
+            if (roomNAs[checkId]) {
+                roomChecks[checkId] = false; // Uncheck if marked N/A
             }
-        }));
+
+            return {
+                ...prev,
+                qualityChecklist: {
+                    ...currentChecklist,
+                    checkedState: {
+                        ...(currentChecklist.checkedState || {}),
+                        [roomId]: roomChecks
+                    },
+                    naState: {
+                        ...(currentChecklist.naState || {}),
+                        [roomId]: roomNAs
+                    }
+                }
+            };
+        });
     };
 
+    // Action: Verify Electrical points
     const toggleElecVerified = (roomId: string) => {
-        setElecVerified(prev => ({
-            ...prev,
-            [roomId]: !prev[roomId]
-        }));
+        setProjectContext(prev => {
+            const currentChecklist = prev.qualityChecklist || { checkedState: {}, elecVerified: {}, customChecks: [], notesState: {} };
+            const verifiedMap = { ...(currentChecklist.elecVerified || {}) };
+            verifiedMap[roomId] = !verifiedMap[roomId];
+
+            return {
+                ...prev,
+                qualityChecklist: {
+                    ...currentChecklist,
+                    elecVerified: verifiedMap
+                }
+            };
+        });
     };
 
+    // Action: Add custom check
+    const handleAddCustomCheck = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newCustomCheck.trim() || !activeRoomId) return;
 
+        setProjectContext(prev => {
+            const currentChecklist = prev.qualityChecklist || { checkedState: {}, elecVerified: {}, customChecks: [], notesState: {} };
+            const customs = [...(currentChecklist.customChecks || [])];
+            customs.push({
+                id: generateId(),
+                roomId: activeRoomId,
+                label: newCustomCheck.trim(),
+                checked: false
+            });
+
+            return {
+                ...prev,
+                qualityChecklist: {
+                    ...currentChecklist,
+                    customChecks: customs
+                }
+            };
+        });
+        setNewCustomCheck('');
+    };
+
+    // Action: Remove custom check
+    const handleRemoveCustomCheck = (checkId: string) => {
+        setProjectContext(prev => {
+            const currentChecklist = prev.qualityChecklist || { checkedState: {}, elecVerified: {}, customChecks: [], notesState: {} };
+            const customs = (currentChecklist.customChecks || []).filter(c => c.id !== checkId);
+
+            return {
+                ...prev,
+                qualityChecklist: {
+                    ...currentChecklist,
+                    customChecks: customs
+                }
+            };
+        });
+    };
+
+    // Action: Toggle custom check checkbox
+    const toggleCustomCheck = (checkId: string) => {
+        setProjectContext(prev => {
+            const currentChecklist = prev.qualityChecklist || { checkedState: {}, elecVerified: {}, customChecks: [], notesState: {} };
+            const customs = (currentChecklist.customChecks || []).map(c => 
+                c.id === checkId ? { ...c, checked: !c.checked } : c
+            );
+
+            return {
+                ...prev,
+                qualityChecklist: {
+                    ...currentChecklist,
+                    customChecks: customs
+                }
+            };
+        });
+    };
+
+    // Action: Update Room Note
+    const handleUpdateRoomNote = (roomId: string, noteText: string) => {
+        setProjectContext(prev => {
+            const currentChecklist = prev.qualityChecklist || { checkedState: {}, elecVerified: {}, customChecks: [], notesState: {} };
+            const notesMap = { ...(currentChecklist.notesState || {}) };
+            notesMap[roomId] = noteText;
+
+            return {
+                ...prev,
+                qualityChecklist: {
+                    ...currentChecklist,
+                    notesState: notesMap
+                }
+            };
+        });
+    };
+
+    // Action: Verify/Complete All for active room
+    const handleVerifyAllInRoom = () => {
+        if (!activeRoomId) return;
+        setProjectContext(prev => {
+            const currentChecklist = prev.qualityChecklist || { checkedState: {}, elecVerified: {}, customChecks: [], notesState: {}, naState: {} };
+            const roomNAs = currentChecklist.naState?.[activeRoomId] || {};
+            
+            // Set all standard checks (excluding N/A ones) to true
+            const roomChecks = { ...(currentChecklist.checkedState?.[activeRoomId] || {}) };
+            STANDARD_CHECKS.forEach(c => {
+                if (!roomNAs[c.id]) {
+                    roomChecks[c.id] = true;
+                }
+            });
+
+            // Set all custom checks for this room to true
+            const customs = (currentChecklist.customChecks || []).map(c => 
+                c.roomId === activeRoomId ? { ...c, checked: true } : c
+            );
+
+            // Also mark electrical verified as true
+            const verifiedMap = { ...(currentChecklist.elecVerified || {}) };
+            verifiedMap[activeRoomId] = true;
+
+            return {
+                ...prev,
+                qualityChecklist: {
+                    ...currentChecklist,
+                    checkedState: {
+                        ...(currentChecklist.checkedState || {}),
+                        [activeRoomId]: roomChecks
+                    },
+                    customChecks: customs,
+                    elecVerified: verifiedMap
+                }
+            };
+        });
+    };
+
+    // -------------------------------------------------------------
+    // ELECTRICAL PLAN EDITING LOGIC (For Electrical table view)
+    // -------------------------------------------------------------
     const handleUpdateElectricalPoint = (id: string, field: string, value: string | number) => {
         setProjectContext(prev => ({
             ...prev,
@@ -170,8 +418,8 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
         setProjectContext(prev => ({
             ...prev,
             electricalPointsPlan: [...(prev.electricalPointsPlan || []), {
-                id: crypto.randomUUID(),
-                roomId: prev.rooms[0]?.id || 'unassigned',
+                id: generateId(),
+                roomId: activeRoomId || prev.rooms[0]?.id || 'unassigned',
                 item: '',
                 qty: 1,
                 notes: ''
@@ -182,13 +430,12 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
     const handleAddSpecificElectricalPoint = (item: string, customRoomId?: string) => {
         setProjectContext(prev => {
             const plan = prev.electricalPointsPlan || [];
-            const lastRoomId = plan.length > 0 ? plan[plan.length - 1].roomId : (prev.rooms[0]?.id || 'unassigned');
-            const targetRoomId = customRoomId || lastRoomId;
+            const targetRoomId = customRoomId || activeRoomId || prev.rooms[0]?.id || 'unassigned';
             
             return {
                 ...prev,
                 electricalPointsPlan: [...plan, {
-                    id: crypto.randomUUID(),
+                    id: generateId(),
                     roomId: targetRoomId,
                     item: item,
                     qty: 1,
@@ -223,7 +470,6 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
         });
     };
 
-    // Grouping for table render
     const groupedElectricalPlan = useMemo(() => {
         const plan = projectContext.electricalPointsPlan || [];
         const groups: Record<string, typeof plan> = {};
@@ -234,334 +480,568 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
         return groups;
     }, [projectContext.electricalPointsPlan]);
 
-    if (!boq.length && (!projectContext.electricalPointsPlan || projectContext.electricalPointsPlan.length === 0)) {
-         return (
-            <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-500 font-medium">
-                <LayoutList className="w-8 h-8 mx-auto mb-3 text-slate-300" />
-                <p>No BOQ items loaded and no electrical plan exists.</p>
-                <button
-                    onClick={handleAddElectricalPoint}
-                    className="mt-4 flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-indigo-700 transition-colors"
-                >
-                    <Plus className="w-4 h-4" /> Start Electrical Plan
-                </button>
-            </div>
-         );
-    }
+    const activeRoomSummary = useMemo(() => {
+        return roomSummaries.find(r => r.id === activeRoomId);
+    }, [roomSummaries, activeRoomId]);
+
+    const activeRoomCustoms = useMemo(() => {
+        return customChecks.filter(c => c.roomId === activeRoomId);
+    }, [customChecks, activeRoomId]);
+
+    const activeRoomNotes = notesState[activeRoomId] || '';
+
+    // Handle Direct Print Action
+    const handlePrintClick = () => {
+        if (window !== window.parent) {
+            setShowPrintWarning(true);
+            setTimeout(() => setShowPrintWarning(false), 8000);
+        } else {
+            window.print();
+        }
+    };
 
     return (
-        <div className="space-y-6 print:space-y-8">
-            <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-xl flex flex-col md:flex-row items-start justify-between gap-4 print:hidden">
-                <div className="flex items-start gap-4">
-                    <CheckCircle className="w-8 h-8 text-emerald-600 mt-1 flex-shrink-0" />
-                    <div>
-                        <h3 className="text-xl font-bold text-emerald-900 mb-2">Pre-Handover & Electrical Check</h3>
-                        <p className="text-emerald-700 text-sm max-w-2xl">
-                            This checklist dynamically reads from your BOQ items to confirm site finish readiness and count electrical points room-by-room. Mark sections as verified before scheduling client walkthrough.
-                        </p>
-                    </div>
-                </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
-                    <div className="bg-white border text-sm border-slate-200 p-1 rounded-lg flex font-medium shadow-sm">
-                        <button 
-                            onClick={() => setViewMode('checklist')}
-                            className={`px-3 py-1.5 rounded-md transition-colors ${viewMode === 'checklist' ? 'bg-slate-100 text-indigo-900 font-bold' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            Grid Checklist
-                        </button>
-                        <button 
-                            onClick={() => setViewMode('electrical-plan')}
-                            className={`px-3 py-1.5 rounded-md transition-colors ${viewMode === 'electrical-plan' ? 'bg-slate-100 text-indigo-900 font-bold' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            Electrical Plan Table
-                        </button>
-                    </div>
-                    <div className="relative">
-                        <button 
-                            onClick={handlePrintClick}
-                            className="flex items-center justify-center gap-2 bg-white border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-emerald-100 transition-colors"
-                        >
-                            <Printer className="w-4 h-4" />
-                            Print
-                        </button>
-                        {showPrintWarning && (
-                            <div className="absolute top-full right-0 mt-2 w-72 bg-indigo-950 text-white text-xs p-3 rounded shadow-xl z-50">
-                                Printing directly from the preview might be blocked. Click the "Open Web App" arrow button ↗ in the top right to open in a new tab, then print.
+        <div className="space-y-6 print:space-y-8 font-['Plus_Jakarta_Sans']">
+            {/* Top Overview Ribbon */}
+            <div className="bg-[#FAF9F6] border border-[#EBEAE5] p-6 rounded-[24px] shadow-sm print:hidden">
+                <div className="flex flex-col lg:flex-row items-stretch justify-between gap-6">
+                    <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-[#0055B3] shadow-sm shrink-0">
+                            <FileCheck2 className="w-6 h-6 stroke-[2]" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-[#0066CC]">Quality Standard Hub</span>
+                                <span className="bg-sky-50 text-[#0066CC] border border-sky-100 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">Studio Standard</span>
                             </div>
-                        )}
+                            <h3 className="text-base sm:text-lg font-bold text-slate-900 mt-1 tracking-tight">Quality & Handover Checklist</h3>
+                            <p className="text-slate-500 text-xs mt-0.5 max-w-xl font-normal">
+                                Verify room finishes, carpentry alignments, plumbing, and electrical installations before final client handover.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 border-t lg:border-t-0 lg:border-l border-slate-200/80 pt-4 lg:pt-0 lg:pl-6">
+                        {/* Circle Progress Meter */}
+                        <div className="flex items-center gap-3">
+                            <div className="relative w-14 h-14 shrink-0">
+                                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                                    <path className="text-slate-100" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    <path className="text-emerald-500 transition-all duration-500" strokeDasharray={`${projectOverallStats.pct}, 100`} strokeWidth="3" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                </svg>
+                                <div className="absolute inset-0 flex items-center justify-center text-[11px] font-black text-slate-800">
+                                    {projectOverallStats.pct}%
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Project Progress</div>
+                                <div className="text-xs font-bold text-slate-700 mt-0.5">{projectOverallStats.checked} / {projectOverallStats.total} Points Cleared</div>
+                            </div>
+                        </div>
+
+                        {/* Room Completion Count */}
+                        <div className="bg-white p-3 rounded-2xl border border-slate-100 flex-1 min-w-[120px] shadow-sm">
+                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Rooms Perfected</div>
+                            <div className="text-lg font-black text-slate-800 mt-1 leading-none">
+                                {projectOverallStats.verifiedRoomsCount}<span className="text-slate-300 font-light text-sm">/{rooms.length}</span>
+                            </div>
+                        </div>
+
+                        {/* Switch Buttons & Print */}
+                        <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+                            <div className="bg-slate-100 p-1 rounded-xl flex border border-slate-200/60 shadow-inner w-full sm:w-auto">
+                                <button 
+                                    onClick={() => setViewMode('checklist')}
+                                    className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all flex-1 sm:flex-initial text-center ${viewMode === 'checklist' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    Audits
+                                </button>
+                                <button 
+                                    onClick={() => setViewMode('electrical-plan')}
+                                    className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all flex-1 sm:flex-initial text-center ${viewMode === 'electrical-plan' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    Points Plan
+                                </button>
+                            </div>
+
+                            {onNavigateToTab && (
+                                <button
+                                    onClick={() => onNavigateToTab('checklist')}
+                                    className="flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold uppercase tracking-wider rounded-xl text-[#b8923a] border border-[#d9c585]/45 bg-[#faf8f0] hover:bg-[#f3eedc] transition-all shadow-sm w-full sm:w-auto shrink-0 font-extrabold"
+                                >
+                                    <FolderOpen className="w-3.5 h-3.5" />
+                                    <span>View Document</span>
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* Print Header */}
-            <div className="hidden print:block text-center border-b-2 border-indigo-950 pb-4 mb-8">
-                <h1 className="text-3xl font-black text-indigo-950 uppercase tracking-widest mb-1">
-                    {viewMode === 'electrical-plan' ? 'Electrical Plan' : 'Site Checklist'}
+            <div className="hidden print:block text-center border-b border-[#D9D6CC] pb-4 mb-6">
+                <h1 className="text-2xl font-black text-[#1E293B] uppercase tracking-widest">
+                    {viewMode === 'electrical-plan' ? 'Electrical Points Audit' : 'Quality Handover Audit'}
                 </h1>
-                <h2 className="text-lg font-medium text-slate-600">
-                    {viewMode === 'electrical-plan' ? 'Electrical Points Audit' : 'Electrical Points & Handover Audit'}
-                </h2>
-                <div className="mt-4 flex justify-between text-sm font-bold text-slate-500">
+                <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Form Factors Design Studio · Quality Assurance Checklist</p>
+                <div className="mt-4 flex justify-between text-xs text-slate-500">
                     <span>Project: {projectContext.name || 'Untitled'}</span>
-                    <span>Date: ____________</span>
+                    <span>Client: {projectContext.clientName || 'N/A'}</span>
+                    <span>Date: {new Date().toLocaleDateString()}</span>
                 </div>
             </div>
 
             {viewMode === 'electrical-plan' ? (
-                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden print:border-none print:shadow-none">
-                    <table className="w-full text-left text-sm text-slate-600 print:text-xs">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 uppercase tracking-wider text-xs font-bold print:bg-white print:border-slate-400">
-                            <tr>
-                                <th className="px-4 py-3 print:p-2 border-r border-slate-200 print:border-slate-300 w-1/4">Room</th>
-                                <th className="px-4 py-3 print:p-2 border-r border-slate-200 print:border-slate-300 w-1/3">Item</th>
-                                <th className="px-4 py-3 print:p-2 border-r border-slate-200 print:border-slate-300 w-24 text-center">Quantity</th>
-                                <th className="px-4 py-3 print:p-2 border-slate-200 w-1/3">Notes</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200 print:divide-slate-300">
-                            {Object.entries(groupedElectricalPlan).map(([roomId, records]: [string, any]) => {
-                                const roomMatch = projectContext.rooms.find(r => r.id === roomId);
-                                const roomName = roomMatch ? roomMatch.name : (roomId === 'unassigned' ? 'General / Unassigned' : roomId);
-                                return (
-                                    <React.Fragment key={roomId}>
-                                        <tr className="bg-slate-100/50 print:bg-slate-100 text-indigo-900">
-                                            <td colSpan={4} className="px-4 py-2 border-b border-slate-200 print:border-slate-300">
-                                                <div className="flex items-center justify-between font-bold">
-                                                    {roomId === 'unassigned' ? (
+                /* =========================================================================
+                   ELECTRICAL TABLE VIEW 
+                   ========================================================================= */
+                <div className="bg-white border border-[#EBEAE5] rounded-[24px] overflow-hidden shadow-sm">
+                    <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 print:hidden">
+                        <div className="flex items-center gap-2">
+                            <Bolt className="w-4 h-4 text-amber-500" />
+                            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Electrical Points Verification Master Grid</h4>
+                        </div>
+                        <button
+                            onClick={handleAddElectricalPoint}
+                            className="bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold px-3 py-1.5 rounded-lg uppercase tracking-wider transition-colors flex items-center gap-1.5 shadow-sm"
+                        >
+                            <Plus className="w-3.5 h-3.5" /> Add Point Node
+                        </button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-slate-600 border-collapse">
+                            <thead>
+                                <tr className="bg-[#FAF9F6] border-b border-[#EBEAE5] text-slate-700 uppercase tracking-wider text-[11px] font-black">
+                                    <th className="px-6 py-4 w-1/4">Target Room</th>
+                                    <th className="px-6 py-4 w-1/3">Electrical Item Node</th>
+                                    <th className="px-6 py-4 w-24 text-center">Qty</th>
+                                    <th className="px-6 py-4 w-1/3">Technical Audit Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {Object.entries(groupedElectricalPlan).map(([roomId, records]) => {
+                                    const planRecords = records as any[];
+                                    const roomMatch = rooms.find(r => r.id === roomId);
+                                    const roomName = roomMatch ? roomMatch.name : (roomId === 'unassigned' ? 'General / Unassigned' : roomId);
+                                    return (
+                                        <React.Fragment key={roomId}>
+                                            {/* Subheader per room */}
+                                            <tr className="bg-slate-50/70 text-slate-900">
+                                                <td colSpan={4} className="px-6 py-2.5 font-extrabold text-xs uppercase tracking-wide border-y border-slate-100">
+                                                    <div className="flex items-center justify-between">
                                                         <span>{roomName}</span>
-                                                    ) : (
-                                                        <div className="flex items-center gap-1 group/edit w-full relative">
+                                                        <span className="text-[10px] bg-slate-200/80 text-slate-800 px-2 py-0.5 rounded font-bold">
+                                                            {planRecords.reduce((sum, r) => sum + r.qty, 0)} Points
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {planRecords.map((ep) => (
+                                                <tr key={`ep-${ep.id}`} className="hover:bg-slate-50/50 group/row">
+                                                    <td className="px-6 py-3">
+                                                        <select 
+                                                            value={ep.roomId} 
+                                                            onChange={(e) => handleRoomChange(ep.id, e.target.value)}
+                                                            className="w-full text-xs text-slate-700 bg-transparent border-none p-0 focus:ring-0 cursor-pointer font-medium print:hidden"
+                                                        >
+                                                            {rooms.map((r, idx) => (
+                                                                <option key={`${r.id}-${idx}`} value={r.id}>{r.name}</option>
+                                                            ))}
+                                                            <option value="unassigned">General / Unassigned</option>
+                                                        </select>
+                                                        <span className="hidden print:inline text-xs">{roomName}</span>
+                                                    </td>
+                                                    <td className="px-6 py-3">
+                                                        <input 
+                                                            type="text" 
+                                                            list="electrical-items-list"
+                                                            value={ep.item} 
+                                                            onChange={(e) => handleUpdateElectricalPoint(ep.id, 'item', e.target.value)}
+                                                            placeholder="E.g. Panel Light, COB..."
+                                                            className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-semibold text-slate-800 placeholder-slate-300"
+                                                        />
+                                                    </td>
+                                                    <td className="px-6 py-3 text-center">
+                                                        <input 
+                                                            type="number" 
+                                                            min={1}
+                                                            value={ep.qty} 
+                                                            onChange={(e) => handleUpdateElectricalPoint(ep.id, 'qty', parseInt(e.target.value) || 0)}
+                                                            className="w-12 bg-transparent border-none p-0 focus:ring-0 text-center font-extrabold text-slate-800"
+                                                        />
+                                                    </td>
+                                                    <td className="px-6 py-3 relative">
+                                                        <div className="flex items-center justify-between pr-8">
                                                             <input 
                                                                 type="text" 
-                                                                value={roomName}
-                                                                onChange={(e) => handleUpdateRoomName(roomId, e.target.value)}
-                                                                className="bg-transparent border-b border-dashed border-transparent hover:border-slate-300 focus:border-indigo-500 py-0.5 outline-none focus:ring-0 text-inherit font-bold w-full transition-colors"
+                                                                value={ep.notes} 
+                                                                onChange={(e) => handleUpdateElectricalPoint(ep.id, 'notes', e.target.value)}
+                                                                placeholder="Add site notes..."
+                                                                className="w-full bg-transparent border-none p-0 focus:ring-0 text-xs text-slate-500"
                                                             />
-                                                            <Edit2 className="w-3.5 h-3.5 text-slate-400 opacity-0 group-hover/edit:opacity-100 transition-opacity absolute right-0 pointer-events-none" />
+                                                            <button 
+                                                                onClick={() => handleRemoveElectricalPoint(ep.id)}
+                                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-500 opacity-0 group-hover/row:opacity-100 transition-opacity print:hidden cursor-pointer"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
                                                         </div>
-                                                    )}
-                                                    <button onClick={() => handleAddSpecificElectricalPoint('', roomId)} className="text-xs text-indigo-600 flex items-center gap-1 opacity-0 group-hover/row:opacity-100 hover:opacity-100 transition-opacity print:hidden px-2 py-1 hover:bg-indigo-50 rounded">
-                                                        <Plus className="w-3 h-3" /> Add Point
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        {records.map((ep, i) => (
-                                            <tr key={`ep-${ep.id}`} className="hover:bg-slate-50 print:hover:bg-transparent group/row">
-                                                <td className="px-4 py-2 print:p-1.5 border-r border-b border-slate-200 print:border-slate-300">
-                                                    <select 
-                                                        value={ep.roomId} 
-                                                        onChange={(e) => handleRoomChange(ep.id, e.target.value)}
-                                                        className="w-full text-xs text-slate-400 bg-transparent border-none p-0 outline-none focus:ring-0 cursor-pointer print:hidden"
-                                                    >
-                                                        {projectContext.rooms.map((r, idx) => (
-                                                            <option key={`${r.id}-${idx}-small`} value={r.id}>{r.name}</option>
-                                                        ))}
-                                                        <option value="unassigned">General / Unassigned</option>
-                                                    </select>
-                                                </td>
-                                                <td className="px-4 py-2 print:p-1.5 border-r border-b border-slate-200 print:border-slate-300">
-                                                    <input 
-                                                        type="text" 
-                                                        list="electrical-items"
-                                                        value={ep.item} 
-                                                        onChange={(e) => handleUpdateElectricalPoint(ep.id, 'item', e.target.value)}
-                                                        placeholder="E.g., Panel Light, Switch..."
-                                                        className="w-full bg-transparent border-none p-0 focus:ring-0 font-medium text-indigo-900"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2 print:p-1.5 border-r border-b border-slate-200 print:border-slate-300">
-                                                    <input 
-                                                        type="number" 
-                                                        min={1}
-                                                        value={ep.qty} 
-                                                        onChange={(e) => handleUpdateElectricalPoint(ep.id, 'qty', parseInt(e.target.value) || 0)}
-                                                        className="w-full bg-transparent border-none p-0 focus:ring-0 text-center font-bold text-indigo-900"
-                                                    />
-                                                </td>
-                                                <td className="px-0 py-0 border-b border-slate-200 print:border-slate-300 relative">
-                                                    <input 
-                                                        type="text" 
-                                                        value={ep.notes} 
-                                                onChange={(e) => handleUpdateElectricalPoint(ep.id, 'notes', e.target.value)}
-                                                placeholder="Add notes..."
-                                                className="w-full bg-transparent border-none px-4 py-2 focus:ring-0 text-slate-500"
-                                            />
-                                            <button 
-                                                onClick={() => handleRemoveElectricalPoint(ep.id)}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-500 opacity-0 group-hover/row:opacity-100 transition-opacity print:hidden"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
+                                    );
+                                })}
+
+                                {(!projectContext.electricalPointsPlan || projectContext.electricalPointsPlan.length === 0) && (
+                                    <tr>
+                                        <td colSpan={4} className="p-8 text-center text-slate-400 bg-slate-50/50 print:hidden">
+                                            No electrical points logged in this project's checklist plan yet.
                                         </td>
                                     </tr>
-                                ))}
-                            </React.Fragment>
-                            );
-                        })}
-                            
-                            {/* Empty state add button */}
-                            {(!projectContext.electricalPointsPlan || projectContext.electricalPointsPlan.length === 0) && (
-                                <tr>
-                                    <td colSpan={4} className="p-8 text-center text-slate-500 bg-slate-50 print:hidden border-b border-slate-200">
-                                        <button
-                                            onClick={handleAddElectricalPoint}
-                                            className="inline-flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-slate-50 transition-colors"
-                                        >
-                                            <Plus className="w-4 h-4" /> Start Adding Points
-                                        </button>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                        <tfoot className="print:hidden">
-                            <tr>
-                                <td colSpan={4} className="px-4 py-3 bg-slate-50">
-                                   <div className="flex flex-col gap-4">
-                                       <button
-                                            onClick={handleAddElectricalPoint}
-                                            className="text-sm font-bold text-indigo-600 flex items-center gap-2 hover:text-indigo-800 transition-colors w-fit"
-                                        >
-                                            <Plus className="w-4 h-4" /> Add Custom Electrical Point
-                                        </button>
-                                        <div className="flex flex-wrap gap-2 items-center">
-                                           <span className="text-xs uppercase font-bold text-slate-400 mr-2">Rapid Adding:</span>
-                                           {STANDARD_ELECTRICAL_ITEMS.map(item => (
-                                              <button 
-                                                 key={item}
-                                                 onClick={() => handleAddSpecificElectricalPoint(item)} 
-                                                 className="text-[11px] bg-white border border-slate-200 px-2 py-1 rounded-md text-slate-600 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 transition-colors shadow-sm"
-                                              >
-                                                 + {item}
-                                              </button>
-                                           ))}
-                                        </div>
-                                   </div>
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                    
-                    <datalist id="electrical-items">
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Datalist */}
+                    <datalist id="electrical-items-list">
                         {STANDARD_ELECTRICAL_ITEMS.map((item, idx) => (
                             <option key={idx} value={item} />
                         ))}
                     </datalist>
+
+                    {/* Rapid Addition Footer */}
+                    <div className="p-6 bg-[#FAF9F6] border-t border-[#EBEAE5] print:hidden">
+                        <div className="space-y-3">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Rapid node injection (Adds to current active room):</span>
+                            <div className="flex flex-wrap gap-2">
+                                {STANDARD_ELECTRICAL_ITEMS.map(item => (
+                                    <button 
+                                        key={item}
+                                        onClick={() => handleAddSpecificElectricalPoint(item)} 
+                                        className="text-[11px] bg-white border border-[#EBEAE5] px-2.5 py-1 rounded-lg text-slate-600 hover:border-sky-300 hover:bg-sky-50/50 hover:text-[#0055B3] transition-all shadow-sm font-semibold"
+                                    >
+                                        + {item}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 print:grid-cols-2 print:gap-8 print:text-xs">
-                {checklists.map((room, i) => (
-                    <Card 
-                        key={room.roomId || `room-${i}`} 
-                        title={
-                            room.roomId === 'unassigned' ? (
-                                <span>{room.roomName}</span>
-                            ) : (
-                                <div className="flex items-center gap-2 group/edit relative w-full">
-                                    <input
-                                        type="text"
-                                        value={room.roomName}
-                                        onChange={(e) => handleUpdateRoomName(room.roomId, e.target.value)}
-                                        className="bg-transparent border-b border-dashed border-transparent hover:border-slate-300 focus:border-indigo-500 py-1 outline-none focus:ring-0 w-full text-inherit transition-colors"
-                                    />
-                                    <Edit2 className="w-4 h-4 text-slate-400 opacity-0 group-hover/edit:opacity-100 transition-opacity absolute right-0 pointer-events-none" />
-                                </div>
-                            )
-                        } 
-                        className="flex flex-col print:shadow-none print:border-slate-300 print:break-inside-avoid"
-                    >
+                /* =========================================================================
+                   MASTER-DETAIL QUALITY AUDIT CHECKLIST
+                   ========================================================================= */
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    
+                    {/* Left Sidebar: Rooms List */}
+                    <div className="lg:col-span-4 space-y-3 print:hidden">
+                        <div className="flex items-center justify-between px-1">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">PROJECT ROOMS ({rooms.length})</span>
+                        </div>
                         
-                        {/* Electrical Counting Section */}
-                        <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 print:bg-white print:border-slate-300">
-                            <div className="flex justify-between items-start mb-3">
-                                <div className="flex items-center gap-2 text-indigo-700 font-bold print:text-indigo-950">
-                                    <Bolt className="w-4 h-4 print:hidden" /> Electrical Points
-                                </div>
-                                <div className="text-2xl font-black text-indigo-900 bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-sm print:shadow-none print:border-indigo-950 print:bg-slate-50">
-                                    {room.electricalPoints.totalPoints}
-                                </div>
-                            </div>
-                            
-                            {room.electricalPoints.breakdown.length > 0 ? (
-                                <ul className="text-xs space-y-2 mb-4 text-slate-600 border-t border-slate-200 pt-3 print:text-[11px] print:text-indigo-900">
-                                    {room.electricalPoints.breakdown.map((bd, idx) => (
-                                        <li key={`elec-${bd.name}-${idx}`} className="flex justify-between border-b border-slate-100 pb-1 print:border-slate-300">
-                                            <span className="truncate pr-2">{bd.name}</span>
-                                            <span className="font-bold">{bd.qty}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <p className="text-xs text-slate-400 mb-4 pt-3 border-t border-slate-200">No explicit electrical points found.</p>
-                            )}
-
-                            <label className="flex items-center gap-2 cursor-pointer pt-2 group print:hidden">
-                                <input 
-                                    type="checkbox" 
-                                    checked={!!elecVerified[room.roomId]}
-                                    onChange={() => toggleElecVerified(room.roomId)}
-                                    className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer transition-all"
-                                />
-                                <span className={`text-sm font-bold transition-colors ${elecVerified[room.roomId] ? 'text-indigo-600' : 'text-slate-600 group-hover:text-indigo-600'}`}>
-                                    Verify Points Count
-                                </span>
-                            </label>
-                            
-                            {/* Print-only checkbox space */}
-                            <div className="hidden print:flex items-center justify-between mt-2 pt-2 border-t border-slate-200">
-                                <span className="font-bold">Points Verified</span>
-                                <div className="w-5 h-5 border border-slate-400 rounded-sm"></div>
-                            </div>
-                        </div>
-
-                        {/* Standard Finishes Section */}
-                        <div className="flex-grow">
-                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1 print:text-slate-700">Finish Checks</h4>
-                            <ul className="space-y-3 print:space-y-2">
-                                {room.standardChecks.map(check => {
-                                    const isChecked = checkedState[room.roomId]?.[check.id] || false;
-                                    return (
-                                        <li key={check.id}>
-                                            <label className="flex items-start gap-3 cursor-pointer group print:hidden">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={isChecked}
-                                                    onChange={() => toggleCheck(room.roomId, check.id)}
-                                                    className="w-5 h-5 mt-0.5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 cursor-pointer transition-all"
-                                                />
-                                                <span className={`text-sm tracking-tight transition-all leading-tight ${isChecked ? 'text-slate-400 line-through' : 'text-slate-700 font-medium group-hover:text-emerald-700'}`}>
-                                                    {check.label}
-                                                </span>
-                                            </label>
-                                            
-                                            {/* Print friendly checklist item */}
-                                            <div className="hidden print:flex items-start gap-2">
-                                                <div className="w-4 h-4 mt-0.5 border border-slate-400 rounded-sm shrink-0"></div>
-                                                <span className="text-[11px] font-medium text-indigo-900 leading-tight">
-                                                    {check.label}
-                                                </span>
+                        <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                            {roomSummaries.map((room) => {
+                                const isActive = room.id === activeRoomId;
+                                return (
+                                    <button
+                                        key={room.id}
+                                        onClick={() => setActiveRoomId(room.id)}
+                                        className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between cursor-pointer group ${
+                                            isActive 
+                                                ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 border-[#0055B3] text-white shadow-md shadow-sky-950/10' 
+                                                : 'bg-white border-[#EBEAE5] hover:border-slate-300 text-slate-800'
+                                        }`}
+                                    >
+                                        <div className="space-y-1.5 min-w-0 flex-1 pr-3">
+                                            <div className="flex items-center gap-2">
+                                                <h5 className={`font-bold text-sm truncate ${isActive ? 'text-white' : 'text-slate-900 group-hover:text-[#0055B3]'}`}>
+                                                    {room.name}
+                                                </h5>
+                                                {room.pct === 100 && (
+                                                    <span className="text-emerald-500 bg-emerald-50 rounded-full p-0.5">
+                                                        <Check className="w-3 h-3 stroke-[3]" />
+                                                    </span>
+                                                )}
                                             </div>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
+
+                                            <div className="flex items-center gap-3">
+                                                {/* Mini completion percentage */}
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <span className={`text-[10px] font-black uppercase ${isActive ? 'text-sky-200' : 'text-slate-400'}`}>
+                                                        {room.checkedCount}/{room.totalChecksCount} Verified
+                                                    </span>
+                                                </div>
+
+                                                {/* Electrical count marker */}
+                                                {room.electricalCount > 0 && (
+                                                    <div className="flex items-center gap-1">
+                                                        <Bolt className={`w-3 h-3 ${room.isElecVerified ? 'text-amber-500' : 'text-slate-400'}`} />
+                                                        <span className={`text-[10px] font-bold ${isActive ? 'text-sky-200' : 'text-slate-500'}`}>
+                                                            {room.electricalCount} Nodes
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Progress bar */}
+                                            <div className="w-full bg-slate-100/30 h-1.5 rounded-full overflow-hidden shrink-0">
+                                                <div 
+                                                    className={`h-full transition-all duration-300 ${room.pct === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
+                                                    style={{ width: `${room.pct}%` }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${isActive ? 'text-white translate-x-1' : 'text-slate-300 group-hover:text-slate-500'}`} />
+                                    </button>
+                                );
+                            })}
                         </div>
-                    </Card>
-                ))}
-            </div>
+                    </div>
+
+                    {/* Right Workspace: Active Selected Room Panel */}
+                    <div className="lg:col-span-8">
+                        {activeRoomSummary ? (
+                            <div className="space-y-6">
+                                <Card 
+                                    title={
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full border-b border-slate-100 pb-4">
+                                            <div>
+                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block leading-none">Inspecting Zone</span>
+                                                <h4 className="text-lg font-extrabold text-slate-900 font-['Plus_Jakarta_Sans'] leading-tight mt-1">{activeRoomSummary.name}</h4>
+                                            </div>
+                                            <div className="flex items-center gap-2 print:hidden">
+                                                <button
+                                                    onClick={handleVerifyAllInRoom}
+                                                    className="bg-slate-50 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
+                                                >
+                                                    <CheckCircle className="w-3.5 h-3.5" />
+                                                    Approve Room Complete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                    className="bg-white border border-[#EBEAE5] rounded-[24px] p-6 shadow-sm flex flex-col"
+                                >
+                                    {/* Standardized Checklist Categories */}
+                                    <div className="space-y-6">
+                                        
+                                        {/* 1. Paint & Woodwork Finishes */}
+                                        <div className="space-y-3">
+                                            <div className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b border-slate-100 pb-1 flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-full"></span>
+                                                Core Standard Checks
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {STANDARD_CHECKS.map((check) => {
+                                                    const isChecked = !!(checkedState[activeRoomSummary.id]?.[check.id]);
+                                                    const isNA = !!(naState[activeRoomSummary.id]?.[check.id]);
+                                                    return (
+                                                        <div 
+                                                            key={check.id}
+                                                            onClick={() => {
+                                                                if (!isNA) {
+                                                                    toggleCheck(activeRoomSummary.id, check.id);
+                                                                }
+                                                            }}
+                                                            className={`flex items-start justify-between gap-3 p-3 rounded-xl border transition-all select-none relative group/card ${
+                                                                isNA
+                                                                    ? 'bg-slate-50/60 border-slate-200 text-slate-450'
+                                                                    : isChecked 
+                                                                        ? 'bg-emerald-50/40 border-emerald-200/80 cursor-pointer' 
+                                                                        : 'bg-white border-slate-100 hover:border-slate-200 cursor-pointer'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-start gap-3">
+                                                                <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-all ${
+                                                                    isNA
+                                                                        ? 'border-slate-300 bg-slate-200 text-slate-500 cursor-not-allowed'
+                                                                        : isChecked 
+                                                                            ? 'bg-emerald-500 border-emerald-500 text-white' 
+                                                                            : 'border-slate-300 bg-white'
+                                                                }`}>
+                                                                    {isChecked && !isNA && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                                                    {isNA && <span className="text-[9px] font-extrabold">NA</span>}
+                                                                </div>
+                                                                <div className="space-y-0.5">
+                                                                    <span className={`text-xs font-semibold leading-tight block ${
+                                                                        isNA 
+                                                                            ? 'text-slate-400 font-medium italic line-through' 
+                                                                            : isChecked 
+                                                                                ? 'text-slate-400 line-through' 
+                                                                                : 'text-slate-700'
+                                                                    }`}>
+                                                                        {check.label}
+                                                                    </span>
+                                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1">
+                                                                        {check.category}
+                                                                        {isNA && <span className="text-amber-700 font-extrabold bg-amber-50 px-1 rounded">[N/A]</span>}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => toggleNA(activeRoomSummary.id, check.id, e)}
+                                                                className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider transition-all border shrink-0 ${
+                                                                    isNA
+                                                                        ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                                                                        : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700 sm:opacity-0 group-hover/card:opacity-100'
+                                                                }`}
+                                                            >
+                                                                {isNA ? 'Apply' : 'N/A'}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* 2. Custom Site Checks */}
+                                        <div className="space-y-3 pt-2">
+                                            <div className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b border-slate-100 pb-1 flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-full"></span>
+                                                Room-Specific Custom Audits
+                                            </div>
+
+                                            {activeRoomCustoms.length > 0 ? (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    {activeRoomCustoms.map((custom) => (
+                                                        <div 
+                                                            key={custom.id}
+                                                            className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                                                                custom.checked 
+                                                                    ? 'bg-emerald-50/40 border-emerald-200/80' 
+                                                                    : 'bg-white border-slate-100'
+                                                            }`}
+                                                        >
+                                                            <div 
+                                                                onClick={() => toggleCustomCheck(custom.id)}
+                                                                className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
+                                                            >
+                                                                <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${
+                                                                    custom.checked 
+                                                                        ? 'bg-emerald-500 border-emerald-500 text-white' 
+                                                                        : 'border-slate-300 bg-white'
+                                                                }`}>
+                                                                    {custom.checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                                                </div>
+                                                                <span className={`text-xs font-semibold leading-tight truncate ${custom.checked ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                                                                    {custom.label}
+                                                                </span>
+                                                            </div>
+                                                            <button 
+                                                                onClick={() => handleRemoveCustomCheck(custom.id)}
+                                                                className="text-slate-300 hover:text-red-500 p-1 rounded-md hover:bg-slate-50 transition-colors shrink-0 cursor-pointer"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-slate-400 italic">No room-specific custom audits added yet.</p>
+                                            )}
+
+                                            {/* Form to add custom checks */}
+                                            <form onSubmit={handleAddCustomCheck} className="flex gap-2 max-w-md pt-1 print:hidden">
+                                                <input 
+                                                    type="text" 
+                                                    value={newCustomCheck}
+                                                    onChange={(e) => setNewCustomCheck(e.target.value)}
+                                                    placeholder="Add custom check (e.g. Veneer polish grooves)..."
+                                                    className="flex-1 bg-[#FAF9F6] border border-[#EBEAE5] rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#0066CC] focus:bg-white focus:border-[#0066CC] font-medium"
+                                                />
+                                                <button 
+                                                    type="submit"
+                                                    className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 hover:bg-[#0055B3] text-white text-xs font-bold px-4 py-2 rounded-xl uppercase tracking-wider shrink-0 transition-colors cursor-pointer flex items-center gap-1"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" /> Append
+                                                </button>
+                                            </form>
+                                        </div>
+
+                                        {/* 3. Electrical Audit counts */}
+                                        <div className="space-y-3 pt-2">
+                                            <div className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b border-slate-100 pb-1 flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-full"></span>
+                                                Electrical Point Audit
+                                            </div>
+
+                                            <div className="bg-slate-50 border border-slate-150 p-4 rounded-xl">
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                                                            <Bolt className="w-4 h-4 text-amber-500" />
+                                                            <span>Nodes Planned: {activeRoomSummary.electricalCount} point(s)</span>
+                                                        </div>
+                                                        <p className="text-[11px] text-slate-400 leading-normal max-w-md">
+                                                            Compare the physical physical mockups on site against the BOQ plan before final handover.
+                                                        </p>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleElecVerified(activeRoomSummary.id)}
+                                                        className={`text-xs font-bold px-4 py-2 rounded-xl uppercase tracking-wider transition-all border flex items-center gap-1.5 shadow-sm cursor-pointer ${
+                                                            activeRoomSummary.isElecVerified 
+                                                                ? 'bg-amber-500 text-slate-900 border-amber-600 font-extrabold' 
+                                                                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                                        }`}
+                                                    >
+                                                        <Bolt className={`w-4 h-4 ${activeRoomSummary.isElecVerified ? 'text-slate-900' : 'text-slate-400'}`} />
+                                                        {activeRoomSummary.isElecVerified ? 'Points Verified ✓' : 'Verify Points Count'}
+                                                    </button>
+                                                </div>
+
+                                                {/* Electrical breakdown table in active room */}
+                                                {activeRoomSummary.electricalBreakdown.length > 0 && (
+                                                    <div className="mt-4 border-t border-slate-200/60 pt-3">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Plan Breakdown:</span>
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                                                            {activeRoomSummary.electricalBreakdown.map((b, idx) => (
+                                                                <div key={idx} className="bg-white border border-slate-100 p-2 rounded-lg text-xs flex justify-between items-center">
+                                                                    <span className="text-slate-600 font-medium truncate pr-2">{b.name || 'Points'}</span>
+                                                                    <span className="font-extrabold text-slate-900 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">{b.qty}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* 4. Supervisor Audit notes */}
+                                        <div className="space-y-3 pt-2">
+                                            <div className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b border-slate-100 pb-1 flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-full"></span>
+                                                Site Supervisor Remarks
+                                            </div>
+
+                                            <textarea
+                                                rows={3}
+                                                value={activeRoomNotes}
+                                                onChange={(e) => handleUpdateRoomNote(activeRoomSummary.id, e.target.value)}
+                                                placeholder={`Add specialized quality remarks for ${activeRoomSummary.name} (e.g., Slight dampness check near skirting, alignment needs 1mm adjustment)...`}
+                                                className="w-full bg-[#FAF9F6] border border-[#EBEAE5] rounded-[18px] p-4 text-xs focus:ring-1 focus:ring-[#0066CC] focus:bg-white focus:border-[#0066CC] font-medium placeholder-slate-400 leading-relaxed"
+                                            />
+                                        </div>
+
+                                    </div>
+                                </Card>
+                            </div>
+                        ) : (
+                            <div className="text-center py-12 bg-slate-50 border border-slate-200 rounded-[24px]">
+                                <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                                <p className="text-sm font-semibold text-slate-500">Please select a room to audit.</p>
+                            </div>
+                        )}
+                    </div>
+
+                </div>
             )}
-            
-            {/* Print Footer */}
-            <div className="hidden print:flex mt-12 pt-8 border-t border-slate-300 justify-between">
-                <div className="w-48">
-                    <div className="border-b border-slate-400 h-8 mb-2"></div>
-                    <span className="text-xs font-bold text-slate-600">Supervisor Signature</span>
-                </div>
-                <div className="w-48">
-                    <div className="border-b border-slate-400 h-8 mb-2"></div>
-                    <span className="text-xs font-bold text-slate-600">Client Signature</span>
-                </div>
-            </div>
         </div>
     );
 };

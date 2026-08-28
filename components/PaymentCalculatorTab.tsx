@@ -1,19 +1,30 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ProjectContext, ProposalTier, PaymentMilestone, FullProjectData, PaymentStatus, ProjectDiscount } from '../types';
-import { formatCurrency, id as generateId } from '../lib/utils';
+import { showSuccessWithNext } from './SuccessWithNextToast';
+import { calculateSellPrice } from "../lib/utils";
+import { ProjectContext, ProposalTier, PaymentMilestone, FullProjectData, Item, FullBoqItem, PaymentStatus, ProjectDiscount, BoqItem, AIStrategy } from '../types';
+import { formatCurrency, formatINR, id as generateId } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, Coins, CheckCircle, TrendingUp, Info, AlertTriangle, Sparkles, Sliders, History, FileText, Lock } from 'lucide-react';
 import Card from './shared/Card';
 import { CalculatorIcon, ShieldCheckIcon, AlertIcon, CheckIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon, DeleteIcon, PlusIcon, ScissorsIcon, ClockIcon } from './Icons';
 import { useOrg } from '../contexts/OrgContext';
-import { FFDS_PAYMENT_STRUCTURE_DEFAULTS } from '../services/engagementService';
+import { usePageHeader } from '../contexts/PageHeaderContext';
+import { FFDS_PAYMENT_STRUCTURE_DEFAULTS, getPaymentStructure, setPaymentStructure } from '../services/engagementService';
+import MarginOptimizer from './MarginOptimizer';
+import { CashFlowForecastDashboard } from './CashFlowForecastDashboard';
+import TermsAndPaymentTab from './studio/TermsAndPaymentTab';
 
 interface PaymentCalculatorTabProps {
     projectContext: ProjectContext;
     setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
     activeTier?: ProposalTier;
+    tiers?: ProposalTier[];
     allProjects: FullProjectData[];
+    bank?: Item[];
+    fullBoq?: FullBoqItem[];
+    setBoq?: React.Dispatch<React.SetStateAction<BoqItem[]>>;
+    aiStrategy?: AIStrategy;
 }
 
 const DEFAULT_MILESTONES: PaymentMilestone[] = [
@@ -27,7 +38,7 @@ const DEFAULT_MILESTONES: PaymentMilestone[] = [
     { id: 'e4', type: 'execution', name: 'Execution Final Advance', percentage: 10, description: 'Handover', unlocks: 'Handover Document & Keys', isHandoverAdvance: true },
 ];
 
-const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectContext, setProjectContext, activeTier, allProjects = [] }) => {
+const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectContext, setProjectContext, activeTier, tiers = [], allProjects = [], bank = [], fullBoq = [], setBoq, aiStrategy = 'balanced' }) => {
     // --- STATE ---
     const { orgData } = useOrg();
     const financials = projectContext.financials || {
@@ -40,26 +51,190 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         discounts: []
     };
 
-    const [gstRate, setGstRate] = useState<number>(projectContext.gstRate || 18);
-    const [initiationFee, setInitiationFee] = useState<number>(financials.initiationFeePaid);
-    const [billablePercent, setBillablePercent] = useState<number>(financials.billablePercent);
-    const [executionGstEnabled, setExecutionGstEnabled] = useState<boolean>(financials.executionGstEnabled);
-    const [cashLimit, setCashLimit] = useState<number>(financials.taxLimitYearly);
+    const [localGstRate, setGstRate] = useState<number>(projectContext.gstRate || 18);
+    const [localInitiationFee, setInitiationFee] = useState<number>(financials.initiationFeePaid);
+    const [localBillablePercent, setBillablePercent] = useState<number>(financials.billablePercent);
+    const [localExecutionGstEnabled, setExecutionGstEnabled] = useState<boolean>(financials.executionGstEnabled);
+    const [localCashLimit, setCashLimit] = useState<number>(financials.taxLimitYearly);
     
     // Discounts
-    const [discounts, setDiscounts] = useState<ProjectDiscount[]>(financials.discounts || []);
+    const [localDiscounts, setDiscounts] = useState<ProjectDiscount[]>(financials.discounts || []);
     const [newDiscount, setNewDiscount] = useState<Partial<ProjectDiscount>>({
         name: '', value: 0, type: 'percentage', target: 'execution'
     });
     const [showDiscountForm, setShowDiscountForm] = useState(false);
 
+    // Historical Snapshot & Tier Versioning
+    const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
+
+    const snapshots = financials.paymentSnapshots || [];
+
+    // Unified list of all available proposal versions, approved snapshots, and live billing
+    const availableVersions = useMemo(() => {
+        const list: Array<{
+            id: string;
+            name: string;
+            timestamp: number;
+            lifecycleTag?: string;
+            executionValue: number;
+            designValue: number;
+            milestones: PaymentMilestone[];
+            billablePercent?: number;
+            executionGstEnabled?: boolean;
+            isCurrentActive: boolean;
+            isSnapshot: boolean;
+        }> = [];
+
+        // 1. Live Current Tier
+        const liveExec = (activeTier?.summary?.totalSell !== undefined && activeTier?.summary?.totalSell > 0)
+            ? activeTier.summary.totalSell
+            : (financials.approvedExecutionValue ?? (activeTier?.summary?.totalRevenue || 0));
+        const liveDesign = (activeTier?.summary?.designFee !== undefined && activeTier?.summary?.designFee > 0)
+            ? activeTier.summary.designFee
+            : (financials.approvedDesignValue ?? 0);
+        list.push({
+            id: activeTier?.id || 'live-current',
+            name: activeTier?.name || 'Current Active Billing',
+            timestamp: activeTier?.timestamp || Date.now(),
+            lifecycleTag: activeTier?.lifecycleTag || (projectContext.approvedTierId === activeTier?.id ? 'Current contract' : 'Active'),
+            executionValue: liveExec,
+            designValue: liveDesign,
+            milestones: projectContext.paymentMilestones || [],
+            billablePercent: localBillablePercent,
+            executionGstEnabled: localExecutionGstEnabled,
+            isCurrentActive: true,
+            isSnapshot: false,
+        });
+
+        // 2. Other Tiers in Project (e.g. Superseded versions, Drafts, Copies)
+        const allTiers = (tiers && tiers.length > 0) ? tiers : (projectContext.tiers || []);
+        allTiers.forEach(t => {
+            if (activeTier && t.id === activeTier.id) return; // already added as live
+            const matchingSnapshot = snapshots.find(s => s.tierId === t.id);
+            const tExec = matchingSnapshot?.approvedExecutionValue ?? (t.summary?.totalSell || t.summary?.totalRevenue || 0);
+            const tDesign = matchingSnapshot?.approvedDesignValue ?? (t.summary?.designFee || 0);
+            const tMilestones = (matchingSnapshot?.milestones && matchingSnapshot.milestones.length > 0)
+                ? matchingSnapshot.milestones
+                : (projectContext.paymentMilestones || []);
+
+            list.push({
+                id: t.id,
+                name: t.name,
+                timestamp: t.timestamp,
+                lifecycleTag: t.lifecycleTag || 'Alternative Option',
+                executionValue: tExec,
+                designValue: tDesign,
+                milestones: tMilestones,
+                billablePercent: matchingSnapshot?.billablePercent,
+                executionGstEnabled: matchingSnapshot?.executionGstEnabled,
+                isCurrentActive: false,
+                isSnapshot: !!matchingSnapshot,
+            });
+        });
+
+        // 3. Standalone snapshots not matching any tier
+        snapshots.forEach(s => {
+            if (!list.some(item => item.id === s.tierId)) {
+                list.push({
+                    id: s.tierId,
+                    name: s.tierName || 'Archived Snapshot',
+                    timestamp: s.timestamp,
+                    lifecycleTag: 'Archived Snapshot',
+                    executionValue: s.approvedExecutionValue || 0,
+                    designValue: s.approvedDesignValue || 0,
+                    milestones: s.milestones || [],
+                    billablePercent: s.billablePercent,
+                    executionGstEnabled: s.executionGstEnabled,
+                    isCurrentActive: false,
+                    isSnapshot: true,
+                });
+            }
+        });
+
+        return list;
+    }, [activeTier, tiers, projectContext.tiers, projectContext.approvedTierId, projectContext.paymentMilestones, snapshots, financials.approvedExecutionValue, financials.approvedDesignValue, localBillablePercent, localExecutionGstEnabled]);
+
+    const selectedHistoricalEntry = selectedSnapshotId ? availableVersions.find(v => v.id === selectedSnapshotId) : null;
+    const activeSnapshot = selectedHistoricalEntry;
+    const isReadOnlyMode = !!selectedHistoricalEntry && !selectedHistoricalEntry.isCurrentActive;
+
+    // Derived active values
+    const milestones = selectedHistoricalEntry ? selectedHistoricalEntry.milestones : (projectContext.paymentMilestones || []);
+    const gstRate = localGstRate;
+    const cashLimit = localCashLimit;
+
+    const billablePercent = selectedHistoricalEntry && selectedHistoricalEntry.billablePercent !== undefined 
+        ? selectedHistoricalEntry.billablePercent 
+        : localBillablePercent;
+
+    const executionGstEnabled = selectedHistoricalEntry && selectedHistoricalEntry.executionGstEnabled !== undefined 
+        ? selectedHistoricalEntry.executionGstEnabled 
+        : localExecutionGstEnabled;
+
+    const initiationFee = isReadOnlyMode ? 0 : localInitiationFee;
+    const discounts = isReadOnlyMode ? [] : localDiscounts;
+
+    // Computed vitals for header bar
+    const displayDesign = selectedHistoricalEntry
+        ? selectedHistoricalEntry.designValue
+        : ((activeTier?.summary?.designFee !== undefined && activeTier?.summary?.designFee > 0)
+            ? activeTier.summary.designFee
+            : (financials.approvedDesignValue || 0));
+
+    const displayExec = selectedHistoricalEntry
+        ? selectedHistoricalEntry.executionValue
+        : ((activeTier?.summary?.totalSell !== undefined && activeTier?.summary?.totalSell > 0)
+            ? activeTier.summary.totalSell
+            : (financials.approvedExecutionValue || 0));
+
+    usePageHeader({
+        vitals: [
+            { label: "DESIGN", value: formatINR(displayDesign) },
+            { label: "EXECUTION", value: formatINR(displayExec) }
+        ]
+    }, [displayDesign, displayExec]);
+
+    useEffect(() => {
+        if (setProjectContext && (displayDesign > 0 || displayExec > 0)) {
+            setProjectContext(prev => {
+                if (prev.financials?.approvedDesignValue === displayDesign && prev.financials?.approvedExecutionValue === displayExec) {
+                    return prev;
+                }
+                return {
+                    ...prev,
+                    financials: {
+                        ...(prev.financials || {}),
+                        approvedDesignValue: displayDesign,
+                        approvedExecutionValue: displayExec,
+                    }
+                };
+            });
+        }
+    }, [displayDesign, displayExec, setProjectContext]);
+
     // Reset Confirm State
     const [isResetting, setIsResetting] = useState(false);
+
+    // Track Filter Tab
+    const [activeTrackTab, setActiveTrackTab] = useState<'all' | 'design' | 'execution'>('all');
+    const [activeSmartView, setActiveSmartView] = useState<'none' | 'margin' | 'cash-flow'>('none');
+    const [viewLayout, setViewLayout] = useState<'stacked' | 'side-by-side'>('stacked');
+    const [designViewMode, setDesignViewMode] = useState<'simple' | 'advanced'>('simple');
+    const [executionViewMode, setExecutionViewMode] = useState<'simple' | 'advanced'>('simple');
+    const [isStudioDefaultsModalOpen, setIsStudioDefaultsModalOpen] = useState(false);
+    // Insights Toggle
+    const [showInsights, setShowInsights] = useState(true);
+    // Financial Controls Accordion
+    const [showFinancialControls, setShowFinancialControls] = useState(false);
 
     // Compare Revision State
     const [compareRevision, setCompareRevision] = useState<any>(null);
 
-    const milestones = projectContext.paymentMilestones || [];
+    const [confirmingException, setConfirmingException] = useState<{
+        index: number;
+        action: 'generate_invoice' | 'mark_paid';
+        lockedTaxableBase?: number;
+    } | null>(null);
 
     // Payment Schedule Logic
     const paymentSchedules = projectContext.paymentSchedules || [];
@@ -135,7 +310,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             const advCode = m.type === 'design' ? `D${++designIndex}` : `E${++execIndex}`;
 
             return {
-                advanceCode: m.description && m.description.match(/^[DEH][0-9]$/) ? m.description : advCode,
+                advanceCode: advCode,
                 label: (m.name || '').replace(' (Gross)', ''),
                 phase: m.type as 'design' | 'execution' | 'handover',
                 percentage: m.percentage,
@@ -147,7 +322,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 status: m.status === 'invoiced' ? 'advance_requested' : m.status === 'paid' ? 'received' : 'pending',
                 invoiceRef: m.invoiceNumber || null,
                 receivedAt: null,
-                isHandoverAdvance: m.isHandoverAdvance || false
+                isHandoverAdvance: m.isHandoverAdvance || (m.name || '').toLowerCase().includes('handover') || false
             };
         });
 
@@ -179,11 +354,30 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         updatedSchedules.push(newSchedule as any);
 
         setProjectContext(prev => ({ ...prev, paymentSchedules: updatedSchedules as any }));
-        alert('Payment Schedule v' + newSchedule.version + ' Generated. You can view it in the Client Outputs section.');
+        showSuccessWithNext(`Payment Schedule v${newSchedule.version} generated successfully`);
     };
 
-    const getDefaultMilestones = () => {
-        const paymentStr = (orgData as any).paymentStructure;
+    // Studio Defaults State & Sync
+    const [studioPaymentStr, setStudioPaymentStr] = useState<any>(null);
+    const [savingStudioDefaults, setSavingStudioDefaults] = useState(false);
+
+    useEffect(() => {
+        const loadStudioPaymentStructure = async () => {
+            try {
+                const orgId = orgData?.tenantId || 'demo-tenant-01';
+                const p = await getPaymentStructure(orgId);
+                if (p) {
+                    setStudioPaymentStr(p);
+                }
+            } catch (err) {
+                console.error("Failed to load studio payment structure in PaymentCalculatorTab", err);
+            }
+        };
+        loadStudioPaymentStructure();
+    }, [orgData?.tenantId]);
+
+    const getDefaultMilestones = (customStructure?: any) => {
+        const paymentStr = customStructure || studioPaymentStr || (orgData as any).paymentStructure;
         const structure = paymentStr?.designStages ? paymentStr : FFDS_PAYMENT_STRUCTURE_DEFAULTS;
         
         return [
@@ -209,12 +403,56 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         ];
     };
 
+    // Save Current Project Milestones back to Studio level defaults
+    const handleSaveAsStudioDefaults = async () => {
+        if (!window.confirm("This will save the current project's milestone structure as the new Studio Defaults for all future projects. Continue?")) return;
+        
+        try {
+            setSavingStudioDefaults(true);
+            const orgId = orgData?.tenantId || 'demo-tenant-01';
+            
+            const designStages = designMilestones.map(m => ({
+                code: m.description || `D${m.id}`,
+                name: m.name,
+                pct: m.percentage,
+                trigger: m.trigger || m.dueCondition || '',
+                unlocks: m.unlocks || ''
+            }));
+            
+            const executionStages = executionMilestones.map(m => ({
+                code: m.description || `E${m.id}`,
+                name: m.name,
+                pct: m.percentage,
+                trigger: m.trigger || m.dueCondition || '',
+                unlocks: m.unlocks || ''
+            }));
+            
+            const newStructure = {
+                designStages,
+                executionStages,
+                validation: {
+                    designSumMustEqual: 100,
+                    executionSumMustEqual: 100
+                }
+            };
+            
+            await setPaymentStructure(orgId, newStructure as any);
+            setStudioPaymentStr(newStructure);
+            showSuccessWithNext("Current milestones saved as Studio Defaults successfully!");
+        } catch (err: any) {
+            console.error("Failed to save as studio defaults", err);
+            alert(`Error saving defaults: ${err.message}`);
+        } finally {
+            setSavingStudioDefaults(false);
+        }
+    };
+
     // --- DEFAULTS ---
     useEffect(() => {
         if (!projectContext.paymentMilestones || projectContext.paymentMilestones.length === 0) {
             setProjectContext(prev => ({ ...prev, paymentMilestones: getDefaultMilestones() }));
         }
-    }, []);
+    }, [studioPaymentStr]);
 
     const autoBalanceMilestones = (items: PaymentMilestone[], phase: string, changedId?: string) => {
         const phaseItems = items.filter(m => m.type === phase);
@@ -394,8 +632,81 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         setProjectContext(prev => ({ ...prev, paymentMilestones: getDefaultMilestones() }));
     };
 
-    const handleInvoiceAction = (index: number, action: 'generate_invoice' | 'mark_paid' | 'revert_invoice', lockedTaxableBase?: number) => {
-        const m = milestones[index];
+    const handleMoveMilestone = (id: string, direction: 'up' | 'down') => {
+        const newMilestones = [...milestones];
+        const targetIdx = newMilestones.findIndex(m => m.id === id);
+        if (targetIdx === -1) return;
+        const targetType = newMilestones[targetIdx].type;
+        
+        // Find previous or next milestone of the same type
+        let swapIdx = -1;
+        if (direction === 'up') {
+            for (let i = targetIdx - 1; i >= 0; i--) {
+                if (newMilestones[i].type === targetType) {
+                    swapIdx = i;
+                    break;
+                }
+            }
+        } else {
+            for (let i = targetIdx + 1; i < newMilestones.length; i++) {
+                if (newMilestones[i].type === targetType) {
+                    swapIdx = i;
+                    break;
+                }
+            }
+        }
+        
+        if (swapIdx !== -1) {
+            const temp = newMilestones[targetIdx];
+            newMilestones[targetIdx] = newMilestones[swapIdx];
+            newMilestones[swapIdx] = temp;
+            setProjectContext(prev => ({ ...prev, paymentMilestones: newMilestones }));
+        }
+    };
+
+    const handleSplitMilestone = (id: string) => {
+        const newMilestones = [...milestones];
+        const idx = newMilestones.findIndex(m => m.id === id);
+        if (idx === -1) return;
+        
+        const m = newMilestones[idx];
+        if (m.status === 'paid' || m.status === 'invoiced') return;
+        
+        const p1 = Math.floor(m.percentage / 2);
+        const p2 = m.percentage - p1;
+        
+        let f1: number | undefined;
+        let f2: number | undefined;
+        if (m.isFixedAmount && m.fixedAmount !== undefined) {
+            f1 = Math.floor(m.fixedAmount / 2);
+            f2 = m.fixedAmount - f1;
+        }
+        
+        const m1: PaymentMilestone = {
+            ...m,
+            id: generateId(),
+            name: `${m.name} (Part 1)`,
+            percentage: p1,
+            fixedAmount: f1,
+            isCustom: true
+        };
+        
+        const m2: PaymentMilestone = {
+            ...m,
+            id: generateId(),
+            name: `${m.name} (Part 2)`,
+            percentage: p2,
+            fixedAmount: f2,
+            isCustom: true,
+            isHandoverAdvance: m.isHandoverAdvance,
+            subSteps: []
+        };
+        
+        newMilestones.splice(idx, 1, m1, m2);
+        setProjectContext(prev => ({ ...prev, paymentMilestones: autoBalanceMilestones(newMilestones, m.type, m1.id) }));
+    };
+
+    const executeInvoiceAction = (index: number, action: 'generate_invoice' | 'mark_paid' | 'revert_invoice', lockedTaxableBase?: number) => {
         const projectCode = (projectContext?.name || 'PRJ').substring(0, 3).toUpperCase();
         const seq = String(index + 1).padStart(2, '0');
         
@@ -406,14 +717,6 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             invNumber = `INV-CASH-${projectCode}-${seq}`;
         }
 
-        if (action === 'generate_invoice' || action === 'mark_paid') {
-            const engagementStatus = projectContext.engagement?.status;
-            if (engagementStatus !== 'acknowledged') {
-                alert("Issue and obtain client acknowledgement of the Terms Docket and Payment Schedule before recording any advance.");
-                return;
-            }
-        }
-
         if (action === 'generate_invoice') {
             handleUpdateMilestone(index, { 
                 status: 'invoiced', 
@@ -421,6 +724,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 invoiceDate: new Date().toISOString(),
                 lockedTaxableBase: lockedTaxableBase
             });
+            showSuccessWithNext('Invoice raised successfully');
         } else if (action === 'mark_paid') {
             handleUpdateMilestone(index, { status: 'paid' });
         } else if (action === 'revert_invoice') {
@@ -431,6 +735,29 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 lockedTaxableBase: undefined
             });
         }
+    };
+
+    const handleInvoiceAction = (index: number, action: 'generate_invoice' | 'mark_paid' | 'revert_invoice', lockedTaxableBase?: number) => {
+        if (action === 'generate_invoice' || action === 'mark_paid') {
+            const engagementStatus = projectContext.engagement?.status;
+            if (engagementStatus !== 'acknowledged') {
+                setConfirmingException({
+                    index,
+                    action,
+                    lockedTaxableBase
+                });
+                return;
+            }
+        }
+
+        executeInvoiceAction(index, action, lockedTaxableBase);
+    };
+
+    const handleConfirmException = () => {
+        if (!confirmingException) return;
+        const { index, action, lockedTaxableBase } = confirmingException;
+        executeInvoiceAction(index, action, lockedTaxableBase);
+        setConfirmingException(null);
     };
 
     // --- DISCOUNT HANDLERS ---
@@ -485,11 +812,21 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
     // --- CALCULATIONS ENGINE ---
 
-    const originalExecutionTotal = activeTier?.summary.totalSell || 0;
-    const originalDesignFee = activeTier?.summary.designFee || 0;
+    const originalExecutionTotal = selectedHistoricalEntry
+        ? selectedHistoricalEntry.executionValue
+        : (activeTier?.summary.totalSell || 0);
 
-    const rawExecutionTotal = financials.approvedExecutionValue ?? originalExecutionTotal;
-    const rawDesignFee = financials.approvedDesignValue ?? originalDesignFee;
+    const originalDesignFee = selectedHistoricalEntry
+        ? selectedHistoricalEntry.designValue
+        : (activeTier?.summary.designFee || 0);
+
+    const rawExecutionTotal = selectedHistoricalEntry
+        ? selectedHistoricalEntry.executionValue
+        : (financials.approvedExecutionValue ?? originalExecutionTotal);
+
+    const rawDesignFee = selectedHistoricalEntry
+        ? selectedHistoricalEntry.designValue
+        : (financials.approvedDesignValue ?? originalDesignFee);
 
     // 1. Apply Discounts (Pre-Tax)
     const calculateDiscountValue = (base: number, target: 'execution' | 'design') => {
@@ -595,6 +932,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
     // Persistence
     useEffect(() => {
+        if (isReadOnlyMode) return;
         const newConfig = {
             initiationFeePaid: initiationFee,
             billablePercent,
@@ -612,7 +950,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             }
         }, 500);
         return () => clearTimeout(timer);
-    }, [initiationFee, billablePercent, executionGstEnabled, executionCash, cashLimit, discounts, financials.approvedExecutionValue, financials.approvedDesignValue]);
+    }, [initiationFee, billablePercent, executionGstEnabled, executionCash, cashLimit, discounts, financials.approvedExecutionValue, financials.approvedDesignValue, isReadOnlyMode]);
 
 
     const renderSplitTable = (
@@ -636,6 +974,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         const unpaidItems = items.filter(m => m.status !== 'paid' && m.status !== 'invoiced');
         const unpaidPct = unpaidItems.reduce((sum, m) => sum + m.percentage, 0);
         
+        const viewMode = isExecution ? executionViewMode : designViewMode;
+        const setViewMode = isExecution ? setExecutionViewMode : setDesignViewMode;
+        
         let lockedBase = 0;
         paidItems.forEach(m => {
             if (m.isFixedAmount && m.fixedAmount !== undefined) {
@@ -646,24 +987,180 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         });
         const remainingBaseAmount = baseAmount - lockedBase;
 
+        const renderStageAndConditions = (m: PaymentMilestone, mainIndex: number, isCleared: boolean, filteredIdx: number, totalFiltered: number) => {
+            return (
+                <div className="space-y-3 py-1.5 font-['Plus_Jakarta_Sans']">
+                    <div className="flex items-center gap-2">
+                        {(!m.status || m.status === 'pending') && (
+                            <div className="flex items-center gap-0.5 shrink-0 bg-stone-100 p-0.5 rounded-lg border border-stone-250 select-none mr-1">
+                                <button 
+                                    onClick={() => handleMoveMilestone(m.id, 'up')}
+                                    disabled={filteredIdx === 0}
+                                    className={`p-0.5 rounded transition-all ${filteredIdx === 0 ? 'text-stone-300 cursor-not-allowed' : 'text-stone-600 hover:text-stone-900 hover:bg-white shadow-xs'}`}
+                                    title="Move Up"
+                                >
+                                    <ChevronUpIcon className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                    onClick={() => handleMoveMilestone(m.id, 'down')}
+                                    disabled={filteredIdx === totalFiltered - 1}
+                                    className={`p-0.5 rounded transition-all ${filteredIdx === totalFiltered - 1 ? 'text-stone-300 cursor-not-allowed' : 'text-stone-600 hover:text-stone-900 hover:bg-white shadow-xs'}`}
+                                    title="Move Down"
+                                >
+                                    <ChevronDownIcon className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        )}
+                        <input 
+                            type="text" 
+                            value={m.name} 
+                            onChange={e => handleUpdateMilestone(mainIndex, { name: e.target.value })}
+                            className="bg-transparent outline-none font-extrabold text-stone-900 focus:border-b focus:border-stone-400 text-xs font-semibold py-0.5 w-full max-w-md font-['Plus_Jakarta_Sans'] transition-colors"
+                            disabled={isCleared}
+                        />
+                        {(!m.status || m.status === 'pending') && (
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                    onClick={() => handleSplitMilestone(m.id)}
+                                    className="text-stone-400 hover:text-sky-600 shrink-0 p-1 bg-stone-50 hover:bg-sky-50 rounded-lg border border-stone-200 transition-all shadow-2xs"
+                                    title="Split Milestone"
+                                >
+                                    <ScissorsIcon className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                    onClick={() => handleDeleteMilestone(mainIndex)}
+                                    className="text-stone-400 hover:text-red-500 shrink-0 p-1 bg-stone-50 hover:bg-red-50 rounded-lg border border-stone-200 transition-all shadow-2xs"
+                                    title="Delete Milestone"
+                                >
+                                    <DeleteIcon className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Trigger (WHEN) & Deliverables (UNLOCKS) - Elegant, Flat, Non-collapsible */}
+                    <div className="space-y-1.5 border-l border-stone-200 pl-3 ml-0.5">
+                        <div className="flex items-start gap-1.5 text-[11px] text-stone-500 font-medium">
+                            <span className="font-extrabold text-stone-400 uppercase tracking-wider shrink-0 text-[9px] w-14 mt-0.5">WHEN:</span>
+                            {isCleared ? (
+                                <span className="text-stone-600 font-semibold leading-relaxed">{m.trigger || '—'}</span>
+                            ) : (
+                                <input 
+                                    type="text" 
+                                    value={m.trigger || ''} 
+                                    onChange={e => handleUpdateMilestone(mainIndex, { trigger: e.target.value })} 
+                                    placeholder="Trigger condition..." 
+                                    className="bg-transparent border-b border-dashed border-stone-200 hover:border-stone-400 focus:border-stone-500 outline-none w-full max-w-lg py-0.5 text-[11px] font-semibold text-stone-700 transition-colors"
+                                />
+                            )}
+                        </div>
+
+                        <div className="flex items-start gap-1.5 text-[11px] text-stone-500 font-medium">
+                            <span className="font-extrabold text-sky-400 uppercase tracking-wider shrink-0 text-[9px] w-14 mt-0.5">UNLOCKS:</span>
+                            {isCleared ? (
+                                <span className="text-slate-900 font-semibold leading-relaxed">{m.unlocks || '—'}</span>
+                            ) : (
+                                <input 
+                                    type="text" 
+                                    value={m.unlocks || ''} 
+                                    onChange={e => handleUpdateMilestone(mainIndex, { unlocks: e.target.value })} 
+                                    placeholder="Unlocks deliverables..." 
+                                    className="bg-transparent border-b border-dashed border-stone-200 hover:border-sky-400 focus:border-[#0066CC] outline-none w-full max-w-lg py-0.5 text-[11px] font-semibold text-slate-900 transition-colors"
+                                />
+                            )}
+                        </div>
+
+                        {/* Handover advance checkbox for execution milestones */}
+                        {isExecution && (
+                            <div className="pt-0.5">
+                                {isCleared ? (
+                                    m.isHandoverAdvance && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 border border-amber-200/50 text-[9px] font-black text-amber-800 uppercase tracking-wider mt-0.5">
+                                            HANDOVER ADVANCE
+                                        </span>
+                                    )
+                                ) : (
+                                    <label className="flex items-center gap-1.5 cursor-pointer mt-0.5 select-none">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={m.isHandoverAdvance || false}
+                                            onChange={(e) => handleUpdateMilestone(mainIndex, { isHandoverAdvance: e.target.checked })}
+                                            className="w-3.5 h-3.5 text-amber-600 rounded border-stone-300 focus:ring-amber-500 cursor-pointer"
+                                        />
+                                        <span className="text-[10px] font-extrabold text-stone-500 uppercase tracking-wider">Is Handover Advance</span>
+                                    </label>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Pre-requisites checklist */}
+                    <div className="pl-3.5 pt-1 space-y-1.5">
+                        {m.subSteps && m.subSteps.length > 0 && (
+                            <div className="space-y-1.5 max-w-md">
+                                {m.subSteps.map((step, sIdx) => (
+                                    <div key={step.id} className="flex items-center gap-2 group/step">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={step.isDone} 
+                                            onChange={() => handleToggleSubStep(mainIndex, sIdx)}
+                                            className="rounded text-[#0066CC] w-3.5 h-3.5 cursor-pointer border-stone-300 focus:ring-[#0066CC]"
+                                        />
+                                        {isCleared ? (
+                                            <span className={`text-[11px] font-semibold ${step.isDone ? 'text-stone-400 line-through' : 'text-stone-600'}`}>
+                                                {step.label}
+                                            </span>
+                                        ) : (
+                                            <div className="flex items-center gap-1 w-full">
+                                                <input 
+                                                    value={step.label || ''}
+                                                    onChange={(e) => handleUpdateSubStepLabel(mainIndex, sIdx, e.target.value)}
+                                                    className={`bg-transparent outline-none text-[11px] font-semibold w-full py-0.5 border-b border-transparent hover:border-stone-200 focus:border-stone-300 ${step.isDone ? 'text-stone-400 line-through' : 'text-stone-700'}`}
+                                                />
+                                                <button 
+                                                    onClick={() => handleDeleteSubStep(mainIndex, sIdx)} 
+                                                    className="text-stone-300 hover:text-red-500 p-0.5 opacity-0 group-hover/step:opacity-100 transition-opacity shrink-0"
+                                                    title="Remove condition"
+                                                >
+                                                    <DeleteIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {!isCleared && (
+                            <button 
+                                onClick={() => handleAddSubStep(mainIndex)} 
+                                className="text-[10px] text-[#0066CC] hover:text-[#0055B3] font-extrabold flex items-center gap-1 py-1 transition-colors uppercase tracking-wider"
+                            >
+                                <PlusIcon className="w-3 h-3" /> Add Pre-requisite Condition
+                            </button>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
         return (
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mb-8">
-                <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+            <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm mb-8 font-['Plus_Jakarta_Sans']">
+                <div className="bg-stone-50/50 px-6 py-4 border-b border-stone-200 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                     <div>
-                        <h3 className="font-bold text-indigo-900">{title} Tracking</h3>
-                        <div className="text-xs text-slate-500 mt-1 flex gap-4 items-center">
+                        <h3 className="text-sm font-extrabold text-stone-900 uppercase tracking-wider">{title} Tracking</h3>
+                        <div className="text-[11px] text-stone-500 mt-1 flex flex-wrap gap-x-4 gap-y-1 items-center font-medium">
                             {baseAmount !== originalBaseAmount ? (
                                 <div className="flex items-center gap-2">
-                                    <span className="line-through text-slate-400" title="Original Taxable Base">Orig: {formatCurrency(originalBaseAmount)}</span>
-                                    <span className="text-indigo-600 font-bold" title="Revised Taxable Base">Rev: {formatCurrency(baseAmount)}</span>
+                                    <span className="line-through text-stone-400" title="Original Taxable Base">Orig: {formatCurrency(originalBaseAmount)}</span>
+                                    <span className="text-[#0066CC] font-bold font-mono" title="Revised Taxable Base">Rev: {formatCurrency(baseAmount)}</span>
                                 </div>
                             ) : (
-                                <span>Taxable Base: <span className="font-mono font-bold text-slate-700">{formatCurrency(baseAmount)}</span></span>
+                                <span>Taxable Base: <span className="font-mono font-bold text-stone-700">{formatCurrency(baseAmount)}</span></span>
                             )}
                             {isExecution && (
                                 <>
                                     {billablePercent < 100 && (
-                                        <span className="text-amber-700 font-bold bg-amber-50 px-1.5 rounded border border-amber-100">
+                                        <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200/60 font-mono text-[10px]">
                                             Split: {billablePercent}% / {100 - billablePercent}%
                                         </span>
                                     )}
@@ -671,26 +1168,45 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             )}
                         </div>
                     </div>
-                    <div className={`text-xs font-bold px-3 py-1.5 rounded-lg border ${isBalanced ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                        Total: {totalEffectivePercent.toFixed(1).replace('.0', '')}%
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* Segmented Toggle Control */}
+                        <div className="flex bg-stone-100 p-0.5 rounded-xl border border-stone-200 select-none">
+                            <button 
+                                onClick={() => setViewMode('simple')}
+                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${viewMode === 'simple' ? 'bg-white text-slate-900 shadow-xs border border-stone-200/50' : 'text-stone-500 hover:text-stone-800'}`}
+                            >
+                                Simple
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('advanced')}
+                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${viewMode === 'advanced' ? 'bg-white text-slate-900 shadow-xs border border-stone-200/50' : 'text-stone-500 hover:text-stone-800'}`}
+                            >
+                                Advanced
+                            </button>
+                        </div>
+
+                        <div className={`text-xs font-black px-3 py-1.5 rounded-xl border font-mono ${isBalanced ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}`}>
+                            Total: {totalEffectivePercent.toFixed(1).replace('.0', '')}%
+                        </div>
                     </div>
                 </div>
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-100 text-xs font-bold text-slate-500 uppercase">
+
+                <div className="overflow-x-auto w-full">
+                <table className="w-full text-xs text-left min-w-[850px]">
+                    <thead className="bg-stone-50 text-[10px] font-bold text-stone-500 uppercase tracking-wider border-b border-stone-200">
                         <tr>
-                            <th className="p-4 w-[35%]">Stage & Conditions</th>
-                            <th className="p-4 w-24 text-center">% / Amt</th>
-                            <th className="p-4 text-right bg-blue-50/30 text-blue-800">Invoice Amount</th>
+                            <th className="p-4 min-w-[325px]">Stage & Conditions</th>
+                            <th className="p-4 w-32 text-center">% / Amt</th>
+                            <th className="p-4 text-right min-w-[150px] bg-stone-50/30 text-stone-900 font-black">Invoice Amount</th>
                             {isExecution && billablePercent < 100 && (
-                                <th className="p-4 text-right bg-amber-50/30 text-amber-800">Cash</th>
+                                <th className="p-4 text-right min-w-[120px] bg-amber-50/10 text-amber-900 font-black">Cash</th>
                             )}
-                            <th className="p-4 text-center w-32">Status</th>
+                            <th className="p-4 text-center w-28">Status</th>
                             <th className="p-4 text-right w-32">Action</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-stone-150">
                         {items.map((m, i) => {
-                            // Row Logic based on TAXABLE Amount
                             const isCleared = m.status === 'paid' || m.status === 'invoiced';
                             let rowBaseOriginal = 0;
                             let effectiveTaxableBaseForLocking = baseAmount;
@@ -718,7 +1234,6 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             const applicableGstRate = isExecution ? (executionGstEnabled ? gstRate : 0) : gstRate;
                             let rowGST = Math.round(rowBillable * (applicableGstRate / 100));
                             
-                            // Calculate Raw Invoice Total
                             let rowInvoiceTotal = Math.round(rowBillable + rowGST);
                             
                             let deductedInitiationFee = 0;
@@ -729,120 +1244,85 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             
                             const mainIndex = milestones.findIndex(x => x.id === m.id);
                             
-                            const statusColor = m.status === 'paid' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : m.status === 'invoiced' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-500 border-slate-200';
+                            const statusColor = m.status === 'paid' 
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-100' 
+                                : m.status === 'invoiced' 
+                                    ? 'bg-sky-50/50 text-sky-800 border-sky-200' 
+                                    : 'bg-stone-50 text-stone-500 border-stone-200/50';
 
                             if (deductedInitiationFee > 0) {
                                 return (
                                     <React.Fragment key={m.id}>
-                                        <tr className="hover:bg-slate-50 transition-colors group">
+                                        <tr id={m.id} className="hover:bg-stone-50/10 transition-colors group scroll-mt-24">
                                             <td className="p-4 align-top">
-                                                <div className="flex items-start gap-2">
-                                                    <button onClick={() => { /* Expand handled locally */ }} className="mt-1 text-slate-400 hover:text-indigo-600">
-                                                        {m.subSteps && m.subSteps.length > 0 ? <ChevronDownIcon className="w-4 h-4" /> : <div className="w-4" />}
-                                                    </button>
-                                                    <div className="flex-grow">
-                                                        <div className="flex items-center gap-2">
-                                                            <input 
-                                                                type="text" 
-                                                                value={m.name + ' (Gross)'} 
-                                                                onChange={e => handleUpdateMilestone(mainIndex, { name: e.target.value.replace(' (Gross)', '') })}
-                                                                className="w-full bg-transparent outline-none font-bold text-indigo-900 mb-1 focus:border-b focus:border-indigo-300"
-                                                            />
-                                                            {(!m.status || m.status === 'pending') && (
-                                                                <button 
-                                                                    onClick={() => handleDeleteMilestone(mainIndex)}
-                                                                    className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                    title="Delete Milestone"
-                                                                >
-                                                                    <DeleteIcon className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex flex-col gap-1 mt-1">
-                                                            <input type="text" value={m.trigger || ''} onChange={e => handleUpdateMilestone(mainIndex, { trigger: e.target.value })} placeholder="Paid When / Trigger..." className="text-[10px] uppercase tracking-wider font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded w-full outline-none focus:bg-white focus:border-indigo-300" />
-                                                            <input type="text" value={m.unlocks || ''}
-                                                                onChange={e => handleUpdateMilestone(mainIndex, { unlocks: e.target.value })}
-                                                                placeholder="Unlocks what..."
-                                                                className="text-[10px] uppercase tracking-wider font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded w-full outline-none focus:bg-indigo-100 focus:border-indigo-300"
-                                                            />
-                                                        </div>
-                                                        {/* Sub-steps Preview */}
-                                                        {m.subSteps && m.subSteps.length > 0 && (
-                                                            <div className="mt-2 space-y-1">
-                                                                {m.subSteps.map((step, sIdx) => (
-                                                                    <div key={step.id} className="flex items-center gap-2 text-xs">
-                                                                        <input 
-                                                                            type="checkbox" 
-                                                                            checked={step.isDone} 
-                                                                            onChange={() => handleToggleSubStep(mainIndex, sIdx)}
-                                                                            className="rounded text-indigo-600 w-3 h-3 cursor-pointer"
-                                                                        />
-                                                                        <input 
-                                                                            value={step.label || ''}
-                                                                            onChange={(e) => handleUpdateSubStepLabel(mainIndex, sIdx, e.target.value)}
-                                                                            className={`bg-transparent outline-none w-full ${step.isDone ? 'text-slate-400 line-through' : 'text-slate-600'}`}
-                                                                        />
-                                                                        <button onClick={() => handleDeleteSubStep(mainIndex, sIdx)} className="text-slate-300 hover:text-red-500 px-1 opacity-0 group-hover:opacity-100 transition-opacity"><span className="text-[10px]"><DeleteIcon className="w-3 h-3" /></span></button>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                        <button onClick={() => handleAddSubStep(mainIndex)} className="mt-2 text-[10px] text-indigo-600 font-bold flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity">
-                                                            <PencilIcon className="w-3 h-3" /> Add Release Condition
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                                {renderStageAndConditions(m, mainIndex, isCleared, i, items.length)}
                                             </td>
                                             <td className="p-4 text-center align-top">
                                                 <div className="flex flex-col items-center justify-center gap-1.5">
-                                                    <div className="flex items-center justify-center bg-slate-200/60 rounded overflow-hidden p-0.5">
-                                                        <button 
-                                                            onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: false })}
-                                                            className={`px-1.5 py-0.5 text-[9px] font-bold rounded-sm transition-all ${!m.isFixedAmount ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
-                                                            title="Percentage Mode"
-                                                        >
-                                                            %
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: true, fixedAmount: m.fixedAmount || rowBaseOriginal })}
-                                                            className={`px-1.5 py-0.5 text-[9px] font-bold rounded-sm transition-all ${m.isFixedAmount ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
-                                                            title="Fixed Amount Mode"
-                                                        >
-                                                            ₹
-                                                        </button>
-                                                    </div>
+                                                    {!isCleared && (
+                                                        <div className="flex bg-stone-100 p-0.5 rounded-lg border border-stone-200 select-none">
+                                                            <button 
+                                                                onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: false })}
+                                                                className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all ${!m.isFixedAmount ? 'bg-white text-[#0055B3] shadow-xs' : 'text-stone-500 hover:text-stone-800'}`}
+                                                                title="Percentage Mode"
+                                                            >
+                                                                %
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: true, fixedAmount: m.fixedAmount || rowBaseOriginal })}
+                                                                className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all ${m.isFixedAmount ? 'bg-white text-[#0055B3] shadow-xs' : 'text-stone-500 hover:text-stone-800'}`}
+                                                                title="Fixed Amount Mode"
+                                                            >
+                                                                ₹
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                     {!m.isFixedAmount ? (
-                                                        <input 
-                                                            type="number" 
-                                                            value={m.percentage} 
-                                                            onChange={e => handleUpdateMilestone(mainIndex, { percentage: Number(e.target.value) })}
-                                                            className="w-12 text-center font-bold text-indigo-900 outline-none bg-slate-100 rounded focus:ring-2 focus:ring-indigo-200"
-                                                        />
+                                                        <div className="flex items-center gap-1 text-stone-850 font-bold font-mono">
+                                                            {isCleared ? (
+                                                                <span>{m.percentage}%</span>
+                                                            ) : (
+                                                                <>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        value={m.percentage} 
+                                                                        onChange={e => handleUpdateMilestone(mainIndex, { percentage: Number(e.target.value) })}
+                                                                        className="w-10 text-center font-bold text-stone-800 outline-none bg-stone-50 border border-stone-200 rounded-lg py-1 focus:ring-1 focus:ring-sky-300"
+                                                                    />
+                                                                    <span className="text-[10px] text-stone-400 font-bold">%</span>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     ) : (
-                                                        <input 
-                                                            type="number" 
-                                                            value={m.fixedAmount || 0} 
-                                                            onChange={e => handleUpdateMilestone(mainIndex, { fixedAmount: Number(e.target.value) })}
-                                                            className="w-28 text-center font-bold text-indigo-900 outline-none bg-amber-50 border border-amber-200 rounded focus:ring-2 focus:ring-amber-400"
-                                                        />
+                                                        <div className="flex items-center gap-1 text-stone-850 font-bold font-mono">
+                                                            {isCleared ? (
+                                                                <span>{formatCurrency(m.fixedAmount || 0)}</span>
+                                                            ) : (
+                                                                <input 
+                                                                    type="number" 
+                                                                    value={m.fixedAmount || 0} 
+                                                                    onChange={e => handleUpdateMilestone(mainIndex, { fixedAmount: Number(e.target.value) })}
+                                                                    className="w-24 text-center font-bold text-stone-800 outline-none bg-amber-50/50 border border-amber-200/50 rounded-lg py-1 focus:ring-1 focus:ring-amber-400"
+                                                                />
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </div>
                                             </td>
                                             
-                                            {/* Invoice Column */}
-                                            <td className="p-4 text-right font-mono text-blue-700 bg-blue-50/10 border-l border-slate-100 align-top">
-                                                <div className="font-bold">{formatCurrency(rowInvoiceTotal + deductedInitiationFee)}</div>
-                                                <div className="text-[9px] text-slate-400">
+                                            <td className="p-4 text-right font-mono text-slate-900 bg-stone-50/20 border-l border-stone-150 align-top">
+                                                <div className="font-bold text-sm">{formatCurrency(rowInvoiceTotal + deductedInitiationFee)}</div>
+                                                <div className="text-[9px] text-stone-400">
                                                     (Base: {formatCurrency(rowBillable)} + {applicableGstRate}% GST)
                                                 </div>
                                             </td>
 
                                             <td className="p-4 text-center align-top">
-                                                <div className={`px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider ${statusColor}`}>
+                                                <div className={`px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider ${statusColor}`}>
                                                     {m.status || 'Pending'}
                                                 </div>
                                                 {m.invoiceNumber && (
-                                                    <div className="text-[9px] text-slate-500 font-mono mt-1">{m.invoiceNumber}</div>
+                                                    <div className="text-[9px] text-stone-400 font-mono mt-1.5">{m.invoiceNumber}</div>
                                                 )}
                                             </td>
 
@@ -850,7 +1330,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 {!m.status || m.status === 'pending' ? (
                                                     <button 
                                                         onClick={() => handleInvoiceAction(mainIndex, 'generate_invoice', effectiveTaxableBaseForLocking)}
-                                                        className="px-3 py-1.5 bg-indigo-950 text-white text-xs font-bold rounded shadow hover:bg-indigo-950 transition-all"
+                                                        className="px-3.5 py-1.5 bg-[#0066CC] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#0055B3] transition-all font-['Plus_Jakarta_Sans']"
                                                     >
                                                         Raise Invoice
                                                     </button>
@@ -858,226 +1338,180 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     <div className="flex items-center justify-end gap-2">
                                                         <button 
                                                             onClick={() => handleInvoiceAction(mainIndex, 'revert_invoice')}
-                                                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                            className="p-1.5 text-stone-400 hover:text-red-650 hover:bg-red-50 rounded transition-colors"
                                                             title="Revert Invoice"
                                                         >
                                                             <RotateCcw className="w-4 h-4" />
                                                         </button>
                                                         <button 
                                                             onClick={() => handleInvoiceAction(mainIndex, 'mark_paid')}
-                                                            className="px-3 py-1.5 bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold rounded shadow-sm hover:bg-emerald-200 transition-all"
+                                                            className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl shadow-xs hover:bg-emerald-100 transition-all font-['Plus_Jakarta_Sans']"
                                                         >
                                                             Mark Paid
                                                         </button>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-emerald-600 text-xs font-bold flex items-center justify-end gap-1">
-                                                        <CheckIcon className="w-3 h-3" /> Done
+                                                    <span className="text-emerald-600 text-xs font-extrabold flex items-center justify-end gap-1 font-['Plus_Jakarta_Sans']">
+                                                        <CheckIcon className="w-3.5 h-3.5 stroke-2" /> Paid
                                                     </span>
                                                 )}
                                             </td>
                                         </tr>
-                                        <tr className="bg-amber-50/30 border-t border-amber-100/50">
-                                            <td className="p-4 pl-12 text-amber-800 text-xs font-medium">↳ Less: Project Initiation Fee (Paid)</td>
-                                            <td className="p-4 text-center text-amber-600">-</td>
-                                            <td className="p-4 text-right font-mono text-amber-700 font-bold border-l border-slate-100">-{formatCurrency(deductedInitiationFee)}</td>
-                                            <td className="p-4 text-center">
-                                                <span className="px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 border-emerald-200">Paid</span>
+                                        <tr className="bg-amber-50/20 border-t border-amber-100/50">
+                                            <td className="p-4 pl-8 text-amber-900 text-xs font-semibold leading-relaxed">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-amber-500 font-bold">↳</span>
+                                                    <span>Less: Project Initiation Fee (Design Retainer)</span>
+                                                </div>
                                             </td>
-                                            <td className="p-4 text-right">-</td>
-                                        </tr>
-                                        <tr className="bg-blue-50/30 border-t border-blue-100/50">
-                                            <td className="p-4 pl-12 text-blue-800 text-xs font-bold">↳ Balance Payable</td>
-                                            <td className="p-4 text-center text-blue-600">-</td>
-                                            <td className="p-4 text-right font-mono text-blue-800 font-bold border-l border-slate-100">{formatCurrency(rowInvoiceTotal)}</td>
+                                            <td className="p-4 text-center text-amber-600 font-mono text-xs">-</td>
+                                            <td className="p-4 text-right font-mono text-amber-700 font-bold border-l border-stone-150 text-sm">-{formatCurrency(deductedInitiationFee)}</td>
                                             <td className="p-4 text-center">
-                                                <div className={`px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider ${statusColor}`}>
+                                                <span className="px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border-emerald-200">Paid</span>
+                                            </td>
+                                            <td className="p-4 text-right font-mono text-xs">-</td>
+                                        </tr>
+                                        <tr className="bg-blue-50/10 border-t border-blue-100/40">
+                                            <td className="p-4 pl-8 text-slate-900 text-xs font-bold leading-relaxed">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[#0066CC] font-bold">↳</span>
+                                                    <span>Balance Payable on Milestone</span>
+                                                </div>
+                                            </td>
+                                            <td className="p-4 text-center text-blue-600 font-mono text-xs">-</td>
+                                            <td className="p-4 text-right font-mono text-slate-900 font-black border-l border-stone-150 text-sm">{formatCurrency(rowInvoiceTotal)}</td>
+                                            <td className="p-4 text-center">
+                                                <div className={`px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider ${statusColor}`}>
                                                     {m.status || 'Pending'}
                                                 </div>
                                             </td>
-                                            <td className="p-4 text-right">-</td>
+                                            <td className="p-4 text-right font-mono text-xs">-</td>
                                         </tr>
                                     </React.Fragment>
                                 );
                             }
 
                             return (
-                                <React.Fragment key={m.id}>
-                                    <tr className="hover:bg-slate-50 transition-colors group">
-                                        <td className="p-4 align-top">
-                                            <div className="flex items-start gap-2">
-                                                <button onClick={() => { /* Expand handled locally */ }} className="mt-1 text-slate-400 hover:text-indigo-600">
-                                                    {m.subSteps && m.subSteps.length > 0 ? <ChevronDownIcon className="w-4 h-4" /> : <div className="w-4" />}
-                                                </button>
-                                                <div className="flex-grow">
-                                                    <div className="flex items-center gap-2">
-                                                        <input 
-                                                            type="text" 
-                                                            value={m.name} 
-                                                            onChange={e => handleUpdateMilestone(mainIndex, { name: e.target.value })}
-                                                            className="w-full bg-transparent outline-none font-bold text-indigo-900 mb-1 focus:border-b focus:border-indigo-300"
-                                                        />
-                                                        {(!m.status || m.status === 'pending') && (
-                                                            <button 
-                                                                onClick={() => handleDeleteMilestone(mainIndex)}
-                                                                className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                title="Delete Milestone"
-                                                            >
-                                                                <DeleteIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex flex-col gap-1 mt-1">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <label className="flex items-center gap-1.5 cursor-pointer">
-                                                                <input 
-                                                                    type="checkbox" 
-                                                                    checked={m.isHandoverAdvance || false}
-                                                                    onChange={(e) => handleUpdateMilestone(mainIndex, { isHandoverAdvance: e.target.checked })}
-                                                                    className="w-3 h-3 text-amber-600 rounded border-slate-300 focus:ring-amber-500"
-                                                                />
-                                                                <span className="text-[10px] font-bold text-slate-500 uppercase">Is Handover Advance (Clause 6.4)</span>
-                                                            </label>
-                                                        </div>
-                                                        {m.isHandoverAdvance && (
-                                                            <div className="bg-amber-50 border-l-2 border-amber-500 px-2 py-1 mb-1">
-                                                                <span className="text-[10px] uppercase text-amber-700 font-bold block">Tags final advance unlocking Dossier, Keys & Warranty.</span>
-                                                            </div>
-                                                        )}
-                                                        <input type="text" value={m.trigger || ''} onChange={e => handleUpdateMilestone(mainIndex, { trigger: e.target.value })} placeholder="Paid When / Trigger..." className="text-[10px] uppercase tracking-wider font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded w-full outline-none focus:bg-white focus:border-indigo-300" />
-                                                            <input type="text" value={m.unlocks || ''}
-                                                            onChange={e => handleUpdateMilestone(mainIndex, { unlocks: e.target.value })}
-                                                            placeholder="Unlocks what..."
-                                                            className="text-[10px] uppercase tracking-wider font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded w-full outline-none focus:bg-indigo-100 focus:border-indigo-300"
-                                                        />
-                                                    </div>
-                                                    {/* Sub-steps Preview */}
-                                                    {m.subSteps && m.subSteps.length > 0 && (
-                                                        <div className="mt-2 space-y-1">
-                                                            {m.subSteps.map((step, sIdx) => (
-                                                                <div key={step.id} className="flex items-center gap-2 text-xs">
-                                                                    <input 
-                                                                        type="checkbox" 
-                                                                        checked={step.isDone} 
-                                                                        onChange={() => handleToggleSubStep(mainIndex, sIdx)}
-                                                                        className="rounded text-indigo-600 w-3 h-3 cursor-pointer"
-                                                                    />
-                                                                    <input 
-                                                                        value={step.label || ''}
-                                                                        onChange={(e) => handleUpdateSubStepLabel(mainIndex, sIdx, e.target.value)}
-                                                                        className={`bg-transparent outline-none w-full ${step.isDone ? 'text-slate-400 line-through' : 'text-slate-600'}`}
-                                                                    />
-                                                                    <button onClick={() => handleDeleteSubStep(mainIndex, sIdx)} className="text-slate-300 hover:text-red-500 px-1 opacity-0 group-hover:opacity-100 transition-opacity"><span className="text-[10px]"><DeleteIcon className="w-3 h-3" /></span></button>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                    <button onClick={() => handleAddSubStep(mainIndex)} className="mt-2 text-[10px] text-indigo-600 font-bold flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity">
-                                                        <PencilIcon className="w-3 h-3" /> Add Release Condition
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="p-4 text-center align-top">
-                                            <div className="flex flex-col items-center justify-center gap-1.5">
-                                                <div className="flex items-center justify-center bg-slate-200/60 rounded overflow-hidden p-0.5">
+                                <tr key={m.id} id={m.id} className="hover:bg-stone-50/10 transition-colors group scroll-mt-24">
+                                    <td className="p-4 align-top">
+                                        {renderStageAndConditions(m, mainIndex, isCleared, i, items.length)}
+                                    </td>
+                                    <td className="p-4 text-center align-top">
+                                        <div className="flex flex-col items-center justify-center gap-1.5">
+                                            {!isCleared && (
+                                                <div className="flex bg-stone-100 p-0.5 rounded-lg border border-stone-200 select-none">
                                                     <button 
                                                         onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: false })}
-                                                        className={`px-1.5 py-0.5 text-[9px] font-bold rounded-sm transition-all ${!m.isFixedAmount ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
+                                                        className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all ${!m.isFixedAmount ? 'bg-white text-[#0055B3] shadow-xs' : 'text-stone-500 hover:bg-slate-200'}`}
                                                         title="Percentage Mode"
                                                     >
                                                         %
                                                     </button>
                                                     <button 
                                                         onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: true, fixedAmount: m.fixedAmount || rowBaseOriginal })}
-                                                        className={`px-1.5 py-0.5 text-[9px] font-bold rounded-sm transition-all ${m.isFixedAmount ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
+                                                        className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all ${m.isFixedAmount ? 'bg-white text-[#0055B3] shadow-xs' : 'text-stone-500 hover:bg-slate-200'}`}
                                                         title="Fixed Amount Mode"
                                                     >
                                                         ₹
                                                     </button>
                                                 </div>
-                                                {!m.isFixedAmount ? (
-                                                    <input 
-                                                        type="number" 
-                                                        value={m.percentage} 
-                                                        onChange={e => handleUpdateMilestone(mainIndex, { percentage: Number(e.target.value) })}
-                                                        className="w-12 text-center font-bold text-indigo-900 outline-none bg-slate-100 rounded focus:ring-2 focus:ring-indigo-200"
-                                                    />
-                                                ) : (
-                                                    <input 
-                                                        type="number" 
-                                                        value={m.fixedAmount || 0} 
-                                                        onChange={e => handleUpdateMilestone(mainIndex, { fixedAmount: Number(e.target.value) })}
-                                                        className="w-28 text-center font-bold text-indigo-900 outline-none bg-amber-50 border border-amber-200 rounded focus:ring-2 focus:ring-amber-400"
-                                                    />
-                                                )}
-                                            </div>
-                                        </td>
-                                        
-                                        {/* Invoice Column */}
-                                        <td className="p-4 text-right font-mono text-blue-700 bg-blue-50/10 border-l border-slate-100 align-top">
-                                            <div className="font-bold">{formatCurrency(rowInvoiceTotal)}</div>
-                                            <div className="text-[9px] text-slate-400">
-                                                (Base: {formatCurrency(rowBillable)} + {applicableGstRate}% GST)
-                                            </div>
-                                        </td>
-
-                                        {/* Cash Column */}
-                                        {isExecution && billablePercent < 100 && (
-                                            <td className="p-4 text-right font-mono text-amber-700 bg-amber-50/10 border-l border-slate-100 font-bold align-top">
-                                                {formatCurrency(rowCash)}
-                                            </td>
-                                        )}
-
-                                        <td className="p-4 text-center align-top">
-                                            <div className={`px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider ${statusColor}`}>
-                                                {m.status || 'Pending'}
-                                            </div>
-                                            {m.invoiceNumber && (
-                                                <div className="text-[9px] text-slate-500 font-mono mt-1">{m.invoiceNumber}</div>
                                             )}
-                                        </td>
-
-                                        <td className="p-4 text-right align-top">
-                                            {!m.status || m.status === 'pending' ? (
-                                                <button 
-                                                    onClick={() => handleInvoiceAction(mainIndex, 'generate_invoice', effectiveTaxableBaseForLocking)}
-                                                    className="px-3 py-1.5 bg-indigo-950 text-white text-xs font-bold rounded shadow hover:bg-indigo-950 transition-all"
-                                                >
-                                                    Raise Invoice
-                                                </button>
-                                            ) : m.status === 'invoiced' ? (
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <button 
-                                                        onClick={() => handleInvoiceAction(mainIndex, 'revert_invoice')}
-                                                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                                        title="Revert Invoice"
-                                                    >
-                                                        <RotateCcw className="w-4 h-4" />
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => handleInvoiceAction(mainIndex, 'mark_paid')}
-                                                        className="px-3 py-1.5 bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold rounded shadow-sm hover:bg-emerald-200 transition-all"
-                                                    >
-                                                        Mark Paid
-                                                    </button>
+                                            {!m.isFixedAmount ? (
+                                                <div className="flex items-center gap-1 text-stone-850 font-bold font-mono">
+                                                    {isCleared ? (
+                                                        <span>{m.percentage}%</span>
+                                                    ) : (
+                                                        <>
+                                                            <input 
+                                                                type="number" 
+                                                                value={m.percentage} 
+                                                                onChange={e => handleUpdateMilestone(mainIndex, { percentage: Number(e.target.value) })}
+                                                                className="w-10 text-center font-bold text-stone-800 outline-none bg-stone-50 border border-stone-200 rounded-lg py-1 focus:ring-1 focus:ring-sky-300"
+                                                            />
+                                                            <span className="text-[10px] text-stone-400 font-bold">%</span>
+                                                        </>
+                                                    )}
                                                 </div>
                                             ) : (
-                                                <span className="text-emerald-600 text-xs font-bold flex items-center justify-end gap-1">
-                                                    <CheckIcon className="w-3 h-3" /> Done
-                                                </span>
+                                                <div className="flex items-center gap-1 text-stone-850 font-bold font-mono">
+                                                    {isCleared ? (
+                                                        <span>{formatCurrency(m.fixedAmount || 0)}</span>
+                                                    ) : (
+                                                        <input 
+                                                            type="number" 
+                                                            value={m.fixedAmount || 0} 
+                                                            onChange={e => handleUpdateMilestone(mainIndex, { fixedAmount: Number(e.target.value) })}
+                                                            className="w-24 text-center font-bold text-stone-800 outline-none bg-amber-50/50 border border-amber-200/50 rounded-lg py-1 focus:ring-1 focus:ring-amber-400"
+                                                        />
+                                                    )}
+                                                </div>
                                             )}
+                                        </div>
+                                    </td>
+                                    
+                                    <td className="p-4 text-right font-mono text-slate-900 bg-stone-50/20 border-l border-stone-150 align-top">
+                                        <div className="font-bold text-sm">{formatCurrency(rowInvoiceTotal)}</div>
+                                        <div className="text-[9px] text-stone-450 font-sans font-medium mt-0.5">
+                                            (Base: {formatCurrency(rowBillable)} + {applicableGstRate}% GST)
+                                        </div>
+                                    </td>
+
+                                    {isExecution && billablePercent < 100 && (
+                                        <td className="p-4 text-right font-mono text-amber-900 bg-amber-50/5 border-l border-stone-150 font-bold align-top text-sm">
+                                            {formatCurrency(rowCash)}
                                         </td>
-                                    </tr>
-                                </React.Fragment>
+                                    )}
+
+                                    <td className="p-4 text-center align-top">
+                                        <div className={`px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider font-['Plus_Jakarta_Sans'] ${statusColor}`}>
+                                            {m.status || 'Pending'}
+                                        </div>
+                                        {m.invoiceNumber && (
+                                            <div className="text-[9px] text-stone-400 font-mono mt-1.5">{m.invoiceNumber}</div>
+                                        )}
+                                    </td>
+
+                                    <td className="p-4 text-right align-top">
+                                        {!m.status || m.status === 'pending' ? (
+                                            <button 
+                                                onClick={() => handleInvoiceAction(mainIndex, 'generate_invoice', effectiveTaxableBaseForLocking)}
+                                                className="px-3.5 py-1.5 bg-[#0066CC] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#0055B3] transition-all font-['Plus_Jakarta_Sans']"
+                                            >
+                                                Raise Invoice
+                                            </button>
+                                        ) : m.status === 'invoiced' ? (
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button 
+                                                    onClick={() => handleInvoiceAction(mainIndex, 'revert_invoice')}
+                                                    className="p-1.5 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                                    title="Revert Invoice"
+                                                >
+                                                    <RotateCcw className="w-4 h-4" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleInvoiceAction(mainIndex, 'mark_paid')}
+                                                    className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl shadow-xs hover:bg-emerald-100 transition-all font-['Plus_Jakarta_Sans']"
+                                                >
+                                                    Mark Paid
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span className="text-emerald-600 text-xs font-extrabold flex items-center justify-end gap-1 font-['Plus_Jakarta_Sans']">
+                                                <CheckIcon className="w-3.5 h-3.5 stroke-2" /> Paid
+                                            </span>
+                                        )}
+                                    </td>
+                                </tr>
                             );
                         })}
                     </tbody>
                 </table>
-                <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-center">
+                </div>
+
+                <div className="p-4 bg-stone-50/50 border-t border-stone-100 flex justify-center">
                     <button 
                         onClick={() => handleAddMilestone(isExecution ? 'execution' : 'design')}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-bold rounded-lg shadow-sm hover:bg-slate-50 hover:text-indigo-600 transition-all"
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-stone-200 text-stone-700 text-xs font-extrabold rounded-xl shadow-sm hover:bg-stone-50 hover:text-[#0066CC] transition-all font-['Plus_Jakarta_Sans']"
                     >
                         <PlusIcon className="w-4 h-4" /> Add {isExecution ? 'Execution' : 'Design'} Milestone
                     </button>
@@ -1086,271 +1520,1683 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         );
     };
 
-    if (!activeTier) {
+    const renderSimpleTrackView = (
+        items: PaymentMilestone[], 
+        baseAmount: number, 
+        originalBaseAmount: number,
+        isExecution: boolean, 
+        title: string
+    ) => {
+        let totalEffectivePercent = 0;
+        items.forEach(m => {
+            if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                totalEffectivePercent += baseAmount > 0 ? (m.fixedAmount / baseAmount) * 100 : 0;
+            } else {
+                totalEffectivePercent += m.percentage;
+            }
+        });
+        const isBalanced = Math.abs(totalEffectivePercent - 100) < 0.1;
+
+        const paidItems = items.filter(m => m.status === 'paid' || m.status === 'invoiced');
+        const unpaidItems = items.filter(m => m.status !== 'paid' && m.status !== 'invoiced');
+        
+        let lockedBase = 0;
+        paidItems.forEach(m => {
+            if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                lockedBase += m.fixedAmount;
+            } else {
+                lockedBase += (m.lockedTaxableBase || originalBaseAmount) * (m.percentage / 100);
+            }
+        });
+        const remainingBaseAmount = baseAmount - lockedBase;
+        const firstPendingIndex = items.findIndex(m => m.status !== 'paid' && m.status !== 'invoiced');
+
+        const viewMode = isExecution ? executionViewMode : designViewMode;
+        const setViewMode = isExecution ? setExecutionViewMode : setDesignViewMode;
+
         return (
-            <Card>
-                <div className="text-center py-12 text-slate-400">
-                    <p>Please select a project tier to enable calculations.</p>
+            <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm mb-8 font-['Plus_Jakarta_Sans']">
+                {/* Header */}
+                <div className="bg-stone-50/50 px-6 py-4 border-b border-stone-200 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                    <div>
+                        <h3 className="text-sm font-extrabold text-stone-900 uppercase tracking-wider">{title} Tracking</h3>
+                        <div className="text-[11px] text-stone-500 mt-1 flex flex-wrap gap-x-4 gap-y-1 items-center font-medium">
+                            {baseAmount !== originalBaseAmount ? (
+                                <div className="flex items-center gap-2">
+                                    <span className="line-through text-stone-400" title="Original Taxable Base">Orig: {formatCurrency(originalBaseAmount)}</span>
+                                    <span className="text-[#0066CC] font-bold font-mono" title="Revised Taxable Base">Rev: {formatCurrency(baseAmount)}</span>
+                                </div>
+                            ) : (
+                                <span>Taxable Base: <span className="font-mono font-bold text-stone-700">{formatCurrency(baseAmount)}</span></span>
+                            )}
+                            {isExecution && (
+                                <>
+                                    {billablePercent < 100 && (
+                                        <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200/60 font-mono text-[10px]">
+                                            Split: {billablePercent}% / {100 - billablePercent}%
+                                        </span>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* Segmented Toggle Control */}
+                        <div className="flex bg-stone-100 p-0.5 rounded-xl border border-stone-200 select-none">
+                            <button 
+                                onClick={() => setViewMode('simple')}
+                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${viewMode === 'simple' ? 'bg-white text-slate-900 shadow-xs border border-stone-200/50' : 'text-stone-500 hover:text-stone-800'}`}
+                            >
+                                Simple
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('advanced')}
+                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${viewMode === 'advanced' ? 'bg-white text-slate-900 shadow-xs border border-stone-200/50' : 'text-stone-500 hover:text-stone-800'}`}
+                            >
+                                Advanced
+                            </button>
+                        </div>
+                        
+                        <div className={`text-xs font-black px-3 py-1.5 rounded-xl border font-mono ${isBalanced ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}`}>
+                            Total: {totalEffectivePercent.toFixed(1).replace('.0', '')}%
+                        </div>
+                    </div>
                 </div>
-            </Card>
-        )
+
+                {/* Cards List */}
+                <div className="p-6 bg-stone-50/20 space-y-4">
+                    {items.map((m, i) => {
+                        const isCleared = m.status === 'paid' || m.status === 'invoiced';
+                        let rowBaseOriginal = 0;
+                        let effectiveTaxableBaseForLocking = baseAmount;
+                        if (isCleared) {
+                            rowBaseOriginal = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : ((m.lockedTaxableBase || originalBaseAmount) * (m.percentage / 100));
+                            effectiveTaxableBaseForLocking = m.lockedTaxableBase || originalBaseAmount;
+                        } else {
+                            if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                                rowBaseOriginal = m.fixedAmount;
+                            } else {
+                                const fixedPendingTotal = unpaidItems.filter(x => x.isFixedAmount).reduce((sum, x) => sum + (x.fixedAmount || 0), 0);
+                                const remainingBaseAmountValue = Math.max(0, remainingBaseAmount - fixedPendingTotal);
+                                
+                                const unpaidPctExcludingFixed = unpaidItems.filter(x => !x.isFixedAmount).reduce((sum, x) => sum + x.percentage, 0);
+                                const relativePct = unpaidPctExcludingFixed > 0 ? (m.percentage / unpaidPctExcludingFixed) : 0;
+                                rowBaseOriginal = remainingBaseAmountValue * relativePct;
+                            }
+                            effectiveTaxableBaseForLocking = m.percentage > 0 ? (rowBaseOriginal / (m.percentage / 100)) : baseAmount;
+                        }
+                        rowBaseOriginal = Math.round(rowBaseOriginal);
+                        
+                        let rowBillable = Math.round(isExecution ? rowBaseOriginal * (billablePercent / 100) : rowBaseOriginal);
+                        const rowCash = Math.round(isExecution ? rowBaseOriginal * ((100 - billablePercent) / 100) : 0);
+                        
+                        const applicableGstRate = isExecution ? (executionGstEnabled ? gstRate : 0) : gstRate;
+                        let rowGST = Math.round(rowBillable * (applicableGstRate / 100));
+                        
+                        let rowInvoiceTotal = Math.round(rowBillable + rowGST);
+                        
+                        let deductedInitiationFee = 0;
+                        if (!isExecution && i === 0 && initiationFee > 0) {
+                            deductedInitiationFee = Math.min(rowInvoiceTotal, initiationFee);
+                            rowInvoiceTotal = Math.max(0, rowInvoiceTotal - initiationFee);
+                        }
+
+                        const mainIndex = milestones.findIndex(x => x.id === m.id);
+                        
+                        const statusColor = m.status === 'paid' 
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-100' 
+                            : m.status === 'invoiced' 
+                                ? 'bg-sky-50/50 text-sky-800 border-sky-200' 
+                                : 'bg-stone-50 text-stone-500 border-stone-200/50';
+
+                        // Total item amount shown (net balance payable to match Advanced view)
+                        const finalItemAmountToShow = rowInvoiceTotal;
+
+                        const isNextUp = i === firstPendingIndex;
+
+                        return (
+                            <motion.div 
+                                key={m.id} 
+                                animate={isNextUp ? {
+                                    boxShadow: [
+                                        "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+                                        "0 0 0 3px rgba(99, 102, 241, 0.15)",
+                                        "0 1px 2px 0 rgba(0, 0, 0, 0.05)"
+                                    ]
+                                } : {}}
+                                transition={isNextUp ? {
+                                    duration: 3,
+                                    repeat: Infinity,
+                                    ease: "easeInOut"
+                                } : {}}
+                                className={`bg-white border ${isNextUp ? 'border-sky-300 shadow-md' : 'border-stone-200/80 hover:border-stone-300'} rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative transition-all shadow-xs pl-6`}
+                            >
+                                {/* Colored Left Accent Bar with Heartbeat effect if Next Up */}
+                                <motion.div 
+                                    animate={isNextUp ? {
+                                        opacity: [1, 0.6, 1]
+                                    } : {}}
+                                    transition={isNextUp ? {
+                                        duration: 1.5,
+                                        repeat: Infinity,
+                                        ease: "easeInOut"
+                                    } : {}}
+                                    className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${isExecution ? 'bg-amber-400' : 'bg-[#0066CC]'}`} 
+                                />
+
+                                {/* Milestone Info Column */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        {isCleared ? (
+                                            <span className="font-extrabold text-stone-900 text-sm block truncate">{m.name}</span>
+                                        ) : (
+                                            <input 
+                                                type="text" 
+                                                value={m.name} 
+                                                onChange={e => handleUpdateMilestone(mainIndex, { name: e.target.value })}
+                                                className="bg-transparent font-extrabold text-stone-900 text-sm py-0.5 outline-none focus:border-b focus:border-stone-400 w-full"
+                                            />
+                                        )}
+                                        {isNextUp && (
+                                            <span className="inline-flex items-center gap-1 bg-sky-50 text-[#0055B3] text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider select-none shrink-0 h-4.5 border border-sky-100">
+                                                <motion.span 
+                                                    animate={{ opacity: [1, 0.3, 1], scale: [1, 1.4, 1] }}
+                                                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                                                    className="w-1.5 h-1.5 bg-[#0066CC] rounded-full inline-block"
+                                                />
+                                                Next Up
+                                            </span>
+                                        )}
+                                        {(!m.status || m.status === 'pending') && (
+                                            <div className="flex items-center gap-1 shrink-0 select-none">
+                                                <button 
+                                                    onClick={() => handleMoveMilestone(m.id, 'up')}
+                                                    disabled={i === 0}
+                                                    className={`p-1 rounded transition-colors ${i === 0 ? 'text-stone-250 cursor-not-allowed' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-100'}`}
+                                                    title="Move Up"
+                                                >
+                                                    <ChevronUpIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleMoveMilestone(m.id, 'down')}
+                                                    disabled={i === items.length - 1}
+                                                    className={`p-1 rounded transition-colors ${i === items.length - 1 ? 'text-stone-250 cursor-not-allowed' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-100'}`}
+                                                    title="Move Down"
+                                                >
+                                                    <ChevronDownIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleSplitMilestone(m.id)}
+                                                    className="text-stone-400 hover:text-sky-600 p-1 hover:bg-sky-50 rounded transition-colors"
+                                                    title="Split Milestone"
+                                                >
+                                                    <ScissorsIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDeleteMilestone(mainIndex)}
+                                                    className="text-stone-400 hover:text-red-500 p-1 hover:bg-red-55 rounded transition-colors shrink-0"
+                                                    title="Delete Milestone"
+                                                >
+                                                    <DeleteIcon className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="text-[11px] text-stone-500 mt-1 leading-relaxed">
+                                        {isCleared ? (
+                                            <span>{m.unlocks || m.description || 'No deliverables mapped.'}</span>
+                                        ) : (
+                                            <input 
+                                                type="text" 
+                                                value={m.unlocks || m.description || ''} 
+                                                onChange={e => handleUpdateMilestone(mainIndex, { unlocks: e.target.value })}
+                                                placeholder="Unlocks deliverables..."
+                                                className="bg-transparent text-[11px] text-stone-500 focus:border-b focus:border-stone-400 w-full outline-none"
+                                            />
+                                        )}
+                                    </div>
+                                    {m.invoiceNumber && (
+                                        <div className="text-[9px] text-stone-400 font-mono mt-1.5">Ref: {m.invoiceNumber}</div>
+                                    )}
+                                </div>
+
+                                {/* Calculation and Inputs Column */}
+                                <div className="flex flex-wrap items-center gap-4 sm:gap-6 shrink-0">
+                                    {/* Percentage input */}
+                                    <div className="flex items-center gap-1.5">
+                                        {!m.isFixedAmount ? (
+                                            <div className="flex items-center gap-1">
+                                                {isCleared ? (
+                                                    <span className="font-bold text-stone-700 bg-stone-50 px-2.5 py-1 rounded-lg border border-stone-200 text-xs font-mono">{m.percentage}%</span>
+                                                ) : (
+                                                    <>
+                                                        <input 
+                                                            type="number" 
+                                                            value={m.percentage} 
+                                                            onChange={e => handleUpdateMilestone(mainIndex, { percentage: Number(e.target.value) })}
+                                                            className="w-12 text-center text-xs font-bold text-stone-800 outline-none bg-stone-50 border border-stone-200 rounded-lg py-1 focus:ring-1 focus:ring-sky-300 font-mono"
+                                                        />
+                                                        <span className="text-[10px] text-stone-400 font-bold">%</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-1">
+                                                {isCleared ? (
+                                                    <span className="font-bold text-stone-700 bg-stone-50 px-2.5 py-1 rounded-lg border border-stone-200 text-xs font-mono">{formatCurrency(m.fixedAmount || 0)}</span>
+                                                ) : (
+                                                    <input 
+                                                        type="number" 
+                                                        value={m.fixedAmount || 0} 
+                                                        onChange={e => handleUpdateMilestone(mainIndex, { fixedAmount: Number(e.target.value) })}
+                                                        className="w-24 text-center text-xs font-bold text-stone-800 outline-none bg-amber-50/50 border border-amber-200/50 rounded-lg py-1 focus:ring-1 focus:ring-amber-400 font-mono"
+                                                    />
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Amount Display */}
+                                    <div className="text-right min-w-[100px]">
+                                        <div className="font-extrabold text-stone-900 text-sm font-mono">{formatCurrency(finalItemAmountToShow)}</div>
+                                        {isExecution && billablePercent < 100 && (
+                                            <div className="text-[9px] text-stone-400 font-mono mt-0.5">
+                                                Inv: {formatCurrency(rowInvoiceTotal)} | Cash: {formatCurrency(rowCash)}
+                                            </div>
+                                        )}
+                                        {deductedInitiationFee > 0 && (
+                                            <div className="text-[9px] text-amber-700 font-mono mt-0.5">
+                                                -{formatCurrency(deductedInitiationFee)} Retainer applied (Gross: {formatCurrency(rowInvoiceTotal + deductedInitiationFee)})
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Status Badge */}
+                                    <div className={`px-2 py-1 rounded-lg border text-[9px] font-black uppercase tracking-wider text-center w-20 shrink-0 ${statusColor}`}>
+                                        {m.status || 'Pending'}
+                                    </div>
+
+                                    {/* Action Button */}
+                                    <div className="w-24 flex justify-end shrink-0">
+                                        {!m.status || m.status === 'pending' ? (
+                                            <button 
+                                                onClick={() => handleInvoiceAction(mainIndex, 'generate_invoice', effectiveTaxableBaseForLocking)}
+                                                className="w-full text-center px-3 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] text-white text-[11px] font-extrabold rounded-xl shadow-xs transition-all uppercase tracking-wider"
+                                            >
+                                                Raise
+                                            </button>
+                                        ) : m.status === 'invoiced' ? (
+                                            <div className="flex items-center gap-1.5 w-full">
+                                                <button 
+                                                    onClick={() => handleInvoiceAction(mainIndex, 'revert_invoice')}
+                                                    className="p-1.5 text-stone-400 hover:text-red-650 hover:bg-red-50 rounded transition-colors shrink-0"
+                                                    title="Revert Invoice"
+                                                >
+                                                    <RotateCcw className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleInvoiceAction(mainIndex, 'mark_paid')}
+                                                    className="flex-1 text-center py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold rounded-xl shadow-xs transition-all uppercase tracking-wider"
+                                                >
+                                                    Paid
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span className="text-emerald-600 text-xs font-extrabold flex items-center gap-1">
+                                                <CheckIcon className="w-3.5 h-3.5 stroke-2" /> Paid
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        );
+                    })}
+                </div>
+
+                {/* Switching help caption */}
+                <div className="px-6 py-2 bg-stone-50/50 border-t border-stone-200">
+                    <p className="text-[10px] text-stone-400 text-center font-medium leading-relaxed">
+                        Switch to <span className="font-extrabold text-[#0066CC] cursor-pointer hover:underline" onClick={() => setViewMode('advanced')}>Advanced View</span> for triggers, release conditions, fixed amounts & cash split.
+                    </p>
+                </div>
+
+                {/* Footer Add Button */}
+                <div className="bg-stone-50/50 px-6 py-4 border-t border-stone-200 flex justify-center">
+                    <button 
+                        onClick={() => handleAddMilestone(isExecution ? 'execution' : 'design')}
+                        className="px-4 py-2 bg-white hover:bg-stone-50 border border-stone-200 rounded-xl text-xs font-bold text-stone-700 shadow-xs flex items-center gap-1.5 transition-all"
+                    >
+                        <PlusIcon className="w-3.5 h-3.5" /> Add {isExecution ? 'Execution' : 'Design'} Milestone
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    // --- TAX SIMULATOR ---
+    const [showTaxSimulator, setShowTaxSimulator] = useState(false);
+    const [customMaterialRatio, setCustomMaterialRatio] = useState<number | null>(null);
+    const [materialGstRecovery, setMaterialGstRecovery] = useState<number>(18);
+    const [simulatedLaborGstEnabled, setSimulatedLaborGstEnabled] = useState<boolean>(true);
+    const [laborGstRecovery, setLaborGstRecovery] = useState<number>(18);
+
+    let materialSellRaw = 0;
+    let laborSellRaw = 0;
+    let materialCostRaw = 0;
+    let laborCostRaw = 0;
+
+    if (fullBoq && fullBoq.length > 0) {
+        fullBoq.forEach(item => {
+            const margin = item.marginOverride ?? item.margin ?? 20;
+            const mCost = item.materials || 0;
+            const lCost = item.labor || 0;
+            const qty = item.qty || 1;
+            
+            materialCostRaw += mCost * qty;
+            laborCostRaw += lCost * qty;
+            
+            const mSell = calculateSellPrice(mCost, 0, margin) * qty;
+            const lSell = calculateSellPrice(0, lCost, margin) * qty;
+
+            materialSellRaw += mSell;
+            laborSellRaw += lSell;
+        });
     }
 
+    const totalRaw = materialSellRaw + laborSellRaw;
+    const dynamicMaterialRatio = totalRaw > 0 ? materialSellRaw / totalRaw : 0;
+    const dynamicLaborRatio = totalRaw > 0 ? laborSellRaw / totalRaw : 0;
+
+    const materialRatio = customMaterialRatio !== null ? customMaterialRatio : dynamicMaterialRatio;
+    const laborRatio = 1 - materialRatio;
+
+    const simulatedTaxableLabor = taxableExecution * laborRatio;
+    const simulatedTaxableMaterial = taxableExecution * materialRatio;
+
+    const simulatedGstOnDesign = taxableDesign * 0.18;
+    const simulatedGstOnLabor = simulatedLaborGstEnabled ? simulatedTaxableLabor * 0.18 : 0;
+    const simulatedLaborRecovery = !simulatedLaborGstEnabled ? simulatedTaxableLabor * (laborGstRecovery / 100) : 0;
+    const simulatedMaterialRecovery = simulatedTaxableMaterial * (materialGstRecovery / 100);
+
+    const simulatedTotalGST = simulatedGstOnDesign + simulatedGstOnLabor;
+    
+    // The Studio pays ~18% GST on material purchases which is lost (dead cost) if sold in cash
+    const estimatedMaterialInputGst = materialCostRaw * 0.18;
+    
+    const execProfitCurrent = taxableExecution - (materialCostRaw + laborCostRaw);
+    const designProfitCurrent = taxableDesign; 
+    
+    // Theoretical profit accounts for the dead input GST, plus whatever recovery we charge the client in cash
+    const theoreticalProfit = execProfitCurrent + designProfitCurrent - estimatedMaterialInputGst + simulatedMaterialRecovery + simulatedLaborRecovery;
+    
+    const newGrossProjectValue = taxableDesign + taxableExecution + simulatedTotalGST + simulatedMaterialRecovery + simulatedLaborRecovery;
+    const profitMargin = (taxableDesign + taxableExecution) > 0 ? (theoreticalProfit / (taxableDesign + taxableExecution)) * 100 : 0;
+
+    // Proportions for the visual pipeline progress bar
+    const totalInvoicedButNotPaid = useMemo(() => {
+        let invoicedUnpaid = 0;
+        milestones.forEach((m) => {
+            if (m.status === 'invoiced') {
+                let rowBaseOriginal = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : (m.type === 'execution' ? originalNetExecution : originalNetDesign) * (m.percentage / 100);
+                rowBaseOriginal = Math.round(rowBaseOriginal);
+                let rowBillable = Math.round(m.type === 'execution' ? rowBaseOriginal * (billablePercent / 100) : rowBaseOriginal);
+                const applicableGstRate = m.type === 'execution' ? (executionGstEnabled ? gstRate : 0) : gstRate;
+                let rowGST = Math.round(rowBillable * (applicableGstRate / 100));
+                let rowInvoiceTotal = Math.round(rowBillable + rowGST);
+                
+                // Adjust for first design milestone initiation fee subtraction
+                const firstDesignMilestoneId = milestones.find(x => x.type === 'design')?.id;
+                if (m.id === firstDesignMilestoneId && initiationFee > 0) {
+                    rowInvoiceTotal = Math.max(0, rowInvoiceTotal - initiationFee);
+                }
+                
+                invoicedUnpaid += rowInvoiceTotal;
+            }
+        });
+        return invoicedUnpaid;
+    }, [milestones, originalNetDesign, originalNetExecution, gstRate, initiationFee, billablePercent, executionGstEnabled]);
+
+    const paidPercentOfGross = grossProjectValue > 0 ? (totalPaid / grossProjectValue) * 100 : 0;
+    const invoicedPercentOfGross = grossProjectValue > 0 ? (totalInvoicedButNotPaid / grossProjectValue) * 100 : 0;
+    const pendingPercentOfGross = Math.max(0, 100 - paidPercentOfGross - invoicedPercentOfGross);
+
+    const billingInsights = useMemo(() => {
+        const list: { type: 'info' | 'warning' | 'success'; text: string }[] = [];
+        
+        // 1. Sign-up Retainer Check
+        const hasPaidInvoices = milestones.some(m => m.status === 'paid' || m.status === 'invoiced');
+        if (!hasPaidInvoices) {
+            list.push({
+                type: 'warning',
+                text: 'No active payments or invoices recorded. Recommend raising the Design Retainer (D1) to formalize engagement and unlock Discovery.'
+            });
+        }
+
+        // 2. Unbalanced Milestones Check
+        let totalDesignPct = 0;
+        let totalExecPct = 0;
+        milestones.forEach(m => {
+            if (m.type === 'design') {
+                totalDesignPct += m.isFixedAmount && m.fixedAmount !== undefined && originalNetDesign > 0 ? (m.fixedAmount / originalNetDesign) * 100 : m.percentage;
+            } else {
+                totalExecPct += m.isFixedAmount && m.fixedAmount !== undefined && originalNetExecution > 0 ? (m.fixedAmount / originalNetExecution) * 100 : m.percentage;
+            }
+        });
+        if (Math.abs(totalDesignPct - 100) > 0.1) {
+            list.push({
+                type: 'warning',
+                text: `Design milestones sum to ${Math.round(totalDesignPct)}% (should equal 100%). Adjust stages to balance the design fee track.`
+            });
+        }
+        if (Math.abs(totalExecPct - 100) > 0.1) {
+            list.push({
+                type: 'warning',
+                text: `Execution milestones sum to ${Math.round(totalExecPct)}% (should equal 100%). Adjust stages to balance the execution track.`
+            });
+        }
+
+        // 3. Design Gate Progress Check
+        const allDesignInvoicedOrPaid = designMilestones.length > 0 && designMilestones.every(m => m.status === 'paid' || m.status === 'invoiced');
+        const projectStageNum = projectContext.lifecycle?.stage || 1;
+        if (allDesignInvoicedOrPaid && projectStageNum < 5) {
+            list.push({
+                type: 'info',
+                text: 'All Design milestones are invoiced or paid. Consider advancing the project stage to Execution (Stage 5) to initiate civil/material orders.',
+            });
+        }
+
+        // 4. Tax Threshold Alert
+        if (cashUtilization > 80) {
+            list.push({
+                type: 'warning',
+                text: `Yearly cash utilization across active studio projects is at ${Math.round(cashUtilization)}%. Standardize remaining execution milestones to GST-applicable billing to mitigate tax risks.`
+            });
+        }
+
+        // 5. Missing Handover Tag Check
+        const hasHandoverTag = executionMilestones.some(m => m.isHandoverAdvance);
+        if (executionMilestones.length > 0 && !hasHandoverTag) {
+            list.push({
+                type: 'info',
+                text: 'Best Practice: No execution milestone is marked as the final Handover Advance (Clause 6.4). Tag the final milestone to connect to keys/documentation delivery.'
+            });
+        }
+
+        // 6. Terms Acknowledgment Block Check
+        if (projectContext.engagement?.status !== 'acknowledged') {
+            list.push({
+                type: 'warning',
+                text: 'The client has not acknowledged the Payment Schedule and Terms Docket. Secure digital approval, or raise invoices as a special-case exception on the condition that amended terms will be signed later.'
+            });
+        }
+
+        // 7. Pending Release Conditions
+        milestones.forEach(m => {
+            const pendingSteps = m.subSteps?.filter(s => !s.isDone) || [];
+            if (pendingSteps.length > 0 && m.status !== 'paid') {
+                list.push({
+                    type: 'info',
+                    text: `Milestone "${m.name}" has ${pendingSteps.length} pending release condition(s). Resolve all conditions prior to marking as paid.`
+                });
+            }
+        });
+
+        // 8. General Health Success
+        if (list.length === 0) {
+            list.push({
+                type: 'success',
+                text: 'Payment structure and records are fully balanced, compliant, and synchronized with client-approved dockets.'
+            });
+        }
+
+        return list;
+    }, [milestones, originalNetDesign, originalNetExecution, projectContext.lifecycle?.stage, cashUtilization, projectContext.engagement?.status, designMilestones, executionMilestones]);
+
     return (
-        <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in">
+        <div className="w-full space-y-8 animate-in fade-in">
             
-            {/* Payment Schedule Banner */}
-            {(!latestSchedule || hasUnsavedScheduleChanges) && (
-                <div className={`p-4 rounded-xl border flex items-center justify-between shadow-sm ${latestSchedule ? 'bg-amber-50 border-amber-200' : 'bg-indigo-50 border-indigo-200'}`}>
-                    <div>
-                        <h3 className={`text-sm font-bold ${latestSchedule ? 'text-amber-800' : 'text-indigo-800'}`}>
-                            {latestSchedule ? `Milestones have changed since the last Payment Schedule (v${latestSchedule.version}).` : 'No Advance Payment Schedule document generated yet.'}
-                        </h3>
-                        <p className={`text-xs mt-1 ${latestSchedule ? 'text-amber-700' : 'text-indigo-600'}`}>
-                            {latestSchedule ? 'Generate a revised Payment Schedule to keep the client updated.' : 'Generate the document from these milestones to send to the client.'}
-                        </p>
-                    </div>
+            {/* Version Selection Header (shown if multiple versions or snapshots exist) */}
+            {availableVersions.length > 1 && (
+                <div className="bg-white rounded-3xl border border-stone-200 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 font-['Plus_Jakarta_Sans']">
                     <div className="flex items-center gap-3">
-                        {latestSchedule && <button className="text-sm font-semibold text-amber-700 hover:text-amber-900">Later</button>}
-                        <button onClick={handleGenerateSchedule} className={`px-4 py-2 text-sm font-bold rounded-lg shadow-sm text-white transition-all ${latestSchedule ? 'bg-amber-600 hover:bg-amber-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-                            {latestSchedule ? `Generate Revised Schedule (v${latestSchedule.version + 1})` : 'Generate Payment Schedule'}
-                        </button>
+                        <div className="p-2.5 bg-slate-100 text-slate-800 rounded-xl">
+                            <History className="w-5 h-5 text-slate-700" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-sm font-extrabold text-stone-900">Payment Milestones Versioning</h3>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                                    {availableVersions.length} versions
+                                </span>
+                            </div>
+                            <p className="text-[10px] text-stone-400 mt-0.5">Audit past milestone schedules or select active billing version</p>
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {availableVersions.map((ver) => {
+                            const isSelected = ver.isCurrentActive ? !selectedSnapshotId : selectedSnapshotId === ver.id;
+                            return (
+                                <button
+                                    key={ver.id}
+                                    onClick={() => setSelectedSnapshotId(ver.isCurrentActive ? null : ver.id)}
+                                    className={`px-3.5 py-2.5 rounded-xl text-xs transition-all flex items-center gap-2 border ${
+                                        isSelected
+                                            ? ver.isCurrentActive
+                                                ? "bg-sky-50 border-[#0066CC] text-slate-900 shadow-xs font-bold ring-1 ring-[#0066CC]/30"
+                                                : "bg-amber-50/80 border-amber-300 text-amber-950 font-bold shadow-xs ring-1 ring-amber-300/60"
+                                            : "bg-white border-stone-200 text-stone-600 hover:bg-stone-50/80 hover:border-stone-300 font-medium"
+                                    }`}
+                                >
+                                    {ver.isCurrentActive ? (
+                                        <span className="inline-block w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-emerald-200" />
+                                    ) : (
+                                        <FileText className={`w-3.5 h-3.5 ${isSelected ? "text-amber-700" : "text-stone-400"}`} />
+                                    )}
+                                    <span className={`max-w-[150px] truncate ${isSelected ? "font-bold text-slate-900" : "text-stone-700"}`}>{ver.name}</span>
+                                    {ver.lifecycleTag && (
+                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
+                                            isSelected 
+                                                ? ver.isCurrentActive ? "bg-sky-100 text-[#0055B3] font-bold" : "bg-amber-100 text-amber-900 font-bold"
+                                                : "bg-stone-100 text-stone-600"
+                                        }`}>
+                                            {ver.lifecycleTag}
+                                        </span>
+                                    )}
+                                    <span className={`text-[10px] font-mono ${isSelected ? (ver.isCurrentActive ? "text-[#0055B3] font-bold" : "text-amber-900 font-bold") : "text-stone-500"}`}>
+                                        {formatCurrency(ver.executionValue + ver.designValue)}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
             )}
 
-            {/* 1. CONFIGURATION HEADER */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col lg:flex-row gap-8 relative">
-                <div className="absolute top-4 right-4 flex items-center gap-2">
-                    <button 
-                        onClick={handleLoadDefaults}
-                        className="text-xs font-bold transition-all px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-                    >
-                        Load Studio Defaults
-                    </button>
-                    <button 
-                        onClick={handleReset}
-                        className={`text-xs font-bold transition-all flex items-center gap-1 px-3 py-1.5 rounded-lg border ${
-                            isResetting 
-                                ? 'bg-red-500 text-white border-red-500 hover:bg-red-600' 
-                                : 'text-red-500 hover:text-red-700 bg-red-50 border-red-100'
-                        }`}
-                    >
-                        {isResetting ? 'Click Again to Confirm Reset' : 'Reset Everything'}
-                    </button>
-                </div>
-
-                {/* LEFT COLUMN: ADJUSTMENTS */}
-                <div className="flex-1 space-y-6">
-                    <div>
-                        <h2 className="text-2xl font-black text-indigo-950 flex items-center gap-3">
-                            <span className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><CalculatorIcon className="w-6 h-6"/></span>
-                            Payment Ops & Invoicing
-                        </h2>
-                        <p className="text-sm text-slate-500 mt-2">
-                            Manage residential payment schedules, track invoice status, and handle cash flow splits for <strong>{activeTier?.name || 'Active Tier'}</strong>.
-                        </p>
+            {/* Read-only Alert Bar if viewing a historical version */}
+            {isReadOnlyMode && selectedHistoricalEntry && (
+                <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 font-['Plus_Jakarta_Sans'] shadow-xs">
+                    <div className="flex items-start gap-3">
+                        <div className="p-2.5 bg-amber-100 text-amber-800 rounded-xl mt-0.5 md:mt-0">
+                            <Lock className="w-5 h-5 text-amber-800" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-extrabold text-amber-900">Historical Read-Only Archive</h4>
+                                {selectedHistoricalEntry.lifecycleTag && (
+                                    <span className="text-[10px] bg-amber-200/80 text-amber-950 font-bold px-2 py-0.5 rounded-full">
+                                        {selectedHistoricalEntry.lifecycleTag}
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-xs text-amber-800 mt-1">
+                                You are viewing the frozen milestone configuration for <strong>{selectedHistoricalEntry.name}</strong> • Execution Base: <strong>{formatCurrency(selectedHistoricalEntry.executionValue)}</strong> • Design Fee: <strong>{formatCurrency(selectedHistoricalEntry.designValue)}</strong> ({new Date(selectedHistoricalEntry.timestamp).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}). All modifications, updates, and integrations are disabled.
+                            </p>
+                        </div>
                     </div>
+                    <div className="flex items-center gap-2 self-stretch md:self-auto">
+                        <button
+                            onClick={() => setCompareRevision({
+                                name: selectedHistoricalEntry.name,
+                                date: selectedHistoricalEntry.timestamp,
+                                previousExecutionValue: selectedHistoricalEntry.executionValue,
+                                previousDesignValue: selectedHistoricalEntry.designValue,
+                                milestones: selectedHistoricalEntry.milestones,
+                                reason: `Historical Version: ${selectedHistoricalEntry.name} (${selectedHistoricalEntry.lifecycleTag || 'Archived'})`
+                            })}
+                            className="px-3.5 py-2 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 font-bold text-xs rounded-xl transition-all shadow-xs"
+                        >
+                            Compare with Live
+                        </button>
+                        <button
+                            onClick={() => setSelectedSnapshotId(null)}
+                            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl transition-all shadow-sm text-center"
+                        >
+                            Return to Live Billing
+                        </button>
+                    </div>
+                </div>
+            )}
+            
 
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex justify-between items-center">
-                            Discounts & Adjustments
-                            <button onClick={() => setShowDiscountForm(!showDiscountForm)} className="text-indigo-600 hover:text-indigo-800 text-[10px] flex items-center gap-1">
-                                <PlusIcon className="w-3 h-3" /> Add Discount
-                            </button>
-                        </h4>
-                        
-                        {showDiscountForm && (
-                            <div className="mb-4 p-3 bg-white rounded-lg border border-indigo-100 shadow-sm animate-in fade-in slide-in-from-top-2">
-                                <div className="grid grid-cols-2 gap-2 mb-2">
-                                    <input 
-                                        placeholder="Discount Label" 
-                                        value={newDiscount.name} 
-                                        onChange={e => setNewDiscount({...newDiscount, name: e.target.value})}
-                                        className="text-xs p-1.5 border rounded outline-none"
-                                    />
-                                    <div className="flex">
-                                        <input 
-                                            type="number" 
-                                            placeholder="Value" 
-                                            value={newDiscount.value || ''} 
-                                            onChange={e => setNewDiscount({...newDiscount, value: Number(e.target.value)})}
-                                            className="w-16 text-xs p-1.5 border rounded-l outline-none"
-                                        />
-                                        <select 
-                                            value={newDiscount.type}
-                                            onChange={e => setNewDiscount({...newDiscount, type: e.target.value as any})}
-                                            className="text-xs p-1.5 border-y border-r rounded-r bg-slate-50 outline-none"
-                                        >
-                                            <option value="percentage">%</option>
-                                            <option value="fixed">₹</option>
-                                        </select>
+
+            {/* Slide-over Drawer for Smart Features */}
+            <AnimatePresence>
+                {activeSmartView !== 'none' && (
+                    <>
+                        {/* Backdrop */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setActiveSmartView('none')}
+                            className="fixed inset-0 bg-stone-950/40 backdrop-blur-sm z-50 transition-all"
+                        />
+                        {/* Drawer Panel */}
+                        <motion.div
+                            initial={{ x: '100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '100%' }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className="fixed inset-y-0 right-0 w-full max-w-4xl bg-white shadow-2xl border-l border-stone-200 z-50 flex flex-col h-full font-['Plus_Jakarta_Sans']"
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-6 border-b border-stone-100 bg-stone-50/50">
+                                <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-xl ${activeSmartView === 'margin' ? 'bg-sky-50 text-[#0066CC]' : 'bg-amber-50 text-amber-600'}`}>
+                                        {activeSmartView === 'margin' ? <TrendingUp className="w-5 h-5" /> : <Coins className="w-5 h-5" />}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black text-stone-900">
+                                            {activeSmartView === 'margin' ? 'Interactive Margin Optimizer' : 'Cash Flow Forecast Dashboard'}
+                                        </h3>
+                                        <p className="text-xs text-stone-400">
+                                            {activeSmartView === 'margin' ? 'Simulate pricing tracks and optimize profit margins inline' : 'Analyze monthly billings, forecast inflows, and optimize capital efficiency'}
+                                        </p>
                                     </div>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                    <select 
-                                        value={newDiscount.target}
-                                        onChange={e => setNewDiscount({...newDiscount, target: e.target.value as any})}
-                                        className="text-xs p-1.5 border rounded bg-white outline-none w-32"
-                                    >
-                                        <option value="execution">On Execution</option>
-                                        <option value="design">On Design Fee</option>
-                                    </select>
+                                <button 
+                                    onClick={() => setActiveSmartView('none')}
+                                    className="px-3.5 py-2 bg-stone-100 hover:bg-stone-200 text-stone-600 hover:text-stone-900 rounded-xl transition-all duration-150 font-bold text-xs flex items-center gap-1.5 shadow-xs"
+                                >
+                                    <span>✕ Close Panel</span>
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                {activeSmartView === 'margin' ? (
+                                    setBoq ? (
+                                        <MarginOptimizer boq={fullBoq} setBoq={setBoq} aiStrategy={aiStrategy} />
+                                    ) : (
+                                        <div className="p-6 text-center text-sm text-stone-500">
+                                            Designer role or missing BOQ write permissions.
+                                        </div>
+                                    )
+                                ) : (
+                                    <CashFlowForecastDashboard />
+                                )}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            {activeTier && (
+                <>
+                    {/* Payment Schedule Banner */}
+                    {(!latestSchedule || hasUnsavedScheduleChanges) && (
+                        <div className={`p-4 rounded-xl border flex items-center justify-between shadow-sm ${latestSchedule ? 'bg-amber-50 border-amber-200' : 'bg-sky-50 border-sky-200'}`}>
+                            <div>
+                                <h3 className={`text-sm font-bold ${latestSchedule ? 'text-amber-800' : 'text-sky-800'}`}>
+                                    {latestSchedule ? `Milestones have changed since the last Payment Schedule (v${latestSchedule.version}).` : 'No Advance Payment Schedule document generated yet.'}
+                                </h3>
+                                <p className={`text-xs mt-1 ${latestSchedule ? 'text-amber-700' : 'text-[#0066CC]'}`}>
+                                    {latestSchedule ? 'Generate a revised Payment Schedule to keep the client updated.' : 'Generate the document from these milestones to send to the client.'}
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                {latestSchedule && <button className="text-sm font-semibold text-amber-700 hover:text-amber-900">Later</button>}
+                                <button onClick={handleGenerateSchedule} className={`px-4 py-2 text-sm font-bold rounded-lg shadow-sm text-white transition-all ${latestSchedule ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#0066CC] hover:bg-[#0055B3]'}`}>
+                                    {latestSchedule ? `Generate Revised Schedule (v${latestSchedule.version + 1})` : 'Generate Payment Schedule'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* NEW HIGH-FIDELITY MILKY WHITE METRICS DASHBOARD BANNER */}
+                    <div className="bg-white rounded-3xl border border-stone-200 shadow-sm p-6 space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h2 className="text-xl font-black text-stone-900 tracking-tight font-['Plus_Jakarta_Sans']">Payment Realization Dashboard</h2>
+                        <p className="text-xs text-stone-400 mt-0.5">Real-time financials and billing status for <strong>{activeTier?.name || 'Active Tier'}</strong></p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={() => setShowInsights(!showInsights)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${showInsights ? 'bg-sky-50 border-sky-100 text-[#0055B3] hover:bg-sky-100' : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-50'}`}
+                        >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            {showInsights ? 'Hide Insights' : 'Show Insights'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* KPI Cards Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <motion.div 
+                        whileHover={{ y: -4, scale: 1.01 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        className="bg-stone-50/50 p-4 rounded-2xl border border-stone-200/80 shadow-xs relative overflow-hidden group cursor-pointer"
+                    >
+                        <div className="flex justify-between items-start">
+                            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider font-['Plus_Jakarta_Sans']">Gross Project Value</span>
+                            <Coins className="w-4 h-4 text-stone-400 group-hover:text-[#0066CC] transition-colors" />
+                        </div>
+                        <h3 className="text-xl font-extrabold text-stone-900 font-mono mt-2">{formatCurrency(grossProjectValue)}</h3>
+                        <p className="text-[10px] text-stone-400 mt-1 flex items-center gap-1">
+                            <span className="inline-block w-1 h-1 bg-[#0066CC] rounded-full" />
+                            Design Fee + Execution + Taxes
+                        </p>
+                    </motion.div>
+
+                    <motion.div 
+                        whileHover={{ y: -4, scale: 1.01 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        className="bg-stone-50/50 p-4 rounded-2xl border border-stone-200/80 shadow-xs relative overflow-hidden group cursor-pointer"
+                    >
+                        <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider font-['Plus_Jakarta_Sans']">Total Collected</span>
+                                <motion.span 
+                                    animate={{
+                                        scale: [1, 1.4, 1],
+                                        opacity: [1, 0.4, 1]
+                                    }}
+                                    transition={{
+                                        duration: 2,
+                                        repeat: Infinity,
+                                        ease: "easeInOut"
+                                    }}
+                                    className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block"
+                                    title="Live Realized Status"
+                                />
+                            </div>
+                            <CheckCircle className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
+                        </div>
+                        <h3 className="text-xl font-extrabold text-emerald-700 font-mono mt-2">{formatCurrency(totalPaid)}</h3>
+                        <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md">{paidPercentOfGross.toFixed(1)}%</span>
+                            <span className="text-[10px] text-stone-400">of total</span>
+                        </div>
+                    </motion.div>
+
+                    <motion.div 
+                        whileHover={{ y: -4, scale: 1.01 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        className="bg-stone-50/50 p-4 rounded-2xl border border-stone-200/80 shadow-xs relative overflow-hidden group cursor-pointer"
+                    >
+                        <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider font-['Plus_Jakarta_Sans']">Remaining Balance</span>
+                                {remainingBalance > 0 && (
+                                    <motion.span 
+                                        animate={{
+                                            scale: [1, 1.4, 1],
+                                            opacity: [1, 0.4, 1]
+                                        }}
+                                        transition={{
+                                            duration: 2.5,
+                                            repeat: Infinity,
+                                            ease: "easeInOut"
+                                        }}
+                                        className="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block"
+                                        title="Pending Outstanding"
+                                    />
+                                )}
+                            </div>
+                            <TrendingUp className="w-4 h-4 text-amber-500 group-hover:translate-y-[-1px] group-hover:translate-x-[1px] transition-transform" />
+                        </div>
+                        <h3 className="text-xl font-extrabold text-stone-800 font-mono mt-2">{formatCurrency(remainingBalance)}</h3>
+                        <p className="text-[10px] text-stone-400 mt-1">Outstanding milestones to collect</p>
+                    </motion.div>
+
+                    <motion.div 
+                        whileHover={{ y: -4, scale: 1.01 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        className="bg-stone-50/50 p-4 rounded-2xl border border-stone-200/80 shadow-xs relative overflow-hidden group cursor-pointer"
+                    >
+                        <div className="flex justify-between items-start">
+                            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider font-['Plus_Jakarta_Sans']">Tax & Recovery Ask</span>
+                            <div className="px-1.5 py-0.5 bg-sky-50 text-[#0055B3] text-[9px] font-black rounded">18% GST</div>
+                        </div>
+                        <h3 className="text-xl font-extrabold text-stone-900 font-mono mt-2">{formatCurrency(totalGST)}</h3>
+                        <p className="text-[10px] text-stone-400 mt-1">
+                            Cash Portion: <span className="font-semibold text-amber-700 font-mono">{formatCurrency(executionCash)}</span>
+                        </p>
+                    </motion.div>
+                </div>
+
+                {/* REALIZATION PIPELINE PROGRESS BAR */}
+                <div className="bg-stone-50/50 p-4 rounded-2xl border border-stone-200/80 space-y-3">
+                    <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-stone-700 font-['Plus_Jakarta_Sans']">Realization Pipeline</span>
+                        <span className="font-medium text-stone-400">Visual Collection Map</span>
+                    </div>
+                    <div className="w-full h-3 bg-stone-200 rounded-full overflow-hidden flex">
+                        {paidPercentOfGross > 0 && (
+                            <div 
+                                style={{ width: `${paidPercentOfGross}%` }} 
+                                className="bg-emerald-500 transition-all duration-500" 
+                                title={`Collected: ${paidPercentOfGross.toFixed(1)}%`}
+                            />
+                        )}
+                        {invoicedPercentOfGross > 0 && (
+                            <div 
+                                style={{ width: `${invoicedPercentOfGross}%` }} 
+                                className="bg-[#0066CC] transition-all duration-500" 
+                                title={`Billed / Outstanding: ${invoicedPercentOfGross.toFixed(1)}%`}
+                            />
+                        )}
+                        {pendingPercentOfGross > 0 && (
+                            <div 
+                                style={{ width: `${pendingPercentOfGross}%` }} 
+                                className="bg-stone-300 transition-all duration-500" 
+                                title={`Pending Release: ${pendingPercentOfGross.toFixed(1)}%`}
+                            />
+                        )}
+                    </div>
+                    <div className="flex flex-wrap justify-between gap-4 text-[10px] font-bold text-stone-500 pt-1">
+                        <div className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 bg-emerald-500 rounded-sm" />
+                            <span>Settled: {formatCurrency(totalPaid)} ({paidPercentOfGross.toFixed(1)}%)</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 bg-[#0066CC] rounded-sm" />
+                            <span>Invoiced / Unpaid: {formatCurrency(totalInvoicedButNotPaid)} ({invoicedPercentOfGross.toFixed(1)}%)</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 bg-stone-300 rounded-sm" />
+                            <span>Pending Release: {formatCurrency(remainingBalance - totalInvoicedButNotPaid)} ({pendingPercentOfGross.toFixed(1)}%)</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* COPILOT SMART BILLING INSIGHTS */}
+                <AnimatePresence>
+                    {showInsights && (
+                        <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden"
+                        >
+                            <div className="p-4 bg-sky-50/40 rounded-2xl border border-sky-100/60 space-y-3">
+                                <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                                    <Sparkles className="w-4 h-4 text-[#0066CC] animate-pulse" />
+                                    <span>Studio Copilot Smart Billing Insights</span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {billingInsights.map((insight, index) => (
+                                        <div 
+                                            key={index} 
+                                            className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                                                insight.type === 'warning' 
+                                                    ? 'bg-amber-50/50 border-amber-200/60 text-amber-800' 
+                                                    : insight.type === 'success'
+                                                    ? 'bg-emerald-50/50 border-emerald-200/60 text-emerald-800'
+                                                    : 'bg-blue-50/50 border-blue-200/60 text-blue-800'
+                                            }`}
+                                        >
+                                            <div className="mt-0.5">
+                                                {insight.type === 'warning' ? (
+                                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                                ) : insight.type === 'success' ? (
+                                                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                                ) : (
+                                                    <Info className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                                )}
+                                            </div>
+                                            <p className="leading-relaxed font-medium">{insight.text}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+
+            {/* COLLAPSIBLE FINANCIAL CONTROLS & RATIOS */}
+            <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+                <div 
+                    onClick={() => setShowFinancialControls(!showFinancialControls)}
+                    className="p-5 bg-stone-50/60 flex justify-between items-center cursor-pointer hover:bg-stone-50 transition-colors border-b border-stone-100"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-stone-200/60 text-stone-700 rounded-xl">
+                            <CalculatorIcon className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-stone-800 text-sm font-['Plus_Jakarta_Sans']">Adjustments & Split Ratios</h3>
+                            <p className="text-xs text-stone-400 mt-0.5">Configure billing modes, tax rates, initiation fees, and client discounts</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleLoadDefaults();
+                            }}
+                            className="text-[10px] font-black tracking-wider uppercase transition-all px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                        >
+                            Load Defaults
+                        </button>
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleReset();
+                            }}
+                            className={`text-[10px] font-black tracking-wider uppercase transition-all flex items-center gap-1 px-2.5 py-1.5 rounded-lg border ${
+                                isResetting 
+                                    ? 'bg-red-500 text-white border-red-500 hover:bg-red-600' 
+                                    : 'text-red-500 hover:text-red-700 bg-red-50 border-red-100'
+                            }`}
+                        >
+                            {isResetting ? 'Confirm Reset' : 'Reset All'}
+                        </button>
+                        <div className="h-4 w-px bg-stone-200" />
+                        <span className="text-xs font-bold text-[#0055B3] bg-sky-50 px-2 py-1 rounded">
+                            {billablePercent}% GST / {100 - billablePercent}% Cash
+                        </span>
+                        {showFinancialControls ? <ChevronUpIcon className="w-4 h-4 text-stone-400" /> : <ChevronDownIcon className="w-4 h-4 text-stone-400" />}
+                    </div>
+                </div>
+
+                <AnimatePresence>
+                    {showFinancialControls && (
+                        <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden border-t border-stone-100"
+                        >
+                            <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 bg-white">
+                                {/* Left Side: Discounts, Adjustments & Initiation Fees */}
+                                <div className="space-y-6">
+                                    <div>
+                                        <h4 className="text-xs font-black text-stone-400 uppercase tracking-wider mb-3 font-['Plus_Jakarta_Sans']">Initiation Retainer</h4>
+                                        <div className="flex justify-between items-center text-xs p-3.5 bg-stone-50 rounded-2xl border border-stone-200/80">
+                                            <span className="text-stone-600 font-bold">Standard Initiation Fee</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-bold text-stone-400">₹</span>
+                                                <input 
+                                                    type="number" 
+                                                    value={initiationFee} 
+                                                    onChange={e => setInitiationFee(Number(e.target.value))}
+                                                    className="w-24 text-right font-black text-stone-800 bg-transparent outline-none border-b border-dashed border-stone-300 focus:border-stone-900 font-mono" 
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div className="flex justify-between items-center mb-3">
+                                            <h4 className="text-xs font-black text-stone-400 uppercase tracking-wider font-['Plus_Jakarta_Sans']">Discounts & Deductions</h4>
+                                            <button 
+                                                onClick={() => setShowDiscountForm(!showDiscountForm)} 
+                                                className="text-[#0066CC] hover:text-[#0055B3] text-xs font-bold flex items-center gap-1"
+                                            >
+                                                <PlusIcon className="w-3 h-3" /> Add Discount
+                                            </button>
+                                        </div>
+
+                                        {showDiscountForm && (
+                                            <div className="mb-4 p-4 bg-stone-50 rounded-2xl border border-stone-200 shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <input 
+                                                        placeholder="e.g. Goodwill Discount" 
+                                                        value={newDiscount.name} 
+                                                        onChange={e => setNewDiscount({...newDiscount, name: e.target.value})}
+                                                        className="text-xs p-2 border border-stone-200 rounded-xl bg-white outline-none focus:border-stone-400 font-medium font-['Plus_Jakarta_Sans']"
+                                                    />
+                                                    <div className="flex">
+                                                        <input 
+                                                            type="number" 
+                                                            placeholder="Value" 
+                                                            value={newDiscount.value || ''} 
+                                                            onChange={e => setNewDiscount({...newDiscount, value: Number(e.target.value)})}
+                                                            className="w-full text-xs p-2 border border-stone-200 rounded-l-xl bg-white outline-none focus:border-stone-400 font-mono"
+                                                        />
+                                                        <select 
+                                                            value={newDiscount.type}
+                                                            onChange={e => setNewDiscount({...newDiscount, type: e.target.value as any})}
+                                                            className="text-xs p-2 border-y border-r border-stone-200 rounded-r-xl bg-stone-100 text-stone-700 outline-none"
+                                                        >
+                                                            <option value="percentage">%</option>
+                                                            <option value="fixed">₹</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-between items-center gap-3">
+                                                    <select 
+                                                        value={newDiscount.target}
+                                                        onChange={e => setNewDiscount({...newDiscount, target: e.target.value as any})}
+                                                        className="text-xs p-2 border border-stone-200 rounded-xl bg-white text-stone-700 outline-none w-1/2 font-['Plus_Jakarta_Sans']"
+                                                    >
+                                                        <option value="execution">Apply On Execution</option>
+                                                        <option value="design">Apply On Design Fee</option>
+                                                    </select>
+                                                    <div className="flex gap-2">
+                                                        <button 
+                                                            onClick={() => setShowDiscountForm(false)}
+                                                            className="text-xs font-bold px-3 py-2 rounded-xl text-stone-500 hover:bg-stone-100 font-['Plus_Jakarta_Sans']"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button 
+                                                            onClick={handleAddDiscount}
+                                                            className="text-xs font-bold bg-[#0066CC] text-white px-4 py-2 rounded-xl hover:bg-[#0055B3] shadow-sm font-['Plus_Jakarta_Sans']"
+                                                        >
+                                                            Apply
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-2">
+                                            {discounts.map(discount => (
+                                                <div key={discount.id} className="flex justify-between items-center text-xs p-3 bg-red-50/60 rounded-xl border border-red-100 group">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-red-800 font-bold font-['Plus_Jakarta_Sans']">{discount.name}</span>
+                                                        <span className="text-[9px] text-red-600 bg-red-100/60 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">{discount.target}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="font-extrabold text-red-700 font-mono">
+                                                            -{discount.type === 'percentage' ? `${discount.value}%` : formatCurrency(discount.value)}
+                                                        </span>
+                                                        <button 
+                                                            onClick={() => handleRemoveDiscount(discount.id)} 
+                                                            className="text-red-400 hover:text-red-700 transition-colors"
+                                                        >
+                                                            <DeleteIcon className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {discounts.length === 0 && (
+                                                <p className="text-[11px] text-stone-400 italic text-center py-4 bg-stone-50/30 rounded-2xl border border-dashed border-stone-200 font-['Plus_Jakarta_Sans']">
+                                                    No additional discounts applied to this schedule.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Right Side: Split Sliders & GST Overrides */}
+                                <div className="space-y-6">
+                                    <div>
+                                        <h4 className="text-xs font-black text-stone-400 uppercase tracking-wider mb-3 font-['Plus_Jakarta_Sans']">Official GST Revenue Split</h4>
+                                        <div className="p-4 bg-stone-50 rounded-2xl border border-stone-200/80 space-y-4">
+                                            <div className="flex justify-between items-end">
+                                                <span className="text-xs font-bold text-stone-600 font-['Plus_Jakarta_Sans']">Billable / GST Percentage</span>
+                                                <div className="text-right">
+                                                    <span className="text-xl font-extrabold text-stone-900 font-mono">{billablePercent}%</span>
+                                                    <span className="text-[10px] text-stone-400 ml-1.5 font-['Plus_Jakarta_Sans']">Official</span>
+                                                </div>
+                                            </div>
+                                            <input 
+                                                type="range" 
+                                                min="0" max="100" step="5"
+                                                value={billablePercent}
+                                                onChange={(e) => setBillablePercent(Number(e.target.value))}
+                                                disabled={isReadOnlyMode}
+                                                className={`w-full h-1.5 bg-stone-200 rounded-lg appearance-none accent-[#0066CC] ${isReadOnlyMode ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                            />
+                                            <div className="flex justify-between text-[10px] text-stone-400 font-mono font-semibold">
+                                                <span>0% (Full Cash)</span>
+                                                <span>100% (Fully GST Compliant)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="text-xs font-black text-stone-400 uppercase tracking-wider mb-3 font-['Plus_Jakarta_Sans']">Execution Taxes</h4>
+                                        <div className="p-4 bg-stone-50 rounded-2xl border border-stone-200/80 flex items-center justify-between">
+                                            <label className={`flex items-center gap-3 ${isReadOnlyMode ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                                                <div className="relative">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={executionGstEnabled} 
+                                                        onChange={e => setExecutionGstEnabled(e.target.checked)}
+                                                        disabled={isReadOnlyMode}
+                                                        className="sr-only peer"
+                                                    />
+                                                    <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                                </div>
+                                                <div>
+                                                    <span className="text-xs font-bold text-stone-700 block font-['Plus_Jakarta_Sans']">Charge GST on Execution Track</span>
+                                                    <span className="text-[10px] text-stone-400 block font-['Plus_Jakarta_Sans']">Apply {gstRate}% official IGST/CGST split</span>
+                                                </div>
+                                            </label>
+                                            <div className="text-right border-l border-stone-200 pl-4">
+                                                <p className="text-[9px] text-stone-400 font-bold uppercase tracking-wider font-['Plus_Jakarta_Sans']">Estimated Cash value</p>
+                                                <p className="text-sm font-extrabold text-amber-700 font-mono">{formatCurrency(executionCash)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+
+            {/* 2. FINANCIAL SUMMARY TABLE */}
+            <div className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm">
+                <div className="p-5 border-b border-stone-100 bg-stone-50/20">
+                    <h3 className="font-bold text-stone-800 text-sm font-['Plus_Jakarta_Sans']">Detailed Financial Breakdown</h3>
+                    <p className="text-xs text-stone-400 mt-0.5">Calculations engine ledger before milestones schedule allocation</p>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                        <thead className="bg-stone-50 text-[10px] font-bold text-stone-500 uppercase tracking-wider border-b border-stone-100 font-['Plus_Jakarta_Sans']">
+                            <tr>
+                                <th className="p-4 text-left">Component</th>
+                                <th className="p-4 text-right">Gross Value</th>
+                                <th className="p-4 text-right text-red-600">Discount</th>
+                                <th className="p-4 text-right bg-sky-50/20 text-slate-900">Taxable Base</th>
+                                <th className="p-4 text-right text-stone-500">GST ({gstRate}%)</th>
+                                <th className="p-4 text-right font-black text-stone-900">Total Receivable</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-100 font-medium font-mono">
+                            {/* Execution Row */}
+                            <tr className="hover:bg-stone-50/30">
+                                <td className="p-4 font-bold text-stone-800 font-['Plus_Jakarta_Sans']">Execution Scope</td>
+                                <td className="p-4 text-right text-stone-500">{formatCurrency(rawExecutionTotal)}</td>
+                                <td className="p-4 text-right text-red-600">-{formatCurrency(executionDiscountVal)}</td>
+                                <td className="p-4 text-right font-bold text-slate-800 bg-sky-50/10">{formatCurrency(taxableExecution)}</td>
+                                <td className="p-4 text-right text-stone-500">{executionGstEnabled ? formatCurrency(gstOnExecution) : '₹0'}</td>
+                                <td className="p-4 text-right font-extrabold text-stone-800">{formatCurrency(taxableExecution + (executionGstEnabled ? gstOnExecution : 0))}</td>
+                            </tr>
+                            {/* Design Row */}
+                            <tr className="hover:bg-stone-50/30">
+                                <td className="p-4 font-bold text-stone-800 font-['Plus_Jakarta_Sans']">Design Fee</td>
+                                <td className="p-4 text-right text-stone-500">{formatCurrency(rawDesignFee)}</td>
+                                <td className="p-4 text-right text-red-600">-{formatCurrency(designDiscountVal)}</td>
+                                <td className="p-4 text-right font-bold text-slate-800 bg-sky-50/10">{formatCurrency(taxableDesign)}</td>
+                                <td className="p-4 text-right text-stone-500">{formatCurrency(gstOnDesign)}</td>
+                                <td className="p-4 text-right font-extrabold text-stone-800">{formatCurrency(taxableDesign + gstOnDesign)}</td>
+                            </tr>
+                            {/* Grand Total Row */}
+                            <tr className="bg-stone-50 font-bold border-t-2 border-stone-100">
+                                <td className="p-4 text-stone-900 font-extrabold font-['Plus_Jakarta_Sans']">GRAND TOTAL</td>
+                                <td className="p-4 text-right text-stone-600">{formatCurrency(rawExecutionTotal + rawDesignFee)}</td>
+                                <td className="p-4 text-right text-red-700">-{formatCurrency(executionDiscountVal + designDiscountVal)}</td>
+                                <td className="p-4 text-right text-slate-900 bg-sky-50/30">{formatCurrency(taxableExecution + taxableDesign)}</td>
+                                <td className="p-4 text-right text-stone-600">{formatCurrency(totalGST)}</td>
+                                <td className="p-4 text-right text-sm text-slate-900 font-extrabold">{formatCurrency(grossProjectValue)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* TAX SIMULATOR */}
+            <div className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm">
+                <div 
+                    className="p-5 bg-stone-50/60 border-b border-stone-100 flex justify-between items-center cursor-pointer hover:bg-stone-50 transition-colors"
+                    onClick={() => setShowTaxSimulator(!showTaxSimulator)}
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-sky-50 text-[#0055B3] rounded-xl">
+                            <CalculatorIcon className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-stone-800 text-sm font-['Plus_Jakarta_Sans']">Tax Structure Simulator: Split GST</h3>
+                            <p className="text-xs text-stone-400 mt-0.5">Simulate split design fee, labor, and material procurement tax streams</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-black tracking-wider uppercase text-[#0055B3] bg-sky-50 px-2 py-1 rounded">Experimental</span>
+                        {showTaxSimulator ? <ChevronUpIcon className="w-5 h-5 text-stone-400" /> : <ChevronDownIcon className="w-5 h-5 text-stone-400" />}
+                    </div>
+                </div>
+                
+                {showTaxSimulator && (
+                    <div className="p-6 bg-stone-50/40 space-y-6">
+                        <p className="text-xs text-stone-500 max-w-3xl leading-relaxed font-['Plus_Jakarta_Sans']">
+                            Simulate treating Design Fees and Labor as GST-applicable (18%), and Materials as non-GST (0%). 
+                            The Material vs Labor % splits are calculated dynamically from the active project's BOQ line items (Material Cost: {formatCurrency(materialCostRaw)}, Labor Cost: {formatCurrency(laborCostRaw)}). This theoretical split is shown in the dedicated Simulated Execution Schedule table below.
+                        </p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Material vs Labor Base breakdown */}
+                            <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm space-y-4">
+                                <h4 className="font-bold text-stone-800 text-xs uppercase tracking-wider border-b border-stone-100 pb-2 font-['Plus_Jakarta_Sans']">Execution Breakdown (Taxable Base)</h4>
+                                
+                                <div className="space-y-3 font-['Plus_Jakarta_Sans']">
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-stone-500 font-medium">Material ({Math.round(materialRatio * 100)}%)</span>
+                                        <span className="font-bold text-stone-800 font-mono">{formatCurrency(simulatedTaxableMaterial)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-stone-500 font-medium">Labor ({Math.round(laborRatio * 100)}%)</span>
+                                        <span className="font-bold text-stone-800 font-mono">{formatCurrency(simulatedTaxableLabor)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center pt-2 border-t border-stone-100 font-bold text-xs">
+                                        <span className="text-stone-800">Total</span>
+                                        <span className="text-stone-800 font-mono">{formatCurrency(taxableExecution)}</span>
+                                    </div>
+                                    <div className="pt-4 border-t border-stone-100 mt-4 space-y-4">
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs font-black text-stone-400 uppercase tracking-wider font-['Plus_Jakarta_Sans']">Labor Billing Mode</span>
+                                                <div className="flex items-center gap-2 text-xs">
+                                                    <span className={simulatedLaborGstEnabled ? "text-stone-400 font-['Plus_Jakarta_Sans']" : "font-bold text-amber-700 font-['Plus_Jakarta_Sans']"}>Cash</span>
+                                                    <div
+                                                        className={`relative w-10 h-5 rounded-full cursor-pointer transition-colors ${simulatedLaborGstEnabled ? 'bg-[#0066CC]' : 'bg-stone-300'}`}
+                                                        onClick={() => setSimulatedLaborGstEnabled(!simulatedLaborGstEnabled)}
+                                                    >
+                                                        <div className={`absolute top-1 left-1 bg-white w-3 h-3 rounded-full transition-transform ${simulatedLaborGstEnabled ? 'transform translate-x-5' : ''}`} />
+                                                    </div>
+                                                    <span className={simulatedLaborGstEnabled ? "font-bold text-[#0055B3] font-['Plus_Jakarta_Sans']" : "text-stone-400 font-['Plus_Jakarta_Sans']"}>GST (18%)</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {!simulatedLaborGstEnabled && (
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-xs font-black text-stone-400 uppercase tracking-wider font-['Plus_Jakarta_Sans']">Labor Cash Recovery</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <input
+                                                        type="range"
+                                                        min="0"
+                                                        max="28"
+                                                        step="1"
+                                                        value={laborGstRecovery}
+                                                        onChange={(e) => setLaborGstRecovery(Number(e.target.value))}
+                                                        className="w-full h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                                    />
+                                                    <span className="text-xs font-bold text-amber-700 w-12 text-right font-mono">{laborGstRecovery}%</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        <div className="pt-2 border-t border-stone-100 space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs font-black text-stone-400 uppercase tracking-wider font-['Plus_Jakarta_Sans']">Material Cash Recovery</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="28"
+                                                    step="1"
+                                                    value={materialGstRecovery}
+                                                    onChange={(e) => setMaterialGstRecovery(Number(e.target.value))}
+                                                    className="w-full h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                                />
+                                                <span className="text-xs font-bold text-amber-700 w-12 text-right font-mono">{materialGstRecovery}%</span>
+                                            </div>
+                                            <p className="text-[10px] text-stone-400 leading-normal font-['Plus_Jakarta_Sans']">
+                                                % charged over and above Material Base to client in cash to recover your dead Input GST on purchases.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="pt-4 border-t border-stone-100 mt-4 space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs font-black text-stone-400 uppercase tracking-wider font-['Plus_Jakarta_Sans']">Override Split</span>
+                                            {customMaterialRatio !== null && (
+                                                <button 
+                                                    onClick={() => setCustomMaterialRatio(null)}
+                                                    className="text-[10px] text-[#0066CC] hover:text-[#0055B3] underline font-bold font-['Plus_Jakarta_Sans']"
+                                                >
+                                                    Reset to BOQ
+                                                </button>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            value={Math.round(materialRatio * 100)}
+                                            onChange={(e) => setCustomMaterialRatio(Number(e.target.value) / 100)}
+                                            className="w-full h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-[#0066CC]"
+                                        />
+                                        <div className="flex justify-between text-[10px] text-stone-400 font-mono font-bold">
+                                            <span>Mat: {Math.round(materialRatio * 100)}%</span>
+                                            <span>Lab: {100 - Math.round(materialRatio * 100)}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* GST Simulation */}
+                            <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm space-y-4">
+                                <h4 className="font-bold text-stone-800 text-xs uppercase tracking-wider border-b border-stone-100 pb-2 font-['Plus_Jakarta_Sans']">Tax & Recovery Simulation</h4>
+                                
+                                <div className="space-y-3 font-['Plus_Jakarta_Sans']">
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-stone-500 font-medium">Design GST (18% - Billed)</span>
+                                        <span className="font-bold text-[#0055B3] font-mono">{formatCurrency(simulatedGstOnDesign)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-stone-500 font-medium">Labor {simulatedLaborGstEnabled ? 'GST (18% - Billed)' : `Cash Recovery (${laborGstRecovery}%)`}</span>
+                                        <span className={`font-bold font-mono ${simulatedLaborGstEnabled ? 'text-[#0055B3]' : 'text-amber-700'}`}>
+                                            {simulatedLaborGstEnabled ? formatCurrency(simulatedGstOnLabor) : `+${formatCurrency(simulatedLaborRecovery)}`}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-stone-500 font-medium">Material Cash Recovery ({materialGstRecovery}%)</span>
+                                        <span className="font-bold text-amber-700 font-mono">+{formatCurrency(simulatedMaterialRecovery)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center pt-2 border-t border-stone-100 font-bold text-xs text-slate-900">
+                                        <span>Total Tax & Recovery Ask</span>
+                                        <span className="font-mono">{formatCurrency(simulatedTotalGST + simulatedLaborRecovery + simulatedMaterialRecovery)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Outcomes */}
+                        <div className="bg-stone-900 p-6 rounded-2xl text-white flex flex-col md:flex-row justify-between items-center gap-6 shadow-sm border border-stone-800">
+                            <div className="space-y-1 w-full md:w-auto">
+                                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block font-['Plus_Jakarta_Sans']">Theoretical Gross Ask</span>
+                                <span className="text-2xl font-black font-mono">{formatCurrency(newGrossProjectValue)}</span>
+                                <div className="text-[10px] text-stone-400 mt-1 font-medium leading-relaxed font-['Plus_Jakarta_Sans']">
+                                    Current Gross: {formatCurrency(grossProjectValue)} <br/>
+                                    {newGrossProjectValue < grossProjectValue ? `(Client saves: ${formatCurrency(grossProjectValue - newGrossProjectValue)})` : `(Client pays extra: ${formatCurrency(newGrossProjectValue - grossProjectValue)})`}
+                                </div>
+                            </div>
+                            
+                            <div className="w-px h-16 bg-stone-800 hidden md:block"></div>
+                            
+                            <div className="space-y-1 w-full md:w-auto text-right font-['Plus_Jakarta_Sans']">
+                                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">Theoretical Firm Profit</span>
+                                <span className="text-2xl font-black text-emerald-400 font-mono">{formatCurrency(theoreticalProfit)}</span>
+                                <div className="text-[10px] text-stone-400 mt-1 font-medium leading-relaxed">
+                                    (Accounts for {formatCurrency(estimatedMaterialInputGst)} dead input GST) <br/>
+                                    Implied Margin: {profitMargin.toFixed(1)}%
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Simulated Schedule Table */}
+                        <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm mt-8 font-['Plus_Jakarta_Sans']">
+                            <div className="bg-stone-100/50 px-4 py-3 border-b border-stone-200">
+                                <h4 className="font-bold text-stone-800 text-xs uppercase tracking-wider font-['Plus_Jakarta_Sans']">Simulated Execution Schedule</h4>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs text-left">
+                                    <thead className="bg-stone-50 text-[10px] font-bold text-stone-500 uppercase tracking-wider border-b border-stone-200">
+                                        <tr>
+                                            <th className="p-3 w-[25%]">Stage</th>
+                                            <th className="p-3 text-right">% / Amt</th>
+                                            <th className="p-3 text-right">Base Exec</th>
+                                            <th className="p-3 text-right bg-blue-50/10">Labor Base</th>
+                                            <th className="p-3 text-right bg-blue-50/10">Labor GST/Rec</th>
+                                            <th className="p-3 text-right bg-amber-50/50 text-amber-800">Mat. Base (Cash)</th>
+                                            <th className="p-3 text-right bg-amber-50/50 text-amber-800">Recovery ({materialGstRecovery}%)</th>
+                                            <th className="p-3 text-right bg-sky-50/50 text-sky-800">Total Ask (Inv + Cash)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {executionMilestones.map((m, i) => {
+                                            const unpaidItems = executionMilestones;
+                                            let rowBase = 0;
+                                            
+                                            if (m.isFixedAmount && m.fixedAmount !== undefined) {
+                                                rowBase = m.fixedAmount;
+                                            } else {
+                                                const fixedPendingTotal = unpaidItems.filter(x => x.isFixedAmount).reduce((sum, x) => sum + (x.fixedAmount || 0), 0);
+                                                const remainingBaseAmount = Math.max(0, taxableExecution - fixedPendingTotal);
+                                                const unpaidPctExcludingFixed = unpaidItems.filter(x => !x.isFixedAmount).reduce((sum, x) => sum + x.percentage, 0);
+                                                const relativePct = unpaidPctExcludingFixed > 0 ? (m.percentage / unpaidPctExcludingFixed) : 0;
+                                                rowBase = remainingBaseAmount * relativePct;
+                                            }
+                                            rowBase = Math.round(rowBase);
+                                            
+                                            const rowLaborBase = Math.round(rowBase * laborRatio);
+                                            const rowMaterialBase = Math.round(rowBase * materialRatio);
+                                            const rowLaborGST = simulatedLaborGstEnabled ? Math.round(rowLaborBase * 0.18) : 0;
+                                            const rowLaborRecovery = !simulatedLaborGstEnabled ? Math.round(rowLaborBase * (laborGstRecovery / 100)) : 0;
+                                            const rowMaterialRecovery = Math.round(rowMaterialBase * (materialGstRecovery / 100));
+                                            const rowTotalAsk = rowLaborBase + rowLaborGST + rowLaborRecovery + rowMaterialBase + rowMaterialRecovery;
+
+                                            return (
+                                                <tr key={m.id} className="hover:bg-stone-50/30">
+                                                    <td className="p-3 text-xs font-bold text-stone-800 truncate font-['Plus_Jakarta_Sans']" title={m.name}>{m.name}</td>
+                                                    <td className="p-3 text-right text-xs text-stone-500 font-mono">{m.isFixedAmount ? 'Fixed' : `${m.percentage}%`}</td>
+                                                    <td className="p-3 text-right text-xs text-stone-800 font-mono">{formatCurrency(rowBase)}</td>
+                                                    <td className="p-3 text-right text-xs text-slate-800 bg-blue-50/5 font-mono">{formatCurrency(rowLaborBase)}</td>
+                                                    <td className="p-3 text-right text-xs text-slate-800 bg-blue-50/5 font-mono">
+                                                        {simulatedLaborGstEnabled ? formatCurrency(rowLaborGST) : `+${formatCurrency(rowLaborRecovery)}`}
+                                                    </td>
+                                                    <td className="p-3 text-right text-xs text-amber-900 bg-amber-50/5 font-mono">{formatCurrency(rowMaterialBase)}</td>
+                                                    <td className="p-3 text-right text-xs text-amber-900 bg-amber-50/5 font-mono">+{formatCurrency(rowMaterialRecovery)}</td>
+                                                    <td className="p-3 text-right text-xs text-slate-900 bg-sky-50/5 font-mono font-black">{formatCurrency(rowTotalAsk)}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                        
+                                        {/* Totals Row */}
+                                        <tr className="bg-stone-50 border-t-2 border-stone-200">
+                                            <td colSpan={2} className="p-3 text-right text-xs font-black text-stone-800 font-['Plus_Jakarta_Sans']">Totals</td>
+                                            <td className="p-3 text-right text-xs font-bold text-stone-800 font-mono">{formatCurrency(taxableExecution)}</td>
+                                            <td className="p-3 text-right text-xs font-bold text-blue-700 bg-blue-50/5 font-mono">{formatCurrency(simulatedTaxableLabor)}</td>
+                                            <td className="p-3 text-right text-xs font-bold text-blue-700 bg-blue-50/5 font-mono">
+                                                {simulatedLaborGstEnabled ? formatCurrency(simulatedGstOnLabor) : `+${formatCurrency(simulatedLaborRecovery)}`}
+                                            </td>
+                                            <td className="p-3 text-right text-xs font-bold text-amber-700 bg-amber-50/5 font-mono">{formatCurrency(simulatedTaxableMaterial)}</td>
+                                            <td className="p-3 text-right text-xs font-bold text-amber-700 bg-amber-50/5 font-mono">+{formatCurrency(simulatedMaterialRecovery)}</td>
+                                            <td className="p-3 text-right text-xs font-black text-slate-900 bg-sky-50/5 font-mono">{formatCurrency(taxableExecution + simulatedGstOnLabor + simulatedLaborRecovery + simulatedMaterialRecovery)}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* 3. BREAKDOWN TABLES & MAIN MILESTONES SECTION */}
+            <div className="bg-white rounded-3xl border border-stone-200 shadow-sm p-6 space-y-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-stone-100 pb-4 font-['Plus_Jakarta_Sans']">
+                        <div>
+                            <h3 className="text-base font-extrabold text-stone-900">Milestones Realization Schedule</h3>
+                            <p className="text-xs text-stone-400 mt-0.5">Track, release, and audit design and execution fee structures</p>
+                        </div>
+                        {activeTier && (
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="flex bg-stone-100 p-1 rounded-xl border border-stone-200/60 max-w-fit">
                                     <button 
-                                        onClick={handleAddDiscount}
-                                        className="text-xs font-bold bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700"
+                                        onClick={() => setActiveTrackTab('all')}
+                                        className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeTrackTab === 'all' ? 'bg-white text-slate-900 shadow-sm border border-stone-200/50 font-black' : 'text-stone-500 hover:text-stone-900'}`}
                                     >
-                                        Add
+                                        Show All
+                                    </button>
+                                    <button 
+                                        onClick={() => setActiveTrackTab('design')}
+                                        className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeTrackTab === 'design' ? 'bg-white text-slate-900 shadow-sm border border-stone-200/50 font-black' : 'text-stone-500 hover:text-stone-900'}`}
+                                    >
+                                        Design Track ({designMilestones.length})
+                                    </button>
+                                    <button 
+                                        onClick={() => setActiveTrackTab('execution')}
+                                        className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeTrackTab === 'execution' ? 'bg-white text-slate-900 shadow-sm border border-stone-200/50 font-black' : 'text-stone-500 hover:text-stone-900'}`}
+                                    >
+                                        Execution Track ({executionMilestones.length})
                                     </button>
                                 </div>
                             </div>
                         )}
+                    </div>
 
-                        <div className="space-y-2">
-                            {/* Standard Initiation Fee */}
-                            <div className="flex justify-between items-center text-xs p-2 bg-white rounded border border-slate-100">
-                                <span className="text-slate-600 font-medium">Initiation Fee Paid</span>
-                                <input 
-                                    type="number" 
-                                    value={initiationFee} 
-                                    onChange={e => setInitiationFee(Number(e.target.value))}
-                                    className="w-20 text-right font-bold text-indigo-900 outline-none border-b border-dashed border-slate-300 focus:border-indigo-500" 
-                                />
+                    {/* Preset Stages & Defaults Management Panel */}
+                    {!isReadOnlyMode && (
+                        <div className="bg-stone-50 border border-stone-200/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 font-['Plus_Jakarta_Sans']">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-stone-200/50 text-stone-700 rounded-xl">
+                                    <Sliders className="w-4 h-4 text-slate-900" />
+                                </div>
+                                <div>
+                                    <span className="text-xs font-bold text-stone-800 block">Preset Stages & Defaults</span>
+                                    <span className="text-[10px] text-stone-400 block mt-0.5">Synchronize, load, or update studio-wide payment templates</span>
+                                </div>
                             </div>
-
-                            {/* Active Discounts List */}
-                            {discounts.map(discount => (
-                                <div key={discount.id} className="flex justify-between items-center text-xs p-2 bg-red-50 rounded border border-red-100 group">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-red-700 font-medium">{discount.name}</span>
-                                        <span className="text-[9px] text-red-400 bg-white px-1 rounded uppercase tracking-wider">{discount.target}</span>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className="font-bold text-red-700">
-                                            -{discount.type === 'percentage' ? `${discount.value}%` : formatCurrency(discount.value)}
-                                        </span>
-                                        <button onClick={() => handleRemoveDiscount(discount.id)} className="text-red-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <DeleteIcon className="w-3 h-3" />
+                            <div className="flex flex-wrap items-center gap-2">
+                                {activeTier && (
+                                    <>
+                                        <button 
+                                            onClick={handleLoadDefaults}
+                                            className="text-[10px] font-black tracking-wider uppercase transition-all flex items-center gap-1 px-3 py-2 rounded-xl border border-stone-250 bg-white text-stone-700 hover:bg-stone-100 hover:text-stone-900 shadow-xs"
+                                        >
+                                            <RotateCcw className="w-3.5 h-3.5 text-stone-500" /> Load Studio Defaults
                                         </button>
-                                    </div>
-                                </div>
-                            ))}
-                            {discounts.length === 0 && <p className="text-[10px] text-slate-400 italic text-center py-1">No additional discounts applied.</p>}
-                        </div>
-                    </div>
-                </div>
-
-                {/* RIGHT COLUMN: TAX & RATIO */}
-                <div className="flex-1 bg-indigo-950 rounded-2xl p-6 text-white relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10"><ShieldCheckIcon className="w-24 h-24" /></div>
-                    
-                    <div className="relative z-10">
-                        <div className="flex justify-between items-end mb-4">
-                            <label className="text-xs font-bold text-indigo-300 uppercase tracking-wider">Execution Billable Ratio</label>
-                            <div className="text-right">
-                                <span className="text-2xl font-black">{billablePercent}%</span>
-                                <span className="text-xs text-slate-400 ml-2">Official</span>
+                                        <button 
+                                            onClick={handleSaveAsStudioDefaults}
+                                            disabled={savingStudioDefaults}
+                                            className="text-[10px] font-black tracking-wider uppercase transition-all flex items-center gap-1 px-3 py-2 rounded-xl border border-stone-250 bg-white text-stone-700 hover:bg-stone-100 hover:text-stone-900 shadow-xs disabled:opacity-50"
+                                        >
+                                            {savingStudioDefaults ? (
+                                                <>
+                                                    <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-stone-500" /> Saving...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Sparkles className="w-3.5 h-3.5 text-[#0066CC] animate-pulse" /> Save as Studio Defaults
+                                                </>
+                                            )}
+                                        </button>
+                                        <div className="h-6 w-px bg-stone-250 hidden md:block" />
+                                    </>
+                                )}
+                                <button 
+                                    onClick={() => setIsStudioDefaultsModalOpen(true)}
+                                    className="text-[10px] font-black tracking-wider uppercase transition-all flex items-center gap-1 px-3 py-2 rounded-xl border border-sky-100 bg-sky-50/50 text-[#0055B3] hover:bg-sky-100 hover:text-[#0055B3]"
+                                >
+                                    <Sliders className="w-3.5 h-3.5 text-[#0066CC]" /> Configure Studio Rules
+                                </button>
                             </div>
                         </div>
+                    )}
 
-                        <input 
-                            type="range" 
-                            min="0" max="100" step="5"
-                            value={billablePercent}
-                            onChange={(e) => setBillablePercent(Number(e.target.value))}
-                            className="w-full h-3 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                        />
-
-                        <div className="mt-6 pt-4 border-t border-slate-700 flex items-center justify-between">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <div className="relative">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={executionGstEnabled} 
-                                        onChange={e => setExecutionGstEnabled(e.target.checked)}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                                </div>
-                                <span className="text-xs font-bold text-slate-300 uppercase tracking-wide">Charge GST ({gstRate}%)</span>
-                            </label>
-                            <div className="text-right">
-                                <p className="text-[10px] text-slate-400 font-bold uppercase">Non-Billable / Cash</p>
-                                <p className="text-lg font-mono text-amber-400 font-bold">{formatCurrency(executionCash)}</p>
-                            </div>
+                    {!activeTier ? (
+                        <div className="bg-stone-50 border border-stone-200 rounded-2xl p-8 text-center max-w-2xl mx-auto font-['Plus_Jakarta_Sans'] my-8">
+                            <Sliders className="w-10 h-10 text-[#0066CC] mx-auto mb-4" />
+                            <h3 className="text-sm font-extrabold text-stone-900 uppercase tracking-wider">No Active Project Tier Selected</h3>
+                            <p className="text-xs text-stone-500 mt-2 leading-relaxed">
+                                Please select an active project tier (such as Luxury or Premium) in the BOQ Editor to calculate project-specific milestone amounts and enable billing.
+                            </p>
+                            <p className="text-xs text-[#0066CC] font-bold mt-4">
+                                In the meantime, you can configure the studio-wide default templates using the "Configure Studio Rules" button above!
+                            </p>
                         </div>
+                    ) : (
+                        /* Milestone tracking container - grid side-by-side if All is selected and viewLayout is side-by-side */
+                        <div className={`grid grid-cols-1 ${activeTrackTab === 'all' && viewLayout === 'side-by-side' ? 'xl:grid-cols-2 gap-8' : 'gap-12'} items-start`}>
+                            {(activeTrackTab === 'all' || activeTrackTab === 'design') && (
+                                designViewMode === 'simple' ? (
+                                    renderSimpleTrackView(designMilestones, taxableDesign, originalNetDesign, false, "Design Fees")
+                                ) : (
+                                    renderSplitTable(designMilestones, taxableDesign, originalNetDesign, false, "Design Fees")
+                                )
+                            )}
+                            {(activeTrackTab === 'all' || activeTrackTab === 'execution') && (
+                                executionViewMode === 'simple' ? (
+                                    renderSimpleTrackView(executionMilestones, taxableExecution, originalNetExecution, true, "Execution Milestones")
+                                ) : (
+                                    renderSplitTable(executionMilestones, taxableExecution, originalNetExecution, true, "Execution Milestones")
+                                )
+                            )}
+                        </div>
+                    )}
+
+
+            </div>
+
+            {/* 4. ADVANCE PAYMENT SCHEDULES ARCHIVE */}
+            {paymentSchedules.length > 0 && (
+                <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm font-['Plus_Jakarta_Sans']">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                        <div className="flex items-center gap-2">
+                            <span className="p-1.5 bg-sky-100 text-[#0066CC] rounded-lg"><FileText className="w-5 h-5"/></span>
+                            <h2 className="text-lg font-black text-stone-900">
+                                Generated Advance Payment Schedules
+                            </h2>
+                        </div>
+                        <span className="text-xs font-bold text-stone-400 font-mono">
+                            {paymentSchedules.length} {paymentSchedules.length === 1 ? 'document' : 'documents'} generated
+                        </span>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-stone-50 text-[11px] font-bold text-stone-500 uppercase border-b border-stone-200">
+                                <tr>
+                                    <th className="p-4">Schedule Version</th>
+                                    <th className="p-4">Issued Date</th>
+                                    <th className="p-4 text-right">Contract Value</th>
+                                    <th className="p-4">Advances Count</th>
+                                    <th className="p-4">Status</th>
+                                    <th className="p-4 text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-stone-100">
+                                {[...paymentSchedules].reverse().map((sched: any) => {
+                                    const isLatest = latestSchedule?.id === sched.id;
+                                    return (
+                                        <tr key={sched.id} className="hover:bg-stone-50/80 transition-colors">
+                                            <td className="p-4 font-bold text-stone-900 flex items-center gap-2">
+                                                <span className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold ${
+                                                    isLatest ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-100 text-stone-700'
+                                                }`}>
+                                                    {sched.versionLabel || `v${sched.version}.0`}
+                                                </span>
+                                                {isLatest && (
+                                                    <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                                                        Active
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="p-4 text-stone-600 text-xs">
+                                                {new Date(sched.issuedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            </td>
+                                            <td className="p-4 text-right font-mono font-bold text-stone-900">
+                                                {formatCurrency(sched.contractValue || 0)}
+                                            </td>
+                                            <td className="p-4 text-stone-600 text-xs">
+                                                {sched.advances?.length || 0} advances ({sched.advances?.filter((a: any) => a.phase === 'design').length || 0} Design, {sched.advances?.filter((a: any) => a.phase !== 'design').length || 0} Execution)
+                                            </td>
+                                            <td className="p-4">
+                                                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase ${
+                                                    sched.supersededBy ? 'bg-amber-100 text-amber-800' : isLatest ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                                                }`}>
+                                                    {sched.supersededBy ? 'Superseded' : sched.status || 'Active'}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                <button
+                                                    onClick={() => setCompareRevision({
+                                                        name: `Payment Schedule ${sched.versionLabel || `v${sched.version}.0`}`,
+                                                        date: sched.issuedAt,
+                                                        previousExecutionValue: sched.snapshotEngagement?.executionValue || sched.contractValue,
+                                                        previousDesignValue: sched.snapshotEngagement?.designFee || 0,
+                                                        milestones: (sched.advances || []).map((adv: any, i: number) => ({
+                                                            id: `adv_${i}`,
+                                                            type: adv.phase || 'execution',
+                                                            name: adv.label || adv.advanceCode,
+                                                            percentage: adv.percentage || 0,
+                                                            fixedAmount: adv.amount,
+                                                            isFixedAmount: adv.isFixedAmount,
+                                                            description: adv.advanceCode,
+                                                            status: adv.status === 'received' ? 'paid' : adv.status === 'advance_requested' ? 'invoiced' : 'pending',
+                                                        })),
+                                                        reason: `Payment Schedule Document ${sched.versionLabel || `v${sched.version}.0`}`
+                                                    })}
+                                                    className="px-3 py-1.5 bg-sky-50 text-[#0066CC] hover:bg-sky-100 rounded-lg text-xs font-bold transition-colors border border-sky-200"
+                                                >
+                                                    Audit Snapshot
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-            </div>
+            )}
 
-            {/* 2. FINANCIAL SUMMARY TABLE (NEW) */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                <table className="w-full text-sm">
-                    <thead className="bg-slate-100 text-xs font-bold text-slate-500 uppercase">
-                        <tr>
-                            <th className="p-4 text-left">Component</th>
-                            <th className="p-4 text-right">Gross Value</th>
-                            <th className="p-4 text-right text-red-600">Discount</th>
-                            <th className="p-4 text-right bg-blue-50/30 text-blue-900">Taxable Value</th>
-                            <th className="p-4 text-right text-slate-500">GST ({gstRate}%)</th>
-                            <th className="p-4 text-right font-black">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {/* Execution Row */}
-                        <tr>
-                            <td className="p-4 font-bold text-slate-700">Execution Scope</td>
-                            <td className="p-4 text-right text-slate-600">{formatCurrency(rawExecutionTotal)}</td>
-                            <td className="p-4 text-right text-red-600 font-medium">-{formatCurrency(executionDiscountVal)}</td>
-                            <td className="p-4 text-right font-bold text-blue-900 bg-blue-50/10">{formatCurrency(taxableExecution)}</td>
-                            <td className="p-4 text-right text-slate-500">{executionGstEnabled ? formatCurrency(gstOnExecution) : '₹0'}</td>
-                            <td className="p-4 text-right font-bold">{formatCurrency(taxableExecution + (executionGstEnabled ? gstOnExecution : 0))}</td>
-                        </tr>
-                        {/* Design Row */}
-                        <tr>
-                            <td className="p-4 font-bold text-slate-700">Design Fee</td>
-                            <td className="p-4 text-right text-slate-600">{formatCurrency(rawDesignFee)}</td>
-                            <td className="p-4 text-right text-red-600 font-medium">-{formatCurrency(designDiscountVal)}</td>
-                            <td className="p-4 text-right font-bold text-blue-900 bg-blue-50/10">{formatCurrency(taxableDesign)}</td>
-                            <td className="p-4 text-right text-slate-500">{formatCurrency(gstOnDesign)}</td>
-                            <td className="p-4 text-right font-bold">{formatCurrency(taxableDesign + gstOnDesign)}</td>
-                        </tr>
-                        {/* Grand Total Row */}
-                        <tr className="bg-slate-50 font-bold">
-                            <td className="p-4 text-indigo-950">GRAND TOTAL</td>
-                            <td className="p-4 text-right">{formatCurrency(rawExecutionTotal + rawDesignFee)}</td>
-                            <td className="p-4 text-right text-red-700">-{formatCurrency(executionDiscountVal + designDiscountVal)}</td>
-                            <td className="p-4 text-right text-blue-900 bg-blue-100/20">{formatCurrency(taxableExecution + taxableDesign)}</td>
-                            <td className="p-4 text-right text-slate-600">{formatCurrency(totalGST)}</td>
-                            <td className="p-4 text-right text-lg text-indigo-950">{formatCurrency(grossProjectValue)}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            {/* 3. BREAKDOWN TABLES */}
-            <div className="grid grid-cols-1 gap-8">
-                {renderSplitTable(
-                    designMilestones, 
-                    taxableDesign, 
-                    originalNetDesign,
-                    false, 
-                    "Design Fees"
-                )}
-                {renderSplitTable(
-                    executionMilestones, 
-                    taxableExecution, 
-                    originalNetExecution,
-                    true, 
-                    "Execution Milestones"
-                )}
-            </div>
-
-            {/* 4. REVISION HISTORY */}
+            {/* 5. REVISION HISTORY */}
             {financials.paymentRevisions && financials.paymentRevisions.length > 0 && (
-                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                    <h2 className="text-xl font-black text-indigo-950 mb-4 flex items-center gap-2">
-                        <span className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg"><ClockIcon className="w-5 h-5"/></span>
+                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm font-['Plus_Jakarta_Sans']">
+                    <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
+                        <span className="p-1.5 bg-sky-100 text-[#0066CC] rounded-lg"><ClockIcon className="w-5 h-5"/></span>
                         Payment Revisions History
                     </h2>
                     <div className="overflow-x-auto">
@@ -1368,17 +3214,17 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                 {[...financials.paymentRevisions].reverse().map((rev) => (
                                     <tr key={rev.id} className="hover:bg-slate-50">
                                         <td className="p-4 text-slate-600">{new Date(rev.date).toLocaleString()}</td>
-                                        <td className="p-4 text-indigo-900 font-medium">{rev.reason || 'Manual Revision'}</td>
+                                        <td className="p-4 text-slate-800 font-medium">{rev.reason || 'Manual Revision'}</td>
                                         <td className="p-4 text-right">
                                             <div className="flex flex-col items-end">
                                                 <span className="text-slate-400 line-through text-xs">{formatCurrency(rev.previousExecutionValue || 0)}</span>
-                                                <span className="text-indigo-600 font-bold">{formatCurrency(rev.newExecutionValue || 0)}</span>
+                                                <span className="text-[#0066CC] font-bold">{formatCurrency(rev.newExecutionValue || 0)}</span>
                                             </div>
                                         </td>
                                         <td className="p-4 text-right">
                                             <div className="flex flex-col items-end">
                                                 <span className="text-slate-400 line-through text-xs">{formatCurrency(rev.previousDesignValue || 0)}</span>
-                                                <span className="text-indigo-600 font-bold">{formatCurrency(rev.newDesignValue || 0)}</span>
+                                                <span className="text-[#0066CC] font-bold">{formatCurrency(rev.newDesignValue || 0)}</span>
                                             </div>
                                         </td>
                                         <td className="p-4 text-center">
@@ -1405,8 +3251,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 </div>
             )}
 
-            {/* 5. NET RECEIVABLE FOOTER */}
-            <div className="bg-indigo-950 text-white p-6 rounded-2xl shadow-xl flex flex-col md:flex-row justify-between items-center gap-6">
+            {/* 6. NET RECEIVABLE FOOTER */}
+            <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white p-6 rounded-2xl shadow-xl flex flex-col md:flex-row justify-between items-center gap-6">
                 <div className="flex-1">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Gross Project Value</p>
                     <h2 className="text-2xl font-black text-slate-200">{formatCurrency(grossProjectValue)}</h2>
@@ -1425,6 +3271,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     <p className="text-[10px] text-slate-500 mt-1">To be collected</p>
                 </div>
             </div>
+            </>)}
 
             {/* COMPARE REVISION MODAL */}
             <AnimatePresence>
@@ -1433,7 +3280,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-indigo-950/50 backdrop-blur-sm p-4"
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-[#0066CC]/90 backdrop-blur-md border border-white/20/50 backdrop-blur-sm p-4"
                     >
                         <motion.div 
                             initial={{ scale: 0.95, opacity: 0 }}
@@ -1443,9 +3290,13 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         >
                             <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                                 <div>
-                                    <h2 className="text-xl font-bold text-indigo-950">Version Comparison</h2>
+                                    <h2 className="text-xl font-bold text-slate-900">{compareRevision.name || 'Version Comparison'}</h2>
                                     <p className="text-sm text-slate-500 mt-1">
-                                        Comparing <span className="font-semibold text-slate-700">{new Date(compareRevision.date).toLocaleString()}</span> vs Current
+                                        {compareRevision.reason ? (
+                                            <span>{compareRevision.reason} • <span className="font-semibold text-slate-700">{new Date(compareRevision.date).toLocaleString()}</span> vs Current</span>
+                                        ) : (
+                                            <span>Comparing <span className="font-semibold text-slate-700">{new Date(compareRevision.date).toLocaleString()}</span> vs Current</span>
+                                        )}
                                     </p>
                                 </div>
                                 <button 
@@ -1459,20 +3310,20 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             </div>
                             
                             <div className="p-6 overflow-y-auto flex-1 bg-slate-100">
-                                <div className="grid grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {/* Previous Version */}
                                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                                         <div className="bg-slate-50 p-4 border-b border-slate-200">
-                                            <h3 className="font-bold text-indigo-900 text-center">Previous Version</h3>
+                                            <h3 className="font-bold text-slate-800 text-center">{compareRevision.name || 'Previous Version'}</h3>
                                             <div className="flex justify-between mt-2 text-sm">
-                                                <span className="text-slate-500">Execution: <span className="font-bold text-indigo-950">{formatCurrency(compareRevision.previousExecutionValue)}</span></span>
-                                                <span className="text-slate-500">Design: <span className="font-bold text-indigo-950">{formatCurrency(compareRevision.previousDesignValue)}</span></span>
+                                                <span className="text-slate-500">Execution: <span className="font-bold text-slate-900">{formatCurrency(compareRevision.previousExecutionValue)}</span></span>
+                                                <span className="text-slate-500">Design: <span className="font-bold text-slate-900">{formatCurrency(compareRevision.previousDesignValue)}</span></span>
                                             </div>
                                         </div>
                                         <div className="p-4">
                                             <h4 className="font-semibold text-xs text-slate-400 uppercase tracking-wider mb-2">Milestone Breakdown</h4>
-                                            <div className="space-y-2">
-                                                {milestones.map(m => {
+                                            <div className="space-y-2 max-h-[360px] overflow-y-auto">
+                                                {(compareRevision.milestones || milestones).map((m: PaymentMilestone) => {
                                                     const isCleared = m.status === 'paid' || m.status === 'invoiced';
                                                     const baseAmount = m.type === 'execution' ? compareRevision.previousExecutionValue : compareRevision.previousDesignValue;
                                                     const origBase = m.type === 'execution' ? originalNetExecution : originalNetDesign;
@@ -1482,7 +3333,6 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     if (isCleared) {
                                                         amount = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : (m.lockedTaxableBase || origBase) * (m.percentage / 100);
                                                     } else {
-                                                        // This is a simplified approximation for the modal
                                                         amount = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : baseAmount * (m.percentage / 100); 
                                                     }
                                                     
@@ -1490,7 +3340,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     const gst = billable * (m.type === 'execution' ? (executionGstEnabled ? gstRate : 0) : gstRate) / 100;
                                                     let total = billable + gst;
                                                     
-                                                    const firstDesignMilestoneId = milestones.find(x => x.type === 'design')?.id;
+                                                    const firstDesignMilestoneId = (compareRevision.milestones || milestones).find((x: PaymentMilestone) => x.type === 'design')?.id;
                                                     if (m.id === firstDesignMilestoneId && initiationFee > 0) {
                                                         total = Math.max(0, total - initiationFee);
                                                     }
@@ -1498,7 +3348,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     return (
                                                         <div key={m.id} className="flex justify-between items-center text-sm p-2 bg-slate-50 rounded border border-slate-100">
                                                             <span className="text-slate-600 truncate pr-2" title={m.name}>{m.percentage}% - {m.name}</span>
-                                                            <span className="font-bold text-indigo-950">{formatCurrency(total)}</span>
+                                                            <span className="font-bold text-slate-900">{formatCurrency(total)}</span>
                                                         </div>
                                                     );
                                                 })}
@@ -1507,17 +3357,17 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                     </div>
 
                                     {/* Current Version */}
-                                    <div className="bg-white rounded-xl border border-indigo-200 shadow-sm overflow-hidden ring-1 ring-indigo-500/10">
-                                        <div className="bg-indigo-50 p-4 border-b border-indigo-100">
-                                            <h3 className="font-bold text-indigo-900 text-center">Current Version</h3>
+                                    <div className="bg-white rounded-xl border border-sky-200 shadow-sm overflow-hidden ring-1 ring-[#0066CC]/10">
+                                        <div className="bg-sky-50 p-4 border-b border-sky-100">
+                                            <h3 className="font-bold text-slate-800 text-center">Current Live Billing</h3>
                                             <div className="flex justify-between mt-2 text-sm">
-                                                <span className="text-indigo-700">Execution: <span className="font-bold text-indigo-900">{formatCurrency(financials.approvedExecutionValue || originalNetExecution)}</span></span>
-                                                <span className="text-indigo-700">Design: <span className="font-bold text-indigo-900">{formatCurrency(financials.approvedDesignValue || originalNetDesign)}</span></span>
+                                                <span className="text-[#0055B3]">Execution: <span className="font-bold text-slate-800">{formatCurrency(financials.approvedExecutionValue || originalNetExecution)}</span></span>
+                                                <span className="text-[#0055B3]">Design: <span className="font-bold text-slate-800">{formatCurrency(financials.approvedDesignValue || originalNetDesign)}</span></span>
                                             </div>
                                         </div>
                                         <div className="p-4">
-                                            <h4 className="font-semibold text-xs text-indigo-400 uppercase tracking-wider mb-2">Milestone Breakdown</h4>
-                                            <div className="space-y-2">
+                                            <h4 className="font-semibold text-xs text-sky-400 uppercase tracking-wider mb-2">Milestone Breakdown</h4>
+                                            <div className="space-y-2 max-h-[360px] overflow-y-auto">
                                                 {milestones.map(m => {
                                                     const isCleared = m.status === 'paid' || m.status === 'invoiced';
                                                     const baseAmount = m.type === 'execution' ? (financials.approvedExecutionValue || originalNetExecution) : (financials.approvedDesignValue || originalNetDesign);
@@ -1540,9 +3390,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     }
 
                                                     return (
-                                                        <div key={m.id} className="flex justify-between items-center text-sm p-2 bg-indigo-50/50 rounded border border-indigo-100">
+                                                        <div key={m.id} className="flex justify-between items-center text-sm p-2 bg-sky-50/50 rounded border border-sky-100">
                                                             <span className="text-slate-600 truncate pr-2" title={m.name}>{m.percentage}% - {m.name}</span>
-                                                            <span className="font-bold text-indigo-700">{formatCurrency(total)}</span>
+                                                            <span className="font-bold text-[#0055B3]">{formatCurrency(total)}</span>
                                                         </div>
                                                     );
                                                 })}
@@ -1559,15 +3409,70 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                 >
                                     Close
                                 </button>
+                                {compareRevision.id && (
+                                    <button 
+                                        onClick={() => {
+                                            handleRevertRevision(compareRevision);
+                                            setCompareRevision(null);
+                                        }}
+                                        className="px-4 py-2 bg-amber-500 text-white font-bold rounded-lg shadow-sm hover:bg-amber-600 transition-colors flex items-center gap-2"
+                                    >
+                                        <ClockIcon className="w-4 h-4" />
+                                        Revert to Previous
+                                    </button>
+                                )}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* PRE-SIGNOFF PAYMENTS EXCEPTION CONFIRMATION MODAL */}
+            <AnimatePresence>
+                {confirmingException && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-[#0066CC]/90 backdrop-blur-md border border-white/20/55 backdrop-blur-sm p-4 animate-none"
+                        style={{ position: 'fixed', zIndex: 9999 }}
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-stone-200"
+                        >
+                            <div className="p-6 text-center space-y-4">
+                                <div className="mx-auto w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-100">
+                                    <AlertTriangle className="w-6 h-6" />
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <h3 className="text-lg font-bold text-slate-900 font-['Plus_Jakarta_Sans']">
+                                        Client Unacknowledged Schedule
+                                    </h3>
+                                    <p className="text-sm text-stone-600 leading-relaxed font-['Plus_Jakarta_Sans']">
+                                        The client has not signed or acknowledged the Terms Docket & Payment Schedule yet.
+                                    </p>
+                                    <p className="text-xs text-stone-500 leading-relaxed font-['Plus_Jakarta_Sans'] bg-stone-50 p-3 rounded-lg border border-stone-150">
+                                        Do you want to proceed as a special-case exception, on the condition that amended terms and conditions will be signed later?
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div className="p-4 bg-stone-50 border-t border-stone-200 flex gap-3">
                                 <button 
-                                    onClick={() => {
-                                        handleRevertRevision(compareRevision);
-                                        setCompareRevision(null);
-                                    }}
-                                    className="px-4 py-2 bg-amber-500 text-white font-bold rounded-lg shadow-sm hover:bg-amber-600 transition-colors flex items-center gap-2"
+                                    onClick={() => setConfirmingException(null)}
+                                    className="flex-1 px-4 py-2 bg-white text-stone-700 font-bold border border-stone-250 rounded-xl hover:bg-stone-100 transition-colors text-xs font-['Plus_Jakarta_Sans']"
                                 >
-                                    <ClockIcon className="w-4 h-4" />
-                                    Revert to Previous
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={handleConfirmException}
+                                    className="flex-1 px-4 py-2 bg-[#0066CC] text-white font-bold rounded-xl hover:bg-[#0055B3] shadow-sm transition-colors text-xs font-['Plus_Jakarta_Sans']"
+                                >
+                                    {confirmingException.action === 'mark_paid' ? 'Yes, Mark Paid' : 'Yes, Raise Invoice'}
                                 </button>
                             </div>
                         </motion.div>

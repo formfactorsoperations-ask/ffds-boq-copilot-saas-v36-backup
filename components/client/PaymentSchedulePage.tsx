@@ -4,6 +4,7 @@ import { FileText, Send, Download, AlertTriangle, ArrowRight, History, Eye } fro
 import { formatCurrency, id as generateId } from '../../lib/utils';
 import { useOrg } from '../../contexts/OrgContext';
 import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
+import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 
 interface PaymentSchedulePageProps {
     projectContext: ProjectContext;
@@ -41,8 +42,8 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
             lockedSnapshot: null,
             history: [],
             ...(engagement || {}),
-            designFee: engagement?.designFee || projectContext.financials?.approvedDesignValue || activeTier?.summary?.designFee || 0,
-            executionValue: engagement?.executionValue || projectContext.financials?.approvedExecutionValue || activeTier?.summary?.totalSell || 0
+            designFee: (activeTier?.summary?.designFee !== undefined && activeTier?.summary?.designFee > 0) ? activeTier.summary.designFee : (engagement?.designFee || projectContext.financials?.approvedDesignValue || 0),
+            executionValue: (activeTier?.summary?.totalSell !== undefined && activeTier?.summary?.totalSell > 0) ? activeTier.summary.totalSell : (engagement?.executionValue || projectContext.financials?.approvedExecutionValue || 0)
         } as ProjectEngagement;
 
         latestSchedule = {
@@ -88,8 +89,12 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
             }
 
             const engagement = projectContext.engagement;
-            const originalNetDesign = engagement?.designFee || projectContext.financials?.approvedDesignValue || activeTier?.summary?.designFee || 0;
-            const originalNetExecution = engagement?.executionValue || projectContext.financials?.approvedExecutionValue || activeTier?.summary?.totalSell || 0;
+            const originalNetDesign = (activeTier?.summary?.designFee !== undefined && activeTier?.summary?.designFee > 0)
+                ? activeTier.summary.designFee 
+                : (engagement?.designFee || projectContext.financials?.approvedDesignValue || 0);
+            const originalNetExecution = (activeTier?.summary?.totalSell !== undefined && activeTier?.summary?.totalSell > 0)
+                ? activeTier.summary.totalSell 
+                : (engagement?.executionValue || projectContext.financials?.approvedExecutionValue || 0);
             const contractValue = originalNetExecution + originalNetDesign;
 
             const engagementSnapshot = {
@@ -117,9 +122,9 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                     const originalBaseAmount = m.type === 'execution' ? originalNetExecution : originalNetDesign;
                     let amount = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : (originalBaseAmount * (m.percentage / 100));
                     amount = Math.round(amount);
-                    const advCode = m.type === 'design' ? `D${++dIndex}` : `E${++eIndex}`;
+                    const autoCode = m.type === 'design' ? `D${++dIndex}` : `E${++eIndex}`;
                     return {
-                        advanceCode: m.description && m.description.match(/^[DEH][0-9]$/) ? m.description : advCode,
+                        advanceCode: autoCode,
                         label: (m.name || '').replace(' (Gross)', ''),
                         phase: m.type as 'design' | 'execution' | 'handover',
                         percentage: m.percentage,
@@ -131,7 +136,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                         status: 'pending',
                         invoiceRef: null,
                         receivedAt: null,
-                        isHandoverAdvance: m.isHandoverAdvance || false
+                        isHandoverAdvance: m.isHandoverAdvance || (m.name || '').toLowerCase().includes('handover') || false
                     };
                 });
             } else {
@@ -261,7 +266,13 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                     margin: [15, 0, 15, 0],
                     filename: `${orgData.orgName?.replace(/\s+/g, '') || 'Studio'}-PaymentSchedule-${projectContext.name}-v${latestSchedule.version}.pdf`,
                     image: { type: 'jpeg' as const, quality: 1 },
-                    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+                    html2canvas: { 
+                        scale: 2, 
+                        useCORS: true, 
+                        letterRendering: true,
+                        logging: false,
+                        onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc)
+                    },
                     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
                     pagebreak: { mode: ['css', 'legacy'], avoid: ['.sec-group', 'tr', '.highlight', '.sig', '.metabar', '.valuebar'] }
                 };
@@ -294,7 +305,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
             <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in">
                 <div className="bg-white border text-center border-slate-200 p-16 rounded-3xl shadow-sm">
                     <FileText className="w-16 h-16 text-slate-300 mx-auto mb-6" />
-                    <h2 className="text-2xl font-black text-indigo-900 tracking-tight">Advance Payment Schedule</h2>
+                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">Advance Payment Schedule</h2>
                     <p className="text-slate-500 mt-2 max-w-lg mx-auto">
                         No payment schedule has been generated yet for this project.
                     </p>
@@ -306,10 +317,25 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
         );
     }
 
-    // Grouping logic for the PDF table
-    const designAdvances = latestSchedule.advances.filter(a => a.phase === 'design');
-    const executionAdvances = latestSchedule.advances.filter(a => a.phase === 'execution' && !a.isHandoverAdvance);
-    const handoverAdvances = latestSchedule.advances.filter(a => a.phase === 'handover' || a.isHandoverAdvance);
+    // Grouping & Natural Sorting logic for the PDF table
+    const designAdvances = latestSchedule.advances
+        .filter(a => a.phase === 'design')
+        .sort((a, b) => {
+            const numA = parseInt((a.advanceCode || '').replace(/\D/g, '') || '0', 10);
+            const numB = parseInt((b.advanceCode || '').replace(/\D/g, '') || '0', 10);
+            return (numA && numB) ? numA - numB : 0;
+        });
+
+    // All execution stages (including handover stages) in unified natural chronological sequence
+    const allExecutionAdvances = latestSchedule.advances
+        .filter(a => a.phase === 'execution' || a.phase === 'handover' || a.isHandoverAdvance)
+        .sort((a, b) => {
+            const numA = parseInt((a.advanceCode || '').replace(/\D/g, '') || '0', 10);
+            const numB = parseInt((b.advanceCode || '').replace(/\D/g, '') || '0', 10);
+            return (numA && numB) ? numA - numB : 0;
+        });
+
+    const handoverAdvances = allExecutionAdvances.filter(a => a.phase === 'handover' || a.isHandoverAdvance || (a.label && a.label.toLowerCase().includes('handover')));
 
     const isOwner = currentRole === 'Super Admin' || currentRole === 'Admin';
     const studioName = orgData.orgName || '[set in Studio Settings]';
@@ -351,8 +377,8 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
 
     const designPctTotal = designAdvances.reduce((sum, a) => sum + a.percentage, 0);
     const designAmountTotal = designAdvances.reduce((sum, a) => sum + (a.amount || 0), 0);
-    const executionPctTotal = executionAdvances.reduce((sum, a) => sum + a.percentage, 0) + handoverAdvances.reduce((sum, a) => sum + a.percentage, 0);
-    const executionAmountTotal = executionAdvances.reduce((sum, a) => sum + (a.amount || 0), 0) + handoverAdvances.reduce((sum, a) => sum + (a.amount || 0), 0);
+    const executionPctTotal = allExecutionAdvances.reduce((sum, a) => sum + a.percentage, 0);
+    const executionAmountTotal = allExecutionAdvances.reduce((sum, a) => sum + (a.amount || 0), 0);
 
     return (
         <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in pb-20 font-sans">
@@ -365,10 +391,10 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                     </div>
                     <div>
                         <div className="flex items-center gap-2">
-                            <h2 className="text-lg font-bold text-indigo-900 leading-tight">Payment Schedule</h2>
+                            <h2 className="text-lg font-bold text-slate-800 leading-tight">Payment Schedule</h2>
                             {isOwner && sortedHistory.length > 1 ? (
                                 <select 
-                                    className="ml-2 font-mono text-sm bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700 outline-none focus:border-indigo-300"
+                                    className="ml-2 font-mono text-sm bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-700 outline-none focus:border-sky-300"
                                     value={selectedScheduleId || ''}
                                     onChange={(e) => setSelectedScheduleId(e.target.value || null)}
                                 >
@@ -547,25 +573,15 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                             </div>
                         )}
 
-                        {(executionAdvances.length > 0 || handoverAdvances.length > 0) && (
+                        {allExecutionAdvances.length > 0 && (
                             <div className="sec-group">
                                 <h2 className="sec">B &middot; Execution Phase <span className="pill e">% OF EXECUTION VALUE</span></h2>
                                 <table>
                                     <thead><tr><th>STAGE</th><th>PAID WHEN</th><th className="r">%</th><th className="r">AMOUNT (EXCL. GST)</th><th className="r">+18% GST</th><th className="r">TOTAL (INCL. GST)</th></tr></thead>
                                     <tbody>
-                                        {executionAdvances.map((adv, i) => (
+                                        {allExecutionAdvances.map((adv, i) => (
                                             <tr key={`e-${i}`}>
                                                 <td><span className="nm">{adv.advanceCode || `E${i+1}`} &middot; {adv.label}</span><span className="sm">{adv.unlocks || ''}</span></td>
-                                                <td>{adv.dueCondition}</td>
-                                                <td className="pct">{adv.percentage}%</td>
-                                                <td className="amt">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${(adv.amount || 0).toLocaleString('en-IN')}` : '--'}</td>
-                                                <td className="amt text-slate-500">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * 0.18).toLocaleString('en-IN')}` : '--'}</td>
-                                                <td className="amt font-bold">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * 1.18).toLocaleString('en-IN')}` : '--'}</td>
-                                            </tr>
-                                        ))}
-                                        {handoverAdvances.map((adv, i) => (
-                                            <tr key={`h-${i}`}>
-                                                <td><span className="nm">{adv.advanceCode || 'H1'} &middot; {adv.label}</span><span className="sm">{adv.unlocks || ''}</span></td>
                                                 <td>{adv.dueCondition}</td>
                                                 <td className="pct">{adv.percentage}%</td>
                                                 <td className="amt">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${(adv.amount || 0).toLocaleString('en-IN')}` : '--'}</td>
@@ -577,6 +593,9 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                                     <tfoot><tr><td colSpan={2}>Execution total</td><td className="r">{executionPctTotal}%</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${executionAmountTotal.toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * 0.18).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * 1.18).toLocaleString('en-IN')}` : '--'}</td></tr></tfoot>
                                 </table>
                                 <p className="note">Percentages are fixed; amounts are calculated from the values above. Each payment is triggered by the completed milestone shown, not by a calendar date.</p>
+                                <p className="note" style={{ marginTop: '6px', lineHeight: '1.5' }}>
+                                    <strong>GST &amp; Statutory Applicability:</strong> Goods and Services Tax (GST) is a statutory levy governed by prevailing Government of India tax regulations and shall apply in accordance with the specific commercial and execution structure stipulated in the signed Execution Agreement. Milestone GST values indicated in this schedule reflect standard applicable statutory rates (18%) and are subject to final tax invoice terms, SAC/HSN classifications, direct procurement allowances, and executed agreement conditions.
+                                </p>
                             </div>
                         )}
 

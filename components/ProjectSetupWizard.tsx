@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { showSuccessWithNext } from './SuccessWithNextToast';
 import { Item, ProjectContext, ProposalTier, AIStrategy, MaterialSuggestion, TimelinePhase, LeadProfile, DecisionBrainOutput } from '../types';
 import { generateStandardPackages, TemplateData } from '../lib/standardPackages';
 import { SparklesIcon, PencilIcon, ArrowRightIcon, UploadIcon, ListIcon } from './Icons';
@@ -26,6 +27,8 @@ interface ProjectSetupWizardProps {
   setLeadProfile: (profile: LeadProfile) => void;
   setDecisionBrainOutput: (output: DecisionBrainOutput | null) => void;
   templates: TemplateData;
+  onComplete?: () => void;
+  onCancel?: () => void;
 }
 
 type SetupMethod = 'manual' | 'floorplan';
@@ -59,7 +62,9 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       templates,
       setAiStrategy,
       setMaterialSuggestions,
-      setTimelinePhases
+      setTimelinePhases,
+      onComplete,
+      onCancel
   } = props;
 
   const [step, setStep] = useState(0); 
@@ -67,6 +72,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [theme, setTheme] = useState('modern');
+  const [proposalMode, setProposalMode] = useState<'single' | 'tiered'>('tiered');
   const [selectedStrategy, setSelectedStrategy] = useState<AIStrategy>('balanced');
   
   const isContextComplete = (projectContext.rooms || []).length > 0 && projectContext.area > 0;
@@ -98,6 +104,15 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
           rooms,
           area: totalAreaFromAI > 0 ? Number(totalAreaFromAI.toFixed(2)) : p.area 
       }));
+      showSuccessWithNext("Project area is calculated. Check the rooms.", {
+          label: "Review Rooms",
+          onClick: () => {
+              const el = document.getElementById("dimensional-space-planner");
+              if (el) {
+                  el.scrollIntoView({ behavior: 'smooth' });
+              }
+          }
+      });
     } catch (e) {
       console.error(e);
       alert("Failed to analyze floor plan. Please try manual setup.");
@@ -137,6 +152,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
 
   const finalizeGeneration = async (newTiers: ProposalTier[]) => {
       setTiers(newTiers);
+      if (onComplete) onComplete();
       const premiumTier = newTiers.find(t => t.name === "Comfort Upgrade") || newTiers[0];
       setActiveTierId(premiumTier.id);
 
@@ -175,6 +191,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
           setMaterialSuggestions(materials);
       }
       setIsLoading(false);
+      showSuccessWithNext('Project Context Saved and Packages Generated');
   };
 
   const handleGenerateTemplates = async () => {
@@ -182,10 +199,11 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
     setLoadingMessage('Applying Standard Packages...');
     await new Promise(resolve => setTimeout(resolve, 600)); // UX delay
     
-    setProjectContext(prev => ({ ...prev, theme }));
+    const updatedContext = { ...projectContext, theme, proposalMode };
+    setProjectContext(updatedContext);
     if (setAiStrategy) setAiStrategy(selectedStrategy);
 
-    const newTiers = generateStandardPackages(projectContext, bank, templates);
+    const newTiers = generateStandardPackages(updatedContext, bank, templates, proposalMode);
     await finalizeGeneration(newTiers);
   };
 
@@ -193,11 +211,12 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       setIsLoading(true);
       setLoadingMessage('AI: Thinking & Generating...');
       
-      setProjectContext(prev => ({ ...prev, theme }));
+      const updatedContext = { ...projectContext, theme, proposalMode };
+      setProjectContext(updatedContext);
       if (setAiStrategy) setAiStrategy(selectedStrategy);
 
       try {
-          const rawPackages = await generateTieredBoqPackages(projectContext, theme, bank, selectedStrategy);
+          const rawPackages = await generateTieredBoqPackages(updatedContext, theme, bank, selectedStrategy);
           
           const mapToTier = (name: string, items: any[]): ProposalTier => {
               const boqItems: BoqItem[] = items.map(i => ({
@@ -215,12 +234,14 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                   name,
                   timestamp: Date.now(),
                   boq: boqItems,
-                  projectContext,
+                  projectContext: updatedContext,
                   summary: { totalSell: 0, totalCost: 0, totalGm: 0, itemCount: boqItems.length, totalRevenue: 0, designFee: 0, blendedGm: 0 }
               };
           };
 
-          const newTiers = [
+          const newTiers = proposalMode === 'single' ? [
+              mapToTier("Comfort Upgrade", rawPackages.premium)
+          ] : [
               mapToTier("Essential Elegance", rawPackages.essential),
               mapToTier("Comfort Upgrade", rawPackages.premium),
               mapToTier("Complete Harmony", rawPackages.luxury)
@@ -251,8 +272,16 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                 className="text-center mb-16"
               >
                   <FFDSLogo className="mb-6 scale-125" />
-                  <h1 className="text-4xl md:text-5xl font-black text-indigo-950 tracking-tight mb-4">
-                      Create New Project
+                  {onCancel && (
+                      <button 
+                          onClick={onCancel}
+                          className="absolute top-8 right-8 px-4 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-full text-sm font-bold transition-colors"
+                      >
+                          Cancel
+                      </button>
+                  )}
+                  <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight mb-4">
+                      {onCancel ? 'Modify Project Brief' : 'Create New Project'}
                   </h1>
                   <p className="text-lg text-slate-500 max-w-xl mx-auto">
                       Build data-driven interior proposals in minutes. Choose how you want to input the project details.
@@ -271,15 +300,15 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                     whileHover={{ scale: 1.02, y: -5 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => { setSetupMethod('floorplan'); setStep(1); }} 
-                    className="relative bg-white border-2 border-indigo-100 rounded-3xl p-8 text-left shadow-xl shadow-indigo-500/10 hover:shadow-2xl hover:border-indigo-500/50 transition-all group overflow-hidden"
+                    className="relative bg-white border-2 border-sky-100 rounded-3xl p-8 text-left shadow-xl shadow-sky-500/10 hover:shadow-2xl hover:border-[#0066CC]/50 transition-all group overflow-hidden"
                   >
                       <div className="absolute top-0 right-0 p-3">
-                          <span className="bg-indigo-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-md">Recommended</span>
+                          <span className="bg-[#0066CC] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-md">Recommended</span>
                       </div>
-                      <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mb-6 text-indigo-600 group-hover:scale-110 transition-transform">
+                      <div className="w-14 h-14 bg-sky-50 rounded-2xl flex items-center justify-center mb-6 text-[#0066CC] group-hover:scale-110 transition-transform">
                           <SparklesIcon className="w-7 h-7" />
                       </div>
-                      <h3 className="text-xl font-bold text-indigo-950 mb-2 group-hover:text-indigo-700 transition-colors">AI Floor Plan Analysis</h3>
+                      <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-[#0055B3] transition-colors">AI Floor Plan Analysis</h3>
                       <p className="text-sm text-slate-500 leading-relaxed">
                           Upload a floor plan image. Our AI will automatically detect rooms, calculate areas, and prepare your BOQ structure.
                       </p>
@@ -296,26 +325,14 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                       <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mb-6 text-slate-600 group-hover:scale-110 transition-transform">
                           <PencilIcon className="w-7 h-7" />
                       </div>
-                      <h3 className="text-xl font-bold text-indigo-950 mb-2 group-hover:text-slate-700 transition-colors">Manual Entry</h3>
+                      <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-slate-700 transition-colors">Manual Entry</h3>
                       <p className="text-sm text-slate-500 leading-relaxed">
                           Start with a blank canvas. Manually define rooms and dimensions. Best for simple renovations or specific scope.
                       </p>
                   </MotionButton>
               </MotionDiv>
 
-              <MotionDiv 
-                initial={{ opacity: 0 }} 
-                animate={{ opacity: 1 }} 
-                transition={{ delay: 0.5 }}
-                className="mt-12"
-              >
-                  <button 
-                      onClick={handleSkipToDashboard}
-                      className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-2 px-4 py-2 rounded-full hover:bg-slate-100"
-                  >
-                      Just exploring? Skip setup and go to Dashboard <ArrowRightIcon className="w-4 h-4" />
-                  </button>
-              </MotionDiv>
+
           </div>
       )}
 
@@ -324,7 +341,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
         <MotionDiv initial={{opacity:0, x: 20}} animate={{opacity:1, x: 0}} className="space-y-8 pt-10">
             {/* Header / Progress */}
             <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-indigo-950">Project Context</h2>
+                <h2 className="text-2xl font-bold text-slate-900">Project Context</h2>
                 <div className="flex justify-center gap-2 mt-4">
                     <div className="h-1.5 w-12 bg-blue-600 rounded-full"></div>
                     <div className="h-1.5 w-4 bg-slate-200 rounded-full"></div>
@@ -350,7 +367,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                 </Card>
             )}
              
-             <ProjectContextCard projectContext={projectContext} setProjectContext={setProjectContext} aiStrategy={'balanced'} />
+             <ProjectContextCard projectContext={projectContext} setProjectContext={setProjectContext} aiStrategy={'balanced'} hideExecutionControls={true} />
              
              <div className="flex justify-center gap-4 pt-4">
                 <button onClick={() => setStep(0)} className="px-8 py-4 bg-white text-slate-600 font-bold rounded-2xl hover:bg-slate-50 transition-all shadow-sm border border-slate-200">Back</button>
@@ -370,7 +387,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
           <MotionDiv initial={{opacity:0, scale: 0.95}} animate={{opacity:1, scale: 1}} className="max-w-4xl mx-auto space-y-8 pt-10">
               
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-indigo-950">Generation Strategy</h2>
+                <h2 className="text-2xl font-bold text-slate-900">Generation Strategy</h2>
                 <div className="flex justify-center gap-2 mt-4">
                     <div className="h-1.5 w-4 bg-emerald-500 rounded-full"></div>
                     <div className="h-1.5 w-12 bg-blue-600 rounded-full"></div>
@@ -381,30 +398,55 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                    <div className="p-2">
                        <p className="text-slate-600 mb-8">Select how you want to build the proposal options.</p>
                        
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                            <div className="space-y-2">
+                                <label className="font-bold text-slate-700">Proposal Mode</label>
+                                <div className="grid grid-cols-2 gap-2 h-[58px]">
+                                    {(['single', 'tiered'] as const).map(m => (
+                                        <button
+                                            key={m}
+                                            type="button"
+                                            onClick={() => {
+                                                setProposalMode(m);
+                                                setProjectContext(p => ({ ...p, proposalMode: m }));
+                                            }}
+                                            className={`px-3 rounded-xl border text-center transition-all font-bold text-[10px] flex items-center justify-center uppercase tracking-wider leading-tight
+                                                ${proposalMode === m 
+                                                    ? 'bg-blue-50 border-blue-500 text-blue-800 ring-1 ring-blue-200 shadow-sm' 
+                                                    : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                                                }
+                                            `}
+                                        >
+                                            {m === 'single' ? 'Single Option' : 'Tiered Options'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             <div className="space-y-2">
                                 <label className="font-bold text-slate-700">Design Theme</label>
-                                <select value={theme} onChange={e => setTheme(e.target.value)} className="w-full p-4 border border-slate-200 rounded-xl bg-slate-50 font-medium text-lg outline-none focus:ring-2 focus:ring-blue-200 cursor-pointer">
+                                <select value={theme} onChange={e => setTheme(e.target.value)} className="w-full p-4 border border-slate-200 rounded-xl bg-slate-50 font-medium text-sm outline-none focus:ring-2 focus:ring-blue-200 cursor-pointer h-[58px]">
                                     {['modern', 'minimalist', 'classic', 'industrial', 'bohemian', 'luxury'].map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
                                 </select>
                             </div>
                             
                             <div className="space-y-2">
                                 <label className="font-bold text-slate-700">AI Persona (for Custom Gen)</label>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-3 gap-1 h-[58px]">
                                     {AI_STRATEGIES.map(s => (
                                         <button
                                             key={s.id}
+                                            type="button"
                                             onClick={() => setSelectedStrategy(s.id as AIStrategy)}
-                                            className={`p-2 rounded-xl border text-center transition-all flex flex-col items-center justify-center
+                                            className={`rounded-xl border text-center transition-all flex flex-col items-center justify-center p-1
                                                 ${selectedStrategy === s.id 
                                                     ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-200 text-blue-800' 
                                                     : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                                                 }
                                             `}
                                         >
-                                            <span className="text-xl mb-1">{s.icon}</span>
-                                            <span className="text-[10px] font-bold uppercase tracking-wide">{s.name}</span>
+                                            <span className="text-base mb-0.5">{s.icon}</span>
+                                            <span className="text-[8px] font-bold uppercase tracking-wider leading-none">{s.name}</span>
                                         </button>
                                     ))}
                                 </div>
@@ -421,9 +463,9 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                                 <div className="absolute top-4 right-4 text-blue-600 bg-blue-50 p-2 rounded-lg">
                                     <ListIcon className="w-6 h-6" />
                                 </div>
-                                <h3 className="text-lg font-bold text-indigo-900 group-hover:text-blue-700">Use Standard Templates</h3>
+                                <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-700">Use Standard Templates</h3>
                                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                                    Instantly generates 3 tiers (Essential, Comfort, Harmony) using FFDS standard specifications for {projectContext.config}.
+                                    Instantly generates {proposalMode === 'single' ? '1 option (Comfort Upgrade)' : '3 tiers (Essential, Comfort, Harmony)'} using standard firm specifications for {projectContext.config}.
                                 </p>
                                 <div className="mt-4 text-xs font-bold text-blue-600 bg-blue-50 inline-block px-2 py-1 rounded">Fastest • Recommended</div>
                             </button>
@@ -436,9 +478,9 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                                 <div className="absolute top-4 right-4 text-purple-600 bg-purple-50 p-2 rounded-lg">
                                     <SparklesIcon className="w-6 h-6" />
                                 </div>
-                                <h3 className="text-lg font-bold text-indigo-900 group-hover:text-purple-700">Ask AI to Create</h3>
+                                <h3 className="text-lg font-bold text-slate-800 group-hover:text-purple-700">Ask AI to Create</h3>
                                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                                    Gemini will analyze your exact room list and client brief to build 3 unique custom packages from scratch.
+                                    Gemini will analyze your exact room list and client brief to build {proposalMode === 'single' ? 'a unique custom option' : '3 unique custom packages'} from scratch.
                                 </p>
                                 <div className="mt-4 text-xs font-bold text-purple-600 bg-purple-50 inline-block px-2 py-1 rounded">Flexible • Tailored</div>
                             </button>
@@ -458,7 +500,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                              <button 
                                 onClick={handleStartManual} 
                                 disabled={isLoading} 
-                                className="w-full py-4 bg-slate-50 text-slate-500 border border-slate-200 font-bold rounded-2xl hover:bg-white hover:text-indigo-900 hover:border-slate-300 transition-all flex items-center justify-center gap-2"
+                                className="w-full py-4 bg-slate-50 text-slate-500 border border-slate-200 font-bold rounded-2xl hover:bg-white hover:text-slate-800 hover:border-slate-300 transition-all flex items-center justify-center gap-2"
                             >
                                Skip Generation & Start Manual BOQ <ArrowRightIcon className="w-4 h-4"/>
                             </button>

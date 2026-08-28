@@ -1,57 +1,20 @@
 const fs = require('fs');
-let code = fs.readFileSync('components/ProjectListTab.tsx', 'utf8');
+const path = 'components/ProjectWorkspace.tsx';
+let content = fs.readFileSync(path, 'utf8');
 
-const regex = /\s*\/\/ 5\. Payment Due \(within 7 days or overdue\)[\s\S]*?conditions\.push\(\{[^{}]*?text: isOverdue \? `Payment Overdue \$\{d\}` : `Payment due \$\{d\}`,\s*isAlert: isOverdue\s*\}\);\s*\}/;
+// Replace FloatingDock closing tag and add the button
+content = content.replace(
+  '              desktopClassName="h-auto bg-slate-200/50 border border-slate-200/80 px-2 py-1 gap-1 rounded-xl shadow-2xs"\n              mobileClassName=""\n            />\n          </div>\n        </div>',
+  `              desktopClassName="h-auto bg-slate-200/50 border border-slate-200/80 px-2 py-1 gap-1 rounded-xl shadow-2xs"\n              mobileClassName=""\n            />\n\n            <button\n              onClick={() => setIsGlassLabOpen(true)}\n              className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-xs font-medium rounded-lg hover:from-purple-600 hover:to-indigo-600 transition-all shadow-sm shadow-purple-500/20"\n            >\n              <Sparkles className="w-3.5 h-3.5" />\n              Glass Theme\n            </button>\n          </div>\n        </div>`
+);
 
-const replacement = `                      // 5. Payment Due (within 7 days or overdue)
-                      const upcomingOrOverdue = project.context?.paymentMilestones
-                        ?.map((m) => {
-                          const st = m.status?.toLowerCase();
-                          if (st === "paid" || st === "cleared" || st === "received") return null;
-                          if (st !== "invoiced" && st !== "advance_requested") return null;
-
-                          const baseDateStr = m.invoiceDate || m.date;
-                          if (!baseDateStr) return null;
-                          
-                          const targetDate = new Date(baseDateStr);
-                          if (isNaN(targetDate.getTime())) return null;
-                          
-                          if (m.invoiceDate) {
-                              targetDate.setDate(targetDate.getDate() + 7);
-                          }
-
-                          return { m, targetDate };
-                        })
-                        .filter((item): item is { m: any, targetDate: Date } => item !== null)
-                        .filter((item) => {
-                          const in7Days = new Date();
-                          in7Days.setDate(in7Days.getDate() + 7);
-                          return item.targetDate <= in7Days;
-                        })
-                        .sort((a, b) => a.targetDate.getTime() - b.targetDate.getTime());
-
-                      if (upcomingOrOverdue && upcomingOrOverdue.length > 0) {
-                        const { targetDate } = upcomingOrOverdue[0];
-                        const now = new Date();
-                        now.setHours(0, 0, 0, 0); // compare dates only
-                        const isOverdue = targetDate < now;
-                        
-                        const d = targetDate.toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                        });
-                        
-                        conditions.push({
-                          dot: isOverdue ? "bg-rose-500 animate-pulse" : "bg-amber-500",
-                          text: isOverdue ? \`Payment Overdue \${d}\` : \`Payment due \${d}\`,
-                          isAlert: isOverdue
-                        });
-                      }`;
-
-if (regex.test(code)) {
-    code = code.replace(regex, replacement);
-    fs.writeFileSync('components/ProjectListTab.tsx', code);
-    console.log("Success");
-} else {
-    console.log("Target not found!");
+// Add <GlassThemeLab /> just before the final </div> of the component
+const lastDivIndex = content.lastIndexOf('</div>');
+if (lastDivIndex !== -1) {
+  content = content.slice(0, lastDivIndex) + 
+    `\n      <AnimatePresence>\n        {isGlassLabOpen && <GlassThemeLab onClose={() => setIsGlassLabOpen(false)} />}\n      </AnimatePresence>\n    ` + 
+    content.slice(lastDivIndex);
 }
+
+fs.writeFileSync(path, content, 'utf8');
+console.log("Patched successfully.");

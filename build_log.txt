@@ -1,0 +1,105 @@
+
+> ffds-boq-copilot-v36.1---execution-workspace@0.0.0 build
+> vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs
+
+vite v6.4.3 building for production...
+transforming...
+✓ 3457 modules transformed.
+rendering chunks...
+[plugin vite:reporter] 
+(!) /app/applet/components/StudioReports.tsx is dynamically imported by /app/applet/App.tsx but also statically imported by /app/applet/components/ClientsDirectory.tsx, /app/applet/components/StudioHome.tsx, dynamic import will not move module into another chunk.
+
+computing gzip size...
+dist/index.html                                           18.97 kB │ gzip:   4.46 kB
+dist/assets/index-BA9T2Vrd.css                           301.23 kB │ gzip:  38.78 kB
+dist/assets/authService-BH48f-IP.js                        0.05 kB │ gzip:   0.07 kB
+dist/assets/UIConstants-B6gCNHVH.js                        0.79 kB │ gzip:   0.37 kB
+dist/assets/googleCalendarService-YAowuGH3.js              1.02 kB │ gzip:   0.62 kB
+dist/assets/useCommunicationLog-BHwmrLl_.js                1.85 kB │ gzip:   0.88 kB
+dist/assets/AIStrategyTab-CKZvBJED.js                      2.01 kB │ gzip:   0.77 kB
+dist/assets/lifecycleService-DfQgFK42.js                   2.49 kB │ gzip:   1.23 kB
+dist/assets/ManualStepCompleter-BfMcw07f.js                2.58 kB │ gzip:   0.83 kB
+dist/assets/LockedState-BCuYJWbk.js                        2.61 kB │ gzip:   0.87 kB
+dist/assets/Card-DOyKQOPb.js                               2.64 kB │ gzip:   0.81 kB
+dist/assets/StudioSettingsShell-VwMfiTY0.js                3.59 kB │ gzip:   1.27 kB
+dist/assets/useMomActions-Dr9bsxvh.js                      3.66 kB │ gzip:   1.60 kB
+dist/assets/pdfUtils-K-5YGfcJ.js                           3.83 kB │ gzip:   1.60 kB
+dist/assets/StudioDocumentShell-CDjiYTiu.js                4.17 kB │ gzip:   1.11 kB
+dist/assets/useStudioSettings-DeD9ZOju.js                  5.07 kB │ gzip:   2.30 kB
+dist/assets/MarginOptimizer-Bvzz1oRC.js                    7.89 kB │ gzip:   1.93 kB
+dist/assets/EngagementLifecycleWidget-BPF4pMxH.js          8.16 kB │ gzip:   2.53 kB
+dist/assets/clientApprovalEngine-C5_42QI2.js               8.26 kB │ gzip:   2.69 kB
+dist/assets/EmailDraftsTab-MprFjLgx.js                    12.00 kB │ gzip:   2.70 kB
+dist/assets/SubscriptionTab-DSec0gjV.js                   13.87 kB │ gzip:   2.15 kB
+dist/assets/SelectionConfirmPage-CTW4dPby.js              14.17 kB │ gzip:   3.05 kB
+dist/assets/ManualAcceptanceOverrideModal-D_wi7FrG.js     14.34 kB │ gzip:   2.92 kB
+dist/assets/MomAcknowledgePage-BNjfHItN.js                14.41 kB │ gzip:   3.22 kB
+dist/assets/DigitalSignatureDocket-CHvHro__.js            14.43 kB │ gzip:   2.43 kB
+dist/assets/engagementService-sUDz7uLk.js                 16.91 kB │ gzip:   5.86 kB
+dist/assets/TeamTab-BgiZyEcf.js                           17.21 kB │ gzip:   3.32 kB
+dist/assets/SignoffPage-c-sIcmz0.js                       17.50 kB │ gzip:   3.80 kB
+dist/assets/BulkImportModal-BsA5pcbP.js                   17.60 kB │ gzip:   4.09 kB
+dist/assets/LoginScreen-BlcGYsVe.js                       19.87 kB │ gzip:   4.32 kB
+dist/assets/format-CBpsKyOP.js                            20.37 kB │ gzip:   5.76 kB
+dist/assets/SnagListReportPage-GOWgH5C4.js                20.41 kB │ gzip:   3.84 kB
+dist/assets/SiteActivityWidget-Cn4dcU8y.js                20.93 kB │ gzip:   3.94 kB
+dist/assets/purify.es-BgtpMKW3.js                         22.77 kB │ gzip:   8.79 kB
+dist/assets/ProjectJourneyPage-BRXbfGmL.js                22.97 kB │ gzip:   4.19 kB
+dist/assets/LeadBrainTab-C0s1qgNW.js                      23.74 kB │ gzip:   5.16 kB
+dist/assets/ProjectSetupWizard-DdRVRpvc.js                23.83 kB │ gzip:   5.29 kB
+dist/assets/RaisePOModal-WnrdkgEu.js                      24.75 kB │ gzip:   4.50 kB
+dist/assets/ProjectHistory-DzV0jQdL.js                    25.86 kB │ gzip:   5.01 kB
+dist/assets/TemplatesAndBankTab-n-h16hOa.js               26.22 kB │ gzip:   4.77 kB
+dist/assets/QualityChecklistReportPage-Df0kFUS7.js        26.72 kB │ gzip:   5.10 kB
+dist/assets/DesignCompleteGate-C0fJXHPM.js                26.72 kB │ gzip:   5.84 kB
+dist/assets/emailService-BKznJQ98.js                      27.70 kB │ gzip:   8.24 kB
+dist/assets/AgreementSignoffPage-CtTvKHyF.js              27.78 kB │ gzip:   6.66 kB
+dist/assets/CashFlowForecastDashboard-DBynghZs.js         28.34 kB │ gzip:   5.74 kB
+dist/assets/SuperAdminDashboard-CSW5unaA.js               28.98 kB │ gzip:   4.49 kB
+dist/assets/DigitalSignaturePad-DdeP_CTA.js               29.20 kB │ gzip:   5.97 kB
+dist/assets/SiteVisitHistory-B2POJ7wL.js                  29.76 kB │ gzip:   5.98 kB
+dist/assets/CommunicationTrackerPage-CW3uZ3hb.js          30.18 kB │ gzip:   5.21 kB
+dist/assets/StudioSetupWizard-BPhRBT8S.js                 31.31 kB │ gzip:   4.93 kB
+dist/assets/HandoverDocketPage-e-8MwgBD.js                35.53 kB │ gzip:   6.44 kB
+dist/assets/SOFBoardTab-BEJRn9_H.js                       40.03 kB │ gzip:   6.44 kB
+dist/assets/SiteVisitLogModal-DOwP6XzR.js                 44.14 kB │ gzip:   8.95 kB
+dist/assets/SupervisorMobileApp-D4aphv6G.js               45.58 kB │ gzip:   7.84 kB
+dist/assets/PaymentSchedulePage-D9MQQxSD.js               46.92 kB │ gzip:   9.13 kB
+dist/assets/MomReviewModal-BAoRbTU0.js                    49.12 kB │ gzip:   8.65 kB
+dist/assets/OnboardingKitPage-zmPcNRmy.js                 69.27 kB │ gzip:   9.07 kB
+dist/assets/ProjectListTab-BIs2c8pa.js                    71.24 kB │ gzip:  12.23 kB
+dist/assets/vendor-charts-i-8Ah4bf.js                     71.58 kB │ gzip:  24.13 kB
+dist/assets/ClientsDirectory-uTBiyG6m.js                  76.71 kB │ gzip:  12.95 kB
+dist/assets/TimelineTab-C8mfm4hf.js                       78.82 kB │ gzip:  14.94 kB
+dist/assets/TermsDocketPage-1uoebyGG.js                   79.38 kB │ gzip:  14.24 kB
+dist/assets/ScopeAdditionsModule-DwT0v57b.js              80.97 kB │ gzip:  15.45 kB
+dist/assets/OperationsTab-DOl_mbAO.js                     81.06 kB │ gzip:  14.62 kB
+dist/assets/TemplateEditorTab-CHuzvqvG.js                111.49 kB │ gzip:  17.60 kB
+dist/assets/vendor-motion-D--5FmMt.js                    118.04 kB │ gzip:  39.52 kB
+dist/assets/Dashboard-eNLWB2S0.js                        118.74 kB │ gzip:  19.70 kB
+dist/assets/AnalyticsTab-uz6LgOJ4.js                     118.76 kB │ gzip:  19.93 kB
+dist/assets/scheduleBuilder-irah-CEy.js                  124.40 kB │ gzip:  23.79 kB
+dist/assets/DrawingTrackerModule-Bc6VQ_iE.js             138.15 kB │ gzip:  23.00 kB
+dist/assets/BankTab-hgpDoNrI.js                          140.75 kB │ gzip:  22.48 kB
+dist/assets/index.es-BZhd_JMf.js                         159.68 kB │ gzip:  53.56 kB
+dist/assets/StudioSettingsTab-DSEjmEDB.js                161.56 kB │ gzip:  22.62 kB
+dist/assets/RevisionStudio-DY5Fud_g.js                   167.68 kB │ gzip:  28.88 kB
+dist/assets/MaterialTab-5C813w-1.js                      170.95 kB │ gzip:  29.89 kB
+dist/assets/PaymentCalculatorTab-CRMt6wW5.js             193.21 kB │ gzip:  28.06 kB
+dist/assets/StudioDashboard-BOG-Drp-.js                  209.24 kB │ gzip:  35.11 kB
+dist/assets/ExecutionAgreementPage-Ibhzs9kl.js           272.65 kB │ gzip:  37.01 kB
+dist/assets/ClientPortal-CT49DKO8.js                     324.39 kB │ gzip:  57.78 kB
+dist/assets/vendor-jspdf-CcNHvgVE.js                     400.51 kB │ gzip: 131.29 kB
+dist/assets/vendor-react-D6_Iel6T.js                     476.64 kB │ gzip: 135.09 kB
+dist/assets/vendor-excel-CiHExXOJ.js                     477.52 kB │ gzip: 158.51 kB
+dist/assets/ClientTab-CRK0lrJr.js                        525.29 kB │ gzip:  83.53 kB
+dist/assets/SiteOpsTab-DFwt82Fq.js                       559.86 kB │ gzip:  89.92 kB
+dist/assets/vendor-firebase-Bn9tJcfY.js                  678.24 kB │ gzip: 160.44 kB
+dist/assets/index-J9um-QW-.js                          1,071.17 kB │ gzip: 219.28 kB
+dist/assets/vendor-html2pdf-BfQsOGcp.js                1,190.54 kB │ gzip: 334.57 kB
+✓ built in 32.85s
+
+  dist/server.cjs      117.6kb
+  dist/server.cjs.map  217.8kb
+
+⚡ Done in 30ms

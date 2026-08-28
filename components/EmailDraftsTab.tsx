@@ -18,10 +18,33 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
     const [filterCategory, setFilterCategory] = useState('All');
     const [copySuccess, setCopySuccess] = useState('');
 
-    const templates = settings?.emailTemplateLibrary && Array.isArray(settings.emailTemplateLibrary) && settings.emailTemplateLibrary.length > 0 && settings.emailTemplateLibrary[0]?.title
-        ? settings.emailTemplateLibrary
-        : EMAIL_TEMPLATE_LIBRARY;
-    const categories = ['All', ...new Set(templates.map(t => t.category))];
+    const getValidTemplates = (stg: any) => {
+        let source: any[] = [];
+        if (stg && Array.isArray(stg.emailTemplateLibrary) && stg.emailTemplateLibrary.length > 0) {
+            source = stg.emailTemplateLibrary;
+        } else if (stg && Array.isArray(stg.communicationTemplate) && stg.communicationTemplate.length > 0) {
+            source = stg.communicationTemplate;
+        }
+        if (source && source.length > 0) {
+            const customMap = new Map(source.map((item: any) => [item?.key, item]));
+            return EMAIL_TEMPLATE_LIBRARY.map(defaultItem => {
+                const custom = customMap.get(defaultItem.key);
+                if (custom && custom.title) {
+                    return {
+                        ...defaultItem,
+                        ...custom,
+                        email: { ...defaultItem.email, ...(custom.email || {}) },
+                        whatsapp: { ...defaultItem.whatsapp, ...(custom.whatsapp || {}) }
+                    };
+                }
+                return defaultItem;
+            });
+        }
+        return EMAIL_TEMPLATE_LIBRARY;
+    };
+
+    const templates = getValidTemplates(settings);
+    const categories = ['All', ...Array.from(new Set(templates.map(t => t?.category).filter(Boolean)))];
 
     const filteredTemplates = templates.filter(t => {
         if (filterCategory !== 'All' && t.category !== filterCategory) return false;
@@ -62,7 +85,7 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
         <div className="space-y-6 max-w-6xl mx-auto pb-12 animate-in fade-in zoom-in-95 duration-300">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div>
-                    <h2 className="text-2xl font-bold text-indigo-900 tracking-tight">Project Communication Scripts</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Project Communication Scripts</h2>
                     <p className="text-sm text-slate-500 mt-1">Pre-filled templates based on {projectContext?.name || 'this project'}</p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
@@ -73,13 +96,13 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
                             placeholder="Search scripts..." 
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="pl-9 pr-4 py-2 w-full border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            className="pl-9 pr-4 py-2 w-full border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-[#0066CC] outline-none"
                         />
                     </div>
                     <select 
                         value={filterCategory} 
                         onChange={(e) => setFilterCategory(e.target.value)}
-                        className="w-full sm:w-auto border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full sm:w-auto border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0066CC] outline-none"
                     >
                         {categories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
@@ -94,11 +117,11 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
                         <div key={template.key} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                             <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
                                 <div>
-                                    <h3 className="font-bold text-indigo-900 text-lg flex items-center gap-2">
+                                    <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
                                         {template.title}
                                     </h3>
                                     <div className="text-xs text-slate-500 font-medium flex gap-3 mt-1.5 align-center">
-                                        <span>Phase: <span className="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">{template.phase}</span></span>
+                                        <span>Phase: <span className="text-[#0066CC] bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">{template.phase}</span></span>
                                         <span>Category: <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">{template.category}</span></span>
                                     </div>
                                 </div>
@@ -111,12 +134,12 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
                                     <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 relative group">
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Subject</p>
                                         <div 
-                                            className="text-indigo-950 font-semibold text-sm pr-12"
+                                            className="text-slate-900 font-semibold text-sm pr-12"
                                             dangerouslySetInnerHTML={{ __html: resolveTemplate(template.email?.subject || '', vars) }}
                                         />
                                         <button 
                                             onClick={() => handleCopy(resolveTemplate(template.email?.subject || '', vars), `${template.key}_subject`)}
-                                            className="absolute top-3 right-3 text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 transition-all flex items-center gap-1 text-xs"
+                                            className="absolute top-3 right-3 text-slate-400 hover:text-[#0066CC] p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 transition-all flex items-center gap-1 text-xs"
                                         >
                                             {copySuccess === `${template.key}_subject` ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                                         </button>
@@ -129,7 +152,7 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
                                         />
                                         <button 
                                             onClick={() => handleCopy(resolveTemplate(template.email?.body || '', vars), `${template.key}_body`)}
-                                            className="absolute top-3 right-3 text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 transition-all flex items-center gap-1 text-xs"
+                                            className="absolute top-3 right-3 text-slate-400 hover:text-[#0066CC] p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 transition-all flex items-center gap-1 text-xs"
                                         >
                                             {copySuccess === `${template.key}_body` ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                                         </button>

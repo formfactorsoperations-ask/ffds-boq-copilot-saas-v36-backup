@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../services/firebaseClient';
 import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { del } from "idb-keyval";
 import { BuildingOfficeIcon, UserIcon, ShieldCheckIcon } from './Icons';
 import { useOrg } from '../contexts/OrgContext';
+import FlipText from './ui/flip-text';
 
 export default function SuperAdminDashboard() {
     const { orgData, updateOrgData, currentUserAuth } = useOrg();
@@ -112,6 +114,7 @@ export default function SuperAdminDashboard() {
             
             // Clear local caches to prevent seeing previous workspace's data while cloud sync initializes
             localStorage.removeItem('ffds_project_library');
+            await del('ffds_project_library');
             localStorage.removeItem('ffds_item_bank');
             localStorage.removeItem('ffds_draft_bank');
             localStorage.removeItem('ffds_templates');
@@ -130,7 +133,7 @@ export default function SuperAdminDashboard() {
             <div className="flex-1 p-8 flex items-center justify-center bg-slate-50">
                 <div className="text-center">
                     <ShieldCheckIcon className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                    <h2 className="text-2xl font-bold text-indigo-900 mb-2">Unauthorized Access</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-2">Unauthorized Access</h2>
                     <p className="text-slate-500">You must be a Platform Admin to view this page.</p>
                 </div>
             </div>
@@ -148,27 +151,31 @@ export default function SuperAdminDashboard() {
     return (
         <div className="flex-1 bg-slate-50 overflow-y-auto">
             <header className="px-4 sm:px-10 py-6 sm:py-8 bg-white border-b border-slate-200">
-                <div className="flex items-center gap-4 text-indigo-600 mb-2">
+                <div className="flex items-center gap-4 text-[#0066CC] mb-2">
                     <ShieldCheckIcon className="w-8 h-8" />
-                    <h1 className="text-3xl font-bold text-indigo-900 tracking-tight">Platform Super Admin</h1>
+                    <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
+                      <FlipText duration={2.5} loop={true}>
+                        Platform Super Admin
+                      </FlipText>
+                    </h1>
                 </div>
                 <p className="text-slate-500">Manage all SaaS tenants, onboarding, and platform-wide authentication access.</p>
             </header>
 
-            <div className="p-10 max-w-7xl mx-auto space-y-10">
+            <div className="p-10 w-full space-y-10">
                 
                 {/* Platform Health Overview */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Total Studios</div>
-                        <div className="text-3xl font-black text-indigo-900">{organizations.length}</div>
+                        <div className="text-3xl font-black text-slate-800">{organizations.length}</div>
                         <div className="text-xs font-medium text-emerald-600 mt-2 flex items-center gap-1">
                             <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Active & Online
                         </div>
                     </div>
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Total Users</div>
-                        <div className="text-3xl font-black text-indigo-900">{users.length}</div>
+                        <div className="text-3xl font-black text-slate-800">{users.length}</div>
                         <div className="text-xs font-medium text-emerald-600 mt-2 flex items-center gap-1">
                             <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Synced Platform Wide
                         </div>
@@ -185,14 +192,14 @@ export default function SuperAdminDashboard() {
                 {/* Studios Management */}
                 <section>
                     <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-bold text-indigo-900 flex items-center gap-2">
+                        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                             <BuildingOfficeIcon className="w-6 h-6 text-slate-400" />
                             Registered Studios (Organizations)
                         </h2>
                         {orgData.tenantId !== 'demo-tenant-01' && (
                             <button 
                                 onClick={() => handleSwitchToStudio({ id: 'demo-tenant-01', orgName: 'Main Platform Workspace' })}
-                                className="px-4 py-2 bg-indigo-900 text-white font-bold rounded-xl text-sm hover:bg-indigo-800 transition"
+                                className="px-4 py-2 bg-sky-900 text-white font-bold rounded-xl text-sm hover:bg-sky-800 transition"
                             >
                                 Return to Main Platform
                             </button>
@@ -215,7 +222,7 @@ export default function SuperAdminDashboard() {
                                             placeholder="e.g., Apex Design Consultants"
                                             value={newStudioName}
                                             onChange={(e) => setNewStudioName(e.target.value)}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
                                         />
                                     </div>
                                     <div>
@@ -223,7 +230,7 @@ export default function SuperAdminDashboard() {
                                         <select 
                                             value={newTierPlan}
                                             onChange={(e) => setNewTierPlan(e.target.value)}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
                                         >
                                             <option value="Free">Free / Trial</option>
                                             <option value="Professional">Professional (Standard)</option>
@@ -238,7 +245,7 @@ export default function SuperAdminDashboard() {
                                             placeholder="admin@studio.com"
                                             value={newAdminEmail}
                                             onChange={(e) => setNewAdminEmail(e.target.value)}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
                                         />
                                     </div>
                                     <div>
@@ -248,7 +255,7 @@ export default function SuperAdminDashboard() {
                                             placeholder="e.g., Rahul Sharma"
                                             value={newContactPerson}
                                             onChange={(e) => setNewContactPerson(e.target.value)}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
                                         />
                                     </div>
                                     <div>
@@ -258,7 +265,7 @@ export default function SuperAdminDashboard() {
                                             placeholder="e.g., +91 98765 43210"
                                             value={newPhone}
                                             onChange={(e) => setNewPhone(e.target.value)}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
                                         />
                                     </div>
                                     <div>
@@ -268,14 +275,14 @@ export default function SuperAdminDashboard() {
                                             placeholder="e.g., Bangalore, KA"
                                             value={newCity}
                                             onChange={(e) => setNewCity(e.target.value)}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
                                         />
                                     </div>
                                 </div>
                                 <div className="flex justify-end pt-4 border-t border-slate-100">
                                     <button 
                                         type="submit"
-                                        className="bg-indigo-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-800 transition shadow-sm hover:shadow-md flex items-center gap-2"
+                                        className="bg-sky-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-sky-800 transition shadow-sm hover:shadow-md flex items-center gap-2"
                                     >
                                         <BuildingOfficeIcon className="w-5 h-5"/>
                                         Provision Studio Workspace
@@ -287,21 +294,21 @@ export default function SuperAdminDashboard() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {organizations.map(org => (
-                            <div key={org.id} className={`bg-white p-6 rounded-2xl shadow-sm border ${orgData.tenantId === org.id ? 'border-indigo-400 bg-indigo-50/20' : 'border-slate-200'} flex flex-col justify-between`}>
+                            <div key={org.id} className={`bg-white p-6 rounded-2xl shadow-sm border ${orgData.tenantId === org.id ? 'border-sky-400 bg-sky-50/20' : 'border-slate-200'} flex flex-col justify-between`}>
                                 <div>
-                                    <h3 className="font-bold text-indigo-900 mb-1 flex items-center justify-between">
+                                    <h3 className="font-bold text-slate-800 mb-1 flex items-center justify-between">
                                         {org.orgName || 'Unnamed Studio'}
-                                        {orgData.tenantId === org.id && <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full uppercase tracking-wider">Active</span>}
+                                        {orgData.tenantId === org.id && <span className="text-xs bg-sky-100 text-[#0055B3] px-2 py-0.5 rounded-full uppercase tracking-wider">Active</span>}
                                     </h3>
                                     <div className="text-xs font-mono text-slate-500 mb-4 bg-slate-50 px-2 py-1 rounded inline-block">
                                         {org.id}
                                     </div>
                                     <div className="text-sm text-slate-600 space-y-1">
-                                        <p className="flex justify-between"><span className="text-slate-400">Admin Email:</span> <span className="font-medium text-indigo-900 break-all">{org.adminEmail || 'N/A'}</span></p>
-                                        <p className="flex justify-between"><span className="text-slate-400">Plan:</span> <span className="font-medium text-indigo-900">{org.tierPlan || 'Standard'}</span></p>
-                                        <p className="flex justify-between"><span className="text-slate-400">Contact:</span> <span className="font-medium text-indigo-900">{org.contactPerson || 'N/A'}</span></p>
-                                        <p className="flex justify-between"><span className="text-slate-400">Phone:</span> <span className="font-medium text-indigo-900">{org.phone || 'N/A'}</span></p>
-                                        <p className="flex justify-between"><span className="text-slate-400">City:</span> <span className="font-medium text-indigo-900">{org.city || org.cityState || 'N/A'}</span></p>
+                                        <p className="flex justify-between"><span className="text-slate-400">Admin Email:</span> <span className="font-medium text-slate-800 break-all">{org.adminEmail || 'N/A'}</span></p>
+                                        <p className="flex justify-between"><span className="text-slate-400">Plan:</span> <span className="font-medium text-slate-800">{org.tierPlan || 'Standard'}</span></p>
+                                        <p className="flex justify-between"><span className="text-slate-400">Contact:</span> <span className="font-medium text-slate-800">{org.contactPerson || 'N/A'}</span></p>
+                                        <p className="flex justify-between"><span className="text-slate-400">Phone:</span> <span className="font-medium text-slate-800">{org.phone || 'N/A'}</span></p>
+                                        <p className="flex justify-between"><span className="text-slate-400">City:</span> <span className="font-medium text-slate-800">{org.city || org.cityState || 'N/A'}</span></p>
                                     </div>
                                 </div>
                                 <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end">
@@ -311,7 +318,7 @@ export default function SuperAdminDashboard() {
                                         className={`px-4 py-2 text-sm font-bold rounded-xl transition ${
                                             orgData.tenantId === org.id 
                                                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                                                : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-800'
+                                                : 'text-[#0066CC] bg-sky-50 hover:bg-sky-100 hover:text-[#0055B3]'
                                         }`}
                                     >
                                         {orgData.tenantId === org.id ? 'Current Workspace' : 'Login to Workspace'}
@@ -326,7 +333,7 @@ export default function SuperAdminDashboard() {
 
                 {/* Users Management */}
                 <section>
-                    <h2 className="text-xl font-bold text-indigo-900 flex items-center gap-2 mb-6">
+                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2 mb-6">
                         <UserIcon className="w-6 h-6 text-slate-400" />
                         Platform Users Access Control
                     </h2>
@@ -344,7 +351,7 @@ export default function SuperAdminDashboard() {
                             <tbody>
                                 {users.map(user => (
                                     <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50">
-                                        <td className="p-4 font-medium text-indigo-900">{user.email}</td>
+                                        <td className="p-4 font-medium text-slate-800">{user.email}</td>
                                         <td className="p-4 font-mono text-xs">{user.tenantId || 'demo-tenant-01'}</td>
                                         <td className="p-4">
                                             <span className={`px-2 py-1 rounded-full text-xs font-bold ${
@@ -362,7 +369,7 @@ export default function SuperAdminDashboard() {
                                                     setEditRole(user.role || 'Admin');
                                                     setEditTenant(user.tenantId || 'demo-tenant-01');
                                                 }}
-                                                className="text-indigo-600 font-medium hover:text-indigo-800 text-sm"
+                                                className="text-[#0066CC] font-medium hover:text-[#0055B3] text-sm"
                                             >
                                                 Edit Access
                                             </button>
@@ -377,10 +384,10 @@ export default function SuperAdminDashboard() {
 
             {/* Edit User Modal */}
             {selectedUser && (
-                <div className="fixed inset-0 bg-indigo-950/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
                         <div className="p-6 border-b border-slate-100">
-                            <h3 className="font-bold text-lg text-indigo-900">Edit User Access</h3>
+                            <h3 className="font-bold text-lg text-slate-800">Edit User Access</h3>
                             <p className="text-sm text-slate-500">{selectedUser.email}</p>
                         </div>
                         <div className="p-6 space-y-4">
@@ -389,7 +396,7 @@ export default function SuperAdminDashboard() {
                                 <select 
                                     value={editTenant}
                                     onChange={(e) => setEditTenant(e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066CC] font-mono"
                                 >
                                     <option value="demo-tenant-01">demo-tenant-01 (Main FFDS)</option>
                                     {organizations.map(org => (
@@ -402,7 +409,7 @@ export default function SuperAdminDashboard() {
                                 <select 
                                     value={editRole}
                                     onChange={(e) => setEditRole(e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
                                 >
                                     <option value="Admin">Studio Admin</option>
                                     <option value="Ops Director">Ops Director</option>
@@ -420,7 +427,7 @@ export default function SuperAdminDashboard() {
                             </button>
                             <button 
                                 onClick={handleUpdateUser}
-                                className="px-5 py-2.5 bg-indigo-600 text-white font-bold hover:bg-indigo-700 rounded-xl transition"
+                                className="px-5 py-2.5 bg-[#0066CC] text-white font-bold hover:bg-[#0055B3] rounded-xl transition"
                             >
                                 Save Changes
                             </button>

@@ -100,7 +100,7 @@ const CloudConfigModal: React.FC<CloudConfigModalProps> = ({ isOpen, onClose }) 
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-indigo-950/80 backdrop-blur-sm p-4">
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0066CC]/90 backdrop-blur-md border border-white/20/80 backdrop-blur-sm p-4">
                 <MotionDiv 
                     initial={{ opacity: 0, scale: 0.95 }} 
                     animate={{ opacity: 1, scale: 1 }} 
@@ -109,7 +109,7 @@ const CloudConfigModal: React.FC<CloudConfigModalProps> = ({ isOpen, onClose }) 
                 >
                     <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                         <div>
-                            <h3 className="font-bold text-lg text-indigo-900">Cloud Database Setup</h3>
+                            <h3 className="font-bold text-lg text-slate-800">Cloud Database Setup</h3>
                             <p className="text-xs text-slate-500">Connect to Firebase Firestore</p>
                         </div>
                         <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400">
@@ -125,12 +125,12 @@ const CloudConfigModal: React.FC<CloudConfigModalProps> = ({ isOpen, onClose }) 
                                 <p className="text-2xl font-black text-slate-700">{stats?.localCount ?? '-'}</p>
                                 <p className="text-[10px] text-slate-400 font-medium">Projects</p>
                             </div>
-                            <div className={`p-3 rounded-xl border text-center transition-colors ${stats?.cloudStatus === 'Connected' ? 'bg-indigo-50 border-indigo-200' : 'bg-red-50 border-red-200'}`}>
-                                <p className={`text-[10px] uppercase font-bold tracking-wider mb-1 ${stats?.cloudStatus === 'Connected' ? 'text-indigo-500' : 'text-red-500'}`}>Cloud Database</p>
-                                <p className={`text-2xl font-black ${stats?.cloudStatus === 'Connected' ? 'text-indigo-700' : 'text-red-700'}`}>
+                            <div className={`p-3 rounded-xl border text-center transition-colors ${stats?.cloudStatus === 'Connected' ? 'bg-sky-50 border-sky-200' : 'bg-red-50 border-red-200'}`}>
+                                <p className={`text-[10px] uppercase font-bold tracking-wider mb-1 ${stats?.cloudStatus === 'Connected' ? 'text-[#0066CC]' : 'text-red-500'}`}>Cloud Database</p>
+                                <p className={`text-2xl font-black ${stats?.cloudStatus === 'Connected' ? 'text-[#0055B3]' : 'text-red-700'}`}>
                                     {stats?.cloudCount ?? '-'}
                                 </p>
-                                <p className={`text-[10px] font-bold ${stats?.cloudStatus === 'Connected' ? 'text-indigo-400' : 'text-red-400'}`}>{stats?.cloudStatus}</p>
+                                <p className={`text-[10px] font-bold ${stats?.cloudStatus === 'Connected' ? 'text-sky-400' : 'text-red-400'}`}>{stats?.cloudStatus}</p>
                             </div>
                         </div>
 
@@ -147,7 +147,7 @@ const CloudConfigModal: React.FC<CloudConfigModalProps> = ({ isOpen, onClose }) 
                                         </p>
                                         <button 
                                             onClick={() => setForceLocalMode(false)}
-                                            className="mt-3 text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                                            className="mt-3 text-xs font-bold text-[#0066CC] hover:text-[#0055B3] flex items-center gap-1"
                                         >
                                             <UploadIcon className="w-3 h-3" /> Reconnect to Cloud Database
                                         </button>
@@ -223,7 +223,7 @@ const CloudConfigModal: React.FC<CloudConfigModalProps> = ({ isOpen, onClose }) 
                                             <button 
                                                 onClick={() => setConfirmSeed(true)}
                                                 disabled={isSeeding}
-                                                className="w-full py-2 bg-indigo-50 border border-indigo-100 text-indigo-700 font-bold text-xs rounded-lg hover:bg-indigo-100 transition-colors flex items-center justify-center gap-2 mb-1"
+                                                className="w-full py-2 bg-sky-50 border border-sky-100 text-[#0055B3] font-bold text-xs rounded-lg hover:bg-sky-100 transition-colors flex items-center justify-center gap-2 mb-1"
                                             >
                                                 {isSeeding ? 'Uploading...' : <><SparklesIcon className="w-3.5 h-3.5" /> Upload Default Bank & Templates</>}
                                             </button>
@@ -261,7 +261,7 @@ const CloudConfigModal: React.FC<CloudConfigModalProps> = ({ isOpen, onClose }) 
                                         value={jsonInput}
                                         onChange={e => { setJsonInput(e.target.value); setError(null); }}
                                         placeholder={`const firebaseConfig = {\n  apiKey: "...",\n  authDomain: "...",\n  projectId: "...",\n  ...\n};`}
-                                        className="w-full h-32 p-3 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none resize-none placeholder:text-slate-300"
+                                        className="w-full h-32 p-3 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-[#0066CC] outline-none resize-none placeholder:text-slate-300"
                                     />
                                     {error && <p className="text-xs text-red-500 font-bold mt-2">{error}</p>}
                                 </div>
@@ -282,7 +282,7 @@ const CloudConfigModal: React.FC<CloudConfigModalProps> = ({ isOpen, onClose }) 
                                 <button 
                                     onClick={handleSave}
                                     disabled={isConnecting}
-                                    className="px-6 py-2 bg-indigo-600 text-white font-bold text-sm rounded-lg hover:bg-indigo-700 shadow-lg flex items-center gap-2 disabled:bg-indigo-400"
+                                    className="px-6 py-2 bg-[#0066CC] text-white font-bold text-sm rounded-lg hover:bg-[#0055B3] shadow-lg flex items-center gap-2 disabled:bg-sky-400"
                                 >
                                     {isConnecting ? 'Connecting...' : <><UploadIcon className="w-4 h-4" /> Connect</>}
                                 </button>

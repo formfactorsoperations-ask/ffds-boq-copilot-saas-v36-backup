@@ -68,7 +68,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                     <div className="flex flex-col md:flex-row justify-between items-end gap-4">
                                         <div>
                                             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Section 3: Execution Bundles</div>
-                                            <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-indigo-950">
+                                            <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
                                                 Detailed Specification & Estimate
                                             </h2>
                                             <p className="mt-2 text-slate-600 max-w-3xl text-sm leading-relaxed">
@@ -79,7 +79,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                 </div>
 
                                 {/* Grand Total Card */}
-                                <div className="mb-8 bg-indigo-950 text-white rounded-2xl p-6 shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
+                                <div className="mb-8 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white rounded-2xl p-6 shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Project Value ({tier.name})</p>
                                         <h3 className="text-3xl font-extrabold tracking-tight">{formatCurrency(grandTotal)}</h3>
@@ -115,10 +115,10 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                                         {/* Room Header Row */}
                                                         <tr className="bg-slate-100/80 border-y border-slate-200 break-inside-avoid">
                                                             <td colSpan={5} className="py-3 px-4">
-                                                                <span className="font-bold text-indigo-900 text-xs uppercase tracking-wide">{roomName}</span>
+                                                                <span className="font-bold text-slate-800 text-xs uppercase tracking-wide">{roomName}</span>
                                                             </td>
                                                             <td className="py-3 px-6 text-right bg-slate-200/50">
-                                                                <span className="font-mono text-sm font-bold text-indigo-950">{formatCurrency(roomTotal)}</span>
+                                                                <span className="font-mono text-sm font-bold text-slate-900">{formatCurrency(roomTotal)}</span>
                                                             </td>
                                                         </tr>
 
@@ -133,7 +133,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                                                 <tr key={item.id} className="hover:bg-slate-50 transition-colors break-inside-avoid">
                                                                     <td className="py-4 px-4 text-center text-slate-400 text-xs font-mono">{rIdx * 100 + iIdx + 1}</td>
                                                                     <td className="py-4 px-4">
-                                                                        <div className="font-medium text-indigo-950 text-sm">{item.name}</div>
+                                                                        <div className="font-medium text-slate-900 text-sm">{item.name}</div>
                                                                         {cleanSpecs && (
                                                                             <div className="text-xs text-slate-500 leading-relaxed mt-1 max-w-xl">{cleanSpecs}</div>
                                                                         )}
@@ -148,7 +148,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                                                     <td className="py-4 px-4 text-right font-mono text-xs text-slate-600">
                                                                         {formatCurrency(sellRate)}
                                                                     </td>
-                                                                    <td className="py-4 px-6 text-right font-bold text-indigo-950 font-mono bg-slate-50">
+                                                                    <td className="py-4 px-6 text-right font-bold text-slate-900 font-mono bg-slate-50">
                                                                         {formatCurrency(lineTotal)}
                                                                     </td>
                                                                 </tr>
@@ -173,12 +173,12 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                     <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
                                         <div>
                                             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Scope Breakdown</div>
-                                            <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-indigo-950">
+                                            <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
                                                 Detailed Scope of Works
                                             </h2>
                                         </div>
-                                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-xs font-bold text-indigo-800 self-start">
-                                            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-sky-50 border border-sky-100 rounded-xl text-xs font-bold text-sky-800 self-start">
+                                            <span className="w-2 h-2 rounded-full bg-[#0066CC] animate-pulse"></span>
                                             Viewing: {tier.name}
                                         </div>
                                     </div>
@@ -199,7 +199,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                                 <summary className="p-5 cursor-pointer flex justify-between items-center list-none [&::-webkit-details-marker]:hidden outline-none select-none">
                                                     <div>
                                                         <div className="flex items-center gap-2">
-                                                            <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wide">{roomName}</h3>
+                                                            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">{roomName}</h3>
                                                             <span className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-full text-slate-500 font-bold group-open:bg-slate-100">
                                                                 {items.length} Items
                                                             </span>
@@ -210,7 +210,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                                         </p>
                                                     </div>
 
-                                                    <div className="p-2 rounded-full bg-white text-slate-400 group-hover:text-slate-600 transition-all group-open:rotate-180 group-open:bg-indigo-100 group-open:text-indigo-600">
+                                                    <div className="p-2 rounded-full bg-white text-slate-400 group-hover:text-slate-600 transition-all group-open:rotate-180 group-open:bg-sky-100 group-open:text-[#0066CC]">
                                                         <ChevronDownIcon className="w-4 h-4" />
                                                     </div>
                                                 </summary>
@@ -225,7 +225,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                                                         <CheckBadgeIcon className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                                                                         <div className="flex-grow">
                                                                             <div className="flex justify-between items-start">
-                                                                                <span className="font-bold text-indigo-900">{item.name}</span>
+                                                                                <span className="font-bold text-slate-800">{item.name}</span>
                                                                                 <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
                                                                                     {item.qty} {item.unit}
                                                                                 </span>

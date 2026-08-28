@@ -37,15 +37,15 @@ export function ExecutionBundleWidget({
       onClick={onClick} 
       className="col-span-1 bg-white rounded-[2.5rem] p-8 md:p-10 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col cursor-pointer hover:shadow-lg transition-all min-h-[450px] h-full relative"
     >
-      <h2 className="text-2xl font-light tracking-tighter text-indigo-950 mb-2">Execution</h2>
+      <h2 className="text-2xl font-light tracking-tighter text-slate-900 mb-2">Execution</h2>
       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6">Bundles & Progress</p>
       
       <div className="flex items-center gap-6 mb-8">
-        <div className={`text-6xl font-light tracking-tighter ${progressPct === 100 ? 'text-emerald-500' : progressPct > 0 ? 'text-indigo-500' : 'text-slate-400'}`}>
+        <div className={`text-6xl font-light tracking-tighter ${progressPct === 100 ? 'text-emerald-500' : progressPct > 0 ? 'text-[#0066CC]' : 'text-slate-400'}`}>
           {progressPct}%
         </div>
         <div className="flex flex-col">
-          <span className="text-sm font-bold text-indigo-900">{completedCount} of {totalBundles}</span>
+          <span className="text-sm font-bold text-slate-800">{completedCount} of {totalBundles}</span>
           <span className="text-xs text-slate-500">Bundles Completed</span>
         </div>
       </div>
@@ -60,9 +60,9 @@ export function ExecutionBundleWidget({
                 <span className="text-xl font-bold text-rose-600">{blockedCount}</span>
                 <span className="text-[9px] font-bold uppercase tracking-widest text-rose-600/70">Blocked</span>
             </div>
-            <div className="flex-1 bg-indigo-50/50 border border-indigo-100 rounded-2xl p-3 flex flex-col items-center justify-center">
-                <span className="text-xl font-bold text-indigo-600">{completedCount}</span>
-                <span className="text-[9px] font-bold uppercase tracking-widest text-indigo-600/70">Done</span>
+            <div className="flex-1 bg-sky-50/50 border border-sky-100 rounded-2xl p-3 flex flex-col items-center justify-center">
+                <span className="text-xl font-bold text-[#0066CC]">{completedCount}</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-[#0066CC]/70">Done</span>
             </div>
         </div>
 
@@ -78,7 +78,7 @@ export function ExecutionBundleWidget({
                 </div>
                 <div className="flex flex-col items-center flex-1">
                     <span className="text-[9px] font-bold uppercase text-slate-400">Comm</span>
-                    <span className={`text-xs font-bold ${commBlocked > 0 ? 'text-indigo-500' : 'text-slate-300'}`}>{commBlocked}</span>
+                    <span className={`text-xs font-bold ${commBlocked > 0 ? 'text-[#0066CC]' : 'text-slate-300'}`}>{commBlocked}</span>
                 </div>
                 <div className="flex flex-col items-center flex-1">
                     <span className="text-[9px] font-bold uppercase text-slate-400">Site</span>
@@ -97,7 +97,7 @@ export function ExecutionBundleWidget({
                 <span className="px-2 py-0.5 bg-white text-slate-600 text-[9px] font-bold uppercase tracking-wider rounded border border-slate-200">
                     {urgentBundle.code}
                 </span>
-                <h4 className="text-xs font-bold text-indigo-950 truncate">{urgentBundle.name}</h4>
+                <h4 className="text-xs font-bold text-slate-900 truncate">{urgentBundle.name}</h4>
              </div>
              <p className="text-[10px] text-slate-600 line-clamp-2 leading-relaxed mb-3">
                 {urgentBundle.actToday || 'Review bundle gates and update execution status.'}
@@ -123,7 +123,7 @@ export function ExecutionBundleWidget({
       </div>
 
       <div className="mt-4 text-right">
-        <span className="text-sm font-semibold text-indigo-600 flex items-center gap-1 justify-end">
+        <span className="text-sm font-semibold text-[#0066CC] flex items-center gap-1 justify-end">
           Execution Workspace <ArrowRight className="w-4 h-4"/>
         </span>
       </div>

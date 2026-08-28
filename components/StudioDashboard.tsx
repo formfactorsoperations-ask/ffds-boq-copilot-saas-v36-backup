@@ -2,20 +2,23 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ProjectContext, Item, BoqItem, Room, AIStrategy, FullBoqItem, CommandAction, ProposalTier, AuditResult } from '../types';
 import { id as generateId, calculateSellPrice } from '../lib/utils';
-import CommandBar from './CommandBar';
 import RoomCard from './RoomCard';
 import StudioExcelGrid from './StudioExcelGrid';
 import AddItemModal from './AddItemModal';
-import BoqPackageCreator from './BoqPackageCreator';
+import InteractiveBoqEditor from './InteractiveBoqEditor';
 import BulkImportModal from './BulkImportModal';
-import { processCommand, auditProject, isAiAvailable } from '../services/geminiService';
+import TakeoffPanel from './TakeoffPanel';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheckIcon, GridIcon, ListIcon, SaveIcon, CheckIcon, ExportIcon, CalculatorIcon } from './Icons';
-import { Search, X, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Search, X, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 import { useOrg } from '../contexts/OrgContext';
+import { useStudioSettings } from '../hooks/useStudioSettings';
+import { db as dbService } from '../services/dbService';
 import { db, functions } from '../services/firebaseClient';
 import { httpsCallable } from 'firebase/functions';
 import { doc, onSnapshot, getDoc, query, collection } from 'firebase/firestore';
+import { usePageHeader } from '../contexts/PageHeaderContext';
+import { prepareClonedDocForPdf } from '../lib/pdfUtils';
 
 interface StudioDashboardProps {
     projectContext: ProjectContext;
@@ -28,6 +31,8 @@ interface StudioDashboardProps {
     onViewInBank: (bankId: string) => void;
     onSaveProject: () => void;
     projectId?: string;
+    projectArchitecture?: 'legacy' | 'canonical';
+    onUpgradeArchitecture?: () => void;
 }
 
 // Helper function for applying command actions
@@ -86,17 +91,54 @@ const itemVar = {
     show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100, damping: 12 } }
 };
 
-const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId }) => {
+const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture }) => {
   const { orgData, currentRole } = useOrg();
   const isOwner = ['Super Admin', 'Admin', 'Ops Director'].includes(currentRole);
   
+  const { settings, updateSettings } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+
+  const handleSelectItemToggle = (itemId: string) => {
+      setSelectedItemIds(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(itemId)) {
+              newSet.delete(itemId);
+          } else {
+              newSet.add(itemId);
+          }
+          return newSet;
+      });
+  };
+
+  const handleSaveAsBundle = async (itemIds: string[], defaultName?: string) => {
+      const bundleName = window.prompt("Enter a name for this custom bundle:", defaultName || "Custom Bundle");
+      if (!bundleName) return;
+
+      const bundleDesc = window.prompt("Enter a short description for this bundle:", `Custom bundle containing ${itemIds.length} items.`);
+      
+      const newBundle = {
+          id: `custom-bundle-${Date.now()}`,
+          name: bundleName,
+          description: bundleDesc || '',
+          itemIds: itemIds
+      };
+
+      const existingBundles = settings?.customBundles || [];
+      const updatedBundles = [...existingBundles, newBundle];
+
+      try {
+          await updateSettings('customBundles', updatedBundles);
+          alert(`Successfully saved "${bundleName}" as a Custom Bundle! It is now instantly reusable across all projects.`);
+      } catch (err) {
+          console.error("Error saving bundle", err);
+          alert("Failed to save custom bundle. Please try again.");
+      }
+  };
+
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // For AddItemModal
   const [isModalOpen, setIsModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
-  const [auditError, setAuditError] = useState<string | null>(null);
-  const [isAuditing, setIsAuditing] = useState(false);
-  const [viewMode, setViewMode] = useState<'cards' | 'excel'>('excel');
+        const [viewMode, setViewMode] = useState<'cards' | 'excel' | 'interactive' | 'takeoff'>('interactive');
   
   // Versions state
                 
@@ -133,7 +175,13 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               margin: 0.5,
               filename: `SOF_${projectContext.name || 'Project'}_${version || 'Draft'}.pdf`,
               image: { type: 'jpeg' as const, quality: 0.98 },
-              html2canvas: { scale: 2, useCORS: true },
+              html2canvas: { 
+                scale: 2, 
+                useCORS: true,
+                onclone: (clonedDoc: Document) => {
+                  prepareClonedDocForPdf(clonedDoc, 'boq-editor-content');
+                }
+              },
               jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' as const }
           };
           html2pdfObj().set(opt).from(element).save();
@@ -177,6 +225,9 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   }, []);
 
   const activeTier = tiers.find(t => t.id === activeTierId);
+  const rooms = projectContext?.rooms || [];
+
+  
   const bankMap = useMemo(() => {
     const map = new Map(bank.map(item => [item.id, item]));
     if (projectContext?.adHocItems) {
@@ -216,7 +267,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   const groupedItems = useMemo(() => {
     const grouped: { [key: string]: FullBoqItem[] } = {};
     const unassigned: FullBoqItem[] = [];
-    const validRoomNames = new Set(projectContext.rooms.map(r => r.name));
+    const validRoomNames = new Set((projectContext.rooms || []).map(r => r.name));
 
     fullBoq.forEach(item => {
       const roomName = item.roomId;
@@ -325,45 +376,6 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
       }));
   };
 
-  const handleProcessCommand = async (command: string) => {
-      if (!activeTier) return;
-      const { actions, summary } = await processCommand(command, activeTier.boq, projectContext, bank);
-      
-      let updatedBoq = [...activeTier.boq];
-      actions.forEach(action => {
-          updatedBoq = applyCommandAction(updatedBoq, action, bank);
-      });
-
-      setTiers(prev => prev.map(tier => {
-          if (tier.id !== activeTierId) return tier;
-          return { ...tier, boq: updatedBoq };
-      }));
-      
-      alert(`Command Executed: ${summary}`);
-  };
-
-  const handlePackageCreated = (newBoq: BoqItem[]) => {
-      setTiers(prev => prev.map(tier => {
-          if (tier.id !== activeTierId) return tier;
-          return { ...tier, boq: newBoq };
-      }));
-  }
-
-  const handleRunAudit = async () => {
-      if (!isAiAvailable()) return;
-      setIsAuditing(true);
-      setAuditResult(null);
-      setAuditError(null);
-      try {
-          const result = await auditProject(projectContext, fullBoq);
-          setAuditResult(result);
-      } catch (e: any) {
-          console.error("Smart Audit failed:", e);
-          setAuditError(e.message || "Failed to run Smart Audit");
-      } finally {
-          setIsAuditing(false);
-      }
-  }
 
   const handleManualSave = () => {
       // Clear any existing timeout
@@ -449,231 +461,178 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
 
   const MotionDiv = motion.div as any;
 
+  usePageHeader({
+    badge: activeTier?.name || '',
+    vitals: [
+        { label: "AREA", value: (projectContext.area || 0) + ' sq ft' },
+        { label: "CONFIG", value: projectContext.config || 'N/A' },
+        { label: "STYLE", value: projectContext.theme || 'N/A' },
+        { label: "ITEMS", value: String(activeTier?.boq?.length || 0) },
+        { label: "ROOMS", value: String(rooms.length || 0) }
+    ].filter(Boolean)
+  }, [activeTier?.name, activeTier?.boq?.length, rooms.length]);
+
   if (!activeTier) return <div>Please select a proposal tier.</div>;
 
   return (
     <div id="boq-editor-content" className="space-y-8 pb-12 print:space-y-0 print:pb-0">
       
       {/* PRINT-ONLY HEADER */}
-      <div className="hidden print:block w-full pt-8 pb-6 border-b-2 border-indigo-900 mb-6">
+      <div className="hidden print:block w-full pt-8 pb-6 border-b-2 border-sky-900 mb-6">
           <div className="flex justify-between items-end">
               <div>
-                  <h1 className="text-3xl font-black tracking-tighter text-indigo-950 mb-1">SCHEDULE OF FINISHES</h1>
+                  <h1 className="text-3xl font-black tracking-tighter text-slate-900 mb-1">SCHEDULE OF FINISHES</h1>
                   <h2 className="text-lg font-bold text-slate-600 uppercase tracking-widest">{projectContext.name}</h2>
               </div>
               <div className="text-right">
-                  <div className="font-bold text-indigo-900 tracking-tight">FORM FACTORS DESIGN STUDIO</div>
+                  <div className="font-bold text-slate-800 tracking-tight">FORM FACTORS DESIGN STUDIO</div>
                   <div className="text-xs text-slate-500 uppercase font-medium mt-1">Ref: 'Draft' | Date: {new Date().toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'})}</div>
               </div>
           </div>
       </div>
 
-      {/* Header Area */}
-      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between mb-4 print:hidden">
-          <div>
-            <h2 className="text-2xl font-black text-indigo-900 tracking-tight">Studio Editor <span className="text-indigo-600 text-lg align-top font-bold bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 ml-2">{activeTier.name}</span></h2>
-            <p className="text-slate-500 font-medium">Build and refine your scope room by room.</p>
+            {/* Unified Compact Toolbar Row */}
+      <div className="mb-6 flex flex-col lg:flex-row gap-3 items-center justify-between bg-white border border-slate-200/90 p-2.5 rounded-2xl shadow-sm">
+          {/* Smaller Focus Editor / Excel / Cards / Plan Takeoff View Switcher */}
+          <div className="flex bg-slate-100 p-1 rounded-xl shrink-0 w-full lg:w-auto overflow-x-auto gap-1">
+              <button 
+                  onClick={() => setViewMode('interactive')}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'interactive' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                  <Sparkles className="w-3.5 h-3.5" /> Focus Editor
+              </button>
+              <button 
+                  onClick={() => setViewMode('excel')}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'excel' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                  <ListIcon className="w-3.5 h-3.5" /> Excel
+              </button>
+              <button 
+                  onClick={() => setViewMode('cards')}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'cards' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                  <GridIcon className="w-3.5 h-3.5" /> Cards
+              </button>
+              <button 
+                  onClick={() => setViewMode('takeoff')}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'takeoff' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                  <ListIcon className="w-3.5 h-3.5" /> Plan Takeoff
+              </button>
           </div>
           
-          <div className="flex flex-wrap gap-3 items-center justify-start lg:justify-end">
-              {/* Manual Save Button */}
-              <div className="flex flex-col items-end mr-2">
+          {/* Search Box */}
+          <div className="relative group flex-1 w-full min-w-[200px]">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#0066CC] transition-colors" />
+              <input 
+                  ref={searchInputRef}
+                  type="text" 
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search items by name, description, or category... (Cmd/Ctrl+F)"
+                  className="w-full pl-9 pr-9 py-1.5 bg-slate-50/70 border border-slate-200/80 rounded-xl focus:bg-white focus:outline-none focus:border-[#0066CC] focus:ring-2 focus:ring-[#0066CC]/10 transition-all text-xs font-medium text-slate-700"
+              />
+              {searchQuery && (
                   <button 
-                    onClick={handleManualSave}
-                    disabled={isSaving}
-                    className={`px-4 py-2 border font-bold rounded-xl shadow-sm transition-all flex items-center gap-2 ${isSaving ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'}`}
-                    title="Save current changes locally"
+                     onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
+                     className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-md transition-colors"
                   >
-                      {isSaving ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-slate-300 border-t-indigo-600 rounded-full animate-spin"></div>
-                            Saving...
-                          </>
-                      ) : (
-                          <>
-                            <CheckIcon className="w-4 h-4" /> Save Changes
-                          </>
-                      )}
+                      <X className="w-3.5 h-3.5" />
                   </button>
-                  <span className="text-[10px] text-slate-400 font-medium mt-1 pr-1">
-                      {isSaving ? 'Syncing...' : `All changes saved`}
-                  </span>
-              </div>
+              )}
+          </div>
 
-              
-              
-              
-              
-              
-              
+          {/* Action Buttons: Save Changes, Global Margin, Import Excel, Export CSV */}
+          <div className="flex items-center gap-2 shrink-0 w-full lg:w-auto justify-end">
+              <button 
+                  onClick={handleManualSave}
+                  disabled={isSaving}
+                  className={`px-3 py-1.5 text-xs border font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 ${isSaving ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'}`}
+                  title="Save current changes locally"
+              >
+                  {isSaving ? (
+                      <>
+                          <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-white rounded-full animate-spin"></div>
+                          <span>Saving...</span>
+                      </>
+                  ) : (
+                      <>
+                          <CheckIcon className="w-3.5 h-3.5" />
+                          <span>Save Changes</span>
+                      </>
+                  )}
+              </button>
 
-              
-              {/* View Toggle */}
-              <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm self-start">
-                  <button 
-                    onClick={() => setViewMode('cards')}
-                    className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs font-bold transition-all ${viewMode === 'cards' ? 'bg-slate-100 text-indigo-900 shadow-inner' : 'text-slate-400 hover:text-slate-600'}`}
-                  >
-                      <GridIcon className="w-4 h-4" /> Cards
-                  </button>
-                  <button 
-                    onClick={() => setViewMode('excel')}
-                    className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs font-bold transition-all ${viewMode === 'excel' ? 'bg-indigo-50 text-indigo-700 shadow-inner' : 'text-slate-400 hover:text-slate-600'}`}
-                  >
-                      <ListIcon className="w-4 h-4" /> Excel
-                  </button>
-              </div>
-
-              {/* Set Global Markup */}
-              <div className="relative self-start">
+              <div className="relative">
                   <button
                       onClick={() => setIsGlobalMarkupOpen(!isGlobalMarkupOpen)}
-                      className={`p-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl hover:text-indigo-600 hover:border-indigo-200 hover:shadow-md transition-all ${isGlobalMarkupOpen ? 'ring-2 ring-indigo-200 border-indigo-300 text-indigo-600' : ''}`}
-                      title="Set Global Markup"
+                      className={`p-1.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:text-[#0066CC] hover:border-sky-200 hover:shadow-sm transition-all ${isGlobalMarkupOpen ? 'ring-2 ring-sky-200 border-sky-300 text-[#0066CC]' : ''}`}
+                      title="Set Global Margin"
                   >
-                      <CalculatorIcon className="w-5 h-5" />
+                      <CalculatorIcon className="w-4 h-4" />
                   </button>
                   {isGlobalMarkupOpen && (
                       <div className="absolute top-full right-0 mt-2 p-4 bg-white rounded-xl shadow-xl border border-slate-200 z-50 w-64 origin-top-right animate-in fade-in zoom-in duration-200">
-                          <label className="block text-xs font-bold text-slate-700 mb-2 whitespace-normal break-words">Set global markup % for ALL items</label>
+                          <label className="block text-xs font-bold text-slate-700 mb-2 whitespace-normal break-words">Set global margin % for ALL items</label>
                           <input 
-                             type="number" 
-                             value={globalMarkupValue}
-                             onChange={e => setGlobalMarkupValue(Number(e.target.value))}
-                             className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 focus:outline-none focus:border-indigo-500" 
+                              type="number" 
+                              value={globalMarkupValue}
+                              onChange={e => setGlobalMarkupValue(Number(e.target.value))}
+                              className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 focus:outline-none focus:border-[#0066CC]" 
                           />
                           <div className="flex justify-end gap-2 text-xs">
                               <button onClick={() => setIsGlobalMarkupOpen(false)} className="px-3 py-1.5 text-slate-500 hover:text-slate-700 font-medium">Cancel</button>
-                              <button onClick={handleApplyGlobalMarkup} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-sm">Apply All</button>
+                              <button onClick={handleApplyGlobalMarkup} className="px-3 py-1.5 bg-[#0066CC] text-white rounded-lg hover:bg-[#0055B3] font-bold shadow-sm">Apply All</button>
                           </div>
                       </div>
                   )}
               </div>
 
-              {/* Bulk Import Button */}
               <button 
-                onClick={() => setIsImportModalOpen(true)}
-                className="px-3 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold rounded-xl hover:bg-indigo-100 hover:shadow-md transition-all self-start text-xs flex items-center gap-2"
-                title="Paste or upload items from Excel"
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="px-3 py-1.5 bg-sky-50 border border-sky-200 text-[#0055B3] font-bold rounded-xl hover:bg-sky-100 transition-all text-xs flex items-center gap-1.5"
+                  title="Paste or upload items from Excel"
               >
-                  <ListIcon className="w-4 h-4" /> Import Excel
-              </button>
-
-              {/* Excel Export Button */}
-              <button 
-                onClick={handleExportExcelWithFormulas}
-                className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl hover:bg-emerald-100 hover:shadow-md transition-all self-start"
-                title="Export Excel with Live Formulas"
-              >
-                  <ExportIcon className="w-5 h-5" />
+                  <ListIcon className="w-3.5 h-3.5" />
+                  <span>Import Excel</span>
               </button>
 
               <button 
-                onClick={onSaveProject}
-                className="p-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl hover:text-indigo-600 hover:border-indigo-200 hover:shadow-md transition-all self-start"
-                title="Download Project Backup (JSON)"
+                  onClick={handleExportExcelWithFormulas}
+                  className="p-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl hover:bg-emerald-100 transition-all"
+                  title="Export Excel with Live Formulas"
               >
-                  <SaveIcon className="w-5 h-5" />
-              </button>
-
-              <button 
-                onClick={handleRunAudit}
-                disabled={isAuditing || !isAiAvailable()}
-                className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-xl shadow-lg hover:shadow-emerald-200/50 hover:scale-[1.02] transition-all flex items-center gap-2 self-start"
-              >
-                {isAuditing ? 'Auditing...' : <><ShieldCheckIcon className="w-5 h-5" /> Smart Audit</>}
+                  <ExportIcon className="w-4 h-4" />
               </button>
           </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="mb-6 relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-          <input 
-              ref={searchInputRef}
-              type="text" 
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search items by name, description, or category... (Cmd/Ctrl+F)"
-              className="w-full pl-12 pr-12 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-medium text-slate-700"
-          />
-          {searchQuery && (
-              <button 
-                onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }} 
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-              >
-                  <X className="w-4 h-4" />
-              </button>
-          )}
-      </div>
-
-      {/* Audit Result Banner */}
-      <AnimatePresence>
-        {auditError && (
-            <MotionDiv initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                <div className="bg-red-50 border-l-4 border-red-500 rounded-r-xl shadow-sm p-4 mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative">
-                    <button onClick={() => setAuditError(null)} className="absolute top-4 right-4 text-red-400 hover:text-red-600">✕</button>
-                    <div className="flex items-center gap-3 text-red-700">
-                        <AlertCircle className="w-5 h-5" />
-                        <div>
-                            <span className="font-bold block">Audit Failed</span>
-                            <span className="text-sm">{auditError}</span>
-                        </div>
-                    </div>
-                    <button onClick={handleRunAudit} className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-bold rounded-lg transition-colors whitespace-nowrap">
-                        Retry Audit
-                    </button>
-                </div>
-            </MotionDiv>
-        )}
-        {auditResult && (
-            <MotionDiv initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                <div className="bg-white border-l-4 border-indigo-500 rounded-r-xl shadow-md p-6 mb-8 relative">
-                    <button onClick={() => setAuditResult(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">✕</button>
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className={`text-4xl font-black ${auditResult.score > 80 ? 'text-emerald-500' : auditResult.score > 50 ? 'text-amber-500' : 'text-red-500'}`}>{auditResult.score}</div>
-                        <div>
-                            <h4 className="font-bold text-indigo-900">Project Health Score</h4>
-                            <p className="text-xs text-slate-500">AI analysis of scope completeness and logic.</p>
-                        </div>
-                    </div>
-                    {((auditResult.missingItems?.length || 0) === 0 && (auditResult.warnings?.length || 0) === 0 && (auditResult.suggestions?.length || 0) === 0) ? (
-                        <div className="bg-emerald-50 text-emerald-700 p-4 rounded-lg flex items-center gap-3">
-                            <CheckCircle2 className="w-6 h-6" />
-                            <span className="font-bold">No issues found.</span> The scope appears well-structured.
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
-                            {(auditResult.missingItems?.length || 0) > 0 && (
-                                <div className="bg-red-50 p-3 rounded-lg border border-red-100">
-                                    <strong className="text-red-700 block mb-2">Missing Essentials</strong>
-                                    <ul className="list-disc list-inside text-red-600 space-y-1">{auditResult.missingItems?.slice(0,3).map((item, i) => <li key={i}>{item}</li>)}</ul>
-                                </div>
-                            )}
-                            {(auditResult.warnings?.length || 0) > 0 && (
-                                <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
-                                    <strong className="text-amber-700 block mb-2">Logic Warnings</strong>
-                                    <ul className="list-disc list-inside text-amber-600 space-y-1">{auditResult.warnings?.slice(0,3).map((item, i) => <li key={i}>{item}</li>)}</ul>
-                                </div>
-                            )}
-                            {(auditResult.suggestions?.length || 0) > 0 && (
-                                <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                    <strong className="text-blue-700 block mb-2">Smart Suggestions</strong>
-                                    <ul className="list-disc list-inside text-blue-600 space-y-1">{auditResult.suggestions?.slice(0,3).map((item, i) => <li key={i}>{item}</li>)}</ul>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </MotionDiv>
-        )}
-      </AnimatePresence>
+      
+      
 
       <div className="space-y-8">
           
           {/* Main Editor (Full Width) */}
           <div className="w-full">
               
+              {/* INTERACTIVE WORKSPACE MODE */}
+              {viewMode === 'interactive' && (
+                  <MotionDiv initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
+                      <InteractiveBoqEditor 
+                        items={fullBoq} 
+                        rooms={projectContext.rooms}
+                        bank={bank}
+                        customBundles={settings?.customBundles}
+                        onUpdate={handleUpdateItem}
+                        onBulkUpdate={handleBulkUpdateItems}
+                        onDelete={handleDeleteItem}
+                        setTiers={setTiers}
+                        activeTierId={activeTierId}
+                        boqFrozen={projectContext.boqFrozen}
+                      />
+                  </MotionDiv>
+              )}
+
               {/* EXCEL MODE */}
               {viewMode === 'excel' && (
                   <MotionDiv initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
@@ -698,18 +657,21 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               {/* CARDS MODE */}
               {viewMode === 'cards' && (
                   <MotionDiv variants={container} initial="hidden" animate="show">
-                    {projectContext.rooms.map(room => (
+                    {(projectContext.rooms || []).map(room => (
                         <MotionDiv key={room.name} variants={itemVar}>
                             <RoomCard
                                 room={room}
                                 items={groupedItems.grouped[room.name] || []}
-                                allRooms={projectContext.rooms}
+                                allRooms={projectContext.rooms || []}
                                 searchQuery={searchQuery}
                                 onUpdate={handleUpdateItem}
                                 onBulkUpdate={handleBulkUpdateItems}
                                 onDelete={handleDeleteItem}
                                 onAddItem={() => handleOpenAddModal(room.name)}
                                 onViewInBank={onViewInBank}
+                                selectedItemIds={selectedItemIds}
+                                onSelectItemToggle={handleSelectItemToggle}
+                                onSaveAsBundle={handleSaveAsBundle}
                             />
                         </MotionDiv>
                     ))}
@@ -727,9 +689,26 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                                 onDelete={handleDeleteItem}
                                 onAddItem={() => handleOpenAddModal('Unassigned')}
                                 onViewInBank={onViewInBank}
+                                selectedItemIds={selectedItemIds}
+                                onSelectItemToggle={handleSelectItemToggle}
+                                onSaveAsBundle={handleSaveAsBundle}
                             />
                         </MotionDiv>
                     )}
+                  </MotionDiv>
+              )}
+
+              {/* PLAN TAKEOFF MODE */}
+              {viewMode === 'takeoff' && (
+                  <MotionDiv initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
+                      <TakeoffPanel 
+                        projectContext={projectContext}
+                        setProjectContext={setProjectContext}
+                        tiers={tiers}
+                        setTiers={setTiers}
+                        activeTierId={activeTierId}
+                        bank={bank}
+                      />
                   </MotionDiv>
               )}
           </div>
@@ -740,55 +719,93 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               let estimateExposure = 0;
               let clientProcuredCount = 0;
               let excludedCount = 0;
+              let firmBaseCost = 0;
+              let firmMarginValue = 0;
               
               fullBoq.forEach(item => {
-                  const sellPrice = calculateSellPrice(item.materials, item.labor, item.margin);
-                  const val = sellPrice * item.qty;
+                  const basePrice = (item.materials + item.labor) * item.qty;
+                  const sellPrice = calculateSellPrice(item.materials, item.labor, item.margin) * item.qty;
+                  const marginVal = sellPrice - basePrice;
                   
                   if (item.boqStatus === 'client_procured') {
                       clientProcuredCount++;
                   } else if (item.boqStatus === 'excluded') {
                       excludedCount++;
                   } else if (item.boqStatus === 'as_actuals' || item.boqStatus === 'provisional_sum' || item.boqStatus === 'pending_finalisation') {
-                      estimateExposure += val;
+                      estimateExposure += sellPrice;
                   } else if (item.boqStatus !== 'deleted' && item.boqStatus !== 'substituted') {
-                      firmTotal += val;
+                      firmTotal += sellPrice;
+                      firmBaseCost += basePrice;
+                      firmMarginValue += marginVal;
                   }
               });
               
               const grandTotal = firmTotal + estimateExposure;
+              const firmMarginPercent = firmTotal > 0 ? ((firmTotal - firmBaseCost) / firmBaseCost) * 100 : 0;
               
               return (
-                  <div className="flex justify-end pt-4">
-                      <div className="w-full sm:w-[360px] bg-white border border-slate-200 rounded-xl shadow-sm p-4 text-sm">
-                          <div className="flex justify-between items-center mb-2">
-                              <span className="text-slate-600 font-medium">Firm scope</span>
-                              <span className="font-mono text-indigo-900 font-bold">₹ {firmTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-                          </div>
-                          <div className="flex justify-between items-center mb-3">
-                              <div className="flex items-center gap-2">
-                                  <span className="text-slate-600 font-medium">Estimated items</span>
-                                  <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded cursor-help" title="As actuals, provisional sum, or pending finalisation">EST</span>
+                  <div className="pt-4">
+                      <div className="w-full bg-white border border-slate-200 rounded-2xl shadow-sm p-5 text-sm flex flex-col lg:flex-row justify-between gap-6">
+                          {/* Financials (Owners Only) */}
+                          {isOwner ? (
+                              <div className="flex flex-1 gap-6">
+                                  {/* Base Costs */}
+                                  <div className="flex flex-col flex-1 border-r border-slate-100 pr-6 justify-center">
+                                      <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">Project Base Cost</span>
+                                      <span className="font-mono text-slate-800 font-bold text-lg tabular-nums">₹ {firmBaseCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                                      <div className="text-[10px] font-medium text-slate-500 mt-0.5">Materials + Labor</div>
+                                  </div>
+                                  {/* Margin */}
+                                  <div className="flex flex-col flex-1 border-r border-slate-100 pr-6 justify-center">
+                                      <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">Firm Margin</span>
+                                      <span className="font-mono text-emerald-600 font-bold text-lg tabular-nums">₹ {firmMarginValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                                      <div className="mt-0.5"><span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{firmMarginPercent.toFixed(1)}% Avg</span></div>
+                                  </div>
+                                  {/* Value */}
+                                  <div className="flex flex-col flex-1 border-r border-slate-100 pr-6 justify-center">
+                                      <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">Firm Scope Value</span>
+                                      <span className="font-mono text-slate-900 font-bold text-lg tabular-nums">₹ {firmTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                                      <div className="text-[10px] font-medium text-slate-500 mt-0.5">Total Billable</div>
+                                  </div>
                               </div>
-                              <span className="font-mono text-amber-600 font-bold">₹ {estimateExposure.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                          ) : (
+                              <div className="flex flex-1 items-center justify-center border-r border-slate-100 pr-6">
+                                  <span className="text-slate-400 text-xs font-medium italic">Financial details restricted to Owner role.</span>
+                              </div>
+                          )}
+                          
+                          {/* Item Counts (Everyone) */}
+                          <div className="flex flex-col flex-1 border-r border-slate-100 pr-6 justify-center gap-1.5">
+                               <div className="flex justify-between items-center">
+                                   <span className="text-slate-500 font-bold text-[10px] uppercase tracking-wider">Client-Procured</span>
+                                   <span className="font-bold text-slate-700 text-xs">{clientProcuredCount} items</span>
+                               </div>
+                               <div className="flex justify-between items-center">
+                                   <span className="text-slate-500 font-bold text-[10px] uppercase tracking-wider">Excluded</span>
+                                   <span className="font-bold text-slate-700 text-xs">{excludedCount} items</span>
+                               </div>
+                               <div className="flex justify-between items-center">
+                                   <div className="flex items-center gap-1.5">
+                                       <span className="text-slate-500 font-bold text-[10px] uppercase tracking-wider">Estimated Value</span>
+                                       <span className="bg-amber-100 text-amber-800 text-[9px] font-bold px-1 rounded">EST</span>
+                                   </div>
+                                   <span className="font-bold text-slate-700 text-xs">{estimateExposure > 0 ? (isOwner ? `₹ ${estimateExposure.toLocaleString('en-IN')}` : 'Included') : 'None'}</span>
+                               </div>
                           </div>
-                          <div className="flex justify-between items-center border-t border-slate-100 pt-3 mb-3">
-                              <span className="text-indigo-900 font-bold text-base">Grand total</span>
-                              <span className="font-mono text-indigo-950 font-black text-lg">₹ {grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs text-slate-400">
-                              <span>Client-procured: {clientProcuredCount} items (₹0 in FFDS billing) &middot; Excluded: {excludedCount}</span>
+
+                          {/* Grand Total */}
+                          <div className="flex flex-col min-w-[180px] justify-center items-end">
+                              <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">Total Project Value</span>
+                              {isOwner ? (
+                                  <span className="font-mono text-sky-700 font-bold text-2xl tabular-nums">₹ {grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                              ) : (
+                                  <span className="font-mono text-slate-300 font-bold text-2xl tabular-nums">₹ --</span>
+                              )}
                           </div>
                       </div>
                   </div>
               );
           })()}
-
-          {/* AI Tools Section (Bottom) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-200">
-              <CommandBar onProcessCommand={handleProcessCommand} />
-              <BoqPackageCreator projectContext={projectContext} bank={bank} onPackageCreated={handlePackageCreated} />
-          </div>
       </div>
 
       
@@ -797,7 +814,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
         onClose={() => setIsModalOpen(false)}
         bank={bank}
         onAdd={handleAddItems}
-        room={projectContext.rooms.find(r => r.name === activeRoomId) || { name: 'General', size: 0, unit: 'sq ft' }}
+        room={(projectContext.rooms || []).find(r => r.name === activeRoomId) || { name: 'General', size: 0, unit: 'sq ft' }}
         projectContext={projectContext}
       />
 
@@ -814,6 +831,105 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
         rooms={projectContext.rooms}
         isOwner={isOwner}
       />
+
+      {/* Floating Action Bar for Selected Items */}
+      <AnimatePresence>
+          {selectedItemIds.size > 0 && (
+              <motion.div 
+                  initial={{ opacity: 0, y: 50, x: "-50%" }}
+                  animate={{ opacity: 1, y: 0, x: "-50%" }}
+                  exit={{ opacity: 0, y: 50, x: "-50%" }}
+                  className="fixed bottom-6 left-1/2 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl z-50 flex flex-col sm:flex-row items-center gap-4 sm:gap-6 border border-slate-800 backdrop-blur-md max-w-4xl w-[calc(100%-2rem)] sm:w-auto"
+              >
+                  <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 bg-[#0066CC] rounded-full flex items-center justify-center text-xs font-bold shadow-inner">
+                          {selectedItemIds.size}
+                      </span>
+                      <span className="text-sm font-semibold text-slate-200">items selected</span>
+                  </div>
+
+                  <div className="hidden sm:block h-6 w-[1px] bg-slate-800" />
+
+                  <div className="flex flex-wrap items-center justify-center gap-3 w-full sm:w-auto">
+                      <button 
+                          onClick={() => {
+                              const selectedBoqItems = fullBoq.filter(i => selectedItemIds.has(i.id));
+                              const bankIds = selectedBoqItems.map(i => i.bankId);
+                              if (bankIds.length > 0) {
+                                  handleSaveAsBundle(bankIds);
+                                  setSelectedItemIds(new Set());
+                              }
+                          }}
+                          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold rounded-xl text-xs hover:from-amber-400 hover:to-amber-500 transition-all shadow-md flex items-center gap-1.5"
+                      >
+                          📦 Save as Custom Bundle
+                      </button>
+
+                      <button 
+                          onClick={() => {
+                              const promptMargin = window.prompt("Enter margin % to apply to all selected items:", "20");
+                              if (promptMargin !== null) {
+                                  const marginValue = parseFloat(promptMargin);
+                                  if (!isNaN(marginValue)) {
+                                      const updates: { itemId: string; updates: Partial<BoqItem> }[] = Array.from(selectedItemIds).map((id) => ({
+                                          itemId: id as string,
+                                          updates: { marginOverride: marginValue }
+                                      }));
+                                      handleBulkUpdateItems(updates);
+                                      setSelectedItemIds(new Set());
+                                      alert(`Successfully updated margin to ${marginValue}% for ${updates.length} items!`);
+                                  }
+                              }
+                          }}
+                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold rounded-xl text-xs border border-slate-700 hover:border-slate-600 transition-all flex items-center gap-1.5"
+                      >
+                          ⚡ Set Margin %
+                      </button>
+
+                      <button 
+                          onClick={() => {
+                              const findStr = window.prompt("Enter text to find in specifications (e.g. Commercial):");
+                              if (!findStr) return;
+                              const replaceStr = window.prompt(`Replace "${findStr}" with (e.g. Marine Grade):`);
+                              if (replaceStr === null) return;
+
+                              const updates: any[] = [];
+                              Array.from(selectedItemIds).forEach(id => {
+                                  const item = fullBoq.find(i => i.id === id);
+                                  if (item) {
+                                      const oldSpecs = item.specs || '';
+                                      const regex = new RegExp(findStr, 'gi');
+                                      if (regex.test(oldSpecs)) {
+                                          const newSpecs = oldSpecs.replace(regex, replaceStr);
+                                          updates.push({ itemId: id, updates: { specs: newSpecs } });
+                                      }
+                                  }
+                              });
+
+                              if (updates.length > 0) {
+                                  handleBulkUpdateItems(updates);
+                                  setSelectedItemIds(new Set());
+                                  alert(`Successfully replaced specs in ${updates.length} items!`);
+                              } else {
+                                  alert(`No matching text "${findStr}" found in selected items' specifications.`);
+                              }
+                          }}
+                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold rounded-xl text-xs border border-slate-700 hover:border-slate-600 transition-all flex items-center gap-1.5"
+                      >
+                          ✏️ Bulk Spec Swap
+                      </button>
+                      
+                      <button 
+                          onClick={() => setSelectedItemIds(new Set())}
+                          className="text-xs text-slate-400 hover:text-white font-bold hover:underline px-2 py-1"
+                      >
+                          Clear
+                      </button>
+                  </div>
+              </motion.div>
+          )}
+      </AnimatePresence>
+      
     </div>
   );
 };

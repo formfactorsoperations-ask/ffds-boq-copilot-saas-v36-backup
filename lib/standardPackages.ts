@@ -119,56 +119,142 @@ export const ROOM_DISTRIBUTIONS: Record<string, Array<{ name: string, ratio: num
     ]
 };
 
-const detectRoomType = (name: string): string => {
-    const n = (name || '').toLowerCase();
-    if (n.includes('liv') || n.includes('hall') || n.includes('sit')) return 'living';
-    if (n.includes('bed') || n.includes('master') || n.includes('guest') || n.includes('kid')) return 'bedroom';
-    if (n.includes('kitch') || n.includes('pantry')) return 'kitchen';
-    if (n.includes('bath') || n.includes('toilet') || n.includes('wc') || n.includes('wash')) return 'bathroom';
+export const detectRoomType = (name: string): string => {
+    const n = (name || '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (n.includes('foyer') || n.includes('entry') || n.includes('entrance')) return 'foyer';
+    if (n.includes('liv') || n.includes('hall') || n.includes('sit') || n.includes('drawing')) return 'living';
     if (n.includes('din')) return 'dining';
+    if (n.includes('kitch') || n.includes('pantry') || n.includes('modular_kitch')) return 'kitchen';
+    if (n.includes('util') || n.includes('dry_balc') || n.includes('wash_area')) return 'utility';
+    if (n.includes('master_bed')) return 'master_bedroom';
+    if (n.includes('kids_bed')) return 'kids_bedroom';
+    if (n.includes('guest_bed')) return 'guest_bedroom';
+    if (n.includes('parents_bed')) return 'parents_bedroom';
+    if (n.includes('bed')) return 'bedroom';
+    if (n.includes('master_bath')) return 'master_bathroom';
+    if (n.includes('common_bath')) return 'common_bathroom';
+    if (n.includes('powder')) return 'powder_room';
+    if (n.includes('bath') || n.includes('toilet') || n.includes('wc') || n.includes('washroom')) return 'bathroom';
+    if (n.includes('pooja') || n.includes('mandir') || n.includes('temple')) return 'pooja';
+    if (n.includes('balc') || n.includes('deck') || n.includes('terrace')) return 'balcony';
+    if (n.includes('office') || n.includes('study') || n.includes('work_from_home')) return 'home_office';
+    if (n.includes('dress') || n.includes('walk_in')) return 'dressing_area';
+    if (n.includes('servant') || n.includes('staff')) return 'servant_room';
+    if (n.includes('recept')) return 'reception';
+    if (n.includes('conf')) return 'conference';
+    if (n.includes('cabin') || n.includes('director')) return 'director_cabin';
+    if (n.includes('workstation')) return 'workstation_area';
     return 'general';
+};
+
+const ROOM_TYPE_META: Record<string, { label: string; ratio: number; isWet: boolean }> = {
+    foyer: { label: 'Foyer / Entrance', ratio: 0.05, isWet: false },
+    living: { label: 'Living Room', ratio: 0.28, isWet: false },
+    dining: { label: 'Dining Area', ratio: 0.10, isWet: false },
+    kitchen: { label: 'Modular Kitchen', ratio: 0.12, isWet: true },
+    utility: { label: 'Utility / Dry Balcony', ratio: 0.04, isWet: true },
+    master_bedroom: { label: 'Master Bedroom', ratio: 0.18, isWet: false },
+    bedroom: { label: 'Standard Bedroom', ratio: 0.14, isWet: false },
+    kids_bedroom: { label: 'Kids Bedroom', ratio: 0.13, isWet: false },
+    guest_bedroom: { label: 'Guest Bedroom', ratio: 0.12, isWet: false },
+    parents_bedroom: { label: 'Parents Bedroom', ratio: 0.13, isWet: false },
+    bathroom: { label: 'Bathroom / Toilet', ratio: 0.06, isWet: true },
+    master_bathroom: { label: 'Master Bathroom', ratio: 0.06, isWet: true },
+    common_bathroom: { label: 'Common Bathroom', ratio: 0.05, isWet: true },
+    powder_room: { label: 'Powder Room', ratio: 0.04, isWet: true },
+    pooja: { label: 'Pooja / Mandir', ratio: 0.03, isWet: false },
+    balcony: { label: 'Balcony / Deck', ratio: 0.05, isWet: true },
+    home_office: { label: 'Home Office / Study', ratio: 0.08, isWet: false },
+    dressing_area: { label: 'Walk-in Dressing Area', ratio: 0.05, isWet: false },
+    servant_room: { label: 'Staff / Servant Room', ratio: 0.05, isWet: false },
+    reception: { label: 'Reception & Waiting', ratio: 0.15, isWet: false },
+    conference: { label: 'Conference Room', ratio: 0.20, isWet: false },
+    director_cabin: { label: 'Director Cabin', ratio: 0.18, isWet: false },
+    workstation_area: { label: 'Open Workstations', ratio: 0.35, isWet: false },
+    pantry: { label: 'Office Pantry', ratio: 0.07, isWet: true },
+    restroom: { label: 'Restroom', ratio: 0.05, isWet: true },
 };
 
 const isLivingArea = (name: string) => {
     const n = (name || '').toLowerCase();
-    return n.includes('liv') || n.includes('hall') || n.includes('din') || n.includes('foyer');
+    return n.includes('liv') || n.includes('hall') || n.includes('din') || n.includes('foyer') || n.includes('drawing');
 };
 
 const isDryArea = (name: string) => {
     const n = (name || '').toLowerCase();
-    const isWet = n.includes('kitch') || n.includes('bath') || n.includes('toilet') || n.includes('wash') || n.includes('balcony') || n.includes('util');
+    const isWet = n.includes('kitch') || n.includes('bath') || n.includes('toilet') || n.includes('wash') || n.includes('balcony') || n.includes('util') || n.includes('pantry');
     return !isWet;
+};
+
+export const getSmartDefaultCoefficient = (item: Item): number | undefined => {
+    // If explicit coefficient exists on item, use it
+    if (item.areaMultiplierCoefficient !== undefined && item.areaMultiplierCoefficient > 0) {
+        return item.areaMultiplierCoefficient;
+    }
+
+    const name = (item.name || '').toLowerCase();
+    const cat = (item.cat || '').toLowerCase();
+
+    // Painting category (Wall painting / Ceiling painting)
+    if (cat.includes('paint') || name.includes('painting') || name.includes('paint')) {
+        if (name.includes('ceiling')) {
+            return 1.0; // Ceiling is exactly room area
+        }
+        return 3.5; // Wall area approx 3.5x room area
+    }
+
+    // Tiling / Flooring
+    if (name.includes('tile') || name.includes('tiling') || name.includes('flooring') || name.includes('floor')) {
+        if (name.includes('wall')) {
+            return 3.0; // Wall tiles approx 3.0x room area
+        }
+        return 1.15; // Floor tiles with 15% waste buffer
+    }
+
+    // False Ceiling
+    if (name.includes('ceiling') || name.includes('pop false')) {
+        return 1.1; // Ceiling area with 10% waste buffer
+    }
+
+    // Electrical Points
+    if (cat.includes('electrical') && item.unit === 'nos') {
+        return 0.15; // e.g. 0.15 points per sq ft
+    }
+
+    return undefined;
 };
 
 // Quantity Calculator Logic (Room Specific)
 export const calculateQuantity = (item: Item, size: number, ceilingHeight: number = 9.5): number => {
+    const customCoeff = getSmartDefaultCoefficient(item);
+    if (customCoeff !== undefined && size > 0) {
+        return Number((size * customCoeff).toFixed(2));
+    }
+
     const name = (item.name || '').toLowerCase().replace(/\./g, '');
     const unit = (item.unit || '').toLowerCase();
     const safeSize = Math.max(size, 25); // Min room size clamp
     const wallLength = Math.sqrt(safeSize);
     const perimeter = (wallLength * 2) + (wallLength * 1.5 * 2); // Simple rectangular approx
 
-    // --- NEW LOGIC FOR CUSTOM BATHROOM LIST ---
-    
-    // Flooring (Item 30 equivalent)
-    if (name.includes('flooring tiles') && name.includes('demolish')) {
-        // Floor area only
+    // Flooring
+    if (name.includes('flooring tiles') || name.includes('floor tile') || name.includes('vitrified tile')) {
+        return Number((safeSize * 1.15).toFixed(2));
+    }
+
+    // Wall Tiles
+    if (name.includes('wall tile') || name.includes('dado')) {
+        const dadoHeight = name.includes('kitchen') ? 2.5 : 7;
+        const wallArea = (perimeter * dadoHeight) - 15;
+        return Number(Math.max(20, wallArea).toFixed(2));
+    }
+
+    // Waterproofing logic
+    if (name.includes('waterproofing') || name.includes('bbc')) {
         return Number((safeSize).toFixed(2));
     }
-
-    // Wall Tiles (Item 31 equivalent)
-    if (name.includes('wall tiles') && name.includes('demolish')) {
-        // Wall Area (Perimeter * Height)
-        const wallArea = perimeter * 7; // Approx 7ft height for tiles
-        return Number((wallArea).toFixed(2));
-    }
-
-    // Waterproofing logic (Item 29)
-    if (name.includes('waterproofing') || name.includes('bbc')) {
-        return 1; // Lumpsum 1 as per list
-    }
     
-    // Other new lumpsum items
+    // Lumpsum items
     if (['door frame', 'door - new', 'wall niches', 'washbasin counter'].some(k => name.includes(k))) {
         return 1;
     }
@@ -176,18 +262,6 @@ export const calculateQuantity = (item: Item, size: number, ceilingHeight: numbe
     // Material Provisions
     if (name.includes('actuals')) {
         return 1;
-    }
-
-    // --- END NEW LOGIC ---
-
-    if (name.includes('flooring') || (name.includes('tile') && name.includes('floor'))) {
-        return Number((safeSize * 1.1).toFixed(2)); 
-    }
-
-    if (name.includes('tile') && name.includes('wall')) {
-        const dadoHeight = name.includes('kitchen') ? 2 : 7; 
-        const area = (perimeter * dadoHeight) - 15; // Deduct door
-        return Number(Math.max(20, area).toFixed(2));
     }
 
     if (name.includes('wallpaper')) {
@@ -247,75 +321,171 @@ export const calculateQuantity = (item: Item, size: number, ceilingHeight: numbe
     return 1;
 };
 
-const ensureRoomsExist = (projectContext: ProjectContext): Room[] => {
-    if (projectContext.rooms.length > 0) return projectContext.rooms;
-    const config = projectContext.config || '2-BHK';
+/**
+ * Resolves the active template configuration matching the requested typology name.
+ */
+export const resolveActiveTemplate = (
+    templates: TemplateData | undefined,
+    configStr: string
+): { configKey: string; activeTemplate: Record<string, string[]> } => {
+    const all = templates || INITIAL_TEMPLATES;
+    const cleanConfig = (configStr || '').trim();
+
+    // 1. Exact match
+    if (cleanConfig && all[cleanConfig]) {
+        return { configKey: cleanConfig, activeTemplate: all[cleanConfig] };
+    }
+
+    // 2. Case-insensitive exact match
+    if (cleanConfig) {
+        const found = Object.keys(all).find(k => k.toLowerCase() === cleanConfig.toLowerCase());
+        if (found && all[found]) {
+            return { configKey: found, activeTemplate: all[found] };
+        }
+    }
+
+    // 3. Substring match (longest matching key)
+    if (cleanConfig) {
+        const candidates = Object.keys(all).filter(k =>
+            cleanConfig.toLowerCase().includes(k.toLowerCase()) || k.toLowerCase().includes(cleanConfig.toLowerCase())
+        );
+        if (candidates.length > 0) {
+            candidates.sort((a, b) => b.length - a.length);
+            const best = candidates[0];
+            return { configKey: best, activeTemplate: all[best] };
+        }
+    }
+
+    // 4. Default fallback
+    const firstKey = Object.keys(all)[0] || '2-BHK';
+    return { configKey: firstKey, activeTemplate: all[firstKey] || FALLBACK_TEMPLATE };
+};
+
+/**
+ * Builds rooms dynamically based on template room scopes and target carpet area.
+ */
+export const ensureRoomsExistForTemplate = (
+    projectContext: ProjectContext,
+    activeTemplate: Record<string, string[]>
+): Room[] => {
+    if (projectContext.rooms && projectContext.rooms.length > 0) {
+        return projectContext.rooms;
+    }
+
     const totalArea = projectContext.area || 1000;
-    const distribution = ROOM_DISTRIBUTIONS[config] || ROOM_DISTRIBUTIONS['2-BHK'];
-    return distribution.map(d => ({
-        name: d.name,
-        size: Math.round(totalArea * d.ratio),
-        unit: 'sq ft' as const
-    }));
+    const templateRoomKeys = Object.keys(activeTemplate).filter(k => k !== 'general');
+
+    if (templateRoomKeys.length === 0) {
+        // Fallback to 2-BHK distribution
+        const distribution = ROOM_DISTRIBUTIONS['2-BHK'];
+        return distribution.map(d => ({
+            name: d.name,
+            size: Math.round(totalArea * d.ratio),
+            unit: 'sq ft' as const
+        }));
+    }
+
+    // Compute raw ratios from template rooms
+    const rawRatios = templateRoomKeys.map(key => {
+        const meta = ROOM_TYPE_META[key] || {
+            label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+            ratio: 0.12,
+            isWet: false
+        };
+        return { key, label: meta.label, rawRatio: meta.ratio };
+    });
+
+    const sumRatio = rawRatios.reduce((acc, r) => acc + r.rawRatio, 0);
+
+    return rawRatios.map(r => {
+        const normalizedRatio = sumRatio > 0 ? r.rawRatio / sumRatio : (1 / rawRatios.length);
+        const roomSize = Math.max(25, Math.round(totalArea * normalizedRatio));
+        return {
+            name: r.label,
+            size: roomSize,
+            unit: 'sq ft' as const
+        };
+    });
 };
 
 const calculateTotalWallArea = (rooms: Room[], ceilingHeight: number) => {
     return rooms.reduce((total, room) => {
-        // Approx perimeter = 4 * sqrt(Area). 
-        // 0.85 factor for doors/windows
         const p = Math.sqrt(room.size) * 4;
         const wall = (p * ceilingHeight) * 0.85;
         return total + wall;
     }, 0);
 };
 
-export const generateStandardPackages = (projectContext: ProjectContext, bank: Item[], templates: TemplateData): ProposalTier[] => {
-    const tiers: { name: string, marginMod: number, rationalePrefix: string, desc: string, filterType: 'base' | 'mid' | 'top' }[] = [
+export const generateStandardPackages = (
+    projectContext: ProjectContext,
+    bank: Item[],
+    templates: TemplateData,
+    mode: 'single' | 'tiered' = 'tiered'
+): ProposalTier[] => {
+    const tiers: {
+        name: string;
+        marginMod: number;
+        rationalePrefix: string;
+        desc: string;
+        filterType: 'base' | 'mid' | 'top';
+    }[] = [
         { 
             name: "Essential Elegance", 
             marginMod: 0.85, 
             rationalePrefix: "Base Spec: 0.8mm Lam, Std H/W",
-            desc: "Core Functionality Only",
+            desc: "Core Functional Package",
             filterType: 'base'
         },
         { 
             name: "Comfort Upgrade", 
             marginMod: 1.0, 
             rationalePrefix: "Mid Spec: 1mm Lam, Soft-close",
-            desc: "Standard Interiors",
+            desc: "Standard Turnkey Interiors",
             filterType: 'mid'
         },
         { 
             name: "Complete Harmony", 
             marginMod: 1.25, 
             rationalePrefix: "Top Spec: Acrylic/PU, Premium H/W",
-            desc: "Fully Loaded",
+            desc: "Fully Loaded Luxury Package",
             filterType: 'top'
         }
     ];
 
-    const bankMap = new Map(bank.map(i => [i.id, i]));
-    const activeRooms = ensureRoomsExist(projectContext);
-    const updatedContext = { ...projectContext, rooms: activeRooms };
+    const activeTiers = mode === 'single' ? [tiers[1]] : tiers;
+
+    const bankMap = new Map<string, Item>(bank.map(i => [i.id, i]));
     
-    // Calculate Aggregates for Global Items (Prioritize room sum over generic area if available)
+    // 1. Resolve exact template
+    const { configKey, activeTemplate } = resolveActiveTemplate(templates, projectContext.config);
+    
+    // 2. Synthesize rooms matching template room scopes
+    const activeRooms = ensureRoomsExistForTemplate(projectContext, activeTemplate);
+    const updatedContext = { ...projectContext, config: configKey, rooms: activeRooms };
+    
+    // 3. Calculate Aggregates for Global / General Items
     const totalRoomArea = activeRooms.reduce((sum, r) => sum + r.size, 0);
     const totalCarpetArea = totalRoomArea > 0 ? totalRoomArea : (projectContext.area || 1000);
     
     const ceilingHeight = projectContext.ceilingHeight || 9.5;
     const totalWallArea = calculateTotalWallArea(activeRooms, ceilingHeight);
 
-    const configStr = projectContext.config || '';
-    const configKey = Object.keys(templates || INITIAL_TEMPLATES).find(k => configStr.includes(k)) || '2-BHK';
-    const activeTemplate = (templates || INITIAL_TEMPLATES)[configKey] || FALLBACK_TEMPLATE;
-
-    return tiers.map(tier => {
+    return activeTiers.map(tier => {
         const boqItems: BoqItem[] = [];
 
-        // 1. PROCESS ROOM ITEMS
-        activeRooms.forEach(room => {
-            const templateKey = detectRoomType(room.name);
-            const itemIds = activeTemplate[templateKey] || [];
+        // 1. PROCESS ROOM ITEMS (Iterate across all template room scopes)
+        Object.entries(activeTemplate).forEach(([roomKey, itemIds]) => {
+            if (roomKey === 'general') return;
+
+            // Find matching synthesized room
+            const matchingRoom = activeRooms.find(r => {
+                const detected = detectRoomType(r.name);
+                return detected === roomKey || r.name.toLowerCase().includes(roomKey.replace(/_/g, ' '));
+            }) || {
+                name: roomKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                size: Math.round(totalCarpetArea / Math.max(1, Object.keys(activeTemplate).length - 1)),
+                unit: 'sq ft' as const
+            };
 
             itemIds.forEach(bankId => {
                 const bankItem = bankMap.get(bankId);
@@ -324,159 +494,135 @@ export const generateStandardPackages = (projectContext: ProjectContext, bank: I
                 const itemName = (bankItem.name || '').toLowerCase();
                 const itemCat = bankItem.cat;
 
-                // STRICTLY REMOVE GLOBAL ITEMS FROM ROOMS
-                // False ceiling, Painting, Electrical are now handled globally to avoid double counting
-                // Exception: For Bathroom Remodels, we WANT False Ceiling in the room logic as it's room-specific
-                const isBathroomRemodel = configKey === 'Bathroom-Remodel';
-                
-                if (!isBathroomRemodel && (itemCat === 'Painting' || itemCat === 'Electrical' || itemName.includes('false ceiling'))) return;
-                
-                // Exclude Loose Furniture
-                if (itemCat === 'Loose Furniture') return; 
-
-                // Tier Filtering
+                // Tier Filtering logic for decorative upgrades
                 if (tier.filterType === 'base') {
-                    if (itemName.includes('tv unit')) return;
-                    if (itemName.includes('shoe')) return;
-                    if (itemName.includes('crockery')) return;
-                    if (itemName.includes('vanity')) return;
-                    if (itemName.includes('showcase')) return;
-                    if (itemName.includes('panelling')) return;
-                    if (itemName.includes('wallpaper')) return;
-                    if (itemName.includes('headboard')) return;
+                    // In Base, exclude high-cost decorative surface cladding/panelling/luxury accents
+                    if (itemName.includes('fluted panelling') || itemName.includes('acoustic panel') || itemName.includes('wallpaper') || itemName.includes('profile light')) {
+                        return;
+                    }
                 }
                 if (tier.filterType === 'mid') {
-                    if (itemName.includes('panelling')) return;
-                    if (itemName.includes('wallpaper')) return;
-                    if (itemName.includes('headboard')) return;
+                    // In Mid, exclude ultra-luxury acoustic & custom wall cladding
+                    if (itemName.includes('acoustic panel') || itemName.includes('marble cladding')) {
+                        return;
+                    }
                 }
 
-                const qty = calculateQuantity(bankItem, room.size, ceilingHeight);
-                const newMargin = Math.max(10, bankItem.margin * tier.marginMod);
+                const qty = calculateQuantity(bankItem, matchingRoom.size, ceilingHeight);
+                const newMargin = Math.max(10, Math.min(45, Number((bankItem.margin * tier.marginMod).toFixed(1))));
 
                 boqItems.push({
                     id: generateId(),
                     bankId: bankItem.id,
                     qty: qty,
-                    roomId: room.name,
-                    marginOverride: Number(newMargin.toFixed(1)),
+                    roomId: matchingRoom.name,
+                    marginOverride: newMargin,
                     rationale: tier.rationalePrefix,
                     optional: false
                 });
             });
         });
 
-        // 2. PROCESS GENERAL ITEMS (Global / Functional)
-        // Ensure core functional items are ALWAYS processed
-        // For Bathroom Remodel, we skip generic whole-house painting/elec logic
-        const isBathroomRemodel = configKey === 'Bathroom-Remodel';
-        
-        if (!isBathroomRemodel) {
-            const functionalIds = ['gen-021', 'gen-022', 'gen-023', 'gen-024']; // FC, Wall Paint, Ceiling Paint, Elec
-            const templateGeneralIds = activeTemplate['general'] || [];
-            const combinedGeneralIds = Array.from(new Set([...templateGeneralIds, ...functionalIds]));
-            
-            combinedGeneralIds.forEach(bankId => {
-                const bankItem = bankMap.get(bankId);
-                if (!bankItem) return;
-                const itemName = (bankItem.name || '').toLowerCase();
-                const itemCat = bankItem.cat;
+        // 2. PROCESS GENERAL / WHOLE-HOUSE ITEMS
+        const templateGeneralIds = activeTemplate['general'] || [];
+        templateGeneralIds.forEach(bankId => {
+            const bankItem = bankMap.get(bankId);
+            if (!bankItem) return;
+            const itemName = (bankItem.name || '').toLowerCase();
+            const itemCat = bankItem.cat;
 
-                let qty = 1;
-                let skipItem = false;
+            let qty = 1;
+            let skipItem = false;
 
-                // --- SMART QUANTITY LOGIC FOR GENERAL ITEMS ---
-
-                // A. FALSE CEILING
-                if (itemName.includes('false ceiling')) {
-                    if (tier.filterType === 'base') {
-                        skipItem = true; // No FC in base
-                    } else if (tier.filterType === 'mid') {
-                        // Living + Dining Areas Only
-                        const eligibleArea = activeRooms
-                            .filter(r => isLivingArea(r.name))
-                            .reduce((sum, r) => sum + r.size, 0);
-                        qty = Number((eligibleArea * 1.15).toFixed(2));
-                    } else {
-                        // All Dry Areas (Excludes Kitchen/Bath)
-                        const eligibleArea = activeRooms
-                            .filter(r => isDryArea(r.name))
-                            .reduce((sum, r) => sum + r.size, 0);
-                        qty = Number((eligibleArea * 1.15).toFixed(2));
-                    }
+            // False Ceiling in General Scope
+            if (itemName.includes('ceiling') || itemCat === 'False Ceiling') {
+                if (tier.filterType === 'base') {
+                    // Base: living area only (~30% of carpet area)
+                    qty = Number((totalCarpetArea * 0.35).toFixed(2));
+                } else if (tier.filterType === 'mid') {
+                    // Mid: living + dining (~55% of carpet area)
+                    qty = Number((totalCarpetArea * 0.60).toFixed(2));
+                } else {
+                    // Top: all dry areas (~85% of carpet area)
+                    qty = Number((totalCarpetArea * 0.85).toFixed(2));
                 }
-                // B. PAINTING
-                else if (itemCat === 'Painting') {
-                    if (itemName.includes('ceiling')) {
-                        // Ceiling Paint: Matches Total Carpet Area (approx)
-                        qty = Number(totalCarpetArea.toFixed(2));
-                    } else {
-                        // Wall Paint: Calculated Total Wall Area
-                        qty = Number(totalWallArea.toFixed(2));
-                    }
+            }
+            // Painting in General Scope
+            else if (itemCat === 'Painting' || itemName.includes('paint')) {
+                if (itemName.includes('ceiling')) {
+                    qty = Number(totalCarpetArea.toFixed(2));
+                } else {
+                    qty = Number(totalWallArea.toFixed(2));
                 }
-                // C. ELECTRICAL
-                else if (itemCat === 'Electrical') {
-                    // Point Calculation: Approx 1 point per 25 sqft
+            }
+            // Electrical in General Scope
+            else if (itemCat === 'Electrical' || itemName.includes('electrical') || itemName.includes('point wiring')) {
+                if (bankItem.unit === 'nos') {
                     qty = Math.ceil(totalCarpetArea / 25);
+                } else {
+                    qty = 1;
                 }
-                // D. OTHERS (Debris, Protection)
-                else if (itemName.includes('debris') || itemName.includes('protection')) {
-                    if (bankItem.unit === 'sq ft') qty = totalCarpetArea;
-                    if (itemName.includes('debris') && bankItem.unit === 'nos') {
-                        qty = Math.ceil(totalCarpetArea / 400); 
-                    }
+            }
+            // Debris & Floor Protection
+            else if (itemName.includes('debris') || itemName.includes('protection') || itemName.includes('cleaning')) {
+                if (bankItem.unit === 'sq ft') {
+                    qty = totalCarpetArea;
+                } else if (bankItem.unit === 'nos' || bankItem.unit === 'lumpsum') {
+                    qty = Math.max(1, Math.ceil(totalCarpetArea / 500));
                 }
+            } else {
+                qty = calculateQuantity(bankItem, totalCarpetArea, ceilingHeight);
+            }
 
-                if (skipItem || qty <= 0) return;
+            if (skipItem || qty <= 0) return;
 
-                const newMargin = Math.max(10, bankItem.margin * tier.marginMod);
+            const newMargin = Math.max(10, Math.min(45, Number((bankItem.margin * tier.marginMod).toFixed(1))));
 
-                boqItems.push({
-                    id: generateId(),
-                    bankId: bankItem.id,
-                    qty: qty,
-                    roomId: 'General', 
-                    marginOverride: Number(newMargin.toFixed(1)),
-                    rationale: tier.rationalePrefix,
-                    optional: false
-                });
+            boqItems.push({
+                id: generateId(),
+                bankId: bankItem.id,
+                qty: qty,
+                roomId: 'General Scope',
+                marginOverride: newMargin,
+                rationale: tier.rationalePrefix,
+                optional: false
             });
-        } else {
-            // For Bathroom Remodel, specific generic items
-             const templateGeneralIds = activeTemplate['general'] || [];
-             templateGeneralIds.forEach(bankId => {
-                const bankItem = bankMap.get(bankId);
-                if (!bankItem) return;
-                // Debris logic specific to small area
-                if ((bankItem.name || '').toLowerCase().includes('debris')) {
-                    boqItems.push({
-                        id: generateId(),
-                        bankId: bankItem.id,
-                        qty: 1, // 1 Trip usually enough for 1 bath
-                        roomId: 'General', 
-                        marginOverride: bankItem.margin,
-                        rationale: 'Disposal',
-                        optional: false
-                    });
-                }
-             });
-        }
+        });
+
+        // 3. COMPUTE ACCURATE FINANCIAL TOTALS
+        let totalCost = 0;
+        let totalSell = 0;
+
+        boqItems.forEach(bItem => {
+            const b = bankMap.get(bItem.bankId);
+            if (b) {
+                const itemCost = ((b.materials || 0) + (b.labor || 0)) * bItem.qty;
+                const itemMargin = bItem.marginOverride !== undefined ? bItem.marginOverride : (b.margin || 20);
+                const sellRate = (b.materials + b.labor) / (1 - (itemMargin / 100));
+                const itemSell = sellRate * bItem.qty;
+                totalCost += itemCost;
+                totalSell += itemSell;
+            }
+        });
+
+        const totalGm = totalSell > 0 ? totalSell - totalCost : 0;
+        const blendedGm = totalSell > 0 ? (totalGm / totalSell) * 100 : 0;
+        const designFee = projectContext.designFee || 0;
 
         return {
             id: generateId(),
             name: tier.name,
             timestamp: Date.now(),
             boq: boqItems,
-            projectContext: updatedContext, 
+            projectContext: updatedContext,
             summary: {
-                totalSell: 0, 
-                totalCost: 0, // Added to match type definition
-                totalGm: 0, 
+                totalSell: Math.round(totalSell),
+                totalCost: Math.round(totalCost),
+                totalGm: Math.round(totalGm),
                 itemCount: boqItems.length,
-                totalRevenue: 0, // Initializer
-                designFee: 0,    // Initializer
-                blendedGm: 0     // Initializer
+                totalRevenue: Math.round(totalSell + designFee),
+                designFee: Math.round(designFee),
+                blendedGm: Number(blendedGm.toFixed(1))
             }
         };
     });

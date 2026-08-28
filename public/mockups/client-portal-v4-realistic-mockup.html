@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOQ Copilot — Client Portal Redesign (V4 Realistic & Zero-Overhead)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#F0F7FF',
+              100: '#E0EFFE',
+              500: '#0066CC',
+              600: '#0055B3',
+              700: '#004499',
+              900: '#0A2540',
+            },
+            gold: {
+              400: '#F59E0B',
+              500: '#D97706',
+              600: '#B45309',
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #F8FAFC;
+      color: #0F172A;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
+    }
+    .sidebar-link {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.625rem 0.875rem;
+      border-radius: 0.75rem;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: #475569;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .sidebar-link:hover {
+      background-color: #F1F5F9;
+      color: #0F172A;
+    }
+    .sidebar-link.active {
+      background-color: #0066CC;
+      color: #FFFFFF;
+      box-shadow: 0 4px 12px rgba(0, 102, 204, 0.2);
+    }
+    .sidebar-link.active i {
+      color: #FFFFFF !important;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#F8FAFC] antialiased flex flex-col lg:flex-row">
+
+  <!-- LEFT SIDEBAR NAVIGATION -->
+  <aside class="w-full lg:w-72 bg-white border-r border-slate-200/90 flex flex-col shrink-0 lg:min-h-screen sticky top-0 z-30">
+    
+    <!-- Studio Header -->
+    <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-[#0A2540] text-amber-400 flex items-center justify-center font-black text-lg shadow-sm border border-amber-500/30">
+          F
+        </div>
+        <div>
+          <span class="text-[10px] font-extrabold uppercase tracking-widest text-[#0066CC] bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
+            Form Factors
+          </span>
+          <h2 class="text-xs font-black text-slate-900 tracking-tight leading-tight mt-0.5">
+            Lodha Amara 2BHK
+          </h2>
+        </div>
+      </div>
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse hidden lg:block" title="Site Active"></span>
+    </div>
+
+    <!-- Navigation Menu Links -->
+    <nav class="p-3 space-y-1 flex-1 overflow-y-auto custom-scroll">
+      
+      <div class="px-3 pt-2 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+        Project Overview
+      </div>
+
+      <a onclick="switchTab('dashboard')" id="nav-dashboard" class="sidebar-link active">
+        <i data-lucide="layout-dashboard" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Dashboard</span>
+      </a>
+
+      <a onclick="switchTab('timeline')" id="nav-timeline" class="sidebar-link">
+        <i data-lucide="calendar-range" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Phase Schedule & Timeline</span>
+      </a>
+
+      <a onclick="switchTab('site')" id="nav-site" class="sidebar-link">
+        <i data-lucide="camera" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Live Site Photo Feed</span>
+        <span class="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">14 New</span>
+      </a>
+
+      <div class="px-3 pt-4 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+        Design & Deliverables
+      </div>
+
+      <a onclick="switchTab('vault')" id="nav-vault" class="sidebar-link">
+        <i data-lucide="folder-open" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Document Vault</span>
+        <span class="px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-800 text-[10px] font-bold">6 Docs</span>
+      </a>
+
+      <a onclick="switchTab('renders')" id="nav-renders" class="sidebar-link">
+        <i data-lucide="box" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">3D Renders & Drawings</span>
+      </a>
+
+      <a onclick="switchTab('approvals')" id="nav-approvals" class="sidebar-link">
+        <i data-lucide="check-square" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Pending Approvals</span>
+        <span class="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold">1</span>
+      </a>
+
+      <a onclick="switchTab('snagging')" id="nav-snagging" class="sidebar-link">
+        <i data-lucide="clipboard-check" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Snag List & Handover</span>
+        <span class="px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold">2 Open</span>
+      </a>
+
+      <div class="px-3 pt-4 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+        Commercial & Scope
+      </div>
+
+      <a onclick="switchTab('boq')" id="nav-boq" class="sidebar-link">
+        <i data-lucide="clipboard-list" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Project Scope & BOQ</span>
+      </a>
+
+      <a onclick="switchTab('payments')" id="nav-payments" class="sidebar-link">
+        <i data-lucide="wallet" class="w-4 h-4 text-slate-500"></i>
+        <span class="flex-1">Payments & Invoices</span>
+      </a>
+
+    </nav>
+
+    <!-- Sidebar Bottom: Client Profile & Direct Studio Contact -->
+    <div class="p-3 border-t border-slate-100 bg-slate-50/80 space-y-2">
+      <div class="p-2.5 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between shadow-2xs">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-full bg-amber-100 border border-amber-300 text-amber-900 font-bold text-xs flex items-center justify-center">
+            AS
+          </div>
+          <div>
+            <p class="text-xs font-extrabold text-slate-900 leading-tight">Anand Sharma</p>
+            <p class="text-[10px] text-slate-500">Lodha Amara, Thane</p>
+          </div>
+        </div>
+        <button onclick="toggleModal('contact-modal')" class="p-1.5 hover:bg-slate-100 text-slate-600 rounded-lg cursor-pointer" title="Studio Team Contact">
+          <i data-lucide="phone-call" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <button onclick="toggleModal('bank-modal')" class="w-full py-2 bg-[#0A2540] hover:bg-slate-800 text-amber-400 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs">
+        <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
+        <span>Studio Bank & GSTIN Details</span>
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOP HEADER BAR -->
+    <header class="bg-white border-b border-slate-200/90 sticky top-0 z-20 shadow-2xs">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+        
+        <!-- Left Title Context -->
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-extrabold text-slate-900">Lodha Amara, Flat 1204 (2BHK)</span>
+            <span class="px-2 py-0.5 bg-emerald-50 text-emerald-800 rounded text-[10px] font-bold border border-emerald-200">
+              Stage 3: Millwork & Polishing
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-500">Handover Target: <strong class="text-slate-800">October 15, 2026</strong></p>
+        </div>
+
+        <!-- Right Quick Action Buttons -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          <button onclick="switchTab('vault')" class="px-3.5 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs">
+            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+            <span>Download Signed Contract</span>
+          </button>
+
+          <button onclick="toggleModal('contact-modal')" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer">
+            <i data-lucide="phone-call" class="w-3.5 h-3.5 text-slate-500"></i>
+            <span>Studio Support Hotline</span>
+          </button>
+        </div>
+
+      </div>
+      <!-- Gold Hairline Branding Line -->
+      <div class="h-[2px] bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500"></div>
+    </header>
+
+    <!-- CONTENT BODY -->
+    <main class="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+
+      <!-- VIEW 1: DASHBOARD -->
+      <div id="view-dashboard" class="tab-view space-y-6">
+        
+        <!-- Hero Project Progress Summary -->
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <span class="text-[10px] font-extrabold uppercase tracking-widest text-[#0066CC]">Site Execution Status</span>
+              <h2 class="text-xl font-black text-slate-900 mt-0.5">Project Execution is 68% Complete</h2>
+              <p class="text-xs text-slate-600">Millwork carcasses installed across all bedrooms. Living room veneer polishing in progress.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="text-right">
+                <p class="text-2xl font-black text-[#0066CC]">68%</p>
+                <p class="text-[10px] font-bold text-emerald-700 uppercase">On Schedule ✓</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Room Completion Meters -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+              <div class="flex justify-between font-extrabold text-slate-900 mb-1">
+                <span>Living Room</span>
+                <span class="text-emerald-600">85%</span>
+              </div>
+              <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-emerald-500 h-full rounded-full" style="width: 85%;"></div>
+              </div>
+            </div>
+
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+              <div class="flex justify-between font-extrabold text-slate-900 mb-1">
+                <span>Master Bed</span>
+                <span class="text-sky-600">65%</span>
+              </div>
+              <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-sky-500 h-full rounded-full" style="width: 65%;"></div>
+              </div>
+            </div>
+
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+              <div class="flex justify-between font-extrabold text-slate-900 mb-1">
+                <span>Modular Kitchen</span>
+                <span class="text-sky-600">70%</span>
+              </div>
+              <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-sky-500 h-full rounded-full" style="width: 70%;"></div>
+              </div>
+            </div>
+
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+              <div class="flex justify-between font-extrabold text-slate-900 mb-1">
+                <span>Guest Room</span>
+                <span class="text-amber-600">50%</span>
+              </div>
+              <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-amber-500 h-full rounded-full" style="width: 50%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3 Key Summary Cards Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          <!-- Card 1: Document Vault Shortcut -->
+          <div class="bg-white rounded-3xl p-5 border border-slate-200 shadow-2xs space-y-3">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+              <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Project Documents</span>
+              <i data-lucide="folder-check" class="w-4 h-4 text-[#0066CC]"></i>
+            </div>
+            <div class="space-y-1 text-xs">
+              <p class="font-bold text-slate-900">Signed Contract & Onboarding Kit</p>
+              <p class="text-slate-500">6 official documents, 3D layouts, and payment receipts available.</p>
+            </div>
+            <button onclick="switchTab('vault')" class="w-full py-2 bg-slate-50 hover:bg-slate-100 text-[#0066CC] border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer">
+              <span>Open Document Vault</span>
+              <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <!-- Card 2: Material Delivery Status -->
+          <div class="bg-white rounded-3xl p-5 border border-slate-200 shadow-2xs space-y-3">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+              <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Key Material Gates</span>
+              <i data-lucide="truck" class="w-4 h-4 text-emerald-600"></i>
+            </div>
+            <div class="space-y-1.5 text-xs">
+              <div class="flex justify-between text-slate-700">
+                <span>Super Walnut Veneer</span>
+                <span class="font-bold text-emerald-700">On Site ✓</span>
+              </div>
+              <div class="flex justify-between text-slate-700">
+                <span>Kalinga Quartz Counter</span>
+                <span class="font-bold text-emerald-700">On Site ✓</span>
+              </div>
+              <div class="flex justify-between text-slate-700">
+                <span>Master Bed Velvet Fabric</span>
+                <span class="font-bold text-amber-600">Awaiting Sign-off</span>
+              </div>
+            </div>
+            <button onclick="switchTab('approvals')" class="w-full py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer">
+              <span>View Approvals</span>
+              <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <!-- Card 3: Financial Gate -->
+          <div class="bg-white rounded-3xl p-5 border border-slate-200 shadow-2xs space-y-3">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+              <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Next Payment Gate</span>
+              <i data-lucide="indian-rupee" class="w-4 h-4 text-amber-600"></i>
+            </div>
+            <div class="space-y-1 text-xs">
+              <div class="flex justify-between items-baseline">
+                <span class="font-bold text-slate-900">E3 — Finishing Advance (20%)</span>
+                <span class="font-black text-slate-900">₹3,70,000</span>
+              </div>
+              <p class="text-slate-500">Milestone gate due Sep 05, 2026 upon veneer arrival.</p>
+            </div>
+            <button onclick="toggleModal('bank-modal')" class="w-full py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer">
+              <span>View Bank Transfer Details</span>
+              <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Latest Site Update Teaser -->
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-sm font-extrabold text-slate-900">Latest Photo Uploads from Site</h3>
+              <p class="text-xs text-slate-500">Logged by Site Supervisor Rajesh Verma today at 11:30 AM</p>
+            </div>
+            <button onclick="switchTab('site')" class="text-xs font-bold text-[#0066CC] hover:underline cursor-pointer">View All 14 Photos →</button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 cursor-pointer" onclick="openLightbox('https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=80')">
+              <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=600&q=80" alt="Living Polish" class="h-36 w-full object-cover">
+              <div class="p-2.5 text-xs font-bold text-slate-800">Living Room Veneer Coat 1</div>
+            </div>
+            <div class="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 cursor-pointer" onclick="openLightbox('https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=80')">
+              <img src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=600&q=80" alt="Bedroom Carcass" class="h-36 w-full object-cover">
+              <div class="p-2.5 text-xs font-bold text-slate-800">Master Bedroom Wardrobe Frame</div>
+            </div>
+            <div class="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 cursor-pointer" onclick="openLightbox('https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1200&q=80')">
+              <img src="https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=600&q=80" alt="Kitchen Counter" class="h-36 w-full object-cover">
+              <div class="p-2.5 text-xs font-bold text-slate-800">Quartz Countertop Fitting</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- VIEW 2: PHASE SCHEDULE & TIMELINE (GANTT BAR VIEW) -->
+      <div id="view-timeline" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h3 class="text-base font-extrabold text-slate-900">Project Master Schedule & Stage Timeline</h3>
+              <p class="text-xs text-slate-500">Milestone-triggered execution schedule managed by Form Factors Design Studio</p>
+            </div>
+            <span class="px-3 py-1 bg-emerald-50 text-emerald-800 text-xs font-extrabold rounded-xl border border-emerald-200 self-start sm:self-auto">
+              Estimated Handover: Oct 15, 2026
+            </span>
+          </div>
+
+          <!-- Clean Visual Phase Bar Chart / Timeline -->
+          <div class="space-y-4">
+            
+            <!-- Phase 1 -->
+            <div class="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl space-y-2">
+              <div class="flex justify-between items-center text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-[11px]">✓</span>
+                  <span class="font-extrabold text-slate-900">Phase 1: Design Freeze, 3D & Working Drawings</span>
+                </div>
+                <span class="font-bold text-emerald-800">100% Completed</span>
+              </div>
+              <div class="w-full bg-emerald-200 h-2.5 rounded-full overflow-hidden">
+                <div class="bg-emerald-600 h-full rounded-full" style="width: 100%;"></div>
+              </div>
+              <p class="text-[11px] text-slate-500">Approved May 20, 2026 • Contract signed & Design Fee cleared</p>
+            </div>
+
+            <!-- Phase 2 -->
+            <div class="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl space-y-2">
+              <div class="flex justify-between items-center text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-[11px]">✓</span>
+                  <span class="font-extrabold text-slate-900">Phase 2: Civil, Electrical, Plumbing & False Ceiling</span>
+                </div>
+                <span class="font-bold text-emerald-800">100% Completed</span>
+              </div>
+              <div class="w-full bg-emerald-200 h-2.5 rounded-full overflow-hidden">
+                <div class="bg-emerald-600 h-full rounded-full" style="width: 100%;"></div>
+              </div>
+              <p class="text-[11px] text-slate-500">Completed Jul 10, 2026 • Site inspection signed off</p>
+            </div>
+
+            <!-- Phase 3 (Active) -->
+            <div class="p-4 bg-sky-50/90 border border-sky-300 rounded-2xl space-y-2">
+              <div class="flex justify-between items-center text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-full bg-[#0066CC] text-white font-bold flex items-center justify-center text-[11px]">⚡</span>
+                  <span class="font-extrabold text-slate-900">Phase 3: Millwork Installation, Veneers & PU Polish</span>
+                </div>
+                <span class="font-extrabold text-[#0066CC]">68% In Progress</span>
+              </div>
+              <div class="w-full bg-sky-200 h-2.5 rounded-full overflow-hidden">
+                <div class="bg-[#0066CC] h-full rounded-full" style="width: 68%;"></div>
+              </div>
+              <p class="text-[11px] text-slate-600">Active Stage • Scheduled Completion: Sep 25, 2026</p>
+            </div>
+
+            <!-- Phase 4 (Upcoming) -->
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 text-slate-400">
+              <div class="flex justify-between items-center text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">4</span>
+                  <span class="font-extrabold text-slate-700">Phase 4: Deep Cleaning, Snag Closure & Final Handover</span>
+                </div>
+                <span class="font-bold text-slate-500">Scheduled (0%)</span>
+              </div>
+              <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                <div class="bg-slate-300 h-full rounded-full" style="width: 0%;"></div>
+              </div>
+              <p class="text-[11px] text-slate-500">Target Schedule: Oct 01 – Oct 15, 2026</p>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 3: PROJECT DOCUMENT VAULT -->
+      <div id="view-vault" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-base font-extrabold text-slate-900">Project Document Vault</h3>
+              <p class="text-xs text-slate-500">Official signed agreements, onboarding kits, receipts, and warranty terms stored for your project</p>
+            </div>
+            <span class="px-2.5 py-1 bg-sky-50 text-sky-800 rounded-lg text-xs font-bold border border-sky-200">
+              6 Documents Available
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-sky-100 text-[#0066CC] flex items-center justify-center font-bold">
+                  <i data-lucide="file-text" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="font-extrabold text-slate-900">Signed Design & Execution Agreement</p>
+                  <p class="text-[10px] text-slate-500">Signed May 12, 2026 • PDF (1.2 MB)</p>
+                </div>
+              </div>
+              <button onclick="downloadDoc('Signed Agreement')" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-xl font-bold transition-all">
+                Download
+              </button>
+            </div>
+
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+                  <i data-lucide="book-open" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="font-extrabold text-slate-900">Client Onboarding & Guidelines Kit</p>
+                  <p class="text-[10px] text-slate-500">Issued May 15, 2026 • PDF (850 KB)</p>
+                </div>
+              </div>
+              <button onclick="downloadDoc('Onboarding Kit')" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-xl font-bold transition-all">
+                Download
+              </button>
+            </div>
+
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                  <i data-lucide="receipt" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="font-extrabold text-slate-900">Payment Receipt #RCT-1002 (E1 Advance)</p>
+                  <p class="text-[10px] text-slate-500">Paid Jun 10, 2026 • ₹7,40,000</p>
+                </div>
+              </div>
+              <button onclick="downloadDoc('Receipt RCT-1002')" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-xl font-bold transition-all">
+                Download
+              </button>
+            </div>
+
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                  <i data-lucide="receipt" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="font-extrabold text-slate-900">Payment Receipt #RCT-1048 (E2 Advance)</p>
+                  <p class="text-[10px] text-slate-500">Paid Jul 15, 2026 • ₹5,55,000</p>
+                </div>
+              </div>
+              <button onclick="downloadDoc('Receipt RCT-1048')" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-xl font-bold transition-all">
+                Download
+              </button>
+            </div>
+
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
+                  <i data-lucide="map" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="font-extrabold text-slate-900">Approved 2D Working & Electrical Drawings</p>
+                  <p class="text-[10px] text-slate-500">Approved May 20, 2026 • DWG / PDF</p>
+                </div>
+              </div>
+              <button onclick="downloadDoc('2D Drawings')" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-xl font-bold transition-all">
+                Download
+              </button>
+            </div>
+
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between opacity-60">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center font-bold">
+                  <i data-lucide="shield-check" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="font-extrabold text-slate-900">10-Year Studio Warranty Certificate</p>
+                  <p class="text-[10px] text-slate-500">Unlocks upon Handover & Final Settlement</p>
+                </div>
+              </div>
+              <span class="px-3 py-1 bg-slate-200 text-slate-600 rounded-xl font-bold text-[10px]">Upcoming</span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 4: LIVE SITE PHOTO FEED -->
+      <div id="view-site" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-base font-extrabold text-slate-900">Live Site Photo Feed</h3>
+              <p class="text-xs text-slate-500">Real-time uploads from site supervisor Rajesh Verma</p>
+            </div>
+            <span class="px-2.5 py-1 bg-emerald-50 text-emerald-800 rounded-lg text-xs font-bold border border-emerald-200">
+              14 Photos Logged
+            </span>
+          </div>
+
+          <div class="space-y-4">
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+              <div class="flex justify-between items-center">
+                <span class="text-xs font-extrabold text-slate-900">Living Room Veneer Polish — Coat 1</span>
+                <span class="text-[11px] text-slate-400 font-mono">Today, 11:30 AM</span>
+              </div>
+              <p class="text-xs text-slate-600">Super Walnut veneer polishing coat 1 completed on the main wall panel.</p>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=400&q=80" alt="Site Photo 1" class="rounded-xl h-32 w-full object-cover border border-slate-200 hover:opacity-90 cursor-pointer" onclick="openLightbox(this.src)">
+                <img src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=400&q=80" alt="Site Photo 2" class="rounded-xl h-32 w-full object-cover border border-slate-200 hover:opacity-90 cursor-pointer" onclick="openLightbox(this.src)">
+                <img src="https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=400&q=80" alt="Site Photo 3" class="rounded-xl h-32 w-full object-cover border border-slate-200 hover:opacity-90 cursor-pointer" onclick="openLightbox(this.src)">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 5: 3D RENDERS -->
+      <div id="view-renders" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <h3 class="text-base font-extrabold text-slate-900">Approved 3D Views</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50 cursor-pointer" onclick="openLightbox('https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=80')">
+              <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=600&q=80" alt="Living Render" class="h-48 w-full object-cover">
+              <div class="p-3">
+                <p class="text-xs font-bold text-slate-900">Living Room — 3D Perspective</p>
+                <p class="text-[10px] text-emerald-700 font-bold">Approved ✓</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 6: PENDING APPROVALS -->
+      <div id="view-approvals" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <h3 class="text-base font-extrabold text-slate-900">Pending Sign-offs & Decisions</h3>
+          <div id="approval-card" class="p-5 bg-amber-50/80 border border-amber-200 rounded-2xl space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-extrabold text-amber-950 uppercase tracking-wider">Master Bed Headboard Fabric</span>
+              <span class="text-[11px] text-amber-800 font-bold">Due Today</span>
+            </div>
+            <p class="text-xs text-slate-700">Option B (Warm Oatmeal Velvet) recommended by lead designer Priya Nair.</p>
+            <div class="flex justify-between items-center pt-2 border-t border-amber-200">
+              <span class="text-[11px] text-slate-500">1-click audit sign-off</span>
+              <button onclick="approveAction()" id="approve-action-btn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer">
+                Approve Option B
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 7: SNAG LIST & HANDOVER GATE -->
+      <div id="view-snagging" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-base font-extrabold text-slate-900">Snag List & Quality Handover Tracker</h3>
+              <p class="text-xs text-slate-500">Transparent defect closure before Handover Gate sign-off</p>
+            </div>
+            <span class="px-2.5 py-1 bg-amber-100 text-amber-900 text-xs font-bold rounded-lg">
+              2 Items Under Resolution
+            </span>
+          </div>
+
+          <div class="space-y-3 text-xs">
+            
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+              <div class="space-y-0.5">
+                <p class="font-extrabold text-slate-900">Guest Room Door Soft-Close Latch Alignment</p>
+                <p class="text-slate-500">Reported during preliminary walkthrough • Target fix: Friday</p>
+              </div>
+              <span class="px-2.5 py-1 bg-sky-100 text-sky-800 rounded-lg font-bold text-[10px]">In Progress</span>
+            </div>
+
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+              <div class="space-y-0.5">
+                <p class="font-extrabold text-slate-900">Kitchen Counter Corner Silicone Sealing Touch-up</p>
+                <p class="text-slate-500">Scheduled during final deep cleaning</p>
+              </div>
+              <span class="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-lg font-bold text-[10px]">Pending Final Clean</span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 8: BOQ SCOPE -->
+      <div id="view-boq" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <h3 class="text-base font-extrabold text-slate-900">Project Scope (BOQ)</h3>
+            <span class="text-xs font-black text-slate-900">Total: ₹18,50,000</span>
+          </div>
+          <div class="space-y-2 text-xs">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between">
+              <div>
+                <p class="font-extrabold text-slate-900">Living Room False Ceiling & Cove</p>
+                <p class="text-[11px] text-slate-500">Gyproc Board + LED Channel • 220 sq.ft</p>
+              </div>
+              <span class="font-extrabold text-slate-900">₹66,000</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 9: PAYMENTS -->
+      <div id="view-payments" class="tab-view space-y-6 hidden">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <h3 class="text-base font-extrabold text-slate-900">Payment Milestones</h3>
+            <button onclick="toggleModal('bank-modal')" class="px-3 py-1.5 bg-[#0066CC] text-white rounded-xl text-xs font-bold">
+              Bank Details
+            </button>
+          </div>
+          <div class="space-y-3 text-xs">
+            <div class="p-4 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between">
+              <div>
+                <p class="font-extrabold text-slate-900">E1 — Material Order Advance (40%)</p>
+                <p class="text-[11px] text-slate-500">Paid Jun 10, 2026 • Receipt #RCT-1002</p>
+              </div>
+              <span class="font-black text-emerald-800">₹7,40,000 Paid ✓</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- BANK DETAILS MODAL -->
+  <div id="bank-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 border border-slate-200 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <h3 class="text-sm font-extrabold text-slate-900">Form Factors Design Studio Bank Details</h3>
+        <button onclick="toggleModal('bank-modal')" class="text-slate-400 hover:text-slate-600 text-sm font-bold">✕</button>
+      </div>
+      <div class="space-y-2 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200">
+        <p><span class="text-slate-500">Account Name:</span> <strong>Form Factors Design Studio Pvt Ltd</strong></p>
+        <p><span class="text-slate-500">Bank:</span> <strong>HDFC Bank Ltd</strong></p>
+        <p><span class="text-slate-500">Account Number:</span> <strong class="font-mono">50200049281102</strong></p>
+        <p><span class="text-slate-500">IFSC Code:</span> <strong class="font-mono">HDFC0000128</strong></p>
+        <p><span class="text-slate-500">GSTIN:</span> <strong class="font-mono">27AAACF4829K1Z5</strong></p>
+      </div>
+      <button onclick="toggleModal('bank-modal')" class="w-full py-2 bg-slate-900 text-white rounded-xl text-xs font-bold">Close Window</button>
+    </div>
+  </div>
+
+  <!-- CONTACT STUDIO HOTLINE MODAL -->
+  <div id="contact-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 border border-slate-200 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="text-sm font-extrabold text-slate-900">Studio Support & Escalation Team</h3>
+          <p class="text-[10px] text-slate-500">Mon – Sat, 10:00 AM – 7:00 PM IST</p>
+        </div>
+        <button onclick="toggleModal('contact-modal')" class="text-slate-400 hover:text-slate-600 text-sm font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        
+        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-center">
+          <div>
+            <p class="font-extrabold text-slate-900">Priya Nair (Lead Designer)</p>
+            <p class="text-[10px] text-slate-500">Design Queries & Material Selections</p>
+            <p class="text-slate-700 font-mono mt-0.5">+91 98200 11223</p>
+          </div>
+          <a href="tel:+919820011223" class="px-3 py-1.5 bg-emerald-600 text-white rounded-xl font-bold flex items-center gap-1">
+            <i data-lucide="phone" class="w-3 h-3"></i> Call
+          </a>
+        </div>
+
+        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-center">
+          <div>
+            <p class="font-extrabold text-slate-900">Rajesh Verma (Site Supervisor)</p>
+            <p class="text-[10px] text-slate-500">Site Work, Deliveries & Inspection Visits</p>
+            <p class="text-slate-700 font-mono mt-0.5">+91 98201 44321</p>
+          </div>
+          <a href="tel:+919820144321" class="px-3 py-1.5 bg-emerald-600 text-white rounded-xl font-bold flex items-center gap-1">
+            <i data-lucide="phone" class="w-3 h-3"></i> Call
+          </a>
+        </div>
+
+        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-center">
+          <div>
+            <p class="font-extrabold text-slate-900">Studio Support Hotline & WhatsApp</p>
+            <p class="text-[10px] text-slate-500">Billing, Invoices & Commercials</p>
+            <p class="text-slate-700 font-mono mt-0.5">+91 98202 99887</p>
+          </div>
+          <a href="https://wa.me/919820299887" target="_blank" class="px-3 py-1.5 bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1">
+            WhatsApp
+          </a>
+        </div>
+
+      </div>
+
+      <button onclick="toggleModal('contact-modal')" class="w-full py-2 bg-slate-900 text-white rounded-xl text-xs font-bold">Close Window</button>
+    </div>
+  </div>
+
+  <!-- LIGHTBOX MODAL -->
+  <div id="lightbox" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden" onclick="toggleModal('lightbox')">
+    <img id="lightbox-img" src="" class="rounded-2xl max-h-[85vh] max-w-[90vw] object-contain border border-slate-700 shadow-2xl">
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function switchTab(viewId) {
+      document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+      document.querySelectorAll('.tab-view').forEach(v => v.classList.add('hidden'));
+
+      const activeLink = document.getElementById('nav-' + viewId);
+      const activeView = document.getElementById('view-' + viewId);
+
+      if (activeLink) activeLink.classList.add('active');
+      if (activeView) activeView.classList.remove('hidden');
+    }
+
+    function toggleModal(id) {
+      document.getElementById(id).classList.toggle('hidden');
+    }
+
+    function openLightbox(src) {
+      document.getElementById('lightbox-img').src = src;
+      toggleModal('lightbox');
+    }
+
+    function downloadDoc(docName) {
+      alert("Downloading document: " + docName);
+    }
+
+    function approveAction() {
+      const card = document.getElementById('approval-card');
+      const btn = document.getElementById('approve-action-btn');
+      if (card && btn) {
+        card.className = "p-5 bg-emerald-50/80 border border-emerald-200 rounded-2xl space-y-3 transition-all";
+        btn.outerHTML = `<span class="text-xs font-bold text-emerald-800 bg-emerald-100 px-3 py-1.5 rounded-xl border border-emerald-300">✓ Approved by Anand Sharma</span>`;
+      }
+    }
+  </script>
+</body>
+</html>

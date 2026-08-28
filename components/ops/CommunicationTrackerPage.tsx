@@ -1,3 +1,4 @@
+import { showSuccessWithNext } from '../SuccessWithNextToast';
 import React, { useState } from 'react';
 import { useCommunicationLog } from '../../hooks/useCommunicationLog';
 import { updateCommunicationLog } from '../../services/communicationTrackerService';
@@ -82,6 +83,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
         });
         
         setSelectedItem(null);
+        showSuccessWithNext('Communication logged successfully');
     };
 
     const handleMarkNA = async (item: {template: CommunicationTemplateItem, log: CommunicationLogItem}) => {
@@ -140,7 +142,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
             <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <div>
                     <h2 className="text-2xl font-semibold text-gray-900 tracking-tight flex items-center gap-3">
-                        <Send className="w-6 h-6 text-indigo-500" />
+                        <Send className="w-6 h-6 text-[#0066CC]" />
                         Communication Tracker
                     </h2>
                     <p className="text-gray-500 mt-1">Audit log of all client emails and notifications</p>
@@ -157,13 +159,13 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                 <div className="flex border-b border-gray-100">
                     <button 
                         onClick={() => setActiveTab('design')}
-                        className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'design' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30' : 'text-gray-500 hover:bg-gray-50'}`}
+                        className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'design' ? 'text-[#0066CC] border-b-2 border-[#0066CC] bg-sky-50/30' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
                         Design Phase ({(designItems || []).filter(i => i.log.status === 'sent').length}/{(designItems || []).filter(i => i.template.isRequired).length})
                     </button>
                     <button 
                         onClick={() => setActiveTab('execution')}
-                         className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'execution' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30' : 'text-gray-500 hover:bg-gray-50'}`}
+                         className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'execution' ? 'text-[#0066CC] border-b-2 border-[#0066CC] bg-sky-50/30' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
                         Execution Phase ({(executionItems || []).filter(i => i.log.status === 'sent').length}/{(executionItems || []).filter(i => i.template.isRequired).length})
                     </button>
@@ -175,8 +177,8 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                             <h3 className="text-xs font-bold tracking-wider text-gray-400 uppercase">{category}</h3>
                             <div className="space-y-3">
                                 {items.map((item) => (
-                                    <div key={item.template.key} className={`flex items-stretch bg-white border rounded-xl overflow-hidden transition-all ${item.log.status === 'sent' ? 'border-gray-100 shadow-sm opacity-70' : item.log.needsAttention ? 'border-amber-200 shadow-md ring-1 ring-amber-100' : 'border-gray-200 hover:border-indigo-300 hover:shadow-md'}`}>
-                                        <div className={`w-2 ${item.log.status === 'sent' ? 'bg-emerald-400' : item.log.status === 'not_applicable' ? 'bg-gray-200' : item.log.needsAttention ? 'bg-amber-400' : 'bg-indigo-400'}`} />
+                                    <div key={item.template.key} className={`flex items-stretch bg-white border rounded-xl overflow-hidden transition-all ${item.log.status === 'sent' ? 'border-gray-100 shadow-sm opacity-70' : item.log.needsAttention ? 'border-amber-200 shadow-md ring-1 ring-amber-100' : 'border-gray-200 hover:border-sky-300 hover:shadow-md'}`}>
+                                        <div className={`w-2 ${item.log.status === 'sent' ? 'bg-emerald-400' : item.log.status === 'not_applicable' ? 'bg-gray-200' : item.log.needsAttention ? 'bg-amber-400' : 'bg-sky-400'}`} />
                                         
                                         <div className="flex-1 p-5 flex flex-col justify-center">
                                             <div className="flex items-start justify-between">
@@ -188,7 +190,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                     <div>
                                                         <div className="flex items-center gap-3">
                                                             <h4 className={`font-semibold ${item.log.status === 'not_applicable' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{item.template.title}</h4>
-                                                            <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${item.template.isRequired ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-500'}`}>
+                                                            <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${item.template.isRequired ? 'bg-sky-50 text-[#0055B3]' : 'bg-gray-100 text-gray-500'}`}>
                                                                 {item.template.isRequired ? 'Required' : 'Optional'}
                                                             </span>
                                                         </div>
@@ -262,7 +264,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
             </div>
 
             {selectedItem && (
-                <div className="fixed inset-0 bg-indigo-950/60 backdrop-blur-md backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
                         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 flex-shrink-0">
                             <h3 className="font-semibold text-gray-900">
@@ -282,7 +284,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                 <button
                                                     key={mode}
                                                     onClick={() => setPreviewMode(mode)}
-                                                    className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-colors ${previewMode === mode ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                                    className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-colors ${previewMode === mode ? 'bg-white text-[#0066CC] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                                 >
                                                     {mode}
                                                 </button>
@@ -300,7 +302,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                 />
                                                 <button 
                                                     onClick={() => handleCopy(resolveTemplate(selectedItem.template.email?.subject || '', getVariables()), 'email_subject')}
-                                                    className="absolute top-3 right-3 text-gray-400 hover:text-indigo-600 p-1.5 rounded-md hover:bg-white border border-transparent hover:border-gray-200 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1 text-xs font-medium"
+                                                    className="absolute top-3 right-3 text-gray-400 hover:text-[#0066CC] p-1.5 rounded-md hover:bg-white border border-transparent hover:border-gray-200 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1 text-xs font-medium"
                                                 >
                                                     {copySuccess === 'email_subject' ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />} {copySuccess === 'email_subject' ? 'Copied!' : 'Copy'}
                                                 </button>
@@ -313,7 +315,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                 />
                                                 <button 
                                                     onClick={() => handleCopy(resolveTemplate(selectedItem.template.email?.body || '', getVariables()), 'email_body')}
-                                                    className="absolute top-3 right-3 text-gray-400 hover:text-indigo-600 p-1.5 rounded-md hover:bg-white border border-transparent hover:border-gray-200 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1 text-xs font-medium"
+                                                    className="absolute top-3 right-3 text-gray-400 hover:text-[#0066CC] p-1.5 rounded-md hover:bg-white border border-transparent hover:border-gray-200 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1 text-xs font-medium"
                                                 >
                                                     {copySuccess === 'email_body' ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />} {copySuccess === 'email_body' ? 'Copied!' : 'Copy'}
                                                 </button>
@@ -355,7 +357,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                             {['email', 'whatsapp', 'both'].map(method => (
                                                 <label key={method} className="cursor-pointer">
                                                     <input type="radio" name="sentVia" value={method} className="peer sr-only" required defaultChecked={selectedItem.log.sentVia === method} />
-                                                    <div className="px-4 py-1.5 text-sm font-medium text-gray-500 rounded-md peer-checked:bg-white peer-checked:text-indigo-600 peer-checked:shadow-sm capitalize">
+                                                    <div className="px-4 py-1.5 text-sm font-medium text-gray-500 rounded-md peer-checked:bg-white peer-checked:text-[#0066CC] peer-checked:shadow-sm capitalize">
                                                         {method}
                                                     </div>
                                                 </label>
@@ -371,7 +373,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                 name="sentAt"
                                                 required 
                                                 defaultValue={selectedItem.log.sentAt ? format(selectedItem.log.sentAt.toDate ? selectedItem.log.sentAt.toDate() : new Date(selectedItem.log.sentAt), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')}
-                                                className="w-full px-3 py-2 bg-gray-50 rounded-lg border-gray-200 focus:bg-white focus:ring-2 focus:ring-indigo-500 text-sm" 
+                                                className="w-full px-3 py-2 bg-gray-50 rounded-lg border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#0066CC] text-sm" 
                                             />
                                         </div>
                                         <div>
@@ -393,7 +395,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                 name="invoiceRef"
                                                 defaultValue={selectedItem.log.invoiceRef || ''}
                                                 placeholder="e.g. INV-2023-014"
-                                                className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 text-sm" 
+                                                className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066CC] text-sm" 
                                             />
                                         </div>
                                     )}
@@ -405,7 +407,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                             defaultValue={selectedItem.log.notes}
                                             rows={3}
                                             placeholder="Add any specific context or links..."
-                                            className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 text-sm resize-none" 
+                                            className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066CC] text-sm resize-none" 
                                         />
                                     </div>
                                 </form>
@@ -423,11 +425,11 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                     Cancel
                                 </button>
                                 {modalStep === 1 ? (
-                                    <button onClick={() => setModalStep(2)} className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 shadow-sm flex items-center gap-2">
+                                    <button onClick={() => setModalStep(2)} className="px-5 py-2 text-sm font-medium text-white bg-[#0066CC] rounded-lg hover:bg-[#0055B3] shadow-sm flex items-center gap-2">
                                         Continue to Log <Send className="w-3.5 h-3.5" />
                                     </button>
                                 ) : (
-                                    <button type="submit" form="mark-sent-form" className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 shadow-sm flex items-center gap-2">
+                                    <button type="submit" form="mark-sent-form" className="px-5 py-2 text-sm font-medium text-white bg-[#0066CC] rounded-lg hover:bg-[#0055B3] shadow-sm flex items-center gap-2">
                                         <CheckCircle className="w-4 h-4" />
                                         {selectedItem.log.status === 'sent' ? 'Update Log' : 'Log as Sent'}
                                     </button>

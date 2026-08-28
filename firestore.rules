@@ -141,7 +141,24 @@ service cloud.firestore {
               : true
            );
       }
-      match /{document=**} {
+      
+    match /weeklyReports/{reportId} {
+      allow read: if (isAuthenticated() && (isSameTenant(resource.data.tenantId) || isSuperAdmin()))
+                  || resource.data.status == 'published';
+      allow create: if isAuthenticated() && (isSameTenant(request.resource.data.tenantId) || isSuperAdmin())
+                    && (getUserData().role in ['Owner', 'Admin', 'Super Admin']);
+      allow update: if isAuthenticated() && (isSameTenant(resource.data.tenantId) || isSuperAdmin())
+                    && (getUserData().role in ['Owner', 'Admin', 'Super Admin'])
+                    && (
+                      resource.data.status != 'published' || 
+                      (request.resource.data.status == 'superseded' || request.resource.data.supersededBy != null)
+                    );
+      allow delete: if isAuthenticated() && (isSameTenant(resource.data.tenantId) || isSuperAdmin())
+                    && (getUserData().role in ['Owner', 'Admin', 'Super Admin'])
+                    && resource.data.status != 'published';
+    }
+
+    match /{document=**} {
          allow read, write: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
       }
     }
@@ -154,19 +171,12 @@ service cloud.firestore {
     match /projects/{projectId} {
       allow read: if true;
 
-      // CREATE / UPDATE: Document payload must match user's tenantId
-      allow write: if isAuthenticated() && (isSameTenant(request.resource.data.tenantId) || isSuperAdmin())
-        && (
-          (request.method == 'update' && request.resource.data.executionData != null && 
-           (!('executionData' in resource.data) || request.resource.data.executionData.bundles != resource.data.executionData.bundles))
-          ? (getUserData().role in ['Owner', 'Admin', 'Ops Director', 'Super Admin'] || isSuperAdmin() || isLegacyFFDS())
-          : true
-        )
-        && (
-          (request.method == 'update' && request.resource.data.engagement != resource.data.engagement)
-          ? (getUserData().role == 'Owner' || isSuperAdmin())
-          : true
-        );
+      // Allow public client digital signature / signoff updates, or authenticated tenant updates
+      allow update: if (isAuthenticated() && (isSameTenant(request.resource.data.tenantId) || isSuperAdmin())) ||
+                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['context', 'lastModified', 'isCompressed', 'compressedData']));
+
+      // CREATE: Document payload must match user's tenantId
+      allow create: if isAuthenticated() && (isSameTenant(request.resource.data.tenantId) || isSuperAdmin());
       
       // DELETE: Can only delete if they had read access to it
       allow delete: if isAuthenticated() && (
@@ -233,6 +243,11 @@ service cloud.firestore {
     
     match /publicProposals/{tokenId} {
       allow read: if true;
+    }
+
+    match /studioSettings/{settingId} {
+      allow read: if true;
+      allow write: if isAuthenticated() && (settingId == getUserTenantId() || isSuperAdmin());
     }
 
     match /studios/{studioId} {

@@ -4,8 +4,13 @@ import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { ProjectContext, FullBoqItem, ProposalTier, Item, AiComparisonResult, MaterialSuggestion, TimelinePhase, PaymentMilestone, ProposalContent, DecisionBrainOutput, LeadProfile, ProposalLevel, ProposalType } from '../../types';
 import ClientExportView from './ClientExportView';
+import { useOrg } from '../../contexts/OrgContext';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { Download } from 'lucide-react';
+import { UI_STYLES, UI_CONSTANTS } from '../../lib/UIConstants';
  
-import { calculateSellPrice, generateDeterministicSchedule } from '../../lib/utils';
+import { calculateSellPrice, generateDeterministicSchedule, formatINR } from '../../lib/utils';
 import { generateLocalComparison } from '../../lib/comparison';
 import { CloseIcon, ExportIcon, PrintIcon, CheckBadgeIcon, PencilRulerIcon, BriefcaseIcon } from '../Icons';
 import { TEMPLATE_TURNKEY, TEMPLATE_DESIGN_ONLY } from '../../constants';
@@ -37,7 +42,7 @@ function FieldRenderer({ data, path, onChange }: FieldRendererProps) {
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
                 {path[path.length - 1]}
             </label>
-            <div className="text-sm text-indigo-900">
+            <div className="text-sm text-slate-800">
                 {typeof data === 'object' ? 'Complex Data' : String(data)}
             </div>
         </div>
@@ -115,15 +120,15 @@ const ContentEditorModal: React.FC<{
     const sectionData = (localContent as any)[activeSection];
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-indigo-950/60 backdrop-blur-md backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md backdrop-blur-sm p-4">
             <MotionDiv 
                 initial={{ opacity: 0, scale: 0.95 }} 
                 animate={{ opacity: 1, scale: 1 }} 
                 className={`bg-white w-full ${initialSection ? 'max-w-2xl h-auto max-h-[85vh]' : 'max-w-6xl h-[90vh]'} rounded-2xl shadow-2xl flex flex-col overflow-hidden`}
             >
                 <div className="p-4 border-b flex justify-between items-center bg-slate-50">
-                    <h3 className="font-bold text-lg text-indigo-900">{initialSection ? `Edit: ${currentLabel}` : 'Proposal Content Editor'}</h3>
-                    <button onClick={onClose}><CloseIcon className="w-6 h-6 text-slate-500 hover:text-indigo-900" /></button>
+                    <h3 className="font-bold text-lg text-slate-800">{initialSection ? `Edit: ${currentLabel}` : 'Proposal Content Editor'}</h3>
+                    <button onClick={onClose}><CloseIcon className="w-6 h-6 text-slate-500 hover:text-slate-800" /></button>
                 </div>
                 
                 <div className="flex flex-grow overflow-hidden">
@@ -134,7 +139,7 @@ const ContentEditorModal: React.FC<{
                                 <button
                                     key={section.id}
                                     onClick={() => setActiveSection(section.id)}
-                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${activeSection === section.id ? 'bg-indigo-100 text-indigo-700' : 'text-slate-500 hover:bg-slate-100'}`}
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${activeSection === section.id ? 'bg-sky-100 text-[#0055B3]' : 'text-slate-500 hover:bg-slate-100'}`}
                                 >
                                     {section.label}
                                 </button>
@@ -144,7 +149,7 @@ const ContentEditorModal: React.FC<{
 
                     {/* Content Area */}
                     <div className="flex-1 overflow-y-auto p-6 md:p-8">
-                        {!initialSection && <h4 className="font-bold text-lg text-indigo-900 border-b pb-4 mb-6">{currentLabel}</h4>}
+                        {!initialSection && <h4 className="font-bold text-lg text-slate-800 border-b pb-4 mb-6">{currentLabel}</h4>}
                         
                         {sectionData ? (
                             <FieldRenderer 
@@ -160,7 +165,7 @@ const ContentEditorModal: React.FC<{
 
                 <div className="p-4 border-t bg-slate-50 flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg">Cancel</button>
-                    <button onClick={() => onSave(localContent)} className="px-6 py-2 bg-indigo-950 text-white font-bold rounded-lg hover:bg-indigo-950 shadow-lg">Save Changes</button>
+                    <button onClick={() => onSave(localContent)} className="px-6 py-2 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white font-bold rounded-lg hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 shadow-lg">Save Changes</button>
                 </div>
             </MotionDiv>
         </div>,
@@ -170,6 +175,9 @@ const ContentEditorModal: React.FC<{
 
 const ClientTab: React.FC<ClientTabProps> = (props) => {
   const { tiers, bank, materialSuggestions, timelinePhases, isClientViewOnly = false, projectContext: liveContext, setProjectContext, onExportHtml } = props;
+  const { currentRole, orgData } = useOrg();
+  const isDesigner = currentRole === 'Designer';
+
   const [comparisonData, setComparisonData] = useState<AiComparisonResult>({ materialMatrix: [], scopeMatrix: [], tierSummaries: [] });
   const [editingSection, setEditingSection] = useState<string | null>(null);
 
@@ -179,6 +187,8 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
 
   const proposalLevel = projectContext?.activeProposalLevel || 'LEVEL_1';
   const activeMode = projectContext?.activeProposalMode || 'TURNKEY';
+  const proposalFormat = projectContext?.activeProposalFormat || 'classic';
+  const showScopePricing = projectContext?.showScopePricing || false;
 
   const setProposalLevel = (level: ProposalLevel) => {
       if (setProjectContext) {
@@ -189,6 +199,18 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
   const setActiveMode = (mode: ProposalType) => {
       if (setProjectContext) {
           setProjectContext(prev => ({ ...prev, activeProposalMode: mode }));
+      }
+  };
+
+  const setProposalFormat = (format: 'classic' | 'booklet') => {
+      if (setProjectContext) {
+          setProjectContext(prev => ({ ...prev, activeProposalFormat: format }));
+      }
+  };
+
+  const toggleShowScopePricing = () => {
+      if (setProjectContext) {
+          setProjectContext(prev => ({ ...prev, showScopePricing: !showScopePricing }));
       }
   };
 
@@ -491,6 +513,451 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
       }
   }
 
+  const handleDownloadPdf = async () => {
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      }) as any;
+
+      const studioName = (orgData?.orgName || 'FORM FACTORS DESIGN STUDIO').toUpperCase();
+      const contactPhone = orgData?.contactPhone || '';
+      const contactEmail = orgData?.contactEmail || '';
+      const logoUrl = orgData?.orgLogo || '';
+      const tagline = orgData?.tagline || 'PREMIUM BESPOKE INTERIOR ARCHITECTURE & DESIGN';
+      const clientName = projectContext.clientName || 'Valued Client';
+      const projectName = projectContext.name || 'Residency Project';
+      const city = projectContext.city || 'Bengaluru';
+      const area = projectContext.areaSqFt ? `${projectContext.areaSqFt} SQ FT` : '—';
+      const dateStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+
+      // Asynchronously load studio logo if available
+      let logoImg: HTMLImageElement | null = null;
+      if (logoUrl) {
+        logoImg = await new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'Anonymous';
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = logoUrl;
+        });
+      }
+
+      // Milky White Glossy/Sober Aesthetic Palette
+      const slateDark: [number, number, number] = [15, 23, 42];      // Primary text & headers (#0F172A)
+      const slateBody: [number, number, number] = [51, 65, 85];      // Body text color (#334155)
+      const goldAccent: [number, number, number] = [197, 168, 92];   // Gold hairline / branding (#C5A85C)
+      const backgroundLight: [number, number, number] = [253, 253, 251]; // Milky White creamy backdrop (#FDFDFB)
+      const tableHeaderBg: [number, number, number] = [30, 41, 59];  // Deep slate (#1E293B)
+      const alternateRowBg: [number, number, number] = [250, 250, 249]; // Soft cream row (#FAFAFA)
+
+      // ================= PAGE 1: COVER PAGE =================
+      doc.setFillColor(backgroundLight[0], backgroundLight[1], backgroundLight[2]);
+      doc.rect(0, 0, 210, 297, 'F');
+
+      // Gold Hairline across center
+      doc.setDrawColor(goldAccent[0], goldAccent[1], goldAccent[2]);
+      doc.setLineWidth(1.5);
+      doc.line(20, 120, 190, 120);
+
+      // Main Proposal Title
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(28);
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+      if (isDesigner) {
+        doc.text('DESIGN & SPECIFICATION', 20, 142);
+        doc.text('PROPOSAL', 20, 154);
+      } else {
+        doc.text('PROJECT ESTIMATE', 20, 142);
+        doc.text('& DESIGN PROPOSAL', 20, 154);
+      }
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      doc.setTextColor(slateBody[0], slateBody[1], slateBody[2]);
+      doc.text(`Proposal Level: ${proposalLevel.replace('_', ' ')} (${activeMode === 'TURNKEY' ? 'Turnkey Services' : 'Design & PMC'})`, 20, 164);
+
+      // Client / Project details box
+      doc.setFillColor(248, 250, 252);
+      doc.rect(20, 200, 170, 60, 'F');
+      
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.rect(20, 200, 170, 60, 'S');
+
+      // Subtle gold indicator in the box corner
+      doc.setFillColor(goldAccent[0], goldAccent[1], goldAccent[2]);
+      doc.rect(20, 200, 3, 60, 'F');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(120, 120, 120);
+      doc.text('PREPARED FOR', 30, 212);
+      doc.text('PROJECT INFO', 110, 212);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+      doc.text(clientName, 30, 222);
+      doc.text(projectName, 110, 222);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(slateBody[0], slateBody[1], slateBody[2]);
+      doc.text(`Location: ${city}`, 110, 232);
+      doc.text(`Total Area: ${area}`, 110, 242);
+      doc.text(`Date: ${dateStr}`, 30, 232);
+      doc.text(`Doc Ref: ${getExportFileName()}`, 30, 242);
+
+      // ================= PAGE 2: EXEC SUMMARY & ROOM ESTIMATES =================
+      doc.addPage();
+      doc.setFillColor(backgroundLight[0], backgroundLight[1], backgroundLight[2]);
+      doc.rect(0, 0, 210, 297, 'F');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+      doc.text('EXECUTIVE SUMMARY', 20, 30);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(slateBody[0], slateBody[1], slateBody[2]);
+      doc.text('The following is a curated overview of the spatial specifications proposed for your residence. Each area has been analyzed carefully to ensure optimal utility and aesthetic balance matching our pristine architectural standards.', 20, 42, { maxWidth: 170 });
+
+      // Create Roomwise Estimates table
+      const activeTier = fullTiers.find(t => t.id === projectContext?.approvedTierId) || fullTiers[0];
+      const roomsData = Object.keys(activeTier?.groupedBoq || {}).map(roomName => {
+        const roomItems = activeTier.groupedBoq[roomName] || [];
+        const roomTotal = roomItems.reduce((sum, item) => sum + calculateSellPrice(item.materials, item.labor, item.margin) * item.qty, 0);
+        return isDesigner ? [
+          roomName,
+          `${roomItems.length} spec items`
+        ] : [
+          roomName,
+          `${roomItems.length} spec items`,
+          formatINR(roomTotal)
+        ];
+      });
+
+      // Calculate totals
+      const grandTotalVal = activeTier?.executionTotal || 0;
+
+      // Add table of rooms
+      autoTable(doc, {
+        startY: 55,
+        head: isDesigner 
+          ? [['Room / Living Zone', 'Specification Density']] 
+          : [['Room / Living Zone', 'Specification Density', 'Estimated Price (INR)']],
+        body: isDesigner ? roomsData : [
+          ...roomsData,
+          [{ content: 'Total Execution & Fit-out Estimate', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatINR(grandTotalVal), styles: { fontStyle: 'bold', textColor: [15, 23, 42] } }]
+        ],
+        theme: 'striped',
+        headStyles: {
+          fillColor: tableHeaderBg as any,
+          textColor: [255, 255, 255],
+          fontSize: 9,
+          fontStyle: 'bold'
+        },
+        bodyStyles: {
+          fontSize: 9,
+          textColor: slateBody as any
+        },
+        alternateRowStyles: {
+          fillColor: alternateRowBg as any
+        },
+        margin: { left: 20, right: 20 }
+      });
+
+      let currentY = (doc as any).lastAutoTable.finalY + 15;
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+      doc.text('1. DESIGN & PLANNING PROCESS', 20, currentY);
+
+      currentY += 6;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(slateBody[0], slateBody[1], slateBody[2]);
+      
+      const designFeeText = activeMode === 'TURNKEY'
+        ? 'Our comprehensive design services are bundled into the turnkey implementation project. In this model, detailed layout planning, 3D visualization, material curation, and general site PMC are integrated to ensure absolute fidelity.'
+        : 'Our professional fee structure is tailored to the project size and complexity. For a Turnkey design scope, our fee represents a highly optimized track ensuring premium delivery matching the exact material selections.';
+
+      doc.text(designFeeText, 20, currentY, { maxWidth: 170 });
+
+      // Render milestone schedule if not Designer
+      if (!isDesigner) {
+        currentY += 18;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+        doc.text('Milestone & Payments Breakdown', 20, currentY);
+
+        const milestonesRows = paymentMilestones.map(m => {
+          const amt = (grandTotalVal * m.percentage) / 100;
+          return [
+            m.name,
+            `${m.percentage}%`,
+            m.type.toUpperCase(),
+            formatINR(amt)
+          ];
+        });
+
+        autoTable(doc, {
+          startY: currentY + 5,
+          head: [['Milestone Stage', 'Percentage', 'Type', 'Amount (INR)']],
+          body: milestonesRows,
+          theme: 'striped',
+          headStyles: {
+            fillColor: [51, 65, 85] as any,
+            textColor: [255, 255, 255],
+            fontSize: 8.5
+          },
+          bodyStyles: {
+            fontSize: 8.5,
+            textColor: slateBody as any
+          },
+          alternateRowStyles: {
+            fillColor: alternateRowBg as any
+          },
+          margin: { left: 20, right: 20 }
+        });
+      }
+
+      // ================= PAGE 3+: ITEMIZED BOQ DETAILS =================
+      doc.addPage();
+      doc.setFillColor(backgroundLight[0], backgroundLight[1], backgroundLight[2]);
+      doc.rect(0, 0, 210, 297, 'F');
+
+      // Page Header
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+      doc.text(studioName, 20, 20);
+
+      doc.setDrawColor(goldAccent[0], goldAccent[1], goldAccent[2]);
+      doc.setLineWidth(0.5);
+      doc.line(20, 23, 190, 23);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.text('DETAILED SPECIFICATIONS', 20, 35);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(slateBody[0], slateBody[1], slateBody[2]);
+      doc.text('Below is the itemized breakdown of premium fixtures, customized cabinetry, finishing works, civil installations, and site prep details included in the approved proposal scope.', 20, 41, { maxWidth: 170 });
+
+      // Compile detailed items
+      const detailedItemsRows: any[] = [];
+      Object.keys(activeTier?.groupedBoq || {}).forEach(roomName => {
+        const roomItems = activeTier.groupedBoq[roomName] || [];
+        roomItems.forEach(item => {
+          const unitPrice = calculateSellPrice(item.materials, item.labor, item.margin);
+          const totalAmt = unitPrice * item.qty;
+          if (isDesigner) {
+            detailedItemsRows.push([
+              roomName,
+              item.name || item.item || 'Custom Spec Item',
+              item.unit || 'nos',
+              item.qty.toString()
+            ]);
+          } else {
+            detailedItemsRows.push([
+              roomName,
+              item.name || item.item || 'Custom Spec Item',
+              item.unit || 'nos',
+              item.qty.toString(),
+              formatINR(unitPrice),
+              formatINR(totalAmt)
+            ]);
+          }
+        });
+      });
+
+      autoTable(doc, {
+        startY: 50,
+        head: isDesigner
+          ? [['Room / Area', 'Item & Material Specifications', 'Unit', 'Qty']]
+          : [['Room / Area', 'Item & Material Specifications', 'Unit', 'Qty', 'Unit Rate', 'Total Amount']],
+        body: detailedItemsRows,
+        theme: 'striped',
+        headStyles: {
+          fillColor: tableHeaderBg as any,
+          textColor: [255, 255, 255],
+          fontSize: 8,
+          fontStyle: 'bold'
+        },
+        bodyStyles: {
+          fontSize: 7.5,
+          textColor: slateBody as any
+        },
+        alternateRowStyles: {
+          fillColor: alternateRowBg as any
+        },
+        columnStyles: isDesigner ? {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 100 },
+          2: { cellWidth: 20 },
+          3: { cellWidth: 20 }
+        } : {
+          0: { cellWidth: 30 },
+          1: { cellWidth: 65 },
+          2: { cellWidth: 15 },
+          3: { cellWidth: 12 },
+          4: { cellWidth: 23 },
+          5: { cellWidth: 25 }
+        },
+        margin: { left: 20, right: 20, top: 22, bottom: 22 }
+      });
+
+      // ================= FINAL PAGE: STANDARD TERMS & SIGN OFF =================
+      doc.addPage();
+      doc.setFillColor(backgroundLight[0], backgroundLight[1], backgroundLight[2]);
+      doc.rect(0, 0, 210, 297, 'F');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+      doc.text('STANDARD INCLUSIONS & WARRANTY TERMS', 20, 30);
+
+      const termsInclusions = [
+        `1. Material specifications as detailed in the BOQ represent the premium materials approved by ${orgData?.orgName || 'our'} Quality Control.`,
+        "2. Any alterations or structural changes requested on-site will be processed via formal Change Requests.",
+        "3. Standard execution duration is 90 working days from the clearance of the first material order advance (E1 payment).",
+        "4. A 5-year replacement warranty is applicable on all bespoke cabinetry hinges, tandem drawer runners, and modular hardware.",
+        "5. The project initiation fee is non-refundable and will be adjusted against the primary milestones schedule.",
+        "6. No vendor bookings or site procurement tasks may be initiated prior to the clearance of the Material Order Advance."
+      ];
+
+      let termsY = 40;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(slateBody[0], slateBody[1], slateBody[2]);
+
+      termsInclusions.forEach(term => {
+        doc.text(term, 20, termsY, { maxWidth: 170 });
+        termsY += 12;
+      });
+
+      // Sign-off section
+      termsY += 15;
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.line(20, termsY, 190, termsY);
+
+      termsY += 15;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+      doc.text('Accepted By Client:', 20, termsY);
+      doc.text('Authorized Studio Signatory:', 110, termsY);
+
+      termsY += 22;
+      doc.setDrawColor(180, 180, 180);
+      doc.setLineWidth(0.5);
+      doc.line(20, termsY, 80, termsY);
+      doc.line(110, termsY, 170, termsY);
+
+      termsY += 5;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(140, 140, 140);
+      doc.text('Client Signature & Date', 20, termsY);
+      doc.text('Authorized Director / Partner', 110, termsY);
+
+      // ================= POST-PROCESSING: STUDIO BRANDING HEADER & FOOTER =================
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        const isCover = i === 1;
+
+        if (isCover) {
+          // Cover Page Branding Header
+          let headerLeft = 20;
+          if (logoImg) {
+            try {
+              doc.addImage(logoImg, 'PNG', 20, 16, 20, 10);
+              headerLeft = 44;
+            } catch {
+              headerLeft = 20;
+            }
+          }
+
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(11);
+          doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+          doc.text(studioName, headerLeft, 22);
+
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.5);
+          doc.setTextColor(120, 120, 120);
+          doc.text(tagline.toUpperCase(), headerLeft, 27);
+
+          if (contactPhone || contactEmail) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(100, 116, 139);
+            const contactStr = [contactPhone && `Tel: ${contactPhone}`, contactEmail].filter(Boolean).join('  |  ');
+            doc.text(contactStr, 190, 22, { align: 'right' });
+          }
+        } else {
+          // Inner Page Branding Header
+          let headerLeft = 20;
+          if (logoImg) {
+            try {
+              doc.addImage(logoImg, 'PNG', 20, 8, 14, 7);
+              headerLeft = 38;
+            } catch {
+              headerLeft = 20;
+            }
+          }
+
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9);
+          doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+          doc.text(studioName, headerLeft, 13);
+
+          if (contactPhone || contactEmail) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(100, 116, 139);
+            const contactStr = [contactPhone && `Tel: ${contactPhone}`, contactEmail].filter(Boolean).join('  •  ');
+            doc.text(contactStr, 190, 13, { align: 'right' });
+          }
+
+          // Gold Hairline Line under inner page header
+          doc.setDrawColor(goldAccent[0], goldAccent[1], goldAccent[2]);
+          doc.setLineWidth(0.5);
+          doc.line(20, 17, 190, 17);
+
+          // Inner Page Footer
+          doc.setDrawColor(226, 232, 240);
+          doc.setLineWidth(0.4);
+          doc.line(20, 282, 190, 282);
+
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.5);
+          doc.setTextColor(148, 163, 184);
+
+          const footerInfo = `${studioName}${contactPhone ? ` • ${contactPhone}` : ''} • Confidential Proposal`;
+          doc.text(footerInfo, 20, 287);
+          doc.text(`Page ${i} of ${totalPages}`, 190, 287, { align: 'right' });
+        }
+      }
+
+      // Save document
+      const fileName = `${getExportFileName()}.pdf`;
+      doc.save(fileName);
+    } catch (err) {
+      console.error("PDF generation failed", err);
+      alert("Professional PDF download failed. Please print to PDF or try again.");
+    }
+  };
+
   return (
     <div className={`transition-all ${isClientViewOnly ? '' : 'p-4 bg-slate-200/50 pattern-bg rounded-2xl print:p-0 print:bg-white print:rounded-none'}`}>
         {!isClientViewOnly && setProjectContext && (
@@ -503,7 +970,7 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
                             <button
                                 key={m.id}
                                 onClick={() => setActiveMode(m.id as ProposalType)}
-                                className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition-all ${activeMode === m.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-indigo-900 hover:bg-slate-50'}`}
+                                className={`${UI_STYLES.button.xs} rounded-md transition-all ${activeMode === m.id ? 'bg-[#0F172A] text-[#FDFDFB] shadow-md' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
                             >
                                 {m.icon}
                                 {m.label}
@@ -515,49 +982,91 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
                         {onExportHtml && (
                             <button 
                                 onClick={() => onExportHtml(getExportFileName())} 
-                                className="flex items-center gap-2 px-4 py-2 bg-white text-slate-700 font-bold text-sm rounded-lg shadow-sm border border-slate-300 hover:bg-slate-50 transition-all"
+                                className={`${UI_STYLES.button.sm} ${UI_STYLES.button.secondary}`}
                             >
                                 <ExportIcon className="w-4 h-4" /> Export HTML
                             </button>
                         )}
                         
 
-                        <button 
-                            type="button"
-                            onClick={handlePrint}
-                            className="flex items-center gap-2 px-4 py-2 bg-indigo-900 text-white font-bold text-sm rounded-lg shadow-sm hover:bg-indigo-950 transition-all"
-                        >
-                            <PrintIcon className="w-4 h-4"/> Save PDF
-                        </button>
+                         <button 
+                             type="button"
+                             onClick={handleDownloadPdf}
+                             className="flex items-center gap-2 px-4 py-2 bg-[#0066CC] text-white font-bold text-sm rounded-lg shadow-sm hover:bg-[#0055B3] transition-all"
+                         >
+                             <Download className="w-4 h-4" /> Download PDF
+                         </button>
+
+                         <button 
+                             type="button"
+                             onClick={handlePrint}
+                             className="flex items-center gap-2 px-4 py-2 bg-sky-900 text-white font-bold text-sm rounded-lg shadow-sm hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 transition-all"
+                         >
+                             <PrintIcon className="w-4 h-4"/> Save PDF
+                         </button>
                     </div>
                  </div>
 
-                 {/* Level Switcher */}
-                 <div className="flex self-start bg-white rounded-lg p-1 border border-slate-300 shadow-sm flex-wrap gap-1">
-                    <button 
-                        onClick={() => setProposalLevel('LEVEL_1')}
-                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_1' ? 'bg-indigo-950 text-white shadow-md' : 'text-slate-500 hover:text-indigo-900'}`}
-                    >
-                        Level 1: Concept
-                    </button>
-                    <button 
-                        onClick={() => setProposalLevel('LEVEL_1_5')}
-                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_1_5' ? 'bg-indigo-950 text-white shadow-md' : 'text-slate-500 hover:text-indigo-900'}`}
-                    >
-                        Level 1.5: Interim Update
-                    </button>
-                    <button 
-                        onClick={() => setProposalLevel('LEVEL_2')}
-                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_2' ? 'bg-indigo-950 text-white shadow-md' : 'text-slate-500 hover:text-indigo-900'}`}
-                    >
-                        Level 2: Planning
-                    </button>
-                    <button 
-                        onClick={() => setProposalLevel('LEVEL_3')}
-                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_3' ? 'bg-indigo-950 text-white shadow-md' : 'text-slate-500 hover:text-indigo-900'}`}
-                    >
-                        Level 3: Execution
-                    </button>
+                 {/* Level Switcher and Format Switcher */}
+                 <div className="flex flex-col md:flex-row justify-between gap-4 w-full items-start md:items-center">
+                     <div className="flex bg-white rounded-lg p-1 border border-slate-300 shadow-sm flex-wrap gap-1">
+                        <button 
+                            onClick={() => setProposalLevel('LEVEL_1')}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_1' ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            Level 1: Concept
+                        </button>
+                        <button 
+                            onClick={() => setProposalLevel('LEVEL_1_5')}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_1_5' ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            Level 1.5: Interim Update
+                        </button>
+                        <button 
+                            onClick={() => setProposalLevel('LEVEL_2')}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_2' ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            Level 2: Planning
+                        </button>
+                        <button 
+                            onClick={() => setProposalLevel('LEVEL_3')}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_3' ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            Level 3: Execution
+                        </button>
+                     </div>
+
+                     {true && (
+                         <div className="flex items-center gap-4 flex-wrap">
+                             {!isDesigner && (
+                                 <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-300 shadow-sm text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all select-none no-print">
+                                     <input 
+                                         type="checkbox" 
+                                         checked={showScopePricing} 
+                                         onChange={toggleShowScopePricing}
+                                         className="rounded border-slate-300 text-[#0066CC] focus:ring-[#0066CC] w-3.5 h-3.5"
+                                     />
+                                     <span>Show Scope Pricing & Total</span>
+                                 </label>
+                             )}
+                             {proposalLevel !== 'LEVEL_3' && (
+                                 <div className="flex bg-white rounded-lg p-1 border border-slate-300 shadow-sm gap-1 self-stretch md:self-auto">
+                                 <button
+                                 onClick={() => setProposalFormat('classic')}
+                                 className={`flex-1 md:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalFormat === 'classic' ? 'bg-[#0066CC] text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                             >
+                                 Classic Digital
+                             </button>
+                             <button
+                                 onClick={() => setProposalFormat('booklet')}
+                                 className={`flex-1 md:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalFormat === 'booklet' ? 'bg-[#0066CC] text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                             >
+                                 Luxe Booklet (New Format)
+                             </button>
+                         </div>
+                         )}
+                     </div>
+                     )}
                  </div>
             </div>
         )}
@@ -576,6 +1085,7 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
                 decisionBrainOutput={props.decisionBrainOutput}
                 level={proposalLevel}
                 materialSuggestions={materialSuggestions}
+                proposalFormat={proposalFormat}
                 onEditSection={!isClientViewOnly ? setEditingSection : undefined}
                 clientBudget={props.leadProfile?.budgetValue}
                 onVisibilityChange={handleVisibilityChange} // NEW PROP

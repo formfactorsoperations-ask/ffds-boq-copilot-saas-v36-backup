@@ -1,6 +1,10 @@
 
 import { FullBoqItem, ProjectTask } from '../types';
 
+export function cn(...classes: (string | undefined | null | false)[]): string {
+  return classes.filter(Boolean).join(" ");
+}
+
 export const formatCurrency = (n: number) => {
   return "₹ " + (Number(n) || 0).toLocaleString('en-IN', {
     minimumFractionDigits: 0,
@@ -29,22 +33,32 @@ export const formatClientValue = (val: number): string => {
     return `₹ ${rounded.toLocaleString('en-IN')}`;
 };
 
-// SWITCHED TO GROSS MARGIN FORMULA
-// Previous: Cost * (1 + Margin/100) -> Markup
-// New: Cost / (1 - Margin/100) -> Gross Margin
+/**
+ * Short but exact — lakh/crore for readability, no ₹5,000 rounding.
+ * Use this for anything the studio reads about itself. `formatClientValue`
+ * deliberately blurs figures for client-facing documents, which makes it wrong
+ * for internal analysis: it turns ₹31,967 into "₹30,000".
+ */
+export const formatCompactINR = (val: number): string => {
+    if (!val || !isFinite(val)) return '₹0';
+    const abs = Math.abs(val);
+    const sign = val < 0 ? '-' : '';
+    if (abs >= 1e7) return `${sign}₹${(abs / 1e7).toFixed(2)}Cr`;
+    if (abs >= 1e5) return `${sign}₹${(abs / 1e5).toFixed(2)}L`;
+    return `${sign}₹${Math.round(abs).toLocaleString('en-IN')}`;
+};
+
+// Markup-on-Cost Formula (Standard Markup)
+// Selling Price = Cost * (1 + Margin / 100)
 export const calculateSellPrice = (materials: number, labor: number, margin: number): number => {
   const cost = (Number(materials) || 0) + (Number(labor) || 0);
   const marginPercent = (Number(margin) || 0);
-  
-  // Safety check to prevent division by zero or negative prices if margin is >= 100
-  if (marginPercent >= 100) return cost * 2; // Fallback
-  
-  return cost / (1 - (marginPercent / 100));
+  return cost * (1 + marginPercent / 100);
 };
 
 export const calculateGrossMargin = (sell: number, cost: number): number => {
-  if (sell === 0) return 0;
-  return ((sell - cost) / sell) * 100;
+  if (cost === 0) return 0;
+  return ((sell - cost) / cost) * 100;
 };
 
 // Keep a session-local counter to ensure uniqueness even in rapid succession

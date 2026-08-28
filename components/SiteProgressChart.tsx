@@ -128,12 +128,12 @@ export function SiteProgressChart({ project }: { project?: FullProjectData }) {
         
         gradient.append('stop')
             .attr('offset', '0%')
-            .attr('stop-color', '#4f46e5') // indigo-600
+            .attr('stop-color', '#0066CC') // sky-600
             .attr('stop-opacity', 0.15);
             
         gradient.append('stop')
             .attr('offset', '100%')
-            .attr('stop-color', '#4f46e5')
+            .attr('stop-color', '#0066CC')
             .attr('stop-opacity', 0);
 
         // Draw area
@@ -146,7 +146,7 @@ export function SiteProgressChart({ project }: { project?: FullProjectData }) {
         g.append('path')
             .datum(data)
             .attr('fill', 'none')
-            .attr('stroke', '#4f46e5') // indigo-600
+            .attr('stroke', '#0066CC') // sky-600
             .attr('stroke-width', 2.5)
             .attr('d', line);
 
@@ -158,7 +158,7 @@ export function SiteProgressChart({ project }: { project?: FullProjectData }) {
                 .attr('cy', y(lastPoint.progress))
                 .attr('r', 4)
                 .attr('fill', '#ffffff')
-                .attr('stroke', '#4f46e5')
+                .attr('stroke', '#0066CC')
                 .attr('stroke-width', 2);
         }
 

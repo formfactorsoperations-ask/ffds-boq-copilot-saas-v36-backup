@@ -113,13 +113,13 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
     setTitle('');
     setDate(new Date().toISOString().split('T')[0]);
     setStartTime('10:00');
-    setDuration(defaultType === 'site_visit' ? (settings?.calendarIntegration?.defaultSiteVisitDuration || 90) : (settings?.calendarIntegration?.defaultMeetingDuration || 60));
+    setDuration((defaultType === 'site_visit' || defaultType === 'measurement_survey') ? (settings?.calendarIntegration?.defaultSiteVisitDuration || 90) : (settings?.calendarIntegration?.defaultMeetingDuration || 60));
     setLocation(projectContext?.location || '');
     setIsVirtual(false);
     setCurrAttendeeName('');
     setCurrAttendeeEmail('');
     
-    if (defaultType === 'client_meeting' && projectContext?.clientName) {
+    if (defaultType !== 'site_visit' && defaultType !== 'measurement_survey' && projectContext?.clientName) {
       setAttendees([projectContext.clientName]);
       if (projectContext.clientEmail && settings?.calendarIntegration?.autoAddClientToMeetings !== false) {
         setAttendeeEmails([projectContext.clientEmail]);
@@ -205,10 +205,13 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
     }
   };
 
-  const isSite = type === 'site_visit';
+  const isSite = type === 'site_visit' || type === 'measurement_survey';
   const prefix = settings?.calendarIntegration?.calendarEventPrefix || "[BOQ Copilot]";
-  const typeLabel = isSite ? 'Site Visit' : 'Client Meeting';
-  const previewTitle = `${prefix} ${typeLabel} — ${projectContext?.name || 'Project'} · ${currentPhaseTitle}`;
+  let typeLabel = 'Site Visit';
+  if (type === 'client_meeting') typeLabel = 'Client Meeting';
+  else if (type === 'internal_meeting') typeLabel = 'Internal Meeting';
+  else if (type === 'vendor_meeting') typeLabel = 'Vendor Meeting';
+  const previewTitle = `${prefix} ${typeLabel}: ${title || 'Meeting'} — ${projectContext?.name || 'Project'} · ${currentPhaseTitle}`;
 
   // generate time slots
   const timeSlots = [];
@@ -225,7 +228,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
         <div className="px-6 py-5 bg-white border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isSite ? 'bg-amber-500 animate-pulse' : 'bg-indigo-500 animate-pulse'}`}></span>
+              <span className={`w-2.5 h-2.5 rounded-full ${isSite ? 'bg-amber-500 animate-pulse' : 'bg-[#0066CC] animate-pulse'}`}></span>
               <h2 className="text-base font-bold text-stone-900 tracking-tight font-sans">
                 {isSite ? 'Log Dynamic Site Visit' : 'Schedule Client Interaction'}
               </h2>
@@ -242,7 +245,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
                 type="button"
                 onClick={() => setType('site_visit')}
                 className={`flex items-center gap-1.5 py-1.5 px-3 text-xs font-semibold rounded-lg transition-all duration-200 ${
-                  type === 'site_visit' 
+                  isSite 
                     ? 'bg-amber-600 text-white shadow-sm' 
                     : 'text-stone-600 hover:text-stone-950 hover:bg-stone-50'
                 }`}
@@ -251,10 +254,14 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
               </button>
               <button 
                 type="button"
-                onClick={() => setType('client_meeting')}
+                onClick={() => {
+                  if (isSite) {
+                    setType('client_meeting');
+                  }
+                }}
                 className={`flex items-center gap-1.5 py-1.5 px-3 text-xs font-semibold rounded-lg transition-all duration-200 ${
-                  type === 'client_meeting' 
-                    ? 'bg-indigo-600 text-white shadow-sm' 
+                  !isSite 
+                    ? 'bg-[#0066CC] text-white shadow-sm' 
                     : 'text-stone-600 hover:text-stone-950 hover:bg-stone-50'
                 }`}
               >
@@ -308,6 +315,33 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
           )}
 
           <div className="space-y-5">
+             {!isSite && (
+               <div className="space-y-1.5 animate-fadeIn">
+                 <label className="block text-xs font-semibold text-stone-600 uppercase tracking-wider">Meeting Category *</label>
+                 <div className="grid grid-cols-3 gap-2">
+                   {[
+                     { id: 'client_meeting', label: 'Client Meeting', icon: '🤝' },
+                     { id: 'internal_meeting', label: 'Internal Meeting', icon: '👥' },
+                     { id: 'vendor_meeting', label: 'Vendor Meeting', icon: '🏭' }
+                   ].map(opt => (
+                     <button
+                       key={opt.id}
+                       type="button"
+                       onClick={() => setType(opt.id as SiteVisitType)}
+                       className={`flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-xl border transition-all duration-200 ${
+                         type === opt.id
+                           ? 'bg-[#0066CC] border-[#0066CC] text-white shadow-md'
+                           : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100 hover:text-stone-950'
+                       }`}
+                     >
+                       <span>{opt.icon}</span>
+                       <span>{opt.label}</span>
+                     </button>
+                   ))}
+                 </div>
+               </div>
+             )}
+
              <div className="space-y-1.5">
                <label className="block text-xs font-semibold text-stone-600 uppercase tracking-wider">Purpose / Title *</label>
                <input 
@@ -666,7 +700,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
         <div className="p-5 border-t bg-stone-900 text-stone-200 rounded-b-2xl flex flex-col sm:flex-row gap-5 items-stretch sm:items-center justify-between">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 mb-1 bg-stone-880 w-fit px-2 py-0.5 rounded border border-stone-800">
-              <span className={`w-1.5 h-1.5 rounded-full ${isSite ? 'bg-amber-500' : 'bg-indigo-500'}`}></span>
+              <span className={`w-1.5 h-1.5 rounded-full ${isSite ? 'bg-amber-500' : 'bg-[#0066CC]'}`}></span>
               <p className="text-[9px] font-bold text-stone-400 tracking-wider uppercase">Google Calendar Synchronization</p>
             </div>
             <p className="text-xs font-semibold text-stone-100 truncate">{previewTitle}</p>

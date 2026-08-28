@@ -5,7 +5,16 @@ import { COMMUNICATION_TEMPLATE_DEFAULT } from '../constants';
 import { db } from '../services/dbService';
 import { EMAIL_TEMPLATE_LIBRARY } from '../lib/templateEngine';
 
+export interface CustomBundle {
+  id: string;
+  name: string;
+  description?: string;
+  itemIds: string[];
+  items?: import('../types').Item[];
+}
+
 export interface StudioSettings {
+  customBundles?: CustomBundle[];
   designProcess?: {
     steps: { stepNumber: number; title: string; description: string; deliverables: string[]; clientSignoffRequired?: boolean; triggersMilestoneLabel?: string | null; defaultDuration?: number }[];
     totalSteps: number;
@@ -70,6 +79,28 @@ export interface StudioSettings {
   };
   communicationTemplate?: import('../types').CommunicationTemplateItem[];
   emailTemplateLibrary?: import('../types').CommunicationTemplateItem[];
+  reportTemplate?: ReportTemplateSettings;
+}
+
+export interface ReportTemplateSettings {
+  visibility: {
+    overview: boolean;
+    design: boolean;
+    site: boolean;
+    financials: boolean;
+    sof: boolean;
+    actions: boolean;
+  };
+  titles: {
+    overview: string;
+    design: string;
+    site: string;
+    financials: string;
+    sof: string;
+    actions: string;
+  };
+  noteLabel: string;
+  narrativeTone: 'warm-professional' | 'concise-formal' | 'detailed';
 }
 
 const defaultFFDSSettings: StudioSettings = {
@@ -147,6 +178,12 @@ const defaultFFDSSettings: StudioSettings = {
   },
   communicationTemplate: COMMUNICATION_TEMPLATE_DEFAULT,
   emailTemplateLibrary: EMAIL_TEMPLATE_LIBRARY,
+  reportTemplate: {
+    visibility: { overview: true, design: true, site: true, financials: true, sof: true, actions: true },
+    titles: { overview: "Week At A Glance", design: "Design Progress", site: "Site Progress", financials: "Financials", sof: "Schedule of Finishes", actions: "Action Register" },
+    noteLabel: "Note from the studio",
+    narrativeTone: "warm-professional"
+  },
 };
 
 const defaultEmptySettings: StudioSettings = {
@@ -167,6 +204,12 @@ const defaultEmptySettings: StudioSettings = {
   },
   communicationTemplate: COMMUNICATION_TEMPLATE_DEFAULT,
   emailTemplateLibrary: EMAIL_TEMPLATE_LIBRARY,
+  reportTemplate: {
+    visibility: { overview: true, design: true, site: true, financials: true, sof: true, actions: true },
+    titles: { overview: "Week At A Glance", design: "Design Progress", site: "Site Progress", financials: "Financials", sof: "Schedule of Finishes", actions: "Action Register" },
+    noteLabel: "Note from the studio",
+    narrativeTone: "warm-professional"
+  },
 };
 
 export function useStudioSettings(studioId: string) {

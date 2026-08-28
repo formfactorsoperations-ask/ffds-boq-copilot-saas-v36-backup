@@ -1,8 +1,8 @@
-import { GoogleGenAI } from '@google/genai';
+import { getAi } from './aiClient';
 
 // Initialize the Gemini API client
 // In this environment, process.env.GEMINI_API_KEY is automatically available
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = getAi();
 
 export interface ExtractedMaterial {
     roomId: string;
@@ -32,7 +32,7 @@ Text to parse:
 `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.6-flash',
             contents: prompt,
             config: {
                 temperature: 0.1,

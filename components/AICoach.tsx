@@ -35,11 +35,11 @@ const AICoach: React.FC<AICoachProps> = ({ boq, aggregates }) => {
   return (
     <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-200">
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 bg-white border border-slate-200 text-indigo-950 rounded-full shadow-sm">
+        <div className="p-2 bg-white border border-slate-200 text-slate-900 rounded-full shadow-sm">
           <SparklesIcon className="w-5 h-5" />
         </div>
         <div>
-          <h3 className="text-xl font-light tracking-tight text-indigo-950 leading-none">AI Coach</h3>
+          <h3 className="text-xl font-light tracking-tight text-slate-900 leading-none">AI Coach</h3>
           <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-1">Margin Optimization</p>
         </div>
       </div>
@@ -54,7 +54,7 @@ const AICoach: React.FC<AICoachProps> = ({ boq, aggregates }) => {
             <button
               onClick={handleGetInsights}
               disabled={!isAiAvailable() || !boq || boq.length === 0}
-              className="flex w-full items-center justify-center gap-2 px-6 py-3 bg-indigo-950 text-white font-bold text-[11px] uppercase tracking-[0.2em] rounded-full hover:bg-indigo-900 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+              className="flex w-full items-center justify-center gap-2 px-6 py-3 bg-[#0066CC]/90 hover:bg-[#0055B3] text-white font-bold text-[11px] uppercase tracking-[0.2em] rounded-full backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all"
             >
               Analyze Metrics
             </button>
@@ -77,7 +77,7 @@ const AICoach: React.FC<AICoachProps> = ({ boq, aggregates }) => {
         {suggestions.length > 0 && (
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mt-4">
             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Strategic Recommendations</h4>
-            <ul className="space-y-4 text-sm text-indigo-900">
+            <ul className="space-y-4 text-sm text-slate-800">
               {suggestions.map((s, i) => (
                 <li key={i} className="flex gap-3 leading-relaxed">
                     <span className="text-emerald-500 font-bold mt-0.5 opacity-50">+</span>

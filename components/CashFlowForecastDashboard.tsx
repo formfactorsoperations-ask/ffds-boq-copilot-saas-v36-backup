@@ -97,7 +97,7 @@ export function CashFlowForecastDashboard() {
     <div className="text-left w-full max-w-5xl mx-auto space-y-8">
       <div className="flex justify-between items-end mb-10 pb-6 border-b border-slate-200">
         <div>
-          <h2 className="text-4xl font-light tracking-tight text-indigo-950 leading-none mb-2">
+          <h2 className="text-4xl font-light tracking-tight text-slate-900 leading-none mb-2">
             Finance & Analytics
           </h2>
           <p className="text-sm text-slate-500 font-medium">
@@ -107,7 +107,7 @@ export function CashFlowForecastDashboard() {
         </div>
         <button
           onClick={refresh}
-          className="flex items-center gap-2 text-[10px] font-bold text-slate-400 hover:text-indigo-950 uppercase tracking-widest px-4 py-2 border-slate-200 transition-colors"
+          className="flex items-center gap-2 text-[10px] font-bold text-slate-400 hover:text-slate-900 uppercase tracking-widest px-4 py-2 border-slate-200 transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" /> REFRESH
         </button>
@@ -116,7 +116,7 @@ export function CashFlowForecastDashboard() {
       {isEmpty ? (
         <div className="bg-slate-50/50 border border-slate-200 p-16 text-center text-slate-400 flex flex-col items-center">
           <CheckCircle2 className="w-10 h-10 mb-6 text-slate-300" />
-          <p className="font-light text-indigo-950 text-2xl tracking-tighter">
+          <p className="font-light text-slate-900 text-2xl tracking-tighter">
             No Pending Execution Gates
           </p>
           <p className="text-sm mt-2 max-w-md">
@@ -133,7 +133,7 @@ export function CashFlowForecastDashboard() {
                 <div className="flex items-center gap-4">
                   <div className="w-1.5 h-8 bg-rose-500 rounded-full"></div>
                   <div>
-                    <h3 className="text-lg font-bold tracking-tight text-indigo-950">
+                    <h3 className="text-lg font-bold tracking-tight text-slate-900">
                       Critical Blockers
                     </h3>
                     <p className="text-[11px] text-rose-500 font-bold uppercase tracking-[0.2em] mt-0.5">
@@ -141,7 +141,7 @@ export function CashFlowForecastDashboard() {
                     </p>
                   </div>
                 </div>
-                <h3 className="text-3xl font-light tracking-tighter text-indigo-950 mt-2 sm:mt-0">
+                <h3 className="text-3xl font-light tracking-tighter text-slate-900 mt-2 sm:mt-0">
                   {formatCurrency(overdueTotal)}
                 </h3>
               </div>
@@ -169,7 +169,7 @@ export function CashFlowForecastDashboard() {
                             </span>
                           )}
                         </div>
-                        <h4 className="font-light tracking-tight text-indigo-950 text-xl">
+                        <h4 className="font-light tracking-tight text-slate-900 text-xl">
                           {item.projectName}
                         </h4>
                         <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">
@@ -177,7 +177,7 @@ export function CashFlowForecastDashboard() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-light text-2xl text-indigo-950 tracking-tighter">
+                        <p className="font-light text-2xl text-slate-900 tracking-tighter">
                           {formatCurrency(item.amount)}
                         </p>
                       </div>
@@ -185,7 +185,7 @@ export function CashFlowForecastDashboard() {
                     <div className="pt-4 border-t border-slate-100 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => handleSendReminder(item)}
-                        className="inline-flex items-center gap-2 text-[10px] font-bold tracking-[0.2em] uppercase bg-indigo-950 text-white px-5 py-2.5 rounded-full hover:bg-indigo-900 transition-colors"
+                        className="inline-flex items-center gap-2 text-[10px] font-bold tracking-[0.2em] uppercase bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white px-5 py-2.5 rounded-full hover:bg-[#0055B3] transition-colors"
                       >
                         <Bell className="w-3 h-3" /> Escalation Nudge
                       </button>
@@ -201,9 +201,9 @@ export function CashFlowForecastDashboard() {
             <div>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-1.5 h-8 bg-indigo-950 rounded-full"></div>
+                  <div className="w-1.5 h-8 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-full"></div>
                   <div>
-                    <h3 className="text-lg font-bold tracking-tight text-indigo-950">
+                    <h3 className="text-lg font-bold tracking-tight text-slate-900">
                       Upcoming Execution Gates
                     </h3>
                     <p className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-0.5">
@@ -211,7 +211,7 @@ export function CashFlowForecastDashboard() {
                     </p>
                   </div>
                 </div>
-                <h3 className="text-3xl font-light tracking-tighter text-indigo-950 mt-2 sm:mt-0">
+                <h3 className="text-3xl font-light tracking-tighter text-slate-900 mt-2 sm:mt-0">
                   {formatCurrency(next30DaysTotal)}
                 </h3>
               </div>
@@ -232,14 +232,14 @@ export function CashFlowForecastDashboard() {
                               )
                             : "-"}
                         </span>
-                        <span className="block text-2xl font-light tracking-tighter text-indigo-950 leading-none">
+                        <span className="block text-2xl font-light tracking-tighter text-slate-900 leading-none">
                           {item.expectedDate
                             ? new Date(item.expectedDate).getDate()
                             : "-"}
                         </span>
                       </div>
                       <div>
-                        <h4 className="font-light tracking-tight text-indigo-950 text-lg mb-1">
+                        <h4 className="font-light tracking-tight text-slate-900 text-lg mb-1">
                           {item.projectName}
                         </h4>
                         <div className="flex items-center gap-3">
@@ -247,7 +247,7 @@ export function CashFlowForecastDashboard() {
                             {item.milestoneLabel}
                           </span>
                           <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                          <span className="text-sm font-light text-indigo-950">
+                          <span className="text-sm font-light text-slate-900">
                             {formatCurrency(item.amount)}
                           </span>
                         </div>
@@ -274,7 +274,7 @@ export function CashFlowForecastDashboard() {
                 <div className="flex items-center gap-4">
                   <div className="w-1.5 h-8 bg-slate-300 rounded-full"></div>
                   <div>
-                    <h3 className="text-lg font-bold tracking-tight text-indigo-950">
+                    <h3 className="text-lg font-bold tracking-tight text-slate-900">
                       Dormant Execution Gates
                     </h3>
                     <p className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-0.5">
@@ -302,7 +302,7 @@ export function CashFlowForecastDashboard() {
                     key={project}
                     className="bg-white border border-slate-200 p-6 hover:border-slate-300 transition-colors"
                   >
-                    <h4 className="font-light tracking-tight text-indigo-950 text-lg mb-4">
+                    <h4 className="font-light tracking-tight text-slate-900 text-lg mb-4">
                       {project}
                     </h4>
                     <div className="flex flex-wrap gap-2 mb-6">
@@ -319,7 +319,7 @@ export function CashFlowForecastDashboard() {
                       <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
                         Locked Value
                       </span>
-                      <span className="font-light text-indigo-950 text-xl tracking-tighter">
+                      <span className="font-light text-slate-900 text-xl tracking-tighter">
                         {formatCurrency(
                           (items as any[]).reduce((s, i) => s + i.amount, 0),
                         )}
@@ -365,7 +365,7 @@ export function CashFlowSummaryWidget({
             Execution Gates
           </p>
         </div>
-        <p className="text-sm font-medium text-indigo-950 flex items-center gap-2">
+        <p className="text-sm font-medium text-slate-900 flex items-center gap-2">
           <CheckCircle2 className="w-5 h-5 text-emerald-500" /> No active
           blockers
         </p>
@@ -376,7 +376,7 @@ export function CashFlowSummaryWidget({
   return (
     <div
       onClick={onNavigate}
-      className="bg-indigo-950/90 backdrop-blur-xl border border-indigo-800/50 p-8 rounded-[2rem] shadow-2xl shadow-indigo-950/20 shadow-xl flex flex-col justify-between group hover:-translate-y-1 transition-transform cursor-pointer h-full relative overflow-hidden"
+      className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20/90 backdrop-blur-xl border border-sky-800/50 p-8 rounded-[2rem] shadow-2xl shadow-sky-600/30 shadow-xl flex flex-col justify-between group hover:-translate-y-1 transition-transform cursor-pointer h-full relative overflow-hidden"
     >
       <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none text-white">
         <TrendingUpIcon className="w-24 h-24" />
@@ -398,7 +398,7 @@ export function CashFlowSummaryWidget({
             {currentMonthTotal > 0 ? formatCurrency(currentMonthTotal) : "—"}
           </p>
         </div>
-        <div className="sm:pl-8 sm:border-l border-indigo-900">
+        <div className="sm:pl-8 sm:border-l border-sky-900">
           <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>{" "}
             Blocked <span className="lowercase">overdue</span>
