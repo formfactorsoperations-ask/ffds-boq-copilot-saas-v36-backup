@@ -655,7 +655,7 @@ export default function AgreementSignoffPage({ token: initialToken }: AgreementS
             <div className="flex justify-center gap-3 pt-2 no-print">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-2 transition cursor-pointer"
+                className="px-6 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-2 transition cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 <span>Print Certificate / Save PDF</span>

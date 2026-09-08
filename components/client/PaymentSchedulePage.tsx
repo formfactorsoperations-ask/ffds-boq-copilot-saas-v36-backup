@@ -3,6 +3,8 @@ import { ProjectContext, PaymentSchedule, ProjectEngagement } from '../../types'
 import { FileText, Send, Download, AlertTriangle, ArrowRight, History, Eye } from 'lucide-react';
 import { formatCurrency, id as generateId } from '../../lib/utils';
 import { useOrg } from '../../contexts/OrgContext';
+import { resolveDocumentState, getCurrentIssue } from '../../services/documentIssueEngine';
+import ExecutionStamp from '../documents/ExecutionStamp';
 import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 
@@ -19,7 +21,29 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
     const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
     
     const engagement = projectContext.engagement;
-    const isLocked = engagement?.status === 'issued' || engagement?.status === 'acknowledged';
+
+    /*
+      This page had its own idea of the document's state, and it was wrong.
+
+      Three models describe one Payment Schedule: `paymentSchedules[]` (version
+      + draft/sent), `engagement` (draft/issued/acknowledged) and
+      `documents.issues` — the last being the one the client actually signs
+      against and the one the Documents board reads. On a live project the
+      first two said "draft" while the issue said "signed", so this page
+      offered "Mark as Sent" for a schedule the client had already
+      acknowledged.
+
+      The issue wins wherever one exists. Projects with no issue yet fall back
+      to the old fields, so nothing regresses for work in progress.
+    */
+    const canonicalState = resolveDocumentState(projectContext, 'payment_schedule');
+    const canonicalIssue = getCurrentIssue(projectContext, 'payment_schedule');
+    const hasIssue = !!canonicalIssue;
+    const canonicalSent = hasIssue && canonicalState !== 'draft';
+    const canonicalDone = hasIssue && (canonicalState === 'signed' || canonicalState === 'executed');
+
+    const isLocked = canonicalSent
+      || engagement?.status === 'issued' || engagement?.status === 'acknowledged';
     const lockedSnapshot = engagement?.lockedSnapshot;
 
     const schedules = projectContext.paymentSchedules || [];
@@ -410,8 +434,17 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                             )}
                         </div>
                         <div className="flex items-center gap-2 mt-1">
-                            <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded ${latestSchedule.status === 'draft' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                {latestSchedule.status === 'draft' ? 'Draft Version' : 'Sent & Current'}
+                            <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded ${
+                                canonicalDone ? 'bg-emerald-100 text-emerald-700'
+                                : canonicalState === 'queried' && hasIssue ? 'bg-violet-100 text-violet-700'
+                                : canonicalSent ? 'bg-sky-100 text-[#0055B3]'
+                                : latestSchedule.status === 'draft' ? 'bg-amber-100 text-amber-700'
+                                : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                                {canonicalDone ? 'Acknowledged by client'
+                                  : canonicalState === 'queried' && hasIssue ? 'Question open'
+                                  : canonicalSent ? 'Sent to client'
+                                  : latestSchedule.status === 'draft' ? 'Draft Version' : 'Sent & Current'}
                             </span>
                             <span className="text-xs text-slate-500">
                                 Governed by Docket: <strong className="text-slate-700 font-mono">{resolvedDocketRef === '____' ? '----' : resolvedDocketRef}</strong>
@@ -426,19 +459,19 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                     <button onClick={handleDownloadPdf} disabled={!isValid} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                         <Download className="w-4 h-4" /> Download PDF
                     </button>
-                    {latestSchedule.status === 'draft' && (
+                    {latestSchedule.status === 'draft' && !canonicalSent && (
                         <>
                             {!isLocked && (
                                 <button onClick={handleRegenerate} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2">
                                     Regenerate
                                 </button>
                             )}
-                            <button onClick={handleSend} className="px-4 py-2 bg-[#2f4a2e] border border-[#2f4a2e] text-white font-bold text-sm rounded-lg hover:bg-[#1a2d19] transition flex items-center gap-2 shadow-sm">
+                            <button onClick={handleSend} className="px-4 py-2 bg-[#0066CC] border border-[#0066CC] text-white font-bold text-sm rounded-lg hover:bg-[#0055B3] transition flex items-center gap-2 shadow-sm">
                                 <Send className="w-4 h-4" /> Mark as Sent
                             </button>
                         </>
                     )}
-                    {latestSchedule.status !== 'draft' && !isLocked && (
+                    {(latestSchedule.status !== 'draft' || canonicalSent) && !isLocked && (
                         <button onClick={handleRegenerate} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2">
                             Regenerate
                         </button>
@@ -606,10 +639,21 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                             </div>
                         )}
 
-                        <div className="sig">
-                            <div><div className="line"><b>Client Signature &amp; Date</b>{projectContext.clientName}</div></div>
-                            <div><div className="line"><b>For {studioName}</b>{signatoryName} &middot; {signatoryTitle}</div></div>
-                        </div>
+                        {/*
+                            Once the client has acted, the real record replaces the
+                            blank rule. The printed placeholder said "Client
+                            Signature & Date · ABC test client" whether or not
+                            anyone had signed, which reads on the page exactly like
+                            evidence and is not.
+                        */}
+                        {canonicalIssue?.clientSignature || canonicalIssue?.counterSignature ? (
+                            <ExecutionStamp issue={canonicalIssue} mode="acknowledge" />
+                        ) : (
+                            <div className="sig">
+                                <div><div className="line"><b>Client Signature &amp; Date</b>{projectContext.clientName}</div></div>
+                                <div><div className="line"><b>For {studioName}</b>{signatoryName} &middot; {signatoryTitle}</div></div>
+                            </div>
+                        )}
 
                         <footer>{orgData.orgName || 'Form Factors Design Studio'} &middot; Minimal Design. Maximum Impact. &middot; {orgData.officeAddress || '[studio address]'} &middot; {orgData.contactEmail || 'formfactors.operations@gmail.com'}</footer>
                     </div>

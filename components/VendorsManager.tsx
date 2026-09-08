@@ -1770,7 +1770,7 @@ export default function VendorsManager({ projects = [] }: Props) {
                       setSelectedVendor(null);
                       openEditModal(v);
                     }}
-                    className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                    className="px-5 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
                   >
                     <Edit3 className="w-4 h-4" />
                     <span>Edit Profile</span>

@@ -25,7 +25,6 @@ const getTenantDocId = (baseName: string) => {
 import { INITIAL_BANK } from '../constants';
 import { INITIAL_TEMPLATES, TemplateData } from '../lib/standardPackages';
 import { EMAIL_TEMPLATE_LIBRARY } from '../lib/templateEngine';
-import { FFDS_TEMPLATES } from '../lib/ffdsTemplates';
 import { get, set, del } from "idb-keyval";
 
 // --- CONSTANTS ---
@@ -296,6 +295,9 @@ const LocalStrategy: DBService = {
                 const newT = { ...t };
                 delete (newT as any).fullBoq;
                 delete (newT as any).groupedBoq;
+                if ((newT as any).projectContext) {
+                    (newT as any).projectContext = leanTierContext((newT as any).projectContext);
+                }
                 return newT;
             });
         }
@@ -512,6 +514,228 @@ const handleError = (e: any, context: string) => {
     }
 };
 
+/*
+  Tier BOQs live in their own documents.
+
+  A project document carries everything: context, tiers, execution data. The
+  BOQ line items are by far the largest part of it — on a live project, 443KB of
+  a 699KB payload — and Firestore stops at 1 MiB. The save used to cope by
+  throwing scope away: first the BOQs of superseded versions, then the versions
+  themselves, silently and permanently.
+
+  Each tier's lines are written to projects/{projectId}/tierBoq/{tierId}
+  instead, so the project document grows with the number of versions rather than
+  the size of them, and no amount of scope can push a version out of existence.
+
+  The lines are still written inline as well while they fit. That keeps every
+  existing reader working unchanged, and means the subcollection is a safety net
+  before it is a dependency — nothing breaks if a project has not been saved
+  since this arrived.
+*/
+/*
+  A version's context snapshot, reduced to what is actually read from it.
+
+  Approving an annexure stored `projectContext: { ...projectContext }` on the
+  new tier — a complete copy of the project's context, 434KB of it on a live
+  project, duplicated again for every version approved. Two annexures alone
+  accounted for 865KB of an 1,045KB document, against a Firestore limit of
+  1,048KB. The project was three kilobytes from the point where the save blanks
+  its own cloud copy.
+
+  Only two things ever read it: ClientTab falls back to it when no live context
+  is passed, and InternalComparisonTable takes the room names for column order.
+  Neither needs the engagement document, the history log, the payment schedules
+  or the terms dockets, which is nearly all of the weight.
+*/
+function leanTierContext(ctx: any): any {
+    if (!ctx || typeof ctx !== 'object') return ctx;
+    return {
+        name: ctx.name,
+        clientName: ctx.clientName,
+        area: ctx.area,
+        config: ctx.config,
+        rooms: ctx.rooms,
+        approvedTierId: ctx.approvedTierId,
+        gstRate: ctx.gstRate,
+    };
+}
+
+/**
+ * Decode a raw `projects/{id}` document into a project.
+ *
+ * The same handling getProjects does, exposed because App subscribes to the
+ * open project and has to read what arrives. A project of any size is stored
+ * deflated in `compressedData`, so a snapshot is not usable as-is.
+ *
+ * Returns null rather than throwing: a document that cannot be decoded is a
+ * document to ignore, not one to crash the open project over.
+ */
+export function projectFromDoc(id: string, data: any): any | null {
+    if (!data) return null;
+    try {
+        if (data.isCompressed && data.compressedData) {
+            const decoded = decompressData(data.compressedData);
+            return decoded ? { ...decoded, id } : null;
+        }
+        return { ...data, id };
+    } catch {
+        return null;
+    }
+}
+
+const TIER_BOQ_COLLECTION = 'tierBoq';
+
+/*
+  Auto-save fires every couple of seconds while a project is open, and a tier's
+  lines rarely change between two of them. This remembers what was last written
+  for each tier so unchanged ones are skipped, which keeps a background save from
+  rewriting several hundred KB on every keystroke.
+
+  Keyed by project and tier, and only ever a cache: a miss costs one extra write.
+*/
+const lastWrittenTierBoq = new Map<string, string>();
+
+/*
+  The engagement record lives in its own document.
+
+  It holds the locked terms snapshot, the payment structure and the agreement's
+  own history — 359KB on a live project here, the single largest thing in a
+  document Firestore caps at 1 MiB. It is also read rarely: the agreement
+  screens, and the legacy fallback that synthesises a Terms of Engagement for
+  projects predating the issue model.
+
+  Same arrangement as tier BOQs. Always written here, so it cannot be lost;
+  still written inline while the project fits, so every existing reader carries
+  on unchanged; and dropped from the inline copy only when the document would
+  otherwise be too large to save at all.
+*/
+const ENGAGEMENT_COLLECTION = 'engagement';
+const ENGAGEMENT_DOC = 'current';
+
+/** As with tier BOQs: skip an unchanged record rather than rewrite it every save. */
+const lastWrittenEngagement = new Map<string, string>();
+
+async function writeEngagement(projectId: string, engagement: any): Promise<void> {
+    if (!firestore || !projectId || !engagement) return;
+    const serialised = JSON.stringify(engagement);
+    if (lastWrittenEngagement.get(projectId) === serialised) return;
+
+    try {
+        await setDoc(doc(firestore, 'projects', projectId, ENGAGEMENT_COLLECTION, ENGAGEMENT_DOC), {
+            updatedAt: Date.now(),
+            engagement,
+        });
+        lastWrittenEngagement.set(projectId, serialised);
+    } catch (e) {
+        lastWrittenEngagement.delete(projectId);
+        console.warn(`Could not write the engagement record for project ${projectId}`, e);
+    }
+}
+
+async function writeTierBoqs(projectId: string, tiers: any[]): Promise<void> {
+    if (!firestore || !projectId || !tiers?.length) return;
+
+    const pending = tiers.filter(t => t?.id && Array.isArray(t.boq));
+    if (!pending.length) return;
+
+    try {
+        let batch = writeBatch(firestore);
+        let queued = 0;
+
+        for (const tier of pending) {
+            const cacheKey = `${projectId}/${tier.id}`;
+            const serialised = JSON.stringify(tier.boq);
+            if (lastWrittenTierBoq.get(cacheKey) === serialised) continue;
+
+            batch.set(doc(firestore, 'projects', projectId, TIER_BOQ_COLLECTION, tier.id), {
+                tierId: tier.id,
+                itemCount: tier.boq.length,
+                updatedAt: Date.now(),
+                boq: tier.boq,
+            });
+            lastWrittenTierBoq.set(cacheKey, serialised);
+            queued++;
+
+            // Firestore caps a batch at 500 writes; tiers will never approach
+            // that, but committing in chunks keeps this honest if they do.
+            if (queued % 400 === 0) {
+                await batch.commit();
+                batch = writeBatch(firestore);
+            }
+        }
+
+        if (queued % 400 !== 0 && queued > 0) await batch.commit();
+    } catch (e) {
+        /*
+          Never fatal. The lines are also inline in the project document (while
+          they fit) and in the local copy, so a failure here loses nothing that
+          is not already stored elsewhere — but the cache must forget, or the
+          next save would skip these tiers believing they were written.
+        */
+        pending.forEach(t => lastWrittenTierBoq.delete(`${projectId}/${t.id}`));
+        console.warn(`Could not write tier BOQs for project ${projectId}`, e);
+    }
+}
+
+/**
+ * Fill in any tier whose lines were left out of the project document.
+ *
+ * Called when a project is opened. Tiers that still carry their lines inline are
+ * left alone, so this is a no-op for everything that fits — and for anything
+ * that does not, it is what makes the version history complete again.
+ */
+export async function hydrateProjectDetail(project: FullProjectData): Promise<FullProjectData> {
+    if (!firestore || !project?.id) return project;
+
+    let next = project;
+
+    /*
+      The engagement record, if it was left out of the project document. A
+      project that never had one simply has no document here, so the miss costs
+      one read and changes nothing.
+    */
+    if (!(next.context as any)?.engagement) {
+        try {
+            const snap = await getDoc(doc(firestore, 'projects', next.id, ENGAGEMENT_COLLECTION, ENGAGEMENT_DOC));
+            const stored = snap.exists() ? (snap.data() as any)?.engagement : null;
+            if (stored) next = { ...next, context: { ...(next.context as any), engagement: stored } };
+        } catch (e) {
+            console.warn(`Could not restore the engagement record for project ${next.id}`, e);
+        }
+    }
+
+    return hydrateTierBoqs(next);
+}
+
+export async function hydrateTierBoqs(project: FullProjectData): Promise<FullProjectData> {
+    if (!firestore || !project?.id || !project.tiers?.length) return project;
+
+    const needsLines = project.tiers.filter((t: any) => t?.id && !(t.boq?.length));
+    if (!needsLines.length) return project;
+
+    try {
+        const fetched = await Promise.all(
+            needsLines.map(async (tier: any) => {
+                const snap = await getDoc(doc(firestore!, 'projects', project.id, TIER_BOQ_COLLECTION, tier.id));
+                return { id: tier.id, boq: snap.exists() ? (snap.data() as any)?.boq || [] : null };
+            }),
+        );
+
+        const byId = new Map(fetched.filter(f => f.boq !== null).map(f => [f.id, f.boq as any[]]));
+        if (!byId.size) return project;
+
+        return {
+            ...project,
+            tiers: project.tiers.map((t: any) =>
+                byId.has(t.id) ? { ...t, boq: byId.get(t.id), boqTrimmed: false } : t),
+        };
+    } catch (e) {
+        // The project still opens, just without the trimmed versions' detail.
+        console.warn(`Could not restore tier BOQs for project ${project.id}`, e);
+        return project;
+    }
+}
+
 const CloudStrategy: DBService = {
     upgradeLegacyProject: LocalStrategy.upgradeLegacyProject,
     isCloud: true,
@@ -524,18 +748,40 @@ const CloudStrategy: DBService = {
             let globalDocs: any[] = [];
             let tenantDocs: any[] = [];
 
+            let globalFailed = false;
             try {
                 const globalSnapshot = await getDocs(collection(firestore, "projects"));
                 globalDocs = globalSnapshot.docs;
             } catch (e) {
+                globalFailed = true;
                 console.warn("Failed to fetch global projects", e);
             }
 
+            let tenantFailed = false;
             try {
                 const tenantSnapshot = await getDocs(collection(firestore, "organizations", tenantId, "projects"));
                 tenantDocs = tenantSnapshot.docs;
             } catch (e) {
+                tenantFailed = true;
                 console.warn(`Failed to fetch tenant projects for tenant ${tenantId}`, e);
+            }
+
+            /*
+              If neither read succeeded, fall back to the local copy rather than
+              reporting an empty library.
+
+              Both failures were only warned about, and the empty result was
+              returned as though it were the truth — so a permission denial, a
+              dropped connection or an expired session silently emptied the
+              user's project list while every project sat intact in IndexedDB.
+              An unavailable remote is not the same as "you have no projects".
+            */
+            if (globalFailed && tenantFailed) {
+                const local = await LocalStrategy.getProjects();
+                if (local.length > 0) {
+                    console.warn(`Remote projects unavailable — showing ${local.length} from this device instead.`);
+                    return local;
+                }
             }
 
             const mapDocToProject = (doc: any) => {
@@ -708,6 +954,36 @@ const CloudStrategy: DBService = {
     },
 
     saveProject: async (project) => {
+        /*
+          Two things must never reach the cloud, because both overwrite real
+          data with less of it and neither is recoverable.
+
+          A project that failed to hydrate is returned by getProjects as a shell
+          with `tiers: []` so the UI does not crash on it. That shell is a
+          placeholder, not a project — saving it replaces every version the
+          project had with nothing.
+
+          And a save that arrives with no tiers for a project that has them is
+          the same event by another route: state cleared, a partial load, a
+          component mounting before its data. The local copy is authoritative
+          enough to catch it, and it is read here before it is overwritten.
+        */
+        if ((project as any)?._failedHydration) {
+            console.error(`Refusing to save project ${project?.id}: it failed to load and is a placeholder, not data.`);
+            return;
+        }
+
+        if (!project?.tiers?.length) {
+            const localBefore = (await LocalStrategy.getProjects()).find(p => p.id === project?.id);
+            if (localBefore?.tiers?.length) {
+                console.error(
+                    `Refusing to save project ${project.id}: it arrived with no versions but ${localBefore.tiers.length} are on record. ` +
+                    `Nothing was written; the stored copy is untouched.`,
+                );
+                return;
+            }
+        }
+
         // 1. Always backup to local first (Zero Data Loss Policy)
         await LocalStrategy.saveProject(project);
         
@@ -725,6 +1001,9 @@ const CloudStrategy: DBService = {
                     const newT = { ...t };
                     delete newT.fullBoq;
                     delete newT.groupedBoq;
+                    if ((newT as any).projectContext) {
+                        (newT as any).projectContext = leanTierContext((newT as any).projectContext);
+                    }
                     return newT;
                 });
             }
@@ -841,21 +1120,72 @@ const CloudStrategy: DBService = {
                         
                         let leanCompressed = compressData(superLeanProject);
                         
+                        /*
+                          Shedding weight without shedding history.
+
+                          These two steps used to strip the BOQs from every
+                          superseded tier and then delete the tiers outright,
+                          keeping only the active one. Both were silent and both
+                          were permanent: a project sitting near the threshold
+                          would save four tiers one minute and one the next, and
+                          an approved annexure — a contractual record of what the
+                          client agreed and what it cost — simply stopped
+                          existing. It also broke change markers, which compare
+                          the current BOQ against the version it descends from.
+
+                          A tier record is small; its BOQ is what is large. So
+                          the records are always kept, and only line detail is
+                          given up, in the order that costs least:
+
+                            1. BOQs of intermediate versions — superseded, and
+                               not referenced by anything the client sees.
+                            2. The original's BOQ as well, which loses the
+                               baseline that markers measure against.
+
+                          Neither step removes a tier, so the version list, its
+                          lineage and its totals survive either way.
+                        */
+                        const originalTierId = (() => {
+                          const byId = new Map<string, any>((superLeanProject.tiers || []).map((t: any) => [t.id, t]));
+                          const seen = new Set<string>();
+                          let cursor: any = byId.get(superLeanProject.activeTierId);
+                          while (cursor?.parentTierId && !seen.has(cursor.id)) {
+                            seen.add(cursor.id);
+                            const next = byId.get(cursor.parentTierId);
+                            if (!next) break;
+                            cursor = next;
+                          }
+                          return cursor?.id;
+                        })();
+
+                        /*
+                          The engagement record goes first: it is the largest
+                          single field and it has its own document, so dropping
+                          the inline copy costs nothing but a read on next open.
+                        */
+                        if (leanCompressed && leanCompressed.length > 900000 && superLeanProject.context?.engagement) {
+                             console.warn("Project over the cloud size budget — the engagement record is stored separately and has been dropped from the inline copy.");
+                             superLeanProject.context = { ...superLeanProject.context, engagement: null };
+                             leanCompressed = compressData(superLeanProject);
+                        }
+
                         if (leanCompressed && leanCompressed.length > 900000) {
-                             console.warn("Still huge! Stripping BOQs from non-active tiers...");
+                             console.warn("Project over the cloud size budget — dropping BOQ detail from intermediate versions. Version records are kept.");
                              if (superLeanProject.tiers) {
                                  superLeanProject.tiers = superLeanProject.tiers.map(t => {
-                                     if (t.id === superLeanProject.activeTierId) return t; // Keep active
-                                     return { ...t, boq: [] };
+                                     if (t.id === superLeanProject.activeTierId) return t;
+                                     if (t.id === originalTierId) return t; // the baseline markers compare against
+                                     return { ...t, boq: [], boqTrimmed: true };
                                  });
                              }
                              leanCompressed = compressData(superLeanProject);
                         }
 
                         if (leanCompressed && leanCompressed.length > 900000) {
-                             console.warn("Still huge! Keeping only active tier...");
+                             console.warn("Project still over budget — dropping BOQ detail from the original version too. Change markers will have no baseline until it fits again.");
                              if (superLeanProject.tiers) {
-                                 superLeanProject.tiers = superLeanProject.tiers.filter(t => t.id === superLeanProject.activeTierId);
+                                 superLeanProject.tiers = superLeanProject.tiers.map(t =>
+                                     t.id === superLeanProject.activeTierId ? t : { ...t, boq: [], boqTrimmed: true });
                              }
                              leanCompressed = compressData(superLeanProject);
                         }
@@ -875,14 +1205,31 @@ const CloudStrategy: DBService = {
             }
 
             if (payload.compressedData && payload.compressedData.length > 1048400) {
-                console.error("Payload still too large for Firestore after aggressive stripping!");
-                // Just clear the compressedData to avoid breaking the app, but save metadata
-                payload.compressedData = "";
-                payload.warning = "Project too large for cloud sync. Saved locally only.";
-                payload.isCloudSyncFailed = true;
+                /*
+                  Do not write. This used to blank `compressedData` and save the
+                  metadata anyway, which replaced a complete cloud copy of the
+                  project with an empty shell — the one outcome worse than
+                  failing to save, because the previous good copy went with it.
+
+                  Abandoning the write leaves whatever was last stored intact,
+                  and the local copy still holds everything.
+                */
+                console.error(
+                    `Project ${project.id} is too large for Firestore (${payload.compressedData.length} bytes). ` +
+                    `Nothing was written; the last cloud copy is untouched and the local copy is complete.`,
+                );
+                return;
             }
 
             await setDoc(doc(firestore, "projects", project.id), payload);
+
+            /*
+              The lines, in their own documents, from the project as it was
+              handed in — not from the trimmed payload, which is exactly the
+              copy that may have had them removed to fit.
+            */
+            await writeTierBoqs(project.id, project.tiers as any[]);
+            await writeEngagement(project.id, (project.context as any)?.engagement);
             
             // Also save to tenant-specific collection to ensure consistency and isolation
             try {
@@ -1187,21 +1534,26 @@ const CloudStrategy: DBService = {
                 const data = docSnap.data();
                 const existing = data.emailTemplateLibrary || [];
                 
+                /*
+                  Re-seeds from EMAIL_TEMPLATE_LIBRARY, which is the only place
+                  client correspondence is written.
+
+                  This used to seed from FFDS_TEMPLATES — a second, divergent
+                  copy of 22 of the same templates in a different voice. Which
+                  wording a client received therefore depended on whether this
+                  had ever been run. A studio's own edits are still respected.
+                */
                 const updated = existing.map((tpl: any) => {
                     if (tpl.isCustomised) return tpl;
-                    
-                    const ffdsData = FFDS_TEMPLATES[tpl.key];
-                    if (!ffdsData) return tpl; // If not one of the new FFDS templates, leave it alone
-                    
+
+                    const canonical = EMAIL_TEMPLATE_LIBRARY.find(t => t.key === tpl.key);
+                    if (!canonical) return tpl;
+
                     return {
                         ...tpl,
-                        email: {
-                            subject: ffdsData.subject,
-                            body: ffdsData.emailBody
-                        },
-                        whatsapp: {
-                            body: ffdsData.whatsappBody
-                        }
+                        email: { ...canonical.email },
+                        whatsapp: { ...canonical.whatsapp },
+                        variables: canonical.variables,
                     };
                 });
                 

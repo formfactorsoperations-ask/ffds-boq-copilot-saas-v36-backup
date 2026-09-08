@@ -1,4 +1,5 @@
 
+import ProposalAcceptanceCard from '../ops/ProposalAcceptanceCard';
 import React, { useMemo, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
@@ -962,6 +963,14 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
     <div className={`transition-all ${isClientViewOnly ? '' : 'p-4 bg-slate-200/50 pattern-bg rounded-2xl print:p-0 print:bg-white print:rounded-none'}`}>
         {!isClientViewOnly && setProjectContext && (
             <div className="flex flex-col gap-4 mb-6 no-print">
+                 {/* The client's acceptance of these commercials — studio-side
+                     only, and the thing the rest of the project waits on. */}
+                 <ProposalAcceptanceCard
+                     projectContext={projectContext}
+                     setProjectContext={setProjectContext}
+                     tiers={tiers || []}
+                 />
+
                  
                  <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                      {/* Engagement Model Switcher */}
@@ -970,7 +979,7 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
                             <button
                                 key={m.id}
                                 onClick={() => setActiveMode(m.id as ProposalType)}
-                                className={`${UI_STYLES.button.xs} rounded-md transition-all ${activeMode === m.id ? 'bg-[#0F172A] text-[#FDFDFB] shadow-md' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
+                                className={`${UI_STYLES.button.xs} rounded-md transition-all ${activeMode === m.id ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:text-[#0055B3] hover:bg-sky-50'}`}
                             >
                                 {m.icon}
                                 {m.label}
@@ -1000,7 +1009,7 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
                          <button 
                              type="button"
                              onClick={handlePrint}
-                             className="flex items-center gap-2 px-4 py-2 bg-sky-900 text-white font-bold text-sm rounded-lg shadow-sm hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 transition-all"
+                             className="flex items-center gap-2 px-4 py-2 bg-white text-[#0055B3] font-bold text-sm rounded-lg border border-sky-200 shadow-sm hover:bg-sky-50 hover:border-sky-300 transition-all"
                          >
                              <PrintIcon className="w-4 h-4"/> Save PDF
                          </button>

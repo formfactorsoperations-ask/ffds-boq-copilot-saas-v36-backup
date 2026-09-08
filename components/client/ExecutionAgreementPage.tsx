@@ -1,4 +1,6 @@
 import React, { useRef, useState } from 'react';
+import { getCurrentIssue } from '../../services/documentIssueEngine';
+import ExecutionStamp from '../documents/ExecutionStamp';
 import { ProjectContext, DigitalSignatureDocket } from '../../types';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
@@ -26,6 +28,8 @@ interface ExecutionAgreementPageProps {
 
 export default function ExecutionAgreementPage({ projectContext, setProjectContext, tenantId, projectId: propProjectId, activeTier, fullBoq }: ExecutionAgreementPageProps) {
     const { orgData } = useOrg();
+    /* Signature evidence lives on the issue. */
+    const execIssue = getCurrentIssue(projectContext, 'execution_agreement');
     const { settings } = useStudioSettings(tenantId || '');
     const [isGenerating, setIsGenerating] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
@@ -270,7 +274,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                             margin: 0;
                             padding: 0;
                             color: #334155;
-                            font-family: 'Open Sans', ui-sans-serif, system-ui, sans-serif;
+                            font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
                             font-size: 13px;
                             line-height: 1.6;
                             text-align: left;
@@ -313,7 +317,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                             text-transform: uppercase;
                             letter-spacing: 1.2px;
                         }
-                        .ea-doc h1, .ea-doc h2, .ea-doc h3 { margin: 0; color: #1e1b4b; font-family: 'Open Sans', sans-serif; }
+                        .ea-doc h1, .ea-doc h2, .ea-doc h3 { margin: 0; color: #1e1b4b; font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
                         .ea-doc h1 {
                             font-size: 26px;
                             line-height: 1.2;
@@ -1166,6 +1170,12 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                 </div>
                             </div>
 
+                            {/* Once executed, the record — not the blank rule.
+                                The placeholder printed the client's name and
+                                today's date whether or not anyone had signed. */}
+                            {execIssue?.clientSignature || execIssue?.counterSignature ? (
+                                <ExecutionStamp issue={execIssue} mode="signature" />
+                            ) : (
                             <div className="ea-sig-grid">
                                 <div className="ea-sig-line">
                                     <div className="ea-label">Client Signature</div>
@@ -1180,6 +1190,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                     <p>Date: <span className="ea-placeholder">{dateStr}</span></p>
                                 </div>
                             </div>
+                            )}
 
                             <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 10</span></div>
                         </section>
@@ -1693,7 +1704,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                     <div className="no-print shrink-0 border-t md:border-t-0 md:border-l border-amber-200 pt-4 md:pt-0 md:pl-6 space-y-2.5 w-full md:w-auto">
                         <button 
                             onClick={() => setShowInPersonModal(true)}
-                            className="w-full flex justify-center items-center gap-2 px-4 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl shadow-xs hover:bg-slate-800 transition-all cursor-pointer"
+                            className="w-full flex justify-center items-center gap-2 px-4 py-2.5 bg-[#0066CC] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#0055B3] transition-all cursor-pointer"
                         >
                             <Tablet className="w-4 h-4" />
                             Client In-Person Signing (Tablet)

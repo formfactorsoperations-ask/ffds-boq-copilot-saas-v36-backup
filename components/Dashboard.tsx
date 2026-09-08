@@ -1,4 +1,5 @@
 import { calculateProjectFinancials } from '../lib/financialsUtils';
+import ProjectPnlCard from './ops/ProjectPnlCard';
 import React, { useState, useEffect } from 'react';
 import { ProjectContext, ProposalTier, FullBoqItem, ActiveProject, Item, ProjectStatus, SiteVisitType } from '../types';
 import { formatCurrency, formatINR } from '../lib/utils';
@@ -534,6 +535,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectConte
         { id: 'project-journey', label: 'Project Journey' },
         { id: 'quick-actions', label: 'Quick Actions' },
         { id: 'financials', label: 'Financials & Scope' },
+        { id: 'project-pnl', label: 'Project P&L (margin)' },
         { id: 'ops-intelligence', label: 'Ops Intelligence' },
         { id: 'execution-bundles', label: 'Execution Workspace' },
         { id: 'site-activity', label: 'Site Activity' },
@@ -542,9 +544,28 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectConte
         { id: 'comms-tracker', label: 'Comms Tracker' }
     ];
     
+    const DEFAULT_WIDGETS = ['weekly-pulse', 'project-journey', 'quick-actions', 'project-pnl', 'ops-intelligence', 'execution-bundles', 'site-activity', 'procurement-gate', 'handover-readiness'];
+
     const [activeWidgets, setActiveWidgets] = useState<string[]>(() => {
         const saved = localStorage.getItem('ffds_dashboard_widgets');
-        return saved ? JSON.parse(saved) : ['weekly-pulse', 'project-journey', 'quick-actions', 'ops-intelligence', 'execution-bundles', 'site-activity', 'procurement-gate', 'handover-readiness'];
+        if (!saved) return DEFAULT_WIDGETS;
+        let list: string[];
+        try { list = JSON.parse(saved); } catch { return DEFAULT_WIDGETS; }
+        /*
+          Anyone who has used the dashboard before has a saved list, so a new
+          widget added to the defaults would never reach them — it would ship
+          to nobody but new installs. Introduce it once, and record that it was
+          introduced, so a user who then removes it is not overruled next load.
+        */
+        if (!localStorage.getItem('ffds_widget_intro_pnl')) {
+            localStorage.setItem('ffds_widget_intro_pnl', '1');
+            if (!list.includes('project-pnl')) {
+                const at = list.indexOf('quick-actions');
+                if (at >= 0) list.splice(at + 1, 0, 'project-pnl');
+                else list.push('project-pnl');
+            }
+        }
+        return list;
     });
     const [isWidgetModalOpen, setIsWidgetModalOpen] = useState(false);
 
@@ -588,6 +609,10 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectConte
         const q = collection(db, 'projects', activeProject.id, 'selections');
         const unsub = onSnapshot(q, snap => {
             setSelections(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }, (err) => {
+            // Unhandled here would fail the Firestore queue for the whole page.
+            console.warn('Selections unavailable:', (err as any)?.code || err);
+            setSelections([]);
         });
         return () => unsub();
     }, [activeProject?.id]);
@@ -1295,6 +1320,18 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectConte
                             )}
                         </motion.div>
                     </div>
+                )}
+
+                {activeWidgets.includes('project-pnl') && (
+                    <ProjectPnlCard
+                        projectContext={projectContext}
+                        boq={fullBoq}
+                        projectId={projectId}
+                        activeTier={activeTier}
+                        currentUserRole={currentUserRole}
+                        variants={itemVariants}
+                        onOpenProcurement={() => setActiveTab('materials')}
+                    />
                 )}
 
                 {activeWidgets.includes('project-journey') && (

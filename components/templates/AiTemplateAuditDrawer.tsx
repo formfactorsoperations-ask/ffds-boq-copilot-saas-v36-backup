@@ -286,7 +286,7 @@ export const AiTemplateAuditDrawer: React.FC<AiTemplateAuditDrawerProps> = ({
           </button>
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-all"
+            className="px-5 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg text-xs font-bold transition-all"
           >
             Done
           </button>

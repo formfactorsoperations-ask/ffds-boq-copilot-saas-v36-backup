@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { getCurrentIssue } from '../../services/documentIssueEngine';
+import ExecutionStamp from '../documents/ExecutionStamp';
 import { buildSignoffPatch } from '../../services/clientApprovalEngine';
 import { ProjectContext, TermsDocket, TermsSettings, DigitalSignatureDocket } from '../../types';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
@@ -176,7 +178,10 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
     const [previewMode, setPreviewMode] = useState(true);
 
     const engagement = projectContext.engagement;
-    const isLocked = engagement?.status === 'issued' || engagement?.status === 'acknowledged';
+    /* The signature lives on the issue, not on the engagement object. */
+    const termsIssue = getCurrentIssue(projectContext, 'terms_docket');
+    const isLocked = !!termsIssue?.clientSignature
+      || engagement?.status === 'issued' || engagement?.status === 'acknowledged';
     const lockedSnapshot = engagement?.lockedSnapshot;
 
     // We still use dockets array for backward compatibility, but prefer locked snapshot if available
@@ -766,7 +771,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                                                 <span className="text-xs font-black text-slate-800 block leading-tight">
                                                                     {isAmendment ? 'Addendum / Amendment' : 'Governing Terms of Engagement'}
                                                                 </span>
-                                                                <span className="font-mono text-[10.5px] text-slate-500 mt-1 block tracking-wider font-semibold">
+                                                                <span className="font-mono text-[10px] text-slate-500 mt-1 block tracking-wider font-semibold">
                                                                     {doc.docketRef}
                                                                 </span>
                                                             </div>
@@ -1157,7 +1162,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                                                     />
                                                                 </div>
                                                             ) : (
-                                                                <p className="text-[10.5px] text-slate-500 italic bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                                                <p className="text-[10px] text-slate-500 italic bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                                                                     {block.source === 'warrantyPeriods' ? 'Warranty periods table' : 'Snag categories table'} (Dynamically loaded from organization parameters).
                                                                 </p>
                                                             )}
@@ -1327,10 +1332,16 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                     </div>
                                 )}
 
-                                <div className="sig">
-                                    <div><div className="line"><b>Client Signature &amp; Date</b>{snapshotClientData?.clientName || 'Client Name'}</div></div>
-                                    <div><div className="line"><b>For {orgData.orgName || 'Form Factors Design Studio'}</b>{orgData.signatoryName || activeTermsConfig?.signatory?.name || (activeTermsConfig as any)?.signatoryName || '[Principal Name]'}</div></div>
-                                </div>
+                                {/* The real record where one exists; the blank
+                                    rule only while the docket is unsigned. */}
+                                {termsIssue?.clientSignature || termsIssue?.counterSignature ? (
+                                    <ExecutionStamp issue={termsIssue} mode="signature" />
+                                ) : (
+                                    <div className="sig">
+                                        <div><div className="line"><b>Client Signature &amp; Date</b>{snapshotClientData?.clientName || 'Client Name'}</div></div>
+                                        <div><div className="line"><b>For {orgData.orgName || 'Form Factors Design Studio'}</b>{orgData.signatoryName || activeTermsConfig?.signatory?.name || (activeTermsConfig as any)?.signatoryName || '[Principal Name]'}</div></div>
+                                    </div>
+                                )}
 
                                 <footer>{orgData.orgName || 'Form Factors Design Studio'} &middot; Minimal Design. Maximum Impact. &middot; {orgData.officeAddress || '[studio address]'} &middot; {orgData.contactEmail || 'formfactors.operations@gmail.com'}</footer>
                             </div>

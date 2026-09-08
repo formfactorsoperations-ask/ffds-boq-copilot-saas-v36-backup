@@ -318,7 +318,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                     </button>
                     <button
                         onClick={handleDownloadPdf}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded hover:bg-slate-800 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-[#0066CC] text-white text-sm font-medium rounded-lg hover:bg-[#0055B3] transition-colors"
                     >
                         <Download className="w-4 h-4" />
                         Download PDF

@@ -1,13 +1,19 @@
 import React, { useMemo } from "react";
 import { FullProjectData } from "../types";
 import { formatINR, timeAgo } from "../lib/utils";
-import { getNextActions } from "../services/nextActionEngine";
-import { getSingleProjectValue } from "../lib/financialsUtils";
+import WeekAhead from "./home/WeekAhead";
+import { useStudioHomeData } from "./home/useStudioHomeData";
+import HubMarquee from "./home/HubMarquee";
+
+/* Supplied by the studio. Hotlinked from the reference CDN for now: swap this
+   one line for your own footage when it is shot. */
+const HERO_VIDEO =
+  "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260505_101331_74f9b798-3f00-4e86-8a01-377aa16ffeaa.mp4";
+import PortfolioOrbit from "./home/PortfolioOrbit";
+import { CardContainer, CardBody, CardItem } from "./ui/3d-card";
 import ClockCalendar from "./home/ClockCalendar";
 import WavingGreeting from "./home/WavingGreeting";
 import AnimatedNumber from "./ui/AnimatedNumber";
-import { LampContainer } from "./ui/lamp";
-import { CardContainer, CardBody, CardItem } from "./ui/3d-card";
 import { motion } from "framer-motion";
 import {
   Sparkles,
@@ -27,12 +33,11 @@ import {
   FolderPlus,
   BarChart3,
   Store,
-  Boxes
-} from "lucide-react";
+  Boxes, ChevronDown } from "lucide-react";
 
 interface StudioHomeProps {
   projects: FullProjectData[];
-  onOpenProject: (project: FullProjectData) => void;
+  onOpenProject: (project: FullProjectData, targetTab?: string) => void;
   onCreateNew: () => void;
   onNavigate: (tab: string) => void;
   role: string;
@@ -49,118 +54,9 @@ export default function StudioHome({
 }: StudioHomeProps) {
   
   const [focusFilter, setFocusFilter] = React.useState<"all" | "attention" | "suggested">("all");
-  const [expandedActionId, setExpandedActionId] = React.useState<string | null>(null);
 
   // Compute all data points in a single useMemo
-  const data = useMemo(() => {
-    const activeStatuses = ["won", "execution", "work_paused"];
-    const pipelineStatuses = ["lead", "draft", "proposal_sent", "negotiation"];
-    const deliveredStatuses = ["completed"];
-    const lostStatuses = ["lost", "archived"];
-
-    let activeCount = 0;
-    let pipelineCount = 0;
-    let deliveredCount = 0;
-    let lostCount = 0;
-    const clientKeys = new Set<string>();
-
-    let openValue = 0;
-    let bookedValue = 0;
-
-    const worklist: Array<{ project: FullProjectData; action: any }> = [];
-
-    // Map projects to extract stats
-    for (const p of projects) {
-      const status = p.context?.status || "draft";
-      const pVal = getSingleProjectValue(p);
-
-      // Classify bucket
-      if (activeStatuses.includes(status)) {
-        activeCount++;
-        bookedValue += pVal;
-        openValue += pVal;
-      } else if (pipelineStatuses.includes(status)) {
-        pipelineCount++;
-        openValue += pVal;
-      } else if (deliveredStatuses.includes(status)) {
-        deliveredCount++;
-      } else if (lostStatuses.includes(status)) {
-        lostCount++;
-      }
-
-      // Track unique clients
-      const clientEmail = p.context?.clientEmail;
-      const clientName = p.context?.clientName;
-      if (clientEmail || clientName) {
-        const key = (clientEmail || clientName).toLowerCase().trim();
-        clientKeys.add(key);
-      }
-
-      // Build Cross-Project Worklist (Only non-closed)
-      if (status !== "completed" && status !== "lost" && (status as any) !== "archived") {
-        const nextActionsCtx = {
-          project: p.context,
-          designPaymentStages: p.context?.paymentMilestones,
-          designGate: (p.context as any)?.designGate,
-          drawingTrackerSummary: null,
-          scopeAdditionsSummary: {
-            pending: ((p.context as any)?.scopeAdditions || []).filter(
-              (s: any) => s.status === "pending_approval" || s.status === "pending"
-            ).length
-          },
-          timeline: null
-        };
-
-        const actions = getNextActions(nextActionsCtx, role);
-        if (actions && actions.length > 0) {
-          worklist.push({
-            project: p,
-            action: actions[0] // take top action
-          });
-        }
-      }
-    }
-
-    // Sort worklist: blocker first, then due, then suggested
-    const priorityOrder: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
-    worklist.sort((a, b) => priorityOrder[a.action.priority] - priorityOrder[b.action.priority]);
-
-    const blockersCount = worklist.filter(w => w.action.priority === "blocker").length;
-    const dueCount = worklist.filter(w => w.action.priority === "due").length;
-    const attentionCount = blockersCount + dueCount;
-
-    // Win rate: (won + completed) / (won + completed + lost)
-    const totalDecided = activeCount + deliveredCount + lostCount;
-    const winRate = totalDecided > 0 ? Math.round(((activeCount + deliveredCount) / totalDecided) * 100) : 0;
-
-    // Portfolio flow distribution
-    const totalCount = pipelineCount + activeCount + deliveredCount;
-    const dist = {
-      pipeline: totalCount > 0 ? (pipelineCount / totalCount) * 100 : 0,
-      active: totalCount > 0 ? (activeCount / totalCount) * 100 : 0,
-      delivered: totalCount > 0 ? (deliveredCount / totalCount) * 100 : 0
-    };
-
-    // Recent non-closed projects sorted by lastModified descending
-    const recent = projects
-      .filter(p => p.context?.status !== "completed" && p.context?.status !== "lost" && (p.context?.status as any) !== "archived")
-      .sort((a, b) => b.lastModified - a.lastModified)
-      .slice(0, 4);
-
-    return {
-      activeCount,
-      pipelineCount,
-      deliveredCount,
-      clientsCount: clientKeys.size,
-      attentionCount,
-      openValue,
-      bookedValue,
-      winRate,
-      worklist,
-      dist,
-      recent
-    };
-  }, [projects, role]);
+  const data = useStudioHomeData(projects, role);
 
   const filteredWorklist = useMemo(() => {
     if (focusFilter === "attention") {
@@ -174,6 +70,65 @@ export default function StudioHome({
     return data.worklist;
   }, [data.worklist, focusFilter]);
 
+  /* Twenty-six items in one undifferentiated run is why this read as
+     "dispersed": nothing told you where the things that need you end and the
+     things that can wait begin. Three named groups do that in one glance. */
+  const focusGroups = useMemo(() => {
+    const of = (p: string) => filteredWorklist.filter((w) => w.action.priority === p);
+    return [
+      { key: "blocker",   label: "Blocked",            items: of("blocker") },
+      { key: "due",       label: "Next up",            items: of("due") },
+      { key: "suggested", label: "When there is time", items: of("suggested") },
+    ].filter((g) => g.items.length > 0);
+  }, [filteredWorklist]);
+
+  /* The long tail is collapsed by default so the top of the list stays the
+     part you act on. */
+  /* Action routes carry deep-link hints like "payment-calc?focus=e1", but
+     activeTab is matched as an exact string, so the query made every one of
+     them render a blank screen. The hint is not consumed anywhere yet; strip
+     it and navigate to the tab itself. */
+  const tabFor = (route?: string) => (route || "dashboard").split("?")[0];
+
+  /* Sections open and close. "Blocked" and "Next up" start open because they
+     are the reason to look at this page; the long optional tail starts closed
+     so it cannot bury them. */
+  /* "Needs Attention" counts exactly the items the Attention tab shows, but
+     the tile went nowhere. Clicking it now sets that filter and scrolls to the
+     list -- the number and the thing it describes are finally connected. */
+  const greetingWord = React.useMemo(() => {
+    const h = new Date().getHours();
+    return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  }, []);
+
+  const focusRef = React.useRef<HTMLDivElement | null>(null);
+  const focusOnAttention = () => {
+    setFocusFilter("attention");
+    requestAnimationFrame(() =>
+      focusRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
+  };
+
+  /* The same action repeated across projects was most of the list: 26 rows
+     carried only 8 distinct actions, and "Send Terms Docket" alone accounted
+     for 17 of them. Identical actions now collapse into one row that opens to
+     show the projects, so the list reads as "what to do", not "how many times
+     the same thing is true". */
+  const [openRollups, setOpenRollups] = React.useState<Record<string, boolean>>({});
+  const toggleRollup = (k: string) =>
+    setOpenRollups((prev) => ({ ...prev, [k]: !prev[k] }));
+
+  const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({
+    blocker: true, due: true, suggested: false,
+  });
+  const toggleGroup = (k: string) =>
+    setOpenGroups((prev) => ({ ...prev, [k]: !prev[k] }));
+
+  // Switching tabs resets the sections rather than inheriting the last view.
+  React.useEffect(() => {
+    setOpenGroups({ blocker: true, due: true, suggested: false });
+  }, [focusFilter]);
+
   const attentionCount = useMemo(() => {
     return data.worklist.filter(
       (w) => w.action.priority === "blocker" || w.action.priority === "due"
@@ -183,16 +138,6 @@ export default function StudioHome({
   const suggestedCount = useMemo(() => {
     return data.worklist.filter((w) => w.action.priority === "suggested").length;
   }, [data.worklist]);
-
-  // Auto-expand the top-priority action item when filter changes or data updates
-  React.useEffect(() => {
-    if (filteredWorklist.length > 0) {
-      const topId = `${filteredWorklist[0].project.id}-${filteredWorklist[0].action.id}`;
-      setExpandedActionId(topId);
-    } else {
-      setExpandedActionId(null);
-    }
-  }, [filteredWorklist]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -246,6 +191,7 @@ export default function StudioHome({
     {
       id: "value",
       label: "Open Value",
+      link: "reports",
       value: data.openValue,
       icon: TrendingUp,
       color: "text-emerald-700 bg-emerald-50 border-emerald-200/60",
@@ -254,6 +200,7 @@ export default function StudioHome({
     {
       id: "winrate",
       label: "Win Rate",
+      link: "reports",
       value: data.winRate,
       icon: Sparkles,
       color: "text-violet-600 bg-violet-50 border-violet-200/60",
@@ -268,247 +215,147 @@ export default function StudioHome({
       animate="show"
       className="w-full px-3 lg:px-6 pb-16 space-y-6 bg-transparent font-['Plus_Jakarta_Sans']"
     >
-      {/* 1. STUDIO SPOTLIGHT HERO WITH LAMP ANIMATION */}
+      {/* 1. HERO CARD — one rounded plate carrying the whole opening:
+             footage behind, the studio's own line on top, and the live
+             readouts floating at the bottom instead of a nav. The Quick Hub
+             rides the marquee underneath. */}
       <motion.div variants={itemVariants} className="w-full">
-        <LampContainer
-          theme="studio"
-          containerHeight="min-h-[13rem] sm:min-h-[14rem]"
-          className="rounded-2xl border border-slate-800/80 shadow-md"
-        >
-          <div className="flex flex-col items-center text-center justify-center gap-2 w-full max-w-4xl px-4 sm:px-6">
-            <WavingGreeting userName={userName} attentionCount={data.attentionCount} variant="inverted" />
-          </div>
-        </LampContainer>
-      </motion.div>
+        <div className="relative w-full max-w-[1400px] mx-auto rounded-[48px] bg-white border border-slate-200/50 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.06)] overflow-hidden h-[460px] md:h-[540px] lg:h-[600px] flex flex-col">
 
-      {/* 2. PROJECT HUB QUICK LAUNCHPAD */}
-      <motion.div variants={itemVariants} className="w-full">
-        <div className="flex items-center justify-between mb-2.5 px-0.5">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-600 font-mono">
-              Studio Launchpad & Directory
-            </span>
+          {/* Footage layer. Plain autoplay loop, as the hero-card spec calls
+              for -- no capture pass, no crossOrigin, so nothing depends on the
+              CDN sending CORS headers. */}
+          <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden select-none">
+            {/* Painted behind the video, always. A <video> that fails to load
+                renders transparent, so this is what shows if the CDN is
+                unreachable -- the plate is never an empty black box. */}
+            <div className="absolute inset-0 bg-gradient-to-br from-[#F7F8FA] via-white to-[#EFEDE7]" />
+            <div className="aurora-a absolute -top-40 right-[-8rem] w-[42rem] h-[42rem] rounded-full blur-3xl"
+                 style={{ background: "radial-gradient(circle, rgba(0,102,204,.20), transparent 70%)" }} />
+            <div className="aurora-b absolute -bottom-56 right-1/4 w-[38rem] h-[38rem] rounded-full blur-3xl"
+                 style={{ background: "radial-gradient(circle, rgba(181,148,91,.20), transparent 68%)" }} />
+            <video
+              src={HERO_VIDEO}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="relative w-full h-full object-cover scale-105 transition-transform duration-1000"
+            />
           </div>
-          <span className="text-[11px] font-medium text-slate-400">
-            Quick Hub Access
-          </span>
+
+          {/* Scrim only where the type sits. The reference keeps the right side
+              of the frame clear so the subject reads; washing the whole plate
+              would have hidden the footage entirely. */}
+          <div className="absolute inset-0 z-[1] pointer-events-none bg-gradient-to-r from-white/90 via-white/45 to-transparent" />
+
+          {/* Copy */}
+          <div className="relative z-20 flex-1 px-8 md:px-16 pt-12 md:pt-16 flex flex-col items-start">
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+              className="max-w-2xl"
+            >
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#0a1b33]/45">
+                {greetingWord}, {userName}
+              </p>
+
+              <h1 className="mt-3 text-[42px] md:text-[56px] font-bold leading-[1.08] tracking-tight text-[#0a1b33]">
+                {data.attentionCount > 0 ? (
+                  <>
+                    {data.attentionCount} thing{data.attentionCount === 1 ? "" : "s"} need you
+                    <br />
+                    before anything else.
+                  </>
+                ) : (
+                  <>
+                    Nothing is waiting
+                    <br />
+                    on you today.
+                  </>
+                )}
+              </h1>
+
+              <p className="mt-5 max-w-xl text-[14px] md:text-[15px] leading-relaxed text-[#64748b]">
+                {data.activeCount} live {data.activeCount === 1 ? "project" : "projects"} and{" "}
+                {data.pipelineCount} in the pipeline, worth {formatINR(data.openValue)} open.
+                Price the work, run the site, and show every client where their money went.
+              </p>
+
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={focusOnAttention}
+                className="mt-7 md:mt-9 inline-flex items-center gap-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-full px-6 py-3 text-[13px] font-semibold cursor-pointer transition-colors shadow-[0_8px_24px_-6px_rgba(0,102,204,0.5)]"
+              >
+                {data.attentionCount > 0 ? "Show me what needs me" : "Review today's focus"}
+                <ArrowRight className="w-4 h-4" />
+              </motion.button>
+            </motion.div>
+          </div>
+
+          {/* Floating readouts — the numbers, not a second navigation. */}
+          <div className="absolute bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 z-30 w-[calc(100%-2rem)] md:w-auto">
+            <motion.nav
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="flex items-center gap-1 bg-white/90 backdrop-blur-2xl px-1.5 py-1.5 rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.08)] border border-slate-200/40 overflow-x-auto"
+            >
+              <span className="w-9 h-9 shrink-0 rounded-full bg-white border border-slate-100 shadow-sm flex items-center justify-center text-[#0a1b33] text-sm">
+                &#10022;
+              </span>
+
+              {kpiConfigs.map((kpi) => {
+                const urgent = kpi.id === "attention" && Number(kpi.value) > 0;
+                const clickable = !!kpi.link || kpi.id === "attention";
+                return (
+                  <button
+                    key={kpi.id}
+                    onClick={() => {
+                      if (kpi.id === "attention") return focusOnAttention();
+                      if (kpi.link) onNavigate(kpi.link);
+                    }}
+                    className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-semibold transition-all whitespace-nowrap ${
+                      urgent
+                        ? "bg-rose-50 text-rose-700 border border-rose-200/70"
+                        : "text-slate-500 hover:text-[#0a1b33] hover:bg-slate-50"
+                    } ${clickable ? "cursor-pointer" : "cursor-default"}`}
+                    title={kpi.label}
+                  >
+                    <span className="tabular-nums">
+                      <AnimatedNumber
+                        value={kpi.value}
+                        format={
+                          kpi.isCurrency
+                            ? (v) => formatINR(v)
+                            : kpi.isPercent
+                            ? (v) => `${Math.floor(v)}%`
+                            : undefined
+                        }
+                      />
+                    </span>
+                    <span className={`ml-1.5 font-medium ${urgent ? "text-rose-600/80" : "text-slate-400"}`}>
+                      {kpi.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </motion.nav>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-          {/* Tile 1: New Project */}
-          <motion.button
-            id="hub-action-new-project"
-            type="button"
-            onClick={onCreateNew}
-            whileHover={{ y: -3, scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            className="group relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-sky-50/90 via-white to-blue-50/90 border border-sky-200 hover:border-sky-400 shadow-2xs hover:shadow-lg hover:shadow-sky-500/10 text-left transition-all flex flex-col justify-between min-h-[128px] cursor-pointer"
-          >
-            <div className="flex items-center justify-between w-full mb-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 via-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-sky-500/25 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-200">
-                <Plus className="w-5 h-5 stroke-[2.5]" />
-              </div>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700 border border-sky-200/80">
-                <Sparkles className="w-2.5 h-2.5" />
-                <span>Create</span>
-              </span>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
-                  New Project
-                </h4>
-                <ArrowUpRight className="w-3.5 h-3.5 text-sky-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
-              </div>
-              <p className="text-[11px] font-medium text-slate-500 mt-0.5 line-clamp-1">
-                Start estimate or BOQ
-              </p>
-            </div>
-          </motion.button>
-
-          {/* Tile 2: Projects Pipeline */}
-          <motion.button
-            id="hub-action-projects"
-            type="button"
-            onClick={() => onNavigate("projects")}
-            whileHover={{ y: -3, scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            className="group relative overflow-hidden p-4 rounded-2xl bg-white/90 backdrop-blur-md border border-slate-200/80 hover:border-indigo-300 shadow-2xs hover:shadow-lg hover:shadow-indigo-500/10 text-left transition-all flex flex-col justify-between min-h-[128px] cursor-pointer"
-          >
-            <div className="flex items-center justify-between w-full mb-3">
-              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-200/70 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white group-hover:scale-110 group-hover:rotate-3 transition-all duration-200">
-                <FolderKanban className="w-5 h-5" />
-              </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80">
-                {projects.length} Total
-              </span>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                  Projects Hub
-                </h4>
-                <ArrowUpRight className="w-3.5 h-3.5 text-indigo-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
-              </div>
-              <p className="text-[11px] font-medium text-slate-500 mt-0.5 line-clamp-1">
-                {data.activeCount} active · {data.pipelineCount} pipeline
-              </p>
-            </div>
-          </motion.button>
-
-          {/* Tile 3: Clients Directory */}
-          <motion.button
-            id="hub-action-clients"
-            type="button"
-            onClick={() => onNavigate("clients")}
-            whileHover={{ y: -3, scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            className="group relative overflow-hidden p-4 rounded-2xl bg-white/90 backdrop-blur-md border border-slate-200/80 hover:border-teal-300 shadow-2xs hover:shadow-lg hover:shadow-teal-500/10 text-left transition-all flex flex-col justify-between min-h-[128px] cursor-pointer"
-          >
-            <div className="flex items-center justify-between w-full mb-3">
-              <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 border border-teal-200/70 flex items-center justify-center group-hover:bg-teal-600 group-hover:text-white group-hover:scale-110 group-hover:rotate-3 transition-all duration-200">
-                <Users className="w-5 h-5" />
-              </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200/80">
-                CRM & Portal
-              </span>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-slate-900 group-hover:text-teal-600 transition-colors">
-                  Clients Directory
-                </h4>
-                <ArrowUpRight className="w-3.5 h-3.5 text-teal-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
-              </div>
-              <p className="text-[11px] font-medium text-slate-500 mt-0.5 line-clamp-1">
-                {data.clientsCount} studio clients connected
-              </p>
-            </div>
-          </motion.button>
-
-          {/* Tile 4: Reports & Analytics */}
-          <motion.button
-            id="hub-action-reports"
-            type="button"
-            onClick={() => onNavigate("reports")}
-            whileHover={{ y: -3, scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            className="group relative overflow-hidden p-4 rounded-2xl bg-white/90 backdrop-blur-md border border-slate-200/80 hover:border-violet-300 shadow-2xs hover:shadow-lg hover:shadow-violet-500/10 text-left transition-all flex flex-col justify-between min-h-[128px] cursor-pointer"
-          >
-            <div className="flex items-center justify-between w-full mb-3">
-              <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 border border-violet-200/70 flex items-center justify-center group-hover:bg-violet-600 group-hover:text-white group-hover:scale-110 group-hover:rotate-3 transition-all duration-200">
-                <BarChart3 className="w-5 h-5" />
-              </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-50 text-violet-700 border border-violet-200/80">
-                {data.winRate}% Win
-              </span>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-slate-900 group-hover:text-violet-600 transition-colors">
-                  Reports & Analytics
-                </h4>
-                <ArrowUpRight className="w-3.5 h-3.5 text-violet-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
-              </div>
-              <p className="text-[11px] font-medium text-slate-500 mt-0.5 line-clamp-1">
-                Margins, revenue & win rate
-              </p>
-            </div>
-          </motion.button>
-
-          {/* Tile 5: Vendors & Rate Bank */}
-          <motion.button
-            id="hub-action-vendors"
-            type="button"
-            onClick={() => onNavigate("admin-templates-bank")}
-            whileHover={{ y: -3, scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            className="group relative overflow-hidden p-4 rounded-2xl bg-white/90 backdrop-blur-md border border-slate-200/80 hover:border-amber-300 shadow-2xs hover:shadow-lg hover:shadow-amber-500/10 text-left transition-all flex flex-col justify-between min-h-[128px] cursor-pointer"
-          >
-            <div className="flex items-center justify-between w-full mb-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 border border-amber-200/70 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white group-hover:scale-110 group-hover:rotate-3 transition-all duration-200">
-                <Store className="w-5 h-5" />
-              </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
-                Rate Bank
-              </span>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-slate-900 group-hover:text-amber-600 transition-colors">
-                  Vendors & Bank
-                </h4>
-                <ArrowUpRight className="w-3.5 h-3.5 text-amber-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
-              </div>
-              <p className="text-[11px] font-medium text-slate-500 mt-0.5 line-clamp-1">
-                Item catalogs & rate cards
-              </p>
-            </div>
-          </motion.button>
+        {/* Quick Hub, on the rail */}
+        <div className="mt-6 md:mt-8">
+          <HubMarquee onNavigate={onNavigate} onCreateNew={onCreateNew} />
         </div>
       </motion.div>
 
-      {/* 2. LIVE CLOCK & MONTH CALENDAR BAND */}
+      {/* 2. LIVE CLOCK & MONTH CALENDAR — kept. It carries the studio's
+             rhythm, and the calendar already marks the days that matter. */}
       <motion.div variants={itemVariants} className="w-full">
         <ClockCalendar projects={projects} />
-      </motion.div>
-
-      {/* 3. PORTFOLIO PULSE KPIs */}
-      <motion.div variants={itemVariants} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
-        {kpiConfigs.map((kpi) => {
-          const Icon = kpi.icon;
-          const isClickable = !!kpi.link;
-
-          return (
-            <CardContainer
-              key={kpi.id}
-              containerClassName="w-full py-0"
-              className="w-full h-full"
-              onClick={() => isClickable && kpi.link && onNavigate(kpi.link)}
-            >
-              <CardBody
-                className={`bg-white/90 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between transition-all group w-full h-full ${
-                  isClickable ? "cursor-pointer hover:border-sky-300 hover:shadow-lg hover:shadow-sky-500/5" : ""
-                }`}
-              >
-                <CardItem translateZ={15} className="flex items-center justify-between mb-2.5 w-full">
-                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider leading-none">
-                    {kpi.label}
-                  </span>
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center border shadow-2xs ${kpi.color}`}>
-                    <Icon className="w-3.5 h-3.5" />
-                  </div>
-                </CardItem>
-                <CardItem translateZ={30} className="w-full">
-                  <h3 className="text-xl font-bold text-slate-900 leading-tight tracking-tight tabular-nums">
-                    <AnimatedNumber
-                      value={kpi.value}
-                      format={
-                        kpi.isCurrency
-                          ? (v) => formatINR(v)
-                          : kpi.isPercent
-                          ? (v) => `${Math.floor(v)}%`
-                          : undefined
-                      }
-                    />
-                  </h3>
-                  {isClickable && (
-                    <span className="text-[9px] font-semibold uppercase tracking-wider text-sky-600 mt-1.5 inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span>View list</span>
-                      <ArrowRight className="w-2.5 h-2.5" />
-                    </span>
-                  )}
-                </CardItem>
-              </CardBody>
-            </CardContainer>
-          );
-        })}
       </motion.div>
 
       {/* 4. PORTFOLIO FLOW VISUAL BAR */}
@@ -551,7 +398,7 @@ export default function StudioHome({
       <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         
         {/* LEFT COLUMN (SPANS 3): Today's Focus Worklist */}
-        <div className="lg:col-span-3 space-y-4">
+        <div ref={focusRef} className="lg:col-span-3 space-y-4 scroll-mt-24">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-sky-600" />
@@ -626,116 +473,126 @@ export default function StudioHome({
                 </p>
               </div>
             ) : (
-              filteredWorklist.map(({ project, action }) => {
-                // Style configurations based on priority
-                const priorityConfig: Record<string, { label: string; text: string; bg: string; border: string; icon: React.ReactNode }> = {
-                  blocker: { 
-                    label: "Needs Attention", 
-                    text: "text-rose-700 bg-rose-50 border-rose-200/60", 
-                    bg: "bg-rose-50/40", 
-                    border: "group-hover:border-rose-200", 
-                    icon: <AlertCircle className="w-4 h-4 text-rose-600" />
-                  },
-                  due: { 
-                    label: "Next Step", 
-                    text: "text-amber-800 bg-amber-50 border-amber-200/60", 
-                    bg: "bg-amber-50/40", 
-                    border: "group-hover:border-amber-200", 
-                    icon: <Clock className="w-4 h-4 text-amber-600" />
-                  },
-                  suggested: { 
-                    label: "Opportunity", 
-                    text: "text-sky-700 bg-sky-50 border-sky-200/60", 
-                    bg: "bg-sky-50/30", 
-                    border: "group-hover:border-sky-200", 
-                    icon: <Sparkles className="w-4 h-4 text-sky-600" />
-                  }
+              focusGroups.map((group) => {
+                const tone: Record<string, { dot: string; stripe: string; icon: React.ReactNode; chip: string }> = {
+                  blocker:   { dot: "bg-rose-500",  stripe: "bg-rose-500",  chip: "text-rose-700",
+                               icon: <AlertCircle className="w-4 h-4 text-rose-600" /> },
+                  due:       { dot: "bg-amber-500", stripe: "bg-amber-500", chip: "text-amber-700",
+                               icon: <Clock className="w-4 h-4 text-amber-600" /> },
+                  suggested: { dot: "bg-sky-400",   stripe: "bg-sky-300",   chip: "text-sky-700",
+                               icon: <Sparkles className="w-4 h-4 text-sky-500" /> },
                 };
-
-                const cfg = priorityConfig[action.priority] || priorityConfig.suggested;
-                const itemKey = `${project.id}-${action.id}`;
-                const isExpanded = expandedActionId === itemKey;
+                const cfg = tone[group.key] || tone.suggested;
+                const isOpen = openGroups[group.key] !== false;
 
                 return (
-                  <motion.div
-                    layout
-                    key={itemKey}
-                    onClick={() => {
-                      if (!isExpanded) {
-                        setExpandedActionId(itemKey);
-                      } else {
-                        setExpandedActionId(null);
-                      }
-                    }}
-                    className={`bg-white/90 backdrop-blur-xs border rounded-2xl cursor-pointer transition-all duration-200 flex flex-col overflow-hidden ${
-                      isExpanded 
-                        ? "border-sky-400 shadow-sm p-4.5 bg-white ring-1 ring-sky-100" 
-                        : "border-slate-200/80 hover:border-sky-300 hover:shadow-2xs p-3.5 bg-white"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        {/* Icon Indicator */}
-                        <div className={`p-2 rounded-xl border flex items-center justify-center shrink-0 ${cfg.text} ${isExpanded ? 'w-9 h-9' : 'w-8 h-8'}`}>
-                          {React.cloneElement(cfg.icon as React.ReactElement, { className: isExpanded ? "w-4.5 h-4.5" : "w-4 h-4" })}
-                        </div>
+                  <div key={group.key} className="space-y-2">
+                    {/* Group header doubles as the accordion control. */}
+                    <button
+                      onClick={() => toggleGroup(group.key)}
+                      aria-expanded={isOpen}
+                      className="w-full flex items-center gap-2 pt-1 pb-0.5 group/hdr cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 rounded"
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                      <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 group-hover/hdr:text-slate-700 transition-colors">
+                        {group.label}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 tabular-nums">
+                        {group.items.length}
+                      </span>
+                      <span className="flex-1 h-px bg-slate-100" />
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? "" : "-rotate-90"}`}
+                      />
+                    </button>
 
-                        <div className="min-w-0 flex-1">
-                          {/* Badges row */}
-                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            <span className="px-2 py-0.5 bg-slate-100/80 border border-slate-200/80 text-slate-700 text-[10px] font-semibold rounded-lg">
-                              {project.context?.name || "Unnamed Project"}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-semibold uppercase tracking-wider border ${cfg.text}`}>
-                              {cfg.label}
-                            </span>
+                    {isOpen && (() => {
+                      // Preserve order of first appearance while bucketing.
+                      const buckets: { title: string; items: typeof group.items }[] = [];
+                      const index: Record<string, number> = {};
+                      group.items.forEach((it) => {
+                        const key = it.action.title;
+                        if (index[key] === undefined) {
+                          index[key] = buckets.length;
+                          buckets.push({ title: key, items: [] });
+                        }
+                        buckets[index[key]].items.push(it);
+                      });
+
+                      return buckets.flatMap((bucket) => {
+                        if (bucket.items.length === 1) return bucket.items;
+                        const rollKey = `${group.key}:${bucket.title}`;
+                        const rollOpen = !!openRollups[rollKey];
+                        const head = (
+                          <button
+                            key={rollKey}
+                            onClick={() => toggleRollup(rollKey)}
+                            aria-expanded={rollOpen}
+                            className="w-full group relative flex items-center gap-3 bg-white border border-slate-200/80 rounded-xl pl-4 pr-3 py-2.5 cursor-pointer transition-colors hover:border-sky-300 hover:bg-sky-50/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 overflow-hidden text-left"
+                          >
+                            <span className={`absolute left-0 top-0 bottom-0 w-[3px] ${cfg.stripe}`} />
+                            <span className="shrink-0">{cfg.icon}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[13px] font-semibold text-slate-800 truncate leading-tight">
+                                {bucket.title}
+                              </p>
+                              <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                                {bucket.items.length} projects
+                              </p>
+                            </div>
+                            <ChevronDown
+                              className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${rollOpen ? "" : "-rotate-90"}`}
+                            />
+                          </button>
+                        );
+                        return rollOpen ? [head, ...bucket.items] : [head];
+                      });
+                    })().map((entry: any) => {
+                      if (React.isValidElement(entry)) return entry;
+                      const { project, action } = entry;
+                      const client = project.context?.clientName;
+                      return (
+                        <div
+                          key={`${project.id}-${action.id}`}
+                          onClick={() => onOpenProject(project, tabFor(action.route))}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onOpenProject(project, tabFor(action.route));
+                            }
+                          }}
+                          /* Fixed padding and type sizes: every row is the same
+                             height whatever its state, which is what stops the
+                             list looking scattered. */
+                          className="group relative flex items-center gap-3 bg-white border border-slate-200/80 rounded-xl pl-4 pr-3 py-2.5 cursor-pointer transition-colors hover:border-sky-300 hover:bg-sky-50/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 overflow-hidden"
+                        >
+                          <span className={`absolute left-0 top-0 bottom-0 w-[3px] ${cfg.stripe}`} />
+                          <span className="shrink-0">{cfg.icon}</span>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-semibold text-slate-800 truncate leading-tight">
+                              {action.title}
+                            </p>
+                            {/* The client, because three rows can all say
+                                "New Project" and only the client tells them apart. */}
+                            <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                              {project.context?.name || "Unnamed project"}
+                              {client ? <span className="text-slate-300"> · {client}</span> : null}
+                            </p>
                           </div>
 
-                          {/* Title */}
-                          <h4 className={`font-semibold text-slate-800 leading-snug group-hover:text-sky-700 transition-colors ${isExpanded ? 'text-sm' : 'text-xs'}`}>
-                            {action.title}
-                          </h4>
+                          {/* The action itself, not hidden behind a chevron. */}
+                          <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-[#0066CC] group-hover:text-[#0055B3] whitespace-nowrap">
+                            {action.ctaLabel || "Open"}
+                            <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                          </span>
                         </div>
-                      </div>
+                      );
+                    })}
 
-                      {/* Expand/Collapse Chevron Indicator */}
-                      <div className="pl-2 pr-1 text-slate-400 shrink-0">
-                        <motion.div
-                          animate={{ rotate: isExpanded ? 180 : 0 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <svg className="w-4 h-4 stroke-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </motion.div>
-                      </div>
-                    </div>
-
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="mt-3 pt-3 border-t border-slate-100"
-                      >
-                        <p className="text-xs text-slate-600 leading-relaxed font-normal">
-                          {action.why}
-                        </p>
-                        <div className="mt-3.5 flex justify-end">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenProject(project);
-                            }}
-                            className="px-4 py-2 bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 text-white text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs active:scale-98 cursor-pointer"
-                          >
-                            <span>{action.ctaLabel || "Open Project"}</span>
-                            <ArrowRight className="w-3.5 h-3.5 opacity-90" />
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </motion.div>
+                  </div>
                 );
               })
             )}
@@ -745,6 +602,8 @@ export default function StudioHome({
         {/* RIGHT COLUMN (SPANS 2): Jump back in (Recents) & Shortcuts */}
         <div className="lg:col-span-2 space-y-6">
           
+          <WeekAhead projects={projects} onOpenProject={onOpenProject} />
+
           {/* Recent Projects */}
           <div className="space-y-3.5">
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
@@ -782,39 +641,6 @@ export default function StudioHome({
             </div>
           </div>
 
-          {/* Quick Shortcuts */}
-          <div className="space-y-3.5">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-              <Compass className="w-4 h-4 text-sky-600" />
-              <span>Quick Shortcuts</span>
-            </h3>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => onNavigate("projects")}
-                className="p-3.5 bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl hover:border-sky-300 hover:shadow-md hover:shadow-sky-500/5 hover:-translate-y-0.5 transition-all flex flex-col items-center justify-center text-center gap-2 group cursor-pointer shadow-2xs"
-              >
-                <div className="w-8 h-8 rounded-xl bg-sky-50 flex items-center justify-center text-sky-600 transition-colors group-hover:bg-gradient-to-r group-hover:from-sky-500 group-hover:to-blue-600 group-hover:text-white border border-sky-100 shadow-2xs">
-                  <Building2 className="w-4 h-4" />
-                </div>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-700 group-hover:text-sky-700 transition-colors">
-                  Projects Grid
-                </span>
-              </button>
-
-              <button
-                onClick={() => onNavigate("clients")}
-                className="p-3.5 bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl hover:border-sky-300 hover:shadow-md hover:shadow-sky-500/5 hover:-translate-y-0.5 transition-all flex flex-col items-center justify-center text-center gap-2 group cursor-pointer shadow-2xs"
-              >
-                <div className="w-8 h-8 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600 transition-colors group-hover:bg-gradient-to-r group-hover:from-sky-500 group-hover:to-blue-600 group-hover:text-white border border-teal-100 shadow-2xs">
-                  <Users className="w-4 h-4" />
-                </div>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-700 group-hover:text-sky-700 transition-colors">
-                  Clients Directory
-                </span>
-              </button>
-            </div>
-          </div>
 
         </div>
 

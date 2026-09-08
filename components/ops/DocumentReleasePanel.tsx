@@ -334,7 +334,7 @@ const DocumentReleasePanel: React.FC<DocumentReleasePanelProps> = ({
                       setReleaseNote('');
                     }}
                     disabled={!row.readiness.ready}
-                    className="px-4 py-2 rounded-xl text-xs font-bold cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5 bg-slate-900 hover:bg-black disabled:bg-slate-200 disabled:text-slate-400 text-white"
+                    className="px-4 py-2 rounded-xl text-xs font-bold cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5 bg-[#0066CC] hover:bg-[#0055B3] disabled:bg-slate-200 disabled:text-slate-400 text-white"
                   >
                     <Send className="w-3.5 h-3.5" />
                     {sent ? 'Re-issue' : 'Release to client'}
@@ -522,7 +522,7 @@ const DocumentReleasePanel: React.FC<DocumentReleasePanelProps> = ({
               </button>
               <button
                 onClick={() => doRelease(confirming)}
-                className="px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl cursor-pointer flex items-center gap-1.5"
+                className="px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl cursor-pointer flex items-center gap-1.5"
               >
                 <Check className="w-3.5 h-3.5" />
                 Release

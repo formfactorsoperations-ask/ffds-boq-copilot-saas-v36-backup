@@ -250,7 +250,7 @@ export default function ManualAcceptanceOverrideModal({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer"
+              className="px-5 py-2 text-xs font-bold text-white bg-[#0066CC] hover:bg-[#0055B3] rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer"
             >
               <Check className="w-3.5 h-3.5 text-emerald-400" />
               <span>Record & Seal Acceptance</span>

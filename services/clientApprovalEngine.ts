@@ -216,14 +216,32 @@ function resolveTerms(context: ProjectContext, currentStage: number): AgreementS
   );
 
   const issue = issueEvidence(context, 'terms');
-  const gateDone = !!context.lifecycle?.gates?.proposalAccepted?.done;
   const docketAcked = dockets.some(isDocketAcknowledged);
   const engagementAcked = engagement?.status === 'acknowledged';
 
   // A record the client has contested does not count as executed, whatever
   // the other aliases say.
   const isDisputed = record?.status === 'disputed';
-  const signed = !isDisputed && (record?.status === 'signed' || docketAcked || engagementAcked || gateDone || issue.signed);
+
+  /*
+    `lifecycle.gates.proposalAccepted.done` was an alias here and is gone.
+
+    Accepting a proposal and signing the Terms of Engagement are two different
+    acts on two different documents, and this treated the first as proof of the
+    second. On a live project that produced a Terms docket reading "Signed"
+    whose own status was still `draft`, which had never been sent, and which
+    carried no signature record of any kind — the studio believed it held an
+    executed agreement it had never issued.
+
+    A signature has to come from a signature: an explicit signoff record, an
+    acknowledged docket or engagement, or a signed document issue. The proposal
+    gate still drives stage progression, which is what it is for.
+
+    Note the contrast with resolveContract and resolveHandover below, which do
+    read their gates: `contractSigned` and `handoverComplete` are named for the
+    signature itself, so there the gate and the agreement are the same event.
+  */
+  const signed = !isDisputed && (record?.status === 'signed' || docketAcked || engagementAcked || issue.signed);
 
   const released =
     record?.status === 'sent' ||

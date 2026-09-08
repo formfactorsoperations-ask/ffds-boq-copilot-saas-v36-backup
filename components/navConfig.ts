@@ -1,5 +1,6 @@
-import { Compass, FolderOpen, MessageSquare, Wallet, Scale, Clock, Calendar, MonitorSmartphone } from 'lucide-react';
+import { Compass, FolderOpen, MessageSquare, Wallet, Scale, Clock, Calendar, MonitorSmartphone, BarChart3 } from 'lucide-react';
 import { ProjectContext } from '../types';
+import { STAGE_LABELS } from '../constants/journeyConstants';
 import { calculateClientActionItems } from '../services/clientPortalEngine';
 import { resolveApprovals } from '../services/clientApprovalEngine';
 
@@ -58,10 +59,18 @@ export interface NavStage {
   items: NavItem[];
 }
 
+/**
+ * The workflow rail: six stages, each owning the screens that belong to it.
+ *
+ * Stage names come from STAGE_LABELS rather than being written out here, so this
+ * rail and the stage stepper in the project bar always read the same. They had
+ * drifted: stage 5 was "Execution & Site" here and "Execution" in the stepper,
+ * both visible at once. Rename a stage in STAGE_LABELS and both follow.
+ */
 export const NAV_CONFIG: NavStage[] = [
   {
     stage: 1,
-    label: "Initial Consultation",
+    label: STAGE_LABELS[1],
     items: [
       { label: "Brief & Site", route: "leadiq" },
       { 
@@ -77,7 +86,7 @@ export const NAV_CONFIG: NavStage[] = [
   },
   {
     stage: 2,
-    label: "Scope & Strategy",
+    label: STAGE_LABELS[2],
     items: [
       { label: "BOQ Editor", route: "boq-editor" },
       { label: "Pricing & Tiers", route: "ops", money: true },
@@ -86,15 +95,20 @@ export const NAV_CONFIG: NavStage[] = [
   },
   {
     stage: 3,
-    label: "Proposal & Revisions",
+    label: STAGE_LABELS[3],
     items: [
       { label: "Client Proposal", route: "client" },
-      { label: "Versions & Revision Studio", route: "revision-studio" }
+      { label: "Versions & Revision Studio", route: "revision-studio" },
+      /* Onboarding belongs to the yes, not to the paperwork that follows it.
+         It sat in stage 4 behind a contract-and-design-agreement lock, which
+         put the welcome pack after the two documents it is meant to prepare
+         the client for. It now opens as soon as the proposal is accepted. */
+      { label: "Onboarding Kit", route: "onboarding" }
     ]
   },
   {
     stage: 4,
-    label: "Agreement & Design",
+    label: STAGE_LABELS[4],
     items: [
       { 
         label: "Execution Agreement", 
@@ -106,7 +120,6 @@ export const NAV_CONFIG: NavStage[] = [
         }
       },
       { label: "Payment Schedule", route: "payment-calc", money: true },
-      { label: "Onboarding Kit", route: "onboarding" },
       { 
         label: "Drawing Tracker", 
         route: "drawing-tracker",
@@ -135,7 +148,7 @@ export const NAV_CONFIG: NavStage[] = [
   },
   {
     stage: 5,
-    label: "Execution & Site",
+    label: STAGE_LABELS[5],
     items: [
       { label: "Execution & Ops", route: "site-ops" },
       { label: "SOF & Selections", route: "materials" },
@@ -144,7 +157,7 @@ export const NAV_CONFIG: NavStage[] = [
   },
   {
     stage: 6,
-    label: "Handover & Closeout",
+    label: STAGE_LABELS[6],
     items: [
       { label: "Handover Docket", route: "handover-docket" }
     ]
@@ -167,6 +180,19 @@ export const ALWAYS_ON_BAND: NavItem[] = [
       const summary = (ctx as any)?.journeySummary;
       return summary?.pct === 100 ? 'ok' : 'neutral';
     }
+  },
+  {
+    /* Sits beside Ops Matrix because both answer "how is this project doing",
+       one in steps and one in money. */
+    label: "Reports",
+    route: "project-reports",
+    icon: BarChart3,
+    money: true,
+    statusBadge: (ctx) => {
+      const pct = (ctx as any)?.journeySummary?.pct;
+      return typeof pct === 'number' ? `${pct}%` : null;
+    },
+    badgeTone: () => 'neutral',
   },
   { 
     label: "Documents", 
@@ -243,7 +269,27 @@ export const ALWAYS_ON_BAND: NavItem[] = [
   { 
     label: "Decisions", 
     route: "record-decision",
-    icon: Scale
+    icon: Scale,
+    /*
+      Reads the same projection the client portal does, so the badge and the
+      portal can never disagree about how many decisions are outstanding.
+      A query the client raised outranks a decision merely waiting on them --
+      one is stuck, the other is simply in flight.
+    */
+    statusBadge: (ctx) => {
+      const decisions = ctx?.projectDecisions || [];
+      const queried = decisions.filter((d: any) => d.status === 'rejected').length;
+      const waiting = decisions.filter((d: any) => d.status === 'pending' || d.status === 'proposed').length;
+      if (queried > 0) return `${queried} queried`;
+      if (waiting > 0) return `${waiting} due`;
+      return decisions.length > 0 ? "✓" : null;
+    },
+    badgeTone: (ctx) => {
+      const decisions = ctx?.projectDecisions || [];
+      if (decisions.some((d: any) => d.status === 'rejected')) return 'alert';
+      if (decisions.some((d: any) => d.status === 'pending' || d.status === 'proposed')) return 'warn';
+      return decisions.length > 0 ? 'ok' : null;
+    }
   },
   {
     label: "History",

@@ -3,7 +3,7 @@ import { SmartActionItem } from './types';
 import { BoqItem, FullBoqItem, Item } from '../../types';
 import { formatCurrency, formatINR } from '../../lib/utils';
 import { generateEssentialTradeItems } from './healthEngine';
-import { Zap, Check, ArrowRight, Sparkles, AlertCircle, ShieldAlert, Layers } from 'lucide-react';
+import { Zap, Check, ArrowRight, Sparkles, AlertCircle, ShieldAlert, Layers, Lock } from 'lucide-react';
 
 interface SmartActionQueueProps {
   smartActions: SmartActionItem[];
@@ -11,6 +11,14 @@ interface SmartActionQueueProps {
   setBoq: React.Dispatch<React.SetStateAction<BoqItem[]>>;
   bank: Item[];
   onActionComplete?: (message: string) => void;
+  /** A frozen BOQ is the contracted scope. Auto-fixes rewrite client-facing
+      prices, so once it is frozen they must go through the variation flow
+      instead -- otherwise this screen silently changes what was quoted while
+      its own gate audit reports the baseline as protected. */
+  boqFrozen?: boolean;
+  /** Designers do not reprice. Defaults to false so a caller that forgets to
+      pass a role gets the safe behaviour, not the permissive one. */
+  canEdit?: boolean;
 }
 
 export const SmartActionQueue: React.FC<SmartActionQueueProps> = ({
@@ -18,13 +26,20 @@ export const SmartActionQueue: React.FC<SmartActionQueueProps> = ({
   boq,
   setBoq,
   bank,
-  onActionComplete
+  onActionComplete,
+  boqFrozen = false,
+  canEdit = false
 }) => {
+  const locked = boqFrozen || !canEdit;
+  const lockReason = boqFrozen
+    ? 'The BOQ is frozen. Raise a variation to change contracted prices.'
+    : 'Your role cannot change pricing.';
   const [activeFixing, setActiveFixing] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
   // 1. SMART BIT: 1-Click Auto-Fix Margin Drags
   const handleAutoFixMargins = () => {
+    if (locked) return;
     setActiveFixing('auto_fix_margins');
     setTimeout(() => {
       let count = 0;
@@ -52,6 +67,7 @@ export const SmartActionQueue: React.FC<SmartActionQueueProps> = ({
 
   // 2. SMART BIT: Auto-Inject Missing Baseline Trade
   const handleInjectTrade = (tradeName: string) => {
+    if (locked) return;
     setActiveFixing('inject_trade');
     setTimeout(() => {
       const newItems = generateEssentialTradeItems(tradeName.toLowerCase());
@@ -103,6 +119,16 @@ export const SmartActionQueue: React.FC<SmartActionQueueProps> = ({
         </span>
       </div>
 
+      {locked && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5">
+          <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-bold text-amber-900">One-click fixes are disabled</p>
+            <p className="text-[11.5px] text-amber-800 mt-0.5 leading-snug">{lockReason}</p>
+          </div>
+        </div>
+      )}
+
       {successNotice && (
         <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
           <Check className="w-4 h-4 text-emerald-600" />
@@ -119,7 +145,7 @@ export const SmartActionQueue: React.FC<SmartActionQueueProps> = ({
           >
             <div>
               <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-[10px] font-bold font-mono tracking-widest uppercase px-2.5 py-0.5 rounded-md bg-[#0B1528] text-white">
+                <span className="text-[10px] font-bold font-mono tracking-widest uppercase px-2.5 py-0.5 rounded-md bg-[#0066CC] text-white">
                   {action.badge}
                 </span>
                 <span className="text-xs font-bold text-emerald-600 font-mono">
@@ -139,8 +165,9 @@ export const SmartActionQueue: React.FC<SmartActionQueueProps> = ({
               {action.type === 'auto_fix_margins' && (
                 <button
                   onClick={handleAutoFixMargins}
-                  disabled={activeFixing === 'auto_fix_margins'}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl shadow-sm transition-all disabled:opacity-50"
+                  disabled={locked || activeFixing === 'auto_fix_margins'}
+                  title={locked ? lockReason : undefined}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   {activeFixing === 'auto_fix_margins' ? 'Normalizing Margins...' : '1-Click Auto-Normalize to 28%'}
@@ -150,8 +177,9 @@ export const SmartActionQueue: React.FC<SmartActionQueueProps> = ({
               {action.type === 'inject_trade' && (
                 <button
                   onClick={() => handleInjectTrade(action.data?.missingTrades?.[0] || 'Surface Protection')}
-                  disabled={activeFixing === 'inject_trade'}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-sm transition-all disabled:opacity-50"
+                  disabled={locked || activeFixing === 'inject_trade'}
+                  title={locked ? lockReason : undefined}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Layers className="w-3.5 h-3.5" />
                   {activeFixing === 'inject_trade' ? 'Injecting Pack...' : `1-Click Auto-Inject ${action.data?.missingTrades?.[0] || 'Trade'}`}
@@ -168,7 +196,9 @@ export const SmartActionQueue: React.FC<SmartActionQueueProps> = ({
               {action.type === 'fix_zero_rates' && (
                 <button
                   onClick={handleAutoFixMargins}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all"
+                  disabled={locked}
+                  title={locked ? lockReason : undefined}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <AlertCircle className="w-3.5 h-3.5" />
                   Audit Line Item Pricing

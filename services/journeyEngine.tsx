@@ -57,9 +57,7 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
     }
     
     setLoading(true);
-    setRevisions(projectContext?.boqRevisions || []);
-    setTermsDockets(projectContext?.termsDockets || []);
-    
+
     // Listen to communications log in real-time
     const unsubComms = onSnapshot(collection(db, `projects/${projectId}/communicationLog`), (snap) => {
       const logs: Record<string, CommunicationLogItem> = {};
@@ -68,6 +66,12 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
         logs[data.key] = data;
       });
       setCommsLog(logs);
+    }, (err) => {
+      // An unhandled listener rejection fails the Firestore async queue and every
+      // later call in the page throws INTERNAL ASSERTION FAILED (b815) — one
+      // denied read takes the whole app down. Degrade instead.
+      console.warn('Communication log unavailable:', err?.code || err);
+      setCommsLog({});
     });
 
     // Listen to manual journey steps in real-time
@@ -78,13 +82,51 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
       });
       setManualSteps(steps);
       setLoading(false);
+    }, (err) => {
+      // Journey steps are advisory; without them the engine falls back to
+      // automatic rules rather than stalling the whole project view.
+      console.warn('Journey steps unavailable:', err?.code || err);
+      setManualSteps({});
+      setLoading(false);
     });
 
     return () => {
       unsubComms();
       unsubJourney();
     };
-  }, [projectId, projectContext?.boqRevisions, projectContext?.termsDockets]);
+    // ONLY projectId.
+    //
+    // This array used to carry `projectContext?.boqRevisions` and
+    // `projectContext?.termsDockets`. Those are arrays on the project context,
+    // and the context object is rebuilt on virtually every edit anywhere in the
+    // app — so their *identity* changed constantly even when their contents did
+    // not. Each change tore down both watch streams and immediately reopened
+    // them.
+    //
+    // That churn is what produces
+    //   FIRESTORE INTERNAL ASSERTION FAILED: Unexpected state (ID: ca9 / b815)
+    // in WatchChangeAggregator: the SDK receives a response for a target it has
+    // just dropped. Long-polling widens the window, and StrictMode's double
+    // mount doubles it again, but the resubscription loop is the actual defect —
+    // the transport and StrictMode only make it easier to hit.
+    //
+    // Once the queue asserts it is poisoned, so every later Firestore call in
+    // the page throws too, including unrelated writes like saveBank. One
+    // mis-specified dependency array took down the whole app.
+    //
+    // Seeding revisions and terms dockets from the context is a separate
+    // concern and now lives in its own effect below.
+  }, [projectId]);
+
+  // Seed from the context whenever it changes. Cheap, synchronous, and — unlike
+  // the listeners above — safe to re-run as often as the context updates.
+  useEffect(() => {
+    setRevisions(projectContext?.boqRevisions || []);
+  }, [projectContext?.boqRevisions]);
+
+  useEffect(() => {
+    setTermsDockets(projectContext?.termsDockets || []);
+  }, [projectContext?.termsDockets]);
 
   // Evaluate automatic rules
   const evaluateAutoStep = useCallback((step: JourneyStepDef): boolean => {

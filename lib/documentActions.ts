@@ -60,7 +60,8 @@ export const PROJECT_DOCUMENTS: DocMeta[] = [
     id: 'onboarding', 
     name: 'Onboarding Kit', 
     icon: BookOpen, 
-    group: 'Agreement & Design', 
+    /* Filed with the proposal, because that is what unlocks it. */
+    group: 'Proposal', 
     minStage: 1,
     downloadable: true,
     clientVisible: true,
@@ -99,7 +100,10 @@ export const PROJECT_DOCUMENTS: DocMeta[] = [
     icon: Hammer, 
     group: 'Execution', 
     minStage: 1, 
-    downloadable: true 
+    downloadable: true,
+    /* Signed by the client as a pre-requisite to handover. */
+    clientVisible: true,
+    documentKind: 'snag_list'
   },
   { 
     id: 'checklist', 
@@ -120,25 +124,11 @@ export const PROJECT_DOCUMENTS: DocMeta[] = [
     clientVisible: true,
     documentKind: 'handover_docket'
   },
-  {
-    id: 'variation-order',
-    name: 'Variation Order',
-    icon: FileText,
-    group: 'Execution',
-    minStage: 1,
-    downloadable: true,
-    clientVisible: true,
-    documentKind: 'variation_order'
-  },
-  { 
-    id: 'payment-calc', 
-    name: 'Invoices', 
-    icon: FileText, 
-    group: 'Execution', 
-    minStage: 1, 
-    money: true, 
-    downloadable: true 
-  }
+  /* Variation Order removed: registered, releasable and client-visible, but
+     DocumentRenderer never had a case for it, so it could only ever render as
+     "being prepared". A half-built document in the vault is worse than none. */
+  /* Invoices are raised in Zoho Books, not here. This entry only ever opened
+     a calculator, so the vault listed a client document that was never one. */
 ];
 
 export function buildSigningUrl(token: string): string {

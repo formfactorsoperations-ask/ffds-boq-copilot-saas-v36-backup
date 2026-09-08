@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { formatCurrency, formatINR, calculateGrossMargin } from '../../lib/utils';
+import { formatCurrency, formatINR } from '../../lib/utils';
 import { Activity, TrendingDown, DollarSign, AlertCircle, Percent, RefreshCw, Sparkles, Scale } from 'lucide-react';
 
 interface StressTestLabProps {
@@ -79,7 +79,8 @@ export const StressTestLab: React.FC<StressTestLabProps> = ({
       </div>
 
       {/* Hero Stress Impact Result */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 rounded-2xl bg-slate-900 text-white border border-slate-800">
+      <div className="relative overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 rounded-2xl bg-slate-900 text-white border border-slate-800 hud-frame hud-frame-dark">
+        <span className="hud-scan" />
         <div className="lg:col-span-4 border-b lg:border-b-0 lg:border-r border-slate-800 pb-6 lg:pb-0 lg:pr-6 flex flex-col justify-between">
           <div>
             <span className="text-[10px] uppercase font-bold tracking-widest text-[#B5945B]">Stressed Net Profit</span>

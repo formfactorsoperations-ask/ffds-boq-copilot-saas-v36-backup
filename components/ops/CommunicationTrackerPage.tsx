@@ -4,7 +4,7 @@ import { useCommunicationLog } from '../../hooks/useCommunicationLog';
 import { updateCommunicationLog } from '../../services/communicationTrackerService';
 import { CommunicationLogItem, CommunicationTemplateItem, TeamMember, ProjectContext } from '../../types';
 import { resolveTemplate, stripHtml } from '../../lib/templateEngine';
-import { CheckCircle, Clock, AlertTriangle, Send, MoreVertical, X, Calendar, User, FileText, Check, AlertCircle, Copy } from 'lucide-react';
+import { CheckCircle, Clock, AlertTriangle, Send, MoreVertical, X, Calendar, User, FileText, Check, AlertCircle, Copy, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
 
@@ -24,6 +24,11 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
     const [modalStep, setModalStep] = useState<1 | 2>(1);
     const [previewMode, setPreviewMode] = useState<'email' | 'whatsapp'>('email');
     const [copySuccess, setCopySuccess] = useState('');
+    /* Twenty-four rows is a list you work through, not one you read. */
+    const [query, setQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'attention' | 'pending' | 'sent' | 'na'>('all');
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
     const { settings: studioSettings } = useStudioSettings(studioId);
 
@@ -118,6 +123,57 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
         });
     };
 
+    const toggleSelected = (key: string) =>
+        setSelected(prev => {
+            const next = new Set(prev);
+            next.has(key) ? next.delete(key) : next.add(key);
+            return next;
+        });
+
+    /*
+      Bulk "not applicable" — but deliberately NOT bulk "sent".
+
+      This is an audit log. Marking a batch as sent would have to invent a date,
+      a sender and a channel for each one, and the whole value of the record is
+      that those fields are true. Declaring a batch irrelevant to this project
+      invents nothing, so that is the one that can be done in bulk.
+    */
+    const handleBulkNA = async () => {
+        const keys = [...selected];
+        if (!keys.length) return;
+        if (!window.confirm(`Mark ${keys.length} communication${keys.length > 1 ? 's' : ''} as not applicable?`)) return;
+
+        // Project the end state once — recomputing per item inside the loop
+        // reads stale counts and lands a wrong health score.
+        const keySet = new Set(keys);
+        const projected = mergedItems.map(m => (keySet.has(m.template.key) ? { ...m.log, status: 'not_applicable' } : m.log));
+        const reqItems = mergedItems.filter(m => m.template.isRequired);
+        const reqDone = reqItems.filter(m => {
+            const st = keySet.has(m.template.key) ? 'not_applicable' : m.log.status;
+            return st === 'sent' || st === 'not_applicable';
+        }).length;
+        const stats = {
+            commsHealth: reqItems.length ? Math.round((reqDone / reqItems.length) * 100) : 100,
+            commsSentCount: projected.filter(m => m.status === 'sent').length,
+            commsPendingCount: projected.filter(m => m.status === 'pending').length,
+        };
+        for (const key of keys) {
+            await updateCommunicationLog(projectId, { status: 'not_applicable', key }, stats);
+        }
+        setSelected(new Set());
+    };
+
+    /* The message, on the clipboard, without opening anything. Most of the
+       time that is the entire job this page is asked to do. */
+    const copyEmail = async (item: any) => {
+        const v = getVariables();
+        const subject = stripHtml(resolveTemplate(item.template.email?.subject || '', v));
+        const body = stripHtml(resolveTemplate(item.template.email?.body || '', v));
+        await navigator.clipboard.writeText(`${subject}\n\n${body}`.trim());
+        setCopiedKey(item.template.key);
+        setTimeout(() => setCopiedKey(null), 2000);
+    };
+
     if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">Loading tracker...</div>;
 
     const itemsToShow = activeTab === 'design' ? designItems : executionItems;
@@ -137,130 +193,328 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
         return 'text-rose-600 bg-rose-50';
     };
 
+    const all = itemsToShow || [];
+    const counts = {
+        all: all.length,
+        attention: all.filter(i => i.log.needsAttention && i.log.status === 'pending').length,
+        pending: all.filter(i => i.log.status === 'pending').length,
+        sent: all.filter(i => i.log.status === 'sent').length,
+        na: all.filter(i => i.log.status === 'not_applicable').length,
+    };
+
+    const q = query.trim().toLowerCase();
+    const visible = all.filter(i => {
+        if (q && !i.template.title.toLowerCase().includes(q) && !(i.template.category || '').toLowerCase().includes(q)) return false;
+        const st = i.log.status;
+        if (statusFilter === 'attention') return i.log.needsAttention && st === 'pending';
+        if (statusFilter === 'pending') return st === 'pending';
+        if (statusFilter === 'sent') return st === 'sent';
+        if (statusFilter === 'na') return st === 'not_applicable';
+        return true;
+    });
+
+    const grouped: Record<string, typeof visible> = {};
+    visible.forEach(i => { (grouped[i.template.category] ||= []).push(i); });
+
+    const selectablePending = visible.filter(i => i.log.status === 'pending');
+    const allPendingSelected = selectablePending.length > 0 && selectablePending.every(i => selected.has(i.template.key));
+
+    const FILTERS = [
+        { id: 'all' as const, label: 'All', n: counts.all },
+        { id: 'attention' as const, label: 'Needs confirming', n: counts.attention },
+        { id: 'pending' as const, label: 'Pending', n: counts.pending },
+        { id: 'sent' as const, label: 'Sent', n: counts.sent },
+        { id: 'na' as const, label: 'N/A', n: counts.na },
+    ];
+
+    const PHASES = [
+        { id: 'design' as const, label: 'Design phase', items: designItems || [] },
+        { id: 'execution' as const, label: 'Execution phase', items: executionItems || [] },
+    ];
+
     return (
-        <div className="space-y-6 max-w-5xl mx-auto pb-12">
-            <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <div>
-                    <h2 className="text-2xl font-semibold text-gray-900 tracking-tight flex items-center gap-3">
-                        <Send className="w-6 h-6 text-[#0066CC]" />
-                        Communication Tracker
-                    </h2>
-                    <p className="text-gray-500 mt-1">Audit log of all client emails and notifications</p>
-                </div>
-                <div className={`px-4 py-2 rounded-xl flex items-center gap-3 ${getHealthColor(healthScore)}`}>
-                    <div className="text-3xl font-bold">{healthScore}%</div>
-                    <div className="text-sm font-medium leading-tight">
-                        Health<br/>Score
+        <div className="space-y-4 pb-12">
+
+            <section className="rounded-2xl border border-slate-200/80 bg-white p-5">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="min-w-0">
+                        <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <Send className="w-4 h-4 text-[#0066CC]" />
+                            Communication tracker
+                        </h2>
+                        <p className="text-xs text-slate-500 font-medium mt-0.5">
+                            Every client email and notification, and whether it actually went out.
+                        </p>
+                    </div>
+                    <div className="flex items-baseline gap-2 shrink-0">
+                        <span className={`text-2xl font-extrabold tabular-nums leading-none ${
+                            healthScore >= 90 ? 'text-emerald-600' : healthScore >= 60 ? 'text-amber-600' : 'text-rose-600'
+                        }`}>{healthScore}%</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Health</span>
                     </div>
                 </div>
-            </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="flex border-b border-gray-100">
-                    <button 
-                        onClick={() => setActiveTab('design')}
-                        className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'design' ? 'text-[#0066CC] border-b-2 border-[#0066CC] bg-sky-50/30' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        Design Phase ({(designItems || []).filter(i => i.log.status === 'sent').length}/{(designItems || []).filter(i => i.template.isRequired).length})
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('execution')}
-                         className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'execution' ? 'text-[#0066CC] border-b-2 border-[#0066CC] bg-sky-50/30' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        Execution Phase ({(executionItems || []).filter(i => i.log.status === 'sent').length}/{(executionItems || []).filter(i => i.template.isRequired).length})
-                    </button>
+                <div className="mt-4 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                            healthScore >= 90 ? 'bg-emerald-500' : healthScore >= 60 ? 'bg-amber-400' : 'bg-[#0066CC]'
+                        }`}
+                        style={{ width: `${Math.max(0, Math.min(100, healthScore))}%` }}
+                    />
                 </div>
 
-                <div className="p-6 space-y-8">
-                    {Object.entries(groupedItems).map(([category, items]) => (
-                        <div key={category} className="space-y-4">
-                            <h3 className="text-xs font-bold tracking-wider text-gray-400 uppercase">{category}</h3>
-                            <div className="space-y-3">
-                                {items.map((item) => (
-                                    <div key={item.template.key} className={`flex items-stretch bg-white border rounded-xl overflow-hidden transition-all ${item.log.status === 'sent' ? 'border-gray-100 shadow-sm opacity-70' : item.log.needsAttention ? 'border-amber-200 shadow-md ring-1 ring-amber-100' : 'border-gray-200 hover:border-sky-300 hover:shadow-md'}`}>
-                                        <div className={`w-2 ${item.log.status === 'sent' ? 'bg-emerald-400' : item.log.status === 'not_applicable' ? 'bg-gray-200' : item.log.needsAttention ? 'bg-amber-400' : 'bg-sky-400'}`} />
-                                        
-                                        <div className="flex-1 p-5 flex flex-col justify-center">
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex items-start gap-4">
-                                                    <div className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center ${item.log.status === 'sent' ? 'bg-emerald-500 border-emerald-500' : item.log.status === 'not_applicable' ? 'bg-gray-100 border-gray-300' : 'bg-white border-gray-300'}`}>
-                                                        {item.log.status === 'sent' && <Check className="w-3.5 h-3.5 text-white" />}
-                                                        {item.log.status === 'not_applicable' && <div className="w-2.5 h-0.5 bg-gray-400 rounded-full" />}
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex items-center gap-3">
-                                                            <h4 className={`font-semibold ${item.log.status === 'not_applicable' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{item.template.title}</h4>
-                                                            <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${item.template.isRequired ? 'bg-sky-50 text-[#0055B3]' : 'bg-gray-100 text-gray-500'}`}>
-                                                                {item.template.isRequired ? 'Required' : 'Optional'}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
-                                                            <Clock className="w-3.5 h-3.5" />
-                                                            Trigger: {item.template.trigger}
-                                                        </p>
-                                                        
-                                                        {item.log.status === 'sent' && (
-                                                            <div className="mt-3 flex items-center gap-4 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg">
-                                                                <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5"/>{item.log.sentAt ? format(item.log.sentAt.toDate ? item.log.sentAt.toDate() : new Date(item.log.sentAt), 'dd MMM yyyy') : 'Unknown Date'}</span>
-                                                                <span className="flex items-center gap-1"><User className="w-3.5 h-3.5"/>{item.log.sentByName || 'Unknown'}</span>
-                                                                <span className="flex items-center gap-1 uppercase tracking-widest text-[9px]"><Send className="w-3.5 h-3.5"/>{item.log.sentVia}</span>
-                                                                {item.log.invoiceRef && <span className="flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-emerald-200"># {item.log.invoiceRef}</span>}
-                                                            </div>
-                                                        )}
+                <p className="mt-2.5 text-[11px] font-semibold text-slate-500">
+                    {sentCount} sent · {pendingCount} pending · {naCount} not applicable
+                </p>
+            </section>
 
-                                                        {item.log.needsAttention && item.log.status === 'pending' && (
-                                                            <div className="mt-3 flex items-start gap-2 text-sm font-medium text-amber-800 bg-amber-50 px-3 py-2 rounded-lg border border-amber-100">
-                                                                <AlertCircle className="w-4 h-4 mt-0.5 text-amber-600 flex-shrink-0" />
-                                                                <div>
-                                                                    💡 Action completed in system. Has the email been sent?
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="flex flex-col items-end gap-2 ml-4">
-                                                    {item.log.status === 'pending' && (
-                                                        <>
-                                                            <button 
-                                                                onClick={() => openModal(item)}
-                                                                className={`px-4 py-2 font-medium rounded-lg text-sm transition-colors ${item.log.needsAttention ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-white shadow-sm'}`}
-                                                            >
-                                                                Mark Sent
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => handleMarkNA(item)}
-                                                                className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1"
-                                                            >
-                                                                Mark N/A ✓
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                    {item.log.status === 'sent' && (
-                                                        <button 
-                                                            onClick={() => openModal(item)}
-                                                            className="text-xs text-gray-500 hover:text-gray-700 font-medium px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50"
-                                                        >
-                                                            Edit Log
-                                                        </button>
-                                                    )}
-                                                    {item.log.status === 'not_applicable' && (
-                                                        <button 
-                                                            onClick={() => handleRevertNA(item)}
-                                                            className="text-xs text-gray-500 hover:text-gray-700 font-medium px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50"
-                                                        >
-                                                            Undo N/A
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-white overflow-hidden">
+
+                {/* Phase, then search and status — the three ways anyone
+                    actually narrows a list this long. */}
+                <div className="px-5 pt-4 pb-3 border-b border-slate-100 space-y-3">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex gap-1 rounded-2xl bg-slate-50 p-1 w-fit ring-1 ring-slate-200/70">
+                            {PHASES.map(ph => {
+                                const on = activeTab === ph.id;
+                                const done = ph.items.filter(i => i.log.status === 'sent').length;
+                                const req = ph.items.filter(i => i.template.isRequired).length;
+                                return (
+                                    <button
+                                        key={ph.id}
+                                        onClick={() => { setActiveTab(ph.id); setSelected(new Set()); }}
+                                        aria-current={on ? 'page' : undefined}
+                                        className={`px-3.5 py-2 rounded-xl text-[12px] font-bold whitespace-nowrap cursor-pointer
+                                                    transition-colors flex items-center gap-2 ${
+                                            on ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
+                                               : 'text-slate-500 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        {ph.label}
+                                        <span className={`text-[10px] font-extrabold tabular-nums rounded-full px-1.5 leading-[18px] ${
+                                            on ? 'bg-sky-50 text-[#0055B3]' : 'bg-slate-100 text-slate-500'
+                                        }`}>{done}/{req}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
-                    ))}
+
+                        <div className="relative ml-auto min-w-[190px] flex-1 max-w-xs">
+                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                                value={query}
+                                onChange={e => setQuery(e.target.value)}
+                                placeholder="Search communications…"
+                                className="w-full pl-8.5 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white
+                                           text-[12px] font-medium outline-none focus:border-[#0066CC] transition-colors"
+                                style={{ paddingLeft: '2.1rem' }}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        {FILTERS.map(f => {
+                            const on = statusFilter === f.id;
+                            return (
+                                <button
+                                    key={f.id}
+                                    onClick={() => setStatusFilter(f.id)}
+                                    aria-pressed={on}
+                                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold cursor-pointer border transition-colors ${
+                                        on ? 'bg-sky-50 text-[#0055B3] border-sky-200'
+                                           : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900'
+                                    } ${f.id === 'attention' && f.n > 0 && !on ? 'text-amber-700' : ''}`}
+                                >
+                                    {f.label}
+                                    <span className="ml-1.5 tabular-nums font-extrabold opacity-70">{f.n}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
+
+                {/* Only appears once something is selected, so it never sits
+                    there as chrome. */}
+                {selected.size > 0 && (
+                    <div className="px-5 py-2.5 bg-sky-50 border-b border-sky-100 flex items-center gap-3 flex-wrap">
+                        <p className="text-[12px] font-bold text-[#0055B3]">
+                            {selected.size} selected
+                        </p>
+                        <button
+                            onClick={handleBulkNA}
+                            className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-[#0066CC] hover:bg-[#0055B3] cursor-pointer transition-colors"
+                        >
+                            Mark not applicable
+                        </button>
+                        <button
+                            onClick={() => setSelected(new Set())}
+                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 hover:text-slate-900 hover:bg-white cursor-pointer transition-colors"
+                        >
+                            Clear
+                        </button>
+                        <span className="text-[10.5px] text-slate-500 font-medium ml-auto">
+                            Sending is logged one at a time — the date and channel have to be real.
+                        </span>
+                    </div>
+                )}
+
+                {selectablePending.length > 0 && (
+                    <div className="px-5 py-2 border-b border-slate-100 flex items-center gap-2">
+                        <button
+                            onClick={() => setSelected(allPendingSelected ? new Set() : new Set(selectablePending.map(i => i.template.key)))}
+                            className="text-[11px] font-bold text-slate-500 hover:text-[#0055B3] cursor-pointer transition-colors"
+                        >
+                            {allPendingSelected ? 'Deselect all' : `Select all ${selectablePending.length} pending`}
+                        </button>
+                    </div>
+                )}
+
+                {visible.length === 0 ? (
+                    <p className="px-5 py-12 text-center text-sm text-slate-500">
+                        {q || statusFilter !== 'all'
+                            ? 'Nothing matches that filter.'
+                            : 'Nothing is scheduled for this phase yet.'}
+                    </p>
+                ) : Object.entries(grouped).map(([category, items]) => {
+                    const catSent = items.filter(i => i.log.status === 'sent').length;
+                    return (
+                        <div key={category} className="border-b border-slate-100 last:border-b-0">
+                            <div className="px-5 py-2 bg-slate-50/70 flex items-center justify-between gap-3">
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{category}</p>
+                                <p className="text-[10px] font-bold text-slate-400 tabular-nums">{catSent}/{items.length} sent</p>
+                            </div>
+
+                            <ul>
+                                {items.map(item => {
+                                    const st = item.log.status;
+                                    const attention = item.log.needsAttention && st === 'pending';
+                                    const isSel = selected.has(item.template.key);
+                                    const copied = copiedKey === item.template.key;
+                                    return (
+                                        <li
+                                            key={item.template.key}
+                                            className={`group px-5 py-2.5 border-t border-slate-50 first:border-t-0 flex items-center gap-3
+                                                        transition-colors ${
+                                                isSel ? 'bg-sky-50/60' : attention ? 'bg-amber-50/40' : 'hover:bg-sky-50/30'
+                                            }`}
+                                        >
+                                            {st === 'pending' ? (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSel}
+                                                    onChange={() => toggleSelected(item.template.key)}
+                                                    aria-label={`Select ${item.template.title}`}
+                                                    className="w-4 h-4 shrink-0 rounded border-slate-300 accent-[#0066CC] cursor-pointer"
+                                                />
+                                            ) : (
+                                                <span className={`w-4 h-4 rounded shrink-0 grid place-items-center border ${
+                                                    st === 'sent' ? 'bg-emerald-500 border-emerald-500' : 'bg-slate-100 border-slate-300'
+                                                }`}>
+                                                    {st === 'sent'
+                                                        ? <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                                                        : <span className="w-2 h-px bg-slate-400" />}
+                                                </span>
+                                            )}
+
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <p className={`text-[13px] font-bold leading-snug ${
+                                                        st === 'not_applicable' ? 'text-slate-400 line-through' : 'text-slate-900'
+                                                    }`}>{item.template.title}</p>
+                                                    {!item.template.isRequired && (
+                                                        <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                                            Optional
+                                                        </span>
+                                                    )}
+                                                    {attention && (
+                                                        <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                                            Confirm it went out
+                                                        </span>
+                                                    )}
+                                                    {item.template.trigger && (
+                                                        <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                                                            <Clock className="w-3 h-3 shrink-0" />
+                                                            {item.template.trigger}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {st === 'sent' && (
+                                                    <p className="text-[10px] font-semibold text-emerald-700 mt-0.5 flex flex-wrap items-center gap-x-3">
+                                                        <span className="flex items-center gap-1">
+                                                            <Calendar className="w-3 h-3" />
+                                                            {item.log.sentAt
+                                                                ? format(item.log.sentAt.toDate ? item.log.sentAt.toDate() : new Date(item.log.sentAt), 'dd MMM yyyy')
+                                                                : 'Date not recorded'}
+                                                        </span>
+                                                        <span className="flex items-center gap-1"><User className="w-3 h-3" />{item.log.sentByName || 'Unknown'}</span>
+                                                        {item.log.sentVia && <span className="uppercase tracking-wider">{item.log.sentVia}</span>}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                {/* Copy first: most of the time the job is to grab
+                                                    the text and send it from a real mail client. */}
+                                                {st !== 'not_applicable' && (
+                                                    <button
+                                                        onClick={() => copyEmail(item)}
+                                                        title="Copy the email text"
+                                                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-1 ${
+                                                            copied ? 'text-emerald-700 bg-emerald-50'
+                                                                   : 'text-slate-500 hover:text-[#0055B3] hover:bg-sky-50'
+                                                        }`}
+                                                    >
+                                                        {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                                        {copied ? 'Copied' : 'Copy'}
+                                                    </button>
+                                                )}
+
+                                                {st === 'pending' && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => openModal(item)}
+                                                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer border transition-colors ${
+                                                                attention
+                                                                    ? 'bg-amber-500 border-amber-500 text-white hover:bg-amber-600'
+                                                                    : 'bg-sky-50 border-sky-200 text-[#0055B3] hover:bg-[#0066CC] hover:border-[#0066CC] hover:text-white'
+                                                            }`}
+                                                        >
+                                                            Mark sent
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleMarkNA(item)}
+                                                            className="px-2 py-1.5 rounded-lg text-[11px] font-bold text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors
+                                                                       opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                                        >
+                                                            N/A
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {st === 'sent' && (
+                                                    <button
+                                                        onClick={() => openModal(item)}
+                                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-600 border border-slate-200 hover:border-sky-300 hover:text-[#0055B3] cursor-pointer transition-colors"
+                                                    >
+                                                        Edit log
+                                                    </button>
+                                                )}
+                                                {st === 'not_applicable' && (
+                                                    <button
+                                                        onClick={() => handleRevertNA(item)}
+                                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-600 border border-slate-200 hover:border-sky-300 hover:text-[#0055B3] cursor-pointer transition-colors"
+                                                    >
+                                                        Undo N/A
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </div>
+                    );
+                })}
             </div>
 
             {selectedItem && (

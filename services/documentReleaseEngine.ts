@@ -18,6 +18,7 @@
 import {
   ProjectContext,
   ClientDocumentKind,
+  DocumentState,
   DocumentIssue,
   MaterialSection,
   TermsSettings,
@@ -88,9 +89,11 @@ export const RELEASABLE_DOCUMENTS: ReleasableDocument[] = [
     kind: 'onboarding_kit',
     title: 'Onboarding Kit',
     purpose: 'Who does what, how to reach the team, and what happens next.',
-    mode: 'review',
+    /* 'review' recorded nothing at all — the client read it and the project
+       had no way of knowing. Acknowledgement leaves a receipt. */
+    mode: 'acknowledge',
     signable: false,
-    modeReason: 'Informational. Nothing here binds either side.'
+    modeReason: 'Informational, but the studio needs a receipt that the client has it.'
   },
   {
     kind: 'execution_agreement',
@@ -109,12 +112,12 @@ export const RELEASABLE_DOCUMENTS: ReleasableDocument[] = [
     modeReason: 'Transfers possession and starts the warranty clock. Must be signed.'
   },
   {
-    kind: 'variation_order',
-    title: 'Variation Order',
-    purpose: 'Prices a change to agreed scope before it is built.',
+    kind: 'snag_list',
+    title: 'Snag List & Defect Report',
+    purpose: 'Every defect raised on site, and how each one was closed.',
     mode: 'signature',
     signable: true,
-    modeReason: 'Changes the contract value. Must be signed before the work is done.'
+    modeReason: 'Handover depends on it. Signing is the client agreeing the list is complete and closed.'
   }
 ];
 
@@ -197,6 +200,20 @@ export function getReleaseReadiness(
       }
       break;
     }
+    case 'snag_list': {
+      const snags = (ctx.snagList || []) as any[];
+      if (!snags.length) {
+        blockers.push('No snags have been recorded, so there is nothing for the client to sign off.');
+      }
+      const stillOpen = snags.filter(sn => sn.status !== 'resolved' && sn.status !== 'verified').length;
+      if (stillOpen > 0) {
+        /* A warning, not a blocker: a client may reasonably accept possession
+           with items outstanding, but the studio should be sending it knowingly. */
+        warnings.push(`${stillOpen} item${stillOpen === 1 ? ' is' : 's are'} still open. The client will be signing a list that is not fully closed.`);
+      }
+      break;
+    }
+
     case 'handover_docket': {
       if (!(ctx.snagList || []).length) {
         warnings.push('No snag items recorded. The docket will state that none were found.');
@@ -415,6 +432,37 @@ export function buildSnapshot(
       };
     }
 
+    case 'snag_list': {
+      /*
+        Frozen at release, like every other snapshot: the client signs the list
+        as it stood, not as it looks after someone edits a row next week.
+      */
+      const snags = (ctx.snagList || []) as any[];
+      const closed = (sn: any) => sn.status === 'resolved' || sn.status === 'verified';
+      return {
+        ...base,
+        snags: snags.map(sn => ({
+          roomName: sn.roomName || sn.roomId || 'Unassigned',
+          description: sn.description || sn.title || 'Item',
+          severity: sn.severity || 'medium',
+          status: sn.status,
+          raisedAt: sn.raisedAt || null,
+          resolvedAt: sn.resolvedAt || null,
+          notes: sn.notes || null,
+        })),
+        totalCount: snags.length,
+        closedCount: snags.filter(closed).length,
+        openCount: snags.filter(sn => !closed(sn)).length,
+        displayDate: new Date().toLocaleDateString('en-IN'),
+        org: {
+          orgName: opts?.orgName || null,
+          orgLogo: (opts as any)?.orgLogo || null,
+          officeAddress: opts?.officeAddress || null,
+          contactEmail: opts?.contactEmail || null,
+        }
+      };
+    }
+
     case 'onboarding_kit': {
       const milestones = context.paymentMilestones || [];
       const designFee = ctx.engagement?.designFee ?? context.financials?.approvedDesignValue ?? 0;
@@ -564,7 +612,7 @@ const makeReference = (kind: ClientDocumentKind, context: ProjectContext, versio
     execution_agreement: 'EA',
     onboarding_kit: 'OK',
     handover_docket: 'HD',
-    variation_order: 'VO'
+    snag_list: 'SNAG'
   };
   const year = new Date().getFullYear();
   return `${prefix}-${code[kind] || 'DOC'}-${year}-${String(version).padStart(2, '0')}`;
@@ -731,4 +779,47 @@ export function hasUnsignedAddendum(context: ProjectContext, kind: ClientDocumen
   const current = getCurrentIssue(context, kind);
   if (!current) return false;
   return getAddenda(context, current.id).some(a => !a.clientSignature);
+}
+
+// ---------------------------------------------------------------------------
+// ONE VOCABULARY
+// ---------------------------------------------------------------------------
+
+/**
+ * What to call a document's state, in words that match what it asked for.
+ *
+ * The same acknowledged Payment Schedule read "Signed" in the client portal,
+ * "CONFIRMED" on the studio board and "ACKNOWLEDGED BY CLIENT" on its own page.
+ * Three surfaces, three vocabularies, one fact — and "Signed" was simply wrong,
+ * because nobody signs an acknowledgement.
+ *
+ * Every surface takes its wording from here, so a state cannot be described one
+ * way in the studio and another way to the client.
+ */
+export function documentStatusLabel(
+  state: DocumentState | null | undefined,
+  kind: ClientDocumentKind,
+  audience: 'studio' | 'client' = 'studio',
+): string {
+  const mode = documentMode(kind);
+  const done = mode === 'signature' ? 'Signed' : 'Acknowledged';
+  const asks = mode === 'signature' ? 'sign' : 'confirm';
+
+  switch (state) {
+    case 'signed':
+      return audience === 'client' ? done : `${done} by client`;
+    case 'executed':
+      return 'Fully executed';
+    case 'queried':
+      return audience === 'client' ? 'Your question is with the studio' : 'Question open';
+    case 'amended':
+      return audience === 'client' ? 'Updated — please review' : 'Re-issued';
+    case 'viewed':
+      return audience === 'client' ? 'In progress' : 'Opened, not yet ' + (mode === 'signature' ? 'signed' : 'confirmed');
+    case 'issued':
+      return audience === 'client' ? `Ready to read & ${asks}` : 'Sent to client';
+    case 'draft':
+    default:
+      return audience === 'client' ? 'Not yet released' : 'Draft';
+  }
 }

@@ -21,6 +21,16 @@ export interface JourneyStepDef {
   prerequisiteIds: string[];
 }
 
+/*
+  `linkedTab` MUST be a route the app actually renders. The authoritative set
+  is components/navConfig.ts (NAV_CONFIG items + ALWAYS_ON_BAND) UNION
+  PROJECT_WORKFLOW_ROUTES in App.tsx — some routes, e.g. 'payment-schedule',
+  are reachable by setActiveTab without appearing in the nav.
+
+  Two entries here pointed at 'vision', which no route has ever handled, so
+  every "Go to" built on them silently did nothing. Check new values against
+  both lists, not just the nav.
+*/
 export const JOURNEY_STEPS: JourneyStepDef[] = [
   // PHASE 1 — ACQUISITION
   {
@@ -39,7 +49,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "discovery_completed", n: 3, phase: 0, title: "Discovery Completed",
     description: "Initial meeting concluded. Ready to begin design ideation.",
     illustration: "discovery_completed", statusSource: "manual",
-    autoRule: null, linkedFeature: "Vision Board", linkedTab: "vision", prerequisiteIds: ["discovery_scheduled"]
+    autoRule: null, linkedFeature: "Brief & Site", linkedTab: "leadiq", prerequisiteIds: ["discovery_scheduled"]
   },
 
   // PHASE 2 — DESIGN
@@ -47,7 +57,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "brief_frozen", n: 4, phase: 1, title: "Brief Frozen",
     description: "Client requirements, theme, and scope of work frozen.",
     illustration: "brief_frozen", statusSource: "auto",
-    autoRule: "project.briefFrozenAt exists", linkedFeature: "Project Setup", linkedTab: "dashboard", prerequisiteIds: ["discovery_completed"]
+    autoRule: "project.briefFrozenAt exists", linkedFeature: "Brief & Site", linkedTab: "leadiq", prerequisiteIds: ["discovery_completed"]
   },
   {
     id: "space_planning_presented", n: 5, phase: 1, title: "Space Planning Presented",
@@ -59,7 +69,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "space_planning_approved", n: 6, phase: 1, title: "Space Planning Approved",
     description: "Client has signed off on the 2D layout.",
     illustration: "space_planning_approved", statusSource: "manual",
-    autoRule: null, linkedFeature: "Vision Board", linkedTab: "vision", prerequisiteIds: ["space_planning_presented"]
+    autoRule: null, linkedFeature: "Drawing Tracker", linkedTab: "drawing-tracker", prerequisiteIds: ["space_planning_presented"]
   },
   {
     id: "visuals_3d_developed", n: 7, phase: 1, title: "3D Visuals Developed",
@@ -83,7 +93,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "design_approved", n: 10, phase: 1, title: "Design Approved",
     description: "Final client sign-off on 3D visuals and spatial design.",
     illustration: "design_approved", statusSource: "auto",
-    autoRule: "project.designApprovedAt exists", linkedFeature: "Signoffs", linkedTab: "dashboard", prerequisiteIds: ["revisions_incorporated"]
+    autoRule: "project.designApprovedAt exists", linkedFeature: "Design Gate", linkedTab: "design-gate", prerequisiteIds: ["revisions_incorporated"]
   },
   {
     id: "boq_shared", n: 11, phase: 1, title: "BOQ Shared",
@@ -229,22 +239,33 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "keys_handed_over", n: 33, phase: 5, title: "Keys Handed Over",
     description: "Physical possession transferred to client.",
     illustration: "keys_handed_over", statusSource: "manual",
-    autoRule: null, linkedFeature: "Dashboard", linkedTab: "dashboard", prerequisiteIds: ["handover_dossier_sent"]
+    autoRule: null, linkedFeature: "Handover Docket", linkedTab: "handover-docket", prerequisiteIds: ["handover_dossier_sent"]
   },
   {
     id: "warranty_activated", n: 34, phase: 5, title: "Warranty Activated",
     description: "Project reaches formal closed status and enters warranty period.",
     illustration: "warranty_activated", statusSource: "auto",
-    autoRule: "project.handoverDate exists AND all paymentMilestones status === 'PAID'", linkedFeature: "Project Settings", linkedTab: "dashboard", prerequisiteIds: ["keys_handed_over"]
+    autoRule: "project.handoverDate exists AND all paymentMilestones status === 'PAID'", linkedFeature: "Handover Docket", linkedTab: "handover-docket", prerequisiteIds: ["keys_handed_over"]
   }
 ];
 
 
+/**
+ * The name of each lifecycle stage, everywhere it is shown.
+ *
+ * This is the only place a stage is named. `NAV_CONFIG` in components/navConfig.ts
+ * derives its stage labels from here, so the stage stepper in the project bar and
+ * the workflow rail in the sidebar cannot drift apart — they did, and stage 5 read
+ * "Execution" in one and "Execution & Site" in the other on the same screen.
+ *
+ * Distinct from PHASES above: those are the six journey phases (0-indexed,
+ * Acquisition → Handover), which is a separate model with its own names.
+ */
 export const STAGE_LABELS: Record<number, string> = {
   1: "Initial Consultation",
   2: "Scope & Strategy",
   3: "Proposal & Revisions",
   4: "Agreement & Design",
-  5: "Execution",
+  5: "Execution & Site",
   6: "Handover & Closeout"
 };

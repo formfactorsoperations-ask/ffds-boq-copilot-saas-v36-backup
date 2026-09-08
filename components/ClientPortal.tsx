@@ -1,5 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import LockedState from './LockedState';
+import React, { useMemo, useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { 
     FullProjectData, 
     ProjectContext,
@@ -16,9 +15,27 @@ import {
 import { calculateSellPrice, formatINR } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useOrg } from '../contexts/OrgContext';
+import { useTimelinePhases } from '../hooks/useTimelinePhases';
 import { useStepProgress } from '../hooks/useStepProgress';
 import { usePaymentRequests, usePaymentOverdueCheck } from '../hooks/usePaymentRequests';
 import { db, functions } from '../services/firebaseClient';
+import { recordClientSignoff, recordManualSignoff } from '../services/decisionsService';
+import ClientDecisionCard from './client/ClientDecisionCard';
+import ClientAccountMenu from './client/ClientAccountMenu';
+import { buildClientBoqRows, groupClientBoq, ClientBoqRow } from '../lib/clientBoq';
+import { submitClientAction, ClientAction } from '../services/clientPortalActions';
+import { isVisibleToClient } from '../lib/clientVisibility';
+import PortalOverview from './client/PortalOverview';
+import PortalTimeline from './client/PortalTimeline';
+import { buildSpine, buildCatchUp, stageOfMilestone, AttachmentKind } from './client/spineModel';
+import { buildProgramme } from './client/programme';
+import PortalHero from './client/PortalHero';
+// DocumentsTable is deliberately not used: ClientDocumentVault already renders
+// the client's document record from the same issue engine, with versions,
+// queries and addenda a flat table cannot carry.
+import { DecisionsTable } from './client/PortalTables';
+import PortalPayments from './client/PortalPayments';
+import { issuePortalAccess } from '../services/portalAccessService';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { 
@@ -26,12 +43,18 @@ import {
     calculateClientActionItems, 
     getUpcomingStudioSteps, 
     ClientActionItem,
-    AgreementStatus
+    AgreementStatus,
+    decisionNature
 } from '../services/clientPortalEngine';
 import { buildSignoffPatch, buildDisputePatch, resolveApprovals, AgreementKind } from '../services/clientApprovalEngine';
 import DocumentReadingRoom from './client/DocumentReadingRoom';
+import { FFDSLogo } from './FFDSLogo';
+import BoqVersionCompare from './client/BoqVersionCompare';
+import { describeVersions } from '../lib/boqVersions';
+import { buildBankMap } from '../lib/boqPricing';
 import ClientDocumentVault from './client/ClientDocumentVault';
 import { ClientMoMViewerModal } from './client/ClientMoMViewerModal';
+import { PWAInstallPrompt } from './PWAInstallPrompt';
 import {
     getCurrentIssue,
     recordDocumentView,
@@ -41,6 +64,16 @@ import {
 } from '../services/documentIssueEngine';
 import { raiseQuery, getOpenQueries } from '../services/documentQueryEngine';
 import { ClientDocumentKind } from '../types';
+
+/**
+ * Every view the portal can show. The five in PORTAL_LENSES are navigable; the
+ * rest are opened by an action. `timeline` was being set without being in this
+ * union, which type-checked only because the dev server does not typecheck.
+ */
+type PortalTab =
+    | 'overview' | 'timeline' | 'decisions' | 'documents' | 'financials'
+    | 'approvals' | 'roadmap' | 'feed' | 'designs' | 'materials' | 'scope'
+    | 'designScope';
 import DigitalSignatureDocketView from './common/DigitalSignatureDocket';
 import { 
     LayoutDashboard, 
@@ -50,7 +83,9 @@ import {
     CheckCircle2, 
     AlertCircle, 
     Clock, 
+    ChevronLeft,
     ChevronRight,
+    CheckSquare,
     ChevronDown,
     FileText,
     ArrowRight,
@@ -62,13 +97,11 @@ import {
     LogOut,
     Sparkles,
     ExternalLink,
-    PhoneCall,
     Mail,
     Activity,
     GitMerge,
     Image as ImageIcon,
     Camera,
-    PlusCircle,
     MinusCircle,
     FileEdit,
     Folder,
@@ -78,8 +111,6 @@ import {
     HelpCircle,
     ShieldCheck,
     Printer,
-    CheckSquare,
-    Copy,
     Search,
     Maximize2,
     Eye,
@@ -127,17 +158,125 @@ interface ClientPortalProps {
     bank: Item[];
     onLogout?: () => void;
     onProjectUpdate?: (project: FullProjectData) => void;
+    /**
+     * Where projectData came from.
+     *
+     * 'studio' is the preview inside the ops app: the live project, with tiers,
+     * timeline and the studio's tenant in context. 'client' is a signed-in
+     * client's own session, whose projectData is the published projection and
+     * nothing else — one document, by design.
+     *
+     * The distinction matters because this screen also reads Firestore directly
+     * for site visits, meeting notes, step progress, timeline phases and
+     * payment requests. Those paths are keyed by tenant, and a client has no
+     * tenant, so in a client session they would resolve against
+     * 'demo-tenant-01' — the wrong studio — and be refused. Worse, if they ever
+     * were readable they would bypass the projection entirely, which is the one
+     * thing that makes "not published" mean "not sent".
+     */
+    source?: 'studio' | 'client';
+    /*
+      The scope rows App is sending to the client, for the studio's preview.
+
+      Without this the preview fell back to deriving its own rows, and that
+      derivation has no previous version to compare against — so the preview
+      showed no New or Revised markers while the client's copy showed them.
+      A preview whose job is "what exactly the client sees" cannot be assembled
+      a second way; it takes the same array that gets stored.
+    */
+    clientBoq?: ClientBoqRow[];
 }
 
-export default function ClientPortal({ projectData, bank, onLogout, onProjectUpdate }: ClientPortalProps) {
+export default function ClientPortal({ projectData, bank, onLogout, onProjectUpdate, source = 'studio', clientBoq }: ClientPortalProps) {
     const isInternalStudioView = !onLogout;
-    const isD1Paid = projectData?.context?.paymentMilestones?.some(m => (m.id === 'd1' || (m as any).phase === 'signup') && m.status === 'paid');
+
+    /*
+      The raised pill on the lens bar, measured rather than shared-layout.
+
+      `layoutId` was the obvious way to do this and it did not animate at all —
+      transform stayed `none` through the whole transition and the pill simply
+      snapped to the new tab. Measuring the active button and animating one
+      persistent element is deterministic: it cannot silently do nothing.
+    */
+    const lensTrackRef = useRef<HTMLDivElement>(null);
+    const [lensPill, setLensPill] = useState<{ left: number; width: number } | null>(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
+
+    const checkNavScroll = () => {
+        const el = lensTrackRef.current;
+        if (!el) return;
+        setCanScrollLeft(el.scrollLeft > 6);
+        setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 6);
+    };
+
+    const scrollLens = (direction: 'left' | 'right') => {
+        if (!lensTrackRef.current) return;
+        lensTrackRef.current.scrollBy({
+            left: direction === 'left' ? -150 : 150,
+            behavior: 'smooth'
+        });
+    };
+
+
+    /**
+     * A link the client can actually open, copied to the clipboard.
+     *
+     * Reuses the project's live token so an already-issued link keeps working;
+     * mints and persists one when there is none, or when the last one has
+     * lapsed. Minting invalidates whatever was sent before, which is the
+     * intended way to revoke a link that went to the wrong inbox.
+     */
+    const copyClientLink = async () => {
+        const existing = (context as any)?.portalAccess as
+            | { token: string; expiresAt?: string }
+            | undefined;
+        const live =
+            existing?.token &&
+            (!existing.expiresAt || new Date(existing.expiresAt).getTime() > Date.now());
+
+        let token = existing?.token;
+        if (!live) {
+            const access = issuePortalAccess(projectData.id, (context as any)?.clientEmail);
+            token = access.token;
+            onProjectUpdate?.({
+                ...projectData,
+                context: { ...(context as any), portalAccess: access },
+                lastModified: Date.now(),
+            } as any);
+        }
+
+        const link = `${window.location.origin}/?portal=${token}`;
+        try {
+            await navigator.clipboard?.writeText(link);
+            setSignSuccessMessage(
+                live ? 'Client link copied' : 'New client link copied — any earlier link has stopped working',
+            );
+        } catch {
+            setSignSuccessMessage(link);
+        }
+        setTimeout(() => setSignSuccessMessage(null), 6000);
+    };
 
     const { orgData } = useOrg();
     const { settings } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
     const studioCompanyName = settings?.companyName || orgData?.orgName || 'Form Factors Design Studio';
+    /*
+      Bank details reach a client through the portal projection the studio
+      writes, not by the client reading studioSettings — that collection also
+      holds team emails and GSTIN and is no longer world-readable. The hook is
+      the fallback for the studio's own preview.
+    */
+    const bankDetails = (projectData?.context as any)?.portalStudio?.bankDetails
+        || (settings as any)?.bankDetails
+        || null;
+
     const primaryThemeColor = settings?.primaryColor || orgData?.themeColor || '#0f172a';
-    const { context: propContext, tiers, timeline = [] } = projectData;
+    /* `tiers` defaults because the projection does not carry any — it holds no
+       rates and no BOQ by design. Without the default, `tiers.find(...)` below
+       throws on the client's very first render and the portal is replaced by
+       the error screen. */
+    const { context: propContext, tiers = [], timeline = [] } = projectData;
     const [localContext, setLocalContext] = useState<ProjectContext>(propContext);
 
     useEffect(() => {
@@ -152,13 +291,77 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const siteUpdates = context.siteUpdates || [];
     const materialSelections = context.materialSelections || [];
     const designDocuments = context.designDocuments || [];
-    const studioId = orgData?.tenantId || 'demo-tenant-01';
-    
+    /* Empty in a client session, which is what switches off every direct
+       Firestore read on this screen: the two listeners below and all three
+       hooks already bail on a blank studioId. The client's copy comes from the
+       projection instead. */
+    const studioId = source === 'client' ? '' : (orgData?.tenantId || 'demo-tenant-01');
+
     const { steps: stepProgressSteps } = useStepProgress(projectData.id, studioId);
+
+    /**
+     * The project's own design phases — the same Firestore collection the
+     * studio's Timeline tab reads. Without these the portal was calling
+     * `buildScheduleFromProject` with no `designSteps`, which falls back to a
+     * generic five-step template anchored to today; that is why the portal drew
+     * a programme starting this month while the studio's Gantt showed the real
+     * anchor of 27 Jul 2026.
+     */
+    const { phases: designPhases } = useTimelinePhases(projectData.id, studioId);
     usePaymentOverdueCheck(projectData.id, studioId);
     
-    // Active Tab State
-    const [activeTab, setActiveTab] = useState<'overview' | 'approvals' | 'documents' | 'roadmap' | 'feed' | 'designs' | 'decisions' | 'materials' | 'scope' | 'financials'>('overview');
+    // Active Tab State.
+    // Five of these are lenses the client can navigate to (see PORTAL_LENSES).
+    // The rest are destinations only — reached by acting on something, never by
+    // browsing. `signing` and `scope` open because an item sent the client
+    // there; they are not places to wander into.
+    const [activeTab, setActiveTab] = useState<PortalTab>('overview');
+
+    /**
+     * A general question about a whole document.
+     *
+     * raiseQuery was only reachable from inside the Reading Room, against a
+     * specific clause — so a client who simply wanted to ask about a document
+     * had to open it, find a clause and comment on that. This asks about the
+     * document itself, and lands in the same query inbox ops already has.
+     */
+    const [questionFor, setQuestionFor] = useState<ClientDocumentKind | null>(null);
+    const [questionText, setQuestionText] = useState('');
+
+    /**
+     * Which half of Design & Scope is showing.
+     *
+     * Stacked, the drawings grid and a full room-by-room BOQ made one lens the
+     * length of three screens. They are two different questions — "what will it
+     * look like" and "what am I getting" — so they get two sub-tabs rather than
+     * a scroll.
+     */
+    const [designScopeTab, setDesignScopeTab] = useState<'drawings' | 'scope'>('drawings');
+
+    /** The scope revision history, and whether the compare modal is open. */
+    const [showBoqVersions, setShowBoqVersions] = useState(false);
+    /* Bank plus the project's own ad-hoc items — the same map App.tsx prices
+       tiers with. Without the ad-hoc items, any line added outside the bank
+       resolves to no name and no rate. */
+    const boqBankMap = useMemo(
+        () => buildBankMap(bank as any, (context as any).adHocItems),
+        [bank, (context as any).adHocItems],
+    );
+    const boqVersionSet = useMemo(
+        () => describeVersions(tiers as any, boqBankMap, {
+            approvedTierId: context.approvedTierId,
+            activeTierId: projectData.activeTierId,
+            revisionCount: (context.boqRevisions || []).length,
+        }),
+        [tiers, boqBankMap, context.approvedTierId, projectData.activeTierId, context.boqRevisions],
+    );
+    const boqVersions = boqVersionSet.versions;
+
+    /** Scopes the spine to one kind of thing. 'all' is the resting state. */
+    const [spineFilter, setSpineFilter] = useState<AttachmentKind | 'all'>('all');
+
+    /** The catch-up panel: opened from the hero, rendered under the lens bar. */
+    const [catchOpen, setCatchOpen] = useState(false);
     
     // In-Portal Digital Signing & Approvals State
     // The Reading Room replaces the old signing modal, which showed hardcoded
@@ -174,6 +377,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         setReadingRoomKind(kind);
         setReadingRoomIssueId(issueId);
         setProjectContext(recordDocumentView(kind));
+        persistClientAction({ type: 'documentView', kind });
     };
 
     /** Maps the agreement vocabulary used across the portal to a document kind. */
@@ -203,7 +407,6 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
 
     // Modals & Lightbox State
     const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
-    const [showBankDetailsModal, setShowBankDetailsModal] = useState(false);
     const [showContactModal, setShowContactModal] = useState(false);
     const [clientMessageText, setClientMessageText] = useState('');
     const [clientMessageSent, setClientMessageSent] = useState(false);
@@ -226,8 +429,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                 // Strict filter: never expose cancelled, internal, vendor, or private meetings/logs to client
                 setSyncedVisits(list.filter(v => {
                     if (v.status === 'cancelled') return false;
-                    if (v.isInternal === true || v.isPrivate === true || v.clientVisible === false || v.shareWithClient === false) return false;
-                    if (v.visibility === 'internal' || v.visibility === 'private') return false;
+                    if (!isVisibleToClient(v)) return false;
                     const typeStr = String(v.type || '').toLowerCase();
                     if (typeStr === 'internal_meeting' || typeStr === 'internal' || typeStr === 'vendor_meeting' || typeStr === 'vendor' || typeStr === 'internal_review' || typeStr === 'contractor_meeting') {
                         return false;
@@ -258,8 +460,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                 snap.forEach(d => list.push({ id: d.id, ...d.data() }));
                 setSyncedMoms(list.filter(m => {
                     if (m.status === 'draft' && !m.sharedAt) return false;
-                    if (m.isInternal === true || m.isPrivate === true || m.clientVisible === false || m.shareWithClient === false) return false;
-                    if (m.visibility === 'internal' || m.visibility === 'private') return false;
+                    if (!isVisibleToClient(m)) return false;
                     const typeStr = String(m.meetingType || m.type || '').toLowerCase();
                     if (typeStr === 'internal_meeting' || typeStr === 'internal' || typeStr === 'vendor_meeting' || typeStr === 'vendor' || typeStr === 'internal_review') return false;
                     const titleStr = String(m.meetingTitle || m.title || '').toLowerCase();
@@ -285,11 +486,36 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const [newDecisionDesc, setNewDecisionDesc] = useState('');
     const [newDecisionRoom, setNewDecisionRoom] = useState('');
 
+    /*
+      Persist one client action through the server.
+
+      The local view is updated first, by the same engines, so the client sees
+      an immediate response. This is the durable half — and if it is refused,
+      the view they are looking at is wrong, so the failure is said out loud
+      rather than logged. The studio preview persists the old way: it is the
+      studio's own session, writing their own project.
+    */
+    const persistClientAction = (action: ClientAction) => {
+        if (source !== 'client') return;
+        submitClientAction(projectData.id, action).catch((err: any) => {
+            console.error('Client action was refused', action, err);
+            alert(
+                'That could not be saved. Please tell your studio rather than assuming it went through.\n\n' +
+                (err?.message || 'Unknown error'),
+            );
+        });
+    };
+
     const setProjectContext = (updater: any) => {
         const current = localContext || projectData.context;
         const nextContext = typeof updater === 'function' ? updater(current) : updater;
         setLocalContext(nextContext);
-        if (onProjectUpdate) {
+        /*
+          A client session never saves the project document. Its changes travel
+          as actions through persistClientAction, which is the only path the
+          rules still allow.
+        */
+        if (source !== 'client' && onProjectUpdate) {
             setTimeout(() => {
                 onProjectUpdate({
                     ...projectData,
@@ -318,7 +544,9 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
 
     const [operativeBoq, setOperativeBoq] = useState<any>(null);
     useEffect(() => {
-        if (context.operativeBoqVersion && projectData.id && functions) {
+        // studioId gates this too: the callable takes an orgId, and a client
+        // session has none to give.
+        if (context.operativeBoqVersion && projectData.id && studioId && functions) {
             const getBoq = httpsCallable(functions, 'getOperativeBoq');
             getBoq({ orgId: studioId, projectId: projectData.id })
                 .then(res => setOperativeBoq(res.data))
@@ -346,105 +574,45 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
 
     const clientSchedule = useMemo(() => {
         if (customSchedule) return customSchedule;
-        return buildScheduleFromProject(projectData.context, displayBoq);
-    }, [customSchedule, projectData.context, displayBoq]);
+        // Same arguments the studio's Timeline passes, so both derive the
+        // identical schedule rather than two different ones.
+        return buildScheduleFromProject(projectData.context, displayBoq, {
+            designSteps: designPhases as any,
+        });
+    }, [customSchedule, projectData.context, displayBoq, designPhases]);
 
     // --- BOQ CATEGORIZATION & REVISIONS ---
     const boqRevisions = context.boqRevisions || [];
 
+    /*
+        The scope, from whichever source this session actually has.
+
+        A signed-in client has no tiers and no item bank — they read a stored
+        projection — so deriving the BOQ here returned {} for them and the scope
+        tab was empty. The projection now carries `clientBoq`, already reduced to
+        client-safe rows, and it is preferred whenever present.
+
+        Both paths end in the same rows from the same function, so the studio's
+        preview shows precisely what the client is looking at rather than
+        something assembled a second way.
+    */
     const boqByCategory = useMemo(() => {
+        // The client's own session: exactly what was sent, nothing derived.
+        const stored = (context as any).clientBoq as ClientBoqRow[] | undefined;
+        if (stored?.length) return groupClientBoq(stored);
+
+        // The studio's preview: the same rows, before they are sent.
+        if (clientBoq?.length) return groupClientBoq(clientBoq);
+
         if (!activeTier) return {};
 
-        const validRoomNames = new Set(projectData.context.rooms?.map(r => r.name) || []);
-        const bankMap = new Map<string, any>(bank.map(b => [b.id, b]));
-
-        const baselineBoq: any[] = displayBoq.map((item: any, idx: number) => {
-            const bankItem = bankMap.get(item.bankId);
-            
-            const itemTitle = item.item || item.name || bankItem?.name || 'Deliverable Item';
-            const itemCat = item.cat || item.category || bankItem?.cat || 'General Scope';
-            const itemUnit = item.unit || bankItem?.unit || 'nos';
-            const itemSpecs = item.description || item.specs || item.rationale || bankItem?.specs || '';
-            const itemQty = item.qty !== undefined ? item.qty : 1;
-
-            let sellPrice = 0;
-            if (item.rate !== undefined && Number(item.rate) > 0) {
-                sellPrice = Number(item.rate);
-            } else if (item.selectedRate !== undefined && Number(item.selectedRate) > 0) {
-                sellPrice = Number(item.selectedRate);
-            } else if (item.sellPrice !== undefined && Number(item.sellPrice) > 0) {
-                sellPrice = Number(item.sellPrice);
-            } else if (bankItem) {
-                const materials = item.materials ?? item.baseRate ?? bankItem.materials;
-                const labor = item.labor ?? bankItem.labor;
-                const margin = item.marginOverride ?? item.margin ?? bankItem.margin;
-                sellPrice = calculateSellPrice(materials, labor, margin);
-            } else if (item.total && itemQty > 0) {
-                sellPrice = Number(item.total) / itemQty;
-            }
-
-            const totalVal = item.total !== undefined ? Number(item.total) : (sellPrice * itemQty);
-
-            const groupKey = (item.roomId && validRoomNames.has(item.roomId)) 
-                ? item.roomId 
-                : (item.roomId || (validRoomNames.has(itemCat) ? itemCat : 'General Scope'));
-
-            return {
-                ...item,
-                id: item.id || `boq-item-${item.bankId || 'item'}-${idx}`,
-                roomId: groupKey,
-                item: itemTitle,
-                cat: itemCat,
-                unit: itemUnit,
-                qty: itemQty,
-                rate: sellPrice,
-                total: totalVal,
-                description: itemSpecs,
-                status: item.status || 'Approved'
-            };
-        }).filter(Boolean);
-
-        let workingBoq = JSON.parse(JSON.stringify(baselineBoq));
-
-        boqRevisions.forEach(action => {
-            if (action.type === 'ADD') {
-                workingBoq.push({
-                    id: action.id,
-                    roomId: action.section,
-                    item: action.item,
-                    unit: action.newValue?.unit || 'nos',
-                    qty: action.newValue?.qty || 1,
-                    rate: action.newValue?.rate || 0,
-                    total: (action.newValue?.qty || 1) * (action.newValue?.rate || 0),
-                    status: 'Added',
-                    description: action.note,
-                });
-            } else {
-                const targetIndex = workingBoq.findIndex((i: any) => action.targetId ? i.id === action.targetId : (i.roomId === action.section && i.item === action.item));
-                if (targetIndex >= 0) {
-                    if (action.type === 'REMOVE') {
-                        workingBoq[targetIndex].status = 'Removed';
-                        workingBoq[targetIndex].qty = 0;
-                        workingBoq[targetIndex].total = 0;
-                    } else if (action.type === 'REVISE_QTY') {
-                        workingBoq[targetIndex].qty = action.newValue;
-                        workingBoq[targetIndex].total = action.newValue * workingBoq[targetIndex].rate;
-                        workingBoq[targetIndex].status = 'Revised';
-                    }
-                }
-            }
-        });
-
-        const grouped: Record<string, any[]> = {};
-        workingBoq.forEach((item: any) => {
-            if (item.status === 'Removed' && item.qty === 0) return;
-            const groupKey = item.roomId || 'General Scope';
-            if (!grouped[groupKey]) grouped[groupKey] = [];
-            grouped[groupKey].push(item);
-        });
-
-        return grouped;
-    }, [activeTier, bank, projectData.context.rooms, boqRevisions, displayBoq]);
+        return groupClientBoq(buildClientBoqRows({
+            boq: displayBoq,
+            bank: bank as any,
+            rooms: projectData.context.rooms as any,
+            revisions: boqRevisions,
+        }));
+    }, [activeTier, bank, projectData.context.rooms, boqRevisions, displayBoq, (context as any).clientBoq, clientBoq]);
 
     // Flat list and categorization helpers for Focus Scope View
     const flatBoqList = useMemo(() => {
@@ -546,25 +714,50 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const milestones = context.paymentMilestones || [];
     let totalPaid = initiationFee;
     
+    /**
+     * What one milestone is worth to the client.
+     *
+     * This has to agree with the studio's Money tab to the rupee, and it did
+     * not: the portal computed in full precision while PaymentCalculatorTab
+     * rounds at every step, and the portal ignored the initiation fee that the
+     * Money tab deducts from the first design invoice. So the client's portal
+     * showed ₹2,45,708 where the studio's own screen showed ₹2,44,571, and a
+     * gross ₹50,000 where the studio showed ₹45,001 net of the retainer.
+     *
+     * The rounding below is deliberate and mirrors PaymentCalculatorTab line
+     * for line. Two screens quoting different figures for the same invoice is
+     * worse than either figure being slightly off.
+     */
     const calculateMilestoneTotal = (m: PaymentMilestone) => {
-        let baseAmount = taxableExecution;
-        if (m.type === 'design') baseAmount = taxableDesign;
+        const isFirstDesign =
+            m.type === 'design' &&
+            milestones.filter(x => x.type === 'design').indexOf(m) === 0;
+
+        let baseAmount = m.type === 'design' ? taxableDesign : taxableExecution;
         if (m.lockedTaxableBase !== undefined) baseAmount = m.lockedTaxableBase;
-        
-        const rowBaseOriginal = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : baseAmount * (m.percentage / 100);
-        
-        let rowBillable = rowBaseOriginal;
-        let rowCash = 0;
-        let applicableGstRate = gstRate;
-        
+
+        const rowBaseOriginal = Math.round(
+            m.isFixedAmount && m.fixedAmount !== undefined
+                ? m.fixedAmount
+                : baseAmount * (m.percentage / 100),
+        );
+
         if (m.type === 'execution') {
-            rowBillable = rowBaseOriginal * (billablePercent / 100);
-            rowCash = rowBaseOriginal * (Math.max(0, 100 - billablePercent) / 100);
-            if (!executionGstEnabled) applicableGstRate = 0;
+            const rowBillable = Math.round(rowBaseOriginal * (billablePercent / 100));
+            const rowCash = Math.round(rowBaseOriginal * ((100 - billablePercent) / 100));
+            const rate = executionGstEnabled ? gstRate : 0;
+            const rowGST = Math.round(rowBillable * (rate / 100));
+            return Math.round(rowBillable + rowGST) + rowCash;
         }
-        
-        const rowGST = rowBillable * (applicableGstRate / 100);
-        return rowBillable + rowCash + rowGST;
+
+        const rowGST = Math.round(rowBaseOriginal * (gstRate / 100));
+        const rowInvoiceTotal = Math.round(rowBaseOriginal + rowGST);
+
+        // The retainer already collected comes off the first design invoice,
+        // exactly as the Money tab shows it.
+        return isFirstDesign && initiationFee > 0
+            ? Math.max(0, rowInvoiceTotal - initiationFee)
+            : rowInvoiceTotal;
     };
 
     milestones.forEach(m => {
@@ -632,7 +825,8 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             'onboarding_kit', 'handover_docket'
         ];
         return kinds.filter(k => {
-            const st = resolveDocumentState(context, k);
+            // The client's badge counts what the client can see.
+            const st = resolveDocumentState(context, k, { clientView: true });
             return st === 'issued' || st === 'amended';
         }).length;
     }, [context]);
@@ -640,6 +834,8 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     // --- ACTION REQUIRED ITEMS ---
     const pendingUpdates = displayUpdates.filter(u => u.status === 'pending_approval');
     const pendingClientDecisions = decisions.filter(d => d.status === 'proposed' || d.status === 'pending');
+    // What the outstanding decisions are worth, together.
+    const pendingDecisionCost = pendingClientDecisions.reduce((sum, d) => sum + (Number(d.impactCost) || 0), 0);
     
     const duePayments = milestones.filter(m => m.status === 'invoiced').map(m => {
         return {
@@ -864,9 +1060,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         // 1. Site Log Photos & Updates from Ops (client-visible only)
         siteUpdates.forEach((su, idx) => {
             const suAny = su as any;
-            if (suAny.isInternal === true || suAny.visibility === 'internal' || suAny.visibility === 'private' || suAny.clientVisible === false) {
-                return;
-            }
+            if (!isVisibleToClient(suAny)) return;
             const feedId = `su-${su.id || idx}`;
             if (!seenIds.has(feedId)) {
                 seenIds.add(feedId);
@@ -949,12 +1143,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             processedMomIds.add(momKey);
 
             // Guard: completely exclude any internal/vendor meeting notes or unshared drafts
-            if (mom.isInternal === true || mom.isPrivate === true || mom.clientVisible === false || mom.shareWithClient === false) {
-                return;
-            }
-            if (mom.visibility === 'internal' || mom.visibility === 'private') {
-                return;
-            }
+            if (!isVisibleToClient(mom)) return;
             const mType = String(mom.meetingType || mom.type || '').toLowerCase();
             if (mType === 'internal' || mType === 'internal_meeting' || mType === 'vendor' || mType === 'vendor_meeting' || mType === 'internal_review') {
                 return;
@@ -1008,12 +1197,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         // 6. Synced Meetings & Site Visits from Firestore Project Subcollection (strictly client-facing only)
         syncedVisits.forEach((v: any, idx: number) => {
             // Guard: completely exclude any internal/vendor meetings or non-client logs
-            if (v.isInternal === true || v.isPrivate === true || v.clientVisible === false || v.shareWithClient === false) {
-                return;
-            }
-            if (v.visibility === 'internal' || v.visibility === 'private') {
-                return;
-            }
+            if (!isVisibleToClient(v)) return;
             const typeStr = String(v.type || '').toLowerCase();
             if (typeStr === 'internal_meeting' || typeStr === 'internal' || typeStr === 'vendor_meeting' || typeStr === 'vendor' || typeStr === 'internal_review' || typeStr === 'contractor_meeting') {
                 return;
@@ -1115,12 +1299,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         // 7. Site Visits from context (strictly client-facing only)
         const siteVisits = (context as any).siteVisits || [];
         siteVisits.forEach((sv: any, idx: number) => {
-            if (sv.isInternal === true || sv.isPrivate === true || sv.clientVisible === false || sv.shareWithClient === false) {
-                return;
-            }
-            if (sv.visibility === 'internal' || sv.visibility === 'private') {
-                return;
-            }
+            if (!isVisibleToClient(sv)) return;
             const svType = String(sv.type || '').toLowerCase();
             if (svType === 'internal_meeting' || svType === 'internal' || svType === 'vendor_meeting' || svType === 'vendor' || svType === 'internal_review' || svType === 'contractor_meeting') {
                 return;
@@ -1200,21 +1379,326 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     }, [liveFeed, feedCategoryFilter, feedSearchQuery]);
 
     // --- ACTIONS & HANDLERS ---
-    const handleApproveDecisionOption = (decisionId: string, selectedOption: string) => {
-        const updatedDecisions = decisions.map(d => {
-            if (d.id === decisionId) {
-                return {
-                    ...d,
-                    status: 'confirmed' as const,
-                    selectedOption: selectedOption,
-                };
-            }
-            return d;
+    /**
+     * Client approves a decision.
+     *
+     * The decision ledger in Firestore is the source of truth — the studio's
+     * Decisions table reads it directly, and `projectDecisions` here is only a
+     * projection of it. Flipping the projection alone (which is all this used to
+     * do) left the studio still seeing the decision as awaiting the client, and
+     * the next projection refresh overwrote the approval entirely. So write to
+     * the ledger first, then update locally for immediate feedback.
+     *
+     * An unauthenticated client goes through the signoff token, which is the
+     * only path Firestore rules allow them; the studio's own portal view is
+     * authenticated and records a manual sign-off instead.
+     */
+    /**
+     * Carry out whatever a client action asks for.
+     *
+     * Defined at component scope because both the overview and the approvals
+     * hub offer the same actions — when this lived inside the approvals tab,
+     * the overview could only link across to it rather than act.
+     */
+    /**
+     * The spine's contents: every real record on this project, hung off the
+     * stage it belongs to. Built here rather than inside the overview so the
+     * lens bar can count what a filter would show before the filter is used.
+     *
+     * The action callbacks are captured lazily — they are declared below this
+     * point and only ever run from a click.
+     */
+    /**
+     * The project's real dated programme — the same schedule the studio's own
+     * Timeline tab draws, which this portal was already loading into
+     * `clientSchedule` and then ignoring. Both the spine's month column and the
+     * Gantt read it, so the two can never disagree.
+     */
+    const programme = useMemo(
+        // Real dates, not ours to move, whenever the schedule is anchored to
+        // something the studio set — a saved schedule, or design phases with
+        // their own start dates.
+        () => buildProgramme(clientSchedule, lifecycleInfo, !!customSchedule || designPhases.length > 0),
+        [clientSchedule, customSchedule, designPhases, lifecycleInfo],
+    );
+
+    /**
+     * Drawings, grouped into revision sets.
+     *
+     * `designDocuments` is a flat array — re-issuing "Living Room OP1" simply
+     * appends another row, so the client saw two entries with the same name and
+     * no way to tell which one was current. Grouping by room + title turns that
+     * into a revision chain from data that was already there: newest is the live
+     * sheet, the rest are history.
+     *
+     * This is deliberately derived rather than stored. Giving drawings real
+     * DocumentIssues would also give them the redline and the re-approval flow,
+     * but that needs a release action on the ops side; until then, showing the
+     * revisions that exist beats pretending each upload is a separate drawing.
+     */
+    const drawingSets = useMemo(() => {
+        /*
+          Published only. Nothing reaches a client by default.
+
+          This briefly grandfathered anything without a visibility state, on the
+          reasoning that records predating the gate should stay put. The studio's
+          rule is the opposite and it is the safer one: ops decides what a client
+          sees, every time, and an un-migrated record is not a decision. Existing
+          drawings become visible the moment ops runs "Publish everything up to
+          today", which is one click and leaves an audit trail.
+        */
+        const visible = (context.designDocuments || []).filter(isVisibleToClient as any);
+        const groups = new Map<string, any[]>();
+        visible.forEach((d: any) => {
+            const key = `${(d.roomName || 'Overall').trim().toLowerCase()}|${(d.title || 'Drawing').trim().toLowerCase()}`;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key)!.push(d);
         });
+        return [...groups.values()]
+            .map(items => {
+                const ordered = [...items].sort(
+                    (a, b) => new Date(b.addedAt || 0).getTime() - new Date(a.addedAt || 0).getTime());
+                return {
+                    key: ordered[0].id || ordered[0].title,
+                    current: ordered[0],
+                    older: ordered.slice(1),
+                    revision: ordered.length,
+                    roomName: ordered[0].roomName || 'Overall',
+                    title: ordered[0].title || 'Drawing',
+                };
+            })
+            .sort((a, b) =>
+                new Date(b.current.addedAt || 0).getTime() - new Date(a.current.addedAt || 0).getTime());
+    }, [context.designDocuments]);
+
+    const spinePhases = useMemo(() => buildSpine({
+        context,
+        lifecycle: lifecycleInfo,
+        programme,
+        milestones,
+        decisions,
+        milestoneAmount: calculateMilestoneTotal,
+        clientActions: clientActionSummary.clientActions,
+        onRunAction: (item) => runClientAction(item),
+        onOpenDecision: () => setActiveTab('decisions'),
+        onOpenDocument: (kind) => openDocument(kind),
+    }), [context, lifecycleInfo, programme, milestones, decisions, clientActionSummary]);
+
+    const catchUp = useMemo(() => buildCatchUp({
+        clientActions: clientActionSummary.clientActions,
+        milestones,
+        milestoneAmount: calculateMilestoneTotal,
+        decisions,
+        context,
+    }), [clientActionSummary, milestones, decisions, context]);
+
+    /**
+     * The handover month, but only when the programme actually carries one.
+     * An ETA the studio has not committed to is worse than no ETA: the client
+     * plans around it and the studio never agreed to it.
+     */
+    /**
+     * Handover month, from the schedule's own target or its computed finish.
+     * Absent when there is no schedule — an ETA the studio never committed to
+     * is worse than none, because the client plans around it.
+     */
+    const handoverEta = programme.handoverLabel;
+
+    /**
+     * The portal's navigation — the five lenses from the approved design.
+     *
+     * The eleven that were here came from the sidebar this replaced, and most
+     * were categories of the studio's filing rather than questions a client
+     * asks: Approvals, Site feed, Drawings, Materials, Scope & BOQ and Roadmap
+     * were all reachable at once, so the row read as a system's menu.
+     *
+     * Those views still exist and still hold real content — they are now
+     * reached from the thing that needs them (an item in "Waiting on you", a
+     * document in the file, a link from the overview) instead of being browsed.
+     * Adding a lens here means claiming a client would go looking for it.
+     */
+    const PORTAL_LENSES: {
+        id: PortalTab; label: string; badge?: () => number;
+        dividerBefore?: boolean;
+        /** True when the count is something the client must clear, not a total. */
+        urgent?: boolean;
+    }[] = [
+        { id: 'overview',   label: 'Everything' },
+        { id: 'timeline',   label: 'Timeline' },
+        { id: 'decisions',  label: 'Decisions',  dividerBefore: true, urgent: true, badge: () => pendingClientDecisions.length },
+        { id: 'documents',  label: 'Documents',  urgent: true, badge: () => documentsNeedingAttention },
+        { id: 'financials', label: 'Payments',   urgent: true, badge: () => duePayments.length },
+        /*
+          Drawings and the approved BOQ.
+
+          These were two tabs in the old portal and were orphaned when the lens
+          bar was cut to five — the code stayed, nothing linked to it. They are
+          back as one lens rather than as a group inside Documents, because a
+          client looking for "what does my home look like and what am I getting"
+          should not have to find it filed under paperwork.
+        */
+        { id: 'designScope', label: 'Design & Scope', badge: () => drawingSets.length },
+    ];
+
+    useLayoutEffect(() => {
+        const track = lensTrackRef.current;
+        if (!track) return;
+        const measure = () => {
+            const el = track.querySelector<HTMLElement>(`[data-lens="${activeTab}"]`);
+            if (!el) { setLensPill(null); return; }
+            const next = { left: el.offsetLeft, width: el.offsetWidth };
+            setLensPill(prev =>
+                prev && Math.abs(prev.left - next.left) < 0.5 && Math.abs(prev.width - next.width) < 0.5
+                    ? prev
+                    : next);
+            checkNavScroll();
+        };
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(track);
+        return () => ro.disconnect();
+    }, [activeTab, pendingClientDecisions.length, documentsNeedingAttention, duePayments.length, drawingSets.length]);
+
+    useEffect(() => {
+        const track = lensTrackRef.current;
+        if (!track) return;
+        checkNavScroll();
+        const onScroll = () => checkNavScroll();
+        track.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', onScroll);
+        
+        // Auto scroll selected tab into view on mobile
+        const el = track.querySelector<HTMLElement>(`[data-lens="${activeTab}"]`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+
+        return () => {
+            track.removeEventListener('scroll', onScroll);
+            window.removeEventListener('resize', onScroll);
+        };
+    }, [activeTab]);
+
+    /**
+     * One lens that scopes the spine rather than replacing it.
+     *
+     * "Site feed" used to sit beside this one. It was a filter dressed as a
+     * tab: clicking it returned you to Everything with everything that was not
+     * a site update hidden, so its best case was the same page with less on it
+     * — and with one update published, most stages read "Nothing of this kind
+     * at this stage". It also made the bar change shape as the studio
+     * published, which is hard to learn.
+     *
+     * Site photographs now live in the studio's Google Drive and are reached
+     * from one link on Design & Scope. Site updates themselves are untouched:
+     * they still appear on the spine, under the stage they belong to.
+     */
+    const SPINE_FILTERS = useMemo(() => {
+        const count = (k: AttachmentKind) =>
+            spinePhases.reduce((n, p) => n + p.attachments.filter(a => a.kind === k).length, 0);
+        return ([
+            { id: 'material' as AttachmentKind, label: 'Materials' },
+        ]).map(f => ({ ...f, count: count(f.id) }))
+          // Hidden when empty. It filters the spine, so with nothing to show it
+          // greys out every stage and reads as a broken button.
+          .filter(f => f.count > 0);
+    }, [spinePhases]);
+
+    const runClientAction = (item: ClientActionItem) => {
+        switch (item.actionType) {
+            case 'sign_terms': setSigningDocType('terms'); break;
+            case 'sign_contract': setSigningDocType('contract'); break;
+            case 'sign_handover': setSigningDocType('handover'); break;
+            case 'pay_milestone': setActiveTab('financials'); break;
+            case 'approve_material':
+                handleConfirmMaterialSelection(item.actionPayload?.id);
+                setSignSuccessMessage(`Finish confirmed: ${item.actionPayload?.itemName || item.title}`);
+                setTimeout(() => setSignSuccessMessage(null), 6000);
+                break;
+            case 'confirm_decision':
+                /*
+                  Take them to the decision rather than approving it here.
+                  This button sat on a summary card that showed a title and
+                  nothing else -- no drawing, no cost, no way to ask a question
+                  -- so a click approved something the client had not seen.
+                  The Decisions tab has all of that.
+                */
+                setActiveTab('decisions');
+                break;
+            case 'review_variation': setActiveTab('designScope'); break;
+        }
+    };
+
+    const handleApproveDecisionOption = async (decisionId: string, selectedOption: string) => {
+        const target = decisions.find(d => d.id === decisionId);
+        const confirmedAt = new Date().toISOString();
+        const clientName = projectData?.context?.clientName || 'Client';
+
+        try {
+            if (!isInternalStudioView && target?.signoffToken) {
+                await recordClientSignoff(target.signoffToken, 'approved', clientName, '', '');
+            } else {
+                await recordManualSignoff(projectData.id, decisionId, 'approved', '');
+            }
+        } catch (e: any) {
+            console.error('Could not record decision sign-off against the ledger', e);
+            alert(
+                'Your approval could not be saved. Please tell the studio rather than assuming this is approved.\n\n' +
+                (e?.message || 'Unknown error')
+            );
+            return; // Never show it as approved when the ledger rejected the write.
+        }
+
         setProjectContext((prev: any) => ({
             ...prev,
-            projectDecisions: updatedDecisions
+            projectDecisions: decisions.map(d =>
+                d.id === decisionId
+                    ? { ...d, status: 'confirmed' as const, selectedOption, clientConfirmedAt: confirmedAt, confirmingParty: clientName }
+                    : d
+            )
         }));
+    };
+
+    const [decisionBusyId, setDecisionBusyId] = useState<string | null>(null);
+
+    /**
+     * The client disagrees, or wants something explained.
+     *
+     * Writes 'queried' to the ledger, which moves the decision to `disputed` --
+     * the same state the sign-off email link produces, and the one the studio's
+     * Decisions screen surfaces as "Query raised". No new plumbing: the loop
+     * already existed, the portal simply never offered the door.
+     */
+    const handleQueryDecision = async (decisionId: string, queryText: string) => {
+        const target = decisions.find(d => d.id === decisionId);
+        const clientName = projectData?.context?.clientName || 'Client';
+        setDecisionBusyId(decisionId);
+
+        try {
+            if (!isInternalStudioView && target?.signoffToken) {
+                await recordClientSignoff(target.signoffToken, 'queried', clientName, queryText, '');
+            } else {
+                await recordManualSignoff(projectData.id, decisionId, 'queried', queryText);
+            }
+        } catch (e: any) {
+            console.error('Could not record the query against the ledger', e);
+            alert(
+                'Your question could not be sent. Please contact the studio directly rather than assuming they have seen it. ' +
+                (e?.message || 'Unknown error')
+            );
+            setDecisionBusyId(null);
+            return;
+        }
+
+        setProjectContext((prev: any) => ({
+            ...prev,
+            projectDecisions: decisions.map(d =>
+                d.id === decisionId ? { ...d, status: 'rejected' as const } : d
+            )
+        }));
+        setDecisionBusyId(null);
+        setSignSuccessMessage('Your question has been sent to the studio.');
+        setTimeout(() => setSignSuccessMessage(null), 6000);
     };
 
     const handleConfirmMaterialSelection = (matId: string) => {
@@ -1232,6 +1716,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             ...prev,
             materialSelections: updatedMaterials
         }));
+        persistClientAction({ type: 'confirmSelection', selectionId: matId });
     };
 
     const handleAddSiteUpdateFromStudio = (e: React.FormEvent) => {
@@ -1292,6 +1777,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
      */
     const handleSignDocComplete = (docket: DigitalSignatureDocket, type: 'terms' | 'contract' | 'handover') => {
         setProjectContext(buildSignoffPatch(type, docket, { surface: 'client_portal' }));
+        persistClientAction({ type: 'signDocument', docType: type, docket });
 
         const confirmations: Record<typeof type, string> = {
             terms: 'Terms of Engagement Docket signed and sealed. Your studio has been notified.',
@@ -1318,6 +1804,11 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             disputeReason.trim(),
             context.clientName || 'Client'
         ));
+        persistClientAction({
+            type: 'raiseDispute',
+            kind: disputeTarget.kind,
+            reason: disputeReason.trim(),
+        });
         setDisputeTarget(null);
         setDisputeReason('');
         setSignSuccessMessage(
@@ -1339,211 +1830,379 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         }, 1200);
     };
 
-    // External clients are locked out if D1 is unpaid. Studio owners can always view in-app in Studio Workspace mode.
-    if (!isD1Paid && !isInternalStudioView) {
-        return (
-            <div className="w-full space-y-6 p-6">
-                <LockedState 
-                    title="Client Portal Locked" 
-                    prerequisite="D1 Advance Payment" 
-                    why="The Client Portal activates automatically once the initial design advance (D1) is logged as paid." 
-                    actionLabel="Log Payment" 
-                    onAction={() => window.dispatchEvent(new CustomEvent('change-tab', { detail: 'payment-calc' }))}
-                />
-            </div>
-        );
-    }
+    // The portal used to be withheld from the client until the D1 advance was
+    // logged as paid. That gate locked out the very people it was built for —
+    // a client signing in with the email the studio gave them hit a wall — and
+    // it also held back everything the portal does that has nothing to do with
+    // payment: approvals, decisions, drawings, site feed. Access is no longer
+    // conditional on payment.
 
     return (
         <div 
-            className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans selection:bg-amber-100 selection:text-amber-900"
+            /* Column, not a row: navigation moved to the top, so a side-by-side
+               container left <main> with no width and every tab rendered blank. */
+            className="min-h-screen bg-slate-100/70 flex flex-col font-sans selection:bg-amber-100 selection:text-amber-900 px-2 sm:px-5"
             style={{ 
                 '--color-primary': primaryThemeColor,
                 '--color-accent': settings?.accentColor || '#d97706'
             } as React.CSSProperties}
         >
-            {/* Sidebar Navigation */}
-            <aside className="w-full md:w-64 bg-[#0066CC]/95 text-white backdrop-blur-xl flex flex-col shrink-0 sticky top-0 md:h-screen z-20 shadow-xl border-r border-white/20">
-                <div className="p-6 border-b border-white/20 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                        {settings?.logoUrl ? (
-                            <img src={settings.logoUrl} alt="Logo" className="w-9 h-9 object-contain shrink-0 rounded-lg bg-white/10 p-1" />
-                        ) : (
-                            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-sm shrink-0 bg-white/20 border border-white/30 shadow-inner">
-                                {studioCompanyName.charAt(0).toUpperCase()}
-                            </div>
-                        )}
-                        <div>
-                            <h1 className="font-bold text-white leading-tight text-sm tracking-tight">
-                                {settings?.clientPortalConfig?.portalTitle || studioCompanyName}
-                            </h1>
-                            <p className="text-[10px] font-semibold text-sky-200 uppercase tracking-widest mt-0.5">Client Portal</p>
-                        </div>
-                    </div>
-                    {onLogout && (
-                        <button onClick={onLogout} title="Sign Out" className="md:hidden p-2 text-sky-200 hover:text-white">
-                            <LogOut className="w-5 h-5" />
-                        </button>
-                    )}
+            {/* Studio identity and the lens bar. The navy sidebar it replaces
+                took a fifth of the screen and pushed the client's own project
+                below it; navigation now sits above the content it filters. */}
+            {/* The portal's frame.
+
+                The header and lens bar ran edge to edge while the hero and the
+                content sat inside a max-width, so the page had three different
+                left edges and no outline at all — it read as loose bands rather
+                than as one application. Everything now lives inside a single
+                bordered card at one width. */}
+            <div className="w-full max-w-[1560px] mx-auto my-2 sm:my-6 rounded-2xl sm:rounded-3xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04),0_12px_36px_rgba(15,23,42,.06)] overflow-clip">
+              {/* The branding row.
+
+                  The mark used to sit inside the dark hero, where a logo drawn
+                  in dark ink simply disappeared — and it was duplicated here at
+                  36px on a grey plate. It belongs on light, once, at a size
+                  that can actually be read. */}
+              <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 sm:py-5 flex items-center justify-between gap-3 sm:gap-4 flex-wrap">
+                {/* The shared mark, resolved by the shared component.
+
+                    This hand-rolled the lookup and checked two fields; FFDSLogo
+                    checks four — orgLogo, customLogo and logoUrl — and this
+                    studio's mark lives on `customLogo`, so the portal fell back
+                    to initials while the same logo rendered fine everywhere
+                    else in the app. Never re-implement a resolver that already
+                    exists. */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <FFDSLogo mode="icon" className="w-10 h-10 sm:w-14 sm:h-14 shrink-0" />
+
+                  <div className="min-w-0 border-l border-slate-200 pl-3 sm:pl-4">
+                    <p className="text-sm sm:text-[15px] font-extrabold text-slate-900 leading-tight truncate tracking-tight">{studioCompanyName}</p>
+                    {orgData?.tagline
+                      ? <p className="text-[10px] sm:text-[11px] font-medium text-slate-500 truncate">{orgData.tagline}</p>
+                      : null}
+                    <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 mt-0.5">Client portal</p>
+                  </div>
                 </div>
 
-                {/* Navigation Links */}
-                <nav className="flex-1 p-4 flex flex-row md:flex-col gap-1.5 overflow-x-auto md:overflow-visible scrollbar-none">
-                    {[
-                        { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-                        { id: 'approvals', label: 'Client Approvals', icon: ShieldCheck, badge: clientPendingCount },
-                        { id: 'documents', label: 'Your Documents', icon: FileText, badge: documentsNeedingAttention },
-                        { id: 'feed', label: 'Live Site Feed', icon: Activity, badge: liveFeed.length },
-                        { id: 'roadmap', label: 'Roadmap & Progress', icon: MapIcon },
-                        { id: 'designs', label: '3D Renders & Drawings', icon: ImageIcon, badge: designDocuments.length },
-                        { id: 'materials', label: 'Material Selections', icon: Layers, badge: clientActionSummary.materialsPending.filter(m => m.owner === 'client').length },
-                        { id: 'scope', label: 'Scope & BOQ', icon: GitMerge },
-                        { id: 'financials', label: 'Financials & Invoices', icon: Wallet, badge: duePayments.length },
-                    ].map((tab: any) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
-                            className={`flex items-center justify-between px-3.5 py-3 rounded-xl font-semibold text-xs transition-all whitespace-nowrap cursor-pointer ${
-                                activeTab === tab.id 
-                                    ? 'bg-white/20 text-white backdrop-blur-md border border-white/30 shadow-md shadow-sky-950/30 font-bold' 
-                                    : 'text-sky-100 hover:bg-white/10 hover:text-white'
-                            }`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-white' : 'text-sky-200'}`} />
-                                <span>{tab.label}</span>
-                            </div>
-                            {tab.badge !== undefined && tab.badge > 0 && (
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                    activeTab === tab.id 
-                                        ? 'bg-white text-[#0066CC]' 
-                                        : 'bg-white/20 text-white border border-white/30'
-                                }`}>
-                                    {tab.badge}
-                                </span>
-                            )}
-                        </button>
-                    ))}
-                </nav>
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  {/* Where the project stands, beside the things you can do
+                      about it. These sat in the lens bar for one render and the
+                      chips overflowed their track and ran under the tabs — a
+                      centre column sized to its content cannot defend itself
+                      against two nowrap chips growing to the left of it. */}
+                  <motion.span
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35, ease: 'easeOut' }}
+                    className="hidden md:inline-flex items-center rounded-lg px-2.5 py-1.5 text-[11px] font-bold bg-slate-100 text-slate-600 whitespace-nowrap"
+                  >
+                    Stage {lifecycleInfo.currentStageNumber} of 6 · {lifecycleInfo.currentStageName}
+                  </motion.span>
+                  {handoverEta && (
+                    <motion.span
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.35, delay: 0.06, ease: 'easeOut' }}
+                      className="hidden md:inline-flex items-center rounded-lg px-2.5 py-1.5 text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 whitespace-nowrap"
+                    >
+                      Handover {handoverEta}
+                    </motion.span>
+                  )}
+                  <span className="hidden md:block w-px h-5 bg-slate-200 mx-0.5" />
+                  <button
+                    onClick={() => { setActiveTab('overview'); setCatchOpen(o => !o); }}
+                    aria-expanded={catchOpen}
+                    className="px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-600 hover:border-sky-300 hover:text-[#0055B3] transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    {catchOpen ? 'Hide summary' : 'Catch me up'}
+                  </button>
+                  {/* Ops-only, and deliberately the same size as everything
+                      else in this row. These two used to sit in a second
+                      full-width blue bar that restated the project name, the
+                      client and the code — all of which the page below already
+                      says. The bar is gone; the two things it could actually do
+                      are here. */}
+                  {isInternalStudioView && (
+                    <>
+                      <span className="px-2 py-1 rounded-md bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        Studio preview
+                      </span>
+                      <button
+                        onClick={() => setShowAddUpdateModal(true)}
+                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold text-slate-600 hover:border-sky-300 hover:text-[#0055B3] transition-colors cursor-pointer"
+                      >
+                        Post site update
+                      </button>
+                      <button
+                        onClick={() => setShowAddDecisionModal(true)}
+                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold text-slate-600 hover:border-sky-300 hover:text-[#0055B3] transition-colors cursor-pointer"
+                      >
+                        Request decision
+                      </button>
+                      <span className="w-px h-5 bg-slate-200 mx-0.5" />
+                    </>
+                  )}
+                  {/*
+                    The link IS the credential — there is no login ID.
 
-                {/* Footer Bar */}
-                <div className="p-4 border-t border-slate-800 bg-slate-950/60 text-xs space-y-3">
-                    <div className="bg-slate-900/90 rounded-xl p-3 border border-slate-800 space-y-1.5">
-                        <div className="flex items-center justify-between text-[11px] text-slate-400">
-                            <span>Client Login ID</span>
+                    This copied `projectData.id`, which grants nothing: the
+                    portal only opens on `?portal=<token>`, and an identifier a
+                    client knows is deliberately not enough to get in. Ops would
+                    send that id to a client expecting it to work. It also
+                    showed to clients, offering them their own project id for
+                    no reason. Studio-side only now, and it copies a link that
+                    actually opens the portal — minting one on first use, which
+                    is also how a previous link gets revoked.
+                  */}
+                  {isInternalStudioView && (
+                    <button
+                      onClick={copyClientLink}
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold text-slate-600 hover:border-sky-300 hover:text-[#0055B3] transition-colors cursor-pointer"
+                    >
+                      Copy client link
+                    </button>
+                  )}
+                  <PWAInstallPrompt variant="pill" label="Install App" />
+                  <button onClick={() => setShowContactModal(true)} className="px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-600 hover:border-sky-300 hover:text-[#0055B3] transition-colors cursor-pointer">
+                    Contact studio
+                  </button>
+                  {/* A real session gets a real account menu: who they are
+                      signed in as, and a way to change the password their
+                      studio generated for them. The studio's own preview has
+                      no such session, so it keeps the plain button. */}
+                  {onLogout && (source === 'client' ? (
+                    <ClientAccountMenu
+                      clientName={(context as any)?.clientName}
+                      projectName={(context as any)?.name}
+                      onSignOut={onLogout}
+                    />
+                  ) : (
+                    <button onClick={onLogout} className="px-2 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold text-slate-400 hover:text-slate-700 transition-colors cursor-pointer">
+                      Sign out
+                    </button>
+                  ))}
+                </div>
+              </header>
+
+              {/* The greeting sits above the lenses, as the design has it. It
+                  was below them for one render and the tab row floating over a
+                  dark hero looked like chrome that had come loose. */}
+              <div className="px-3 sm:px-8 pt-3 sm:pt-5 pb-1 w-full">
+                <PortalHero
+                  clientName={(context as any).clientName}
+                  attentionCount={clientActionSummary.clientActions.length}
+                />
+              </div>
+
+              <nav className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-y border-slate-200 px-1 sm:px-8 py-2 sm:py-2.5">
+                <div className="relative flex items-center w-full max-w-full justify-center">
+                  {/* Left scroll chevron indicator */}
+                  {canScrollLeft && (
+                    <button
+                      onClick={() => scrollLens('left')}
+                      aria-label="Scroll left"
+                      className="absolute left-0 z-20 w-7 h-7 rounded-full bg-white/95 shadow-md border border-slate-200 flex items-center justify-center text-slate-600 hover:text-slate-900 transition-all cursor-pointer"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  <div
+                    ref={lensTrackRef}
+                    className="relative flex items-center gap-1 overflow-x-auto overflow-y-hidden rounded-xl sm:rounded-2xl bg-slate-100/90 p-1 w-full sm:w-fit sm:mx-auto ring-1 ring-slate-200/80 scrollbar-none touch-pan-x"
+                    style={{ WebkitOverflowScrolling: 'touch' }}
+                  >
+                    {lensPill && (
+                      <span
+                        aria-hidden="true"
+                        style={{ transform: `translateX(${lensPill.left}px)`, width: `${lensPill.width}px` }}
+                        className="absolute top-1 bottom-1 left-0 rounded-lg sm:rounded-xl bg-white shadow-sm ring-1 ring-slate-200
+                                   pointer-events-none transition-[transform,width] duration-300 ease-out
+                                   motion-reduce:transition-none"
+                      />
+                    )}
+
+                    {PORTAL_LENSES.map(lens => {
+                      const badge = lens.badge ? lens.badge() : 0;
+                      const on = activeTab === lens.id;
+                      const needsYou = !!lens.urgent && badge > 0;
+                      return (
+                        <React.Fragment key={lens.id}>
+                          {lens.dividerBefore && <span className="w-px h-3.5 sm:h-4 bg-slate-200/80 self-center mx-0.5 sm:mx-1 shrink-0" />}
+                          <button
+                            onClick={(e) => {
+                              setActiveTab(lens.id);
+                              setSpineFilter('all');
+                              (e.currentTarget as HTMLElement).scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                            }}
+                            aria-current={on ? 'page' : undefined}
+                            data-lens={lens.id}
+                            className={`group relative shrink-0 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-[12px] font-bold whitespace-nowrap
+                                        cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors duration-200 select-none ${
+                              on ? 'text-slate-900 font-extrabold' : 'text-slate-500 hover:text-slate-900'
+                            }`}
+                          >
+                            <span className="relative z-10 flex items-center gap-1.5 sm:gap-2">
+                              {lens.label}
+                              {badge > 0 && (
+                                <span className={`inline-flex items-center gap-1 rounded-full px-1.5 min-w-[18px] justify-center
+                                                  text-[9px] sm:text-[10px] font-extrabold tabular-nums leading-[16px] sm:leading-[18px] ${
+                                  needsYou
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : on ? 'bg-sky-50 text-[#0055B3]' : 'bg-slate-200/70 text-slate-600'
+                                }`}>
+                                  {needsYou && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 portal-blink" />}
+                                  {badge}
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        </React.Fragment>
+                      );
+                    })}
+
+                    {SPINE_FILTERS.length > 0 && <span className="w-px h-4 bg-slate-200 self-center mx-1 shrink-0" />}
+                    {SPINE_FILTERS.map(f => {
+                      const on = activeTab === 'overview' && spineFilter === f.id;
+                      return (
+                        <button
+                          key={f.id}
+                          onClick={(e) => {
+                            setActiveTab('overview');
+                            setSpineFilter(on ? 'all' : f.id);
+                            (e.currentTarget as HTMLElement).scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                          }}
+                          aria-pressed={on}
+                          className={`shrink-0 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-bold whitespace-nowrap transition-colors cursor-pointer border select-none ${
+                            on ? 'bg-sky-50 text-[#0055B3] border-sky-200' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900'
+                          }`}
+                        >
+                          {f.label}
+                          {f.count > 0 && <span className={`ml-1 tabular-nums font-extrabold ${on ? 'text-[#0066CC]' : 'text-slate-400'}`}>{f.count}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Right scroll chevron indicator */}
+                  {canScrollRight && (
+                    <button
+                      onClick={() => scrollLens('right')}
+                      aria-label="Scroll right"
+                      className="absolute right-0 z-20 w-7 h-7 rounded-full bg-white/95 shadow-md border border-slate-200 flex items-center justify-center text-slate-600 hover:text-slate-900 transition-all cursor-pointer"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </nav>
+
+
+            {showBoqVersions && (
+                <BoqVersionCompare
+                    tiers={tiers as any}
+                    bankMap={boqBankMap}
+                    approvedTierId={context.approvedTierId}
+                    activeTierId={projectData.activeTierId}
+                    revisions={context.boqRevisions}
+                    onClose={() => setShowBoqVersions(false)}
+                />
+            )}
+
+            {questionFor && (
+                <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setQuestionFor(null)}>
+                    <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-lg p-5" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-base font-bold text-slate-900">Ask about this document</h3>
+                        <p className="text-xs text-slate-500 font-medium mt-1">
+                            Your studio sees the question against the document and replies here. Nothing is signed by asking.
+                        </p>
+                        <textarea
+                            autoFocus
+                            value={questionText}
+                            onChange={e => setQuestionText(e.target.value)}
+                            rows={4}
+                            placeholder="What would you like to know?"
+                            className="w-full mt-3 rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-sky-300"
+                        />
+                        <div className="flex justify-end gap-2 mt-3">
                             <button
-                                onClick={() => {
-                                    navigator.clipboard.writeText(projectData.id);
-                                    alert('Login ID copied to clipboard!');
-                                }}
-                                className="text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 cursor-pointer"
+                                onClick={() => { setQuestionFor(null); setQuestionText(''); }}
+                                className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
                             >
-                                <Copy className="w-3 h-3" />
-                                Copy
+                                Cancel
+                            </button>
+                            <button
+                                disabled={!questionText.trim()}
+                                onClick={() => {
+                                    const issue = getCurrentIssue(context, questionFor, { clientView: true });
+                                    setProjectContext(raiseQuery({
+                                        issueId: issue?.id || `pending-${questionFor}`,
+                                        documentKind: questionFor,
+                                        clauseRef: 'General',
+                                        clauseExcerpt: '',
+                                        question: questionText.trim(),
+                                        raisedBy: context.clientName || 'Client',
+                                    }));
+                                    persistClientAction({
+                                        type: 'raiseQuery',
+                                        issueId: issue?.id || `pending-${questionFor}`,
+                                        documentKind: questionFor,
+                                        clauseRef: 'General',
+                                        clauseExcerpt: '',
+                                        question: questionText.trim(),
+                                    });
+                                    setQuestionFor(null);
+                                    setQuestionText('');
+                                    setSignSuccessMessage('Your question has been sent to the studio.');
+                                    setTimeout(() => setSignSuccessMessage(null), 8000);
+                                }}
+                                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#0066CC] text-white hover:bg-[#0055B3] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                                Send question
                             </button>
                         </div>
-                        <p className="font-mono text-amber-200 font-bold text-xs truncate">{projectData.id}</p>
                     </div>
-
-                    <button 
-                        onClick={() => setShowContactModal(true)}
-                        className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer border border-slate-700"
-                    >
-                        <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                        Contact Studio Manager
-                    </button>
-
-                    {onLogout && (
-                        <button 
-                            onClick={onLogout} 
-                            className="flex items-center justify-center gap-2 px-3 py-2 w-full rounded-xl font-bold text-xs text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition-colors border border-transparent hover:border-rose-500/20 cursor-pointer"
-                        >
-                            <LogOut className="w-3.5 h-3.5" />
-                            Sign Out
-                        </button>
-                    )}
                 </div>
-            </aside>
+            )}
 
             {/* Main Workspace Area */}
             <main className="flex-1 overflow-y-auto flex flex-col">
-                {/* Studio Workspace Mirror Banner */}
-                {isInternalStudioView && (
-                    <div className="bg-[#0066CC]/10 backdrop-blur-md border-b border-[#0066CC]/20 px-6 py-3 text-slate-900 flex flex-col md:flex-row items-center justify-between gap-3 text-sm font-sans shadow-2xs">
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#0066CC]/90 text-white backdrop-blur-md border border-white/20 shadow-sm shadow-sky-600/20">
-                                Studio Workspace View
-                            </span>
-                            <span className="font-semibold text-slate-800 text-xs">
-                                Client Portal Live Mirror & Control Panel
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <button
-                                onClick={() => {
-                                    navigator.clipboard.writeText(projectData.id);
-                                    alert(`Client Login ID (${projectData.id}) copied to clipboard!`);
-                                }}
-                                className="px-3 py-1.5 text-xs font-bold bg-white/90 border border-slate-200 hover:bg-slate-50 text-slate-800 rounded-lg shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
-                            >
-                                <Copy className="w-3.5 h-3.5 text-slate-600" />
-                                Copy Login ID ({projectData.id})
-                            </button>
-                            <button
-                                onClick={() => setShowAddUpdateModal(true)}
-                                className="px-3 py-1.5 text-xs font-bold bg-[#0066CC]/90 hover:bg-[#0055B3] text-white backdrop-blur-md border border-white/20 rounded-lg shadow-md shadow-sky-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
-                            >
-                                <PlusCircle className="w-3.5 h-3.5 text-sky-200" />
-                                + Post Site Update
-                            </button>
-                            <button
-                                onClick={() => setShowAddDecisionModal(true)}
-                                className="px-3 py-1.5 text-xs font-bold bg-[#0066CC]/80 hover:bg-[#0055B3] text-white backdrop-blur-md border border-white/20 rounded-lg shadow-md shadow-sky-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
-                            >
-                                <CheckSquare className="w-3.5 h-3.5 text-sky-200" />
-                                + Request Decision
-                            </button>
-                        </div>
-                    </div>
-                )}
+                {/* Two bars used to sit here and both have gone.
 
-                {/* Top Header Bar */}
-                <header className="bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-10 px-6 md:px-10 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xs">
-                    <div>
-                        <div className="flex items-center gap-2.5">
-                            <h2 className="text-xl font-bold text-slate-900 tracking-tight">{context.name || 'Interior Design Project'}</h2>
-                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                Active Execution
-                            </span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
-                            <span>Client: <strong className="text-slate-800">{context.clientName || 'Valued Client'}</strong></span>
-                            <span>•</span>
-                            <span>Project Code: <strong className="font-mono text-slate-800">{projectData.id}</strong></span>
-                        </p>
-                    </div>
+                    The first was a blue "Studio Workspace View — Client Portal
+                    Live Mirror & Control Panel" strip carrying Copy Login ID,
+                    Post Site Update and Request Decision. That is ops chrome
+                    painted across the client's own screen; the two controls it
+                    alone could reach are now in the portal header, shown only
+                    to studio users.
 
-                    <div className="flex items-center gap-3 self-end md:self-auto">
+                    The second restated the project name, an "Active Execution"
+                    pill, the client's name and the project code — directly
+                    above a page whose first three lines are the studio name,
+                    the project name and the current stage. Studio PM Support
+                    duplicated "Contact studio" in the header; Bank Details &
+                    UPI now sits in Payments, beside the amounts it is for. */}
+
+                {/* Main Content Area.
+                    max-w-6xl held this to 1152px and left ~350px of empty grey
+                    down each side of a widescreen — the programme chart and
+                    the tables were scrolling sideways inside a column narrower
+                    than the window. */}
+                <div className="px-3 sm:px-8 py-5 sm:py-8 w-full space-y-6 sm:space-y-8 flex-1">
+
+                    {/* A view reached by acting on something, not by choosing a
+                        lens. Without this the nav highlights nothing and there
+                        is no way back except the browser. */}
+                    {!PORTAL_LENSES.some(l => l.id === activeTab) && (
                         <button
-                            onClick={() => setShowContactModal(true)}
-                            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                            onClick={() => setActiveTab('overview')}
+                            className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-[#0055B3] transition-colors cursor-pointer -mb-3"
                         >
-                            <PhoneCall className="w-3.5 h-3.5 text-slate-600" />
-                            Studio PM Support
+                            <ChevronRight className="w-3.5 h-3.5 rotate-180" />
+                            Back to overview
                         </button>
-                        <button
-                            onClick={() => setShowBankDetailsModal(true)}
-                            className="px-3 py-2 bg-[#FDFDFB] hover:bg-slate-50 text-slate-800 border border-slate-200/80 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                        >
-                            <CreditCard className="w-3.5 h-3.5 text-[#C5A85C]" />
-                            Bank Details & UPI
-                        </button>
-                    </div>
-                </header>
-
-                {/* Main Content Area */}
-                <div className="p-6 md:p-10 max-w-6xl mx-auto w-full space-y-8 flex-1">
+                    )}
 
                     {/* Tab Content Router */}
                     <AnimatePresence mode="wait">
@@ -1553,561 +2212,69 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 initial={{ opacity: 0, y: 8 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -8 }}
-                                className="space-y-6"
                             >
-                                {/* Success Notification Banner (e.g. after digital signing) */}
-                                {signSuccessMessage && (
-                                    <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-fade-in">
-                                        <div className="flex items-center gap-3">
-                                            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                                            <p className="text-xs font-bold text-emerald-900">{signSuccessMessage}</p>
-                                        </div>
-                                        <button 
-                                            onClick={() => setSignSuccessMessage(null)}
-                                            className="text-emerald-700 hover:text-emerald-900 text-xs font-semibold px-2 py-1"
-                                        >
-                                            Dismiss
-                                        </button>
-                                    </div>
-                                )}
-
-                                {/* Signature callouts — one per agreement the studio has actually
-                                    released to the client. Documents still being prepared by the
-                                    studio are deliberately NOT shown as a client task here. */}
-                                {approvals.actionable.map((doc: AgreementStatus) => (
-                                    <div
-                                        key={`callout-${doc.kind}`}
-                                        className={`p-5 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs animate-fade-in ${
-                                            doc.isOverdue ? 'bg-rose-50 border-rose-300/80' : 'bg-amber-50 border-amber-300/80'
-                                        }`}
-                                    >
-                                        <div className="flex items-start gap-3">
-                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold ${
-                                                doc.isOverdue ? 'bg-rose-200/80 text-rose-900' : 'bg-amber-200/80 text-amber-900'
-                                            }`}>
-                                                <FileText className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <h4 className={`text-sm font-bold ${doc.isOverdue ? 'text-rose-950' : 'text-amber-950'}`}>
-                                                        Action required: {doc.title}
-                                                    </h4>
-                                                    <span className="px-2 py-0.5 rounded text-[10px] font-black bg-rose-500 text-white">
-                                                        {doc.isOverdue ? 'Overdue' : 'Pending sign-off'}
-                                                    </span>
-                                                </div>
-                                                <p className={`text-xs mt-0.5 ${doc.isOverdue ? 'text-rose-900/90' : 'text-amber-900/90'}`}>
-                                                    {doc.purpose}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => setSigningDocType(doc.kind as AgreementKind)}
-                                            className={`px-4 py-2 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                                                doc.isOverdue ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'
-                                            }`}
-                                        >
-                                            <ShieldCheck className="w-3.5 h-3.5" />
-                                            Review & sign
-                                        </button>
-                                    </div>
-                                ))}
-
-                                {/* Paperwork has fallen behind the site — shown regardless of stage. */}
-                                {approvals.breaches.filter(b => !b.needsClientAction).length > 0 && (
-                                    <div className="p-5 rounded-2xl bg-rose-50 border border-rose-300/80 flex items-start gap-3 shadow-2xs">
-                                        <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                                        <div>
-                                            <h4 className="text-sm font-bold text-rose-950">
-                                                Unsigned paperwork at Stage {lifecycleInfo.currentStageNumber}
-                                            </h4>
-                                            <p className="text-xs text-rose-900/90 mt-0.5 leading-relaxed">
-                                                {approvals.breaches.filter(b => !b.needsClientAction).map(b => b.title).join(' and ')}{' '}
-                                                should have been executed by now. Your studio is preparing the document — we will notify you the moment it is ready to sign.
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* 1. Refined Executive Header Banner */}
-                                <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-xs relative overflow-hidden border-t-4 border-t-[#C5A85C]">
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-                                        <div className="space-y-1.5">
-                                            <div className="flex items-center gap-2">
-                                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-amber-50 text-amber-900 border border-amber-200/80">
-                                                    Executive Summary
-                                                </span>
-                                                <span className="text-slate-300">•</span>
-                                                <span className="text-xs font-semibold text-slate-500">
-                                                    {studioCompanyName}
-                                                </span>
-                                            </div>
-                                            <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                                                Welcome, {context.clientName || 'Valued Client'}
-                                            </h3>
-                                            <p className="text-slate-500 text-xs max-w-2xl">
-                                                {settings?.clientPortalConfig?.introMessage ||
-                                                  `Track real-time site execution, design sign-offs, and financial updates for ${context.name || 'your interior project'}.`}
-                                            </p>
-                                        </div>
-
-                                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
-                                            <div className="px-4 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-left">
-                                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Current Phase</p>
-                                                <p className="text-xs font-bold text-slate-800 capitalize mt-0.5">
-                                                    Phase {lifecycleInfo.currentStageNumber} of 6: {lifecycleInfo.currentStageName}
-                                                </p>
-                                            </div>
-                                            <button
-                                                onClick={() => setShowContactModal(true)}
-                                                className="px-4 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-                                            >
-                                                <MessageSquare className="w-3.5 h-3.5 text-sky-200" />
-                                                Contact PM
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* 2. Three High-Impact Executive Key Vitals */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                    {/* Vital 1: Overall Progress */}
-                                    <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                                                <Activity className="w-3.5 h-3.5 text-[#C5A85C]" />
-                                                Lifecycle Progress
-                                            </span>
-                                            <span className="text-xs font-extrabold text-[#C5A85C] bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60">
-                                                {lifecycleInfo.overallProgressPercent}%
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden mb-2">
-                                                <div 
-                                                    className="h-full bg-gradient-to-r from-[#C5A85C] to-amber-500 rounded-full transition-all duration-700" 
-                                                    style={{ width: `${lifecycleInfo.overallProgressPercent}%` }}
-                                                />
-                                            </div>
-                                            <p className="text-[11px] text-slate-500 flex justify-between">
-                                                <span>Stage {lifecycleInfo.currentStageNumber}: {lifecycleInfo.currentStageName}</span>
-                                                <button onClick={() => setActiveTab('roadmap')} className="text-slate-800 font-bold hover:underline cursor-pointer">
-                                                    Roadmap →
-                                                </button>
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Vital 2: Financial Snapshot */}
-                                    <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                                                <Wallet className="w-3.5 h-3.5 text-emerald-600" />
-                                                Financial Summary
-                                            </span>
-                                            <span className="text-xs font-extrabold text-slate-900">
-                                                {formatINR(currentProjectValue)}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <div className="flex justify-between items-center text-[11px] mb-1 font-semibold text-slate-600">
-                                                <span>Cleared: <strong className="text-emerald-700">{formatINR(totalPaid)}</strong></span>
-                                                <span>Due: <strong className="text-slate-900">{formatINR(balanceDue)}</strong></span>
-                                            </div>
-                                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${paidPercentage}%` }} />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Vital 3: Pending Approvals & Actions */}
-                                    <div className={`rounded-2xl p-5 border shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between space-y-3 ${
-                                        clientPendingCount > 0
-                                            ? 'bg-amber-50/50 border-amber-200/90'
-                                            : 'bg-white border-slate-200/80'
-                                    }`}>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                                                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                                                Client Approvals
-                                            </span>
-                                            {clientPendingCount > 0 ? (
-                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
-                                                    {clientPendingCount} Pending
-                                                </span>
-                                            ) : (
-                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                                    All Clear ✓
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-slate-600 font-medium">
-                                                {clientPendingCount > 0
-                                                    ? [
-                                                        clientActionSummary.agreementsPending.filter(a => a.owner === 'client').length > 0 && `${clientActionSummary.agreementsPending.filter(a => a.owner === 'client').length} agreement(s) to sign`,
-                                                        clientActionSummary.paymentsPending.length > 0 && `${clientActionSummary.paymentsPending.length} invoice(s) due`,
-                                                        clientActionSummary.variationsPending.length > 0 && `${clientActionSummary.variationsPending.length} variation(s)`,
-                                                        clientActionSummary.decisionsPending.length > 0 && `${clientActionSummary.decisionsPending.length} decision(s)`,
-                                                        clientActionSummary.materialsPending.filter(a => a.owner === 'client').length > 0 && `${clientActionSummary.materialsPending.filter(a => a.owner === 'client').length} finish(es)`
-                                                      ].filter(Boolean).join(' • ')
-                                                    : clientActionSummary.studioActions.length > 0
-                                                        ? `Nothing needs you. ${clientActionSummary.studioActions.length} item(s) are with your studio.`
-                                                        : 'No pending sign-offs or approvals required at this time.'}
-                                            </p>
-                                            <div className="mt-2 text-right">
-                                                <button 
-                                                    onClick={() => setActiveTab('approvals')}
-                                                    className="text-xs font-bold text-slate-800 hover:text-black flex items-center justify-end gap-1 cursor-pointer"
-                                                >
-                                                    {clientPendingCount > 0 ? 'Review Action Items' : 'View Approval History'} <ChevronRight className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* 3. Main Dashboard 2-Column Split */}
-                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                                    
-                                    {/* Left Main Column (7/12) */}
-                                    <div className="lg:col-span-7 space-y-6">
-                                        
-                                        {/* Action Required — driven entirely by the client action engine.
-                                            Only items genuinely in the client's court are listed here. */}
-                                        {clientPendingCount > 0 && (
-                                            <div className="bg-gradient-to-r from-amber-50 to-orange-50/50 border border-amber-200/90 rounded-2xl p-5 space-y-3">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2.5">
-                                                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                                                        <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wide">
-                                                            Waiting on you ({clientPendingCount})
-                                                        </h4>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => setActiveTab('approvals')}
-                                                        className="text-[11px] font-bold text-amber-900 hover:underline cursor-pointer"
-                                                    >
-                                                        Approvals Hub &rarr;
-                                                    </button>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                                    {clientActionSummary.clientActions.slice(0, 6).map((item) => {
-                                                        const tone = item.category === 'payment'
-                                                            ? { border: 'border-rose-200 hover:border-rose-300', dot: 'bg-rose-500', text: 'text-rose-900', chev: 'text-rose-400' }
-                                                            : item.category === 'agreement'
-                                                                ? { border: 'border-amber-300 hover:border-amber-400', dot: 'bg-amber-500', text: 'text-amber-950', chev: 'text-amber-600' }
-                                                                : { border: 'border-slate-200 hover:border-slate-300', dot: 'bg-slate-400', text: 'text-slate-900', chev: 'text-slate-400' };
-                                                        return (
-                                                            <button
-                                                                key={item.id}
-                                                                onClick={() => {
-                                                                    if (item.actionType === 'sign_terms') setSigningDocType('terms');
-                                                                    else if (item.actionType === 'sign_contract') setSigningDocType('contract');
-                                                                    else if (item.actionType === 'sign_handover') setSigningDocType('handover');
-                                                                    else setActiveTab(item.targetTab as any);
-                                                                }}
-                                                                className={`p-3 bg-white border rounded-xl text-left transition-all cursor-pointer flex items-center justify-between shadow-2xs group ${tone.border}`}
-                                                            >
-                                                                <div className="space-y-0.5 pr-2 min-w-0">
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <span className={`w-2 h-2 rounded-full shrink-0 ${tone.dot} ${item.severity === 'critical' ? 'animate-pulse' : ''}`} />
-                                                                        <p className={`text-xs font-bold truncate ${tone.text}`}>{item.title}</p>
-                                                                    </div>
-                                                                    <p className="text-[10px] text-slate-500 line-clamp-1">
-                                                                        {item.amount ? `${formatINR(item.amount)} • ` : ''}{item.statusBadge}
-                                                                    </p>
-                                                                </div>
-                                                                <ChevronRight className={`w-4 h-4 group-hover:translate-x-0.5 transition-transform shrink-0 ${tone.chev}`} />
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-
-                                                {clientActionSummary.clientActions.length > 6 && (
-                                                    <button
-                                                        onClick={() => setActiveTab('approvals')}
-                                                        className="text-[11px] font-bold text-amber-900 hover:underline cursor-pointer"
-                                                    >
-                                                        + {clientActionSummary.clientActions.length - 6} more
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
-
-
-                                        {/* Dynamic 6-Phase Project Lifecycle Pipeline */}
-                                        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-4">
-                                            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                                                <div className="flex items-center gap-2">
-                                                    <MapIcon className="w-4 h-4 text-[#C5A85C]" />
-                                                    <div>
-                                                        <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wide">
-                                                            Project Lifecycle Pipeline
-                                                        </h4>
-                                                        <p className="text-[10px] text-slate-400">
-                                                            Derived from signed documents, cleared payments and site records
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <button onClick={() => setActiveTab('roadmap')} className="text-xs font-bold text-[#0066CC] hover:underline cursor-pointer">
-                                                    Full Interactive Roadmap &rarr;
-                                                </button>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
-                                                {lifecycleInfo.stages.map((stage) => (
-                                                    <div 
-                                                        key={stage.id} 
-                                                        title={stage.gateNote || stage.subtitle}
-                                                        className={`p-3.5 rounded-xl border text-left flex flex-col justify-between space-y-2 transition-all ${
-                                                            stage.gateBreached
-                                                                ? 'bg-rose-50/50 border-rose-200 text-rose-900'
-                                                                : stage.status === 'active' 
-                                                                    ? 'bg-amber-50/70 border-amber-300 text-amber-950 font-bold shadow-2xs ring-1 ring-amber-300/50' 
-                                                                    : stage.status === 'completed'
-                                                                        ? 'bg-emerald-50/40 border-emerald-200 text-emerald-900'
-                                                                        : 'bg-slate-50/60 border-slate-200/60 text-slate-400'
-                                                        }`}
-                                                    >
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-[10px] font-mono font-bold opacity-75">
-                                                                PHASE 0{stage.stageNumber}
-                                                            </span>
-                                                            {stage.gateBreached ? (
-                                                                <span className="flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-100/80 px-1.5 py-0.5 rounded">
-                                                                    <AlertCircle className="w-3 h-3" /> Gate open
-                                                                </span>
-                                                            ) : stage.status === 'completed' && (
-                                                                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded">
-                                                                    <CheckCircle2 className="w-3 h-3" /> Done
-                                                                </span>
-                                                            )}
-                                                            {stage.status === 'active' && (
-                                                                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-200/80 px-1.5 py-0.5 rounded animate-pulse">
-                                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-600" /> Current
-                                                                </span>
-                                                            )}
-                                                            {stage.status === 'pending' && (
-                                                                <span className="text-[10px] font-medium text-slate-400">
-                                                                    Upcoming
-                                                                </span>
-                                                            )}
-                                                        </div>
-
-                                                        <div>
-                                                            <p className={`text-xs font-bold ${
-                                                                stage.status === 'active' ? 'text-slate-900' : stage.status === 'completed' ? 'text-slate-800' : 'text-slate-500'
-                                                            }`}>
-                                                                {stage.title}
-                                                            </p>
-                                                            <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5 font-normal">
-                                                                {stage.clientDeliverable}
-                                                            </p>
-                                                        </div>
-
-                                                        <div className="pt-1.5 border-t border-slate-100/80 text-[10px] flex items-center justify-between">
-                                                            <span className={`font-medium truncate pr-1 ${stage.gateBreached ? 'text-rose-600' : 'text-slate-400'}`}>
-                                                                {stage.gateBreached ? 'Sign-off outstanding' : stage.gateRequirement}
-                                                            </span>
-                                                            <span className="font-bold text-slate-700 shrink-0">
-                                                                {stage.progressPercent}%
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Recent Site Activity Highlight Card */}
-                                        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
-                                            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                                                <h4 className="font-bold text-slate-900 text-xs flex items-center gap-2 uppercase tracking-wide">
-                                                    <Camera className="w-3.5 h-3.5 text-[#C5A85C]" />
-                                                    Latest Site Progress Highlight
-                                                </h4>
-                                                <button onClick={() => setActiveTab('feed')} className="text-xs font-bold text-[#0066CC] hover:underline flex items-center gap-1 cursor-pointer">
-                                                    View Live Feed ({liveFeed.length}) &rarr;
-                                                </button>
-                                            </div>
-
-                                            {liveFeed.filter(item => item.type === 'site_update').length > 0 ? (
-                                                (() => {
-                                                    const latestUpdate = liveFeed.filter(item => item.type === 'site_update')[0];
-                                                    return (
-                                                        <div className="p-5 space-y-4">
-                                                            <div className="flex items-start justify-between gap-3">
-                                                                <div>
-                                                                    <h5 className="font-bold text-slate-900 text-sm">{latestUpdate.title}</h5>
-                                                                    <p className="text-[11px] text-slate-400 mt-0.5">
-                                                                        {latestUpdate.date?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} • Posted by {latestUpdate.author || 'Site Operations'}
-                                                                    </p>
-                                                                </div>
-                                                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60">
-                                                                    Site Log
-                                                                </span>
-                                                            </div>
-
-                                                            {latestUpdate.images && latestUpdate.images.length > 0 && (
-                                                                <div className="grid grid-cols-2 gap-2 rounded-xl overflow-hidden max-h-48">
-                                                                    {latestUpdate.images.slice(0, 2).map((imgUrl: string, imgIdx: number) => (
-                                                                        <img 
-                                                                            key={imgIdx} 
-                                                                            src={imgUrl} 
-                                                                            alt="Site Photo" 
-                                                                            onClick={() => setLightboxImage({ url: imgUrl, title: latestUpdate.title, subtitle: latestUpdate.description })}
-                                                                            className="w-full h-40 object-cover rounded-lg cursor-pointer hover:opacity-95 transition-opacity" 
-                                                                        />
-                                                                    ))}
-                                                                </div>
-                                                            )}
-
-                                                            {latestUpdate.description && (
-                                                                <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                                                    "{latestUpdate.description}"
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })()
-                                            ) : (
-                                                <div className="p-8 text-center text-slate-400 text-xs space-y-1.5">
-                                                    <Camera className="w-6 h-6 mx-auto text-slate-300" />
-                                                    <p className="font-bold text-slate-600">No site photo updates posted yet.</p>
-                                                    <p>Site inspection reports and execution logs will appear here automatically.</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Right Sidebar Column (5/12) */}
-                                    <div className="lg:col-span-5 space-y-6">
-                                        
-                                        {/* Upcoming Studio Milestones Card */}
-                                        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-4">
-                                            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                                                <h4 className="font-bold text-slate-900 text-xs flex items-center gap-2 uppercase tracking-wide">
-                                                    <Clock className="w-3.5 h-3.5 text-[#0066CC]" />
-                                                    Upcoming Studio Steps
-                                                </h4>
-                                                <span className="text-[10px] font-bold text-slate-400">Phase {lifecycleInfo.currentStageNumber}</span>
-                                            </div>
-
-                                            <div className="space-y-3">
-                                                {upcomingSteps.map((step) => (
-                                                    <div
-                                                        key={step.id}
-                                                        className={`p-3 rounded-xl border space-y-1 ${
-                                                            step.blocked
-                                                                ? 'bg-amber-50/60 border-amber-200'
-                                                                : 'bg-slate-50 border-slate-100'
-                                                        }`}
-                                                    >
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <span className="text-[10px] font-bold text-[#0066CC] uppercase tracking-wider truncate">{step.responsible}</span>
-                                                            <span className="text-[10px] font-medium text-slate-400 shrink-0">{step.expectedTimeframe}</span>
-                                                        </div>
-                                                        <h5 className="font-bold text-slate-900 text-xs">{step.title}</h5>
-                                                        <p className="text-[11px] text-slate-500">{step.description}</p>
-                                                        {step.blocked && step.blockedBy && (
-                                                            <p className="text-[10px] font-bold text-amber-800 flex items-center gap-1 pt-1">
-                                                                <Lock className="w-3 h-3 shrink-0" />
-                                                                Blocked: {step.blockedBy}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Studio Contact & Project Info */}
-                                        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-4">
-                                            <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                                                {settings?.logoUrl ? (
-                                                    <img src={settings.logoUrl} alt="Studio Logo" className="w-10 h-10 object-contain rounded-xl bg-slate-50 p-1 border border-slate-200" />
-                                                ) : (
-                                                    <div className="w-10 h-10 rounded-xl bg-slate-900 text-white font-black flex items-center justify-center text-sm shadow-inner">
-                                                        {studioCompanyName.charAt(0).toUpperCase()}
-                                                    </div>
-                                                )}
-                                                <div>
-                                                    <h4 className="font-bold text-slate-900 text-sm">{studioCompanyName}</h4>
-                                                    <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Project Management Support</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-3 text-xs">
-                                                <div className="flex justify-between items-start">
-                                                    <span className="text-slate-400 font-semibold">Property Address:</span>
-                                                    <span className="font-medium text-slate-800 text-right max-w-[180px] truncate">
-                                                        {(context as any).clientAddress || (context as any).address || 'Address On File'}
-                                                    </span>
-                                                </div>
-                                                <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                                                    <span className="text-slate-400 font-semibold">Primary Client:</span>
-                                                    <span className="font-bold text-slate-800">{context.clientName || 'Valued Client'}</span>
-                                                </div>
-                                                <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                                                    <span className="text-slate-400 font-semibold">Project Code:</span>
-                                                    <span className="font-mono font-bold text-slate-800">{projectData.id}</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="pt-2 grid grid-cols-2 gap-2">
-                                                <button 
-                                                    onClick={() => setShowContactModal(true)}
-                                                    className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                                                >
-                                                    <PhoneCall className="w-3.5 h-3.5 text-slate-600" />
-                                                    Call Studio
-                                                </button>
-                                                <button 
-                                                    onClick={() => setShowBankDetailsModal(true)}
-                                                    className="py-2 px-3 bg-[#FDFDFB] hover:bg-slate-50 text-slate-800 border border-slate-200 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                                                >
-                                                    <CreditCard className="w-3.5 h-3.5 text-[#C5A85C]" />
-                                                    Bank & UPI
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Filtered Active Room Progress */}
-                                        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-4">
-                                            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                                                <h4 className="font-bold text-slate-900 text-xs flex items-center gap-2 uppercase tracking-wide">
-                                                    <Layers className="w-3.5 h-3.5 text-slate-400" />
-                                                    Active Space Breakdown
-                                                </h4>
-                                                <span className="text-[10px] text-slate-400 font-bold">{roomProgressData.length} Rooms</span>
-                                            </div>
-
-                                            <div className="space-y-3">
-                                                {roomProgressData.filter(r => r.progress > 0).length > 0 ? (
-                                                    roomProgressData.filter(r => r.progress > 0).map((room, rIdx) => (
-                                                        <div key={room.id || rIdx} className="space-y-1">
-                                                            <div className="flex justify-between items-center text-xs">
-                                                                <span className="font-bold text-slate-800">{room.name}</span>
-                                                                <span className="font-bold text-amber-700">{room.progress}%</span>
-                                                            </div>
-                                                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                                <div className="h-full bg-amber-500 rounded-full" style={{ width: `${room.progress}%` }} />
-                                                            </div>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <div className="text-center py-4 text-slate-400 text-xs space-y-1">
-                                                        <p className="font-medium text-slate-600">Site Preparation Complete</p>
-                                                        <p>Active room execution stages will display here as work commences on site.</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                    </div>
-                                </div>
+                                <PortalOverview
+                                    clientName={(context as any).clientName}
+                                    studio={{
+                                        name: studioCompanyName,
+                                        tagline: orgData?.tagline,
+                                        // Falls back to the strapline only when
+                                        // no description has been written.
+                                        about: orgData?.about || orgData?.tagline,
+                                        address: [orgData?.officeAddress, orgData?.cityState].filter(Boolean).join(', ') || undefined,
+                                        phone: orgData?.contactPhone,
+                                        email: orgData?.contactEmail,
+                                        gstin: orgData?.gstin,
+                                        logoUrl: (settings as any)?.logoUrl || orgData?.orgLogo,
+                                        pmName: orgData?.signatoryName,
+                                        pmRole: orgData?.signatoryTitle,
+                                        website: orgData?.website,
+                                        instagramUrl: orgData?.instagramUrl,
+                                        instagramQr: orgData?.instagramQr,
+                                        businessHours: orgData?.businessHours,
+                                        siteVisitPolicy: orgData?.siteVisitPolicy,
+                                        escalationPolicy: orgData?.escalationPolicy,
+                                        credentials: orgData?.credentials,
+                                        pmResponseTime: orgData?.pmResponseTime,
+                                    }}
+                                    lifecycle={lifecycleInfo}
+                                    actions={clientActionSummary}
+                                    phases={spinePhases}
+                                    filter={spineFilter}
+                                    catchOpen={catchOpen}
+                                    catchUp={catchUp}
+                                    onClearFilter={() => setSpineFilter('all')}
+                                    projectValue={currentProjectValue}
+                                    totalPaid={totalPaid}
+                                    balanceDue={balanceDue}
+                                    overdueCount={duePayments.length}
+                                    onOpenTab={setActiveTab}
+                                    onRunAction={runClientAction}
+                                    onContactStudio={() => setShowContactModal(true)}
+                                    successMessage={signSuccessMessage}
+                                    onDismissSuccess={() => setSignSuccessMessage(null)}
+                                />
                             </motion.div>
                         )}
+
+                        {activeTab === 'timeline' && (
+                            <motion.div key="timeline" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-4">
+                                <div>
+                                    <h2 className="text-base font-bold text-slate-900">Your programme</h2>
+                                    <p className="text-xs text-slate-500 font-medium mt-0.5">
+                                        Work, the decisions we need from you, and when payments fall — on one timeline.
+                                    </p>
+                                </div>
+                                <PortalTimeline
+                                    programme={programme}
+                                    milestones={milestones}
+                                    decisions={decisions}
+                                    milestoneAmount={calculateMilestoneTotal}
+                                    stageOfMilestone={(m, i) => stageOfMilestone(m, i, lifecycleInfo.currentStageNumber)}
+                                />
+                            </motion.div>
+                        )}
+
                         {/* Tab 2: LIVE SITE FEED */}
                         {activeTab === 'feed' && (
                             <motion.div
@@ -2124,7 +2291,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                             { id: 'site', label: 'Site Photos' },
                                             { id: 'meetings', label: 'Minutes of Meeting (MoM)' },
                                             { id: 'variations', label: 'Variations' },
-                                            { id: 'payments', label: 'Invoices' },
+                                            { id: 'payments', label: 'Payments' },
                                             { id: 'decisions', label: 'Decisions' },
                                         ].map(f => (
                                             <button
@@ -2132,8 +2299,8 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                 onClick={() => setFeedCategoryFilter(f.id as any)}
                                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                                                     feedCategoryFilter === f.id 
-                                                        ? 'bg-slate-900 text-white shadow-xs' 
-                                                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                                                        ? 'bg-[#0066CC] text-white shadow-xs' 
+                                                        : 'bg-slate-100 hover:bg-sky-50 text-slate-700'
                                                 }`}
                                             >
                                                 {f.label}
@@ -2357,6 +2524,20 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                         </button>
                                                     </div>
                                                 )}
+
+                                                {/* An approval with no time on it is not a record of
+                                                    anything. Show who confirmed and when. */}
+                                                {item.type === 'decision' && item.status === 'confirmed' && (
+                                                    <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-1.5 text-[11px] font-bold text-emerald-700">
+                                                        <Check className="w-3.5 h-3.5" />
+                                                        <span>
+                                                            Approved{item.data?.confirmingParty ? ` by ${item.data.confirmingParty}` : ''}
+                                                            {item.data?.clientConfirmedAt
+                                                                ? ` · ${new Date(item.data.clientConfirmedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`
+                                                                : ''}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))
                                     )}
@@ -2567,7 +2748,36 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         )}
 
                         {/* Tab 4: 3D RENDERS & DRAWINGS */}
-                        {activeTab === 'designs' && (
+                        {activeTab === 'designScope' && (
+                          <div className="flex gap-1 rounded-2xl bg-slate-50 p-1 w-fit ring-1 ring-slate-200/70 mb-5">
+                            {([
+                              { id: 'drawings' as const, label: 'Drawings & renders', n: drawingSets.length },
+                              { id: 'scope' as const, label: 'Scope & BOQ', n: 0 },
+                            ]).map(t => {
+                              const on = designScopeTab === t.id;
+                              return (
+                                <button
+                                  key={t.id}
+                                  onClick={() => setDesignScopeTab(t.id)}
+                                  aria-current={on ? 'page' : undefined}
+                                  className={`px-3.5 py-2 rounded-xl text-[12px] font-bold whitespace-nowrap transition-all duration-200 cursor-pointer flex items-center gap-2 ${
+                                    on ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
+                                       : 'text-slate-500 hover:text-slate-900 hover:bg-white/70'
+                                  }`}
+                                >
+                                  {t.label}
+                                  {t.n > 0 && (
+                                    <span className={`inline-flex items-center rounded-full px-1.5 min-w-[20px] justify-center text-[10px] font-extrabold tabular-nums leading-[18px] ${
+                                      on ? 'bg-sky-50 text-[#0055B3]' : 'bg-slate-100 text-slate-500'
+                                    }`}>{t.n}</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {activeTab === 'designScope' && designScopeTab === 'drawings' && (
                             <motion.div
                                 key="designs"
                                 initial={{ opacity: 0, y: 8 }}
@@ -2575,6 +2785,44 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 exit={{ opacity: 0, y: -8 }}
                                 className="space-y-6"
                             >
+                                {/*
+                                  Site photographs, where they actually live.
+
+                                  The portal used to carry a "Site feed" lens
+                                  that hid everything on the project spine
+                                  except site updates — a filter dressed as a
+                                  tab, whose best case was the same page with
+                                  less on it. The album belongs in Drive, which
+                                  does ordering, full resolution and download
+                                  properly. Shown only when the studio has set
+                                  a link.
+                                */}
+                                {context.sitePhotosLink?.url && (
+                                    <a
+                                        href={context.sitePhotosLink.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="group flex items-center gap-4 bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-2xs hover:border-sky-200 hover:shadow-md transition-all"
+                                    >
+                                        <div className="w-11 h-11 rounded-2xl bg-sky-50 border border-sky-200 text-[#0066CC] flex items-center justify-center shrink-0">
+                                            <Camera className="w-5 h-5" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <h3 className="font-black text-slate-900 text-base tracking-tight">
+                                                {context.sitePhotosLink.label || 'Site progress photos'}
+                                            </h3>
+                                            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                                                Photographs from site, kept in a shared Google Drive album so you can view
+                                                and download them at full resolution. Opens in a new tab.
+                                            </p>
+                                        </div>
+                                        <span className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-[#0066CC] shrink-0 whitespace-nowrap">
+                                            Open album
+                                            <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                                        </span>
+                                    </a>
+                                )}
+
                                 <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-2xs space-y-6">
                                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                                         <div>
@@ -2615,7 +2863,13 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                     </div>
 
                                     {(() => {
-                                        const filteredDocs = designDocuments.filter((doc: any) => {
+                                        /* Filter the revision SETS, so a sheet
+                                           re-issued three times is one card
+                                           showing Rev 3 — not three cards with
+                                           the same name and no way to tell which
+                                           one the studio is working to. */
+                                        const filteredSets = drawingSets.filter(set => {
+                                            const doc: any = set.current;
                                             if (designTypeFilter !== 'all') {
                                                 const dt = doc.docType || '3d_render';
                                                 if (dt !== designTypeFilter) return false;
@@ -2625,6 +2879,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                             }
                                             return true;
                                         });
+                                        const filteredDocs = filteredSets.map(x => x.current);
 
                                         if (filteredDocs.length === 0) {
                                             return (
@@ -2640,12 +2895,18 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
 
                                         return (
                                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-5">
-                                                {filteredDocs.map((doc: any) => {
+                                                {filteredSets.map((set) => {
+                                                    const doc: any = set.current;
                                                     const isImg = doc.thumbnailUrl || (doc.url && doc.url.match(/\.(jpeg|jpg|png|webp|avif)/i));
                                                     const docType = doc.docType || '3d_render';
 
                                                     return (
-                                                        <div key={doc.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden group shadow-2xs hover:shadow-md transition-all flex flex-col">
+                                                        <div key={set.key} className="bg-white rounded-2xl border border-slate-200 overflow-hidden group shadow-2xs hover:shadow-md transition-all flex flex-col relative">
+                                                            {set.revision > 1 && (
+                                                                <span className="absolute top-2.5 right-2.5 z-10 px-2 py-0.5 rounded-full bg-slate-900/85 text-white text-[10px] font-bold backdrop-blur-xs">
+                                                                    Rev {set.revision}
+                                                                </span>
+                                                            )}
                                                             <div 
                                                                 onClick={() => {
                                                                     if (isImg) {
@@ -2673,7 +2934,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                     docType === '3d_render' ? 'bg-amber-500 text-slate-950' :
                                                                     docType === 'gfc_drawing' ? 'bg-blue-600 text-white' :
                                                                     docType === 'layout' ? 'bg-indigo-600 text-white' :
-                                                                    'bg-slate-800 text-white'
+                                                                    'bg-[#0055B3] text-white'
                                                                 }`}>
                                                                     {docType.replace('_', ' ')}
                                                                 </span>
@@ -2710,6 +2971,36 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                         {doc.addedAt ? new Date(doc.addedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
                                                                     </span>
                                                                 </div>
+
+                                                                {/* The history, stated but not in the way.
+                                                                    A client needs to know a sheet was revised —
+                                                                    and that the one they are looking at is the
+                                                                    current one. */}
+                                                                {set.older.length > 0 && (
+                                                                    <details className="group/rev">
+                                                                        <summary className="list-none cursor-pointer text-[10px] font-bold text-slate-400 hover:text-[#0055B3] transition-colors flex items-center gap-1">
+                                                                            <ChevronRight className="w-3 h-3 transition-transform group-open/rev:rotate-90" />
+                                                                            {set.older.length} earlier {set.older.length === 1 ? 'version' : 'versions'}
+                                                                        </summary>
+                                                                        <ul className="mt-1.5 space-y-1 pl-4 border-l border-slate-100">
+                                                                            {set.older.map((old: any, oi: number) => (
+                                                                                <li key={old.id || oi} className="flex items-center justify-between gap-2">
+                                                                                    <a
+                                                                                        href={old.url}
+                                                                                        target="_blank"
+                                                                                        rel="noopener noreferrer"
+                                                                                        className="text-[10px] font-semibold text-slate-500 hover:text-[#0055B3]"
+                                                                                    >
+                                                                                        Rev {set.revision - 1 - oi}
+                                                                                    </a>
+                                                                                    <span className="text-[10px] text-slate-400 tabular-nums">
+                                                                                        {old.addedAt ? new Date(old.addedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
+                                                                                    </span>
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    </details>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     );
@@ -2722,7 +3013,88 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         )}
 
                         {/* Tab 5: CLIENT APPROVALS & SIGN-OFFS HUB */}
-                        {(activeTab === 'approvals' || activeTab === 'decisions') && (
+                        {/* Decisions. This tab used to fall through to the
+                            Approvals Centre below — clicking "Decisions" showed
+                            a sign-off console reporting 0 items, so the project's
+                            actual decision record was never on screen anywhere.
+                            It now reads `context.projectDecisions`, the same
+                            array the studio's Decision Tracker writes to, with
+                            the client's own sign-off timestamps. */}
+                        {activeTab === 'decisions' && (
+                            <motion.div
+                                key="decisions"
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -8 }}
+                                className="space-y-4"
+                            >
+                                <div>
+                                    <h2 className="text-base font-bold text-slate-900">Your decisions</h2>
+                                    <p className="text-xs text-slate-500 font-medium mt-0.5">
+                                        Every choice we have asked you for, what you decided, and when.
+                                    </p>
+                                </div>
+
+                                {pendingClientDecisions.length > 0 && (
+                                    <div className="space-y-3">
+                                        {/* The headline carries the money as well as the count.
+                                            "2 decisions waiting" and "2 decisions waiting, ₹8,000
+                                            between them" are different sentences to be read by
+                                            somebody deciding whether to open the tab. */}
+                                        <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-[11px] font-bold text-amber-800 flex flex-wrap gap-x-2">
+                                            <span>
+                                                {pendingClientDecisions.length === 1
+                                                    ? 'One decision is waiting on you'
+                                                    : `${pendingClientDecisions.length} decisions are waiting on you`}
+                                            </span>
+                                            {pendingDecisionCost > 0 && (
+                                                <span className="font-black">
+                                                    · {formatINR(pendingDecisionCost)} riding on them
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* One card per decision, not one panel with hairlines
+                                            between. Each card now carries a thread, cost chips, a
+                                            drawing and two buttons -- at that height a 1px divider
+                                            stops reading as a boundary and the whole list looks
+                                            like a single run-on document.
+
+                                            `layout` so the survivors slide up into the gap when one
+                                            is answered rather than the list snapping. */}
+                                        <AnimatePresence initial={false}>
+                                        {pendingClientDecisions.map((d, i) => (
+                                            <motion.div
+                                                key={d.id}
+                                                layout
+                                                initial={{ opacity: 0, y: 8 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, scale: 0.98, height: 0, marginBottom: 0 }}
+                                                transition={{
+                                                    duration: 0.3,
+                                                    ease: [0.22, 1, 0.36, 1],
+                                                    delay: Math.min(i, 5) * 0.04,
+                                                }}
+                                                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs hover:border-slate-300 hover:shadow-sm transition-[border-color,box-shadow] duration-200"
+                                            >
+                                                <ClientDecisionCard
+                                                    decision={d}
+                                                    nature={decisionNature(d as any, lifecycleInfo.currentStageNumber)}
+                                                    busy={decisionBusyId === d.id}
+                                                    onApprove={() => handleApproveDecisionOption(d.id, 'Confirmed by client')}
+                                                    onQuery={(text) => handleQueryDecision(d.id, text)}
+                                                />
+                                            </motion.div>
+                                        ))}
+                                        </AnimatePresence>
+                                    </div>
+                                )}
+
+                                <DecisionsTable decisions={decisions} stageNumber={lifecycleInfo.currentStageNumber} />
+                            </motion.div>
+                        )}
+
+                        {activeTab === 'approvals' && (
                             <motion.div
                                 key="approvals"
                                 initial={{ opacity: 0, y: 8 }}
@@ -2789,9 +3161,9 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                     {/* Sub-filters */}
                                     <div className="flex flex-wrap items-center gap-2">
                                         {([
-                                            { id: 'all', label: 'Everything', count: clientActionSummary.allActions.length, tone: 'bg-slate-900 text-white' },
+                                            { id: 'all', label: 'Everything', count: clientActionSummary.allActions.length, tone: 'bg-[#0066CC] text-white' },
                                             { id: 'agreements', label: 'Agreements', count: clientActionSummary.agreementsPending.length, tone: 'bg-amber-600 text-white', icon: FileText },
-                                            { id: 'payments', label: 'Invoices', count: clientActionSummary.paymentsPending.length, tone: 'bg-rose-600 text-white', icon: Wallet },
+                                            { id: 'payments', label: 'Payments', count: clientActionSummary.paymentsPending.length, tone: 'bg-rose-600 text-white', icon: Wallet },
                                             { id: 'variations', label: 'Variations', count: clientActionSummary.variationsPending.length, tone: 'bg-orange-600 text-white', icon: FileEdit },
                                             { id: 'decisions', label: 'Decisions', count: clientActionSummary.decisionsPending.length, tone: 'bg-purple-600 text-white', icon: CheckSquare },
                                             { id: 'materials', label: 'Finishes', count: clientActionSummary.materialsPending.length, tone: 'bg-[#0066CC] text-white', icon: Layers },
@@ -2822,26 +3194,6 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                         (approvalsFilter === 'decisions' && a.category === 'decision') ||
                                         (approvalsFilter === 'variations' && a.category === 'variation')
                                     );
-
-                                    const runAction = (item: ClientActionItem) => {
-                                        switch (item.actionType) {
-                                            case 'sign_terms': setSigningDocType('terms'); break;
-                                            case 'sign_contract': setSigningDocType('contract'); break;
-                                            case 'sign_handover': setSigningDocType('handover'); break;
-                                            case 'pay_milestone': setActiveTab('financials'); break;
-                                            case 'approve_material':
-                                                handleConfirmMaterialSelection(item.actionPayload?.id);
-                                                setSignSuccessMessage(`Finish confirmed: ${item.actionPayload?.itemName || item.title}`);
-                                                setTimeout(() => setSignSuccessMessage(null), 6000);
-                                                break;
-                                            case 'confirm_decision':
-                                                handleApproveDecisionOption(item.actionPayload?.id, 'Confirmed by client');
-                                                setSignSuccessMessage(`Decision confirmed: ${item.title}`);
-                                                setTimeout(() => setSignSuccessMessage(null), 6000);
-                                                break;
-                                            case 'review_variation': setActiveTab('scope'); break;
-                                        }
-                                    };
 
                                     const categoryStyle: Record<string, { icon: any; ring: string; chip: string }> = {
                                         agreement: { icon: FileCheck, ring: 'border-amber-300 bg-amber-50/60', chip: 'bg-amber-100 text-amber-900' },
@@ -2917,10 +3269,10 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                         </div>
                                                                     ) : null}
                                                                     <button
-                                                                        onClick={() => runAction(item)}
+                                                                        onClick={() => runClientAction(item)}
                                                                         className={`px-4 py-2.5 font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                                                                             isCritical
-                                                                                ? 'bg-slate-900 hover:bg-black text-white'
+                                                                                ? 'bg-[#0066CC] hover:bg-[#0055B3] text-white'
                                                                                 : 'bg-[#0066CC] hover:bg-[#0055B3] text-white'
                                                                         }`}
                                                                     >
@@ -3232,6 +3584,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                     projectData={{ ...projectData, context }}
                                     studioName={studioCompanyName}
                                     onOpenDocument={openDocument}
+                                    onAskQuestion={(kind) => setQuestionFor(kind)}
                                 />
                             </motion.div>
                         )}
@@ -3288,7 +3641,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         )}
 
                         {/* Tab 7: SCOPE & BOQ - ZERO-QUESTIONS TRANSPARENT FOCUS & TABLE */}
-                        {activeTab === 'scope' && (
+                        {activeTab === 'designScope' && designScopeTab === 'scope' && (
                             <motion.div
                                 key="scope"
                                 initial={{ opacity: 0, y: 8 }}
@@ -3296,48 +3649,85 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 exit={{ opacity: 0, y: -8 }}
                                 className="space-y-6"
                             >
-                                {/* Executive Scope Summary Card */}
-                                <div className="bg-gradient-to-br from-[#0066CC] via-[#0052A3] to-[#003D7A] rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-blue-400/30 space-y-6">
-                                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-                                        <div className="space-y-2">
-                                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-sky-100 text-xs font-bold backdrop-blur-md">
-                                                <ShieldCheck className="w-4 h-4 text-amber-300" />
-                                                Approved Master Deliverables & BOQ
-                                            </div>
-                                            <h3 className="font-black text-2xl sm:text-3xl text-white tracking-tight">
-                                                Scope of Work & Itemized Pricing
-                                            </h3>
-                                            <p className="text-xs sm:text-sm text-sky-100 max-w-2xl leading-relaxed">
-                                                Complete item-by-item transparency. Every deliverable includes its approved quantity, unit rate, specifications, hardware standard, and turnkey execution cost.
-                                            </p>
-                                        </div>
+                                {/*
+                                  The scope header.
 
-                                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/20 shrink-0 w-full lg:w-auto text-left lg:text-right space-y-1 shadow-inner">
-                                            <p className="text-[11px] font-bold text-sky-200 uppercase tracking-wider">Total Approved Scope Value</p>
-                                            <p className="text-2xl sm:text-3xl font-black text-amber-300 tracking-tight">
-                                                {formatINR(totalScopeValue)}
-                                            </p>
-                                            <p className="text-[10px] text-sky-100 font-medium">
-                                                {flatBoqList.length} verified deliverables across {allBoqRooms.length} rooms
-                                            </p>
-                                        </div>
+                                  What stood here was a blue marketing band —
+                                  "Zero Hidden Charges", "Factory Precision",
+                                  "Turnkey Delivery" — in a gradient and a
+                                  typeface used nowhere else in this portal. It
+                                  read as a slide pasted in from a pitch deck,
+                                  and worse, it made three promises the app
+                                  cannot stand behind: nothing here knows what a
+                                  rate includes, whether joinery is factory-made,
+                                  or that a QA handover happened.
+
+                                  A BOQ earns trust by being checkable, not by
+                                  asserting it is honest. So: the figure, what it
+                                  covers, which version it is, and when it was
+                                  approved.
+                                */}
+                                <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
+                                  <div className="flex flex-wrap items-start justify-between gap-5">
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <h3 className="text-base font-bold text-slate-900">Scope &amp; pricing</h3>
+                                        {/* Only a frozen BOQ is an approved one.
+                                            Until the studio freezes it, what the client is reading is
+                                            the working tier — it can change under them, and saying
+                                            "Approved" over it would be the same kind of false comfort
+                                            as the marketing band this replaced. */}
+                                        {context.operativeBoqVersion ? (
+                                          <>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-0.5">
+                                              Approved
+                                            </span>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 border border-slate-200 rounded-md px-2 py-0.5 tabular-nums">
+                                              Rev {context.operativeBoqVersion}
+                                            </span>
+                                          </>
+                                        ) : (
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-0.5">
+                                            Not yet frozen
+                                          </span>
+                                        )}
+
+                                        {/* The revision history.
+                                            A revision is the moment a client most
+                                            needs to trust the studio, and the portal
+                                            used to swap one BOQ for another with no
+                                            account of what moved. */}
+                                        {boqVersions.length > 1 && (
+                                          <button
+                                            onClick={() => setShowBoqVersions(true)}
+                                            className="text-[10px] font-bold uppercase tracking-wider text-[#0055B3] bg-sky-50 border border-sky-200 rounded-md px-2 py-0.5 hover:bg-sky-100 transition-colors cursor-pointer"
+                                          >
+                                            {boqVersionSet.mode === 'revisions'
+                                              ? `${boqVersions.length} versions · see what changed`
+                                              : `${boqVersions.length} packages · compare`}
+                                          </button>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-slate-500 font-medium mt-1.5 max-w-2xl leading-relaxed">
+                                        Every line the studio is building, with its quantity, unit rate and total.
+                                        {context.operativeBoqVersion
+                                          ? 'This is the version your agreement is priced against — if it changes, you will be asked to approve the change before it is built.'
+                                          : 'Your studio is still working on this scope, so quantities and rates can still move. Once it is frozen you will be asked to approve it, and any change after that comes back to you.'}
+                                      </p>
                                     </div>
 
-                                    {/* Guarantee & Inclusions Bar */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-4 border-t border-white/20 text-xs text-sky-100">
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
-                                            <span><strong>Zero Hidden Charges:</strong> All rates include raw material, hardware & finishing.</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
-                                            <span><strong>Factory Precision:</strong> Modular joinery with calibrated edge-banding & soft-close fittings.</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
-                                            <span><strong>Turnkey Delivery:</strong> Certified on-site assembly, alignment, and final QA handover.</span>
-                                        </div>
+                                    <div className="text-right shrink-0">
+                                      <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-400">
+                                        Approved scope value
+                                      </p>
+                                      <p className="text-2xl font-extrabold text-slate-900 tabular-nums tracking-tight">
+                                        {formatINR(totalScopeValue)}
+                                      </p>
+                                      <p className="text-[11px] text-slate-500 font-semibold mt-0.5 tabular-nums">
+                                        {flatBoqList.length} items across {allBoqRooms.length} rooms
+                                      </p>
                                     </div>
+                                  </div>
                                 </div>
 
                                 <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-2xs space-y-6">
@@ -3361,12 +3751,12 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                 onClick={() => setBoqRoomFilter('all')}
                                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 border ${
                                                     boqRoomFilter === 'all'
-                                                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                                        ? 'bg-[#0066CC] text-white border-[#0066CC] shadow-xs'
                                                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                                                 }`}
                                             >
                                                 <span>All Rooms</span>
-                                                <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${boqRoomFilter === 'all' ? 'bg-slate-800 text-amber-300' : 'bg-slate-200 text-slate-700'}`}>
+                                                <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${boqRoomFilter === 'all' ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-700'}`}>
                                                     {formatINR(totalScopeValue)}
                                                 </span>
                                             </button>
@@ -3460,7 +3850,14 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                         const matchDesc = item.description && item.description.toLowerCase().includes(q);
                                                         const matchRoom = room.toLowerCase().includes(q);
                                                         const matchTrade = trade.toLowerCase().includes(q);
-                                                        if (!matchItem && !matchDesc && !matchRoom && !matchTrade) return false;
+                                                        /* Clause text is searchable as well — "excludes
+                                                           electrical" is exactly the kind of thing a client
+                                                           opens this tab to look for. */
+                                                        const clauses = [...(item.inclusions || []), ...(item.exclusions || [])]
+                                                            .join(' ')
+                                                            .toLowerCase();
+                                                        const matchClause = clauses.includes(q);
+                                                        if (!matchItem && !matchDesc && !matchRoom && !matchTrade && !matchClause) return false;
                                                     }
                                                     return true;
                                                 });
@@ -3530,8 +3927,71 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                                             <td className="px-4 py-3.5 text-center text-xs font-bold text-slate-400">
                                                                                                 {(idx + 1).toString().padStart(2, '0')}
                                                                                             </td>
-                                                                                            <td className="px-4 py-3.5 align-middle">
-                                                                                                <p className="font-bold text-slate-900 text-xs">{item.item}</p>
+                                                                                            <td className="px-4 py-3.5 align-top">
+                                                                                                <div className="flex items-baseline gap-2 flex-wrap">
+                                                                                                    <p className={`font-bold text-xs ${
+                                                                                                        item.change?.type === 'removed'
+                                                                                                            ? 'text-slate-400 line-through'
+                                                                                                            : 'text-slate-900'
+                                                                                                    }`}>{item.item}</p>
+                                                                                                    {/* Provenance, not commercial state. A line
+                                                                                                        approved yesterday and one in the contract
+                                                                                                        since day one both read "Approved" in the
+                                                                                                        status column — true, and useless for
+                                                                                                        spotting what moved. */}
+                                                                                                    {item.change && (
+                                                                                                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-black uppercase tracking-wider border ${
+                                                                                                            item.change.type === 'added'
+                                                                                                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                                                                                                : item.change.type === 'removed'
+                                                                                                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                                                                                                    : 'bg-sky-50 text-[#0055B3] border-sky-200'
+                                                                                                        }`}>
+                                                                                                            {item.change.type === 'added'
+                                                                                                                ? 'New'
+                                                                                                                : item.change.type === 'removed'
+                                                                                                                    ? 'Removed from scope'
+                                                                                                                    : item.change.type === 'replaced'
+                                                                                                                        ? 'Substituted'
+                                                                                                                        : 'Revised'}
+                                                                                                        </span>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                                {/* What it was, when the log recorded it — a
+                                                                                                    "Revised" tag with no previous figure asks the
+                                                                                                    client to take the change on trust. */}
+                                                                                                {item.change?.from && (item.change.from.qty !== undefined || item.change.from.rate !== undefined) && (
+                                                                                                    <p className="text-[10.5px] text-slate-500 mt-1">
+                                                                                                        {item.change.type === 'removed'
+                                                                                                            ? `Was ${item.change.from.qty} ${item.unit} at ${formatINR(item.change.from.rate)}`
+                                                                                                            : item.change.from.qty !== undefined
+                                                                                                                ? `Was ${item.change.from.qty} ${item.unit}`
+                                                                                                                : `Was ${formatINR(item.change.from.rate)} per ${item.unit}`}
+                                                                                                        {item.change.at ? ` · ${new Date(item.change.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}
+                                                                                                    </p>
+                                                                                                )}
+                                                                                                {/* The boundaries of the line, not decoration: the
+                                                                                                    agreement makes inclusions and exclusions part of
+                                                                                                    the BOQ, so a client approving a price should be
+                                                                                                    able to see what it does and does not cover. */}
+                                                                                                {!!(item.inclusions?.length || item.exclusions?.length) && (
+                                                                                                    <div className="mt-1.5 space-y-1 max-w-[420px]">
+                                                                                                        {item.inclusions?.length > 0 && (
+                                                                                                            <p className="text-[10.5px] leading-relaxed text-slate-500">
+                                                                                                                <span className="font-black uppercase tracking-wider text-emerald-700">Includes</span>
+                                                                                                                <span className="mx-1.5 text-slate-300">·</span>
+                                                                                                                {item.inclusions.join(' · ')}
+                                                                                                            </p>
+                                                                                                        )}
+                                                                                                        {item.exclusions?.length > 0 && (
+                                                                                                            <p className="text-[10.5px] leading-relaxed text-slate-500">
+                                                                                                                <span className="font-black uppercase tracking-wider text-rose-700">Excludes</span>
+                                                                                                                <span className="mx-1.5 text-slate-300">·</span>
+                                                                                                                {item.exclusions.join(' · ')}
+                                                                                                            </p>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                )}
                                                                                             </td>
                                                                                             <td className="px-4 py-3.5 align-middle">
                                                                                                 <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold border ${catInfo.color}`}>
@@ -3551,7 +4011,11 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                                                 </span>
                                                                                             </td>
                                                                                             <td className="px-4 py-3.5 text-center align-middle">
-                                                                                                {isAdded ? (
+                                                                                                {item.change?.type === 'removed' ? (
+                                                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-900 border border-rose-300">
+                                                                                                        Removed
+                                                                                                    </span>
+                                                                                                ) : isAdded ? (
                                                                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
                                                                                                         <Sparkles className="w-3 h-3 text-amber-600" /> Added
                                                                                                     </span>
@@ -3586,13 +4050,20 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                             );
                                                         })}
 
-                                                        {/* Grand Total Summary in Table */}
-                                                        <div className="bg-gradient-to-r from-[#0066CC] to-[#004C99] text-white p-5 rounded-2xl flex items-center justify-between border border-blue-500/30 shadow-md">
+                                                        {/* The total.
+                                                            Was the same blue gradient as the header band, with
+                                                            "branded fittings" — a claim nothing in the data
+                                                            supports. It is a sum; it should look like one. */}
+                                                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 flex items-center justify-between gap-4 flex-wrap">
                                                             <div>
-                                                                <p className="text-xs text-sky-200 font-bold uppercase tracking-wider">Grand Total Approved Scope</p>
-                                                                <p className="text-xs text-sky-100">All rooms, materials, branded fittings & installation</p>
+                                                                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                                                    Total scope value
+                                                                </p>
+                                                                <p className="text-[11px] text-slate-500 font-medium mt-0.5 tabular-nums">
+                                                                    {flatBoqList.length} items across {allBoqRooms.length} rooms
+                                                                </p>
                                                             </div>
-                                                            <p className="text-2xl font-black text-amber-300">
+                                                            <p className="text-2xl font-extrabold text-slate-900 tabular-nums tracking-tight">
                                                                 {formatINR(totalScopeValue)}
                                                             </p>
                                                         </div>
@@ -3614,124 +4085,33 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 exit={{ opacity: 0, y: -8 }}
                                 className="space-y-6"
                             >
-                                {/* Fee Breakdown Dashboards */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Design Fees Tracking */}
-                                    <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-2xs flex flex-col justify-between space-y-4">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 mb-1 block">Design Fees Tracking</span>
-                                                <h3 className="text-2xl font-black text-slate-900">{formatINR(totalDesignValue)}</h3>
-                                                <p className="text-[11px] text-slate-500 mt-1">Includes Base Fee: {formatINR(taxableDesign)} + GST</p>
-                                            </div>
-                                            <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
-                                                <FileEdit className="w-5 h-5 text-indigo-600" />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="flex justify-between items-center text-[11px] mb-1.5 font-bold text-slate-600">
-                                                <span>Amount Cleared: {formatINR(designPaid)}</span>
-                                                <span className="text-indigo-700">{designPaidPercentage}%</span>
-                                            </div>
-                                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${designPaidPercentage}%` }}></div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Execution Fees Tracking */}
-                                    <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-2xs flex flex-col justify-between space-y-4">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-[#0066CC] mb-1 block">Execution Contract Tracking</span>
-                                                <h3 className="text-2xl font-black text-slate-900">{formatINR(totalExecutionValue)}</h3>
-                                                <p className="text-[11px] text-slate-500 mt-1">Includes Base Value: {formatINR(taxableExecution)} + GST</p>
-                                            </div>
-                                            <div className="w-10 h-10 rounded-full bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
-                                                <Layers className="w-5 h-5 text-[#0066CC]" />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="flex justify-between items-center text-[11px] mb-1.5 font-bold text-slate-600">
-                                                <span>Amount Cleared: {formatINR(executionPaid)}</span>
-                                                <span className="text-[#0066CC]">{executionPaidPercentage}%</span>
-                                            </div>
-                                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-[#0066CC] rounded-full transition-all duration-500" style={{ width: `${executionPaidPercentage}%` }}></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-2xs space-y-6">
-                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-100 pb-4 gap-4">
-                                        <div>
-                                            <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-                                                <Wallet className="w-4 h-4 text-amber-600" />
-                                                Milestone Payment Schedule & Invoices
-                                            </h3>
-                                            <p className="text-xs text-slate-600 mt-0.5">
-                                                Transparent invoice schedule for Design & Execution phases.
-                                            </p>
-                                        </div>
-
-                                        <button
-                                            onClick={() => setShowBankDetailsModal(true)}
-                                            className="px-3.5 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs whitespace-nowrap"
-                                        >
-                                            <CreditCard className="w-3.5 h-3.5" />
-                                            Pay via Bank Transfer
-                                        </button>
-                                    </div>
-
-                                    {/* Milestone List */}
-                                    <div className="space-y-3">
-                                        {milestones.map((m) => {
-                                            const amount = calculateMilestoneTotal(m);
-                                            return (
-                                                <div 
-                                                    key={m.id} 
-                                                    className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
-                                                        m.status === 'paid' ? 'bg-emerald-50/50 border-emerald-200' :
-                                                        m.status === 'invoiced' ? 'bg-rose-50/50 border-rose-200' :
-                                                        'bg-white border-slate-200'
-                                                    }`}
-                                                >
-                                                    <div className="space-y-1 flex-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <h5 className="font-bold text-slate-900 text-sm">{m.name} ({m.percentage}%)</h5>
-                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                                                m.status === 'paid' ? 'bg-emerald-100 text-emerald-800' :
-                                                                m.status === 'invoiced' ? 'bg-rose-100 text-rose-800' :
-                                                                'bg-slate-100 text-slate-600'
-                                                            }`}>
-                                                                {m.status ? m.status.toUpperCase() : 'UPCOMING'}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-xs text-slate-600">{m.description || 'Contract milestone payment'}</p>
-                                                    </div>
-
-                                                    <div className="text-right shrink-0 space-y-1">
-                                                        <p className="text-base font-black text-slate-900">{formatINR(amount)}</p>
-                                                        {m.status === 'invoiced' && (
-                                                            <button
-                                                                onClick={() => setShowBankDetailsModal(true)}
-                                                                className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer"
-                                                            >
-                                                                Pay Invoice
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
+                                <PortalPayments
+                                    milestones={milestones}
+                                    amountOf={calculateMilestoneTotal}
+                                    projectValue={currentProjectValue}
+                                    totalPaid={totalPaid}
+                                    balanceDue={balanceDue}
+                                    dueCount={duePayments.length}
+                                    design={{
+                                        total: totalDesignValue,
+                                        taxable: taxableDesign,
+                                        paid: designPaid,
+                                        pct: designPaidPercentage,
+                                    }}
+                                    execution={{
+                                        total: totalExecutionValue,
+                                        taxable: taxableExecution,
+                                        paid: executionPaid,
+                                        pct: executionPaidPercentage,
+                                    }}
+                                    onContactStudio={() => setActiveTab('overview')}
+                                />
                             </motion.div>
                         )}
                     </AnimatePresence>
                 </div>
             </main>
+            </div>
 
             {/* LIGHTBOX MODAL */}
             {lightboxImage && (
@@ -3748,59 +4128,6 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                             <h4 className="font-bold text-base">{lightboxImage.title}</h4>
                             {lightboxImage.subtitle && <p className="text-xs text-slate-400">{lightboxImage.subtitle}</p>}
                         </div>
-                    </div>
-                </div>
-            )}
-
-            {/* BANK DETAILS MODAL */}
-            {showBankDetailsModal && (
-                <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-6">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                            <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-                                <CreditCard className="w-5 h-5 text-amber-600" />
-                                Studio Bank Account & UPI
-                            </h3>
-                            <button onClick={() => setShowBankDetailsModal(false)} className="text-slate-400 hover:text-slate-600">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <div className="space-y-4 text-xs">
-                            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                                <p className="text-slate-500 font-medium">Beneficiary Name</p>
-                                <p className="font-bold text-slate-900 text-sm">{settings?.companyName || studioCompanyName}</p>
-                            </div>
-
-                            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-slate-500 font-medium">Bank Name</span>
-                                    <span className="font-bold text-slate-800">{settings?.bankDetails?.bankName || 'HDFC Bank Ltd.'}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-slate-500 font-medium">Account Number</span>
-                                    <span className="font-mono font-bold text-slate-900">{settings?.bankDetails?.accountNumber || '50200012345678'}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-slate-500 font-medium">IFSC Code</span>
-                                    <span className="font-mono font-bold text-amber-800">{settings?.bankDetails?.ifscCode || 'HDFC0001234'}</span>
-                                </div>
-                            </div>
-
-                            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-1 text-amber-950">
-                                <p className="font-bold text-xs">Payment Notice</p>
-                                <p className="text-[11px] leading-relaxed">
-                                    Please share the payment transaction UTR reference with your Studio PM to update your milestone status instantly.
-                                </p>
-                            </div>
-                        </div>
-
-                        <button
-                            onClick={() => setShowBankDetailsModal(false)}
-                            className="w-full py-3 bg-slate-900 hover:bg-black text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
-                        >
-                            Close
-                        </button>
                     </div>
                 </div>
             )}
@@ -3950,7 +4277,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
 
                             <button
                                 type="submit"
-                                className="w-full py-3 bg-slate-900 hover:bg-black text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                                className="w-full py-3 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
                             >
                                 Send Decision Request
                             </button>
@@ -4095,7 +4422,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 </button>
                                 <button
                                     onClick={() => setFocusedBoqItem(null)}
-                                    className="w-full sm:w-1/2 py-3 bg-slate-900 hover:bg-black text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                                    className="w-full sm:w-1/2 py-3 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
                                 >
                                     Close Details
                                 </button>
@@ -4165,8 +4492,11 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         // that is the whole record for an addendum, which has no
                         // lifecycle gate of its own. Gated agreements additionally
                         // write through the canonical signoff patch.
-                        if (docket.issueId) setProjectContext(signIssue(docket.issueId, docket));
-                        const issue = getCurrentIssue(context, readingRoomKind);
+                        if (docket.issueId) {
+                            setProjectContext(signIssue(docket.issueId, docket));
+                            persistClientAction({ type: 'signIssue', issueId: docket.issueId, docket });
+                        }
+                        const issue = getCurrentIssue(context, readingRoomKind, { clientView: true });
                         const isAddendum = !!issue && docket.issueId !== issue.id;
                         const agreement = agreementKindFor(readingRoomKind);
                         if (agreement && !isAddendum) handleSignDocComplete(docket, agreement);
@@ -4174,7 +4504,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         setReadingRoomIssueId(undefined);
                     }}
                     onRaiseQuery={(clauseRef, excerpt, question) => {
-                        const issue = getCurrentIssue(context, readingRoomKind);
+                        const issue = getCurrentIssue(context, readingRoomKind, { clientView: true });
                         if (!issue) return;
                         setProjectContext(raiseQuery({
                             issueId: issue.id,
@@ -4184,7 +4514,20 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                             question,
                             raisedBy: context.clientName || 'Client'
                         }));
-                        setReadingRoomKind(null);
+                        persistClientAction({
+                            type: 'raiseQuery',
+                            issueId: issue.id,
+                            documentKind: readingRoomKind,
+                            clauseRef,
+                            clauseExcerpt: excerpt,
+                            question,
+                        });
+                        /*
+                          The reading room stays open. Closing it on send threw
+                          the client out of the document the moment they asked
+                          about it — so they could not read on, and the mark now
+                          sitting on that clause was never seen.
+                        */
                         setSignSuccessMessage(
                             `Your question about clause ${clauseRef} has been sent to your studio.`
                         );

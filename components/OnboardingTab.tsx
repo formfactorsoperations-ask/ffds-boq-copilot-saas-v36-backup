@@ -53,7 +53,7 @@ const OnboardingTab: React.FC<OnboardingTabProps> = ({ projectContext, setProjec
                 <script src="https://cdn.tailwindcss.com"></script>
                 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
                 <style>
-                    body { font-family: "Open Sans", sans-serif; background: #f8fafc; padding: 40px; }
+                    body { font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8fafc; padding: 40px; }
                     .print-container { background: white; margin: 0 auto; box-shadow: 0 10px 40px -10px rgba(0,0,0,0.1); }
                     @media print {
                         body { background: white; padding: 0; }

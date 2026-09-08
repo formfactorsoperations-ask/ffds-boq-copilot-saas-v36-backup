@@ -31,12 +31,23 @@ export function MomAcknowledgePage({ token }: { token: string }) {
                     const clientAtt = data.attendees?.find(a => a.side === 'client');
                     if (clientAtt) setAckName(clientAtt.name);
 
-                    // Fetch org data for PDF layout
+                    /*
+                      Studio branding for the PDF layout. Its own try/catch on
+                      purpose: this page is opened by a client with a token and
+                      no account, and the organizations document is no longer
+                      world-readable. A denial here must cost the letterhead,
+                      not the whole page — the client still needs to read and
+                      acknowledge the minutes.
+                    */
                     const parts = docSnap.ref.path.split('/');
                     if (parts[0] === 'organizations') {
                         const orgId = parts[1];
-                        const orgSnap = await getDoc(doc(db, 'organizations', orgId));
-                        if (orgSnap.exists()) setOrgData(orgSnap.data());
+                        try {
+                            const orgSnap = await getDoc(doc(db, 'organizations', orgId));
+                            if (orgSnap.exists()) setOrgData(orgSnap.data());
+                        } catch {
+                            // Falls back to default branding.
+                        }
                     }
                 } else {
                     setError("MoM link is invalid or expired.");

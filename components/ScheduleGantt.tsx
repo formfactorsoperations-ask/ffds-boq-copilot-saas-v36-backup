@@ -592,7 +592,7 @@ export default function ScheduleGantt({
 
               {/* Rows */}
               {result.tasks.map(t => (
-                <div key={t.id} className="h-9 border-b border-slate-100 relative">
+                <div key={t.id} className="gt-row h-9 border-b border-slate-100 relative">
                   {zoom === 'day' && Array.from({ length: span.days }, (_, i) => {
                     const d = span.from + i;
                     return isWorkingDay(schedule.calendar, d) ? null : (
@@ -607,22 +607,24 @@ export default function ScheduleGantt({
                   )}
 
                   {t.kind === 'milestone' ? (
-                    <div className="absolute top-1.5 flex items-center gap-1" style={{ left: left(t.startDay) }}>
-                      <div className="w-0 h-0" style={{
-                        borderLeft: '6px solid transparent', borderRight: '6px solid transparent',
-                        borderBottom: `11px solid ${KIND_COLOR.milestone}`,
-                      }} />
+                    <div className="gt-milestone-wrap absolute top-1.5 flex items-center gap-1.5" style={{ left: left(t.startDay), perspective: '500px' }}>
+                      <span className="gt-milestone block w-2.5 h-2.5 shrink-0"
+                        style={{ backgroundColor: KIND_COLOR.milestone }} />
                       <span className="text-[9px] font-bold text-slate-900 whitespace-nowrap">{t.title}</span>
                     </div>
                   ) : (
                     <button onClick={() => setSelectedId(t.id)}
                       title={`${t.title} (${t.workDays} working days: ${t.startISO} to ${t.endISO})`}
-                      className="absolute top-2 h-5 rounded flex items-center justify-between px-1 text-[9px] font-bold text-white overflow-hidden gap-1 transition-all hover:scale-[1.01] hover:brightness-105"
+                      className={`gt-bar absolute top-2 h-5 rounded flex items-center justify-between px-1 text-[9px] font-bold text-white overflow-hidden gap-1${
+                        t.onCriticalPath ? ' gt-bar--critical' : ''
+                      }`}
                       style={{
                         left: left(t.startDay),
                         width: Math.max(px(t.endDay - t.startDay + 1), 6),
-                        background: t.openGates.length ? STATUS_COLOR.blocked : (KIND_COLOR[t.kind] || '#64748b'),
-                        boxShadow: t.onCriticalPath ? '0 0 0 1.5px #fff, 0 0 0 3px rgba(245,158,11,.6)' : undefined,
+                        /* backgroundColor, not the `background` shorthand: the
+                           shorthand resets background-image and would wipe out
+                           the extrusion gradient .gt-bar paints on top. */
+                        backgroundColor: t.openGates.length ? STATUS_COLOR.blocked : (KIND_COLOR[t.kind] || '#64748b'),
                       }}>
                       {px(t.endDay - t.startDay + 1) > 50 ? (
                         <>
@@ -661,7 +663,7 @@ export default function ScheduleGantt({
                       Today
                     </span>
                   </div>
-                  <div className="w-[2px] h-full bg-amber-500/90 border-r border-dashed border-amber-600/70" />
+                  <div className="gt-today-line w-[2px] h-full bg-amber-500/90 border-r border-dashed border-amber-600/70" />
                 </div>
               )}
 

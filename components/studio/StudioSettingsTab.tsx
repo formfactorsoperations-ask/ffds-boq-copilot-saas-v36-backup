@@ -118,6 +118,15 @@ export default function StudioSettingsTab({
         signatoryName: orgData.signatoryName || '',
         signatoryTitle: orgData.signatoryTitle || '',
         tagline: orgData.tagline || '',
+        website: orgData.website || '',
+        instagramUrl: orgData.instagramUrl || '',
+        instagramQr: orgData.instagramQr || '',
+        about: orgData.about || '',
+        businessHours: orgData.businessHours || '',
+        siteVisitPolicy: orgData.siteVisitPolicy || '',
+        escalationPolicy: orgData.escalationPolicy || '',
+        pmResponseTime: orgData.pmResponseTime || '',
+        credentials: (orgData.credentials || []).join(', '),
         designFeePercentage: orgData.designFeePercentage || 10,
         defaultGstRate: orgData.defaultGstRate || 18,
         themeColor: orgData.themeColor || '#0066CC',
@@ -177,6 +186,12 @@ export default function StudioSettingsTab({
         if (!canEdit) return;
         updateOrgData({
             ...brandingData,
+            /* Edited as one comma-separated line, stored as the list the
+               portal footer actually renders. */
+            credentials: brandingData.credentials
+                .split(',')
+                .map(c => c.trim())
+                .filter(Boolean),
             bankDetails: bankData,
             defaultContractWordings: {
                 forceMajeureText: brandingData.forceMajeureText,
@@ -493,6 +508,53 @@ export default function StudioSettingsTab({
                                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Phone / WhatsApp</label><input type="text" name="contactPhone" value={brandingData.contactPhone} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
                                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">City & State</label><input type="text" name="cityState" value={brandingData.cityState} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
                                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">GSTIN Number</label><input type="text" name="gstin" value={brandingData.gstin} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-mono focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
+                                            {/* Everything below is what the client portal footer prints. */}
+                                            <div className="md:col-span-2">
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">About the studio</label>
+                                                <textarea name="about" value={brandingData.about} onChange={handleBrandingChange} rows={3} placeholder="e.g. Form Factors Design Studio is a Mumbai interior practice working on turnkey residential fit-outs..." className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none resize-none" />
+                                                <p className="text-[11px] text-slate-400 mt-1">The paragraph a client reads in the portal footer. Distinct from the strapline above.</p>
+                                            </div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Working Hours</label><input type="text" name="businessHours" value={brandingData.businessHours} onChange={handleBrandingChange} placeholder="Mon-Sat, 10am-7pm" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Site Visit Pattern</label><input type="text" name="siteVisitPolicy" value={brandingData.siteVisitPolicy} onChange={handleBrandingChange} placeholder="Visits every Tue & Fri" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Escalation Path</label><input type="text" name="escalationPolicy" value={brandingData.escalationPolicy} onChange={handleBrandingChange} placeholder="Ops director, 48h" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Project Manager Response Time</label><input type="text" name="pmResponseTime" value={brandingData.pmResponseTime} onChange={handleBrandingChange} placeholder="replies within one working day" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
+                                            <div className="md:col-span-2">
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Credentials</label>
+                                                <input type="text" name="credentials" value={brandingData.credentials} onChange={handleBrandingChange} placeholder="GST registered, 7 years, 40+ homes delivered, 1-year warranty" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" />
+                                                <p className="text-[11px] text-slate-400 mt-1">Comma separated. Shown as chips in the portal footer — claims a client can hold you to, so keep them true.</p>
+                                            </div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Website</label><input type="text" name="website" value={brandingData.website} onChange={handleBrandingChange} placeholder="www.formfactors.in" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Instagram</label><input type="text" name="instagramUrl" value={brandingData.instagramUrl} onChange={handleBrandingChange} placeholder="instagram.com/yourstudio" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
+                                            <div className="md:col-span-2">
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Instagram QR Code</label>
+                                                <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                                    {brandingData.instagramQr ? (
+                                                        <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-white p-1 border border-slate-200 shrink-0 flex items-center justify-center">
+                                                            <img src={brandingData.instagramQr} alt="Instagram QR" className="max-w-full max-h-full object-contain" />
+                                                            <button type="button" onClick={() => setBrandingData(prev => ({ ...prev, instagramQr: '' }))} className="absolute top-0.5 right-0.5 bg-white/90 rounded-full p-1 shadow-xs hover:text-red-500 transition-colors" title="Remove QR">
+                                                                <Trash2 className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="w-20 h-20 border border-dashed border-slate-300 rounded-lg bg-white flex items-center justify-center text-[10px] text-slate-400 shrink-0 text-center px-1">No QR set</div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            onChange={(e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (!file) return;
+                                                                const reader = new FileReader();
+                                                                reader.onloadend = () => setBrandingData(prev => ({ ...prev, instagramQr: reader.result as string }));
+                                                                reader.readAsDataURL(file);
+                                                            }}
+                                                            className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-[#0066CC] hover:file:bg-blue-100 cursor-pointer"
+                                                        />
+                                                        <p className="text-[11px] text-slate-400 mt-1.5">Appears in the client portal footer so clients can follow the studio.</p>
+                                                    </div>
+                                                </div>
+                                            </div>
                                             <div className="md:col-span-2"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Registered Office Address</label><textarea name="officeAddress" value={brandingData.officeAddress} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none h-16 resize-none" /></div>
                                         </div>
                                     </div>

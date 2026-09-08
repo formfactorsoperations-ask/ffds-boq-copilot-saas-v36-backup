@@ -1,15 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import { FullBoqItem, BoqItem } from '../../types';
 import { calculateSellPrice, calculateGrossMargin, formatCurrency, formatINR } from '../../lib/utils';
+import { BRAND, CAUTION, GOOD, CRITICAL } from '../../lib/reportPalette';
 import { Filter, ArrowUpDown, TrendingUp, AlertTriangle, CheckCircle, Search, SlidersHorizontal, Layers } from 'lucide-react';
 
 interface ForensicMarginMatrixProps {
   boq: FullBoqItem[];
   setBoq: React.Dispatch<React.SetStateAction<BoqItem[]>>;
   isOwner?: boolean;
+  /** Frozen BOQ = contracted scope. Repricing must go through a variation. */
+  boqFrozen?: boolean;
 }
 
-export const ForensicMarginMatrix: React.FC<ForensicMarginMatrixProps> = ({ boq, setBoq, isOwner = true }) => {
+export const ForensicMarginMatrix: React.FC<ForensicMarginMatrixProps> = ({ boq, setBoq, isOwner = false, boqFrozen = false }) => {
+  const locked = boqFrozen || !isOwner;
+  const lockReason = boqFrozen
+    ? 'The BOQ is frozen. Raise a variation to change contracted prices.'
+    : 'Your role cannot change pricing.';
   const [filterMode, setFilterMode] = useState<'all' | 'drags' | 'engines' | 'anomalies' | 'labor_heavy'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<'profit' | 'margin' | 'sell' | 'cost'>('profit');
@@ -148,6 +155,7 @@ export const ForensicMarginMatrix: React.FC<ForensicMarginMatrixProps> = ({ boq,
 
   // Quick Margin Quick-Tuner
   const handleQuickMarginAdjust = (itemId: string, newMargin: number) => {
+    if (locked) return;
     setBoq(prev => prev.map(item => {
       if (item.id === itemId) {
         return { ...item, marginOverride: Math.max(0, Math.min(100, newMargin)) };
@@ -174,8 +182,8 @@ export const ForensicMarginMatrix: React.FC<ForensicMarginMatrixProps> = ({ boq,
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {categoryStats.list.map(cat => {
             const profitShare = categoryStats.grandProfit > 0 ? (cat.netProfit / categoryStats.grandProfit) * 100 : 0;
-            const isHighYield = cat.grossMargin >= 28;
-            const isLowYield = cat.grossMargin < 20;
+            const isHighYield = cat.grossMargin >= 22;
+            const isLowYield = cat.grossMargin < 17;
 
             return (
               <div
@@ -187,7 +195,13 @@ export const ForensicMarginMatrix: React.FC<ForensicMarginMatrixProps> = ({ boq,
                     <span className="font-bold text-sm text-slate-900 truncate" title={cat.category}>
                       {cat.category}
                     </span>
-                    <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded-full ${isHighYield ? 'bg-emerald-100 text-emerald-800' : isLowYield ? 'bg-rose-100 text-rose-800' : 'bg-slate-200 text-slate-700'}`}>
+                    <span
+                      className="text-xs font-bold font-mono px-2 py-0.5 rounded-full"
+                      style={{
+                        color: '#fff',
+                        background: isHighYield ? GOOD : isLowYield ? CRITICAL : CAUTION,
+                      }}
+                    >
                       {cat.grossMargin.toFixed(1)}% GM
                     </span>
                   </div>
@@ -211,13 +225,13 @@ export const ForensicMarginMatrix: React.FC<ForensicMarginMatrixProps> = ({ boq,
                     </div>
                     <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden flex">
                       <div
-                        className="bg-blue-500 h-full"
-                        style={{ width: `${cat.totalCost > 0 ? (cat.materialCost / cat.totalCost) * 100 : 70}%` }}
+                        className="h-full hud-charge"
+                        style={{ background: BRAND, width: `${cat.totalCost > 0 ? (cat.materialCost / cat.totalCost) * 100 : 70}%` }}
                         title="Materials"
                       />
                       <div
-                        className="bg-amber-500 h-full"
-                        style={{ width: `${cat.totalCost > 0 ? (cat.laborCost / cat.totalCost) * 100 : 30}%` }}
+                        className="h-full hud-charge"
+                        style={{ background: CAUTION, animationDelay: '.1s', width: `${cat.totalCost > 0 ? (cat.laborCost / cat.totalCost) * 100 : 30}%` }}
                         title="Labor"
                       />
                     </div>
@@ -258,7 +272,7 @@ export const ForensicMarginMatrix: React.FC<ForensicMarginMatrixProps> = ({ boq,
             </button>
             <button
               onClick={() => setFilterMode('engines')}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${filterMode === 'engines' ? 'bg-emerald-600 text-white shadow-xs' : 'text-emerald-700 hover:text-emerald-900'}`}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${filterMode === 'engines' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-emerald-700 hover:text-emerald-900'}`}
             >
               <TrendingUp className="w-3.5 h-3.5" /> Profit Engines ({processedItems.filter(i => i.isProfitEngine).length})
             </button>
@@ -288,19 +302,19 @@ export const ForensicMarginMatrix: React.FC<ForensicMarginMatrixProps> = ({ boq,
             <span className="text-[11px] uppercase font-bold tracking-wider text-slate-400">Sort by:</span>
             <button
               onClick={() => { if (sortField === 'profit') setSortAsc(!sortAsc); else { setSortField('profit'); setSortAsc(false); } }}
-              className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${sortField === 'profit' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200'}`}
+              className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${sortField === 'profit' ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-white text-slate-600 border-slate-200'}`}
             >
               Profit {sortField === 'profit' ? (sortAsc ? '↑' : '↓') : ''}
             </button>
             <button
               onClick={() => { if (sortField === 'margin') setSortAsc(!sortAsc); else { setSortField('margin'); setSortAsc(false); } }}
-              className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${sortField === 'margin' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200'}`}
+              className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${sortField === 'margin' ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-white text-slate-600 border-slate-200'}`}
             >
               Margin {sortField === 'margin' ? (sortAsc ? '↑' : '↓') : ''}
             </button>
             <button
               onClick={() => { if (sortField === 'sell') setSortAsc(!sortAsc); else { setSortField('sell'); setSortAsc(false); } }}
-              className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${sortField === 'sell' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200'}`}
+              className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${sortField === 'sell' ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-white text-slate-600 border-slate-200'}`}
             >
               Sell Value {sortField === 'sell' ? (sortAsc ? '↑' : '↓') : ''}
             </button>
@@ -320,7 +334,7 @@ export const ForensicMarginMatrix: React.FC<ForensicMarginMatrixProps> = ({ boq,
                 <th className="py-3 px-3 text-right">Total Cost</th>
                 <th className="py-3 px-3 text-right">Total Sell</th>
                 <th className="py-3 px-3 text-right">Net Profit</th>
-                <th className="py-3 px-3 text-center">Margin</th>
+                <th className="py-3 px-3 text-center" title="Markup applied to cost on this line">Markup</th>
                 <th className="py-3 px-4 text-center">Quick Tune</th>
               </tr>
             </thead>
@@ -368,21 +382,24 @@ export const ForensicMarginMatrix: React.FC<ForensicMarginMatrixProps> = ({ boq,
                     <div className="inline-flex items-center gap-1">
                       <button
                         onClick={() => handleQuickMarginAdjust(item.id, item.margin - 5)}
-                        className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-[10px] font-bold font-mono text-slate-600"
-                        title="Reduce Margin -5%"
+                        disabled={locked}
+                        className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-[10px] font-bold font-mono text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={locked ? lockReason : "Reduce Margin -5%"}
                       >
                         -5%
                       </button>
                       <button
                         onClick={() => handleQuickMarginAdjust(item.id, 28)}
-                        className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-[10px] font-bold text-blue-700"
-                        title="Reset to 28% Target"
+                        disabled={locked}
+                        className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-[10px] font-bold text-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={locked ? lockReason : "Reset to 28% Target"}
                       >
                         28%
                       </button>
                       <button
                         onClick={() => handleQuickMarginAdjust(item.id, item.margin + 5)}
-                        className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-[10px] font-bold font-mono text-slate-600"
+                        disabled={locked}
+                        className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-[10px] font-bold font-mono text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
                         title="Increase Margin +5%"
                       >
                         +5%

@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { TermsSettings, TermsDocket } from '../../types';
-import { DocumentBlock } from './DocumentBlocks';
+import { DocumentBlock, resolveTokens } from './DocumentBlocks';
 
 export interface TermsDocketSheetProps {
   /** The authored terms configuration, frozen at issue. */
@@ -176,7 +176,12 @@ const TermsDocketSheet: React.FC<TermsDocketSheetProps> = ({
                         data-section-ref={String(sec.n)}
                     >
                         <h2 className="sec">
-                            <span className="n">{sec.n}</span> {sec.title}
+                            {/* Titles carry the same {{studioName}} tokens the
+                                bodies do, but resolveTokens was only ever
+                                applied to blocks — so section 1 of a signed
+                                contract read "ABOUT {{studioName}}". */}
+                            <span className="n">{sec.n}</span>{' '}
+                            {resolveTokens(sec.title || '', activeTermsConfig, orgData.orgName || 'the Studio')}
                             {sec.recommended && <span className="added">Recommended</span>}
                         </h2>
                         {sec.blocks?.map((block, bIdx) => (

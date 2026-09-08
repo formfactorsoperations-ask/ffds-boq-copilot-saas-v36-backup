@@ -283,9 +283,9 @@ export default function QualityChecklistReportPage({ projectContext, onBack }: Q
                                                             <div key={check.id} className="flex items-start gap-2.5 text-xs">
                                                                 <div className={`w-3.5 h-3.5 border rounded-sm shrink-0 mt-0.5 flex items-center justify-center ${
                                                                     isNA
-                                                                        ? 'bg-slate-100 border-slate-300 text-slate-500 font-extrabold text-[7px]'
+                                                                        ? 'bg-slate-100 border-slate-300 text-slate-500 font-extrabold text-[8px]'
                                                                         : isChecked 
-                                                                            ? 'bg-slate-900 border-slate-900 text-white' 
+                                                                            ? 'bg-[#0066CC] border-[#0066CC] text-white' 
                                                                             : 'border-slate-300'
                                                                 }`}>
                                                                     {isChecked && !isNA && <Check className="w-2.5 h-2.5 stroke-[3]" />}
@@ -310,7 +310,7 @@ export default function QualityChecklistReportPage({ projectContext, onBack }: Q
                                                     {Array.isArray(room.customs) && room.customs.filter(Boolean).map((custom) => (
                                                         <div key={custom.id} className="flex items-start gap-2.5 text-xs">
                                                             <div className={`w-3.5 h-3.5 border rounded-sm shrink-0 mt-0.5 flex items-center justify-center ${
-                                                                custom.checked ? 'bg-slate-900 border-slate-900 text-white' : 'border-slate-300'
+                                                                custom.checked ? 'bg-[#0066CC] border-[#0066CC] text-white' : 'border-slate-300'
                                                             }`}>
                                                                 {custom.checked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                                                             </div>

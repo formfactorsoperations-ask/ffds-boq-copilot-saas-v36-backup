@@ -1,6 +1,6 @@
 import { db } from './firebaseClient';
 import { doc, getDoc } from 'firebase/firestore';
-import { markDecisionNotified, markSignoffSent } from './decisionsService';
+import { ensureDecisionStudio, markDecisionNotified, markSignoffSent } from './decisionsService';
 import { format } from 'date-fns';
 import { EMAIL_TEMPLATE_LIBRARY, resolveTemplate } from '../lib/templateEngine';
 import { formatINR } from '../lib/utils';
@@ -53,6 +53,41 @@ export const getStudioInfo = async (studioId: string = 'demo-tenant-01') => {
                 if (data.email || data.contactEmail) email = data.email || data.contactEmail;
                 if (data.gstNumber || data.gstin) gstin = data.gstNumber || data.gstin;
                 if (data.address) address = data.address;
+            }
+        }
+        /*
+          organizations/{tenantId} is where Studio Settings actually saves.
+
+          This function only knew about studioSettings/{id} and
+          studios/{id}/settings/main, neither of which that screen writes to --
+          so a studio could fill in its name, phone, email and logo and every
+          email, and the client sign-off page, still went out carrying the
+          hardcoded placeholder "+91 98765 43210". Checked last so an explicit
+          studioSettings document still wins if one exists.
+
+          Field names differ here: contactPhone / contactEmail / orgName /
+          orgLogo rather than phone / email / name / logoUrl.
+        */
+        if (name === STUDIO_NAME || !phone || phone === STUDIO_PHONE || !logo) {
+            const orgRef = doc(db, 'organizations', studioId);
+            const orgSnap = await getDoc(orgRef);
+            if (orgSnap.exists()) {
+                const org = orgSnap.data();
+                /*
+                  A stub organisation carries its own id as the name, and there
+                  is at least one of those ('demo-tenant-01'). Printing that to
+                  a client as the studio's name is worse than printing nothing,
+                  so an id-shaped name is treated as absent.
+                */
+                const looksLikeAnId = !org.orgName
+                    || org.orgName === studioId
+                    || /^[a-z0-9]+(-[a-z0-9]+)+$/.test(String(org.orgName));
+                if (!looksLikeAnId) name = org.orgName;
+                if (org.contactPhone) phone = org.contactPhone;
+                if (org.orgLogo) logo = org.orgLogo;
+                if (org.contactEmail) email = org.contactEmail;
+                if (org.gstNumber || org.gstin) gstin = org.gstNumber || org.gstin;
+                if (org.officeAddress || org.address) address = org.officeAddress || org.address;
             }
         }
     } catch (e) {
@@ -183,6 +218,8 @@ const getEmailTemplate = (contentHtml: string) => {
 
 export const sendDecisionNotification = async (decisionId: string, projectId: string, studioId: string = 'demo-tenant-01'): Promise<{ success: boolean; error?: string }> => {
     try {
+        // Older decisions carry no studio; take this chance to record it.
+        void ensureDecisionStudio(projectId, decisionId, studioId);
         const docRef = doc(db, 'projects', projectId, 'decisions', decisionId);
         const docSnap = await getDoc(docRef);
 
@@ -192,12 +229,19 @@ export const sendDecisionNotification = async (decisionId: string, projectId: st
 
         const decision = docSnap.data();
         const clientEmail = decision.clientEmail;
-        
+
+        // No email address is not a reason to leave the decision stuck in draft.
+        // Email is one delivery channel; the client portal is the other, and the
+        // portal only surfaces a decision once it leaves 'draft'. Throwing here
+        // meant that on a project with no client email set, "Notify client"
+        // failed silently forever and the decision never reached the client at
+        // all. Advance the state, record that no email went out.
         if (!clientEmail) {
-            throw new Error('Client email not available');
+            await markDecisionNotified(projectId, decisionId, 'Skipped', 'No client email on file');
+            return { success: false, error: 'Decision is now visible in the client portal, but no email was sent — no client email address on file.' };
         }
 
-        const formattedDate = decision.createdAt 
+        const formattedDate = decision.createdAt
             ? format(decision.createdAt.toDate ? decision.createdAt.toDate() : new Date(decision.createdAt), 'dd MMM yyyy')
             : 'recently';
 
@@ -464,6 +508,8 @@ export const sendAgreementSignoffRequest = async (
 
 export const sendSignoffRequest = async (decisionId: string, projectId: string, studioId: string = 'demo-tenant-01'): Promise<{ success: boolean; error?: string }> => {
     try {
+        // Older decisions carry no studio; take this chance to record it.
+        void ensureDecisionStudio(projectId, decisionId, studioId);
         const docRef = doc(db, 'projects', projectId, 'decisions', decisionId);
         const docSnap = await getDoc(docRef);
 
@@ -473,15 +519,18 @@ export const sendSignoffRequest = async (decisionId: string, projectId: string, 
 
         const decision = docSnap.data();
         const clientEmail = decision.clientEmail;
-        
+
+        // As in sendDecisionNotification: advance the decision so it reaches the
+        // client portal even when there is no address to email.
         if (!clientEmail) {
-            throw new Error('Client email not available');
+            await markSignoffSent(projectId, decisionId, 'Skipped', 'No client email on file');
+            return { success: false, error: 'Sign-off request is now open in the client portal, but no email was sent — no client email address on file.' };
         }
 
-        const formattedDate = decision.createdAt 
+        const formattedDate = decision.createdAt
             ? format(decision.createdAt.toDate ? decision.createdAt.toDate() : new Date(decision.createdAt), 'dd MMM yyyy')
             : 'recently';
-            
+
         // Expiry date - 30 days from now
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + 30);
@@ -500,15 +549,32 @@ export const sendSignoffRequest = async (decisionId: string, projectId: string, 
             isDev = true;
             appDomain = appDomain.replace('ais-dev-', 'ais-pre-');
         }
-        const signoffToken = decision.signoffToken || decisionId;
-        const signoffUrl = `${appDomain}/?signoff=${signoffToken}`;
+        /*
+          The standalone sign-off page is gone -- decisions are approved in the
+          client portal. The portal token lives on the project, so read it from
+          there; without one there is nowhere useful to send them, so the link
+          falls back to the app itself rather than a URL that 404s.
+        */
+        let signoffUrl = appDomain;
+        try {
+            const projectSnap = await getDoc(doc(db, 'projects', projectId));
+            const access = projectSnap.exists()
+                ? (projectSnap.data() as any)?.context?.portalAccess
+                : null;
+            const live =
+                access?.token &&
+                (!access.expiresAt || new Date(access.expiresAt).getTime() > Date.now());
+            if (live) signoffUrl = `${appDomain}/?portal=${access.token}`;
+        } catch {
+            // Fall back to the app root.
+        }
         
         let devTestingHtml = '';
         if (isDev) {
             devTestingHtml = `
             <div style="margin-top: 40px; padding: 12px; background-color: #f8fafc; border: 1px dashed #cbd5e1; font-size: 11px; color: #64748b;">
                 <strong>Developer Testing Note:</strong> If the public link above gives a 404 (due to the app not being published yet), you can test the flow using your dev URL:<br/>
-                <a href="${import.meta.env.VITE_APP_DOMAIN || window.location.origin}/?signoff=${signoffToken}" style="color: #3b82f6;">${import.meta.env.VITE_APP_DOMAIN || window.location.origin}/?signoff=${signoffToken}</a>
+                <a href="${signoffUrl}" style="color: #3b82f6;">${signoffUrl}</a>
             </div>`;
         }
 
@@ -790,5 +856,46 @@ export const sendConsolidatedPendingSelectionsEmail = async (
     } catch (error: any) {
         console.warn('Error sending consolidated reminder email:', error);
         return { success: false, error: error.message || 'Failed to send reminder email.' };
+    }
+};
+
+/**
+ * Emails a client their portal link.
+ *
+ * The link is the credential — the portal has no password — so this is the only
+ * sanctioned way for a client to gain access. Delivery failure is reported to
+ * the caller rather than thrown, so ops can fall back to copying the link.
+ */
+export const sendPortalAccessLink = async (
+    clientEmail: string,
+    projectName: string,
+    clientName: string,
+    link: string,
+    expiresAt: string
+): Promise<{ success: boolean; error?: string }> => {
+    if (!clientEmail) return { success: false, error: 'No client email on file' };
+    try {
+        const expires = new Date(expiresAt).toLocaleDateString('en-IN', { dateStyle: 'medium' });
+        const body = [
+            `Hello ${clientName || 'there'},`,
+            ``,
+            `Here is your private link to the ${projectName} project portal. It shows your approvals, drawings, site updates and payment schedule.`,
+            ``,
+            `<a href="${link}" style="display:inline-block;padding:12px 22px;background:#0066CC;color:#ffffff;border-radius:10px;font-weight:700;text-decoration:none">Open your portal</a>`,
+            ``,
+            `This link works until ${expires}. Please don't forward it — anyone with the link can see your project.`,
+            ``,
+            `${STUDIO_NAME}`
+        ].join('\n');
+
+        const res = await sendResendEmail(
+            clientEmail,
+            `Your ${projectName} project portal`,
+            getEmailTemplate(formatBodyToHtml(body))
+        );
+        return res.success ? { success: true } : { success: false, error: res.error };
+    } catch (error: any) {
+        console.warn('Could not send portal link:', error);
+        return { success: false, error: error?.message || 'Failed to send portal link.' };
     }
 };

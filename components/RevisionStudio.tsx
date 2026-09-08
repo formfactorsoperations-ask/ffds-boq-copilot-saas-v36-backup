@@ -314,15 +314,29 @@ export default function RevisionStudio({
     return (currentSelectedTier.boq || []).map((boqItem) => {
       const initialBankItem = INITIAL_BANK.find((i) => i.id === boqItem.bankId);
       const bankItem = bankMap.get(boqItem.bankId) || initialBankItem;
+      /*
+        The line's own rate wins over anything derived from the bank.
+
+        This had the order the other way round: it computed from the bank
+        whenever a bank item existed, and only looked at `selectedRate` when
+        there was none. So a line whose rate had been revised and approved —
+        which is exactly what `selectedRate` records — was displayed at the
+        bank's rate instead. The Living Room base cabinet showed 3,520 here
+        while the approved BOQ, the client portal and the annexure total all
+        had it at 4,500.
+
+        This is the same order of preference buildClientBoqRows uses, so ops
+        and the client are now reading one number.
+      */
       let rate = 0;
-      if (bankItem) {
+      if (boqItem.selectedRate !== undefined && Number(boqItem.selectedRate) > 0) {
+        rate = Number(boqItem.selectedRate);
+      } else if (bankItem) {
         rate = calculateSellPrice(
           boqItem.baseRate !== undefined ? boqItem.baseRate : bankItem.materials,
           bankItem.labor,
           boqItem.marginOverride ?? bankItem.margin,
         );
-      } else if (boqItem.selectedRate) {
-        rate = boqItem.selectedRate;
       }
 
       const itemTitle =

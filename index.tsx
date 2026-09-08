@@ -2,22 +2,95 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './src/index.css';
+import './src/depth3d';
 import App from './App';
+import { MotionConfig } from 'framer-motion';
 import { OrgProvider } from './contexts/OrgContext';
 
 // Suppress Vite WebSocket connection errors in preview environment
-const originalConsoleError = console.error;
-console.error = (...args) => {
-  if (
-    typeof args[0] === 'string' && 
-    (args[0].includes('[vite] failed to connect to websocket') || 
-     args[0].includes('WebSocket closed without opened') ||
-     args[0].includes('WebSocket'))
-  ) {
-    return; // Suppress the specific Vite HMR error
-  }
-  originalConsoleError(...args);
+const isViteNoise = (...args: any[]) => {
+  return args.some(arg => {
+    if (typeof arg === 'string') {
+      return (
+        arg.includes('[vite]') || 
+        arg.includes('WebSocket') || 
+        arg.includes('WebChannel') || 
+        arg.includes('failed to connect to websocket') || 
+        arg.includes('transport errored') ||
+        arg.includes('server connection lost')
+      );
+    }
+    if (arg && typeof arg === 'object') {
+      const msg = ((arg as any).message || '') + ' ' + ((arg as any).reason || '') + ' ' + ((arg as any).stack || '');
+      return (
+        msg.includes('[vite]') || 
+        msg.includes('WebSocket') || 
+        msg.includes('WebChannel') || 
+        msg.includes('failed to connect to websocket') || 
+        msg.includes('transport errored') ||
+        msg.includes('server connection lost')
+      );
+    }
+    return false;
+  });
 };
+
+/*
+  Patch console once per page, not once per module evaluation.
+
+  This module gets evaluated more than once in dev (Vite re-executes it, and it
+  is reachable as both /index.tsx and /src/index.tsx). Each pass captured the
+  console.warn that the previous pass had already installed and wrapped it
+  again, so a single warning walked a chain of wrappers that grew with every
+  reload until it blew the stack -- "Maximum call stack size exceeded" at this
+  line, thrown before the app had finished mounting. The flag makes re-running
+  this file a no-op.
+*/
+const consoleHost = window as any;
+if (!consoleHost.__ffdsConsolePatched) {
+  consoleHost.__ffdsConsolePatched = true;
+
+  /*
+    Re-entrancy guard.
+
+    Whatever we capture here may itself be somebody else's wrapper -- Vite's
+    client, a devtools bridge, the preview harness -- and if that wrapper logs
+    through the live console.warn rather than the native one, the two call each
+    other until the stack blows. That is not hypothetical: it is what filled the
+    console with 80,000 "Maximum call stack size exceeded" frames and stopped
+    the app mounting at all. A flag makes the cycle impossible no matter who
+    else is in the chain.
+  */
+  let inError = false;
+  const originalConsoleError = console.error;
+  console.error = (...args) => {
+    if (inError) return;
+    inError = true;
+    try {
+      if (isViteNoise(...args)) {
+        return; // Suppress Vite HMR / websocket noise in iframe preview
+      }
+      originalConsoleError(...args);
+    } finally {
+      inError = false;
+    }
+  };
+
+  let inWarn = false;
+  const originalConsoleWarn = console.warn;
+  console.warn = (...args) => {
+    if (inWarn) return;
+    inWarn = true;
+    try {
+      if (isViteNoise(...args)) {
+        return;
+      }
+      originalConsoleWarn(...args);
+    } finally {
+      inWarn = false;
+    }
+  };
+}
 
 window.addEventListener('unhandledrejection', (event) => {
   let reasonStr = '';
@@ -115,6 +188,35 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 }
 
+/*
+  Evict any service worker left over from when the PWA plugin had devOptions
+  enabled.
+
+  Turning that option off stops NEW registrations but does nothing about a
+  worker already installed in a developer's browser: it keeps controlling the
+  page and serving its cached copy of the module graph. That cache included
+  Vite's own client, whose HMR token no longer matches the running server, so
+  the socket is refused -- and the client reports that failure through
+  sendError, which dereferences the socket it does not have and re-enters
+  itself until the stack blows.
+
+  Nothing registers a worker in this app any more, so in dev there is never a
+  legitimate one to keep. Production registration is untouched.
+*/
+if (import.meta.env.DEV && typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+  navigator.serviceWorker
+    .getRegistrations()
+    .then((regs) => regs.forEach((r) => r.unregister()))
+    .catch(() => {});
+
+  if (typeof caches !== "undefined") {
+    caches
+      .keys()
+      .then((keys) => keys.forEach((k) => caches.delete(k)))
+      .catch(() => {});
+  }
+}
+
 console.log("index.tsx starting");
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -123,8 +225,32 @@ if (!rootElement) {
 console.log("Found root element, creating root...");
 const root = ReactDOM.createRoot(rootElement);
 console.log("Root created, rendering...");
-root.render(
-  <React.StrictMode>
+/*
+  StrictMode, on by default.
+
+  It mounts every component twice in dev, so each of this app's 25 onSnapshot
+  listeners subscribes, tears down and resubscribes within a frame. Several of
+  them watch the same Firestore path from different components, and the SDK
+  shares one watch target between those under a reference count — which firebase
+  12.10.0 could drive negative, throwing INTERNAL ASSERTION FAILED (ID: b815 /
+  ca9, CONTEXT {"ve":-1}) and killing the client until the page reloaded.
+
+  That was an SDK bug, not a defect in the effects here: all 25 clean up
+  correctly. It was worked around by disabling StrictMode, which cost the
+  double-mount checks — the very thing that catches a listener someone forgets
+  to unsubscribe. Firebase 12.13.0 fixed it, verified by turning StrictMode back
+  on and opening the screen that used to crash.
+
+  `ffds_strict_mode` is now an escape hatch rather than a switch: set it to
+  'false' in localStorage and reload if the assertion ever returns, which would
+  mean a regression worth reporting upstream rather than living with quietly.
+*/
+const wantsStrictMode = (() => {
+  try { return localStorage.getItem('ffds_strict_mode') !== 'false'; }
+  catch { return true; }
+})();
+
+const appTree = (
     <ErrorBoundary>
       <React.Suspense fallback={
         <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#f8fafc] select-none overflow-hidden relative">
@@ -175,10 +301,21 @@ root.render(
           </div>
         </div>
       }>
-        <OrgProvider>
-          <App />
-        </OrgProvider>
+        {/*
+          One switch for every framer-motion animation in the app.
+
+          `reducedMotion="user"` makes framer read the OS setting and drop
+          transform and layout animations for anyone who has asked for less
+          motion. The CSS animations already honour that media query; the
+          JS-driven ones did not, and there are a lot of them now.
+        */}
+        <MotionConfig reducedMotion="user">
+          <OrgProvider>
+            <App />
+          </OrgProvider>
+        </MotionConfig>
       </React.Suspense>
     </ErrorBoundary>
-  </React.StrictMode>
 );
+
+root.render(wantsStrictMode ? <React.StrictMode>{appTree}</React.StrictMode> : appTree);

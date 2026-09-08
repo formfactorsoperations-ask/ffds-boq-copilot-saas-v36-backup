@@ -118,6 +118,23 @@ export function ProjectWorkspace({
   const isPhaseComplete = activePhaseProgress.pct === 100;
   const phaseSteps = journey.stepsByPhase?.[activePhaseIndex] || [];
 
+  /*
+    Whether the project has enough on it for the journey to mean anything.
+
+    This condition used to sit in the panel's render guard, so on a project
+    with no area and no rooms the panel simply did not exist — while the chip
+    that opens it stayed visible and clickable in the header. A control that
+    is always shown and sometimes does nothing is worse than no control: it
+    teaches people the button is broken. The panel now always opens and
+    answers for itself when there is nothing to report.
+  */
+  const needsSetup = !(projectContext.area > 0) || (projectContext.rooms || []).length === 0;
+  /* Only offer the jump when it actually goes somewhere. Some steps name the
+     screen you are already on — brief_frozen points at 'dashboard' — and a
+     "Take me there" that lands you where you stand reads as a broken button. */
+  const rawNextTab = (journey.nextStep as any)?.linkedTab as string | undefined;
+  const nextStepTab = rawNextTab && rawNextTab !== activeTab ? rawNextTab : undefined;
+
   // Custom messages based on active phase
   let transitionMessage = "Every step is signed off. You can now advance the project to the next lifecycle stage.";
   if (activePhaseIndex === 0) transitionMessage = "Acquisition complete. Ready to advance the project to Design.";
@@ -276,6 +293,9 @@ export function ProjectWorkspace({
       {/* Workspace Header .phead */}
       {/* Workspace Sub-Header: Tier 2 Project Bar */}
       <header className="bg-white border-b border-slate-200/80 shrink-0 shadow-2xs relative z-50">
+        {/* Same energy rail as the studio bar, so the two headers read as one
+            system rather than two unrelated surfaces. */}
+        <span aria-hidden="true" className="hud-rail absolute bottom-0 left-0 right-0 h-px z-10" />
         {/* Row 1: Project Metadata & Project Hub Dropdown */}
         <div className="flex items-center justify-between gap-3 px-4 lg:px-6 py-2.5 border-b border-slate-100 flex-wrap">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
@@ -362,7 +382,7 @@ export function ProjectWorkspace({
 
             <button 
               onClick={() => setIsFloatingWidgetOpen(!isFloatingWidgetOpen)}
-              className="flex items-center gap-2 bg-[#0066CC]/90 hover:bg-[#0055B3] backdrop-blur-md border border-white/20 text-white pl-2 pr-3 py-1.5 rounded-lg transition-all cursor-pointer text-xs font-semibold shadow-md shadow-sky-600/20 overflow-hidden min-w-[200px]"
+              className="flex items-center gap-2 bg-[#0066CC] hover:bg-[#0055B3] text-white pl-2 pr-3 py-1.5 rounded-lg transition-all cursor-pointer text-xs font-semibold shadow-md shadow-sky-600/25 overflow-hidden min-w-[200px]"
             >
               <div className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-black shrink-0 text-white shadow-inner">
                 {Math.round(projectContext.journeySummary?.pct ?? journey.overall.pct ?? 0)}%
@@ -409,7 +429,7 @@ export function ProjectWorkspace({
                     >
                       {isSelectedStage && (
                           <div
-                              className="absolute inset-0 bg-[#0066CC]/90 shadow-md shadow-sky-600/20 backdrop-blur-md border border-white/20 rounded-lg -z-10 transition-all duration-300"
+                              className="hud-reticle absolute inset-0 bg-gradient-to-b from-[#1a7fd4] to-[#0055B3] rounded-lg -z-10 transition-all duration-300"
                           />
                       )}
                       <span className={`relative w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-colors duration-300 ${
@@ -494,16 +514,16 @@ export function ProjectWorkspace({
                   onClick={() => setActiveTab(item.route)}
                   className={`relative px-3.5 py-1.5 rounded-full text-xs sm:text-[13px] font-semibold transition-all duration-200 flex items-center gap-1.5 cursor-pointer border ${
                     isActive
-                      ? 'bg-sky-50 text-[#0066CC] border-sky-200/80 shadow-xs'
+                      ? 'hud-reticle bg-gradient-to-b from-[#1a7fd4] to-[#0055B3] text-white border-transparent'
                       : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800 border-slate-200'
                   }`}
                   title={item.label}
                 >
-                  {isActive && <div className="w-1.5 h-1.5 rounded-full bg-[#0066CC] shrink-0" />}
+                  {isActive && <div className="w-1.5 h-1.5 rounded-full bg-cyan-300 shrink-0" />}
                   <span className="tracking-tight">{item.label}</span>
                   {badgeText && (
                     <span className={`px-1.5 py-0.5 text-[9px] font-mono font-bold rounded-full ${
-                      isActive ? 'bg-[#0066CC] text-white' : 'bg-slate-100 text-slate-500 border border-slate-200'
+                      isActive ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-500 border border-slate-200'
                     }`}>
                       {badgeText}
                     </span>
@@ -599,7 +619,7 @@ export function ProjectWorkspace({
                       >
                         {Icon && <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#0066CC]' : 'text-slate-400 group-hover:text-slate-600'}`} />}
                         {badgeText && (
-                          <span className="absolute -top-1 -right-1 bg-[#0066CC] text-white text-[7.5px] font-extrabold px-1 py-0.5 rounded-full scale-90 leading-none shadow-sm border border-white">
+                          <span className="absolute -top-1 -right-1 bg-[#0066CC] text-white text-[8px] font-extrabold px-1 py-0.5 rounded-full scale-90 leading-none shadow-sm border border-white">
                             {badgeText}
                           </span>
                         )}
@@ -820,13 +840,15 @@ export function ProjectWorkspace({
       {/* Main Workspace Body — Expanded to 100% Horizontal Viewport Width! */}
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-5 min-w-0 pb-20 w-full">
         {renderOpsBanner()}
-        <PageTitleBlock route={activeTab} />
+        {/* The dashboard route shows the setup wizard until the project has tiers,
+            so the title has to follow the screen rather than the route. */}
+        <PageTitleBlock route={isWizard ? 'project-setup' : activeTab} />
         {children}
       </div>
       </div>
 
       {/* FLOATING PROCESS WIDGET */}
-      {!isWizard && activeTab !== 'project-journey' && journey && journey.overall && projectContext.area > 0 && (projectContext.rooms || []).length > 0 && (
+      {!isWizard && activeTab !== 'project-journey' && journey && journey.overall && (
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 pointer-events-none">
           {isFloatingWidgetOpen && (
             <div className="w-[380px] max-h-[90vh] bg-white rounded-[24px] shadow-2xl border border-slate-200/80 p-5 text-left flex flex-col pointer-events-auto relative animate-fade-in-up overflow-hidden">
@@ -857,13 +879,49 @@ export function ProjectWorkspace({
                 ></div>
               </div>
 
-              {/* Intuitive Override Help banner */}
-              <div className="p-2.5 bg-amber-50/80 border border-amber-100 rounded-xl flex items-start gap-2 mb-3">
-                <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-amber-800 leading-normal font-medium">
-                  <strong>Pill Journey Engine:</strong> Click any task checkbox to manually sign off or undo. Manual check-offs act as high-priority overrides and bypass prerequisite locks.
-                </p>
-              </div>
+              {/* Either the reason nothing is tracked yet, or how to drive it. */}
+              {needsSetup ? (
+                <div className="p-3 bg-sky-50/70 border border-sky-100 rounded-xl mb-3">
+                  <div className="flex items-start gap-2">
+                    <Compass className="w-4 h-4 text-[#0066CC] shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-[11.5px] font-bold text-slate-900 leading-snug mb-1">
+                        Set the brief before the journey can track anything
+                      </p>
+                      <p className="text-[10.5px] text-slate-600 leading-normal">
+                        This project has{' '}
+                        <strong className="text-slate-900">
+                          {projectContext.area > 0 ? `${projectContext.area} sqft` : 'no carpet area'}
+                        </strong>{' '}
+                        and{' '}
+                        <strong className="text-slate-900">
+                          {(projectContext.rooms || []).length} room{(projectContext.rooms || []).length === 1 ? '' : 's'}
+                        </strong>{' '}
+                        on record. Steps, progress and gates are all derived from those two, so they stay
+                        empty until the brief is captured.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { setSelectedStage(1); setActiveTab('leadiq'); setIsFloatingWidgetOpen(false); }}
+                    className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg
+                               bg-[#0066CC] hover:bg-[#0055B3] text-white text-[11.5px] font-bold
+                               transition-colors cursor-pointer"
+                  >
+                    Capture brief &amp; site
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="p-2.5 bg-amber-50/80 border border-amber-100 rounded-xl flex items-start gap-2 mb-3">
+                  <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-amber-800 leading-normal font-medium">
+                    <strong>How this works:</strong> tick any checkbox below to sign a step off or undo it.
+                    A manual tick is treated as an override — it bypasses prerequisite locks, and the
+                    journey re-derives everything downstream from it.
+                  </p>
+                </div>
+              )}
 
               {/* Inner state box */}
               <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 flex items-start gap-3 mb-3">
@@ -889,6 +947,18 @@ export function ProjectWorkspace({
                       <p className="text-[11px] text-slate-500 leading-normal line-clamp-2">
                         {journey.nextStep?.description || 'Work on the remaining steps to qualify for the next stage.'}
                       </p>
+                      {/* The step names the screen it belongs to, so the panel
+                          can hand you straight to it rather than describing it. */}
+                      {nextStepTab && (
+                        <button
+                          onClick={() => { setActiveTab(nextStepTab); setIsFloatingWidgetOpen(false); }}
+                          className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#0066CC]
+                                     hover:text-[#0055B3] hover:gap-1.5 transition-all cursor-pointer"
+                        >
+                          Take me there
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
                   </>
                 )}

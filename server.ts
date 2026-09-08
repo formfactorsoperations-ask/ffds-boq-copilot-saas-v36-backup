@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import http from "http";
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -399,69 +400,6 @@ Do NOT invent rooms. Do NOT merge rooms. Return JSON array only.`;
     }
   });
 
-  // API Route to parse unstructured decision text using Gemini
-  app.post("/api/parse-decision-text", async (req, res) => {
-    try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ error: "Gemini API Key missing on server" });
-      }
-
-      const { text, projectRooms } = req.body;
-      if (!text) {
-        return res.status(400).json({ error: "No text provided" });
-      }
-
-      const ai = getAi();
-      const prompt = `
-      Analyze this raw, unstructured interior design discussion, WhatsApp message, site notes, or verbal transcript. 
-      It describes a decision, change request, or site update agreed between the design studio and the client.
-      
-      We have the following list of active rooms/areas in this project: ${JSON.stringify(projectRooms || [])}.
-      
-      Extract and structure the details into the following schema:
-      - title: A very short, crisp, professional title (e.g., "TV Unit Laminate Selection", "AC Concealed Piping Route").
-      - decisionText: A clear, technically accurate, professional summary of the decision. Convert any colloquial, shorthand, or rough notes into polite, formal design language suitable for sharing as an official record. Do not omit technical specs if mentioned.
-      - roomName: The room/area. It MUST strictly match one of the pre-defined rooms: ${JSON.stringify(projectRooms || [])}. If no room matches or is mentioned, return an empty string.
-      - category: The reason category. Must be exactly one of: 'Site Condition', 'Client Request', 'Design Upgrade', 'Value Engineering'.
-      - presentees: A short list or string of people involved/present (e.g., "Amit, Client, Designer").
-      - boqImpact: The financial category of impact. Must be exactly one of: 'none' (no cost change), 'rate_change' (rate or existing item modified), 'new_item' (new scope added).
-      - impactCostValue: The estimated cost impact in Rupees (INR) as a number. If a cost addition is mentioned (e.g. "+ 15k", "+ 15000", "Rs 1.5 Lakhs"), extract it as a number (e.g. 15000, 15000, 150000). Set to 0 if none or unspecified.
-      - impactScheduleDays: The estimated timeline delay in number of days. Set to 0 if none.
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              title: { type: "STRING" },
-              decisionText: { type: "STRING" },
-              roomName: { type: "STRING" },
-              category: { type: "STRING" },
-              presentees: { type: "STRING" },
-              boqImpact: { type: "STRING" },
-              impactCostValue: { type: "NUMBER" },
-              impactScheduleDays: { type: "NUMBER" }
-                },
-            required: ["title", "decisionText", "roomName", "category", "boqImpact", "impactCostValue", "impactScheduleDays"]
-              }
-        }
-      });
-
-      const responseText = response.text || "{}";
-      const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const decision = JSON.parse(cleanedText);
-      res.json({ success: true, decision });
-    } catch (error: any) {
-      console.error("Decision text parse error:", error);
-      res.status(500).json({ error: error.message || "Failed to parse decision from text" });
-    }
-  });
-
   // API Route to send emails securely without CORS issues on the client
   app.post("/api/send-email", async (req, res) => {
     try {
@@ -571,12 +509,25 @@ Do NOT invent rooms. Do NOT merge rooms. Return JSON array only.`;
     res.json({ ok: true });
   });
 
+  /*
+    The HTTP server is created up front so Vite can run its HMR websocket on
+    it. In middleware mode Vite still injects @vite/client into the page
+    regardless of the hmr setting, and `hmr: false` left that client with no
+    socket: it opened ws://localhost:3000, the Express server never upgraded
+    the connection, and the failure called sendError -- which dereferences the
+    socket that does not exist, throws, and is caught by the same handler that
+    called it. One error became an unbounded recursion (80,000+ frames), the
+    main thread saturated, and the app never finished mounting. Any error in
+    dev was fatal and unreadable.
+  */
+  const server = http.createServer(app);
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { 
+      server: {
         middlewareMode: true,
-        hmr: false
+        hmr: { server },
       },
       appType: "spa",
     });
@@ -595,7 +546,7 @@ Do NOT invent rooms. Do NOT merge rooms. Return JSON array only.`;
     });
   }
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 

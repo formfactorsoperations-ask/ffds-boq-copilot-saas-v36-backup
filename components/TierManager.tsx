@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { showSuccessWithNext } from './SuccessWithNextToast';
 import { BoqItem, ProjectContext, ProposalTier, FullProjectData, Item } from '../types';
-import { calculateSellPrice, formatCurrency, calculateGrossMargin, id } from '../lib/utils';
+import { calculateSellPrice, formatCurrency, id } from '../lib/utils';
 import { CompareIcon, DeleteIcon, PencilIcon, CheckBadgeIcon, SparklesIcon, SaveIcon, CheckIcon, FileSpreadsheetIcon, ArrowRightIcon } from './Icons';
 
 interface TierManagerProps {

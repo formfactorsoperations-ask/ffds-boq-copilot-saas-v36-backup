@@ -39,7 +39,7 @@ export const AuditCertificateModal: React.FC<AuditCertificateModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-bold transition-all shadow-xs"
             >
               <Printer className="w-3.5 h-3.5" /> Print Certificate
             </button>

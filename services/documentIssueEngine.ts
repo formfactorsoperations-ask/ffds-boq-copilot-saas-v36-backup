@@ -25,6 +25,7 @@ import {
   TermsSection
 } from '../types';
 import { resolveApprovals, AgreementKind } from './clientApprovalEngine';
+import { draft as draftVisibility, isVisibleToClient } from '../lib/clientVisibility';
 
 // ---------------------------------------------------------------------------
 // HASHING
@@ -197,6 +198,9 @@ export function issueDocument(
       materialSections: opts.materialSections || [],
       supersedes: current?.id || null,
       supersededAt: null,
+      // Staged, not sent. Ops publishes it from the portal controls; until
+      // then the client keeps reading whichever issue they had.
+      clientVisibility: draftVisibility(),
       counterSignature: null
     };
 
@@ -290,19 +294,77 @@ export function counterSignIssue(
  * synthesise a version-1 issue from it on read, so existing projects work
  * untouched.
  */
+export interface IssueViewOptions {
+  /**
+   * Restrict to issues the client is allowed to see.
+   *
+   * Ops must always see the true latest — that is how they know something is
+   * staged — so this is opt-in, and every client-facing caller passes it.
+   * Nothing reaches a client until ops publishes it; an issue with no
+   * visibility recorded has not been published and does not show.
+   */
+  clientView?: boolean;
+}
+
+/**
+ * Whether a legacy document was actually released to the client.
+ *
+ * Not every document exists as a DocumentIssue. `getCurrentIssue` synthesises
+ * the Terms of Engagement and the Payment Schedule from the engagement record
+ * and the last terms docket, for projects that predate the issue model.
+ *
+ * That fallback used to run regardless of who was asking — twenty lines below a
+ * filter whose own comment reads "an issue with no visibility recorded is not a
+ * decision ops has made, so it is not one the client sees". So on any project
+ * with engagement data, a client could be shown a terms docket or a payment
+ * schedule the studio had never released.
+ *
+ * Blocking the fallback outright for clients was not the answer either: on
+ * older projects these documents genuinely were issued, through the flow that
+ * existed at the time, and hiding them would take away a contract the client
+ * has already signed. Both records say plainly whether that happened — a
+ * docket carries `sentAt` and a status past 'draft', an engagement carries
+ * `issuedAt` and the same — so the question is answerable rather than guessed.
+ */
+function legacyWasReleased(context: ProjectContext, kind: ClientDocumentKind): boolean {
+  const ctx = context as any;
+
+  if (kind === 'terms_docket') {
+    const dockets = context.termsDockets || [];
+    const latest = dockets[dockets.length - 1] as any;
+    if (latest && (latest.sentAt || latest.acknowledgedAt || (latest.status && latest.status !== 'draft'))) {
+      return true;
+    }
+  }
+
+  const engagement = ctx.engagement;
+  return !!(engagement && (engagement.issuedAt || engagement.acknowledgedAt || engagement.status === 'issued' || engagement.status === 'acknowledged'));
+}
+
 export function getCurrentIssue(
   context: ProjectContext,
-  kind: ClientDocumentKind
+  kind: ClientDocumentKind,
+  opts: IssueViewOptions = {}
 ): DocumentIssue | null {
   if (!context) return null;
   // Withdrawn issues stay in history but are no longer the live document, so a
   // retired legacy release falls back to draft and can be re-issued from the app.
   const issues = (context.documents?.issues || []).filter(
     i => i.kind === kind && !i.withdrawnAt && !i.addendumTo
+         // Published only. An issue with no visibility recorded is not a
+         // decision ops has made, so it is not one the client sees.
+         && (!opts.clientView || isVisibleToClient(i as any))
   );
   if (issues.length > 0) {
     return issues.sort((a, b) => b.version - a.version)[0];
   }
+
+  /*
+    Past this point everything is synthesised from legacy records rather than
+    read from an issue the studio published. A client only sees it if it was
+    genuinely released to them.
+  */
+  if (opts.clientView && !legacyWasReleased(context, kind)) return null;
 
   const ctx = context as any;
 
@@ -318,26 +380,53 @@ export function getCurrentIssue(
 
     if (!termsSettings) return null;
 
+    /*
+      The shape TermsDocketSheet actually reads.
+
+      This used to carry `clientName` / `projectName` at the top level only.
+      DocumentRenderer passes `snapshotClientData={snap.snapshotClientData}` to
+      the sheet, and the sheet falls back to its own placeholder labels when
+      that is absent — so a client opening their Terms of Engagement was shown
+      a contract headed "CLIENT NAME: Client Name / PROJECT NAME: Project Name
+      / DATE ISSUED: Date Issued". The values were on the project all along;
+      they were being handed over under the wrong key.
+
+      `latestDocket` and `org` are supplied for the same reason: the sheet reads
+      them, and a synthesised issue must present the same shape as one built by
+      `buildSnapshot`, or the two render differently for no visible reason.
+    */
+    const legacyIssuedAt =
+      engagement?.issuedAt || latestDocket?.sentAt || latestDocket?.generatedAt || Date.now();
+
+    const snapshotClientData = latestDocket?.snapshotClientData || {
+      clientName: context.clientName,
+      projectName: context.name,
+      date: new Date(legacyIssuedAt).toLocaleDateString('en-IN'),
+    };
+
     const snapshot = {
       termsSettings,
+      snapshotClientData,
+      latestDocket: latestDocket
+        ? { docketRef: latestDocket.docketRef, status: latestDocket.status }
+        : { docketRef: engagement?.docketRef || '—', status: 'issued' },
+      org: {
+        orgName: null,
+        signatoryName: termsSettings?.signatory?.name || null,
+        signatoryTitle: termsSettings?.signatory?.title || null,
+      },
       clientName: context.clientName || latestDocket?.snapshotClientData?.clientName || 'Client',
       projectName: context.name,
       location: context.location,
       issuedOn: latestDocket?.snapshotClientData?.date || null
     };
 
-    const issuedAt =
-      engagement?.issuedAt ||
-      latestDocket?.sentAt ||
-      latestDocket?.generatedAt ||
-      Date.now();
-
     return {
       id: `di-terms_docket-legacy`,
       kind: 'terms_docket',
       version: 1,
       reference: engagement?.docketRef || latestDocket?.docketRef || '—',
-      issuedAt,
+      issuedAt: legacyIssuedAt,
       issuedBy: latestDocket?.sentBy || 'Studio',
       snapshot,
       contentHash: hashSnapshot(snapshot),
@@ -380,11 +469,27 @@ export function getCurrentIssue(
 /** Every issue for a kind, newest first. */
 export function getIssueHistory(
   context: ProjectContext,
-  kind: ClientDocumentKind
+  kind: ClientDocumentKind,
+  opts: IssueViewOptions = {}
 ): DocumentIssue[] {
-  const issues = (context?.documents?.issues || []).filter(i => i.kind === kind);
+  /*
+    History obeys the same publish gate as `getCurrentIssue`, and it did not.
+
+    A re-issued Payment Schedule that ops had not yet published still appeared
+    in the client's portal — filed under "Earlier versions", because the client
+    was correctly being shown v1 as current while v2 sat unpublished. So the
+    client saw a NEWER version described as older, and clicking it opened
+    nothing. Withdrawn issues and addenda are excluded for the same reason they
+    are excluded from `getCurrentIssue`: neither is a version of this document.
+  */
+  const issues = (context?.documents?.issues || []).filter(
+    i => i.kind === kind
+      && !i.withdrawnAt
+      && !i.addendumTo
+      && (!opts.clientView || isVisibleToClient(i as any))
+  );
   if (issues.length === 0) {
-    const synthesised = getCurrentIssue(context, kind);
+    const synthesised = getCurrentIssue(context, kind, opts);
     return synthesised ? [synthesised] : [];
   }
   return issues.sort((a, b) => b.version - a.version);
@@ -404,11 +509,12 @@ export function agreementKindFor(kind: ClientDocumentKind): AgreementKind | null
  */
 export function resolveDocumentState(
   context: ProjectContext,
-  kind: ClientDocumentKind
+  kind: ClientDocumentKind,
+  opts: IssueViewOptions = {}
 ): DocumentState {
   if (!context) return 'draft';
 
-  const issue = getCurrentIssue(context, kind);
+  const issue = getCurrentIssue(context, kind, opts);
   const agreementKind = agreementKindFor(kind);
 
   let signed = false;
@@ -428,7 +534,23 @@ export function resolveDocumentState(
     i => i.addendumTo && i.addendumTo === issue?.id && !i.clientSignature
   );
 
-  if (signed && unsignedAddendum) return 'amended';
+  /*
+    A REISSUE after the client signed.
+
+    `signed` above comes from the agreement record, and that record is attached
+    to the version the client actually put their name to — not to whatever is
+    current now. So a signed terms docket that the studio then reissues as v2
+    was still reported as 'signed': the portal showed "Signed", the client was
+    never told a newer version existed, and the studio had no signature on the
+    document that is actually live.
+
+    The current issue supersedes an earlier one and carries no signature of its
+    own, so the signature on file belongs to the superseded version. That is an
+    amendment awaiting signature, exactly like an addendum.
+  */
+  const reissuedAfterSignature = !!issue && !!issue.supersedes && !issue.clientSignature;
+
+  if (signed && (unsignedAddendum || reissuedAfterSignature)) return 'amended';
   if (signed && issue?.counterSignature) return 'executed';
   if (signed) return 'signed';
   if (!issue) return 'draft';

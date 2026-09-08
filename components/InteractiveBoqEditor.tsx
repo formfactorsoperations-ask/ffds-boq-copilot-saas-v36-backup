@@ -585,7 +585,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                             className="w-full text-center font-mono font-black text-xs text-slate-900 bg-transparent border-0 p-0 m-0 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             placeholder="0"
                           />
-                          <span className="block text-[7px] uppercase font-bold text-slate-400 select-none pointer-events-none -mt-0.5 leading-none">{item.unit}</span>
+                          <span className="block text-[8px] uppercase font-bold text-slate-400 select-none pointer-events-none -mt-0.5 leading-none">{item.unit}</span>
                         </div>
 
                         <button

@@ -30,6 +30,17 @@ export interface ProjectHealthReport {
     siteGovernance: PillarScore;
   };
   metrics: {
+    /** BOQ lines at LIST sell price. Not what the client agreed to pay. */
+    listSell: number;
+    /** What the client actually contracted for, ex-GST and after discounts.
+        This is the number every profit figure on this screen is built from. */
+    contractedExecution: number;
+    /** listSell - contractedExecution. Shown so the correction is visible. */
+    discountValue: number;
+    /** Whether revenue came from the signed contract or fell back to BOQ list. */
+    revenueSource: 'contract' | 'boq_list';
+    /** True when no design fee is configured, so the fee is genuinely zero. */
+    designFeeConfigured: boolean;
     totalSell: number;
     totalCost: number;
     netProfit: number;

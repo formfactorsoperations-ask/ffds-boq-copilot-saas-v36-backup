@@ -76,7 +76,7 @@ export const ProjectContextTier: React.FC<Props> = ({ projectContext }) => {
             <div key={c.label} className="px-3 py-1.5 border-r border-slate-100 last:border-r-0">
               <div className="text-[9px] font-extrabold uppercase tracking-widest text-slate-400">{c.label}</div>
               <div className="text-[13px] font-bold text-slate-900 tracking-tight capitalize truncate">{c.value}</div>
-              <div className="text-[10.5px] text-slate-500 truncate">{c.meta}</div>
+              <div className="text-[10px] text-slate-500 truncate">{c.meta}</div>
             </div>
           ))}
         </div>

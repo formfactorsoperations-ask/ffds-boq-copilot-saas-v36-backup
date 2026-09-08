@@ -48,8 +48,40 @@ service cloud.firestore {
     // ========================================================================
     
     match /users/{userId} {
-      // Users can only read/write their own profile, Super Admins can do anything
-      allow read, write: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+
+      // Bootstrap on first sign-in still writes the profile.
+      allow create: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+
+      /*
+        Self-service updates may not touch privilege.
+
+        `role`, `tenantId` and `projectIds` decide which app you get and which
+        projects you can open. With a blanket write on your own document, a
+        client could set their own role to Admin and walk into the studio app.
+        Those three are written by the Admin SDK only, which bypasses rules;
+        everything a user legitimately changes about themselves is listed here.
+      */
+      allow update: if isSuperAdmin() ||
+        (isAuthenticated() && request.auth.uid == userId &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['mustChangePassword', 'updatedAt', 'displayName', 'lastSeenAt', 'email'])) ||
+        /*
+          Studio sign-in syncs the signed-in user's role from the organisation's
+          team list, and has always done so from the browser. That is left
+          working -- a studio user is already inside their own tenant, so being
+          able to name their own role changes nothing they could not already do.
+
+          What must never happen is a CLIENT doing it: their whole containment
+          is the role on this document, so a client editing it would walk
+          straight into the studio app. Hence the check on the role they
+          currently hold, not the one they are asking for.
+        */
+        (isAuthenticated() && request.auth.uid == userId &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']) &&
+         resource.data.role != 'Client');
+
+      allow delete: if isSuperAdmin();
     }
 
     match /organizations/{orgId} {
@@ -171,9 +203,27 @@ service cloud.firestore {
     match /projects/{projectId} {
       allow read: if true;
 
-      // Allow public client digital signature / signoff updates, or authenticated tenant updates
-      allow update: if (isAuthenticated() && (isSameTenant(request.resource.data.tenantId) || isSuperAdmin())) ||
-                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['context', 'lastModified', 'isCompressed', 'compressedData']));
+      /*
+        Writes belong to the studio that owns the project.
+
+        The second clause here used to read:
+
+          (request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['context', 'lastModified', 'isCompressed', 'compressedData']))
+
+        with no authentication at all, so that a portal client could record a
+        signature. But `context` is the entire project — every rate, every
+        internal note, every unpublished draft, the portal access token — and
+        `compressedData` is that same context as a blob. Anyone who knew a
+        project id could replace all of it, and no narrower version of the rule
+        was possible: security rules cannot see inside a compressed field.
+
+        Client sign-offs, queries, disputes, document views and selection
+        confirmations now go through the `submitClientAction` callable, which
+        checks the caller's own users/{uid} record and applies one action from a
+        closed set. The client never writes this document.
+      */
+      allow update: if isAuthenticated() && (isSameTenant(request.resource.data.tenantId) || isSuperAdmin());
 
       // CREATE: Document payload must match user's tenantId
       allow create: if isAuthenticated() && (isSameTenant(request.resource.data.tenantId) || isSuperAdmin());
@@ -184,6 +234,63 @@ service cloud.firestore {
         (isLegacyFFDS() && !('tenantId' in resource.data)) ||
         isSuperAdmin()
       );
+
+      /*
+        PORTAL VIEW — the published, client-safe projection.
+
+        This is what a signed-in client reads instead of the project document.
+        buildPortalView has already stripped rates, margins, unpublished items
+        and the access token, so what is not published is not merely hidden in
+        the UI -- it is never sent. Access is by the reader's own profile:
+        the project must be listed on their users/{uid}.projectIds.
+      */
+      match /portalView/{viewId} {
+        allow read: if isAuthenticated() && (
+          isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
+          isSuperAdmin() ||
+          (projectId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.projectIds)
+        );
+        allow write: if isAuthenticated() && (
+          isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
+          isSuperAdmin()
+        );
+      }
+
+      /*
+        BOQ line items for each version of the project's scope.
+
+        Moved out of the project document because they are the bulk of it — on a
+        live project, 443KB of a 699KB payload against Firestore's 1 MiB limit —
+        and the save used to stay under that limit by deleting superseded
+        versions outright.
+
+        Studio-side only. This is the priced BOQ with the studio's own line
+        detail; what a client may see goes through portalView, which carries
+        sell rates and nothing behind them. A portal client's projectIds grant
+        them nothing here, deliberately.
+      */
+      /*
+        The engagement record: locked terms snapshot, payment structure, the
+        agreement's own history. Moved out of the project document because it is
+        the largest single field on it — 359KB on a live project against a 1 MiB
+        limit — and a project that outgrows that limit stops syncing entirely.
+
+        Studio-side only. A client reads their terms through portalView, which
+        carries the slice the documents are rendered from and nothing else.
+      */
+      match /engagement/{docId} {
+        allow read, write: if isAuthenticated() && (
+          isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
+          isSuperAdmin()
+        );
+      }
+
+      match /tierBoq/{tierId} {
+        allow read, write: if isAuthenticated() && (
+          isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
+          isSuperAdmin()
+        );
+      }
 
       match /selections/{selectionId} {
         allow read, write: if isAuthenticated() && (

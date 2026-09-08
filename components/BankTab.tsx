@@ -718,7 +718,7 @@ const BankTab: React.FC<BankTabProps> = ({
                 onClick={() => setHealthFilter('all')}
                 className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors ${
                   healthFilter === 'all'
-                    ? 'bg-slate-900 text-white'
+                    ? 'bg-[#0066CC] text-white'
                     : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
               >

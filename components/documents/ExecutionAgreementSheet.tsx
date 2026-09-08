@@ -111,7 +111,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 margin: 0;
                 padding: 0;
                 color: #334155;
-                font-family: 'Open Sans', ui-sans-serif, system-ui, sans-serif;
+                font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
                 font-size: 13px;
                 line-height: 1.6;
                 text-align: left;
@@ -154,7 +154,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 text-transform: uppercase;
                 letter-spacing: 1.2px;
             }
-            .ea-doc h1, .ea-doc h2, .ea-doc h3 { margin: 0; color: #1e1b4b; font-family: 'Open Sans', sans-serif; }
+            .ea-doc h1, .ea-doc h2, .ea-doc h3 { margin: 0; color: #1e1b4b; font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
             .ea-doc h1 {
                 font-size: 26px;
                 line-height: 1.2;

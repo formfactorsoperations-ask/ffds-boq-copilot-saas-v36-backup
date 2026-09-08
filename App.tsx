@@ -13,7 +13,10 @@ import { useOrg } from "./contexts/OrgContext";
 import PageTitleBlock from "./components/PageTitleBlock";
 import { PageHeaderProvider } from "./contexts/PageHeaderContext";
 import { BackgroundBeamsWithCollision } from "./components/ui/background-beams-with-collision";
-import StudioHome from "./components/StudioHome";
+import StudioHomeOrbit from "./components/StudioHomeOrbit";
+import { buildProjectTemplate } from "./lib/cloneProject";
+import { showSuccessWithNext } from "./components/SuccessWithNextToast";
+import { OfflineIndicator } from "./components/OfflineIndicator";
 
 // Helper for resilient lazy loading of dynamic modules with automatic single retry and window reload fallback
 function lazyWithRetry<T extends React.ComponentType<any>>(
@@ -71,13 +74,15 @@ const ClientsDirectory = lazyWithRetry(() => import("./components/ClientsDirecto
 const StudioReports = lazyWithRetry(() => import("./components/StudioReports"));
 
 const LoginScreen = lazyWithRetry(() => import("./components/LoginScreen"));
+const LandingPage = lazyWithRetry(() => import("./components/marketing/LandingPage"));
+const LandingPageOrbit = lazyWithRetry(() => import("./components/marketing/LandingPageOrbit"));
 const TeamTab = lazyWithRetry(() => import("./components/TeamTab"));
 const SubscriptionTab = lazyWithRetry(() => import("./components/SubscriptionTab"));
 const StudioSetupWizard = lazyWithRetry(() => import("./components/StudioSetupWizard"));
 const StudioSettingsTab = lazyWithRetry(() => import("./components/studio/StudioSettingsTab"));
 const StudioSettingsShell = lazyWithRetry(() => import("./components/StudioSettingsShell"));
 const SuperAdminDashboard = lazyWithRetry(() => import("./components/SuperAdminDashboard"));
-const SignoffPage = lazyWithRetry(() => import("./components/SignoffPage"));
+const ClientLoginScreen = lazyWithRetry(() => import("./components/ClientLoginScreen"));
 const AgreementSignoffPage = lazyWithRetry(() => import("./components/AgreementSignoffPage"));
 const SelectionConfirmPage = lazyWithRetry(() => import("./pages/SelectionConfirmPage"));
 const CommunicationTracker = lazyWithRetry(() => import("./components/ops/CommunicationTrackerPage").then(module => ({ default: module.CommunicationTracker })));
@@ -86,10 +91,9 @@ const HandoverDocketPage = lazyWithRetry(() => import("./components/client/Hando
 const PaymentSchedulePage = lazyWithRetry(() => import("./components/client/PaymentSchedulePage"));
 const SnagListReportPage = lazyWithRetry(() => import("./components/client/SnagListReportPage"));
 const QualityChecklistReportPage = lazyWithRetry(() => import("./components/client/QualityChecklistReportPage"));
-const EngagementLifecycleWidget = lazyWithRetry(() => import("./components/ops/EngagementLifecycleWidget").then(module => ({ default: module.EngagementLifecycleWidget })));
 const MomAcknowledgePage = lazyWithRetry(() => import("./components/client/MomAcknowledgePage").then(module => ({ default: module.MomAcknowledgePage })));
 const ProjectJourneyPage = lazyWithRetry(() => import("./components/ops/journey/ProjectJourneyPage"));
-const ManualStepCompleter = lazyWithRetry(() => import("./components/ops/journey/ManualStepCompleter"));
+const ProjectReportsTab = lazyWithRetry(() => import("./components/ops/ProjectReportsTab"));
 const DrawingTrackerModule = lazyWithRetry(() => import("./components/ops/DrawingTrackerModule"));
 const ScopeAdditionsModule = lazyWithRetry(() => import("./components/ops/ScopeAdditionsModule"));
 const SupervisorMobileApp = lazyWithRetry(() => import("./components/SupervisorMobileApp"));
@@ -114,9 +118,18 @@ import {
   SOFItem,
   ExecutionBundleStatus,
 } from "./types";
-import { db } from "./services/dbService";
+import { db, hydrateProjectDetail, projectFromDoc } from "./services/dbService";
+import { mergeClientOwned } from "./lib/clientOwned";
 import { db as firestoreDb } from "./services/firebaseClient";
-import { collection, doc, getDocs, writeBatch, serverTimestamp } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, writeBatch, serverTimestamp, onSnapshot, query, orderBy } from "firebase/firestore";
+import { toProjectDecisionRecords } from "./services/decisionProjection";
+import { issuePortalAccess, projectIdFromToken } from "./services/portalAccessService";
+import { readPortalView } from "./services/portalViewService";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth as firebaseAuth } from "./services/firebaseClient";
+import PortalPublishControls from "./components/ops/PortalPublishControls";
+import { buildClientBoqRows, baselineFromSentRows, ClientBoqRow } from "./lib/clientBoq";
+import { sendPortalAccessLink } from "./services/emailService";
 import { verifyApiKey } from "./services/geminiService";
 import { id as generateId, calculateSellPrice } from "./lib/utils";
 import { initCommunicationLog } from "./services/communicationTrackerService";
@@ -158,6 +171,22 @@ export default function App() {
     return () => window.removeEventListener('change-tab', handleTabChange);
   }, []);
 
+  /*
+    The marketing page is for people who arrived at the front door.
+
+    A client following a portal link did not: they were sent somewhere specific
+    by their studio, and being shown a pitch for the product first — with a
+    single "Open the studio" button as the only way past it — reads as a wrong
+    link. The initial value cannot decide that on its own, because the portal id
+    is parsed inside init(), so the effect below retracts it as soon as we know.
+  */
+  const [showLanding, setShowLanding] = useState(
+    () => !localStorage.getItem("ffds_seen_landing"),
+  );
+  useEffect(() => {
+    if (!showLanding) localStorage.setItem("ffds_seen_landing", "1");
+  }, [showLanding]);
+
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIStatus>("checking");
 
@@ -170,6 +199,94 @@ export default function App() {
 
   // Active Project State
   const [activeInternalId, setActiveInternalId] = useState<string | null>(null);
+
+  /*
+    The decision ledger for the open project.
+
+    This subscription used to live inside the Decisions screen, which meant
+    projectContext.projectDecisions -- the array the client portal reads -- only
+    caught up while that screen was mounted. Sign off a decision, leave the tab,
+    and the portal kept showing it as pending.
+
+    It has to be the ONLY listener on this query: a second onSnapshot on the
+    same target puts the Firestore SDK into an inconsistent state ("INTERNAL
+    ASSERTION FAILED (ID: b815)"), which is why the screen now reads this array
+    rather than opening its own.
+  */
+  /*
+    The single source of truth for which app a visitor gets.
+
+    Reads users/{uid} once per sign-in. A `Client` role lands in the portal,
+    everything else in the studio app, wherever they arrived from.
+  */
+  useEffect(() => {
+    if (!firebaseAuth) {
+      setAuthResolved(true);
+      return;
+    }
+    const unsub = onAuthStateChanged(firebaseAuth, async (user) => {
+      if (!user) {
+        setAuthProfile(null);
+        setAuthResolved(true);
+        return;
+      }
+      try {
+        const snap = await getDoc(doc(firestoreDb, "users", user.uid));
+        const data = snap.exists() ? (snap.data() as any) : {};
+        setAuthProfile({
+          uid: user.uid,
+          email: user.email || undefined,
+          role: data.role || "Admin",
+          tenantId: data.tenantId,
+          projectIds: data.projectIds || [],
+        });
+      } catch {
+        // No profile readable: treat as a studio user, which the studio rules
+        // will then constrain. Never as a client, since that would hand out a
+        // project view on a failed read.
+        setAuthProfile({ uid: user.uid, email: user.email || undefined, role: "Admin", projectIds: [] });
+      }
+      setAuthResolved(true);
+    });
+    return () => unsub();
+  }, []);
+
+  const [decisionLedger, setDecisionLedger] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!firestoreDb || !activeInternalId) {
+      setDecisionLedger([]);
+      return;
+    }
+
+    const q = query(
+      collection(firestoreDb, "projects", activeInternalId, "decisions"),
+      orderBy("createdAt", "desc"),
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        const fetched = snapshot.docs.map((d) => ({
+          id: d.id,
+          hasPendingWrites: d.metadata.hasPendingWrites,
+          ...d.data(),
+        })) as any[];
+        setDecisionLedger(fetched);
+
+        const projected = toProjectDecisionRecords(fetched);
+        setProjectContext((prev) => {
+          const current = (prev as any).projectDecisions || [];
+          if (JSON.stringify(current) === JSON.stringify(projected)) return prev;
+          return { ...prev, projectDecisions: projected } as any;
+        });
+      },
+      (err) => console.error("Error subscribing to decision ledger:", err),
+    );
+
+    return () => unsubscribe();
+  }, [activeInternalId]);
   const [projectArchitecture, setProjectArchitecture] = useState<'legacy' | 'canonical'>('canonical');
   const [projectContext, setProjectContext] =
     useState<ProjectContext>(DEFAULT_CONTEXT);
@@ -197,12 +314,35 @@ export default function App() {
     null,
   );
   const [portalProjectId, setPortalProjectId] = useState<string | null>(null);
+
+  /*
+    Who is signed in, and what they are allowed to be.
+
+    The app used to decide this from localStorage: `ffds_app_mode = "ops"` put
+    any visitor straight into the studio app with no check on whether anybody
+    was signed in. Mode is now derived from the account -- the URL and local
+    storage can suggest a destination, never grant one.
+  */
+  const [authProfile, setAuthProfile] = useState<
+    { uid: string; email?: string; role: string; tenantId?: string; projectIds: string[] } | null
+  >(null);
+  const [authResolved, setAuthResolved] = useState(false);
+  /** Branding for the client door, read from the public organizations doc. */
+  const [portalStudioBrand, setPortalStudioBrand] = useState<{
+    name?: string;
+    logo?: string;
+    /* Carried so the door can offer a way to ask for credentials rather than
+       telling a locked-out client to contact a studio it will not name. */
+    phone?: string;
+    email?: string;
+  }>({});
+  /** Why a portal link was refused, shown on the login screen. */
+  const [portalDenied, setPortalDenied] = useState<string | null>(null);
   const [appMode, setAppMode] = useState<
     | "loading"
     | "login"
     | "ops"
     | "client"
-    | "signoff"
     | "selection_confirm"
     | "agreement_signoff"
     | "booking_approval"
@@ -282,8 +422,9 @@ export default function App() {
           return;
         }
 
-        setSignoffToken(signoffQueryToken);
-        setAppMode("signoff");
+        // Not an agreement token, so it is a decision one. Decisions are
+        // approved in the client portal now; there is no standalone page to
+        // send them to, and pretending otherwise would strand them.
         setIsDataLoaded(true);
         return;
       }
@@ -303,6 +444,8 @@ export default function App() {
           }
         }
 
+        // /signoff/ carries agreement tokens only now; the decision sign-off
+        // page was removed and those approvals happen in the client portal.
         if (p.startsWith("/signoff/")) {
           const token = p.split("/")[2]?.split("?")[0];
           if (token) {
@@ -322,8 +465,6 @@ export default function App() {
               return;
             }
 
-            setSignoffToken(token);
-            setAppMode("signoff");
             setIsDataLoaded(true);
             return;
           }
@@ -360,7 +501,10 @@ export default function App() {
         setActiveTab("studio-settings");
       }
 
-      const portalId = urlParams.get("portal");
+      // `portal` now carries an access token, not a bare project id. The id is
+      // only a claim extracted from it; verifyPortalToken decides.
+      const portalToken = urlParams.get("portal");
+      const portalId = portalToken ? projectIdFromToken(portalToken) : null;
 
       if (portalId) {
         setPortalProjectId(portalId);
@@ -480,44 +624,135 @@ export default function App() {
 
       setIsDataLoaded(true);
 
-      // Determine initial app mode
-      const savedMode = localStorage.getItem("ffds_app_mode");
+      /*
+        The mode is no longer decided here.
 
+        A portal link says which project the visitor is heading for, and the
+        studio whose branding the sign-in should wear. It grants nothing on its
+        own -- the effect below opens a portal only once somebody has signed in
+        as a client. localStorage no longer gets a vote at all; `ffds_app_mode`
+        set by hand used to be enough to enter the studio app.
+      */
       if (portalId) {
-        // If they have a portal link, force them to login unless they are already logged in as client for this project
-        if (
-          savedMode === "client" &&
-          localStorage.getItem("ffds_client_project_id") === portalId
-        ) {
-          const project = storedProjects.find((p) => p.id === portalId);
-          if (project) {
-            setClientPortalProject(project);
-            setAppMode("client");
-          } else {
-            setAppMode("login");
-          }
-        } else {
-          setAppMode("login");
-        }
-      } else {
-        if (savedMode === "ops") {
-          setAppMode("ops");
-        } else if (savedMode === "client") {
-          const savedProjectId = localStorage.getItem("ffds_client_project_id");
-          const project = storedProjects.find((p) => p.id === savedProjectId);
-          if (project) {
-            setClientPortalProject(project);
-            setAppMode("client");
-          } else {
-            setAppMode("login");
-          }
-        } else {
-          setAppMode("login");
-        }
+        localStorage.setItem("ffds_client_project_id", portalId);
       }
+
+      /*
+        Deliberately does NOT set the mode.
+
+        init() finishes asynchronously, so an unconditional setAppMode("login")
+        here lands after the role effect has already decided and silently undoes
+        it -- a signed-in studio user was being shown the sign-in screen. The
+        effect keyed on the resolved account is the only writer of the mode.
+      */
     };
     init();
   }, []);
+
+  /*
+    Retract the marketing page for anyone it was not written for.
+
+    Two cases: a portal link, which names a project and so is addressed to one
+    client; and an account that is already signed in, for whom a pitch page is
+    simply an extra click on the way back to their own work. Writing it through
+    state rather than the render condition means it also survives the client
+    door handing off to the studio door, which clears portalProjectId.
+  */
+  useEffect(() => {
+    if (portalProjectId || authProfile) setShowLanding(false);
+  }, [portalProjectId, authProfile]);
+
+  /*
+    Whose name the client door wears.
+
+    Best effort only: a portal link names a project, the project names a tenant,
+    and the tenant's organizations document is public profile data. If any step
+    is unreadable the door simply shows no branding rather than failing -- it is
+    decoration, not a gate.
+  */
+  useEffect(() => {
+    if (!portalProjectId || authProfile) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const projectSnap = await getDoc(doc(firestoreDb, "projects", portalProjectId));
+        const tenantId = projectSnap.exists() ? (projectSnap.data() as any)?.tenantId : null;
+        if (!tenantId || cancelled) return;
+        const orgSnap = await getDoc(doc(firestoreDb, "organizations", tenantId));
+        if (!orgSnap.exists() || cancelled) return;
+        const org = orgSnap.data() as any;
+        const looksLikeAnId = !org.orgName || /^[a-z0-9]+(-[a-z0-9]+)+$/.test(String(org.orgName));
+        setPortalStudioBrand({
+          name: looksLikeAnId ? undefined : org.orgName,
+          logo: org.orgLogo || undefined,
+          phone: org.contactPhone || undefined,
+          email: org.contactEmail || undefined,
+        });
+      } catch {
+        // Unbranded door.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [portalProjectId, authProfile]);
+
+  /*
+    Identity decides the destination.
+
+    A Client role opens the portal, everything else opens the studio app --
+    whichever door they came through. Which project a client sees comes from
+    their own users/{uid}.projectIds, intersected with whatever the link asked
+    for, so a link for somebody else's project opens nothing.
+  */
+  useEffect(() => {
+    if (!authResolved || !isDataLoaded) return;
+
+    if (!authProfile) {
+      setAppMode("login");
+      return;
+    }
+
+    // A fresh attempt: whatever stopped the last one is no longer the reason.
+    setPortalDenied(null);
+
+    if (authProfile.role !== "Client") {
+      setAppMode("ops");
+      return;
+    }
+
+    const asked = localStorage.getItem("ffds_client_project_id");
+    const allowed = authProfile.projectIds || [];
+    const target = asked && allowed.includes(asked) ? asked : allowed[0];
+    if (!target) {
+      setPortalDenied("This login is not attached to a project yet. Please contact your studio.");
+      setAppMode("login");
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      /*
+        The portal renders from the published projection, never the project
+        document. buildPortalView already strips rates, margins and anything
+        not published; reading it here is what makes "not shown to the client"
+        mean "never sent to the client".
+      */
+      const view = await readPortalView(target);
+      if (cancelled) return;
+      if (!view) {
+        setPortalDenied("Your project is not published yet. Please contact your studio.");
+        setAppMode("login");
+        return;
+      }
+      setClientPortalProject({
+        id: target,
+        lastModified: Date.now(),
+        context: view.context,
+      } as any);
+      setAppMode("client");
+    })();
+
+    return () => { cancelled = true; };
+  }, [authResolved, authProfile, isDataLoaded]);
 
   // Re-fetch all data when tenantId changes (multi-tenant isolation safety)
   useEffect(() => {
@@ -807,6 +1042,81 @@ export default function App() {
     }
   }, [projectContext, activeInternalId, currentRole]);
 
+  /*
+    Watch the open project for changes this session did not make.
+
+    A client's sign-off, query, dispute or selection confirmation is applied
+    server-side by the submitClientAction callable, straight onto the project
+    document. This session knows nothing about it — and then auto-save writes
+    the whole project from memory every couple of seconds, replacing the stored
+    context with one that never had the client's change in it. An
+    acknowledgement recorded at 23:16 was gone by 23:17, overwritten by a
+    session that had loaded before it arrived.
+
+    Only the fields a client can actually change are merged. Taking the whole
+    remote context would mean the studio losing whatever they were editing at
+    the moment a snapshot landed — the same overwrite, pointed the other way.
+  */
+  /*
+    The last client-owned state seen on the server, kept so the auto-save can
+    carry it even when a write is already in flight. A snapshot updates React
+    state, but a save queued before that snapshot arrived holds the older
+    context — and it is that save which was erasing signatures.
+  */
+  const remoteClientOwnedRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!firestoreDb || !activeInternalId) return;
+
+    const unsub = onSnapshot(
+      doc(firestoreDb, "projects", activeInternalId),
+      (snap) => {
+        /*
+          Skip our own writes. They are already in state, and a snapshot for
+          one would merge a value into itself on every auto-save.
+        */
+        if (!snap.exists() || snap.metadata.hasPendingWrites) return;
+
+        const remote = projectFromDoc(snap.id, snap.data());
+        const remoteContext = remote?.context;
+        if (!remoteContext) return;
+
+        /*
+          No timestamp comparison here, deliberately.
+
+          The first version skipped any snapshot whose `lastModified` was not
+          newer than this session's last save. But those two stamps come from
+          two different clocks — the browser's and the Cloud Function's — and
+          comparing them is meaningless. Whenever the function's clock read
+          behind the browser's, every client change was discarded on arrival and
+          only appeared after a reload, when the reference had reset to zero.
+
+          `hasPendingWrites` already excludes our own writes, and Firestore
+          delivers current state rather than a replay, so a snapshot that
+          differs is a snapshot with something in it we do not have.
+        */
+
+        remoteClientOwnedRef.current = remoteContext;
+
+        setProjectContext((prev: any) => {
+          if (!prev) return prev;
+          /*
+            A merge, not a replacement. Taking the remote copy wholesale would
+            drop a version the studio has just issued; the merge keeps the
+            studio's list and carries the client's signatures onto it.
+          */
+          const merged = mergeClientOwned(prev, remoteContext);
+          if (merged === prev) return prev;
+          console.log("Merged client changes from the portal");
+          return merged;
+        });
+      },
+      (err) => console.warn("Could not watch the open project", err),
+    );
+
+    return () => unsub();
+  }, [activeInternalId]);
+
   // Auto-save Project to DB
   useEffect(() => {
     if (activeInternalId && projectContext) {
@@ -831,7 +1141,35 @@ export default function App() {
       // Debounce save
       const timeout = setTimeout(() => {
         console.log("Calling db.saveProject...");
-        db.saveProject(projectToSave);
+        /*
+          Fold in whatever the server last showed for the fields a client owns.
+
+          Without this, a save queued moments before a client's acknowledgement
+          arrived would still write the context it captured — and the signature
+          the client had just given would be gone. The merge keeps this
+          session's own work and refuses only to drop theirs.
+        */
+        const safeToSave = remoteClientOwnedRef.current
+          ? { ...projectToSave, context: mergeClientOwned(projectToSave.context as any, remoteClientOwnedRef.current) }
+          : projectToSave;
+        db.saveProject(safeToSave);
+        /*
+          Keep the library entry in step with what was just written.
+
+          Several handlers — status changes, quick field edits — build a whole
+          project payload from `projectLibrary` and save that. The auto-save
+          never updated the library, so its entry stayed at whatever was loaded
+          when the project was opened. Any one of those handlers would then
+          write that stale copy back over the cloud, and a document that had
+          gained two approved annexures reverted to the state it was in when the
+          project was opened.
+
+          The library is a cache of what is stored; it has to be updated when
+          what is stored changes.
+        */
+        setProjectLibrary((prev) =>
+          prev.map((p) => (p.id === activeInternalId ? { ...p, ...projectToSave } : p)),
+        );
       }, 2000);
 
       return () => clearTimeout(timeout);
@@ -948,6 +1286,102 @@ export default function App() {
     return tiersWithCalculatedSummaries.find((t) => t.id === activeTierId);
   }, [tiersWithCalculatedSummaries, activeTierId]);
 
+  /*
+    The scope in the form the client receives.
+
+    Built here because this is where the tier and the item bank are both in
+    scope; the projection has neither. lib/clientBoq strips the cost side —
+    bankId, materials, labour, margin — and keeps only the sell rate, so what
+    is stored is what a client may see rather than what the UI happens to draw.
+  */
+  /*
+    The baseline stored with the client's own copy of the scope.
+
+    Preferred over anything derived from the tier chain, because it is the one
+    that lasts. Once written it is never replaced, so "Was ..." keeps meaning
+    the figure in the BOQ the client first received rather than whatever the
+    most recent annexure happened to supersede.
+  */
+  const [storedBoqBaseline, setStoredBoqBaseline] = useState<ClientBoqRow[] | null>(null);
+  useEffect(() => {
+    if (!activeInternalId) { setStoredBoqBaseline(null); return; }
+    let cancelled = false;
+    readPortalView(activeInternalId).then(view => {
+      if (cancelled) return;
+      const ctx: any = view?.context || {};
+      /*
+        `clientBoq` is NOT a baseline. Those rows are the current scope, changes
+        already applied — using them directly made the comparison find nothing
+        and every marker disappeared. Unwound through `change.from` they give
+        back the original, which is what the markers were measured against.
+      */
+      setStoredBoqBaseline(ctx.clientBoqBaseline || baselineFromSentRows(ctx.clientBoq) || null);
+    });
+    return () => { cancelled = true; };
+  }, [activeInternalId]);
+
+  /** Rooms, as both the baseline and the current rows need them. */
+  const clientBoqRooms = (projectContext as any)?.rooms;
+
+  /*
+    What the markers are measured against.
+
+    Two sources, in this order:
+
+      1. The root of the tier chain, walking `parentTierId` to its end. This is
+         the authoritative original — the BOQ the client first approved — and
+         every annexure since shows against it, so the markers accumulate
+         rather than each approval erasing the last one's.
+      2. The baseline stored with the client's copy, when the chain cannot be
+         resolved. The saved project document has been observed holding a single
+         tier with `parentTierId` pointing at a version that is not in it, so
+         the chain is not something to rely on alone.
+
+    The stored copy is the fallback and not the preference, deliberately. It was
+    the other way round and it went wrong: a projection written while the
+    markers were broken became the permanent baseline, and no later correction
+    could dislodge it. A derived value should lose to a source of truth, never
+    outrank it.
+
+    Built without the revision log — those entries belong to the current
+    version, and applying them to an ancestor would compare it against itself.
+  */
+  const clientBoqBaseline = useMemo((): ClientBoqRow[] | undefined => {
+    const tier: any = activeCalculatedTier;
+    if (!tier) return storedBoqBaseline || undefined;
+
+    const rootTier = (() => {
+      const seen = new Set<string>();
+      let cursor: any = tier;
+      while (cursor?.parentTierId && !seen.has(cursor.id)) {
+        seen.add(cursor.id);
+        const next: any = tiersWithCalculatedSummaries.find((t: any) => t.id === cursor.parentTierId);
+        if (!next) break;
+        cursor = next;
+      }
+      // A tier with no ancestry is the original: nothing to compare against.
+      return cursor === tier ? undefined : cursor;
+    })();
+
+    const source = rootTier?.fullBoq || rootTier?.boq || [];
+    if (!source.length) return storedBoqBaseline || undefined;
+    return buildClientBoqRows({ boq: source, bank, rooms: clientBoqRooms, revisions: [] });
+  }, [storedBoqBaseline, activeCalculatedTier, tiersWithCalculatedSummaries, bank, clientBoqRooms]);
+
+  const clientBoqRows = useMemo(() => {
+    const tier: any = activeCalculatedTier;
+    const source = tier?.fullBoq || tier?.boq || [];
+    if (!source.length) return [];
+
+    return buildClientBoqRows({
+      boq: source,
+      bank,
+      rooms: clientBoqRooms,
+      revisions: (projectContext as any)?.boqRevisions,
+      previous: clientBoqBaseline,
+    });
+  }, [activeCalculatedTier, bank, clientBoqRooms, projectContext, clientBoqBaseline]);
+
   const fullBoqForActiveTier = useMemo((): FullBoqItem[] => {
     if (!activeTierId) return [];
     const activeTier = tiers.find((t) => t.id === activeTierId);
@@ -1046,6 +1480,30 @@ export default function App() {
     setProjectArchitecture(project.architecture || 'legacy');
     setProjectContext(project.context || DEFAULT_CONTEXT);
     setTiers(project.tiers || []);
+
+    /*
+      Restore any version whose lines were left out of the project document.
+
+      BOQ detail lives in projects/{id}/tierBoq/{tierId} so a project cannot
+      outgrow Firestore's document limit and start losing versions. Tiers that
+      still carry their lines inline need nothing, so this does no work at all
+      for a project that fits — and for one that does not, it is what makes the
+      history whole before anything reads it.
+
+      Deliberately after the state is set: the project opens immediately, and
+      the versions fill in when they arrive rather than holding up the screen.
+    */
+    hydrateProjectDetail(project)
+      .then((full) => {
+        if (full !== project && full.tiers?.length) {
+          setTiers((current) =>
+            // Only if the user has not moved on to another project meanwhile.
+            activeIdRef.current === project.id ? full.tiers : current,
+          );
+        }
+      })
+      .catch(() => {});
+
     setActiveTierId(project.activeTierId || null);
     setActiveProject(project.activeProject || null);
     setMaterialSuggestions(project.materials || []);
@@ -1077,6 +1535,42 @@ export default function App() {
     }
   };
 
+  /**
+   * Issue a fresh portal link for a project and email it to the client.
+   *
+   * Minting a new token invalidates the previous link, which is what you want
+   * if a client forwards one by mistake — reissuing is also the revoke button.
+   */
+  const handleRequestPortalLink = async (project: FullProjectData) => {
+    const access = issuePortalAccess(project.id, project.context?.clientEmail);
+    const updated: FullProjectData = {
+      ...project,
+      context: { ...project.context, portalAccess: access } as any,
+      lastModified: Date.now(),
+    };
+    try {
+      await db.saveProject(updated);
+      setProjectLibrary((prev) => prev.map((p) => (p.id === project.id ? updated : p)));
+    } catch (e) {
+      console.error("Could not store portal access token", e);
+      return;
+    }
+
+    const link = `${window.location.origin}/?portal=${access.token}`;
+    const res = await sendPortalAccessLink(
+      project.context?.clientEmail || "",
+      project.context?.name || "your project",
+      project.context?.clientName || "",
+      link,
+      access.expiresAt,
+    );
+    // Delivery is best-effort: the token is already live, so ops can copy the
+    // link from the project if the email bounced.
+    if (!res.success) {
+      console.warn("Portal link generated but not emailed:", res.error, link);
+    }
+  };
+
   const handleDeleteProject = async (id: string) => {
     // 1. Optimistic UI Update: Remove immediately from list
     setProjectLibrary((prev) => prev.filter((p) => p.id !== id));
@@ -1098,24 +1592,37 @@ export default function App() {
     // Consistency will be restored on next reload or sync.
   };
 
+  /**
+   * CLONE AS TEMPLATE.
+   *
+   * This used to be `JSON.parse(JSON.stringify(project))` with a new id, which
+   * carried the source client's name, phone, signed agreements, payment
+   * milestones with money received against them, and their portal access token
+   * into the new project. `buildProjectTemplate` copies the SHAPE of the job
+   * from an allowlist instead, so nothing about the old client can ride along.
+   */
   const handleDuplicateProject = async (project: FullProjectData) => {
-    // Deep clone to avoid reference issues
-    const clonedProject = JSON.parse(JSON.stringify(project));
-    const contextToUse = clonedProject.context || DEFAULT_CONTEXT;
+    const { project: template, summary } = buildProjectTemplate(project, {
+      newId: generateId(),
+      newTierId: () => generateId(),
+    });
 
-    const duplicated: FullProjectData = {
-      ...clonedProject,
-      id: generateId(),
-      architecture: clonedProject.architecture || 'legacy',
-      context: { ...contextToUse, name: `${contextToUse.name} (Copy)` },
-      lastModified: Date.now(),
-    };
+    setProjectLibrary((prev) => [template, ...prev]);
+    await db.saveProject(template);
 
-    // Optimistic UI Update
-    setProjectLibrary((prev) => [duplicated, ...prev]);
+    // Open it straight away: the point is to start work, not to admire a copy.
+    handleOpenProject(template);
 
-    // Save to DB
-    await db.saveProject(duplicated);
+    const carried = [
+      summary.rooms ? `${summary.rooms} room${summary.rooms === 1 ? '' : 's'}` : null,
+      summary.boqItems ? `${summary.boqItems} priced item${summary.boqItems === 1 ? '' : 's'}` : null,
+    ].filter(Boolean).join(' and ');
+
+    showSuccessWithNext(
+      carried
+        ? `Template created with ${carried}. Client details, payments and sign-offs were not copied.`
+        : 'Template created. Client details, payments and sign-offs were not copied.',
+    );
   };
 
   const handleProjectStatusChange = async (
@@ -1809,10 +2316,6 @@ export default function App() {
     );
   }
 
-  if (appMode === "signoff" && signoffToken) {
-    return <SignoffPage token={signoffToken} />;
-  }
-
   if (appMode === "agreement_signoff" && agreementSignoffToken) {
     return <AgreementSignoffPage token={agreementSignoffToken} />;
   }
@@ -1825,17 +2328,53 @@ export default function App() {
     return <MomAcknowledgePage token={momToken} />;
   }
 
+  /* The public page is what a visitor lands on. Signing in is one click past
+     it, and anyone returning is taken straight to the sign-in screen. */
+  if (appMode === "login" && showLanding && !portalProjectId && !authProfile) {
+    /* Two public pages exist side by side. `?landing=orbit` shows the orbit
+       variant; anything else keeps the original, so the default path is
+       unchanged for every visitor who does not ask for it. */
+    const wantsOrbit =
+      new URLSearchParams(window.location.search).get("landing") === "orbit";
+    return wantsOrbit
+      ? <LandingPageOrbit onEnter={() => setShowLanding(false)} />
+      : <LandingPage onEnter={() => setShowLanding(false)} />;
+  }
+
+  /*
+    The client door.
+
+    It has to answer for a signed-in client as well as a signed-out one. The
+    condition used to be `portalProjectId && !authProfile`, so a client who
+    signed in successfully and was then refused a project — unpublished
+    projection, or a link for a project not on their account — failed both
+    halves and fell through to the *studio* sign-in screen below. From where
+    they stood, correct credentials had bounced them to a page for staff, with
+    nothing said. `portalDenied` was being set for exactly this and had nowhere
+    to appear.
+  */
+  const clientSession = authProfile?.role === "Client";
+  if (appMode === "login" && (portalProjectId || clientSession)) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+        <ClientLoginScreen
+          studio={portalStudioBrand}
+          notice={portalDenied}
+          signedInAs={clientSession ? authProfile?.email : undefined}
+          onSignOut={() => {
+            firebaseAuth?.signOut().catch(() => {});
+            localStorage.removeItem("ffds_app_mode");
+            localStorage.removeItem("ffds_client_project_id");
+            setPortalDenied(null);
+          }}
+        />
+      </Suspense>
+    );
+  }
+
   if (appMode === "login") {
     return (
       <LoginScreen
-        projects={projectLibrary}
-        portalProjectId={portalProjectId}
-        onLoginClient={(project) => {
-          localStorage.setItem("ffds_app_mode", "client");
-          localStorage.setItem("ffds_client_project_id", project.id);
-          setClientPortalProject(project);
-          setAppMode("client");
-        }}
         onLoginOps={() => {
           localStorage.setItem("ffds_app_mode", "ops");
           setAppMode("ops");
@@ -1849,18 +2388,22 @@ export default function App() {
       <ClientPortal
         projectData={clientPortalProject}
         bank={bank}
+        source="client"
         onLogout={() => {
+          // A real session now, so signing out has to end it.
+          firebaseAuth?.signOut().catch(() => {});
           localStorage.removeItem("ffds_app_mode");
           localStorage.removeItem("ffds_client_project_id");
           setAppMode("login");
         }}
-        onProjectUpdate={async (updatedProject) => {
-          await db.saveProject(updatedProject);
+        /*
+          Local only. A client session no longer saves the project document —
+          its changes travel as actions through the submitClientAction callable,
+          which is the only write path the rules leave open to them. This keeps
+          the view they are looking at in step with what they just did.
+        */
+        onProjectUpdate={(updatedProject) => {
           setClientPortalProject(updatedProject);
-          // Also update projectLibrary if needed
-          setProjectLibrary((prev) =>
-            prev.map((p) => (p.id === updatedProject.id ? updatedProject : p)),
-          );
         }}
       />
     );
@@ -1973,15 +2516,21 @@ export default function App() {
             }}
             pendingCommsCount={projectContext.commsSummary?.pendingCount || 0}
             commsHealthScore={projectContext.commsSummary?.healthScore || 0}
-            projectContext={projectContext}
             autoCollapse={false}
             isHidden={isProjectTab && hasProjectData}
             className={`transition-transform duration-300 z-[80] ${isMobileMenuOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0"}`}
           />
           
           <main
-            className={`w-full transition-[margin,width] duration-300 relative flex flex-col bg-[#F4F7FB] ${isProjectTab && hasProjectData ? "md:h-screen md:overflow-hidden" : "min-h-screen"}`}
+            className={`w-full relative flex flex-col bg-[#F4F7FB] ${isProjectTab && hasProjectData ? "ws-fill" : "app-fill"}`}
             style={{
+              /* The studio nav is a bar now, so it costs height rather than
+                 width. `--sidebar-w` is pinned at 0 and kept only because
+                 other layout still reads it; the top offset comes from the
+                 fill classes, NOT from an inline var under a transition —
+                 Chrome will not recompute a transitioned margin when the
+                 custom property behind it changes, which left a 54px gap at
+                 the top of every project. */
               marginLeft: 'var(--sidebar-w, 0px)',
               width: 'calc(100% - var(--sidebar-w, 0px))',
             }}
@@ -2014,7 +2563,10 @@ export default function App() {
                   setActiveTab={setActiveTab}
                   currentRole={orgData?.role || "Admin"}
                   setProjectContext={setProjectContext}
-                  isWizard={tiers.length === 0}
+                  // Must match the condition that actually renders the wizard
+                  // below, or the workspace titles the page wrong and shows the
+                  // process widget over a wizard that is standing open.
+                  isWizard={activeTab === "dashboard" && (tiers.length === 0 || showWizardOverride)}
                   onStatusChange={(status, note) => handleProjectStatusChange(activeInternalId!, status, note)}
                   onLeaveProject={(targetTab?: string) => {
                     setActiveProject(null);
@@ -2041,19 +2593,23 @@ export default function App() {
                       <span className="text-xs font-semibold uppercase tracking-wider">Loading View...</span>
                     </div>
                   }>
-                  {/* MANUAL STEP COMPLETER PROMPT */}
-                      {activeInternalId && (
-                        <ManualStepCompleter
-                          projectId={activeInternalId}
-                          projectContext={projectContext}
-                          activeTab={activeTab}
-                          // ACTIVE_FLOW_MARKER
-                        />
-                      )}
+                  {/*
+                    The "Required Action" banner that sat here is gone.
+
+                    It pushed itself above whatever tab you had open whenever the
+                    journey held a manual step whose linkedTab matched — so
+                    opening the Project Dashboard on a new lead was met with a
+                    green "Discovery Scheduled / Complete Step" prompt that had
+                    nothing to do with the screen you asked for, and offered to
+                    advance the journey from a page that only reports on it.
+
+                    The same steps are marked done on the Ops Matrix, which is
+                    where the journey lives, so nothing was lost with it.
+                  */}
 
                   {/* GLOBAL TABS - SECTION 1 */}
                   {activeTab === "home" && (
-                    <StudioHome
+                    <StudioHomeOrbit
                       projects={projectLibrary}
                       onOpenProject={handleOpenProject}
                       onCreateNew={handleCreateNewProject}
@@ -2067,6 +2623,10 @@ export default function App() {
                     <StudioReports
                       projects={projectLibrary}
                       onNavigate={setActiveTab}
+                      onOpenProject={(id) => {
+                        const p = projectLibrary.find(x => x.id === id);
+                        if (p) handleOpenProject(p, "project-reports");
+                      }}
                       // ACTIVE_STUDIO_REPORTS
                     />
                   )}
@@ -2289,8 +2849,23 @@ export default function App() {
                         <ProjectJourneyPage
                           projectId={activeInternalId!}
                           projectContext={projectContext}
-                          onClose={() => setActiveTab("projects")} // Fallback just in case
+                          /* Closing a project screen returns you to that project, not out
+                             of it. This sent people to the studio Projects list, which
+                             discards the project context they were working in. */
+                          onClose={() => setActiveTab("dashboard")}
                           onNavigate={setActiveTab}
+                        />
+                      )}
+
+                      {activeTab === "project-reports" && (
+                        <ProjectReportsTab
+                          projectContext={projectContext}
+                          boq={activeProject ? executionBoq : fullBoqForActiveTier}
+                          projectId={activeInternalId}
+                          activeTier={activeCalculatedTier}
+                          allProjects={projectLibrary}
+                          currentUserRole={orgData?.role || 'Admin'}
+                          setActiveTab={setActiveTab}
                         />
                       )}
 
@@ -2402,7 +2977,7 @@ export default function App() {
 
                       {(activeTab === "terms-docket" || activeTab === "payment-schedule") && (
                         <div className="mb-6">
-                          <EngagementLifecycleWidget projectContext={projectContext} setProjectContext={setProjectContext} />
+
                         </div>
                       )}
 
@@ -2461,7 +3036,19 @@ export default function App() {
                         />
                       )}
                       {activeTab === "client-portal" && (
+                        <>
+                        {/* Ops-only. Sits above the preview because ops must see
+                            the state of items the client cannot see at all. */}
+                        <PortalPublishControls
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          currentUser={currentUserAuth?.email || currentUserAuth?.displayName || undefined}
+                          projectId={activeInternalId || undefined}
+                          clientBoq={clientBoqRows}
+                          clientBoqBaseline={clientBoqBaseline}
+                        />
                         <ClientPortal
+                          clientBoq={clientBoqRows}
                           projectData={{
                             id: activeInternalId!,
                             lastModified: Date.now(),
@@ -2482,6 +3069,7 @@ export default function App() {
                             setProjectContext(updated.context);
                           }}
                         />
+                        </>
                       )}
                       {activeTab === "onboarding" && (
                         <OnboardingKitPage
@@ -2564,6 +3152,7 @@ export default function App() {
                           aiStrategy={aiStrategy}
                           tiers={tiersWithCalculatedSummaries}
                           projectContext={projectContext}
+                          currentUserRole={orgData?.role || 'Admin'}
                         />
                       )}
                       {(activeTab === "site-ops" ||
@@ -2579,6 +3168,7 @@ export default function App() {
                             activeProject ? executionBoq : fullBoqForActiveTier
                           }
                           projectId={activeInternalId!}
+                          decisionLedger={decisionLedger}
                           activeProject={activeProject}
                           onProjectUpdate={setActiveProject}
                           onNavigateToTab={setActiveTab}
@@ -2694,18 +3284,9 @@ export default function App() {
                       <span className="text-xs font-semibold uppercase tracking-wider">Loading View...</span>
                     </div>
                   }>
-                  {/* MANUAL STEP COMPLETER PROMPT */}
-                  {activeInternalId && (
-                    <ManualStepCompleter
-                      projectId={activeInternalId}
-                      projectContext={projectContext}
-                      activeTab={activeTab}
-                    />
-                  )}
-
                   {/* GLOBAL TABS */}
                   {activeTab === "home" && (
-                    <StudioHome
+                    <StudioHomeOrbit
                       projects={projectLibrary}
                       onOpenProject={handleOpenProject}
                       onCreateNew={handleCreateNewProject}
@@ -2718,6 +3299,10 @@ export default function App() {
                     <StudioReports
                       projects={projectLibrary}
                       onNavigate={setActiveTab}
+                      onOpenProject={(id) => {
+                        const p = projectLibrary.find(x => x.id === id);
+                        if (p) handleOpenProject(p, "project-reports");
+                      }}
                     />
                   )}
                   {activeTab === "projects" && (
@@ -2940,8 +3525,23 @@ export default function App() {
                         <ProjectJourneyPage
                           projectId={activeInternalId!}
                           projectContext={projectContext}
-                          onClose={() => setActiveTab("projects")} // Fallback just in case
+                          /* Closing a project screen returns you to that project, not out
+                             of it. This sent people to the studio Projects list, which
+                             discards the project context they were working in. */
+                          onClose={() => setActiveTab("dashboard")}
                           onNavigate={setActiveTab}
+                        />
+                      )}
+
+                      {activeTab === "project-reports" && (
+                        <ProjectReportsTab
+                          projectContext={projectContext}
+                          boq={activeProject ? executionBoq : fullBoqForActiveTier}
+                          projectId={activeInternalId}
+                          activeTier={activeCalculatedTier}
+                          allProjects={projectLibrary}
+                          currentUserRole={orgData?.role || 'Admin'}
+                          setActiveTab={setActiveTab}
                         />
                       )}
 
@@ -3051,7 +3651,7 @@ export default function App() {
 
                       {(activeTab === "terms-docket" || activeTab === "payment-schedule") && (
                         <div className="mb-6">
-                          <EngagementLifecycleWidget projectContext={projectContext} setProjectContext={setProjectContext} />
+
                         </div>
                       )}
 
@@ -3110,7 +3710,19 @@ export default function App() {
                         />
                       )}
                       {activeTab === "client-portal" && (
+                        <>
+                        {/* Ops-only. Sits above the preview because ops must see
+                            the state of items the client cannot see at all. */}
+                        <PortalPublishControls
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          currentUser={currentUserAuth?.email || currentUserAuth?.displayName || undefined}
+                          projectId={activeInternalId || undefined}
+                          clientBoq={clientBoqRows}
+                          clientBoqBaseline={clientBoqBaseline}
+                        />
                         <ClientPortal
+                          clientBoq={clientBoqRows}
                           projectData={{
                             id: activeInternalId!,
                             lastModified: Date.now(),
@@ -3131,6 +3743,7 @@ export default function App() {
                             setProjectContext(updated.context);
                           }}
                         />
+                        </>
                       )}
                       {activeTab === "onboarding" && (
                         <OnboardingKitPage
@@ -3213,6 +3826,7 @@ export default function App() {
                           aiStrategy={aiStrategy}
                           tiers={tiersWithCalculatedSummaries}
                           projectContext={projectContext}
+                          currentUserRole={orgData?.role || 'Admin'}
                         />
                       )}
                       {(activeTab === "site-ops" ||
@@ -3228,6 +3842,7 @@ export default function App() {
                             activeProject ? executionBoq : fullBoqForActiveTier
                           }
                           projectId={activeInternalId!}
+                          decisionLedger={decisionLedger}
                           activeProject={activeProject}
                           onProjectUpdate={setActiveProject}
                           onNavigateToTab={setActiveTab}
@@ -3322,6 +3937,7 @@ export default function App() {
       {!(isProjectTab && hasProjectData) && (
         <SuccessWithNextToast projectId={activeInternalId || undefined} projectContext={projectContext} />
       )}
+      <OfflineIndicator />
         </div>
     </div>
     </PageHeaderProvider>

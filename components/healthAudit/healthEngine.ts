@@ -1,3 +1,4 @@
+import { calculateProjectFinancials } from '../../lib/financialsUtils';
 import { BoqItem, FullBoqItem, ProjectContext, ProposalTier, SnagItem, Item } from '../../types';
 import { calculateSellPrice, calculateGrossMargin, formatCurrency, generateId } from '../../lib/utils';
 import { HealthGrade, PillarScore, ProjectHealthReport, SmartActionItem } from './types';
@@ -22,13 +23,28 @@ export function getGradeFromScore(score: number, maxScore: number = 25): HealthG
 }
 
 // Compute comprehensive project health report
+/**
+ * REVENUE COMES FROM THE CONTRACT, NOT THE QUOTE.
+ *
+ * This engine used to build its profit figures by summing every BOQ line at its
+ * LIST sell price. It had no discount handling at all, so every rupee the studio
+ * negotiated away was still being reported as profit. On a real project that read
+ * as Rs 2,27,400 net profit against an actual Rs 80,463 -- 2.8x too high.
+ *
+ * `calculateProjectFinancials` is the one place discounts are applied, and it is
+ * what the P&L card, the Reports tab and the portfolio table all use. This engine
+ * now uses it too, so a project's margin means the same thing on every screen.
+ *
+ * The BOQ list total is kept as `listSell` because per-item margin analysis still
+ * needs it -- but it is never the basis of a profit number.
+ */
 export function computeProjectHealth(
   boq: FullBoqItem[],
   projectContext?: ProjectContext,
   tiers: ProposalTier[] = []
 ): ProjectHealthReport {
   let totalCost = 0;
-  let totalSell = 0;
+  let totalSell = 0; // reassigned below to contracted revenue
   let materialCost = 0;
   let laborCost = 0;
   let marginDragCount = 0;
@@ -61,20 +77,51 @@ export function computeProjectHealth(
     }
   });
 
-  // Calculate Design Fee
-  let designFee = 0;
+  // BOQ lines at list price. Useful for per-item analysis, never for profit.
+  const listSell = totalSell;
+
+  // ---- Contracted revenue, ex-GST and after discounts ----
+  const ctxAny = projectContext as any;
+  const activeTier =
+    tiers.find(t => t.id === (ctxAny?.approvedTierId || ctxAny?.activeTierId)) || tiers[0];
+
+  let contractedExecution = 0;
+  let contractedDesign = 0;
+  let revenueSource: 'contract' | 'boq_list' = 'boq_list';
+  let designFeeConfigured = false;
+
   if (projectContext) {
-    const { designFee: df, designFeeType: dft, area } = projectContext;
-    if (!df && !dft) designFee = totalSell * 0.10;
-    else if (dft === 'fixed_lumpsum') designFee = df || 0;
-    else if (dft === 'fixed_sqft') designFee = (df || 0) * (area || 0);
-    else designFee = totalSell * ((df || 10) / 100);
+    const fin = calculateProjectFinancials(projectContext, activeTier) as any;
+    contractedExecution = Number(fin?.taxableExecution) || 0;
+    contractedDesign = Number(fin?.taxableDesign) || 0;
+    if (contractedExecution > 0) revenueSource = 'contract';
   }
 
-  const netProfit = (totalSell - totalCost) + designFee;
-  const totalRevenue = totalSell + designFee;
-  const grossMarginPct = calculateGrossMargin(totalSell, totalCost);
+  /* A design fee that was never configured is ZERO. The previous version
+     invented 10% of sell here, which both overstated profit and made pillar 3's
+     "No Design Fee configured" deduction unreachable -- it checks for exactly 0,
+     and the invented fee was never 0. */
+  if (contractedDesign > 0) {
+    designFeeConfigured = true;
+  } else if (projectContext) {
+    const { designFee: df, designFeeType: dft, area } = projectContext;
+    if (dft === 'fixed_lumpsum' && df) { contractedDesign = df; designFeeConfigured = true; }
+    else if (dft === 'fixed_sqft' && df) { contractedDesign = df * (area || 0); designFeeConfigured = true; }
+    else if (dft && df) { contractedDesign = listSell * (df / 100); designFeeConfigured = true; }
+  }
+
+  // Fall back to list only when there is no contract to read (BOQ-only preview).
+  const executionRevenue = revenueSource === 'contract' ? contractedExecution : listSell;
+  const designFee = contractedDesign;
+  const discountValue = Math.max(0, listSell - executionRevenue);
+
+  const netProfit = (executionRevenue - totalCost) + designFee;
+  const totalRevenue = executionRevenue + designFee;
+  const grossMarginPct = calculateGrossMargin(executionRevenue, totalCost);
   const blendedMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+  // Everything downstream that used to mean "sell" now means contracted revenue.
+  totalSell = executionRevenue;
 
   // Material vs Labor equilibrium
   const totalDirectCost = materialCost + laborCost;
@@ -193,13 +240,18 @@ export function computeProjectHealth(
   let p2Score = 25;
   const p2Findings: PillarScore['findings'] = [];
 
-  // Gross Margin threshold
-  if (grossMarginPct < 15) {
+  /* Gross margin threshold.
+     These cut-offs were written when `calculateGrossMargin` returned MARKUP, so
+     they read 15 / 22 and quoted a "28-35%" target -- all markup figures. The
+     function now returns a true margin, so each one is restated: 15 markup is
+     13.0 margin, 22 is 18.0, and the 28-35 target band is 22-26. The studio's
+     pricing intent is unchanged; only the units are honest. */
+  if (grossMarginPct < 13) {
     p2Score -= 12;
-    p2Findings.push({ type: 'critical', message: `Gross margin (${grossMarginPct.toFixed(1)}%) is critically below safe industry floor of 20%.` });
-  } else if (grossMarginPct < 22) {
+    p2Findings.push({ type: 'critical', message: `Gross margin (${grossMarginPct.toFixed(1)}%) is critically below the safe floor of 17%.` });
+  } else if (grossMarginPct < 18) {
     p2Score -= 6;
-    p2Findings.push({ type: 'warning', message: `Gross margin (${grossMarginPct.toFixed(1)}%) is tight. Target benchmark is 28-35%.` });
+    p2Findings.push({ type: 'warning', message: `Gross margin (${grossMarginPct.toFixed(1)}%) is tight. Target band is 22-26% (a 28-35% markup).` });
   } else {
     p2Findings.push({ type: 'ok', message: `Robust execution gross margin at ${grossMarginPct.toFixed(1)}% (Blended ${blendedMarginPct.toFixed(1)}%).` });
   }
@@ -251,7 +303,7 @@ export function computeProjectHealth(
   }
 
   // Design Fee structure
-  if (designFee === 0) {
+  if (!designFeeConfigured || designFee === 0) {
     p3Score -= 5;
     p3Findings.push({ type: 'warning', message: 'No Design Fee configured. Studio absorbs all design overheads into execution.' });
   } else {
@@ -319,7 +371,7 @@ export function computeProjectHealth(
   if (compositeScore < 50) {
     statusLabel = 'CRITICAL RISK';
     headlineSummary = 'Severe commercial or operational vulnerabilities detected. Project requires immediate corrective intervention.';
-    primaryRisk = grossMarginPct < 18 ? 'Unviable margin structure' : 'Incomplete scope and missing financial hard gates';
+    primaryRisk = grossMarginPct < 15 ? 'Unviable margin structure' : 'Incomplete scope and missing financial hard gates';
     nextRecommendedAction = 'Execute 1-Click Auto-Fix for margins and complete missing room scopes before proceeding.';
   } else if (compositeScore < 70) {
     statusLabel = 'CAUTION REQUIRED';
@@ -442,6 +494,11 @@ export function computeProjectHealth(
       }
     },
     metrics: {
+      listSell,
+      contractedExecution: executionRevenue,
+      discountValue,
+      revenueSource,
+      designFeeConfigured,
       totalSell,
       totalCost,
       netProfit,

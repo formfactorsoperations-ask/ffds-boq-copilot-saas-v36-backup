@@ -8,23 +8,21 @@ import {
     Plus, 
     Loader2, 
     Upload, 
-    FileText, 
     ChevronDown, 
     ChevronUp, 
     Clock, 
+    FileText,
     FileUp, 
     Download, 
     AlertCircle, 
     CheckCircle, 
     X, 
-    Sparkles, 
     Share2, 
     Copy, 
     Check, 
     Calendar, 
     DollarSign, 
     ShieldCheck, 
-    Info,
     TrendingUp,
     User,
     Mail
@@ -38,45 +36,70 @@ import {
     DecisionData, 
     recordManualSignoff, 
     deleteDecision, 
-    updateDecisionText 
+    updateDecisionText,
+    replyToDecisionQuery
 } from '../../services/decisionsService';
-import { db } from '../../services/firebaseClient';
-import { collection, onSnapshot, query, orderBy, Timestamp } from 'firebase/firestore';
 import { getStorage, ref, uploadString, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getApp } from 'firebase/app';
 import { formatINR } from '../../lib/utils';
+// The portal decides design-vs-site with this exact function. Importing it
+// rather than re-deriving keeps the studio from labelling a decision one way
+// while the client is told the other.
+import { decisionNature as resolveNature } from '../../services/clientPortalEngine';
 
-import { jsPDF } from 'jspdf';
+import { downloadDecisionPdf } from './decisions/decisionPdf';
+import DecisionKpiStrip from './decisions/DecisionKpiStrip';
+import DecisionStatusRail from './decisions/DecisionStatusRail';
+import DecisionShareModal from './decisions/DecisionShareModal';
+import ConfirmDialog, { ConfirmRequest } from './decisions/ConfirmDialog';
+import DecisionAuditTimeline from './decisions/DecisionAuditTimeline';
+import DecisionAttentionPanel, { AttentionItem } from './decisions/DecisionAttentionPanel';
 import { sendDecisionNotification, sendSignoffRequest } from '../../services/emailService';
 import { useOrg } from '../../contexts/OrgContext';
+import { issuePortalAccess } from '../../services/portalAccessService';
 
 interface DecisionTrackerProps {
     projectContext: ProjectContext;
     setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
     projectId: string;
+    /**
+     * The decision ledger, subscribed to once in App. This screen used to open
+     * its own onSnapshot on the same query, which meant the client portal's
+     * copy of the decisions only refreshed while the screen was mounted.
+     */
+    decisionLedger: DecisionData[];
 }
 
-export default function DecisionTracker({ projectContext, setProjectContext, projectId }: DecisionTrackerProps) {
+export default function DecisionTracker({ projectContext, setProjectContext, projectId, decisionLedger }: DecisionTrackerProps) {
     const { orgData } = useOrg();
     const studioId = orgData?.tenantId || 'demo-tenant-01';
     const studioName = orgData?.orgName || 'Form Factors Design Studio';
     
-    const [decisions, setDecisions] = useState<DecisionData[]>([]);
+    const decisions = decisionLedger;
     
     // Form state
     const [isFormOpen, setIsFormOpen] = useState(false);
-    const [formActiveTab, setFormActiveTab] = useState<'ai' | 'manual'>('ai');
     
     // AI Form Input
-    const [aiInputText, setAiInputText] = useState('');
-    const [isAiParsing, setIsAiParsing] = useState(false);
-    const [aiParseStep, setAiParseStep] = useState('');
 
     // Decision Fields
     const [title, setTitle] = useState('');
     const [decisionText, setDecisionText] = useState('');
     const [roomName, setRoomName] = useState('');
     const [category, setCategory] = useState<'Site Condition' | 'Client Request' | 'Design Upgrade' | 'Value Engineering'>('Site Condition');
+
+    /**
+     * Design decision or site decision.
+     *
+     * Everything logged before execution is a design decision — nothing can be
+     * held up on a site that has not been handed over. This defaults from the
+     * project's stage rather than always assuming site, and stays switchable
+     * because the studio sometimes logs a site constraint during design.
+     */
+    const isExecutionStage = (projectContext?.currentStage ?? 0) >= 5;
+    const [decisionNature, setDecisionNature] = useState<'design' | 'site'>(
+        isExecutionStage ? 'site' : 'design'
+    );
     const [presentees, setPresentees] = useState('');
     const [boqImpact, setBoqImpact] = useState<'none' | 'rate_change' | 'new_item'>('none');
     const [impactCostValue, setImpactCostValue] = useState<number>(0);
@@ -85,6 +108,10 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Active Rows and Modals
+    const [pendingShareId, setPendingShareId] = useState<string | null>(null);
+    const [replyingDecisionId, setReplyingDecisionId] = useState<string | null>(null);
+    const [replyText, setReplyText] = useState('');
+    const [natureFilter, setNatureFilter] = useState<'all' | 'design' | 'site'>('all');
     const [expandedRow, setExpandedRow] = useState<string | null>(null);
     const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
     const [shareModalDecision, setShareModalDecision] = useState<DecisionData | null>(null);
@@ -116,25 +143,32 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
     };
 
     // Fetch decisions from Firestore
+    /*
+      The ledger subscription and the projection onto
+      projectContext.projectDecisions both live in App now, so the portal stays
+      current whether or not this screen is open. Two onSnapshot listeners on
+      this same query put the Firestore SDK into an inconsistent target state
+      ("INTERNAL ASSERTION FAILED (ID: b815)"), so this screen must not open
+      one of its own -- it reads the array App passes down.
+    */
+
+    /*
+      The share sheet needs the decision's signoff token, which is generated
+      inside saveDecision and only reaches this screen on the next ledger
+      snapshot. So the publish records an intent, and this opens the sheet once
+      the record actually arrives.
+    */
     useEffect(() => {
-        if (!db || !projectId) return;
-
-        const q = query(
-            collection(db, 'projects', projectId, 'decisions'),
-            orderBy('createdAt', 'desc')
+        if (!pendingShareId) return;
+        const fresh = decisions.find(
+            (d: any) => d.id === pendingShareId && d.signoffToken
         );
-
-        const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
-            const fetched = snapshot.docs.map(doc => ({
-                id: doc.id,
-                hasPendingWrites: doc.metadata.hasPendingWrites,
-                ...doc.data()
-            } as any));
-            setDecisions(fetched);
-        }, (err) => console.error("Error fetching decisions:", err));
-
-        return () => unsubscribe();
-    }, [projectId]);
+        if (fresh) {
+            setShareModalDecision(fresh);
+            setCopiedShareLink(false);
+            setPendingShareId(null);
+        }
+    }, [pendingShareId, decisions]);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -185,69 +219,42 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
         setDecisionText('');
         setRoomName('');
         setCategory('Site Condition');
+        setDecisionNature(isExecutionStage ? 'site' : 'design');
         setPresentees('');
         setBoqImpact('none');
         setImpactCostValue(0);
         setImpactScheduleDays(0);
         setPhotoUrl(null);
-        setAiInputText('');
         setIsFormOpen(false);
     };
 
-    const handleAiAutofill = async () => {
-        if (!aiInputText.trim()) return;
-        setIsAiParsing(true);
-        setAiParseStep('Gemini is analyzing raw conversation notes...');
-        setFormError(null);
-
-        try {
-            const roomsList = projectContext.rooms?.map(r => r.name) || [];
-            
-            // Artificial steps for smooth visual feedback of smart capability
-            setTimeout(() => setAiParseStep('Extracting decision details and room context...'), 800);
-            setTimeout(() => setAiParseStep('Calculating estimated BOQ cost impacts...'), 1600);
-
-            const res = await fetch('/api/parse-decision-text', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    text: aiInputText,
-                    projectRooms: roomsList
-                })
-            });
-
-            if (!res.ok) {
-                throw new Error("Failed to process with Gemini AI");
-            }
-
-            const data = await res.json();
-            if (data.success && data.decision) {
-                const dec = data.decision;
-                setTitle(dec.title || '');
-                setDecisionText(dec.decisionText || '');
-                setRoomName(dec.roomName || '');
-                setCategory(dec.category || 'Site Condition');
-                setPresentees(dec.presentees || '');
-                setBoqImpact(dec.boqImpact || 'none');
-                setImpactCostValue(dec.impactCostValue || 0);
-                setImpactScheduleDays(dec.impactScheduleDays || 0);
-
-                setFormActiveTab('manual');
-                showToast("Magic Autofill successful! Please review and finalize the details.", "success");
-            } else {
-                showToast(data.error || "AI failed to extract structured fields. Please fill manually.", "error");
-            }
-        } catch (error: any) {
-            console.error("AI Parse error:", error);
-            showToast(error.message || "Failed to contact AI parser. Please try manual entry.", "error");
-        } finally {
-            setIsAiParsing(false);
-            setAiParseStep('');
-        }
-    };
 
     const submitForm = async (notifyClient: boolean) => {
         if (!decisionText.trim() || !roomName || !category) return;
+
+        /*
+          Publishing is the irreversible half: it leaves draft, appears in the
+          client's portal and fires a notification. One click did all of that
+          with no way back, on a form that is easy to submit before it is
+          finished. Naming the client makes the consequence concrete.
+        */
+        if (notifyClient) {
+            const who = projectContext.clientName || 'the client';
+            setConfirmRequest({
+                title: `Publish this to ${who}?`,
+                body: 'They will see it in their portal and be asked to approve it. Drafts stay private until you publish.',
+                confirmLabel: 'Publish',
+                cancelLabel: 'Not yet',
+                onConfirm: () => { void publishDecision(true); },
+            });
+            return;
+        }
+
+        void publishDecision(false);
+    };
+
+    /** The write itself, once the studio has said yes. */
+    const publishDecision = async (notifyClient: boolean) => {
         setIsSubmitting(true);
         setFormError(null);
 
@@ -257,13 +264,15 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                 decisionText: decisionText.trim(),
                 roomName,
                 category,
+                decisionNature,
                 presentees: presentees.trim(),
                 boqImpact,
                 impactCostValue: Number(impactCostValue) || 0,
                 impactScheduleDays: Number(impactScheduleDays) || 0,
                 clientName: projectContext.clientName || 'Client',
                 clientEmail: projectContext.clientEmail || '',
-                projectName: projectContext.name || 'Project'
+                projectName: projectContext.name || 'Project',
+                studioId
             };
 
             const decisionId = await saveDecision(projectId, formData);
@@ -282,14 +291,27 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
             }
 
             if (notifyClient) {
+                /*
+                  Publishing and emailing are two different things and they fail
+                  independently. `sendDecisionNotification` moves the decision out
+                  of draft -- which is what puts it in the client portal -- and
+                  then tries to email. A failed email was being reported as though
+                  the whole action had failed, so nobody could tell whether the
+                  client could see the decision. They can; they just were not
+                  told about it.
+                */
                 const mailRes = await sendDecisionNotification(decisionId, projectId, studioId);
-                if (!mailRes.success) {
-                    showToast("Decision saved, but client notification email failed: " + mailRes.error, "error");
-                } else {
-                    showSuccessWithNext('Decision logged & client notified.');
-                }
+                showToast(
+                    mailRes.success
+                        ? 'Published to the client portal and emailed.'
+                        : `Published to the client portal. Email not sent — ${mailRes.error || 'unknown reason'}.`,
+                    'success'
+                );
+                // Either way the client still has to be nudged, and WhatsApp is
+                // the channel that needs no API key and actually gets read.
+                setPendingShareId(decisionId);
             } else {
-                showToast("Decision saved successfully as Draft.", "success");
+                showToast("Saved as a draft. The client cannot see it yet.", "success");
             }
             
             resetForm();
@@ -306,9 +328,12 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
         try {
             const mailRes = await sendDecisionNotification(decisionId, projectId, studioId);
             if (!mailRes.success) {
-                showToast("Decision was updated, but email could not be sent: " + mailRes.error, 'error');
+                showToast(
+                    `Published to the client portal. Email not sent — ${mailRes.error || 'unknown reason'}. Share the link on WhatsApp instead.`,
+                    'success'
+                );
             } else {
-                showSuccessWithNext('Client notified. Decision logged');
+                showSuccessWithNext('Published to the client portal and emailed.');
             }
         } catch(e: any) {
             console.error("Error notifying client", e);
@@ -323,9 +348,12 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
         try {
             const mailRes = await sendSignoffRequest(decisionId, projectId, studioId);
             if (!mailRes.success) {
-                showToast("Status updated, but email could not be sent: " + mailRes.error, 'error');
+                showToast(
+                    `Sign-off is open in the client portal. Email not sent — ${mailRes.error || 'unknown reason'}. Share the link on WhatsApp instead.`,
+                    'success'
+                );
             } else {
-                showSuccessWithNext('Signoff request sent. Decision logged');
+                showSuccessWithNext('Sign-off requested in the portal and emailed.');
             }
         } catch(e: any) {
             console.error("Error sending signoff", e);
@@ -340,9 +368,12 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
         try {
             const mailRes = await sendSignoffRequest(decisionId, projectId, studioId);
             if (!mailRes.success) {
-                showToast("Email could not be sent: " + mailRes.error, 'error');
+                showToast(
+                    `Reminder not sent — ${mailRes.error || 'unknown reason'}. Nothing has reached the client; use WhatsApp.`,
+                    'error'
+                );
             } else {
-                showSuccessWithNext('Reminder sent. Decision logged');
+                showSuccessWithNext('Reminder emailed.');
             }
         } catch(e: any) {
             console.error("Error sending reminder", e);
@@ -352,224 +383,73 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
         }
     };
 
+    // The certificate itself lives in decisions/decisionPdf.ts.
     const handleDownloadPDF = (decision: DecisionData) => {
+        downloadDecisionPdf(decision, studioName, (msg) => showToast(msg, 'error'));
+    };
+
+    const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
+
+    /** True while a mousedown that began on the backdrop is still in flight. */
+    const backdropPressRef = useRef(false);
+
+    /** Anything typed into the logging form. */
+    const formHasContent = () =>
+        Boolean(
+            decisionText.trim() ||
+            title.trim() ||
+            roomName ||
+            presentees.trim() ||
+            photoUrl ||
+            impactCostValue ||
+            impactScheduleDays
+        );
+
+    /*
+      Losing a half-written decision to a stray click is worse than one extra
+      confirm. Only asks when there is something to lose.
+    */
+    const closeFormSafely = () => {
+        if (!formHasContent()) {
+            resetForm();
+            return;
+        }
+        setConfirmRequest({
+            title: 'Discard this decision?',
+            body: 'What you have typed will be lost. Nothing has been saved yet.',
+            confirmLabel: 'Discard',
+            cancelLabel: 'Keep editing',
+            tone: 'danger',
+            onConfirm: resetForm,
+        });
+    };
+
+    const startReply = (decisionId: string) => {
+        setExpandedRow(decisionId);
+        setReplyingDecisionId(decisionId);
+        setReplyText('');
+        setActiveLinkDecision(null);
+        setEditingDecisionId(null);
+        setDeletingDecisionId(null);
+    };
+
+    /*
+      Answer the client's question and hand the decision back to them.
+      Uploading a revised drawing stays available beside this, but it is no
+      longer the only way out of a query -- most questions want a sentence.
+    */
+    const submitReply = async (decisionId: string) => {
+        if (!replyText.trim()) return;
+        setIsActionLoading(`reply-${decisionId}`);
         try {
-            const doc = new jsPDF();
-            const pageWidth = 210;
-            const marginX = 20;
-            const contentWidth = 170; // 210 - 40
-            
-            // --- Elegant Brand Palette ---
-            const ink = [31, 35, 40];       // #1f2328 - Primary Ink
-            const inkSoft = [63, 70, 78];    // #3f464e - Secondary
-            const muted = [114, 122, 130];   // #727a82 - Muted
-            const gold = [176, 141, 87];    // #b08d57 - Gold
-            const line = [230, 227, 220];   // #e6e3dc - Standard Line
-            const lineSoft = [239, 236, 230]; // #efece6 - Soft Line
-            const paper = [251, 250, 247];  // #fbfaf7 - Paper Background
-
-            // Helper for setting colors & text
-            const drawText = (
-                text: string,
-                x: number,
-                y: number,
-                size: number,
-                color: number[],
-                fontStyle: 'normal' | 'bold' | 'italic' = 'normal',
-                align: 'left' | 'center' | 'right' = 'left'
-            ) => {
-                doc.setFont('helvetica', fontStyle);
-                doc.setFontSize(size);
-                doc.setTextColor(color[0], color[1], color[2]);
-                doc.text(text || '', x, y, { align });
-            };
-
-            // 1. Header (Mast - Editorial Style matching TermsDocketPage / StudioDocumentShell)
-            let y = 20;
-            
-            // Studio Brand Name
-            drawText(studioName.toUpperCase(), marginX, y, 11, ink, 'bold');
-            drawText('MINIMAL DESIGN. MAXIMUM IMPACT.', marginX, y + 4.5, 7, muted, 'normal');
-
-            // Right-aligned Document Identifier
-            drawText('DECISION LEDGER RECORD', pageWidth - marginX, y, 9.5, gold, 'bold', 'right');
-            drawText(`REF: FFDS-DEC-${decision.id ? decision.id.substring(0, 8).toUpperCase() : 'NEW'}`, pageWidth - marginX, y + 4.5, 8, muted, 'normal', 'right');
-
-            // Single Gold Hairline Accent
-            doc.setFillColor(gold[0], gold[1], gold[2]);
-            doc.rect(marginX, y + 10, contentWidth, 0.4, 'F');
-
-            // 2. Document Title
-            y = 42;
-            drawText('ON-SITE DESIGN & EXECUTION DECISION', marginX, y, 14, ink, 'bold');
-            drawText('This document certifies technical decisions, on-site revisions, and client authorizations.', marginX, y + 5, 8.5, inkSoft, 'normal');
-
-            // 3. Metabar / Project Classification & Info Grid
-            y = 56;
-            // Draw metabar container with paper background and standard border
-            doc.setFillColor(paper[0], paper[1], paper[2]);
-            doc.setDrawColor(line[0], line[1], line[2]);
-            doc.setLineWidth(0.3);
-            doc.rect(marginX, y, contentWidth, 34, 'FD');
-
-            // Internal Grid lines
-            doc.setDrawColor(lineSoft[0], lineSoft[1], lineSoft[2]);
-            doc.line(marginX, y + 11.5, marginX + contentWidth, y + 11.5);
-            doc.line(marginX, y + 23, marginX + contentWidth, y + 23);
-            doc.line(110, y, 110, y + 34);
-
-            // Row 1
-            drawText('PROJECT NAME', marginX + 4, y + 4.5, 7.5, muted, 'bold');
-            drawText(decision.projectName || 'N/A', marginX + 4, y + 9, 8.5, ink, 'normal');
-
-            drawText('CLIENT NAME', 114, y + 4.5, 7.5, muted, 'bold');
-            drawText(decision.clientName || 'N/A', 114, y + 9, 8.5, ink, 'normal');
-
-            // Row 2
-            drawText('ROOM / AREA', marginX + 4, y + 16, 7.5, muted, 'bold');
-            drawText(decision.roomName, marginX + 4, y + 20.5, 8.5, ink, 'normal');
-
-            drawText('CLIENT EMAIL', 114, y + 16, 7.5, muted, 'bold');
-            drawText(decision.clientEmail || 'N/A', 114, y + 20.5, 8.5, ink, 'normal');
-
-            // Row 3
-            drawText('CATEGORY', marginX + 4, y + 27.5, 7.5, muted, 'bold');
-            drawText(decision.category, marginX + 4, y + 32, 8.5, ink, 'normal');
-
-            drawText('PRESENTEES', 114, y + 27.5, 7.5, muted, 'bold');
-            drawText(decision.presentees || 'N/A', 114, y + 32, 8.5, ink, 'normal');
-
-            // 4. Financial & Schedule Impact Sections (Highlight & Principle styled)
-            y = 98;
-            drawText('FINANCIAL & SCHEDULE REVISIONS', marginX, y, 10, ink, 'bold');
-
-            // Left Box: Cost Impact (Highlight Style: light gold background, gold left border)
-            doc.setFillColor(253, 248, 239); // #fdf8ef
-            doc.setDrawColor(236, 220, 192); // light gold border
-            doc.rect(marginX, y + 4, 82, 18, 'FD');
-            // Gold left border
-            doc.setFillColor(gold[0], gold[1], gold[2]);
-            doc.rect(marginX, y + 4, 1.5, 18, 'F');
-
-            drawText('ESTIMATED COST IMPACT', marginX + 4.5, y + 9, 7.5, [138, 107, 52], 'bold');
-            drawText(`${formatINR(decision.impactCostValue)} (${renderBoqImpactLabel(decision.boqImpact)})`, marginX + 4.5, y + 15, 10, ink, 'bold');
-
-            // Right Box: Schedule Impact (Principle Style: soft grey background, slate left border)
-            doc.setFillColor(244, 242, 236); // #f4f2ec
-            doc.setDrawColor(230, 227, 220); // soft line border
-            doc.rect(108, y + 4, 82, 18, 'FD');
-            // Slate left border
-            doc.setFillColor(ink[0], ink[1], ink[2]);
-            doc.rect(108, y + 4, 1.5, 18, 'F');
-
-            drawText('SCHEDULE TIMELINE IMPACT', 112.5, y + 9, 7.5, ink, 'bold');
-            drawText(decision.impactScheduleDays ? `+ ${decision.impactScheduleDays} Work Days` : 'No Schedule Delay', 112.5, y + 15, 10, ink, 'bold');
-
-            // 5. Main Decision text
-            let yPos = 126;
-            drawText('DECISION TEXT & AGREED CHANGE SCOPE', marginX, yPos, 10, ink, 'bold');
-            yPos += 4;
-            
-            const splitDescription = doc.splitTextToSize(decision.decisionText, 164);
-            const textHeight = splitDescription.length * 5.2;
-            
-            // Draw a subtle left bar with gold accent
-            doc.setFillColor(gold[0], gold[1], gold[2]);
-            doc.rect(marginX, yPos, 1.2, textHeight + 6, 'F');
-            
-            // Write text lines
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(9.5);
-            doc.setTextColor(inkSoft[0], inkSoft[1], inkSoft[2]);
-            doc.text(splitDescription, marginX + 4.5, yPos + 5.5);
-            
-            yPos += textHeight + 20;
-
-            // 6. Signature Sign-off and Digital Audit Block (No colored status pills, very sober print-first)
-            if (decision.status === 'signed' && decision.signoff) {
-                drawText('DIGITAL ACKNOWLEDGEMENT & COMPLIANCE PROOF', marginX, yPos, 10, ink, 'bold');
-                
-                // Outer box
-                doc.setFillColor(255, 255, 255);
-                doc.setDrawColor(line[0], line[1], line[2]);
-                doc.rect(marginX, yPos + 4, contentWidth, 38, 'FD');
-                
-                // Green indicator bar
-                doc.setFillColor(16, 124, 65);
-                doc.rect(marginX, yPos + 4, 1.5, 38, 'F');
-                
-                // Details
-                drawText('AUTHORIZED SIGNATORY DETAILS', marginX + 5, yPos + 10, 7.5, muted, 'bold');
-                drawText(`Signed by: ${decision.signoff.clientNameEntered || decision.clientName}`, marginX + 5, yPos + 16, 8.5, ink, 'normal');
-                drawText(`Email Verification: ${decision.signoff.clientEmail || decision.clientEmail || 'N/A'}`, marginX + 5, yPos + 21.5, 8, inkSoft, 'normal');
-                
-                drawText('DIGITAL VERIFICATION AUDIT', 114, yPos + 10, 7.5, muted, 'bold');
-                drawText(`IP Address: ${decision.signoff.ipAddress || 'Internal'}`, 114, yPos + 16, 8.5, ink, 'normal');
-                drawText(`Verified Date: ${formatDate(decision.signoff.respondedAt)}`, 114, yPos + 21.5, 8, inkSoft, 'normal');
-                
-                // Status label
-                drawText('STATUS: DIGITALLY APPROVED & BINDING', marginX + 5, yPos + 32, 8.5, [16, 124, 65], 'bold');
-                
-            } else if (decision.status === 'disputed' && decision.signoff) {
-                drawText('REVISION REQUESTED & REVIEW DETAILS', marginX, yPos, 10, ink, 'bold');
-                
-                // Outer box
-                doc.setFillColor(255, 255, 255);
-                doc.setDrawColor(242, 202, 202);
-                doc.rect(marginX, yPos + 4, contentWidth, 38, 'FD');
-                
-                // Red indicator bar
-                doc.setFillColor(185, 28, 28);
-                doc.rect(marginX, yPos + 4, 1.5, 38, 'F');
-                
-                drawText('STATUS: REVISION SOUGHT / CLARIFICATION ACTIVE', marginX + 5, yPos + 10, 7.5, [185, 28, 28], 'bold');
-                drawText(`Raised by: ${decision.signoff.clientNameEntered || decision.clientName}`, marginX + 5, yPos + 16, 8.5, ink, 'normal');
-                drawText(`Date Raised: ${formatDate(decision.signoff.respondedAt)}`, 114, yPos + 16, 8.5, inkSoft, 'normal');
-                
-                const splitQuery = doc.splitTextToSize(`Concern: "${decision.signoff.queryText || 'No comment provided.'}"`, contentWidth - 10);
-                doc.setFont('helvetica', 'italic');
-                doc.setFontSize(8.5);
-                doc.setTextColor(inkSoft[0], inkSoft[1], inkSoft[2]);
-                doc.text(splitQuery, marginX + 5, yPos + 23);
-                
-            } else {
-                drawText('CLIENT SIGN-OFF SHEET (FORMAL EXECUTION AUTHORIZATION)', marginX, yPos, 10, ink, 'bold');
-                
-                // Outer box
-                doc.setFillColor(255, 255, 255);
-                doc.setDrawColor(line[0], line[1], line[2]);
-                doc.rect(marginX, yPos + 4, contentWidth, 34, 'FD');
-                
-                // Gold indicator bar
-                doc.setFillColor(gold[0], gold[1], gold[2]);
-                doc.rect(marginX, yPos + 4, 1.5, 34, 'F');
-                
-                drawText('STATUS: PENDING CLIENT DIGITAL SIGNATURE', marginX + 5, yPos + 11, 8, gold, 'bold');
-                drawText('This decision is registered in site progress records. A physical signature below serves as official backup consent.', marginX + 5, yPos + 16, 8, inkSoft, 'normal');
-                
-                // Double Signature lines
-                const sigY = yPos + 28;
-                doc.setDrawColor(ink[0], ink[1], ink[2]);
-                doc.setLineWidth(0.3);
-                doc.line(marginX + 5, sigY, marginX + 55, sigY);
-                doc.line(pageWidth - marginX - 55, sigY, pageWidth - marginX - 5, sigY);
-                
-                drawText('Authorized Studio Architect', marginX + 5, sigY + 4, 8, ink, 'bold');
-                drawText('Client Verification Signature', pageWidth - marginX - 5, sigY + 4, 8, ink, 'bold', 'right');
-            }
-
-            // 7. Footer
-            doc.setDrawColor(lineSoft[0], lineSoft[1], lineSoft[2]);
-            doc.setLineWidth(0.3);
-            doc.line(marginX, 276, pageWidth - marginX, 276);
-
-            drawText(`This record is generated securely via ${studioName}. Unauthorized reproduction is legally restricted.`, marginX, 282, 7.5, muted, 'italic');
-            drawText('Page 1 of 1', pageWidth - marginX, 282, 7.5, muted, 'normal', 'right');
-
-            doc.save(`Signoff_${decision.roomName.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
-        } catch (error) {
-            console.error("Error generating PDF", error);
-            showToast("Failed to generate PDF. Check console for details.", 'error');
+            await replyToDecisionQuery(projectId, decisionId, replyText.trim());
+            setReplyingDecisionId(null);
+            setReplyText('');
+            showToast('Answer sent. The decision is back with the client.', 'success');
+        } catch (e: any) {
+            showToast('Could not send the answer: ' + e.message, 'error');
+        } finally {
+            setIsActionLoading(null);
         }
     };
 
@@ -677,7 +557,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
             case 'drawing_pending': return { dot: 'bg-amber-500', badge: 'Drawing Shared', actionLabel: 'Request signoff', action: () => handleSendSignoff((decision as any).id), type: 'signoff' };
             case 'drawing_sent': return { dot: 'bg-[#0066CC]', badge: 'Awaiting signoff', actionLabel: isDrawingSentMoreThan5Days ? 'Send reminder' : '', action: () => handleSendReminder((decision as any).id), type: 'remind' };
             case 'signed': return { dot: 'bg-emerald-500', badge: 'Signed ✓', actionLabel: '', action: null, type: 'none' };
-            case 'disputed': return { dot: 'bg-red-500', badge: 'Query raised', actionLabel: 'Upload fix', action: () => handleProvideDriveLink((decision as any).id), type: 'drawing' };
+            case 'disputed': return { dot: 'bg-red-500', badge: 'Query raised', actionLabel: 'Answer the query', action: () => startReply((decision as any).id), type: 'reply' };
             default: return { dot: 'bg-slate-400', badge: 'Saved ✓', actionLabel: '', action: null, type: 'none' };
         }
     };
@@ -693,6 +573,83 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
         .filter(d => ['notified', 'drawing_pending', 'drawing_sent', 'disputed'].includes(d.status))
         .reduce((sum, d) => sum + (d.impactCostValue || 0), 0);
 
+    const stageNumber = projectContext?.currentStage ?? 0;
+    const natureOf = (d: DecisionData) => resolveNature(d as any, stageNumber);
+
+    const natureCounts = {
+        all: serverDecisions.length,
+        design: serverDecisions.filter(d => natureOf(d) === 'design').length,
+        site: serverDecisions.filter(d => natureOf(d) === 'site').length,
+    };
+
+    const visibleDecisions = natureFilter === 'all'
+        ? serverDecisions
+        : serverDecisions.filter(d => natureOf(d) === natureFilter);
+
+    /*
+      Everything stuck on somebody, worst first.
+      `drawing_sent` inside the reminder window is deliberately absent: the ball
+      is with the client and there is nothing for the studio to do yet.
+    */
+    const DAY = 24 * 60 * 60 * 1000;
+    const attentionItems: AttentionItem[] = serverDecisions.flatMap((decision): AttentionItem[] => {
+        const id = (decision as any).id;
+        const where = decision.roomName ? ` in ${decision.roomName}` : '';
+        const name = `"${decision.title || decision.roomName || 'This decision'}"`;
+        const view = () => setExpandedRow(id);
+
+        if (decision.status === 'disputed') {
+            return [{
+                id, tone: 'blocked' as const,
+                label: 'Query raised',
+                detail: `${name}${where} — ${decision.signoff?.queryText || 'the client raised a query without leaving a note.'}`,
+                actionLabel: 'Answer it',
+                onAction: () => startReply(id),
+                onView: view,
+            }];
+        }
+
+        if (decision.status === 'notified') {
+            return [{
+                id, tone: 'todo' as const,
+                label: 'Drawing needed',
+                detail: `${name}${where} — the client has been told, but there is no drawing to approve yet.`,
+                actionLabel: 'Attach drawing',
+                onAction: () => handleProvideDriveLink(id),
+                onView: view,
+            }];
+        }
+
+        if (decision.status === 'drawing_pending') {
+            return [{
+                id, tone: 'todo' as const,
+                label: 'Not sent',
+                detail: `${name}${where} — the drawing is attached but sign-off has never been requested.`,
+                actionLabel: 'Request sign-off',
+                onAction: () => handleSendSignoff(id),
+                onView: view,
+            }];
+        }
+
+        const sentAt = (decision.signoffRequestSentAt as any)?.toDate?.();
+        if (decision.status === 'drawing_sent' && sentAt && Date.now() - sentAt.getTime() > 5 * DAY) {
+            const days = Math.floor((Date.now() - sentAt.getTime()) / DAY);
+            return [{
+                id, tone: 'waiting' as const,
+                label: `Quiet ${days} days`,
+                detail: `${name}${where} — sent for sign-off ${days} days ago with no answer.`,
+                actionLabel: 'Chase on WhatsApp',
+                onAction: () => handleShareWhatsApp(decision),
+                onView: view,
+            }];
+        }
+
+        return [];
+    }).sort((a, b) => {
+        const rank = { blocked: 0, waiting: 1, todo: 2 };
+        return rank[a.tone] - rank[b.tone];
+    });
+
     const stats = {
         total: serverDecisions.length,
         signed: serverDecisions.filter(d => d.status === 'signed').length,
@@ -700,28 +657,79 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
         disputed: serverDecisions.filter(d => d.status === 'disputed').length,
     };
 
+    /** A live portal token for this project, minting one if there is none. */
+    const ensurePortalToken = (): string | null => {
+        const access = (projectContext as any)?.portalAccess as
+            | { token: string; expiresAt?: string }
+            | undefined;
+        const live =
+            access?.token &&
+            (!access.expiresAt || new Date(access.expiresAt).getTime() > Date.now());
+        if (live) return access!.token;
+
+        if (!projectId) return null;
+        const fresh = issuePortalAccess(projectId, projectContext.clientEmail);
+        setProjectContext((prev) => ({ ...(prev as any), portalAccess: fresh }));
+        return fresh.token;
+    };
+
     const handleShareWhatsApp = (decision: DecisionData) => {
+        // Minting is a write, so it happens on the click, not in render.
+        ensurePortalToken();
         setShareModalDecision(decision);
         setCopiedShareLink(false);
     };
 
     const getShareURL = (decision: DecisionData) => {
-        return `${window.location.origin}/signoff/${decision.signoffToken}`;
+        /*
+          VITE_APP_DOMAIN first, exactly as emailService and the contract pages
+          already do it. This one place used window.location.origin alone, which
+          on a studio machine is http://localhost:3000 -- so every link copied
+          into WhatsApp pointed at the client's own computer, where nothing is
+          running. The page was never broken; the address was.
+        */
+        const appDomain = import.meta.env.VITE_APP_DOMAIN || window.location.origin;
+        /*
+          The standalone sign-off page is gone; decisions are approved in the
+          portal, so the portal is what gets shared.
+        */
+        const access = (projectContext as any)?.portalAccess as { token?: string } | undefined;
+        return access?.token ? `${appDomain}/?portal=${access.token}` : appDomain;
     };
 
     const getShareMessageText = (decision: DecisionData) => {
         const clientName = decision.clientName || 'Client';
         const costStr = decision.impactCostValue ? formatINR(decision.impactCostValue) : 'No cost change';
         const link = getShareURL(decision);
-        return `Hi ${clientName}, we have logged a design & execution decision regarding the *${decision.roomName}* on-site.\n\n*Decision Title:* ${decision.title || `${decision.roomName} Update`}\n*Cost Impact:* ${costStr}\n*Timeline Impact:* ${decision.impactScheduleDays ? `+${decision.impactScheduleDays} Days` : 'No Delay'}\n\nTo ensure complete alignment and keep execution on track, please review details and sign off here:\n👉 ${link}\n\nThank you!\n-${studioName}`;
+        // Points at the portal now, so the wording asks them to review there.
+        return `Hi ${clientName}, we have logged a decision on *${decision.roomName}*.\n\n*${decision.title || `${decision.roomName} Update`}*\n*Cost:* ${costStr}\n*Timeline:* ${decision.impactScheduleDays ? `+${decision.impactScheduleDays} days` : 'No delay'}\n\nPlease review it in your project portal and approve, or tell us if you have a question:\n👉 ${link}\n\nThank you!\n-${studioName}`;
+    };
+
+    /**
+     * Copy, and say honestly whether it worked.
+     *
+     * The clipboard API is missing in an insecure context and rejects when the
+     * page is not focused, so this has to cope with both. The text is selectable
+     * in the sheet either way -- what must not happen is a silent no-op that
+     * looks like a success.
+     */
+    const copyToClipboard = async (text: string, label: string) => {
+        try {
+            if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+            await navigator.clipboard.writeText(text);
+            showToast(`${label} copied.`, 'success');
+            return true;
+        } catch {
+            showToast(`Could not copy the ${label.toLowerCase()} — select it and copy manually.`, 'error');
+            return false;
+        }
     };
 
     const copyShareText = () => {
         if (!shareModalDecision) return;
-        navigator.clipboard.writeText(getShareMessageText(shareModalDecision));
         setCopiedShareLink(true);
-        showToast("WhatsApp Message and Link copied to clipboard!", "success");
         setTimeout(() => setCopiedShareLink(false), 2000);
+        void copyToClipboard(getShareMessageText(shareModalDecision), 'Message');
     };
 
     return (
@@ -743,429 +751,409 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                 )}
             </AnimatePresence>
 
-            {/* HIGH-FIDELITY OVERVIEW METRICS - Milky White Theme */}
-            <div className="bg-white/90 backdrop-blur-md rounded-2xl p-4 sm:p-5 shadow-2xs border border-slate-200/80">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                    <div className="bg-slate-50/70 border border-slate-200/60 p-3.5 rounded-xl">
-                        <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider block">Approval Rate</span>
-                        <div className="flex items-center gap-2 mt-2">
-                            <div className="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden">
-                                <div 
-                                    className="bg-[#0066CC] h-full rounded-full transition-all duration-500" 
-                                    style={{ width: `${stats.total > 0 ? (stats.signed / stats.total) * 100 : 0}%` }}
-                                />
-                            </div>
-                            <span className="text-sm font-bold text-slate-900 tabular-nums">{stats.total > 0 ? Math.round((stats.signed / stats.total) * 100) : 0}%</span>
-                        </div>
-                        <span className="text-[10px] text-slate-500 font-medium block mt-1">{stats.signed} of {stats.total} approved</span>
-                    </div>
+            <DecisionKpiStrip
+                stats={stats}
+                covered={totalCostProtection}
+                atRisk={activeExposure}
+            />
 
-                    <div className="bg-slate-50/70 border border-slate-200/60 p-3.5 rounded-xl">
-                        <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider block">Decisions Logged</span>
-                        <span className="text-2xl font-bold font-mono text-slate-900 block mt-1 tabular-nums">{stats.total}</span>
-                        <span className="text-[10px] text-slate-500 font-medium block mt-0.5">{stats.signed} signed · {stats.waiting} pending</span>
-                    </div>
-
-                    <div className="bg-slate-50/70 border border-slate-200/60 p-3.5 rounded-xl">
-                        <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider block">Dispute / Query Rate</span>
-                        <span className={`text-2xl font-bold font-mono block mt-1 tabular-nums ${stats.disputed > 0 ? 'text-rose-600' : 'text-slate-900'}`}>{stats.disputed}</span>
-                        <span className="text-[10px] text-slate-500 font-medium block mt-0.5">{stats.disputed > 0 ? 'Requires immediate action' : 'All queries resolved'}</span>
-                    </div>
-
-                    <div className="bg-slate-50/70 border border-slate-200/60 p-3.5 rounded-xl">
-                        <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider block">Financial Risk Covered</span>
-                        <span className="text-2xl font-bold font-mono text-emerald-700 block mt-1 tabular-nums">{formatINR(totalCostProtection)}</span>
-                        <span className="text-[10px] text-emerald-600 font-medium block mt-0.5">✓ Formally signed & approved</span>
-                    </div>
-
-                    <div className="bg-slate-50/70 border border-slate-200/60 p-3.5 rounded-xl">
-                        <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider block">Current At-Risk Cost</span>
-                        <span className="text-2xl font-bold font-mono text-amber-700 block mt-1 tabular-nums">{formatINR(activeExposure)}</span>
-                        <span className="text-[10px] text-slate-500 font-medium block mt-0.5">Awaiting client signature</span>
+            {/* Form Trigger / Header */}
+            <div className="flex flex-wrap gap-3 justify-between items-center bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/70">
+                <div className="flex items-center gap-3">
+                    <span className="p-2 bg-sky-50 text-[#0066CC] rounded-xl border border-sky-100"><CheckCircle className="w-5 h-5"/></span>
+                    <div>
+                        <h3 className="font-extrabold text-slate-900 leading-tight">Decision Ledger</h3>
+                        <p className="text-[11.5px] text-slate-400 font-medium mt-0.5">
+                            Every change, what it cost, and who agreed to it
+                        </p>
                     </div>
                 </div>
-            </div>
-            
-            {/* Form Trigger / Header */}
-            <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200">
-                <h3 className="font-extrabold text-slate-900 flex items-center gap-2">
-                    <span className="p-1.5 bg-sky-50 text-[#0066CC] rounded-lg"><CheckCircle className="w-5 h-5"/></span>
-                    Decision Ledger Entries
-                </h3>
                 <button
-                    onClick={() => {
-                        setIsFormOpen(!isFormOpen);
-                        setFormActiveTab('ai');
-                    }}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-[#0066CC] text-white rounded-lg font-bold text-sm hover:bg-[#0055B3] transition shadow-sm"
+                    onClick={() => setIsFormOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#0066CC] text-white rounded-xl font-bold text-sm hover:bg-[#0055B3] transition"
                 >
-                    {isFormOpen ? <XCircle className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                    {isFormOpen ? 'Cancel Logging' : 'Log a Site Decision'}
+                    <Plus className="w-4 h-4" />
+                    Log a Decision
                 </button>
             </div>
 
-            {/* Smart AI and Manual Form Container */}
+            {/* The logging form, as a modal. */}
             <AnimatePresence>
                 {isFormOpen && (
                     <motion.div
-                        initial={{ opacity: 0, height: 0, y: -10 }}
-                        animate={{ opacity: 1, height: 'auto', y: 0 }}
-                        exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                        className="bg-white rounded-2xl border border-sky-100 shadow-[0_4px_25px_rgba(0,0,0,0.06)] p-5 sm:p-6 space-y-6"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="fixed inset-0 z-[140] bg-slate-900/45 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-6 overflow-y-auto"
+                        onMouseDown={(e: React.MouseEvent) => {
+                            backdropPressRef.current = e.target === e.currentTarget;
+                        }}
+                        onClick={(e: React.MouseEvent) => {
+                            if (e.target !== e.currentTarget || !backdropPressRef.current) return;
+                            backdropPressRef.current = false;
+                            closeFormSafely();
+                        }}
                     >
-                        <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.97, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.97, y: 10 }}
+                        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                        className="bg-white rounded-3xl border border-slate-200/70 shadow-2xl w-full max-w-3xl my-auto p-5 sm:p-6 space-y-6 max-h-[92vh] overflow-y-auto"
+                    >
+                        <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100 sticky -top-5 sm:-top-6 bg-white pt-1 z-10">
                             <div>
-                                <h4 className="font-extrabold text-slate-900 text-base flex items-center gap-1.5">
-                                    <Sparkles className="w-4.5 h-4.5 text-amber-500 fill-amber-500 animate-pulse" /> 
-                                    New Site Decision Logger
-                                </h4>
-                                <p className="text-xs text-slate-500 mt-0.5">Record design revisions, material changes, and client requests on site.</p>
+                                <h4 className="font-extrabold text-slate-900 text-base">Log a decision</h4>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    Three things: what was decided, where it applies, and what it changes.
+                                </p>
                             </div>
-                            
-                            {/* Tabs Switcher */}
-                            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-                                <button
-                                    type="button"
-                                    onClick={() => setFormActiveTab('ai')}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition flex items-center gap-1 ${
-                                        formActiveTab === 'ai' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                                    }`}
-                                >
-                                    <Sparkles className="w-3.5 h-3.5" />
-                                    Smart AI Draft
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setFormActiveTab('manual')}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition flex items-center gap-1 ${
-                                        formActiveTab === 'manual' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                                    }`}
-                                >
-                                    <FileText className="w-3.5 h-3.5" />
-                                    Manual Field Entry
-                                </button>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={closeFormSafely}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition shrink-0"
+                                aria-label="Close"
+                            >
+                                <XCircle className="w-5 h-5" />
+                            </button>
                         </div>
 
-                        {formActiveTab === 'ai' ? (
-                            <div className="space-y-4">
-                                <div className="bg-sky-50/50 border border-sky-100 p-4 rounded-xl space-y-2">
-                                    <h5 className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                                        <Info className="w-4 h-4 text-[#0066CC]"/> Magic AI Parsing Mode
-                                    </h5>
-                                    <p className="text-xs text-slate-900/80 leading-relaxed">
-                                        Paste unstructured WhatsApp chats, site visit bullet points, or raw speech-to-text transcripts. Gemini AI will immediately extract the room context, rewrite the decision text into polished client-friendly terms, identify category reasons, and estimate BOQ cost impacts!
-                                    </p>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="block text-sm font-extrabold text-slate-700">Paste Conversation or Site visit notes:</label>
-                                    <textarea
-                                        rows={6}
-                                        value={aiInputText}
-                                        onChange={(e) => setAiInputText(e.target.value)}
-                                        placeholder={`e.g.,\nLiving Room visit today. Client Amit agreed to move living room TV point 6 inches right to clear overlap with laminate wood panel. Amit approved Rs 4500 extra charge verbally. Mr. Kango and supervisor present.`}
-                                        className="w-full border border-slate-200 rounded-xl p-3.5 text-sm focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] outline-none leading-relaxed"
+                        {/* 1 — What was decided.
+                            The client reads this text verbatim, so it is the field that
+                            deserves the room, and it leads rather than sitting fourth
+                            behind a title and a dropdown. */}
+                        <section className="space-y-3">
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-[11px] font-black text-slate-300 tabular-nums">01</span>
+                                <h5 className="text-sm font-extrabold text-slate-800">What was decided</h5>
+                            </div>
+
+                            <textarea
+                                className="w-full border border-slate-200 rounded-2xl p-3.5 text-sm focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] outline-none min-h-[110px] leading-relaxed"
+                                placeholder="Move the living room TV point 6 inches right so it clears the laminate panel."
+                                value={decisionText}
+                                onChange={(e) => setDecisionText(e.target.value)}
+                            />
+                            <p className="text-[11px] text-slate-400 -mt-1">
+                                Written the way the client will read it — this text is shown to them verbatim.
+                            </p>
+
+                            <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                                        Short name <span className="font-medium text-slate-400">— optional</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none"
+                                        placeholder={roomName ? roomName + " decision" : "e.g. TV unit laminate"}
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
                                     />
                                 </div>
-                                <div className="flex justify-between items-center pt-2">
-                                    <div className="text-[11px] text-slate-400">
-                                        *You can refine and edit fields after autofill completes
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                                        Photo <span className="font-medium text-slate-400">— optional</span>
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        ref={fileInputRef}
+                                        onChange={handleImageUpload}
+                                    />
+                                    {photoUrl ? (
+                                        <div
+                                            className="relative w-[44px] h-[44px] rounded-xl overflow-hidden border border-slate-200 group cursor-pointer"
+                                            onClick={() => fileInputRef.current?.click()}
+                                        >
+                                            <img src={photoUrl} alt="Attached" className="w-full h-full object-cover" />
+                                            <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                                <span className="text-white text-[10px] font-bold">Change</span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="flex items-center justify-center gap-2 px-4 min-h-[44px] rounded-xl border border-dashed border-slate-300 hover:bg-slate-50 text-slate-500 text-sm font-medium transition"
+                                        >
+                                            <Camera className="w-4 h-4" />
+                                            Add
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* 2 — Where it applies, and why it came up. */}
+                        <section className="space-y-3">
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-[11px] font-black text-slate-300 tabular-nums">02</span>
+                                <h5 className="text-sm font-extrabold text-slate-800">Where and why</h5>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1.5">Room or area</label>
+                                    <select
+                                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none bg-white"
+                                        value={roomName}
+                                        onChange={(e) => setRoomName(e.target.value)}
+                                    >
+                                        <option value="">Choose a room…</option>
+                                        {projectContext.rooms?.map(r => (
+                                            <option key={r.name} value={r.name}>{r.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1.5">This holds up</label>
+                                    <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 gap-1 w-full">
+                                        {([
+                                            { id: 'design' as const, label: 'Drawings' },
+                                            { id: 'site' as const,   label: 'Site work' },
+                                        ]).map(opt => (
+                                            <button
+                                                type="button"
+                                                key={opt.id}
+                                                onClick={() => setDecisionNature(opt.id)}
+                                                className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition ${
+                                                    decisionNature === opt.id
+                                                        ? 'bg-white text-[#0055B3] shadow-sm border border-sky-200'
+                                                        : 'text-slate-500 hover:text-slate-800'
+                                                }`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
                                     </div>
+                                    {!isExecutionStage && decisionNature === 'site' && (
+                                        <p className="text-[11px] text-amber-700 font-semibold mt-1.5">
+                                            This project has not reached execution — the client will be told site work is held.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 mb-1.5">Why it came up</label>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                    {(['Site Condition', 'Client Request', 'Design Upgrade', 'Value Engineering'] as const).map(cat => (
+                                        <button
+                                            type="button"
+                                            key={cat}
+                                            onClick={() => setCategory(cat)}
+                                            className={`px-3 py-2 min-h-[38px] rounded-lg text-xs font-bold border transition ${
+                                                category === cat
+                                                    ? 'bg-sky-50 border-sky-200 text-[#0055B3]'
+                                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            {cat}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                                    Who was there <span className="font-medium text-slate-400">— optional</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none"
+                                    placeholder="Amit (client), site supervisor"
+                                    value={presentees}
+                                    onChange={(e) => setPresentees(e.target.value)}
+                                />
+                            </div>
+                        </section>
+
+                        {/* 3 — Consequences.
+                            Most decisions move nothing, so "nothing" is the default and the
+                            rupee field stays out of the way until the answer changes. Asking
+                            for a number on every log is how you get a ledger full of zeroes. */}
+                        <section className="space-y-3">
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-[11px] font-black text-slate-300 tabular-nums">03</span>
+                                <h5 className="text-sm font-extrabold text-slate-800">What it changes</h5>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                {[
+                                    { id: 'none', label: 'Nothing — no cost change' },
+                                    { id: 'rate_change', label: 'A rate changes' },
+                                    { id: 'new_item', label: 'A new item is added' }
+                                ].map(impact => (
                                     <button
                                         type="button"
-                                        onClick={handleAiAutofill}
-                                        disabled={isAiParsing || !aiInputText.trim()}
-                                        className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-[#0066CC] to-sky-800 text-white rounded-xl font-bold text-sm hover:from-[#0055B3] hover:to-sky-900 shadow-sm transition disabled:opacity-50"
+                                        key={impact.id}
+                                        onClick={() => {
+                                            setBoqImpact(impact.id as any);
+                                            if (impact.id === 'none') setImpactCostValue(0);
+                                        }}
+                                        className={`px-3 py-2 min-h-[38px] rounded-lg text-xs font-bold border transition text-left ${
+                                            boqImpact === impact.id
+                                                ? 'bg-sky-50 border-sky-200 text-[#0055B3]'
+                                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                        }`}
                                     >
-                                        {isAiParsing ? (
-                                            <>
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                <span>{aiParseStep || 'Processing...'}</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Sparkles className="w-4 h-4 fill-white animate-pulse" />
-                                                <span>Magic Auto-Fill Fields ⚡️</span>
-                                            </>
-                                        )}
+                                        {impact.label}
                                     </button>
-                                </div>
+                                ))}
                             </div>
-                        ) : (
-                            <div className="space-y-5">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                    {/* 1. Title */}
-                                    <div>
-                                        <label className="block text-sm font-extrabold text-slate-700 mb-1.5">Decision Title *</label>
-                                        <input
-                                            type="text"
-                                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none"
-                                            placeholder="e.g. TV Unit Laminate Selection"
-                                            value={title}
-                                            onChange={(e) => setTitle(e.target.value)}
-                                        />
-                                    </div>
 
-                                    {/* 2. Room */}
-                                    <div>
-                                        <label className="block text-sm font-extrabold text-slate-700 mb-1.5">Room / Area *</label>
-                                        <select
-                                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none bg-white"
-                                            value={roomName}
-                                            onChange={(e) => setRoomName(e.target.value)}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <AnimatePresence initial={false}>
+                                    {boqImpact !== 'none' && (
+                                        <motion.div
+                                            key="cost"
+                                            initial={{ opacity: 0, y: -4 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -4 }}
+                                            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                                         >
-                                            <option value="">Select a room...</option>
-                                            {projectContext.rooms?.map(r => (
-                                                <option key={r.name} value={r.name}>{r.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1.5">How much more</label>
+                                            <div className="relative">
+                                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    className="w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none font-bold"
+                                                    placeholder="15000"
+                                                    value={impactCostValue || ''}
+                                                    onChange={(e) => setImpactCostValue(Number(e.target.value) || 0)}
+                                                />
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
 
-                                {/* 3. Decision description */}
                                 <div>
-                                    <label className="block text-sm font-extrabold text-slate-700 mb-1.5">Decision & Scope Details *</label>
-                                    <textarea
-                                        className="w-full border border-slate-200 rounded-xl p-3 text-sm focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] outline-none min-h-[70px]"
-                                        rows={3}
-                                        placeholder="What was decided? Be specific and technical — this text is rendered verbatim in the client contract & approval portal."
-                                        value={decisionText}
-                                        onChange={(e) => setDecisionText(e.target.value)}
+                                    <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                                        Days of delay <span className="font-medium text-slate-400">— if any</span>
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none font-bold"
+                                        placeholder="0"
+                                        value={impactScheduleDays || ''}
+                                        onChange={(e) => setImpactScheduleDays(Number(e.target.value) || 0)}
                                     />
                                 </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                    {/* 4. Reason Category */}
-                                    <div>
-                                        <label className="block text-sm font-extrabold text-slate-700 mb-1.5">Reason Category *</label>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {(['Site Condition', 'Client Request', 'Design Upgrade', 'Value Engineering'] as const).map(cat => (
-                                                <button
-                                                    type="button"
-                                                    key={cat}
-                                                    onClick={() => setCategory(cat)}
-                                                    className={`px-3 py-2 min-h-[44px] rounded-lg text-xs font-bold transition whitespace-nowrap text-center ${
-                                                        category === cat 
-                                                        ? 'bg-[#0066CC] text-white shadow-sm' 
-                                                        : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
-                                                    }`}
-                                                >
-                                                    {cat}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* 5. Presentees */}
-                                    <div>
-                                        <label className="block text-sm font-extrabold text-slate-700 mb-1.5">Who was present</label>
-                                        <input
-                                            type="text"
-                                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none"
-                                            placeholder="e.g. Amit (Client) + Site Supervisor"
-                                            value={presentees}
-                                            onChange={(e) => setPresentees(e.target.value)}
-                                        />
-                                        <p className="text-[10px] text-slate-400 mt-1">Shorthand log of attendees present on site.</p>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                                    {/* 6. BOQ impact */}
-                                    <div>
-                                        <label className="block text-sm font-extrabold text-slate-700 mb-1.5">BOQ Cost Impact Category *</label>
-                                        <div className="flex flex-col gap-2">
-                                            {[
-                                                { id: 'none', label: 'No cost change' },
-                                                { id: 'rate_change', label: 'Rate modification' },
-                                                { id: 'new_item', label: 'New item to add' }
-                                            ].map(impact => (
-                                                <button
-                                                    type="button"
-                                                    key={impact.id}
-                                                    onClick={() => setBoqImpact(impact.id as any)}
-                                                    className={`px-3 py-2 min-h-[38px] rounded-lg text-xs font-bold border transition text-left ${
-                                                        boqImpact === impact.id 
-                                                        ? 'bg-sky-50 border-sky-200 text-[#0055B3]' 
-                                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                                                    }`}
-                                                >
-                                                    {impact.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* 7. Impact Cost Value in INR */}
-                                    <div>
-                                        <label className="block text-sm font-extrabold text-slate-700 mb-1.5">Rupee Cost Addition (₹) *</label>
-                                        <div className="relative">
-                                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                className="w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none font-bold"
-                                                placeholder="e.g. 15000"
-                                                value={impactCostValue || ''}
-                                                onChange={(e) => setImpactCostValue(Number(e.target.value) || 0)}
-                                            />
-                                        </div>
-                                        <p className="text-[10px] text-slate-400 mt-1">Estimate total extra cost. Use 0 if no change.</p>
-                                    </div>
-
-                                    {/* 8. Impact Schedule Days */}
-                                    <div>
-                                        <label className="block text-sm font-extrabold text-slate-700 mb-1.5">Timeline Delay (Days)</label>
-                                        <div className="relative">
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none font-bold"
-                                                placeholder="e.g. 5"
-                                                value={impactScheduleDays || ''}
-                                                onChange={(e) => setImpactScheduleDays(Number(e.target.value) || 0)}
-                                            />
-                                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">Days</span>
-                                        </div>
-                                        <p className="text-[10px] text-slate-400 mt-1">Project delay impact. Enter 0 for none.</p>
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-col sm:flex-row gap-5 items-center justify-between pt-2">
-                                    {/* Photo upload */}
-                                    <div className="w-full sm:w-auto">
-                                        <label className="block text-sm font-extrabold text-slate-700 mb-1.5">Upload Site Photo</label>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            ref={fileInputRef}
-                                            onChange={handleImageUpload}
-                                        />
-                                        {photoUrl ? (
-                                            <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-slate-200 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                                                <img src={photoUrl} alt="Preview" className="w-full h-full object-cover" />
-                                                <div className="absolute inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                                                    <span className="text-white text-xs font-bold">Change</span>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <button 
-                                                type="button"
-                                                onClick={() => fileInputRef.current?.click()}
-                                                className="flex items-center justify-center gap-2 px-6 py-3 min-h-[44px] rounded-xl border border-dashed border-slate-300 hover:bg-slate-50 text-slate-500 font-medium transition"
-                                            >
-                                                <Camera className="w-5 h-5" />
-                                                <span>Add Site Image</span>
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Action Buttons */}
-                                    <div className="flex flex-col sm:flex-row gap-3 items-center w-full sm:w-auto justify-end">
-                                        {formError && (
-                                            <div className="text-red-600 text-xs font-bold mr-auto">
-                                                {formError} 
-                                            </div>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() => submitForm(false)}
-                                            disabled={!decisionText.trim() || !roomName || !category || isSubmitting}
-                                            className="px-5 py-3 min-h-[44px] rounded-xl font-bold text-sm border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition w-full sm:w-auto text-center"
-                                        >
-                                            Save Draft only
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => submitForm(true)}
-                                            disabled={!decisionText.trim() || !roomName || !category || isSubmitting}
-                                            className="px-6 py-3 min-h-[44px] rounded-xl font-bold text-sm bg-[#0066CC] text-white hover:bg-[#0055B3] disabled:opacity-50 transition flex items-center justify-center gap-2 w-full sm:w-auto shadow-sm"
-                                        >
-                                            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                                            Log & Notify Client
-                                        </button>
-                                    </div>
-                                </div>
                             </div>
-                        )}
+                        </section>
+
+                        <div className="flex flex-col sm:flex-row gap-3 items-center justify-end pt-4 border-t border-slate-100">
+                            {formError && (
+                                <div className="text-red-600 text-xs font-bold mr-auto">{formError}</div>
+                            )}
+                            {!formError && (!decisionText.trim() || !roomName) && (
+                                <p className="text-[11px] text-slate-400 mr-auto">
+                                    {!decisionText.trim() ? 'Say what was decided' : 'Choose a room'} to save this.
+                                </p>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => submitForm(false)}
+                                disabled={!decisionText.trim() || !roomName || !category || isSubmitting}
+                                className="px-5 py-3 min-h-[44px] rounded-xl font-bold text-sm border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition w-full sm:w-auto"
+                            >
+                                Save as draft
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => submitForm(true)}
+                                disabled={!decisionText.trim() || !roomName || !category || isSubmitting}
+                                className="px-6 py-3 min-h-[44px] rounded-xl font-bold text-sm bg-[#0066CC] text-white hover:bg-[#0055B3] disabled:opacity-50 transition flex items-center justify-center gap-2 w-full sm:w-auto"
+                            >
+                                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                                Publish and share
+                            </button>
+                        </div>
+                    </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
 
-            {/* Attention Notifications for disputed or pending issues */}
-            {serverDecisions.map(decision => {
-                const id = (decision as any).id;
-                const isDisputed = decision.status === 'disputed';
-                const isLateDrawing = decision.status === 'drawing_sent' && decision.signoffRequestSentAt && (Date.now() - (decision.signoffRequestSentAt as any).toDate().getTime() > 5 * 24 * 60 * 60 * 1000);
-                
-                if (!isDisputed && !isLateDrawing) return null;
-
-                const daysPending = isLateDrawing ? Math.floor((Date.now() - (decision.signoffRequestSentAt as any).toDate().getTime()) / (1000 * 60 * 60 * 24)) : 0;
-                const clientName = decision.clientName || 'Client';
-
-                return (
-                    <div key={`attention-${id}`} className={`p-4 rounded-xl shadow-sm border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${isDisputed ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
-                        <div>
-                            <h4 className={`text-xs font-bold flex items-center gap-2 uppercase tracking-wide ${isDisputed ? 'text-red-800' : 'text-amber-800'}`}>
-                                <AlertCircle className="w-4 h-4 shrink-0" />
-                                Action Needed: {isDisputed ? 'Client Query Raised' : 'Drawing Signoff Latency'}
-                            </h4>
-                            <p className={`text-sm mt-1 font-semibold ${isDisputed ? 'text-red-700' : 'text-amber-700'}`}>
-                                {isDisputed 
-                                    ? `"${decision.title}" in ${decision.roomName} has query raised: "${decision.signoff?.queryText}"`
-                                    : `Approval for "${decision.title}" in ${decision.roomName} is pending for ${daysPending} days. Send a WhatsApp reminder.`}
-                            </p>
-                        </div>
-                        <div className="flex gap-2 w-full sm:w-auto justify-end">
-                            <button 
-                                onClick={() => setExpandedRow(id)}
-                                className="px-3 py-1.5 text-xs font-bold bg-white border rounded-lg text-slate-700 border-slate-300 hover:bg-slate-50"
-                            >
-                                View Details
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    if (isDisputed) {
-                                        handleProvideDriveLink(id);
-                                    } else {
-                                        handleShareWhatsApp(decision);
-                                    }
-                                }}
-                                className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors shadow-sm whitespace-nowrap ${isDisputed ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
-                            >
-                                {isDisputed ? 'Upload drawing revision' : 'WhatsApp Client'}
-                            </button>
-                        </div>
-                    </div>
-                );
-            })}
+            <DecisionAttentionPanel items={attentionItems} />
 
             {/* Decision Ledger List */}
-            <div className="space-y-4">
-                <div className="flex justify-between items-center px-1">
+            <div className="space-y-3.5">
+                <div className="flex flex-wrap justify-between items-center gap-3 px-1">
                     <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
-                        Historical Ledger entries ({serverDecisions.length})
+                        Historical Ledger entries ({visibleDecisions.length}
+                        {natureFilter !== 'all' && ` of ${serverDecisions.length}`})
                     </span>
-                    <span className="text-xs text-slate-400 font-medium">Click row to inspect timeline and record signoff</span>
+
+                    {/* Design and site decisions hold different things up, and the
+                        studio usually wants one or the other. Counts sit on the
+                        control so an empty lane is obvious before it is opened. */}
+                    <div className="flex items-center gap-3">
+                        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 gap-1">
+                            {([
+                                { id: 'all' as const,    label: 'All' },
+                                { id: 'design' as const, label: 'Design' },
+                                { id: 'site' as const,   label: 'Site' },
+                            ]).map(opt => (
+                                <button
+                                    type="button"
+                                    key={opt.id}
+                                    onClick={() => setNatureFilter(opt.id)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                                        natureFilter === opt.id
+                                            ? 'bg-white text-[#0055B3] shadow-sm border border-sky-200'
+                                            : 'text-slate-500 hover:text-slate-800'
+                                    }`}
+                                >
+                                    {opt.label}
+                                    <span className="ml-1.5 text-[10px] font-black text-slate-400 tabular-nums">
+                                        {natureCounts[opt.id]}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                        <span className="hidden lg:inline text-xs text-slate-400 font-medium">Click row to inspect timeline and record signoff</span>
+                    </div>
                 </div>
 
-                {serverDecisions.length === 0 ? (
+                {visibleDecisions.length === 0 ? (
                     <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-sm text-slate-400 font-medium">
-                        No active site decisions recorded. Use the logger above to secure your first change.
+                        {serverDecisions.length === 0
+                            ? 'No decisions recorded yet. Use the logger above to secure your first change.'
+                            : `No ${natureFilter} decisions on this project yet.`}
                     </div>
                 ) : (
-                    serverDecisions.map(decision => {
+                    visibleDecisions.map((decision, rowIndex) => {
                         const id = (decision as any).id;
                         const isExpanded = expandedRow === id;
                         const config = getStatusConfig(decision);
                         const costDisplay = decision.impactCostValue ? formatINR(decision.impactCostValue) : 'No cost change';
 
                         return (
-                            <div 
-                                key={id} 
-                                className={`bg-white rounded-2xl border transition-all duration-200 shadow-sm overflow-hidden ${
-                                    isExpanded ? 'border-slate-400 ring-1 ring-slate-400/10' : 'border-slate-200 hover:border-slate-300'
+                            <motion.div
+                                key={id}
+                                /* Rows arrive in the order they are read. The step is small
+                                   and capped: past the first handful a stagger stops being
+                                   sequence and starts being waiting. */
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{
+                                    duration: 0.3,
+                                    ease: [0.22, 1, 0.36, 1],
+                                    delay: Math.min(rowIndex, 6) * 0.03,
+                                }}
+                                whileHover={isExpanded ? undefined : { y: -2 }}
+                                className={`bg-white rounded-2xl border overflow-hidden transition-[border-color,box-shadow] duration-200 ${
+                                    isExpanded
+                                        ? 'border-[#0066CC]/40 ring-1 ring-[#0066CC]/10 shadow-md'
+                                        : 'border-slate-200/90 shadow-2xs hover:border-slate-300 hover:shadow-md'
                                 }`}
                             >
                                 {/* Compact Ledger Row */}
@@ -1174,14 +1162,30 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                     onClick={() => setExpandedRow(isExpanded ? null : id)}
                                 >
                                     <div className="flex-1 flex items-start gap-3">
-                                        {/* Colored Status Dot */}
-                                        <div className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${config.dot}`} />
+                                        {/* The lifecycle, not just a colour. Compact here so the
+                                            row stays scannable; the labelled version sits under it. */}
+                                        <div className="mt-1.5 shrink-0 hidden sm:block md:hidden">
+                                            <DecisionStatusRail status={decision.status} compact />
+                                        </div>
+                                        <div className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 sm:hidden ${config.dot}`} />
                                         
                                         <div className="space-y-1 overflow-hidden">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <p className="text-sm font-extrabold text-slate-900 truncate">
                                                     {decision.title || `${decision.roomName} Update`}
                                                 </p>
+                                                {/* What this decision holds up. Drawings and site work
+                                                    are different consequences and the client is told
+                                                    which, so the studio should see it here too. */}
+                                                {natureOf(decision) === 'design' ? (
+                                                    <span className="inline-flex items-center text-[10px] bg-violet-50 text-violet-700 font-black px-1.5 py-0.5 rounded border border-violet-200">
+                                                        Design
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center text-[10px] bg-teal-50 text-teal-700 font-black px-1.5 py-0.5 rounded border border-teal-200">
+                                                        Site
+                                                    </span>
+                                                )}
                                                 {decision.impactCostValue ? (
                                                     <span className="inline-flex items-center text-[10px] bg-amber-50 text-amber-700 font-black px-1.5 py-0.5 rounded border border-amber-200">
                                                         +{costDisplay}
@@ -1225,6 +1229,9 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                     </span>
                                                 )}
                                             </div>
+                                            <div className="hidden md:block pt-1">
+                                                <DecisionStatusRail status={decision.status} />
+                                            </div>
                                         </div>
                                         
                                         <div className="flex items-center gap-2">
@@ -1250,10 +1257,15 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                         e.stopPropagation();
                                                         handleShareWhatsApp(decision);
                                                     }}
-                                                    className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg border border-slate-200 transition"
-                                                    title="Share directly via WhatsApp"
+                                                    className={`rounded-lg border transition font-bold flex items-center gap-1.5 ${
+                                                        ['notified', 'drawing_pending', 'drawing_sent', 'disputed'].includes(decision.status)
+                                                            ? 'px-3 py-1.5 text-xs text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100'
+                                                            : 'p-1.5 text-emerald-600 border-slate-200 hover:text-emerald-700 hover:bg-emerald-50'
+                                                    }`}
+                                                    title="Send this on WhatsApp"
                                                 >
-                                                    <Share2 className="w-4 h-4"/>
+                                                    <Share2 className="w-4 h-4 shrink-0"/>
+                                                    {['notified', 'drawing_pending', 'drawing_sent', 'disputed'].includes(decision.status) && 'WhatsApp'}
                                                 </button>
                                             )}
 
@@ -1271,6 +1283,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                             initial={{ height: 0, opacity: 0 }}
                                             animate={{ height: 'auto', opacity: 1 }}
                                             exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                                             className="border-t border-slate-100 bg-slate-50/50 overflow-hidden"
                                         >
                                             <div className="p-4 sm:p-6 flex flex-col md:flex-row gap-6">
@@ -1366,102 +1379,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                         </div>
                                                     )}
 
-                                                    {/* SOP COMPLIANT DIGITAL AUDIT TIMELINE */}
-                                                    <div className="bg-white p-4 rounded-xl border border-slate-200">
-                                                        <h6 className="text-[10px] uppercase tracking-wider font-extrabold text-slate-500 mb-3 flex items-center gap-1.5">
-                                                            <ShieldCheck className="w-4 h-4 text-emerald-600"/> Digital Audit Trail & Signoff Timeline
-                                                        </h6>
-                                                        <div className="space-y-4 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
-                                                            {/* Event 1: Logged */}
-                                                            <div className="flex gap-3 text-xs items-start">
-                                                                <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border-2 border-white shadow-sm z-10">
-                                                                    <Plus className="w-3.5 h-3.5 text-slate-600" />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="font-bold text-slate-700">Decision Logged on Site</p>
-                                                                    <p className="text-[10px] text-slate-400 mt-0.5">
-                                                                        Logged by Designer on {formatDate(decision.createdAt)}
-                                                                        {decision.presentees && ` · Present: ${decision.presentees}`}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Event 2: Drawing uploaded (conditional) */}
-                                                            {decision.drawingURL && (
-                                                                <div className="flex gap-3 text-xs items-start">
-                                                                    <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center shrink-0 border-2 border-white shadow-sm z-10">
-                                                                        <FileText className="w-3.5 h-3.5 text-amber-700" />
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="font-bold text-slate-700">Technical Drawing Linked</p>
-                                                                        <p className="text-[10px] text-slate-400 mt-0.5">
-                                                                            Drawing uploaded & composite signoff token initialized on {formatDate(decision.drawingUploadedAt || decision.createdAt)}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Event 3: Client Notification Outbound */}
-                                                            {decision.notifiedAt && (
-                                                                <div className="flex gap-3 text-xs items-start">
-                                                                    <div className="w-6 h-6 rounded-full bg-sky-100 flex items-center justify-center shrink-0 border-2 border-white shadow-sm z-10">
-                                                                        <Mail className="w-3.5 h-3.5 text-[#0055B3]" />
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="font-bold text-slate-700">Client Notified via System Portal</p>
-                                                                        <p className="text-[10px] text-slate-400 mt-0.5">
-                                                                            Dispatched on {formatDate(decision.notifiedAt)} · Status: <span className="font-bold text-[#0066CC]">{decision.emailStatus || 'Sent'}</span>
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Event 4: Signoff Status */}
-                                                            {decision.status === 'signed' && decision.signoff ? (
-                                                                <div className="flex gap-3 text-xs items-start">
-                                                                    <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 border-2 border-white shadow-sm z-10">
-                                                                        <Check className="w-3.5 h-3.5 text-emerald-700" />
-                                                                    </div>
-                                                                    <div className="bg-emerald-50 p-2.5 rounded-lg border border-emerald-100 flex-1">
-                                                                        <p className="font-bold text-emerald-800">Formal Electronic Signoff Cleared</p>
-                                                                        <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
-                                                                            Legally Signed by: {decision.signoff.clientNameEntered || decision.clientName}
-                                                                        </p>
-                                                                        <p className="text-[10px] text-slate-500 mt-1 font-mono">
-                                                                            Stamp: {formatDate(decision.signoff.respondedAt)} · IP: {decision.signoff.ipAddress || 'Verified'}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            ) : decision.status === 'disputed' && decision.signoff ? (
-                                                                <div className="flex gap-3 text-xs items-start">
-                                                                    <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center shrink-0 border-2 border-white shadow-sm z-10">
-                                                                        <X className="w-3.5 h-3.5 text-red-700" />
-                                                                    </div>
-                                                                    <div className="bg-red-50 p-2.5 rounded-lg border border-red-100 flex-1">
-                                                                        <p className="font-bold text-red-800">Client Raised Query / Blocked change</p>
-                                                                        <p className="text-sm font-semibold text-red-700 mt-1 italic">
-                                                                            "{decision.signoff.queryText || 'Query raised without text comments.'}"
-                                                                        </p>
-                                                                        <p className="text-[10px] text-slate-500 mt-1">
-                                                                            Logged: {formatDate(decision.signoff.respondedAt)} · Action required: Upload revised drawings/cost.
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="flex gap-3 text-xs items-start">
-                                                                    <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border-2 border-white shadow-sm z-10 animate-pulse">
-                                                                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="font-bold text-slate-500">Awaiting Client Approval</p>
-                                                                        <p className="text-[10px] text-slate-400 mt-0.5">
-                                                                            Client signature pending. Use the share button above to send instant approval link via WhatsApp.
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
+                                                    <DecisionAuditTimeline decision={decision} formatDate={formatDate} />
 
                                                     {activeLinkDecision === id && (
                                                         <div className="pt-2 w-full max-w-lg bg-white p-4 rounded-xl border border-slate-200 shadow-inner">
@@ -1506,8 +1424,84 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                         </div>
                                                     )}
 
+                                                    <AnimatePresence>
+                                                        {replyingDecisionId === id && (
+                                                            <motion.div
+                                                                key="reply"
+                                                                initial={{ opacity: 0, y: -4 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -4 }}
+                                                                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                                                                className="w-full max-w-xl bg-white p-4 rounded-2xl border border-slate-200 space-y-2.5"
+                                                            >
+                                                                {(() => {
+                                                                    const thread = (decision as any).discussion?.length
+                                                                        ? (decision as any).discussion
+                                                                        : decision.signoff?.queryText
+                                                                            ? [{ from: 'client', text: decision.signoff.queryText }]
+                                                                            : [];
+                                                                    if (!thread.length) return null;
+                                                                    return (
+                                                                        <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                                                                            {thread.map((m: any, i: number) => (
+                                                                                <div key={i} className={`px-3 py-2 ${m.from === 'studio' ? 'bg-sky-50/60' : 'bg-rose-50'}`}>
+                                                                                    <p className={`text-[10px] uppercase font-black tracking-wider ${m.from === 'studio' ? 'text-[#0055B3]' : 'text-rose-700'}`}>
+                                                                                        {m.from === 'studio' ? 'You answered' : 'They asked'}
+                                                                                    </p>
+                                                                                    <p className={`text-xs font-medium mt-0.5 ${m.from === 'studio' ? 'text-slate-700' : 'text-rose-900 italic'}`}>
+                                                                                        {m.from === 'client' ? `"${m.text}"` : m.text}
+                                                                                    </p>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    );
+                                                                })()}
+                                                                <label className="text-xs font-bold text-slate-700 block">Your answer</label>
+                                                                <textarea
+                                                                    autoFocus
+                                                                    rows={3}
+                                                                    value={replyText}
+                                                                    onChange={(e) => setReplyText(e.target.value)}
+                                                                    placeholder="Answer the question. Attach a revised drawing only if the drawing itself has to change."
+                                                                    className="w-full bg-white border border-slate-300 text-slate-800 text-sm rounded-xl px-3 py-2 focus:ring-1 focus:ring-[#0066CC] outline-none"
+                                                                />
+                                                                <div className="flex flex-wrap gap-2 items-center">
+                                                                    <button
+                                                                        onClick={() => submitReply(id)}
+                                                                        disabled={isActionLoading === `reply-${id}` || !replyText.trim()}
+                                                                        className="bg-[#0066CC] text-white px-4 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 flex items-center justify-center min-w-[130px]"
+                                                                    >
+                                                                        {isActionLoading === `reply-${id}`
+                                                                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                                            : 'Send and re-request'}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => { setReplyingDecisionId(null); handleProvideDriveLink(id); }}
+                                                                        className="bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold"
+                                                                    >
+                                                                        Attach a revised drawing instead
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => setReplyingDecisionId(null)}
+                                                                        className="text-slate-500 hover:text-slate-800 px-2 py-1.5 text-xs font-bold"
+                                                                    >
+                                                                        Cancel
+                                                                    </button>
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+
+                                                    <AnimatePresence>
                                                     {activeManualSignoffDecision?.id === id && (
-                                                        <div className="pt-2 w-full max-w-md bg-white p-4 rounded-xl border border-slate-200">
+                                                        <motion.div
+                                                            key="manual-signoff"
+                                                            initial={{ opacity: 0, y: -4 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            exit={{ opacity: 0, y: -4 }}
+                                                            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                                                            className="pt-2 w-full max-w-md bg-white p-4 rounded-2xl border border-slate-200"
+                                                        >
                                                             <label className="text-xs font-bold text-slate-700 mb-1 block">Manual {activeManualSignoffDecision.type === 'approved' ? 'Approval Reference (e.g. Approved via WhatsApp chat)' : 'Query details'}</label>
                                                             <div className="flex gap-2">
                                                                 <input 
@@ -1532,18 +1526,36 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                     Cancel
                                                                 </button>
                                                             </div>
-                                                        </div>
+                                                        </motion.div>
                                                     )}
+                                                    </AnimatePresence>
 
-                                                    {deletingDecisionId === id && (
-                                                        <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between">
-                                                            <span className="text-xs font-bold text-red-800">Are you sure you want to delete this decision ledger entry?</span>
-                                                            <div className="flex gap-2">
-                                                                <button onClick={() => executeDelete(id)} disabled={isActionLoading === `delete-${id}`} className="bg-red-600 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-sm">Yes, delete</button>
-                                                                <button onClick={() => setDeletingDecisionId(null)} className="bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold">Cancel</button>
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                    <AnimatePresence>
+                                                        {deletingDecisionId === id && (
+                                                            <motion.div
+                                                                key="confirm-delete"
+                                                                initial={{ opacity: 0, y: -4 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -4 }}
+                                                                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                                                                className="p-3.5 bg-red-50 border border-red-200 rounded-xl flex flex-wrap gap-3 items-center justify-between"
+                                                            >
+                                                                <span className="text-xs font-bold text-red-800">Delete this entry? The client's record of it goes too.</span>
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        onClick={() => executeDelete(id)}
+                                                                        disabled={isActionLoading === `delete-${id}`}
+                                                                        className="bg-red-600 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold disabled:opacity-60 flex items-center justify-center min-w-[86px]"
+                                                                    >
+                                                                        {isActionLoading === `delete-${id}`
+                                                                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                            : 'Yes, delete'}
+                                                                    </button>
+                                                                    <button onClick={() => setDeletingDecisionId(null)} className="bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold">Cancel</button>
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
                                                     
                                                     {/* Drawer Interactive SOP Actions */}
                                                     <div className="pt-2 flex flex-wrap gap-2.5">
@@ -1627,94 +1639,31 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                         </motion.div>
                                     )}
                                 </AnimatePresence>
-                            </div>
+                            </motion.div>
                         );
                     })
                 )}
             </div>
 
-            {/* QUICK WHATSAPP / CHAT SHARING MODAL */}
+            <AnimatePresence>
+                {confirmRequest && (
+                    <ConfirmDialog
+                        request={confirmRequest}
+                        onCancel={() => setConfirmRequest(null)}
+                    />
+                )}
+            </AnimatePresence>
+
             <AnimatePresence>
                 {shareModalDecision && (
-                    <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-                        <motion.div
-                            initial={{ scale: 0.95, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.95, opacity: 0 }}
-                            className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden"
-                        >
-                            <div className="bg-emerald-600 p-4 text-white flex justify-between items-center">
-                                <div className="flex items-center gap-2">
-                                    <span className="p-1 bg-white/20 rounded-lg"><Share2 className="w-4 h-4 text-white"/></span>
-                                    <h4 className="font-extrabold text-sm sm:text-base">WhatsApp Approval Dispatch</h4>
-                                </div>
-                                <button onClick={() => setShareModalDecision(null)} className="p-1 hover:bg-white/20 rounded-lg text-white">
-                                    <X className="w-4.5 h-4.5"/>
-                                </button>
-                            </div>
-
-                            <div className="p-5 space-y-4">
-                                <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-lg text-xs text-emerald-800 leading-relaxed">
-                                    Clients reply up to 8x faster on WhatsApp! Copy this highly professional pre-filled template containing a 1-click legal approval link.
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-[10px] uppercase font-bold text-slate-400">Pre-formatted Message Template</span>
-                                        <button 
-                                            onClick={copyShareText}
-                                            className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
-                                        >
-                                            {copiedShareLink ? <Check className="w-3.5 h-3.5 text-emerald-600"/> : <Copy className="w-3.5 h-3.5"/>}
-                                            {copiedShareLink ? 'Copied!' : 'Copy Template'}
-                                        </button>
-                                    </div>
-                                    <div className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-xs font-medium text-slate-700 whitespace-pre-wrap leading-relaxed max-h-[220px] overflow-y-auto font-mono select-all">
-                                        {getShareMessageText(shareModalDecision)}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Direct Client-Portal URL</span>
-                                    <div className="flex gap-2">
-                                        <input 
-                                            readOnly
-                                            type="text" 
-                                            value={getShareURL(shareModalDecision)}
-                                            className="flex-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono px-3 py-2 text-slate-600"
-                                        />
-                                        <button
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(getShareURL(shareModalDecision));
-                                                showToast("Link copied to clipboard!", "success");
-                                            }}
-                                            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 shadow-sm"
-                                        >
-                                            Copy Link
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-end gap-2.5">
-                                <button
-                                    onClick={() => setShareModalDecision(null)}
-                                    className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 shadow-sm"
-                                >
-                                    Close
-                                </button>
-                                <a
-                                    href={`https://wa.me/${projectContext.clientPhone || ''}?text=${encodeURIComponent(getShareMessageText(shareModalDecision))}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    onClick={() => setShareModalDecision(null)}
-                                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold flex items-center gap-1.5 shadow-sm"
-                                >
-                                    Open Web WhatsApp
-                                </a>
-                            </div>
-                        </motion.div>
-                    </div>
+                    <DecisionShareModal
+                        roomName={shareModalDecision.roomName}
+                        messageText={getShareMessageText(shareModalDecision)}
+                        copied={copiedShareLink}
+                        clientPhone={projectContext.clientPhone}
+                        onCopyText={copyShareText}
+                        onClose={() => setShareModalDecision(null)}
+                    />
                 )}
             </AnimatePresence>
             

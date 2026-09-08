@@ -4,6 +4,7 @@ import { formatINR, formatCurrency } from "../lib/utils";
 import AnimatedNumber from "./ui/AnimatedNumber";
 import { motion, AnimatePresence } from "framer-motion";
 import { calculateProjectFinancials, getSingleProjectValue } from "../lib/financialsUtils";
+import PortfolioMarginPanel from "./ops/PortfolioMarginPanel";
 export { getSingleProjectValue };
 import { SEED_OBSERVATIONS, SEED_SOURCE } from "../lib/studioSeed";
 import {
@@ -60,6 +61,8 @@ import {
 interface StudioReportsProps {
   projects: FullProjectData[];
   onNavigate?: (tab: string) => void;
+  /** Open one project straight onto its own Reports tab. */
+  onOpenProject?: (projectId: string) => void;
 }
 
 // Stage classification
@@ -145,7 +148,7 @@ function PerspectiveCard({
   );
 }
 
-export default function StudioReports({ projects, onNavigate }: StudioReportsProps) {
+export default function StudioReports({ projects, onNavigate, onOpenProject }: StudioReportsProps) {
   const [subTab, setSubTab] = useState<'live' | 'memory'>('live');
   const [datasetFilter, setDatasetFilter] = useState<'all' | 'actual' | 'dummy'>('all');
   const [signalCategory, setSignalCategory] = useState<'all' | 'cash' | 'gate' | 'capacity'>('all');
@@ -595,7 +598,7 @@ export default function StudioReports({ projects, onNavigate }: StudioReportsPro
               onClick={() => setSubTab('live')}
               className={`px-4 py-2 text-xs font-bold rounded-lg transition-all leading-none cursor-pointer flex items-center gap-1.5 ${
                 subTab === 'live'
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-[#0066CC] text-white shadow-xs'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
@@ -606,7 +609,7 @@ export default function StudioReports({ projects, onNavigate }: StudioReportsPro
               onClick={() => setSubTab('memory')}
               className={`px-4 py-2 text-xs font-bold rounded-lg transition-all leading-none flex items-center gap-1.5 cursor-pointer ${
                 subTab === 'memory'
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-[#0066CC] text-white shadow-xs'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
@@ -631,6 +634,15 @@ export default function StudioReports({ projects, onNavigate }: StudioReportsPro
           </div>
         ) : (
           <>
+            {/* Live portfolio margin — the same question the project P&L card
+                answers, one level up. Placed first because "which job is thin"
+                is what an owner opens this page to find out. */}
+            <PortfolioMarginPanel
+              projects={projects}
+              variants={itemVariants}
+              onOpenProject={onOpenProject}
+            />
+
             {/* 2. DATASET SLICE CONTROLLER (ACTUAL VS DUMMY) */}
             <motion.div
               variants={itemVariants}
@@ -985,7 +997,7 @@ export default function StudioReports({ projects, onNavigate }: StudioReportsPro
                           onClick={() => setSignalCategory(tagItem.key as any)}
                           className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
                             isActive
-                              ? 'bg-slate-900 text-white shadow-xs'
+                              ? 'bg-[#0066CC] text-white shadow-xs'
                               : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/70'
                           }`}
                         >

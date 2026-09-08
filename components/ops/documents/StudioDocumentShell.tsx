@@ -37,7 +37,7 @@ export function StudioDocumentHeader({ orgData, type, title }: { orgData: Organi
                     <img src={orgData.orgLogo} alt={orgData.orgName} style={{ maxWidth: '150px', maxHeight: '60px', objectFit: 'contain' }} />
                 ) : (
                     <div className="space-y-1">
-                        <h2 className="text-[#2f4a2e] text-lg font-bold uppercase tracking-wide m-0" style={{ fontFamily: 'Open Sans, sans-serif' }}>{orgData.orgName || "FORM FACTORS DESIGN STUDIO"}</h2>
+                        <h2 className="text-[#2f4a2e] text-lg font-bold uppercase tracking-wide m-0" style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}>{orgData.orgName || "FORM FACTORS DESIGN STUDIO"}</h2>
                         <p className="text-[#666666] text-xs italic m-0">Minimal Design. Maximum Impact.</p>
                     </div>
                 )}

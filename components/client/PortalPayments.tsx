@@ -1,0 +1,310 @@
+import React, { useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { PaymentMilestone } from '../../types';
+import { formatINR } from '../../lib/utils';
+import { Check, Clock, MessageSquare, Info } from 'lucide-react';
+
+/**
+ * PAYMENTS — what has cleared, what is next, and what the whole road costs.
+ *
+ * The tab used to render the milestone schedule TWICE: a table at the top and
+ * the same array again underneath the fee cards, with different wording,
+ * different status chips and different amounts formatting. A client reading a
+ * payment page and finding the same nine milestones listed twice does not think
+ * "duplicate component" — they think the studio is billing them twice.
+ *
+ * Three deliberate departures from what was here:
+ *
+ *   • One list, grouped by the two things a client is actually signing up to —
+ *     the design fee and the execution contract.
+ *   • A running total against every milestone. A schedule exists so somebody can
+ *     plan cash flow, and "what will I have paid by the time site starts" was a
+ *     sum the client had to do on paper.
+ *   • No invoices and no bank details. Neither is issued from this portal, and
+ *     a "Pay via Bank Transfer" button that only opens a panel of account
+ *     numbers invites a client to transfer money against a screen rather than
+ *     against a document from their studio.
+ */
+
+interface Phase {
+  total: number;
+  taxable: number;
+  paid: number;
+  pct: number;
+}
+
+interface Props {
+  milestones: PaymentMilestone[];
+  amountOf: (m: PaymentMilestone) => number;
+  projectValue: number;
+  totalPaid: number;
+  balanceDue: number;
+  /** Milestones the studio has raised and is waiting to be paid. */
+  dueCount: number;
+  design: Phase;
+  execution: Phase;
+  onContactStudio: () => void;
+}
+
+type Stage = 'cleared' | 'due' | 'upcoming';
+
+const stageOf = (m: PaymentMilestone): Stage =>
+  m.status === 'paid' ? 'cleared' : m.status === 'invoiced' ? 'due' : 'upcoming';
+
+const STAGE_LABEL: Record<Stage, string> = {
+  cleared: 'Cleared',
+  due: 'Due now',
+  upcoming: 'Not yet due',
+};
+
+const STAGE_CHIP: Record<Stage, string> = {
+  cleared: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  due: 'bg-amber-50 text-amber-800 border-amber-200',
+  upcoming: 'bg-slate-100 text-slate-500 border-slate-200',
+};
+
+const pctOf = (part: number, whole: number) =>
+  whole > 0 ? Math.max(0, Math.min(100, (part / whole) * 100)) : 0;
+
+/** A bar that grows from the left on mount. Transform only — never a colour. */
+const Fill: React.FC<{ pct: number; className: string; delay?: number }> = ({ pct, className, delay = 0 }) => (
+  <motion.span
+    initial={{ scaleX: 0 }}
+    animate={{ scaleX: 1 }}
+    transition={{ duration: 0.7, delay, ease: [0.22, 1, 0.36, 1] }}
+    style={{ width: `${pct}%`, transformOrigin: 'left' }}
+    className={`block h-full rounded-full ${className}`}
+  />
+);
+
+export default function PortalPayments({
+  milestones, amountOf, projectValue, totalPaid, balanceDue,
+  dueCount, design, execution, onContactStudio,
+}: Props) {
+  /*
+    One pass over the schedule: the money in each state, the running total after
+    each milestone, and the next thing the client actually has to deal with.
+  */
+  const { rows, dueTotal, next } = useMemo(() => {
+    let running = 0;
+    const rows = milestones.map(m => {
+      const amount = amountOf(m);
+      running += amount;
+      return { m, amount, running, stage: stageOf(m) };
+    });
+    return {
+      rows,
+      dueTotal: rows.filter(r => r.stage === 'due').reduce((s, r) => s + r.amount, 0),
+      next: rows.find(r => r.stage === 'due') || rows.find(r => r.stage === 'upcoming'),
+    };
+  }, [milestones, amountOf]);
+
+  const clearedPct = pctOf(totalPaid, projectValue);
+  const duePct = pctOf(dueTotal, projectValue);
+
+  const phases: { key: 'design' | 'execution'; label: string; phase: Phase; bar: string; text: string }[] = [
+    { key: 'design', label: 'Design fee', phase: design, bar: 'bg-indigo-500', text: 'text-indigo-700' },
+    { key: 'execution', label: 'Execution contract', phase: execution, bar: 'bg-[#0066CC]', text: 'text-[#0055B3]' },
+  ];
+
+  return (
+    <div className="space-y-5">
+
+      {/* ── Where it stands. One meter, not four disconnected figures. ── */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Where your payments stand</h2>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Everything agreed for this project, and how much of it you have settled.
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-extrabold text-slate-900 tabular-nums leading-none">{formatINR(projectValue)}</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Agreed in total</p>
+          </div>
+        </div>
+
+        {/* Cleared, due, and what is still ahead — as one continuous bar. */}
+        <div className="mt-5 h-2.5 rounded-full bg-slate-100 overflow-hidden flex">
+          <Fill pct={clearedPct} className="bg-emerald-500" />
+          <Fill pct={duePct} className="bg-amber-400" delay={0.15} />
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+          {[
+            { dot: 'bg-emerald-500', label: 'Cleared', value: totalPaid },
+            ...(dueTotal > 0 ? [{ dot: 'bg-amber-400', label: 'Due now', value: dueTotal }] : []),
+            { dot: 'bg-slate-200', label: 'Still to come', value: Math.max(0, balanceDue - dueTotal) },
+          ].map(s => (
+            <span key={s.label} className="flex items-baseline gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${s.dot} self-center`} />
+              <span className="text-[11px] font-bold text-slate-500">{s.label}</span>
+              <span className="text-[12px] font-extrabold text-slate-900 tabular-nums">{formatINR(s.value)}</span>
+            </span>
+          ))}
+        </div>
+
+        <p className="text-[11px] text-slate-500 font-semibold mt-3">
+          {Math.round(clearedPct)}% cleared
+          {dueCount === 0
+            ? ' · nothing is awaiting payment'
+            : ` · ${dueCount} ${dueCount === 1 ? 'payment has' : 'payments have'} been raised`}
+        </p>
+      </section>
+
+      {/* ── What is next. The one question a client opens this tab to ask. ── */}
+      {next && (
+        <motion.section
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className={`rounded-2xl border p-5 sm:p-6 ${
+            next.stage === 'due' ? 'border-amber-200 bg-amber-50/50' : 'border-sky-200 bg-sky-50/40'
+          }`}
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+            {next.stage === 'due' ? 'Awaiting payment' : 'Next payment'}
+          </p>
+          <div className="mt-2 flex items-end justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-[17px] font-bold text-slate-900 leading-tight">{next.m.name}</p>
+              <p className="text-[12px] text-slate-600 font-medium mt-1">
+                {next.m.trigger || next.m.description || 'Raised against this stage of the work'}
+              </p>
+            </div>
+            <p className="text-2xl font-extrabold text-slate-900 tabular-nums leading-none">
+              {formatINR(next.amount)}
+            </p>
+          </div>
+          {next.stage !== 'due' && (
+            <p className="text-[11px] text-slate-500 font-semibold mt-3">
+              Nothing is payable yet — your studio raises this when the work above is reached.
+            </p>
+          )}
+        </motion.section>
+      )}
+
+      {/* ── The two things being paid for. ── */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {phases.map(({ key, label, phase, bar, text }, i) => (
+          <div key={key} className="rounded-2xl border border-slate-200/80 bg-white p-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p>
+              <p className={`text-[11px] font-extrabold tabular-nums ${text}`}>{phase.pct}%</p>
+            </div>
+            <p className="text-xl font-extrabold text-slate-900 tabular-nums mt-1.5">{formatINR(phase.total)}</p>
+            <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+              {formatINR(phase.taxable)} plus GST
+            </p>
+            <div className="mt-3 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+              <Fill pct={phase.pct} className={bar} delay={0.1 + i * 0.1} />
+            </div>
+            <p className="text-[10px] text-slate-500 font-semibold mt-1.5">
+              {formatINR(phase.paid)} cleared
+            </p>
+          </div>
+        ))}
+      </section>
+
+      {/* ── Every milestone, once. ──
+             Grouped by phase and carrying a running total, so a client can see
+             what they will have paid by any point rather than adding it up. */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white overflow-hidden">
+        <div className="px-5 sm:px-6 py-4 border-b border-slate-100">
+          <h3 className="text-sm font-bold text-slate-900">Every payment on this project</h3>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">
+            In the order they fall due, with what you will have paid by each one.
+          </p>
+        </div>
+
+        {phases.map(({ key, label }) => {
+          const group = rows.filter(r => (r.m.type || 'execution') === key);
+          if (!group.length) return null;
+          return (
+            <div key={key} className="border-b border-slate-100 last:border-b-0">
+              <p className="px-5 sm:px-6 py-2 bg-slate-50/70 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                {label}
+              </p>
+              <ul>
+                {group.map((r, i) => (
+                  <motion.li
+                    key={r.m.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.28, delay: Math.min(i * 0.035, 0.3) }}
+                    className="px-5 sm:px-6 py-3.5 border-t border-slate-50 first:border-t-0 flex items-start gap-3.5"
+                  >
+                    {/* Where this sits: settled, waiting, or ahead. */}
+                    <span className="relative flex flex-col items-center shrink-0 pt-0.5">
+                      <span
+                        className={`w-5 h-5 rounded-full grid place-items-center border-2 ${
+                          r.stage === 'cleared' ? 'bg-emerald-500 border-emerald-500 text-white'
+                            : r.stage === 'due' ? 'bg-amber-400 border-amber-400 text-white animate-pulse'
+                            : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        {r.stage === 'cleared' && <Check className="w-3 h-3" strokeWidth={3} />}
+                        {r.stage === 'due' && <Clock className="w-3 h-3" strokeWidth={3} />}
+                      </span>
+                      {i < group.length - 1 && (
+                        <span className="w-px flex-1 min-h-[26px] bg-slate-150 mt-1 bg-slate-200" />
+                      )}
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-[13px] font-bold text-slate-900">{r.m.name}</p>
+                        <span className="text-[10px] font-bold text-slate-400 tabular-nums">{r.m.percentage}%</span>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-0.5 border ${STAGE_CHIP[r.stage]}`}>
+                          {STAGE_LABEL[r.stage]}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                        {r.m.trigger || r.m.description || 'Raised against this stage of the work'}
+                      </p>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <p className="text-[13px] font-extrabold text-slate-900 tabular-nums">{formatINR(r.amount)}</p>
+                      <p className="text-[10px] text-slate-400 font-semibold tabular-nums mt-0.5">
+                        {formatINR(r.running)} by here
+                      </p>
+                    </div>
+                  </motion.li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </section>
+
+      {/* ── How to actually pay. Not from this screen. ── */}
+      <section className="rounded-2xl border border-slate-200/80 bg-[#FDFDFB] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-slate-900">Paying, and anything that looks wrong</p>
+          <p className="text-xs text-slate-600 font-medium mt-1 leading-relaxed max-w-xl">
+            Your studio confirms payment details with you directly and sends the request when a
+            milestone falls due. If a figure here does not match what you were told, ask before
+            you pay.
+          </p>
+        </div>
+        <button
+          onClick={onContactStudio}
+          className="shrink-0 self-start sm:self-auto px-4 py-2.5 rounded-xl bg-[#0066CC] text-white text-xs font-bold hover:bg-[#0055B3] transition-colors cursor-pointer flex items-center gap-2"
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+          Message your studio
+        </button>
+      </section>
+
+      <p className="text-[10px] text-slate-400 font-medium leading-relaxed flex gap-2 px-1">
+        <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
+        <span>
+          Amounts include GST where it applies. Milestones are raised against progress rather
+          than fixed dates, so when each one falls due can move with the work on site.
+        </span>
+      </p>
+    </div>
+  );
+}

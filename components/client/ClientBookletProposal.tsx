@@ -1977,7 +1977,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                         <div className="mt-6 pt-6 border-t border-slate-100">
                             <p className="text-[10px] text-slate-400 text-center italic mb-4">Not covered by this fee: layouts, 3D views, GFC drawings, SOF and final BOQ. These commence under main engagement design stages.</p>
-                            <button className="w-full bg-[#0F172A] text-white py-3.5 rounded-xl font-bold hover:bg-slate-900 transition-all text-sm uppercase tracking-wider shadow-md">
+                            <button className="w-full bg-[#0066CC] text-white py-3.5 rounded-xl font-bold hover:bg-[#0055B3] transition-all text-sm uppercase tracking-wider shadow-md">
                                 Initiate Turnkey Planning
                             </button>
                         </div>
@@ -2314,7 +2314,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                             </button>
                             <button
                                 onClick={saveSpecs}
-                                className="flex items-center gap-2 px-4 py-2 bg-[#0F172A] hover:bg-[#1E293B] text-white text-xs font-bold rounded-lg transition duration-150 shadow-sm"
+                                className="flex items-center gap-2 px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-lg transition duration-150 shadow-sm"
                             >
                                 <Save className="w-3.5 h-3.5" />
                                 Save Overrides

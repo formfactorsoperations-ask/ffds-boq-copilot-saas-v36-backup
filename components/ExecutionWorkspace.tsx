@@ -32,8 +32,7 @@ import {
   Building2,
   CheckSquare,
   Square,
-  ChevronRight,
-  AlertCircle
+  ChevronRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import WavyText from "./ui/WavyText";
@@ -170,9 +169,16 @@ const ExecutionWorkspace = ({
   
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "ready" | "blocked" | "completed" | "overridden">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "ready" | "blocked" | "completed" | "overridden" | "na">("all");
   const [selectedTrade, setSelectedTrade] = useState<string>("all");
   const [expandedBundleIds, setExpandedBundleIds] = useState<Set<string>>(new Set());
+  /**
+   * Deliverables ticked for a bulk status change, and the row a shift-click
+   * ranges back to. Both are keyed per bundle so expanding a second package
+   * does not inherit the first one's selection.
+   */
+  const [selectedItemIds, setSelectedItemIds] = useState<Record<string, Set<string>>>({});
+  const [lastPickedIdx, setLastPickedIdx] = useState<Record<string, number>>({});
 
   // Firestore Drawings
   const [allDrawings, setAllDrawings] = useState<any[]>([]);
@@ -371,48 +377,61 @@ const ExecutionWorkspace = ({
     return Math.round(((completed * 1.0 + inProgress * 0.5) / items.length) * 100);
   };
 
-  // Handle individual item status change inside a bundle
-  const handleItemStatusChange = (itemId: string, newStatus: 'pending' | 'in_progress' | 'completed') => {
-    if (!itemId) return;
-    const nextItemStatuses = {
-      ...(projectContext?.itemExecutionStatuses || {}),
-      [itemId]: newStatus
-    };
+  type ItemExecStatus = 'pending' | 'in_progress' | 'completed';
 
-    // Also update weeklyRoomProgress if item is linked to a room
-    const targetItem = boq.find((i: any) => (i.id || i.tempId) === itemId);
-    let nextWeekly = { ...(projectContext?.weeklyRoomProgress || {}) };
+  const stageForProgress = (pct: number) => {
+    if (pct === 100) return 'Handover Completed';
+    if (pct >= 80) return 'Painting & Finishes';
+    if (pct >= 50) return 'Carpentry & Assembly';
+    if (pct >= 30) return 'False Ceiling & Framing';
+    if (pct > 0) return 'Civil & MEP Layouts';
+    return 'Carpentry & Assembly';
+  };
 
-    if (targetItem) {
-      const roomKey = targetItem.roomId || targetItem.room || targetItem.roomName || '';
-      if (roomKey) {
-        const roomItems = boq.filter((i: any) => (i.roomId || i.room || i.roomName || '').toLowerCase() === roomKey.toLowerCase());
-        let comp = 0;
-        let inProg = 0;
-        roomItems.forEach((i: any) => {
-          const id = i.id || i.tempId;
-          const st = id === itemId ? newStatus : (nextItemStatuses[id] || 'pending');
-          if (st === 'completed') comp++;
-          else if (st === 'in_progress') inProg++;
-        });
-        const calcProg = roomItems.length > 0 ? Math.round(((comp * 1.0 + inProg * 0.5) / roomItems.length) * 100) : 0;
-        let calcStage = 'Carpentry & Assembly';
-        if (calcProg === 100) calcStage = 'Handover Completed';
-        else if (calcProg >= 80) calcStage = 'Painting & Finishes';
-        else if (calcProg >= 50) calcStage = 'Carpentry & Assembly';
-        else if (calcProg >= 30) calcStage = 'False Ceiling & Framing';
-        else if (calcProg > 0) calcStage = 'Civil & MEP Layouts';
+  /**
+   * Set the execution status of any number of deliverables in one pass.
+   *
+   * Every status change — a single pill, a multi-select, or Mark All — goes
+   * through here, so room progress and the client portal stay in step. The old
+   * bulk path wrote statuses only and skipped the room recompute, which left
+   * the portal disagreeing with the package it was derived from.
+   *
+   * Rooms are recomputed once each rather than per item, so marking twelve
+   * deliverables in one room does not walk the BOQ twelve times.
+   */
+  const applyItemStatuses = (itemIds: string[], newStatus: ItemExecStatus) => {
+    const ids = itemIds.filter(Boolean);
+    if (ids.length === 0) return;
 
-        const updatedRoomData = {
-          Current: {
-            progress: calcProg,
-            stage: calcStage
-          }
-        };
-        nextWeekly[roomKey] = updatedRoomData;
-        if (targetItem.roomName) nextWeekly[targetItem.roomName] = updatedRoomData;
-      }
-    }
+    const nextItemStatuses = { ...(projectContext?.itemExecutionStatuses || {}) };
+    ids.forEach(id => { nextItemStatuses[id] = newStatus; });
+
+    const nextWeekly = { ...(projectContext?.weeklyRoomProgress || {}) };
+    const touchedRooms = new Set<string>();
+    ids.forEach(id => {
+      const target = boq.find((i: any) => (i.id || i.tempId) === id);
+      const roomKey = target && (target.roomId || target.room || target.roomName || '');
+      if (roomKey) touchedRooms.add(roomKey);
+    });
+
+    touchedRooms.forEach(roomKey => {
+      const roomItems = boq.filter(
+        (i: any) => (i.roomId || i.room || i.roomName || '').toLowerCase() === roomKey.toLowerCase()
+      );
+      if (roomItems.length === 0) return;
+      let comp = 0;
+      let inProg = 0;
+      roomItems.forEach((i: any) => {
+        const st = nextItemStatuses[i.id || i.tempId] || 'pending';
+        if (st === 'completed') comp++;
+        else if (st === 'in_progress') inProg++;
+      });
+      const calcProg = Math.round(((comp * 1.0 + inProg * 0.5) / roomItems.length) * 100);
+      const updatedRoomData = { Current: { progress: calcProg, stage: stageForProgress(calcProg) } };
+      nextWeekly[roomKey] = updatedRoomData;
+      const namedRoom = roomItems.find((i: any) => i.roomName)?.roomName;
+      if (namedRoom) nextWeekly[namedRoom] = updatedRoomData;
+    });
 
     if (setProjectContext) {
       setProjectContext((prev: any) => ({
@@ -423,29 +442,63 @@ const ExecutionWorkspace = ({
     }
   };
 
+  const handleItemStatusChange = (itemId: string, newStatus: ItemExecStatus) =>
+    applyItemStatuses([itemId], newStatus);
+
   // Bulk update all items in a bundle
-  const handleBulkUpdateBundleItems = (bundleId: string, status: 'pending' | 'in_progress' | 'completed') => {
-    const items = bundleItemsMap[bundleId] || [];
-    if (items.length === 0) return;
+  const handleBulkUpdateBundleItems = (bundleId: string, status: ItemExecStatus) =>
+    applyItemStatuses((bundleItemsMap[bundleId] || []).map(i => i.id || i.tempId), status);
 
-    const nextItemStatuses = { ...(projectContext?.itemExecutionStatuses || {}) };
-    items.forEach(item => {
-      const id = item.id || item.tempId;
-      if (id) nextItemStatuses[id] = status;
+  /** Apply a status to the ticked deliverables, then drop the selection. */
+  const handleApplyToSelection = (bundleId: string, status: ItemExecStatus) => {
+    applyItemStatuses([...(selectedItemIds[bundleId] || [])], status);
+    setSelectedItemIds(prev => ({ ...prev, [bundleId]: new Set() }));
+  };
+
+  /**
+   * Tick one deliverable. Shift extends from the last row picked, so a
+   * supervisor can select a run of items the way they would in a file list
+   * rather than clicking each one.
+   */
+  const handleToggleItemSelection = (
+    bundleId: string,
+    idx: number,
+    orderedIds: string[],
+    shiftKey: boolean
+  ) => {
+    setSelectedItemIds(prev => {
+      const next = new Set(prev[bundleId] || []);
+      const anchor = lastPickedIdx[bundleId];
+      if (shiftKey && anchor !== undefined && anchor !== idx) {
+        const [from, to] = anchor < idx ? [anchor, idx] : [idx, anchor];
+        // A range always selects; it never toggles individual rows off.
+        for (let i = from; i <= to; i++) {
+          if (orderedIds[i]) next.add(orderedIds[i]);
+        }
+      } else {
+        const id = orderedIds[idx];
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+      }
+      return { ...prev, [bundleId]: next };
     });
+    setLastPickedIdx(prev => ({ ...prev, [bundleId]: idx }));
+  };
 
-    if (setProjectContext) {
-      setProjectContext((prev: any) => ({
-        ...prev,
-        itemExecutionStatuses: nextItemStatuses
-      }));
-    }
+  const handleToggleSelectAll = (bundleId: string, orderedIds: string[]) => {
+    setSelectedItemIds(prev => {
+      const current = prev[bundleId] || new Set();
+      const allOn = orderedIds.length > 0 && orderedIds.every(id => current.has(id));
+      return { ...prev, [bundleId]: allOn ? new Set() : new Set(orderedIds) };
+    });
   };
 
   // Smart Auto-Unblock Action
   const handleSmartAutoUnblock = () => {
     let unblockedCount = 0;
     const next = bundlesToRender.map(b => {
+      // Nothing to unblock on a package with no scope.
+      if (isNotApplicable(b)) return b;
       const allGatesCleared = b.gatekeepers.sof && b.gatekeepers.gfc && b.gatekeepers.payment && b.gatekeepers.site;
       if (allGatesCleared && b.status === "blocked") {
         unblockedCount++;
@@ -589,20 +642,34 @@ const ExecutionWorkspace = ({
     });
   };
 
-  // Statistics
-  const activeCount = bundlesToRender.filter((b) => b.status === "active").length;
-  const blockedCount = bundlesToRender.filter((b) => b.status === "blocked").length;
-  const readyCount = bundlesToRender.filter((b) => b.status === "pending" || (b.status === "blocked" && b.gatekeepers.sof && b.gatekeepers.gfc && b.gatekeepers.payment && b.gatekeepers.site)).length;
-  const completedCount = bundlesToRender.filter((b) => b.status === "completed").length;
+  /**
+   * A package with nothing linked to it is not work that is blocked — it is work
+   * that does not exist. Treating it as gated inflated every bottleneck figure on
+   * this screen ("7 GFC · 7 SOF" for packages nobody will ever build).
+   *
+   * Derived rather than written onto the bundle: the moment Re-sync BOQ or a
+   * scope edit links an item, the package stops being N/A on its own. Persisting
+   * a status would need unwinding, and would show up as a phantom change in the
+   * project's history for merely opening this screen.
+   */
+  const isNotApplicable = (b: ExecutionBundle) => (bundleItemsMap[b.id] || []).length === 0;
+  const liveBundles = bundlesToRender.filter(b => !isNotApplicable(b));
+  const naCount = bundlesToRender.length - liveBundles.length;
+
+  // Statistics — every figure below counts only packages that carry scope.
+  const activeCount = liveBundles.filter((b) => b.status === "active").length;
+  const blockedCount = liveBundles.filter((b) => b.status === "blocked").length;
+  const readyCount = liveBundles.filter((b) => b.status === "pending" || (b.status === "blocked" && b.gatekeepers.sof && b.gatekeepers.gfc && b.gatekeepers.payment && b.gatekeepers.site)).length;
+  const completedCount = liveBundles.filter((b) => b.status === "completed").length;
   const totalCount = bundlesToRender.length;
-  const totalScopeValue = bundlesToRender.reduce((sum, b) => sum + (b.totalValue || 0), 0);
+  const totalScopeValue = liveBundles.reduce((sum, b) => sum + (b.totalValue || 0), 0);
   const totalDeliverablesCount = boq.length;
 
   // Gate Bottlenecks
-  const sofBlocked = bundlesToRender.filter(b => b.status === 'blocked' && !b.gatekeepers.sof).length;
-  const gfcBlocked = bundlesToRender.filter(b => b.status === 'blocked' && !b.gatekeepers.gfc).length;
-  const paymentBlocked = bundlesToRender.filter(b => b.status === 'blocked' && !b.gatekeepers.payment).length;
-  const siteBlocked = bundlesToRender.filter(b => b.status === 'blocked' && !b.gatekeepers.site).length;
+  const sofBlocked = liveBundles.filter(b => b.status === 'blocked' && !b.gatekeepers.sof).length;
+  const gfcBlocked = liveBundles.filter(b => b.status === 'blocked' && !b.gatekeepers.gfc).length;
+  const paymentBlocked = liveBundles.filter(b => b.status === 'blocked' && !b.gatekeepers.payment).length;
+  const siteBlocked = liveBundles.filter(b => b.status === 'blocked' && !b.gatekeepers.site).length;
 
   // Overall Item-level completion
   const overallItemProgress = useMemo(() => {
@@ -642,6 +709,10 @@ const ExecutionWorkspace = ({
       }
 
       // Status filter
+      // N/A packages are only listed under "All" and their own chip, so the
+      // working filters show work that can actually move.
+      if (statusFilter === "na") return isNotApplicable(bundle);
+      if (statusFilter !== "all" && isNotApplicable(bundle)) return false;
       if (statusFilter === "active" && bundle.status !== "active") return false;
       if (statusFilter === "blocked" && bundle.status !== "blocked") return false;
       if (statusFilter === "completed" && bundle.status !== "completed") return false;
@@ -754,7 +825,9 @@ const ExecutionWorkspace = ({
           <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3.5">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Packages</div>
             <div className="text-xl font-black text-slate-900 mt-1">{totalCount}</div>
-            <div className="text-[10px] text-slate-400 font-medium mt-0.5">{totalDeliverablesCount} BOQ items</div>
+            <div className="text-[10px] text-slate-400 font-medium mt-0.5">
+              {totalDeliverablesCount} BOQ items{naCount > 0 ? ` · ${naCount} N/A` : ''}
+            </div>
           </div>
 
           <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-3.5">
@@ -929,6 +1002,22 @@ const ExecutionWorkspace = ({
               >
                 Completed ({completedCount})
               </button>
+
+              {/* Only offered once something is actually N/A — an always-on
+                  chip reading (0) is just noise on a healthy project. */}
+              {naCount > 0 && (
+                <button
+                  onClick={() => setStatusFilter("na")}
+                  title="Packages with no BOQ items linked to them"
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    statusFilter === "na"
+                      ? "bg-slate-500 text-white"
+                      : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                  }`}
+                >
+                  N/A ({naCount})
+                </button>
+              )}
             </div>
           </div>
 
@@ -978,6 +1067,16 @@ const ExecutionWorkspace = ({
               {filteredBundles.map((bundle) => {
                 const isExpanded = expandedBundleIds.has(bundle.id);
                 const items = bundleItemsMap[bundle.id] || [];
+                // Selection works on positions in this list, so the ids the
+                // checkboxes and shift-ranges use must be in render order.
+                const orderedItemIds: string[] = items.map(
+                  (it: any, i: number) => it.id || it.tempId || `item-${i}`
+                );
+                const notApplicable = items.length === 0;
+                const bundleSelection = selectedItemIds[bundle.id] || new Set<string>();
+                const selectedCount = bundleSelection.size;
+                const allSelected =
+                  orderedItemIds.length > 0 && orderedItemIds.every(id => bundleSelection.has(id));
                 const itemProgress = getBundleItemProgress(bundle.id);
                 const allClear = bAllClear(bundle);
 
@@ -1082,26 +1181,35 @@ const ExecutionWorkspace = ({
                             </button>
                           </h3>
 
-                          <span className={`px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full border ${
-                            bundle.status === "active"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : bundle.status === "completed"
-                              ? "bg-sky-50 text-[#0066CC] border-sky-200"
-                              : bundle.status === "blocked"
-                              ? "bg-rose-50 text-rose-700 border-rose-200"
-                              : "bg-amber-50 text-amber-700 border-amber-200"
-                          }`}>
-                            {bundle.status === 'active' ? 'Active On-Site' : bundle.status === 'completed' ? 'Completed' : bundle.status === 'blocked' ? 'Gated (Blocked)' : 'Ready to Start'}
+                          {/* A filled pill per card turned status into the loudest
+                              thing on the page. The colour now lives in a 6px dot,
+                              which still scans down a column but stops shouting. */}
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 whitespace-nowrap">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                              notApplicable
+                                ? "bg-slate-300"
+                                : bundle.status === "active"
+                                ? "bg-emerald-500"
+                                : bundle.status === "completed"
+                                ? "bg-sky-500"
+                                : bundle.status === "blocked"
+                                ? "bg-rose-400"
+                                : "bg-amber-400"
+                            }`} />
+                            {notApplicable
+                              ? 'No linked scope'
+                              : bundle.status === 'active' ? 'Active on-site' : bundle.status === 'completed' ? 'Completed' : bundle.status === 'blocked' ? 'Gated' : 'Ready to start'}
                           </span>
 
                           {bundle.isOverridden && (
-                            <span className="px-2 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-bold uppercase rounded-md border border-amber-200 flex items-center gap-1">
-                              <Unlock className="w-3 h-3 text-amber-700" /> At-Risk Override
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600">
+                              <Unlock className="w-3 h-3" /> At-risk override
                             </span>
                           )}
                         </div>
 
-                        {/* 4 Gatekeeper Badges */}
+                        {/* Gates are meaningless with no scope behind them. */}
+                        {!notApplicable && (
                         <div className="flex flex-wrap items-center gap-2">
                           <GateBadge
                             label="SOF Freeze"
@@ -1128,6 +1236,7 @@ const ExecutionWorkspace = ({
                             icon={<HardHat className="w-3.5 h-3.5" />}
                           />
                         </div>
+                        )}
 
                         {/* Linked Deliverables & Progress summary strip */}
                         <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
@@ -1142,6 +1251,13 @@ const ExecutionWorkspace = ({
                             </span>
                           )}
 
+                          {/* 0% would read as "nothing done yet" rather than
+                              "nothing to do". */}
+                          {notApplicable ? (
+                            <span className="text-[11px] font-semibold text-slate-400">
+                              No deliverables to track
+                            </span>
+                          ) : (
                           <div className="flex items-center gap-2">
                             <span className="text-[11px] font-semibold text-slate-500">Deliverables QA:</span>
                             <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -1154,6 +1270,7 @@ const ExecutionWorkspace = ({
                             </div>
                             <span className="text-xs font-bold text-slate-800">{itemProgress}%</span>
                           </div>
+                          )}
 
                           <button
                             onClick={() => toggleBundleExpand(bundle.id)}
@@ -1167,11 +1284,19 @@ const ExecutionWorkspace = ({
 
                       {/* Package Actions */}
                       <div className="flex flex-col sm:flex-row lg:flex-col items-start lg:items-end gap-2 shrink-0 w-full lg:w-auto">
-                        {bundle.status === "completed" ? (
+                        {notApplicable ? (
+                          /* No scope means nothing to start, complete or force
+                             through a gate. Offering "Proceed At Risk" here
+                             invites an override of a risk that does not exist —
+                             link items or delete the package instead. */
+                          <span className="text-[11px] font-semibold text-slate-400 text-right max-w-[190px] leading-snug">
+                            Link BOQ items to this package, or delete it.
+                          </span>
+                        ) : bundle.status === "completed" ? (
                           <div className="flex flex-col items-end gap-1">
                             <span className="flex items-center gap-1.5 px-4 py-2 bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider rounded-xl">
                               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                              Execution Completed
+                              Execution completed
                             </span>
                             {!isProjectComplete && (
                               <button
@@ -1209,10 +1334,10 @@ const ExecutionWorkspace = ({
                           <div className="flex flex-col gap-1.5 w-full sm:w-auto">
                             <button
                               onClick={() => setOverrideModalBundleId(bundle.id)}
-                              className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold uppercase tracking-wider rounded-xl transition-all border border-rose-200 cursor-pointer"
+                              className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-rose-600 rounded-lg border border-slate-200 hover:border-rose-200 hover:bg-rose-50/50 transition-colors cursor-pointer"
                             >
                               <ShieldAlert className="w-3.5 h-3.5" />
-                              Proceed At Risk
+                              Proceed at risk
                             </button>
                           </div>
                         ) : bundle.status === "active" ? (
@@ -1221,10 +1346,10 @@ const ExecutionWorkspace = ({
                               const next = bundlesToRender.map(b => b.id === bundle.id ? { ...b, status: 'completed' as const } : b);
                               updateBundles(next);
                             }}
-                            className="flex items-center justify-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
+                            className="flex items-center justify-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold rounded-lg transition-colors cursor-pointer"
                           >
-                            <CheckCircle2 className="w-4 h-4" />
-                            Mark Completed
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Mark completed
                           </button>
                         ) : (
                           <button
@@ -1232,10 +1357,10 @@ const ExecutionWorkspace = ({
                               const next = bundlesToRender.map(b => b.id === bundle.id ? { ...b, status: 'active' as const } : b);
                               updateBundles(next);
                             }}
-                            className="flex items-center justify-center gap-1.5 px-5 py-2 bg-[#0066CC] hover:bg-[#0052A3] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
+                            className="flex items-center justify-center gap-1.5 px-4 py-1.5 bg-[#0066CC] hover:bg-[#0052A3] text-white text-[11px] font-semibold rounded-lg transition-colors cursor-pointer"
                           >
-                            <PlayCircle className="w-4 h-4" />
-                            Start Execution
+                            <PlayCircle className="w-3.5 h-3.5" />
+                            Start execution
                           </button>
                         )}
                       </div>
@@ -1257,25 +1382,66 @@ const ExecutionWorkspace = ({
                                 Linked BOQ Deliverables ({items.length})
                               </h4>
                               <p className="text-[11px] text-slate-500">
-                                Toggle item execution statuses to automatically update room progress and synchronize with the client portal.
+                                Set a status per item, or tick several and apply one status to all of them.
+                                Room progress and the client portal follow automatically.
                               </p>
                             </div>
 
-                            {/* Bulk Actions */}
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleBulkUpdateBundleItems(bundle.id, 'in_progress')}
-                                className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                              >
-                                Mark All In-Progress
-                              </button>
-                              <button
-                                onClick={() => handleBulkUpdateBundleItems(bundle.id, 'completed')}
-                                className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                              >
-                                Mark All Done
-                              </button>
-                            </div>
+                            {/* With a selection the bar acts on exactly what is
+                                ticked; with none it falls back to whole-package
+                                actions, so the common case stays one click. */}
+                            {selectedCount > 0 ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[11px] font-black text-[#0055B3] tabular-nums">
+                                  {selectedCount} selected
+                                </span>
+                                <button
+                                  onClick={() => handleApplyToSelection(bundle.id, 'pending')}
+                                  className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                                >
+                                  Pending
+                                </button>
+                                <button
+                                  onClick={() => handleApplyToSelection(bundle.id, 'in_progress')}
+                                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                                >
+                                  In Progress
+                                </button>
+                                <button
+                                  onClick={() => handleApplyToSelection(bundle.id, 'completed')}
+                                  className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                                >
+                                  Done
+                                </button>
+                                <button
+                                  onClick={() => setSelectedItemIds(prev => ({ ...prev, [bundle.id]: new Set() }))}
+                                  className="px-2 py-1 text-slate-500 hover:text-slate-800 text-[11px] font-bold transition-colors cursor-pointer"
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleToggleSelectAll(bundle.id, orderedItemIds)}
+                                  className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                                >
+                                  Select All
+                                </button>
+                                <button
+                                  onClick={() => handleBulkUpdateBundleItems(bundle.id, 'in_progress')}
+                                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                                >
+                                  Mark All In-Progress
+                                </button>
+                                <button
+                                  onClick={() => handleBulkUpdateBundleItems(bundle.id, 'completed')}
+                                  className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                                >
+                                  Mark All Done
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           {items.length === 0 ? (
@@ -1285,14 +1451,17 @@ const ExecutionWorkspace = ({
                           ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               {items.map((item: any, iIdx: number) => {
-                                const itemId = item.id || item.tempId || `item-${iIdx}`;
+                                const itemId = orderedItemIds[iIdx];
                                 const currentItemStatus = (projectContext?.itemExecutionStatuses || {})[itemId] || 'pending';
                                 const roomName = item.roomName || item.room || item.roomId || 'General Scope';
+                                const isPicked = bundleSelection.has(itemId);
 
                                 return (
                                   <div
                                     key={itemId}
                                     className={`p-3.5 rounded-xl border transition-all ${
+                                      isPicked ? 'ring-2 ring-[#0066CC] ring-offset-1 ' : ''
+                                    }${
                                       currentItemStatus === 'completed'
                                         ? 'bg-emerald-50/50 border-emerald-200'
                                         : currentItemStatus === 'in_progress'
@@ -1301,6 +1470,18 @@ const ExecutionWorkspace = ({
                                     }`}
                                   >
                                     <div className="flex items-start justify-between gap-3">
+                                      {/* Shift-click extends from the last row picked, so a
+                                          run of deliverables can be taken in two clicks. */}
+                                      <input
+                                        type="checkbox"
+                                        checked={isPicked}
+                                        onChange={(e) => {
+                                          const ev = e.nativeEvent as unknown as MouseEvent;
+                                          handleToggleItemSelection(bundle.id, iIdx, orderedItemIds, !!ev.shiftKey);
+                                        }}
+                                        aria-label={`Select ${item.name}`}
+                                        className="mt-0.5 w-4 h-4 shrink-0 accent-[#0066CC] cursor-pointer"
+                                      />
                                       <div className="space-y-1 min-w-0 flex-1">
                                         <div className="flex items-center gap-2">
                                           <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded uppercase">
@@ -1323,20 +1504,30 @@ const ExecutionWorkspace = ({
                                         </div>
                                       </div>
 
-                                      {/* Status Selector */}
+                                      {/* A select, not a cycling pill. The old badge was
+                                          styled exactly like the read-only status chips on
+                                          the package above, so it did not read as clickable,
+                                          and stepping Done -> In Progress meant clicking
+                                          twice more through Pending. The native control
+                                          carries its own affordance and sets a state directly. */}
                                       <div className="shrink-0 flex items-center gap-1">
-                                        <button
-                                          onClick={() => handleItemStatusChange(itemId, currentItemStatus === 'completed' ? 'pending' : currentItemStatus === 'in_progress' ? 'completed' : 'in_progress')}
-                                          className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                                        <select
+                                          value={currentItemStatus}
+                                          onChange={(e) => handleItemStatusChange(itemId, e.target.value as ItemExecStatus)}
+                                          aria-label={`Execution status for ${item.name}`}
+                                          title="Set execution status"
+                                          className={`px-2 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer border outline-none focus:ring-2 focus:ring-[#0066CC]/40 ${
                                             currentItemStatus === 'completed'
-                                              ? 'bg-emerald-600 text-white shadow-2xs'
+                                              ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
                                               : currentItemStatus === 'in_progress'
-                                              ? 'bg-amber-500 text-white shadow-2xs'
-                                              : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                                              ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                                              : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
                                           }`}
                                         >
-                                          {currentItemStatus === 'completed' ? 'Done' : currentItemStatus === 'in_progress' ? 'In Progress' : 'Pending'}
-                                        </button>
+                                          <option value="pending" className="bg-white text-slate-700">Pending</option>
+                                          <option value="in_progress" className="bg-white text-slate-700">In Progress</option>
+                                          <option value="completed" className="bg-white text-slate-700">Done</option>
+                                        </select>
                                       </div>
                                     </div>
                                   </div>
@@ -1348,27 +1539,6 @@ const ExecutionWorkspace = ({
                       )}
                     </AnimatePresence>
 
-                    {/* Operational Intel Footer */}
-                    <div className="bg-slate-50 border-t border-slate-100 px-5 py-3.5 flex flex-col sm:flex-row gap-4 text-xs">
-                      <div className="flex-1 flex items-start gap-2">
-                        <AlertTriangle className="w-3.5 h-3.5 text-[#0066CC] shrink-0 mt-0.5" />
-                        <div>
-                          <span className="font-bold text-[#0066CC] uppercase text-[10px] tracking-wider block">Ops Act Today:</span>
-                          <p className="text-slate-700 font-medium text-[11px] leading-relaxed">
-                            {bundle.actToday || `Clear pending gates for ${bundle.name} to unblock execution.`}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex-1 flex items-start gap-2">
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
-                        <div>
-                          <span className="font-bold text-rose-600 uppercase text-[10px] tracking-wider block">Breaks Tomorrow:</span>
-                          <p className="text-slate-700 font-medium text-[11px] leading-relaxed">
-                            {bundle.breaksTomorrow || `Sequential delivery timeline will be impacted.`}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 );
               })}
@@ -1714,18 +1884,24 @@ const GateBadge = ({
   onClick: () => void;
   icon: React.ReactNode;
 }) => {
+  // Four bordered pills per card read as four buttons competing with the real
+  // actions. Cleared and pending are legible from the mark and the text weight
+  // alone, so the boxes are gone and the colour is only on the tick.
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all text-[11px] font-bold cursor-pointer ${
+      title={active ? `${label} — cleared. Click to reopen.` : `${label} — pending. Click to clear.`}
+      className={`flex items-center gap-1.5 px-1 py-0.5 rounded-md text-[11px] transition-colors cursor-pointer ${
         active
-          ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-          : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300"
+          ? "text-emerald-600 font-semibold hover:bg-emerald-50/70"
+          : "text-slate-400 font-medium hover:text-slate-600 hover:bg-slate-50"
       }`}
     >
-      <div className={active ? "text-emerald-500" : "text-slate-400"}>
-        {active ? <CheckCircle2 className="w-3.5 h-3.5" /> : icon}
-      </div>
+      {active ? (
+        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+      ) : (
+        <span className="w-3 h-3 rounded-full border border-slate-300 shrink-0" />
+      )}
       {label}
     </button>
   );

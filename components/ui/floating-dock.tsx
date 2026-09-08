@@ -216,7 +216,7 @@ function IconContainer({
         {badge && (
           <span
             className={cn(
-              "absolute -top-1 -right-1 text-[7.5px] font-extrabold px-1 py-0.1 rounded-full border shadow-2xs z-10 leading-tight tracking-tight",
+              "absolute -top-1 -right-1 text-[8px] font-extrabold px-1 py-0.1 rounded-full border shadow-2xs z-10 leading-tight tracking-tight",
               badgeTone === "alert"
                 ? "bg-rose-500 text-white border-white"
                 : badgeTone === "ok"
@@ -246,7 +246,7 @@ function IconContainer({
       {alwaysShowLabels && (
         <span
           className={cn(
-            "text-[9.5px] font-semibold tracking-tight mt-1 text-center transition-colors leading-none truncate max-w-[70px]",
+            "text-[10px] font-semibold tracking-tight mt-1 text-center transition-colors leading-none truncate max-w-[70px]",
             isActive
               ? "text-[#0055B3] font-bold"
               : "text-slate-600 group-hover:text-slate-900"

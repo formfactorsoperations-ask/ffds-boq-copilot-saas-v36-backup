@@ -13,6 +13,26 @@ export interface OrganizationContext {
     signatoryTitle?: string;
     isSetupComplete?: boolean;
     tagline?: string;
+    /*
+      Client portal footer. `tagline` is a strapline; `about` is the paragraph
+      that says what the studio actually does — the footer used to print the
+      tagline in both places, so a client read the same half-sentence twice.
+    */
+    website?: string;
+    instagramUrl?: string;
+    /** Image URL or data URI for the Instagram QR shown in the portal footer. */
+    instagramQr?: string;
+    about?: string;
+    /** "Mon-Sat, 10am-7pm" */
+    businessHours?: string;
+    /** "Visits every Tue & Fri" */
+    siteVisitPolicy?: string;
+    /** Who a client escalates to, and how fast. "Ops director, 48h" */
+    escalationPolicy?: string;
+    /** "GST registered", "7 years", "40+ homes delivered", "1-year warranty" */
+    credentials?: string[];
+    /** "replies within one working day" */
+    pmResponseTime?: string;
     accentColor?: string;
     designFeePercentage?: number;
     defaultGstRate?: number;
@@ -415,14 +435,40 @@ export interface DesignDocument {
     addedAt: string;
 }
 
+/**
+ * A decision as the client portal sees it.
+ *
+ * This is a *read model*, projected from the decision ledger in Firestore
+ * (projects/{id}/decisions) by DecisionTracker. The ledger is the source of
+ * truth: portal actions write back to it and the projection follows. Do not
+ * treat a change made only to this record as saved.
+ */
 export interface ProjectDecisionRecord {
     id: string;
     date: string;
     title: string;
     roomId?: string; // Newly added
+    /** Design decision or site decision. Absent on older records. */
+    decisionNature?: 'design' | 'site';
+    /** The studio's reason category, e.g. 'Site Condition'. */
+    category?: string;
     photoUrl?: string; // Newly added
+    /** The technical drawing the client is being asked to approve against. */
+    drawingUrl?: string;
+    /** The question the client asked, if they asked one. Latest only. */
+    clientQuery?: string;
+    /** The studio's answer to that question. Latest only. */
+    studioReply?: string;
+    /** The whole exchange, oldest first. Survives more than one round. */
+    discussion?: { from: 'client' | 'studio'; text: string; at?: string; author?: string }[];
     status: 'pending' | 'confirmed' | 'changed' | 'proposed' | 'revoked' | 'rejected';
     selectedOption?: string;
+    /** Token that lets an unauthenticated client sign off against the ledger. */
+    signoffToken?: string;
+    /** When the studio released this to the client. ISO string. */
+    notifiedAt?: string;
+    /** When the client responded. ISO string — mirrors signoff.respondedAt. */
+    clientConfirmedAt?: string;
     
     // Legacy fields (kept for backward compatibility if needed)
     description?: string;
@@ -602,6 +648,34 @@ export interface ProjectContext {
     logoImage?: string;
     logoHeight?: number;
     approvedTierId?: string;
+
+    /**
+     * The client's acceptance of the commercial proposal.
+     *
+     * A distinct commercial event, and previously not recordable anywhere: the
+     * `proposalAccepted` gate was inferred from discovery being completed, so
+     * it turned true weeks before a proposal existed. `approvedTierId` is the
+     * studio's own baseline, not the client's word.
+     *
+     * Acceptance names WHAT was accepted — the tier and the figure. Without
+     * that, "accepted" stops meaning anything the moment the scope is revised.
+     */
+    proposalAcceptance?: {
+        accepted: boolean;
+        at: number | null;
+        /** A proposal is often accepted on a call; the channel is the evidence. */
+        via: 'portal' | 'email' | 'verbal' | 'written' | null;
+        /** The person at the client who accepted. */
+        acceptedBy: string | null;
+        /** The tier accepted, so acceptance points at specific commercials. */
+        tierId: string | null;
+        tierName: string | null;
+        amount: number | null;
+        /** Email subject, call note or docket reference. */
+        reference: string | null;
+        recordedBy: string | null;
+        recordedAt: number | null;
+    };
     status?: ProjectStatus;
     proposalContent?: ProposalContent;
     proposalContentByMode?: Record<string, ProposalContent>;
@@ -684,7 +758,37 @@ export interface ProjectContext {
     materialSelections?: MaterialSelection[];
     paintPalettes?: PaintPalette[];
     designDocuments?: DesignDocument[]; // URLs for approved design PDFs
+    /**
+     * The site progress photo album, held in the studio's Google Drive.
+     *
+     * The portal used to carry a "Site feed" lens that filtered the spine down
+     * to site updates. It could only ever subtract from a page the client had
+     * already scrolled, and photographs — dozens a week, full resolution — were
+     * never something this app should be storing or paginating.
+     *
+     * One link, set by the studio, shown on Design & Scope. Drive already does
+     * albums, ordering, download and sharing properly.
+     */
+    sitePhotosLink?: {
+        url: string;
+        /** Optional label, e.g. "Weeks 1-6 · Civil & carpentry". */
+        label?: string;
+        updatedAt?: string;
+        updatedBy?: string;
+    };
     projectDecisions?: ProjectDecisionRecord[];
+    /**
+     * The client's portal credential. The portal has no password — this token,
+     * delivered by email, is what grants access. Reissuing invalidates the old
+     * link, so it doubles as revoke. See services/portalAccessService.ts.
+     */
+    portalAccess?: {
+        token: string;
+        expiresAt: string;
+        issuedAt: string;
+        issuedTo?: string;
+        firstUsedAt?: string;
+    };
     tradeSequence?: string[];
     delayedTrades?: { trade: string; delayDays: number; markedAt: number }[];
     // Communication Tracker (Project-Level Summary)
@@ -1882,7 +1986,10 @@ export type ClientDocumentKind =
   | 'execution_agreement'
   | 'onboarding_kit'
   | 'handover_docket'
-  | 'variation_order';
+  /* The snag list is a pre-requisite for handover, so the client signs it:
+     it is the record that every defect raised was closed or accepted before
+     possession changed hands. */
+  | 'snag_list';
 
 /** Lifecycle of one document, from the client's point of view. */
 export type DocumentState =
@@ -1928,6 +2035,19 @@ export interface DocumentIssue {
     /** Deterministic hash of `snapshot`. Printed on the signature certificate. */
     contentHash: string;
     materialSections: MaterialSection[];
+    /**
+     * Whether the client may see THIS issue yet.
+     *
+     * Releasing a document used to reach the client the instant the studio
+     * clicked it, so a re-issue silently replaced whatever the client was
+     * reading — including a version they had already signed. A new issue is
+     * now staged as a draft and becomes visible when ops publishes it, the
+     * same gate every other client-facing record goes through.
+     *
+     * Absent means visible: issues released before this existed stay where
+     * they are rather than disappearing from the client's portal.
+     */
+    clientVisibility?: import('./lib/clientVisibility').ClientVisibility;
     /** Set when this issue replaces an earlier one — drives the redline. */
     supersedes?: string | null;
     supersededAt?: number | null;

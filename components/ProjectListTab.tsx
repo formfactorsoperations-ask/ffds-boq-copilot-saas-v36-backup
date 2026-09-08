@@ -7,6 +7,7 @@ import { formatClientValue, timeAgo, formatCurrency } from "../lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Info, PlayCircle, PauseCircle, CheckCircle, FileText, Send, MessageSquare, Briefcase, Zap, Trophy, LayoutDashboard, SlidersHorizontal, XCircle, Pin } from "lucide-react";
 import { ProjectPaymentBadge } from "./PaymentHealth";
+import DocumentMeter from "./ops/DocumentMeter";
 import { ClockIcon } from "./Icons";
 import {
   fetchPaymentHealthScore,
@@ -1270,6 +1271,14 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                               </div>
                             </CardItem>
 
+                            {/* Document completeness — sits with the money because
+                                an unsigned contract is a money problem. */}
+                            <CardItem translateZ={15} className="w-full">
+                              <div className="mt-3 pt-3 border-t border-slate-100">
+                                <DocumentMeter projectContext={project.context} />
+                              </div>
+                            </CardItem>
+
                             {/* Latest Activity Footer */}
                             {latestAct && (
                               <CardItem translateZ={15} className="w-full">
@@ -1316,7 +1325,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                     onDuplicateProject(project);
                                   }}
                                   className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-slate-500 hover:text-[#0066CC] rounded hover:border-sky-200 transition-colors shadow-sm cursor-pointer"
-                                  title="Duplicate"
+                                  title="Clone as template — copies rooms and priced scope, not the client, payments or sign-offs"
                                 >
                                   <svg
                                     width="12"

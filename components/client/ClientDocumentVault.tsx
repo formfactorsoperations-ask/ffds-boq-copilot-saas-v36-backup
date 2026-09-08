@@ -26,6 +26,7 @@ import {
   agreementKindFor
 } from '../../services/documentIssueEngine';
 import { resolveApprovals } from '../../services/clientApprovalEngine';
+import { documentStatusLabel } from '../../services/documentReleaseEngine';
 import { getQueries } from '../../services/documentQueryEngine';
 import { getAddenda } from '../../services/documentReleaseEngine';
 import SignatureCertificate from './SignatureCertificate';
@@ -47,16 +48,18 @@ interface ClientDocumentVaultProps {
   studioName: string;
   /** `issueId` targets a specific issue — used to open an addendum. */
   onOpenDocument: (kind: ClientDocumentKind, issueId?: string) => void;
+  /** Ask a question about the document as a whole, not one clause. */
+  onAskQuestion?: (kind: ClientDocumentKind) => void;
 }
 
 /** Why a document the client cannot see yet does not exist yet. */
 const RELEASE_CONDITION: Record<string, string> = {
   terms_docket: 'Prepared at the start of your engagement.',
   payment_schedule: 'Issued alongside your Terms of Engagement.',
-  onboarding_kit: 'Shared once your design fee sign-up is complete.',
+  onboarding_kit: 'Shared once you have accepted the proposal.',
   execution_agreement: 'Drawn up once your design and BOQ are approved and frozen.',
   handover_docket: 'Issued after the joint snag walk-through, once finishing works are signed off.',
-  variation_order: 'Raised whenever a change to agreed scope is priced.'
+  snag_list: 'Every defect raised on site, and how each one was closed.'
 };
 
 const STATE_CHIP: Record<DocumentState, { label: string; tone: string }> = {
@@ -65,6 +68,9 @@ const STATE_CHIP: Record<DocumentState, { label: string; tone: string }> = {
   viewed: { label: 'In progress', tone: 'bg-amber-100 text-amber-900' },
   queried: { label: 'Your question is with the studio', tone: 'bg-[#0066CC] text-white' },
   amended: { label: 'Updated — please review', tone: 'bg-amber-500 text-white' },
+  /* `label` is a fallback only. The live wording comes from
+     documentStatusLabel(state, kind, 'client') so an acknowledgement is never
+     described to the client as a signature. */
   signed: { label: 'Signed', tone: 'bg-emerald-100 text-emerald-800' },
   executed: { label: 'Fully executed', tone: 'bg-emerald-600 text-white' }
 };
@@ -82,7 +88,8 @@ const ACTION_LABEL: Record<DocumentState, string> = {
 const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
   projectData,
   studioName,
-  onOpenDocument
+  onOpenDocument,
+  onAskQuestion
 }) => {
   const context = projectData.context;
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -93,9 +100,9 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
   const rows = useMemo(() => {
     return PROJECT_DOCUMENTS.filter(d => d.clientVisible).map(doc => {
       const kind = doc.documentKind as ClientDocumentKind | undefined;
-      const issue = kind ? getCurrentIssue(context, kind) : null;
-      const state: DocumentState = kind ? resolveDocumentState(context, kind) : 'draft';
-      const history = kind ? getIssueHistory(context, kind) : [];
+      const issue = kind ? getCurrentIssue(context, kind, { clientView: true }) : null;
+      const state: DocumentState = kind ? resolveDocumentState(context, kind, { clientView: true }) : 'draft';
+      const history = kind ? getIssueHistory(context, kind, { clientView: true }) : [];
       const allQueries = kind ? getQueries(context, kind) : [];
       const openQueries = allQueries.filter(q => q.status === 'open');
       // A studio reply the client has not been shown yet is worth surfacing —
@@ -172,6 +179,8 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
 
                 {items.map(row => {
                   const chip = STATE_CHIP[row.state];
+                  /* Tone from the map, wording from the shared vocabulary. */
+                  const chipLabel = row.kind ? documentStatusLabel(row.state, row.kind, 'client') : chip.label;
                   const isOpen = expanded === row.id;
                   const older = row.history.filter(h => h.id !== row.issue?.id);
 
@@ -214,7 +223,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                               <span
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold ${chip.tone}`}
                               >
-                                {chip.label}
+                                {chipLabel}
                               </span>
                               {row.agreement?.recordedOffline && (
                                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">
@@ -273,7 +282,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                               }
                               className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 transition-colors ${
                                 row.state === 'issued' || row.state === 'amended'
-                                  ? 'bg-slate-900 hover:bg-black text-white'
+                                  ? 'bg-[#0066CC] hover:bg-[#0055B3] text-white'
                                   : row.state === 'signed' || row.state === 'executed'
                                     ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
                                     : 'bg-[#0066CC] hover:bg-[#0055B3] text-white'
@@ -285,6 +294,19 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                                 <Eye className="w-3.5 h-3.5" />
                               )}
                               {ACTION_LABEL[row.state]}
+                            </button>
+                          )}
+
+                          {/* On every document, not only on a clause inside the
+                              reading room. A client who wants to ask about a
+                              document should not have to open it, find a clause
+                              and comment on that one instead. */}
+                          {onAskQuestion && row.kind && (
+                            <button
+                              onClick={() => onAskQuestion(row.kind!)}
+                              className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-slate-500 border border-slate-200 hover:border-sky-300 hover:text-[#0055B3] transition-colors cursor-pointer whitespace-nowrap"
+                            >
+                              Ask a question
                             </button>
                           )}
 
@@ -380,7 +402,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                                 className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer shrink-0 ${
                                   a.clientSignature
                                     ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                                    : 'bg-slate-900 hover:bg-black text-white'
+                                    : 'bg-[#0066CC] hover:bg-[#0055B3] text-white'
                                 }`}
                               >
                                 {a.clientSignature ? 'View' : 'Read & sign'}

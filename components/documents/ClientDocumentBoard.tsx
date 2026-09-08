@@ -18,6 +18,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ProjectContext,
   FullProjectData,
@@ -43,6 +44,8 @@ import {
 } from '../../services/documentReleaseEngine';
 import { resolveApprovals } from '../../services/clientApprovalEngine';
 import { getQueries } from '../../services/documentQueryEngine';
+import { formatINR } from '../../lib/utils';
+import { resolveProposalAcceptance, CHANNEL_LABEL } from '../../services/proposalAcceptanceService';
 import { auditLegacyIssues, withdrawLegacyIssues, describeAudit } from '../../services/documentMigration';
 import { useOrg } from '../../contexts/OrgContext';
 import SignatureStatusPanel from './SignatureStatusPanel';
@@ -130,6 +133,55 @@ const MODE_CHIP: Record<RowMode, { label: string; cls: string } | null> = {
   internal:    null
 };
 
+
+/*
+  Where a document has got to, as a position rather than a word.
+
+  A row said "v1 · DOC-2026-230 · signature" and "Opened today" — accurate, and
+  it still made you reconstruct the sequence in your head for each of twelve
+  documents. Every one of them travels the same four steps, so showing the
+  track and marking the current step makes the whole board readable at a
+  glance: what is still on the studio's desk, what is sitting unopened, what is
+  done.
+*/
+const RAIL_STEPS = ['Prepared', 'Sent', 'Opened', 'Signed'] as const;
+
+const railFor = (state: DocumentState | null, mode: RowMode): { steps: string[]; at: number } => {
+  const last = mode === 'signature' ? 'Signed' : mode === 'acknowledge' ? 'Confirmed' : 'Read';
+  const steps = [...RAIL_STEPS.slice(0, 3), last];
+  const at =
+    state === 'signed' || state === 'executed' ? 3
+    : state === 'viewed' || state === 'queried' ? 2
+    : state === 'issued' || state === 'amended' ? 1
+    : 0;
+  return { steps, at };
+};
+
+const ProgressRail: React.FC<{ state: DocumentState | null; mode: RowMode }> = ({ state, mode }) => {
+  const { steps, at } = railFor(state, mode);
+  return (
+    <div className="flex items-center gap-1.5" aria-label={`Step ${at + 1} of 4: ${steps[at]}`}>
+      {steps.map((label, i) => {
+        const done = i < at;
+        const here = i === at;
+        return (
+          <React.Fragment key={label}>
+            <span
+              title={label}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                here ? 'w-6 bg-[#0066CC]' : done ? 'w-3 bg-[#0066CC]/35' : 'w-3 bg-slate-200'
+              }`}
+            />
+          </React.Fragment>
+        );
+      })}
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 ml-1">
+        {steps[at]}
+      </span>
+    </div>
+  );
+};
+
 const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
   projectContext,
   setProjectContext,
@@ -141,6 +193,9 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
   isDesigner
 }) => {
   const [expanded, setExpanded] = useState<string | null>(null);
+  /* Whose court, as a filter. On a board of a dozen documents the question is
+     never "show me everything", it is "what is mine". */
+  const [court, setCourt] = useState<'all' | 'mine' | 'client' | 'settled'>('all');
   const [releasing, setReleasing] = useState<string | null>(null);
   const [releaseNote, setReleaseNote] = useState('');
   const [asPack, setAsPack] = useState(true);
@@ -158,6 +213,36 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
   const legacyAudit = useMemo(() => auditLegacyIssues(projectContext), [projectContext]);
 
   const approvals = useMemo(() => resolveApprovals(projectContext, 1), [projectContext]);
+
+  /*
+    The Client Proposal has no document kind, so it had no state of its own here
+    and rendered forever as "Internal working document" — even after the studio
+    had recorded the client accepting it on the proposal screen. Two surfaces,
+    one fact, and only one of them knew it.
+
+    Read from the same service the proposal screen writes, so acceptance is
+    canonical rather than restated. Terms, contract and handover already work
+    this way through resolveApprovals.
+  */
+  const acceptance = useMemo(() => resolveProposalAcceptance(projectContext), [projectContext]);
+
+  /*
+    The proposal carries no document kind, so it is identified by id — and the
+    id is 'client', not 'client-proposal'. Guessing it cost a whole release:
+    the branch below never matched, so the board kept saying "Internal working
+    document" while the proposal screen showed the acceptance.
+  */
+  const isProposalRow = (r: Row) => r.meta.id === 'client';
+
+  /** Which pile a row belongs in, from the state it already renders. */
+  const courtOf = (r: Row): 'mine' | 'client' | 'settled' => {
+    if (isProposalRow(r)) return acceptance.accepted ? 'settled' : 'mine';
+    if (r.state === 'signed' || r.state === 'executed') return 'settled';
+    // 'queried' is defined as the ball being with the studio.
+    if (r.openQueryCount > 0 || r.state === 'queried') return 'mine';
+    if (r.state === 'issued' || r.state === 'viewed' || r.state === 'amended') return 'client';
+    return 'mine';
+  };
 
   const rows: Row[] = useMemo(() => {
     return PROJECT_DOCUMENTS.filter(d => !(isDesigner && d.money)).map(meta => {
@@ -217,44 +302,21 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
 
   const grouped = useMemo(() => {
     const out: Record<string, Row[]> = {};
-    rows.forEach(r => {
-      (out[r.meta.group] ||= []).push(r);
-    });
+    rows
+      .filter(r => court === 'all' || courtOf(r) === court)
+      .forEach(r => {
+        (out[r.meta.group] ||= []).push(r);
+      });
     return out;
-  }, [rows]);
+  }, [rows, court, acceptance]);
 
-  // ── Attention items — only what the studio must act on ─────────────────
-  const attention = useMemo(() => {
-    const items: { id: string; icon: 'query' | 'idle' | 'ready'; text: React.ReactNode; action: string; onAct: () => void }[] = [];
-    rows.forEach(r => {
-      if (!r.kind || r.mode === 'review') return;
-      if (r.openQueryCount > 0) {
-        items.push({
-          id: `q-${r.meta.id}`, icon: 'query',
-          text: <><b>Question on {r.meta.name}</b> — the client is waiting on your reply.</>,
-          action: 'Answer', onAct: () => { setExpanded(r.meta.id); }
-        });
-      }
-      if ((r.state === 'issued' || r.state === 'viewed') && r.issue) {
-        const stale = Math.floor((Date.now() - r.issue.issuedAt) / 86400000);
-        if (stale >= 3) {
-          items.push({
-            id: `idle-${r.meta.id}`, icon: 'idle',
-            text: <><b>{r.meta.name}</b> — {r.state === 'issued' ? 'sent but never opened' : 'opened, not signed'}, {ago(r.issue.issuedAt)}.</>,
-            action: 'Remind', onAct: () => setProjectContext(recordReminder(r.kind!, currentUserName, 'portal'))
-          });
-        }
-      }
-      if (r.state === 'draft' && r.readinessReady) {
-        items.push({
-          id: `ready-${r.meta.id}`, icon: 'ready',
-          text: <><b>{r.meta.name}</b> is ready to send to the client.</>,
-          action: 'Release', onAct: () => { setExpanded(r.meta.id); setReleasing(r.meta.id); setAsPack(true); setReleaseNote(''); }
-        });
-      }
-    });
-    return items;
-  }, [rows, currentUserName, setProjectContext]);
+  /*
+    The "needs you" summary that lived here is gone, and the derivation behind
+    it with it. It counted the same documents the filter chips count, from the
+    same rows, one line above them — a second tally that could only ever drift
+    from the first. `Your move` does the job and filters as well as counts.
+  */
+
 
 
   const doRelease = (kind: ClientDocumentKind) => {
@@ -297,6 +359,27 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
     }
   };
 
+  /**
+   * Send an already-released document again.
+   *
+   * `primaryFor` offers "Release to client" only in the `draft` case, so once a
+   * document had been sent there was no way to send it again from anywhere in
+   * the app — the engine has always supported it (`releaseDocument` bumps the
+   * version and stamps `supersedes`), the board simply never offered it.
+   *
+   * This reuses the same release drawer as a first send, so the studio sees the
+   * note field and the pack option before anything reaches the client.
+   */
+  const canSendAgain = (r: Row) =>
+    !!r.kind && r.available && !r.gateLocked && !!r.issue;
+
+  const sendAgain = (r: Row) => {
+    setExpanded(r.meta.id);
+    setReleasing(r.meta.id);
+    setAsPack(false);
+    setReleaseNote('');
+  };
+
   const btnCls = (v: string) =>
     v === 'primary' ? 'bg-[#0066CC] hover:bg-[#0055B3] text-white'
     : v === 'dark' ? 'bg-[#0066CC] hover:bg-[#0055B3] text-white'
@@ -319,6 +402,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
     emerald: '#10B981',
     slate:   '#CBD5E1'
   };
+
 
   const handoff = (r: Row) => {
     const age = r.issue
@@ -447,7 +531,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
             {(legacyAudit?.withdrawable?.length || 0) > 0 && (
               <ul className="space-y-1">
                 {legacyAudit.withdrawable.map(l => (
-                  <li key={l.issueId} className="text-[11.5px] text-amber-900 flex items-center gap-2">
+                  <li key={l.issueId} className="text-[11px] text-amber-900 flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                     <span className="font-semibold">{documentTitle(l.kind)}</span>
                     <span className="text-amber-700">
@@ -461,7 +545,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
 
             {(legacyAudit?.signedLegacy?.length || 0) > 0 && (
               <div className="p-2.5 rounded-lg bg-white border border-amber-200">
-                <p className="text-[11.5px] text-slate-700 leading-relaxed">
+                <p className="text-[11px] text-slate-700 leading-relaxed">
                   <strong>Left untouched:</strong>{' '}
                   {legacyAudit.signedLegacy.map(l => documentTitle(l.kind)).join(', ')} —
                   already signed. The signature and reading record stand; withdrawing them would
@@ -483,34 +567,33 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
         </div>
       )}
 
-      {/* ── Needs you ─────────────────────────────────────────────────── */}
-      {attention.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-          <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-100">
-            <span className="w-6 h-6 rounded-lg bg-amber-50 text-amber-700 grid place-items-center">
-              <AlertCircle className="w-3.5 h-3.5" />
-            </span>
-            <span className="text-[13px] font-bold text-slate-900">Needs you</span>
-            <span className="ml-auto text-[11px] font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full">
-              {attention.length} item{attention.length === 1 ? '' : 's'}
-            </span>
-          </div>
-          {attention.slice(0, 5).map(a => (
-            <div key={a.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-50 last:border-b-0">
-              <span className={`w-5 text-center ${a.icon === 'query' ? 'text-violet-600' : a.icon === 'idle' ? 'text-amber-600' : 'text-[#0066CC]'}`}>
-                {a.icon === 'query' ? <MessageCircleQuestion className="w-3.5 h-3.5 inline" /> : a.icon === 'idle' ? <Clock className="w-3.5 h-3.5 inline" /> : <Send className="w-3.5 h-3.5 inline" />}
-              </span>
-              <span className="flex-1 min-w-0 text-[13px] text-slate-600">{a.text}</span>
-              <button
-                onClick={a.onAct}
-                className={`text-[11.5px] font-bold px-3 py-1.5 rounded-lg cursor-pointer whitespace-nowrap ${a.icon === 'idle' ? 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100' : 'bg-[#0066CC] text-white hover:bg-[#0055B3]'}`}
-              >
-                {a.action}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Whose court. Derived from the same verdict each row already shows,
+          so the filter and the rows can never disagree. */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {([
+          { id: 'all',     label: 'All documents' },
+          { id: 'mine',    label: 'Your move' },
+          { id: 'client',  label: 'With the client' },
+          { id: 'settled', label: 'Settled' },
+        ] as const).map(f => {
+          const on = court === f.id;
+          const n = f.id === 'all' ? rows.length : rows.filter(r => courtOf(r) === f.id).length;
+          return (
+            <button
+              key={f.id}
+              onClick={() => setCourt(f.id)}
+              aria-pressed={on}
+              className={`px-3 py-1.5 rounded-full text-[11px] font-bold cursor-pointer border transition-colors ${
+                on ? 'bg-sky-50 text-[#0055B3] border-sky-200'
+                   : 'text-slate-500 border-slate-200 hover:border-sky-300 hover:text-[#0055B3]'
+              }`}
+            >
+              {f.label}
+              <span className="ml-1.5 tabular-nums font-extrabold opacity-70">{n}</span>
+            </button>
+          );
+        })}
+      </div>
 
       {/* ── The list ──────────────────────────────────────────────────── */}
       {GROUPS.map(group => {
@@ -524,103 +607,153 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
               <span className="text-[11px] font-semibold text-slate-400">{items.length}</span>
             </div>
 
-            {/* Handoff cards. A document is a thing that travels between two
-                parties, so the card is built around the one question the studio
-                actually has: whose court is it in? Each card is a Studio pane
-                and a Client pane with an arrow between them, and the arrow
-                points at whoever owes the next move. The left edge carries the
-                same colour, so the grid can be read down its margin. */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5">
-            {items.map(r => {
+            {/*
+              One document, one line.
+
+              This was a two-column grid of cards, each carrying a coloured
+              edge, a Studio pane, a Client pane, an arrow between them, a
+              verdict and three buttons. Twelve of those is a wall: cards of
+              unequal height, nothing to scan down, and the same information
+              stated four ways on every one.
+
+              A document is a sentence — what it is, where it has got to, and
+              who owes the next move — so it is set as one. Everything else
+              waits for hover or for the drawer. The list is layout-animated,
+              so filtering reflows rather than repaints.
+            */}
+            <motion.div layout className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+            <AnimatePresence initial={false} mode="popLayout">
+            {items.map((r, i) => {
               const isOpen = expanded === r.meta.id;
-              const modeChip = MODE_CHIP[r.mode];
               const primary = primaryFor(r);
               const hand = handoff(r);
+              const mine = courtOf(r) === 'mine';
+              const settled = courtOf(r) === 'settled';
+              const proposalDone = isProposalRow(r) && acceptance.accepted;
+
+              /* The one line that says where this stands. */
+              const sentence = proposalDone
+                ? `${acceptance.tierName || 'Proposal'}${acceptance.amount != null ? ` · ${formatINR(acceptance.amount)}` : ''} — accepted${acceptance.acceptedBy ? ` by ${acceptance.acceptedBy}` : ''}`
+                : !r.kind || !r.available || r.gateLocked
+                  ? subLine(r)
+                  : `${hand.studio.text} · ${hand.client.text}`;
+
+              const orb = proposalDone || settled ? 'bg-emerald-500'
+                : mine ? 'bg-amber-500'
+                : 'bg-violet-500';
 
               return (
-                <div
+                <motion.div
                   key={r.meta.id}
-                  className={`bg-white border transition-colors flex flex-col ${
-                    isOpen ? 'border-[#0066CC]/45 xl:col-span-2' : 'border-slate-200 hover:border-[#0066CC]/30'
+                  layout
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4, transition: { duration: 0.15 } }}
+                  transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.18), ease: [0.22, 1, 0.36, 1] }}
+                  className={`group border-b border-slate-100 last:border-b-0 transition-colors ${
+                    isOpen ? 'bg-sky-50/40' : 'hover:bg-slate-50/70'
                   }`}
-                  /* Square, with a single coloured left edge — a rounded card
-                     with a one-sided accent reads as a mistake. */
-                  style={{ borderLeftWidth: 3, borderLeftColor: hand.edge }}
                 >
-                  <div className="p-3.5 flex flex-col gap-3">
-                    {/* Identity */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h4 className="text-[13.5px] font-bold text-slate-800 leading-snug">{r.meta.name}</h4>
-                        <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-                          {[
-                            r.issue ? `v${r.issue.version}` : 'draft',
-                            r.issue?.reference,
-                            modeChip?.label.toLowerCase()
-                          ].filter(Boolean).join(' · ')}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="px-4 py-3 flex items-center gap-3.5">
+
+                    {/* Whose court, before any words. Pulses only when it is ours. */}
+                    <span className="relative flex w-2 h-2 shrink-0">
+                      {mine && !proposalDone && (
+                        <span className={`absolute inline-flex w-full h-full rounded-full opacity-60 animate-ping ${orb}`} />
+                      )}
+                      <span className={`relative inline-flex w-2 h-2 rounded-full ${orb}`} />
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <h4 className="text-[13px] font-bold text-slate-900 leading-snug">{r.meta.name}</h4>
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {[r.issue ? `v${r.issue.version}` : null, r.issue?.reference].filter(Boolean).join(' · ')}
+                        </span>
                         {r.unsignedAddenda > 0 && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">
-                            +{r.unsignedAddenda}
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                            +{r.unsignedAddenda} unsigned
                           </span>
                         )}
-                        <span className="text-[11px] text-slate-400 whitespace-nowrap">{hand.age}</span>
                       </div>
+                      <p className="text-[11.5px] text-slate-500 font-medium mt-0.5 truncate">{sentence}</p>
                     </div>
 
-                    {/* The handoff itself */}
-                    {r.kind && r.available && !r.gateLocked ? (
-                      <div className="flex items-stretch">
-                        <div className={`flex-1 min-w-0 px-2.5 py-2 border rounded-l-lg border-r-0 ${hand.studio.cls}`}>
-                          <p className={`text-[10px] font-bold uppercase tracking-wider ${hand.studio.label}`}>Studio</p>
-                          <p className="text-[11.5px] font-semibold mt-0.5 truncate">{hand.studio.text}</p>
-                        </div>
-                        <div className={`w-7 shrink-0 grid place-items-center border-t border-b ${hand.arrow.cls}`}>
-                          {hand.arrow.dir === 'right' ? <ArrowRight className="w-3.5 h-3.5" />
-                            : hand.arrow.dir === 'left' ? <ArrowLeft className="w-3.5 h-3.5" />
-                            : <Check className="w-3.5 h-3.5" />}
-                        </div>
-                        <div className={`flex-1 min-w-0 px-2.5 py-2 border rounded-r-lg border-l-0 ${hand.client.cls}`}>
-                          <p className={`text-[10px] font-bold uppercase tracking-wider ${hand.client.label}`}>Client</p>
-                          <p className="text-[11.5px] font-semibold mt-0.5 truncate">{hand.client.text}</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="px-2.5 py-2 rounded-lg border border-slate-200 bg-slate-50 flex items-center gap-2">
-                        <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <p className="text-[11.5px] text-slate-500">{subLine(r)}</p>
+                    {r.kind && r.available && !r.gateLocked && (
+                      <div className="hidden lg:block shrink-0">
+                        <ProgressRail state={r.state} mode={r.mode} />
                       </div>
                     )}
 
-                    {/* Whose move, and the one thing to do about it */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`text-[11.5px] font-semibold ${hand.verdictCls}`}>{hand.verdict}</span>
-                      <div className="flex items-center gap-1">
+                    <span className="text-[10.5px] text-slate-400 whitespace-nowrap shrink-0 w-10 text-right">
+                      {hand.age}
+                    </span>
+
+                    {/* Primary always; the rest on hover or focus, so twelve rows
+                        are not thirty-six competing buttons. */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* The one action the summary line used to own. Offered
+                          where it applies: sent, unopened or unsigned, quiet
+                          for three days or more. */}
+                      {r.issue && (r.state === 'issued' || r.state === 'viewed')
+                        && Math.floor((Date.now() - r.issue.issuedAt) / 86400000) >= 3 && (
                         <button
-                          onClick={primary.onClick}
-                          disabled={primary.variant === 'locked'}
-                          className={`text-[11.5px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap ${primary.variant !== 'locked' ? 'cursor-pointer' : ''} ${btnCls(primary.variant)}`}
+                          onClick={() => setProjectContext(recordReminder(r.kind!, currentUserName, 'portal'))}
+                          title="Log a reminder to the client"
+                          className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg whitespace-nowrap text-slate-500
+                                     hover:text-[#0055B3] hover:bg-sky-50 cursor-pointer transition-all
+                                     opacity-0 group-hover:opacity-100 focus:opacity-100"
                         >
-                          {primary.label}
+                          Remind
                         </button>
-                        {r.kind && r.available && !r.gateLocked && (
-                          <button
-                            onClick={() => setExpanded(isOpen ? null : r.meta.id)}
-                            className="text-[11px] font-bold text-slate-400 hover:text-[#0066CC] px-2 py-1.5 rounded-lg hover:bg-[#0066CC]/8 cursor-pointer flex items-center gap-0.5"
-                          >
-                            {isOpen ? 'Less' : 'Details'}
-                            {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                          </button>
-                        )}
-                      </div>
+                      )}
+                      {canSendAgain(r) && (
+                        <button
+                          onClick={() => sendAgain(r)}
+                          title="Issue a new version to the client"
+                          className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg whitespace-nowrap text-slate-500
+                                     hover:text-[#0055B3] hover:bg-sky-50 cursor-pointer transition-all
+                                     opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        >
+                          Send again
+                        </button>
+                      )}
+                      <button
+                        onClick={primary.onClick}
+                        disabled={primary.variant === 'locked'}
+                        className={`text-[11px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${primary.variant !== 'locked' ? 'cursor-pointer' : ''} ${btnCls(primary.variant)}`}
+                      >
+                        {primary.label}
+                      </button>
+                      {r.kind && r.available && !r.gateLocked && (
+                        <button
+                          onClick={() => setExpanded(isOpen ? null : r.meta.id)}
+                          aria-expanded={isOpen}
+                          aria-label={isOpen ? 'Hide details' : 'Show details'}
+                          className="text-slate-400 hover:text-[#0066CC] p-1.5 rounded-lg hover:bg-sky-50 cursor-pointer transition-colors"
+                        >
+                          <motion.span animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.2 }} className="block">
+                            <ChevronRight className="w-4 h-4" />
+                          </motion.span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
-
                   {/* ── Drawer ────────────────────────────────────────── */}
+                  {/* Opens rather than appears. A panel this tall arriving in one
+                      frame moves everything below it with no explanation; the
+                      height transition shows where the space came from. */}
+                  <AnimatePresence initial={false}>
                   {isOpen && r.kind && (
+                    <motion.div
+                      key="drawer"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                      className="overflow-hidden"
+                    >
                     <div className="border-t border-dashed border-slate-200 bg-slate-50/70 p-4 sm:p-5 space-y-5">
                       {/* The document itself. Once the studio has chosen to open
                           one, the first thing it should see is the paper — not a
@@ -649,7 +782,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                                 </div>
                               ))}
                             </dl>
-                            <p className="text-[11.5px] text-slate-500 leading-relaxed pt-1">
+                            <p className="text-[11px] text-slate-500 leading-relaxed pt-1">
                               This is the frozen copy in {projectContext.clientName || 'the client'}&rsquo;s portal.
                               Editing the studio page will not change it — that takes a re-issue.
                             </p>
@@ -657,23 +790,42 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                         </div>
                       )}
 
-                      {/* Release confirmation */}
-                      {r.state === 'draft' && (
+                      {/* Release confirmation.
+                          Also shown when the studio has asked to send an
+                          already-released document again — this was gated on
+                          `draft` alone, so "Send again" opened the drawer onto
+                          a panel that could never render and the button did
+                          nothing at all. */}
+                      {(r.state === 'draft' || releasing === r.meta.id) && (
                         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
                           <div className="flex items-center gap-2">
                             <Send className="w-4 h-4 text-[#0066CC]" />
-                            <h4 className="text-[13px] font-bold text-slate-900">Release {r.meta.name} to the client</h4>
+                            <h4 className="text-[13px] font-bold text-slate-900">
+                              {r.issue
+                                ? `Re-issue ${r.meta.name} as v${(r.issue.version || 1) + 1}`
+                                : `Release ${r.meta.name} to the client`}
+                            </h4>
                           </div>
                           <p className="text-[12px] text-slate-600 leading-relaxed">
-                            A copy is frozen now and appears in {projectContext.clientName || 'the client'}&rsquo;s
-                            portal. Later edits here won&rsquo;t change what they read or sign.
+                            {r.issue ? (
+                              <>
+                                A fresh copy is frozen now. {projectContext.clientName || 'The client'} keeps
+                                reading v{r.issue.version || 1} until you publish the new one from the portal
+                                controls{r.issue.clientSignature || r.state === 'signed' ? ', and will be asked to sign again' : ''}.
+                              </>
+                            ) : (
+                              <>
+                                A copy is frozen now and appears in {projectContext.clientName || 'the client'}&rsquo;s
+                                portal once published. Later edits here won&rsquo;t change what they read or sign.
+                              </>
+                            )}
                           </p>
                           {(() => {
                             const def = RELEASABLE_DOCUMENTS.find(d => d.kind === r.kind);
                             return def?.packWith && def.packWith.length > 0 ? (
                               <label className="flex items-start gap-2.5 p-2.5 rounded-lg bg-[#0066CC]/8 border border-[#0066CC]/15 cursor-pointer">
                                 <input type="checkbox" checked={asPack} onChange={e => setAsPack(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#0066CC]" />
-                                <span className="text-[11.5px] text-slate-600 leading-relaxed">
+                                <span className="text-[11px] text-slate-600 leading-relaxed">
                                   <b className="text-slate-900 flex items-center gap-1"><Layers className="w-3 h-3" />Send as a pack</b>
                                   Also release {def.packWith.map(k => documentTitle(k)).join(' and ')} — these normally go together.
                                 </span>
@@ -711,7 +863,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                           <div>
                             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Client activity</div>
-                            <ul className="text-[12.5px] text-slate-600 space-y-1.5">
+                            <ul className="text-[12px] text-slate-600 space-y-1.5">
                               <li className="flex gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" /><span><b className="text-slate-800">Released</b> · v{r.issue.version} {ago(r.issue.issuedAt)}</span></li>
                               {r.lastViewed && <li className="flex gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" /><span><b className="text-slate-800">Opened</b> {ago(r.lastViewed)}</span></li>}
                               {r.openQueryCount > 0 && <li className="flex gap-2"><span className="w-1.5 h-1.5 rounded-full bg-violet-500 mt-1.5 shrink-0" /><span><b className="text-slate-800">Asked a question</b></span></li>}
@@ -762,16 +914,19 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
 
                       {/* Footer utilities */}
                       <div className="flex items-center gap-3 pt-1">
-                        <button onClick={() => onNavigate(r.meta.id)} className="text-[11.5px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer flex items-center gap-1.5">
+                        <button onClick={() => onNavigate(r.meta.id)} className="text-[11px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer flex items-center gap-1.5">
                           <ExternalLink className="w-3.5 h-3.5" /> Open in workspace to edit
                         </button>
                       </div>
                     </div>
+                    </motion.div>
                   )}
-                </div>
+                  </AnimatePresence>
+                </motion.div>
               );
             })}
-            </div>
+            </AnimatePresence>
+            </motion.div>
           </div>
         );
       })}

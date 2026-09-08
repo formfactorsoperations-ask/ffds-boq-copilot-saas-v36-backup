@@ -6,6 +6,7 @@ import { Download, Rocket, Edit3 } from 'lucide-react';
 import { useOrg } from '../../contexts/OrgContext';
 import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
+import { resolveProposalAcceptance } from '../../services/proposalAcceptanceService';
 
 interface OnboardingKitPageProps {
     projectContext: ProjectContext;
@@ -13,25 +14,42 @@ interface OnboardingKitPageProps {
 }
 
 export default function OnboardingKitPage({ projectContext, setProjectContext }: OnboardingKitPageProps) {
-    const isContractSigned = projectContext?.executionSignoff?.status === 'signed' || projectContext?.contractSignoff?.status === 'signed';
-    const isDesignAgreementSigned = projectContext?.designAgreementSignoff?.status === 'signed';
-    
-    if (!isContractSigned || !isDesignAgreementSigned) {
+    /*
+      The gate: the client has accepted the proposal.
+
+      It used to require the Execution Contract AND the Design Agreement to be
+      signed, which put the welcome pack after the two documents it exists to
+      prepare the client for — onboarding could only happen once there was
+      nothing left to onboard anyone into. Acceptance is the point at which the
+      engagement becomes real and the client starts needing to know what
+      happens next, so that is what opens it.
+
+      Read through the acceptance service rather than off the context, so this
+      screen and the Documents board agree on what "accepted" means.
+
+      useOrg() now runs before the early return. It sat below it, so the hook
+      count changed the moment the gate opened — a rules-of-hooks violation,
+      and a crash waiting for whichever project flipped state while this page
+      was mounted.
+    */
+    const { orgData } = useOrg();
+    const acceptance = resolveProposalAcceptance(projectContext);
+
+    if (!acceptance.accepted) {
         return (
             <div className="w-full space-y-6">
-                <LockedState 
-                    title="Booking Pack Locked" 
-                    prerequisite="Contract & Design Agreement" 
-                    why="The Booking Pack can only be generated after both the Execution Contract and Design Agreement are signed by the client." 
-                    actionLabel="Go to Agreements" 
-                    onAction={() => window.dispatchEvent(new CustomEvent('change-tab', { detail: 'execution-agreement' }))}
+                <LockedState
+                    title="Onboarding Kit Locked"
+                    prerequisite="Proposal acceptance"
+                    why="The Onboarding Kit is issued once the client has accepted the proposal. Record the acceptance on the Client Proposal screen and this opens straight away."
+                    actionLabel="Go to Client Proposal"
+                    onAction={() => window.dispatchEvent(new CustomEvent('change-tab', { detail: 'client' }))}
                 />
             </div>
         );
     }
 
-    const { orgData } = useOrg();
-    
+
     const studioName = orgData?.orgName || 'Form Factors Design Studio';
     const clientName = projectContext.clientName || 'Valued Client';
     const projectName = projectContext.name || 'Untitled Project';
@@ -122,7 +140,7 @@ export default function OnboardingKitPage({ projectContext, setProjectContext }:
                     </button>
                     <button
                         onClick={handleDownloadPdf}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded hover:bg-slate-700 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-[#0066CC] text-white text-sm font-medium rounded-lg hover:bg-[#0055B3] transition-colors"
                     >
                         <Download className="w-4 h-4" />
                         Download PDF

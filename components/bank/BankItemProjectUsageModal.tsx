@@ -290,7 +290,7 @@ const BankItemProjectUsageModal: React.FC<BankItemProjectUsageModalProps> = ({
           <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
             <button
               onClick={onClose}
-              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              className="px-5 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
             >
               Close
             </button>

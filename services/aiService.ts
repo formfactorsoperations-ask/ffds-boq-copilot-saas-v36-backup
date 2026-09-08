@@ -1,9 +1,5 @@
 import { getAi } from './aiClient';
 
-// Initialize the Gemini API client
-// In this environment, process.env.GEMINI_API_KEY is automatically available
-const ai = getAi();
-
 export interface ExtractedMaterial {
     roomId: string;
     itemName: string;
@@ -30,6 +26,11 @@ Keys for each object:
 Text to parse:
 "${text}"
 `;
+
+        // Resolved per call, not at module load: getAi() throws when
+        // GEMINI_API_KEY is unset, and at module scope that failure breaks the
+        // dynamic import of every screen that pulls this file in.
+        const ai = getAi();
 
         const response = await ai.models.generateContent({
             model: 'gemini-3.6-flash',

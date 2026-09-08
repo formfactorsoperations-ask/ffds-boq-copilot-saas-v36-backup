@@ -1,4 +1,14 @@
 @import "tailwindcss";
+@import "./typography.css";
+
+/* Tailwind v4 reads its theme from CSS, not tailwind.config.js -- there is no
+   @config directive here, so the fontFamily block in that file was never being
+   applied. `font-display` silently fell back to the default sans until these
+   were declared. */
+@theme {
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-display: "Outfit", "Plus Jakarta Sans", system-ui, sans-serif;
+}
 
 :root {
   --sidebar-w: 16rem;
@@ -35,7 +45,7 @@ p, h1, h2, h3, h4, h5, h6, span {
 
 
 body {
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  /* font-family lives in typography.css */
   background-color: #f8fafc;
   color: #0f172a;
 }
@@ -56,4 +66,703 @@ body {
   display: inline-block;
   backface-visibility: hidden;
   animation: flipTextChar var(--flip-duration, 2.2s) cubic-bezier(0.4, 0, 0.2, 1) var(--flip-delay, 0s) var(--flip-iteration, infinite);
+}
+
+/* A heading that rotates is the one piece of motion a reader cannot look away
+   from, so it is the first thing to drop when motion is unwelcome. */
+@media (prefers-reduced-motion: reduce) {
+  .flip-char { animation: none !important; }
+}
+
+
+/* ── Layout under the studio bar ──────────────────────────────────────────
+   The studio navigation is a fixed top bar, so the app body is offset by its
+   height. `--topbar-h` is published by components/Header.tsx and falls back
+   to zero — on mobile, and wherever the bar is hidden, these behave exactly
+   as h-screen / min-h-screen did before. */
+:root { --topbar-h: 0px; }
+
+.app-fill,
+.ws-fill { margin-top: var(--topbar-h, 0px); }
+
+.app-fill { min-height: calc(100vh - var(--topbar-h, 0px)); }
+
+@media (min-width: 768px) {
+  /* The project workspace fills the viewport exactly and scrolls internally. */
+  .ws-fill { height: calc(100vh - var(--topbar-h, 0px)); overflow: hidden; }
+}
+
+
+/* The studio bar's sliding indicator holds still for anyone who asked it to. */
+/* ── Document cells ───────────────────────────────────────────────────────
+   Six hexagonal cells, not a bar. The project card already carries a
+   segmented progress bar; a second segmented bar underneath it read as the
+   same instrument twice, so the document state is drawn as a reactor-style
+   cell cluster that cannot be mistaken for progress. */
+@keyframes hud-cell {
+  0%   { opacity: 0; transform: scale(.35); }
+  62%  { opacity: 1; transform: scale(1.14); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes hud-cell-alert {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .32; }
+}
+@keyframes hud-cell-ring {
+  0%   { opacity: 0; transform: scale(.6); }
+  55%  { opacity: .9; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+.hud-cell {
+  transform-box: fill-box; transform-origin: center;
+  animation: hud-cell .5s cubic-bezier(.22,1,.36,1) backwards;
+}
+.hud-cell-alert {
+  transform-box: fill-box; transform-origin: center;
+  animation: hud-cell-alert 2s ease-in-out infinite;
+}
+.hud-cell-ring {
+  transform-box: fill-box; transform-origin: center;
+  opacity: 0;
+  animation: hud-cell-ring 1s cubic-bezier(.22,1,.36,1) .5s backwards;
+}
+
+/* ── Document ring ────────────────────────────────────────────────────────
+   One arc per document. Arcs fade up in lifecycle order, a bright cyan
+   tracer runs the ring once as it powers on, and each label ticks in behind
+   its own arc so the name and the state arrive together. */
+@keyframes hud-arc   { from { opacity: 0; } to { opacity: 1; } }
+/* A segment sweeps into existence along the ring rather than fading on. The
+   dash length arrives as --seg so one keyframe serves all six; if a browser
+   ever failed to substitute it the inline dashoffset of 0 still leaves the
+   segment fully drawn, so the ring degrades to correct-but-static. */
+@keyframes hud-seg   { from { stroke-dashoffset: var(--seg); } to { stroke-dashoffset: 0; } }
+@keyframes hud-trace {
+  0%   { transform: rotate(-90deg); opacity: 0; }
+  12%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: rotate(270deg); opacity: 0; }
+}
+@keyframes hud-tick  {
+  0%   { opacity: 0; transform: scale(.3); }
+  60%  { opacity: 1; transform: scale(1.25); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes hud-wait  { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+
+.hud-arc   { animation: hud-arc .45s ease-out backwards; }
+.hud-seg   { animation: hud-seg .6s cubic-bezier(.22,1,.36,1) backwards; }
+.hud-trace {
+  transform-origin: center;
+  /* The tracer runs one lap and goes. Without a base opacity it reverts to its
+     static position after the animation and parks a cyan arc on the ring --
+     which reads as a real document status and is the third time this
+     fill-mode trap has bitten in this file. */
+  opacity: 0;
+  animation: hud-trace 1.15s cubic-bezier(.4,0,.2,1) .1s backwards;
+}
+.hud-tick  { animation: hud-tick .42s cubic-bezier(.22,1,.36,1) backwards; }
+.hud-wait  { animation: hud-wait 2.2s ease-in-out infinite; }
+
+/* ── Aurora ───────────────────────────────────────────────────────────────
+   Light, not dark. The studio's surfaces are milky white; a heavy navy slab
+   across the top of the home page fought that and read as oppressive. Three
+   slow-drifting colour fields under a white glass panel give the same sense of
+   depth while keeping the page bright. Long cycles and prime-ish durations so
+   the loops never visibly sync up. */
+@keyframes aurora-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(7%, -5%, 0) scale(1.18); }
+}
+@keyframes aurora-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.06); }
+  50%      { transform: translate3d(-8%, 6%, 0) scale(1); }
+}
+@keyframes aurora-c {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(5%, 8%, 0) scale(1.14); }
+}
+/* One sheen across the panel as it arrives. */
+@keyframes hero-sheen {
+  0%   { transform: translateX(-140%) skewX(-14deg); opacity: 0; }
+  12%  { opacity: .55; }
+  100% { transform: translateX(340%) skewX(-14deg); opacity: 0; }
+}
+
+.aurora-a { animation: aurora-a 29s ease-in-out infinite; }
+.aurora-b { animation: aurora-b 37s ease-in-out infinite; }
+.aurora-c { animation: aurora-c 23s ease-in-out infinite; }
+.hero-sheen {
+  opacity: 0;
+  animation: hero-sheen 2.2s cubic-bezier(.4, 0, .2, 1) .25s;
+}
+
+/* ── Portfolio orbit ──────────────────────────────────────────────────────
+   Every live project is a node. They drift on their own clock -- duration and
+   delay are derived from the project id -- so the field breathes organically
+   instead of pulsing in lockstep, which is what makes it read as alive rather
+   than as a loading state. */
+@keyframes orbit-float {
+  0%, 100% { transform: translate(0, 0); }
+  33%      { transform: translate(2.5px, -4px); }
+  66%      { transform: translate(-2px, 3px); }
+}
+@keyframes orbit-halo {
+  0%, 100% { opacity: .18; transform: scale(1); }
+  50%      { opacity: .38; transform: scale(1.45); }
+}
+@keyframes orbit-in {
+  from { opacity: 0; transform: scale(.2); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.orbit-node { animation: orbit-float var(--dur, 9s) ease-in-out infinite; }
+.orbit-halo { transform-box: fill-box; transform-origin: center;
+              animation: orbit-halo var(--dur, 9s) ease-in-out infinite; }
+.orbit-in   { transform-box: fill-box; transform-origin: center;
+              animation: orbit-in .6s cubic-bezier(.22,1,.36,1) backwards; }
+
+/* ── Seamless marquee ─────────────────────────────────────────────────────
+   The track holds the list twice and slides exactly -50%, so the moment it
+   reaches the end of the first copy it is pixel-identical to the start and the
+   loop is invisible. Pure CSS, so it never touches the main thread. */
+@keyframes marquee-x {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marquee-x var(--speed, 42s) linear infinite;
+  width: max-content;
+}
+.marquee-viewport:hover .marquee-track { animation-play-state: paused; }
+.marquee-viewport {
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none !important; }
+  .orbit-node, .orbit-halo, .orbit-in { animation: none !important; }
+  .aurora-a, .aurora-b, .aurora-c, .hero-sheen { animation: none !important; }
+  .hero-sheen { display: none !important; }
+  .nav-pill { transition: none !important; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   STUDIO BAR — HUD
+   Arc-reactor and targeting-reticle language, rendered in the studio's own
+   sky blue rather than in dark armour, so it reads as instrumentation
+   without fighting the milky-white surfaces everywhere else.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes hud-sweep  { 0% { transform:translateX(-120%); opacity:0; }
+                        18% { opacity:.95; }
+                        100% { transform:translateX(430%); opacity:0; } }
+@keyframes hud-rail   { 0% { background-position:0% 50%; } 100% { background-position:200% 50%; } }
+@keyframes hud-rise   { from { opacity:0; transform:translateY(7px); }
+                        to   { opacity:1; transform:none; } }
+@keyframes hud-echo   { 0%   { opacity:.34; transform:scaleX(1); }
+                        100% { opacity:0;   transform:scaleX(.55); } }
+
+/* The energy rail along the bottom edge of a bar. */
+.hud-rail {
+  background: linear-gradient(90deg,
+    transparent 0%, rgba(0,102,204,.30) 18%, rgba(34,211,238,.85) 32%,
+    rgba(0,102,204,.30) 46%, transparent 64%, transparent 100%);
+  background-size: 200% 100%;
+  animation: hud-rail 9s linear infinite;
+}
+
+/* The reticle that locks onto the active destination. */
+.hud-reticle {
+  box-shadow:
+    0 0 0 1px rgba(34,211,238,.55),
+    0 6px 16px rgba(0,102,204,.34),
+    0 0 22px rgba(34,211,238,.28);
+}
+.hud-reticle::before,
+.hud-reticle::after {
+  content: ""; position: absolute; width: 7px; height: 7px;
+  border-color: rgba(103,232,249,.95); pointer-events: none;
+}
+.hud-reticle::before { top:-2.5px; left:-2.5px;  border-top:1.5px solid; border-left:1.5px solid;  border-top-left-radius:3px; }
+.hud-reticle::after  { bottom:-2.5px; right:-2.5px; border-bottom:1.5px solid; border-right:1.5px solid; border-bottom-right-radius:3px; }
+
+.hud-sweep { background: linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent);
+             animation: hud-sweep .62s cubic-bezier(.4,0,.2,1); }
+
+/* The echo the reticle leaves behind at the position it launched from. */
+.hud-echo  { animation: hud-echo .5s cubic-bezier(.4,0,.2,1) forwards; }
+
+/* Nav items arriving in sequence, once, on mount. */
+.hud-rise  { animation: hud-rise .5s cubic-bezier(.22,1,.36,1) backwards; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CHART INSTRUMENTS — HUD
+   The same targeting language as the studio bar, applied to readouts. Bars
+   CHARGE rather than appear: they run up from zero with a bright leading edge,
+   which is what makes a meter read as live instrumentation. Every animation
+   plays once on mount -- a chart that keeps moving stops being a chart.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* A bar charging to its value. The width is set inline; this scales the fill
+   from 0 so the number and the motion always agree. */
+@keyframes hud-charge { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* The bright edge that leads a charging bar, then fades. */
+@keyframes hud-edge {
+  0%   { opacity: 0; }
+  12%  { opacity: .95; }
+  85%  { opacity: .55; }
+  100% { opacity: 0; }
+}
+
+/* A single scan pass over a panel on mount. */
+@keyframes hud-scan {
+  0%   { transform: translateX(-60%); opacity: 0; }
+  10%  { opacity: .55; }
+  90%  { opacity: .25; }
+  100% { transform: translateX(320%); opacity: 0; }
+}
+
+/* Lock-on flash for a gauge that has finished drawing. */
+@keyframes hud-lock {
+  0%   { opacity: 0; transform: scale(.86); }
+  55%  { opacity: .75; transform: scale(1.03); }
+  100% { opacity: 0; transform: scale(1.12); }
+}
+
+/* Critical readings breathe. Nothing else does. */
+@keyframes hud-alert {
+  0%,100% { opacity: .30; }
+  50%     { opacity: .05; }
+}
+
+/* Rows arriving in sequence. */
+@keyframes hud-row { from { opacity: 0; transform: translateX(-8px); }
+                     to   { opacity: 1; transform: none; } }
+
+.hud-charge {
+  transform-origin: left center;
+  animation: hud-charge .85s cubic-bezier(.22,1,.36,1) backwards;
+}
+.hud-edge {
+  position: absolute; top: 0; bottom: 0; width: 2px;
+  background: linear-gradient(180deg, transparent, rgba(103,232,249,.95), transparent);
+  box-shadow: 0 0 8px rgba(34,211,238,.9), 0 0 16px rgba(34,211,238,.5);
+  animation: hud-edge 1.15s ease-out backwards;
+  pointer-events: none;
+}
+.hud-scan {
+  position: absolute; top: 0; bottom: 0; width: 28%;
+  background: linear-gradient(90deg, transparent, rgba(34,211,238,.22), transparent);
+  /* Base opacity 0. `backwards` fills only the pre-delay state, so without this
+     the sweep parks itself fully visible once the animation ends -- it left a
+     pale blue block sitting over the first third of every instrument. */
+  opacity: 0;
+  animation: hud-scan 1.5s cubic-bezier(.4,0,.2,1) .15s backwards;
+  pointer-events: none;
+}
+.hud-lock {
+  position: absolute; inset: -6px; border-radius: 999px;
+  border: 1.5px solid rgba(34,211,238,.8);
+  /* Base opacity 0: `backwards` only fills the pre-delay state, so without this
+     the ring settles fully visible after the flash instead of vanishing. */
+  opacity: 0;
+  animation: hud-lock .9s cubic-bezier(.22,1,.36,1) .55s backwards;
+  pointer-events: none;
+}
+.hud-alert { animation: hud-alert 2.2s ease-in-out infinite; }
+.hud-row   { animation: hud-row .5s cubic-bezier(.22,1,.36,1) backwards; }
+
+/* Corner brackets that frame a readout, as on the reticle. */
+.hud-frame { position: relative; }
+.hud-frame::before,
+.hud-frame::after {
+  content: ""; position: absolute; width: 10px; height: 10px;
+  border-color: rgba(0,102,204,.45); pointer-events: none;
+}
+.hud-frame::before { top:6px; left:6px;  border-top:1.5px solid; border-left:1.5px solid;  border-top-left-radius:4px; }
+.hud-frame::after  { bottom:6px; right:6px; border-bottom:1.5px solid; border-right:1.5px solid; border-bottom-right-radius:4px; }
+/* On dark instrument panels the brackets pick up the cyan instead. */
+.hud-frame-dark::before, .hud-frame-dark::after { border-color: rgba(103,232,249,.55); }
+
+/* Faint instrument grid behind a bar track. */
+.hud-grid {
+  background-image: repeating-linear-gradient(90deg,
+    rgba(0,102,204,.10) 0 1px, transparent 1px 25%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-pill { transition: none !important; }
+  .hud-rail, .hud-sweep, .hud-rise, .hud-echo,
+  .hud-charge, .hud-edge, .hud-scan, .hud-lock, .hud-alert, .hud-row,
+  .hud-cell, .hud-cell-alert, .hud-cell-ring,
+  .hud-arc, .hud-seg, .hud-trace, .hud-tick, .hud-wait {
+    animation: none !important;
+  }
+  .hud-edge, .hud-scan, .hud-lock, .hud-cell-ring, .hud-trace { display: none !important; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LANDING — ORBIT VARIANT  (.lpo-*)
+   A second public page, kept entirely separate from the first so either can
+   be shown without touching the other. Everything here is prefixed `lpo-`.
+
+   The palette is the studio's own: brand blue, gold, ink. The reference this
+   layout came from is violet throughout; none of that carries over.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Rotating conic border. @property is what makes the angle animatable at all
+   -- a plain custom property is a string to the animation engine and would
+   simply jump from 0deg to 360deg. */
+@property --lpo-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes lpo-border-spin { to { --lpo-angle: 360deg; } }
+
+.lpo-border-wrap { position: relative; border-radius: 50px; isolation: isolate; }
+.lpo-border-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(from var(--lpo-angle),
+    #0066CC, #B5945B, #0066CC, #0A1B33, #0066CC);
+  /* Mask-composite leaves only the padding ring painted, which is how you get
+     a gradient *border* rather than a gradient card behind the button. */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: lpo-border-spin 3s linear infinite;
+  pointer-events: none;
+}
+
+/* ── Orbits ─────────────────────────────────────────────────────────────
+   The ring carries the -50% centring inside its own keyframes, because a
+   `transform` on the element would otherwise be overwritten by the animation. */
+@keyframes lpo-orbit-cw {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+@keyframes lpo-orbit-ccw {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(-360deg); }
+}
+/* Cancels the parent ring's spin so chips and the counter stay upright. */
+@keyframes lpo-upright-cw  { to { transform: rotate(360deg); } }
+@keyframes lpo-upright-ccw { to { transform: rotate(-360deg); } }
+
+.lpo-orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  animation: var(--lpo-dir) var(--lpo-dur) linear infinite;
+  /* A ring is a full circular box, and the rings are stacked largest-last, so
+     the outer ring's box lies over every inner ring and swallowed clicks on
+     the tiles riding them -- the inner tiles looked interactive and did
+     nothing. The rings are decoration; only what rides them is a target. */
+  pointer-events: none;
+}
+.lpo-orbit button,
+.lpo-orbit a,
+.lpo-orbit [role="button"] { pointer-events: auto; }
+.lpo-orbit::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  padding: 1px;
+  background: linear-gradient(180deg,
+    rgba(0, 102, 204, 0) 0%,
+    rgba(0, 102, 204, 0.9) 43%,
+    rgba(0, 102, 204, 0) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+}
+.lpo-orbit.lpo-gold::before {
+  background: linear-gradient(180deg,
+    rgba(181, 148, 91, 0) 0%,
+    rgba(181, 148, 91, 0.9) 43%,
+    rgba(181, 148, 91, 0) 100%);
+}
+.lpo-upright { animation: var(--lpo-anti) var(--lpo-dur) linear infinite; }
+
+/* ── Video duotone ──────────────────────────────────────────────────────
+   Desaturate first, then blend the brand hue in with `color`. Tinting the
+   original footage directly would fight the blue already in it and land on a
+   muddy in-between; stripping the chroma first means the hue we get is ours. */
+.lpo-video { filter: grayscale(1) contrast(1.18) brightness(1.04); }
+.lpo-duo-blue { mix-blend-mode: multiply; background: #0066CC; opacity: 0.55; }
+.lpo-duo-gold {
+  mix-blend-mode: screen;
+  background: linear-gradient(120deg, rgba(181, 148, 91, 0.55) 0%, transparent 62%);
+  opacity: 0.6;
+}
+
+/* ── Stage sizing ──────────────────────────────────────────────────────
+   A ring stage is laid out at full size and then scaled down. The catch:
+   `transform: scale()` is a paint-time effect and does NOT change layout size,
+   so an 830px stage drawn at 0.42 still reserves 830px of height and leaves a
+   large dead gap under the artwork.
+
+   So the box takes the SCALED size and the stage is centred inside it
+   absolutely. Both are derived from the same two variables, which means the
+   reserved space can never drift out of step with what is drawn -- only
+   --lpo-scale changes per breakpoint. */
+.lpo-stage-box {
+  position: relative;
+  flex-shrink: 0;
+  width: calc(var(--lpo-size) * var(--lpo-scale));
+  height: calc(var(--lpo-size) * var(--lpo-scale));
+}
+.lpo-stage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--lpo-size);
+  height: var(--lpo-size);
+  transform: translate(-50%, -50%) scale(var(--lpo-scale));
+}
+
+/* The stage box must be at least as wide as its widest ring, or the ring
+   overflows and the page's overflow-x-hidden shears the right-hand side off.
+   The extra leaves room for the chips' shadows. */
+.lpo-stage-box--landing { --lpo-size: 820px; }
+.lpo-stage-box--home    { --lpo-size: 750px; }
+
+.lpo-stage-box { --lpo-scale: 0.36; }
+@media (min-width: 640px)  { .lpo-stage-box { --lpo-scale: 0.48; } }
+@media (min-width: 1024px) { .lpo-stage-box { --lpo-scale: 0.6; } }
+@media (min-width: 1280px) { .lpo-stage-box { --lpo-scale: 0.68; } }
+@media (min-width: 1536px) { .lpo-stage-box { --lpo-scale: 0.82; } }
+@media (min-width: 1800px) { .lpo-stage-box { --lpo-scale: 0.95; } }
+
+/* The home dial is a smaller composition with larger tiles on it, so it runs
+   closer to full size than the landing stage. Declared AFTER the shared ramp:
+   both selectors are a single class, so order is what decides. */
+.lpo-stage-box--home { --lpo-scale: 0.46; }
+@media (min-width: 640px)  { .lpo-stage-box--home { --lpo-scale: 0.6; } }
+@media (min-width: 1024px) { .lpo-stage-box--home { --lpo-scale: 0.74; } }
+@media (min-width: 1280px) { .lpo-stage-box--home { --lpo-scale: 0.85; } }
+@media (min-width: 1536px) { .lpo-stage-box--home { --lpo-scale: 0.95; } }
+@media (min-width: 1800px) { .lpo-stage-box--home { --lpo-scale: 1; } }
+
+/* ── Ticker ─────────────────────────────────────────────────────────────── */
+@keyframes lpo-ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.lpo-ticker-track { animation: lpo-ticker 30s linear infinite; width: max-content; }
+.lpo-ticker-mask {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+
+/* ── Entrances ──────────────────────────────────────────────────────────── */
+@keyframes lpo-fade-down { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: none; } }
+@keyframes lpo-fade-up   { from { opacity: 0; transform: translateY(40px); }  to { opacity: 1; transform: none; } }
+@keyframes lpo-scale-in  { from { opacity: 0; transform: scale(0.85); }       to { opacity: 1; transform: none; } }
+@keyframes lpo-chip-in {
+  from { opacity: 0; transform: scale(0.3) rotate(-180deg); filter: blur(6px); }
+  to   { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes lpo-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+
+/* backwards fills the PRE-delay state only, so anything that must start
+   invisible also declares opacity:0 on itself. */
+.lpo-anim { opacity: 0; animation-fill-mode: forwards; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lpo-orbit, .lpo-upright, .lpo-ticker-track, .lpo-border-wrap::before { animation: none !important; }
+  .lpo-anim { opacity: 1 !important; animation: none !important; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CLOCK & CALENDAR — DEPTH  (.cc-*)
+
+   Four things are going on, and only one of them is decoration:
+
+    - Each panel sits in its own perspective and tilts toward the cursor, with
+      its contents on separate Z planes so the type floats off the card.
+    - The clock is a real dial whose hands hover above the face and cast onto
+      it, which is what makes the depth read at a glance rather than on hover.
+    - Calendar cells are lifted by HOW MUCH IS ON THEM. An empty day lies flat,
+      a busy day is literally thicker. That is the one bit of this that carries
+      information rather than adding gloss, and it is the reason to do it.
+    - The month grid rests at a slight backward tilt, like a card on a desk,
+      and straightens when you reach for it so nothing is read at an angle.
+
+   `transform-style: preserve-3d` has to hold all the way down the chain -- a
+   single flattening ancestor collapses every Z plane below it, silently.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.cc-scene { perspective: 1000px; }
+
+.cc-panel {
+  transform-style: preserve-3d;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms ease;
+  will-change: transform;
+}
+/* Every wrapper between the panel and a lifted element must keep 3d, or the
+   plane is flattened before it is drawn. */
+.cc-panel *,
+.cc-panel *::before,
+.cc-panel *::after { transform-style: preserve-3d; }
+
+.cc-z1 { transform: translateZ(14px); }
+.cc-z2 { transform: translateZ(30px); }
+.cc-z3 { transform: translateZ(48px); }
+
+/* ── Analog dial ───────────────────────────────────────────────────────── */
+.cc-dial { transform-style: preserve-3d; }
+.cc-hand {
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  transform-origin: 50% 100%;
+  border-radius: 999px;
+  /* The drop is what sells the hover: a hand at translateZ casts onto the
+     face below it rather than looking painted on. */
+  filter: drop-shadow(0 3px 3px rgba(10, 27, 51, 0.22));
+}
+.cc-tick { position: absolute; left: 50%; top: 0; transform-origin: 50% var(--cc-r); }
+
+/* The second hand steps rather than sweeps, matching the 1s state tick that
+   already drives this component -- a smooth sweep would disagree with the
+   digits beside it twice a minute. */
+
+/* ── Desk tilt ─────────────────────────────────────────────────────────── */
+.cc-desk {
+  transform: rotateX(9deg);
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cc-desk:hover { transform: rotateX(0deg); }
+
+/* ── Day cells ─────────────────────────────────────────────────────────── */
+.cc-day {
+  transform: translateZ(var(--cc-lift, 0px));
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms ease;
+}
+.cc-day:hover { transform: translateZ(calc(var(--cc-lift, 0px) + 14px)); }
+/* Offset understorey layers, so a day with several things on it reads as a
+   stack of cards rather than a darker square. */
+.cc-day-stack {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* ── Rows that lift ─────────────────────────────────────────────────────
+   On a tall list, tilting the whole card is not the effect worth having --
+   what helps is the row under the cursor coming forward, so the thing you are
+   about to click separates from the ones you are not. */
+.cc-row {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease;
+}
+.cc-row:hover {
+  transform: translateZ(26px);
+  box-shadow: 0 16px 30px -18px rgba(10, 27, 51, 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-panel, .cc-day, .cc-desk, .cc-desk:hover, .cc-day:hover,
+  .cc-row, .cc-row:hover {
+    transform: none !important;
+    transition: none !important;
+  }
+  .cc-z1, .cc-z2, .cc-z3 { transform: none !important; }
+  .cc-hand { filter: none; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   GANTT DEPTH  (.gt-*)
+   A schedule bar is a solid thing occupying a span of days, so it is shaded
+   like one: a lit top face, a shaded base, and a hairline rim. That reads as
+   depth without any transform, which matters here because the chart lives in
+   an overflow-x-auto scroller and a tilt on the container would fight the
+   horizontal scroll.
+
+   The perspective therefore sits on each ROW, never on the scroller, so a bar
+   can genuinely rise off the page on hover while scrolling stays untouched.
+   ══════════════════════════════════════════════════════════════════════════ */
+.gt-row { perspective: 700px; }
+
+.gt-bar {
+  transform-style: preserve-3d;
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms ease,
+    filter 180ms ease;
+  /* Layered over the inline background COLOUR (not shorthand -- a shorthand
+     would wipe this image out). */
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.32) 0%,
+    rgba(255, 255, 255, 0.08) 42%,
+    rgba(0, 0, 0, 0.06) 58%,
+    rgba(0, 0, 0, 0.20) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 2px 3px -1px rgba(10, 27, 51, 0.3),
+    0 6px 12px -6px rgba(10, 27, 51, 0.4);
+}
+.gt-bar:hover {
+  transform: translateZ(20px);
+  filter: brightness(1.07) saturate(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 10px 18px -6px rgba(10, 27, 51, 0.42),
+    0 20px 34px -14px rgba(10, 27, 51, 0.5);
+}
+
+/* Critical path uses outline, not another box-shadow ring: box-shadow is
+   already carrying the extrusion, and a second one declared inline would
+   replace it outright rather than adding to it. */
+.gt-bar--critical {
+  outline: 2px solid rgba(245, 158, 11, 0.9);
+  outline-offset: 1.5px;
+}
+
+/* A milestone is a point, not a span, so it gets a faceted marker rather than
+   a bar: two lit halves meeting at a ridge. */
+.gt-milestone {
+  transform: rotate(45deg);
+  border-radius: 3px;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease;
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.42), rgba(0, 0, 0, 0.28));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 4px 8px -3px rgba(10, 27, 51, 0.5);
+}
+.gt-milestone-wrap:hover .gt-milestone {
+  transform: rotate(45deg) translateZ(16px) scale(1.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 10px 16px -5px rgba(10, 27, 51, 0.55);
+}
+
+/* The today line reads as a lit edge standing above the grid. */
+.gt-today-line {
+  box-shadow: 0 0 10px 1px rgba(245, 158, 11, 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gt-bar, .gt-bar:hover,
+  .gt-milestone, .gt-milestone-wrap:hover .gt-milestone {
+    transition: none !important;
+  }
+  .gt-bar:hover { transform: none !important; }
+  .gt-milestone-wrap:hover .gt-milestone { transform: rotate(45deg) !important; }
 }

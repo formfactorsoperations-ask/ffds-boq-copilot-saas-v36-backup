@@ -9,6 +9,7 @@ import { RotateCcw, Coins, CheckCircle, TrendingUp, Info, AlertTriangle, Sparkle
 import Card from './shared/Card';
 import { CalculatorIcon, ShieldCheckIcon, AlertIcon, CheckIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon, DeleteIcon, PlusIcon, ScissorsIcon, ClockIcon } from './Icons';
 import { useOrg } from '../contexts/OrgContext';
+import { resolveDocumentState } from '../services/documentIssueEngine';
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import { FFDS_PAYMENT_STRUCTURE_DEFAULTS, getPaymentStructure, setPaymentStructure } from '../services/engagementService';
 import MarginOptimizer from './MarginOptimizer';
@@ -2023,8 +2024,21 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             });
         }
 
-        // 6. Terms Acknowledgment Block Check
-        if (projectContext.engagement?.status !== 'acknowledged') {
+        /*
+          6. Terms acknowledgement.
+
+          This read `engagement.status`, which only the Engagement Lifecycle
+          widget ever wrote. Once a studio releases documents through the
+          Documents board instead, that field stays 'draft' forever — so this
+          warned that the client had not acknowledged the Payment Schedule on
+          projects where they demonstrably had, certificate and all.
+        */
+        const psState = resolveDocumentState(projectContext, 'payment_schedule');
+        const tdState = resolveDocumentState(projectContext, 'terms_docket');
+        const settled = (st: any) => st === 'signed' || st === 'executed';
+        const acknowledgedCanonically = settled(psState) && settled(tdState);
+
+        if (!acknowledgedCanonically && projectContext.engagement?.status !== 'acknowledged') {
             list.push({
                 type: 'warning',
                 text: 'The client has not acknowledged the Payment Schedule and Terms Docket. Secure digital approval, or raise invoices as a special-case exception on the condition that amended terms will be signed later.'

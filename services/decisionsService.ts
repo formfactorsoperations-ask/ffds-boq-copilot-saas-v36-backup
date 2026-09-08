@@ -1,4 +1,4 @@
-import { collection, doc, setDoc, updateDoc, serverTimestamp, getDocs, query, where, Timestamp, collectionGroup, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, serverTimestamp, getDocs, query, where, Timestamp, collectionGroup, getDoc, deleteDoc, arrayUnion } from 'firebase/firestore';
 import { db, auth } from './firebaseClient';
 
 export interface SignoffData {
@@ -10,12 +10,27 @@ export interface SignoffData {
     clientEmail?: string | null;
 }
 
+/** One turn in the conversation about a decision. */
+export interface DecisionMessage {
+    from: 'client' | 'studio';
+    text: string;
+    at: Timestamp;
+    /** Who said it, when we know. */
+    author?: string;
+}
+
 export interface DecisionData {
     id?: string;
     title?: string;
     decisionText: string;
     roomName: string;
     category: 'Site Condition' | 'Client Request' | 'Design Upgrade' | 'Value Engineering';
+    /**
+     * Design decision or site decision. Set explicitly by the studio; when it
+     * is absent the portal falls back to the project's stage, since nothing can
+     * be held up on site before execution has started.
+     */
+    decisionNature?: 'design' | 'site';
     presentees: string;
     boqImpact: 'none' | 'rate_change' | 'new_item';
     photoURL: string | null;
@@ -35,8 +50,26 @@ export interface DecisionData {
     createdAt: any;
     projectId: string;
     projectName: string;
+    /**
+     * Which studio issued this. Stamped at creation so the unauthenticated
+     * sign-off page can look up the right branding -- it has the decision and
+     * nothing else, and studioSettings is keyed by tenant.
+     */
+    studioId?: string;
     impactCostValue?: number;
     impactScheduleDays?: number;
+    /** The studio's answer to a client query. Set by replyToDecisionQuery. */
+    studioReply?: string | null;
+    studioRepliedAt?: Timestamp | null;
+    /**
+     * Every question and answer, in order.
+     *
+     * `signoff.queryText` and `studioReply` each hold only the most recent turn,
+     * so a second question overwrote the first and the whole exchange was lost.
+     * They are still written -- other screens read them -- but this array is the
+     * record. Append-only; nothing here is ever replaced.
+     */
+    discussion?: DecisionMessage[];
 }
 
 /**
@@ -82,10 +115,23 @@ export async function saveDecision(projectId: string, decisionData: Partial<Deci
         createdAt: serverTimestamp(),
         projectId: projectId,
         projectName: decisionData.projectName || '',
+        studioId: decisionData.studioId || 'demo-tenant-01',
         impactCostValue: decisionData.impactCostValue || 0,
         impactScheduleDays: decisionData.impactScheduleDays || 0
     };
     
+    /*
+      Written only when the studio actually chose one. The field was declared on
+      DecisionData and passed in by the Decisions screen, but never made it into
+      this payload -- so every decision was stored with no nature and the portal
+      fell back to guessing from the project's stage. Omitting the key rather
+      than writing null keeps "absent on older records" meaning what it says,
+      and Firestore rejects an explicit undefined.
+    */
+    if (decisionData.decisionNature) {
+        payload.decisionNature = decisionData.decisionNature;
+    }
+
     await setDoc(newDecisionRef, payload);
     return newDecisionRef.id;
 }
@@ -181,6 +227,9 @@ export async function recordManualSignoff(projectId: string, decisionId: string,
     
     await updateDoc(docRef, {
         status: newStatus,
+        ...(type === 'queried' && queryText
+            ? { discussion: arrayUnion({ from: 'client', text: queryText, at: Timestamp.now(), author: 'Manual Ops Entry' }) }
+            : {}),
         signoff: {
             type,
             respondedAt: serverTimestamp(),
@@ -228,6 +277,9 @@ export async function recordClientSignoff(token: string, type: 'approved' | 'que
     
     await updateDoc(targetDocRef, {
         status: newStatus,
+        ...(type === 'queried' && queryText
+            ? { discussion: arrayUnion({ from: 'client', text: queryText, at: Timestamp.now(), author: clientName || 'Client' }) }
+            : {}),
         signoff: {
             type,
             respondedAt: serverTimestamp(),
@@ -237,6 +289,59 @@ export async function recordClientSignoff(token: string, type: 'approved' | 'que
             clientEmail: data.clientEmail || null
         }
     });
+}
+
+/**
+ * Answer a client's query and put the decision back in front of them.
+ *
+ * A queried decision could only be moved by uploading a revised drawing, which
+ * made every question a drawing request. Most are not: "which finish did you
+ * mean?" needs a sentence, not a blueprint. This records the answer and returns
+ * the decision to awaiting-sign-off, leaving the drawing exactly as it was.
+ *
+ * The reply is stored rather than emailed-and-forgotten so the portal can show
+ * the client what they were told, next to the question they asked.
+ */
+export async function replyToDecisionQuery(projectId: string, decisionId: string, replyText: string) {
+    const docRef = doc(db, 'projects', projectId, 'decisions', decisionId);
+    await updateDoc(docRef, {
+        studioReply: replyText,
+        studioRepliedAt: serverTimestamp(),
+        /* Timestamp.now() rather than serverTimestamp(): Firestore rejects a
+           sentinel inside an array element. */
+        discussion: arrayUnion({
+            from: 'studio',
+            text: replyText,
+            at: Timestamp.now()
+        }),
+        // Back to the client. The drawing and its signoff token are untouched --
+        // nothing about the drawing changed. `signoff` is left alone too: it
+        // holds the question that was asked, and clearing it to make the status
+        // tidy would delete the client's own words from the audit trail.
+        status: 'drawing_sent'
+    });
+}
+
+/**
+ * Stamp the issuing studio onto a decision that predates the field.
+ *
+ * Decisions created before `studioId` existed cannot tell the unauthenticated
+ * sign-off page which tenant's branding to load, so it falls back to a default
+ * that is somebody else's. Rather than a migration, this backfills whenever the
+ * studio next notifies or re-requests sign-off -- both of which already run
+ * authenticated and already know the studio.
+ */
+export async function ensureDecisionStudio(projectId: string, decisionId: string, studioId?: string) {
+    if (!studioId) return;
+    try {
+        const docRef = doc(db, 'projects', projectId, 'decisions', decisionId);
+        const snap = await getDoc(docRef);
+        if (snap.exists() && !snap.data().studioId) {
+            await updateDoc(docRef, { studioId });
+        }
+    } catch {
+        // Branding is not worth failing a notification over.
+    }
 }
 
 export async function deleteDecision(projectId: string, decisionId: string) {

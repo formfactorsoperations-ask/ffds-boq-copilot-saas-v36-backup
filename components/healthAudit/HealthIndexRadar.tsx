@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ProjectHealthReport, PillarScore } from './types';
 import { formatCurrency, formatINR } from '../../lib/utils';
 import { ShieldCheck, AlertTriangle, AlertOctagon, TrendingUp, CheckCircle2, ChevronRight, Zap, Target, Lock, DollarSign, Wrench } from 'lucide-react';
+import { scoreTone } from '../../lib/reportPalette';
 
 interface HealthIndexRadarProps {
   report: ProjectHealthReport;
@@ -59,6 +60,13 @@ export const HealthIndexRadar: React.FC<HealthIndexRadarProps> = ({ report, onSe
   const circumference = normalizedRadius * 2 * Math.PI;
   const strokeDashoffset = circumference - (compositeScore / 100) * circumference;
 
+  /* The score sweeps up from zero on mount. A gauge that is already at its
+     value when you arrive reads as a label; one that travels reads as a
+     measurement being taken. */
+  const [charged, setCharged] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setCharged(true), 80); return () => clearTimeout(t); }, []);
+  const liveOffset = charged ? strokeDashoffset : circumference;
+
   return (
     <div className="space-y-6">
       {/* 1. HERO RADAR BANNER */}
@@ -70,7 +78,7 @@ export const HealthIndexRadar: React.FC<HealthIndexRadarProps> = ({ report, onSe
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           {/* Radial Score Gauge */}
           <div className="lg:col-span-4 flex flex-col items-center justify-center text-center">
-            <div className="relative w-44 h-44 flex items-center justify-center">
+            <div className="relative w-44 h-44 flex items-center justify-center hud-frame hud-frame-dark">
               <svg height={radius * 2 + 40} width={radius * 2 + 40} className="transform -rotate-90">
                 <circle
                   stroke="#1E293B"
@@ -80,18 +88,33 @@ export const HealthIndexRadar: React.FC<HealthIndexRadarProps> = ({ report, onSe
                   cx={radius + 20}
                   cy={radius + 20}
                 />
+                {/* Blurred twin: the arc reads as emitted light, not paint. */}
                 <circle
-                  stroke={compositeScore >= 80 ? '#10B981' : compositeScore >= 65 ? '#0284C7' : compositeScore >= 50 ? '#F59E0B' : '#EF4444'}
+                  stroke={scoreTone(compositeScore)}
                   fill="transparent"
                   strokeWidth={stroke}
                   strokeDasharray={circumference + ' ' + circumference}
-                  style={{ strokeDashoffset, transition: 'stroke-dashoffset 0.8s ease' }}
+                  style={{ strokeDashoffset: liveOffset, filter: 'blur(6px)', opacity: .55,
+                           transition: 'stroke-dashoffset 1.1s cubic-bezier(.22,1,.36,1)' }}
+                  strokeLinecap="round"
+                  r={normalizedRadius}
+                  cx={radius + 20}
+                  cy={radius + 20}
+                />
+                <circle
+                  stroke={scoreTone(compositeScore)}
+                  fill="transparent"
+                  strokeWidth={stroke}
+                  strokeDasharray={circumference + ' ' + circumference}
+                  style={{ strokeDashoffset: liveOffset,
+                           transition: 'stroke-dashoffset 1.1s cubic-bezier(.22,1,.36,1)' }}
                   strokeLinecap="round"
                   r={normalizedRadius}
                   cx={radius + 20}
                   cy={radius + 20}
                 />
               </svg>
+              {charged && <span className="hud-lock" />}
               <div className="absolute flex flex-col items-center justify-center">
                 <span className="text-5xl font-extralight tracking-tighter text-white font-mono">
                   {compositeScore}
@@ -103,7 +126,7 @@ export const HealthIndexRadar: React.FC<HealthIndexRadarProps> = ({ report, onSe
             </div>
 
             <div className="mt-3 inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-[11px] font-bold tracking-widest uppercase bg-white/10 backdrop-blur-md border border-white/15">
-              <span className={`w-2 h-2 rounded-full ${compositeScore >= 80 ? 'bg-emerald-400 animate-pulse' : compositeScore >= 50 ? 'bg-amber-400' : 'bg-rose-400'}`} />
+              <span className="w-2 h-2 rounded-full hud-alert" style={{ background: scoreTone(compositeScore) }} />
               {statusLabel}
             </div>
           </div>
@@ -125,7 +148,14 @@ export const HealthIndexRadar: React.FC<HealthIndexRadarProps> = ({ report, onSe
               <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800">
                 <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Blended Margin</p>
                 <p className="text-lg font-bold text-white mt-0.5 font-mono">{metrics.blendedMarginPct.toFixed(1)}%</p>
-                <span className="text-[10px] text-emerald-400">Target: 28-35%</span>
+                {/* 22-26% margin is the studio's 28-35% markup restated. The
+                    colour follows the number rather than always reading green,
+                    which made a 9.5% margin look like it was on target. */}
+                <span className={`text-[10px] ${
+                  metrics.blendedMarginPct >= 22 ? 'text-emerald-400'
+                  : metrics.blendedMarginPct >= 18 ? 'text-amber-400'
+                  : 'text-rose-400'
+                }`}>Target: 22-26%</span>
               </div>
 
               <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800">
@@ -244,8 +274,8 @@ const PillarCard: React.FC<PillarCardProps> = ({ pillar, icon, onActionClick }) 
         {/* Progress Bar */}
         <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-4">
           <div
-            className={`h-full rounded-full transition-all duration-500 ${pct >= 80 ? 'bg-emerald-500' : pct >= 60 ? 'bg-sky-500' : pct >= 40 ? 'bg-amber-500' : 'bg-rose-500'}`}
-            style={{ width: `${pct}%` }}
+            className="h-full rounded-full hud-charge"
+            style={{ width: `${pct}%`, background: scoreTone(pct) }}
           />
         </div>
 

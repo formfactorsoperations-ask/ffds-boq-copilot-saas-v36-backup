@@ -34,7 +34,10 @@ const PageTitleBlock: React.FC<Props> = ({ route }) => {
     <div className="flex items-center gap-x-4 gap-y-2 flex-wrap pb-3 mb-4 border-b border-slate-200 print:hidden">
       {/* Name. h2 because the project name in the top bar is already the h1. */}
       <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 whitespace-nowrap flex items-center">
-        <FlipText duration={2.5} loop={true}>
+        {/* Plays once on mount. Looping meant every page heading re-scrambled
+            itself every 2.5s forever -- a title caught mid-flip is unreadable,
+            and a permanent animation competes with the content under it. */}
+        <FlipText duration={2.5} loop={false}>
           {meta.title}
         </FlipText>
         {badge && (

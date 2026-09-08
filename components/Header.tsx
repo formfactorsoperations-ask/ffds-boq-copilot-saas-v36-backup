@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Home, 
@@ -16,7 +16,6 @@ import {
   LogOut,
   ChevronDown,
   Sparkles,
-  ChevronRight,
   ShieldCheck,
   Cloud,
   HardDrive
@@ -27,7 +26,7 @@ import { useOrg } from '../contexts/OrgContext';
 import { FFDSLogo } from './FFDSLogo';
 import { db } from '../services/dbService';
 import CloudConfigModal from './CloudConfigModal';
-import { ProjectContext } from '../types';
+import { PWAInstallPrompt } from './PWAInstallPrompt';
 
 interface SidebarProps {
   activeTab: string;
@@ -38,7 +37,6 @@ interface SidebarProps {
   className?: string;
   pendingCommsCount?: number;
   commsHealthScore?: number;
-  projectContext?: ProjectContext;
   autoCollapse?: boolean;
   isHidden?: boolean;
 }
@@ -72,11 +70,55 @@ const Sidebar: React.FC<SidebarProps> = ({
   logo, 
   onLogout, 
   className, 
-  projectContext,
   autoCollapse = false,
   isHidden = false
 }) => {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  /* Two disclosure menus on the bar, dismissed together so neither is left
+     hanging open behind the other. */
+  /*
+    The sliding indicator.
+
+    Measured with a layout effect and moved with an inline transform under a
+    CSS transition, NOT with framer-motion's layoutId — that silently resolves
+    to `transform: none` in this codebase and the pill simply never moves.
+    offsetLeft/offsetWidth against the track are reliable, and a ResizeObserver
+    keeps it honest when the bar reflows.
+  */
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
+  /* Bumped whenever the reticle re-locks, so the sweep animation restarts
+     rather than playing once and never again. */
+  const [lockKey, setLockKey] = useState(0);
+  useEffect(() => { setLockKey(k => k + 1); }, [activeTab]);
+
+  /*
+    Travel state for the reticle.
+
+    A pill that simply slides reads as a rectangle changing coordinates. One
+    that stretches as it launches and settles as it lands reads as a single
+    object with mass — so `stretch` is applied for the first ~190ms of the
+    journey, anchored to the edge it is travelling away from, and `echo`
+    leaves a fading ghost at the position it left.
+  */
+  const prevLeft = useRef<number | null>(null);
+  const [stretch, setStretch] = useState(1);
+  const [origin, setOrigin] = useState<'left' | 'right'>('left');
+  const [echo, setEcho] = useState<{ left: number; width: number; key: number } | null>(null);
+  const [adminMenu, setAdminMenu] = useState(false);
+  const [userMenu, setUserMenu] = useState(false);
+  useEffect(() => {
+    if (!adminMenu && !userMenu) return;
+    const close = () => { setAdminMenu(false); setUserMenu(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [adminMenu, userMenu]);
+
   const { orgData, currentRole, currentUserAuth } = useOrg();
   
   const isCloud = db.isCloud;
@@ -144,13 +186,17 @@ const Sidebar: React.FC<SidebarProps> = ({
   // Set CSS variable `--sidebar-w` on `<html>`
   useEffect(() => {
     const handleResize = () => {
-      const isMobile = window.innerWidth < 768;
-      if (isHidden || isMobile) {
-        document.documentElement.style.setProperty('--sidebar-w', '0px');
-      } else {
-        const widthStr = collapsed ? '72px' : '250px';
-        document.documentElement.style.setProperty('--sidebar-w', widthStr);
-      }
+      /* The bar occupies height, never width. `--sidebar-w` is kept and pinned
+         at zero rather than deleted, because layout code across the app still
+         reads it; `--topbar-h` is the measurement that now matters. */
+      /* A window can report width 0 — minimised, or restored from a
+         background tab — and treating that as "mobile" published a 0px
+         offset while the bar was still on screen, sliding the page under it.
+         Zero means unknown, so assume desktop. */
+      const w = window.innerWidth;
+      const isMobile = w > 0 && w < 768;
+      document.documentElement.style.setProperty('--sidebar-w', '0px');
+      document.documentElement.style.setProperty('--topbar-h', (isHidden || isMobile) ? '0px' : '74px');
       window.dispatchEvent(new Event('sidebar-toggle'));
     };
 
@@ -185,271 +231,258 @@ const Sidebar: React.FC<SidebarProps> = ({
     return Object.entries(grouped);
   }, [allowedTabs]);
 
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const measure = () => {
+      const el = track.querySelector<HTMLElement>(`[data-tab="${activeTab}"]`);
+      if (!el) { setPill(null); return; }
+      const next = { left: el.offsetLeft, width: el.offsetWidth };
+      const from = prevLeft.current;
+      if (from !== null && Math.abs(from - next.left) > 4) {
+        const distance = Math.abs(from - next.left);
+        setOrigin(next.left > from ? 'left' : 'right');
+        setStretch(1 + Math.min(distance / 1050, 0.32));
+        setEcho({ left: from, width: el.offsetWidth, key: Date.now() });
+        window.setTimeout(() => setStretch(1), 190);
+        window.setTimeout(() => setEcho(null), 520);
+      }
+      prevLeft.current = next.left;
+      setPill(prev =>
+        prev && Math.abs(prev.left - next.left) < 0.5 && Math.abs(prev.width - next.width) < 0.5
+          ? prev
+          : next);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(track);
+    return () => ro.disconnect();
+  }, [activeTab, allowedTabs.length]);
+
   if (isHidden) return null;
+
+  /*
+    ── The studio bar, as instrumentation ──────────────────────────────────
+
+    The brief was Iron Man, so the borrowed language is the HUD rather than
+    the armour: an arc reactor for the brand mark and the account, a reticle
+    that locks onto the active destination instead of a flat highlight, an
+    energy rail along the bottom edge, and telemetry set in mono.
+
+    Deliberately NOT dark. A charcoal-and-gold bar would look the part for a
+    day and then fight every milky-white surface behind it, and the studio's
+    blue is already the right colour for this — arc reactors are blue. The
+    cyan is the energy accent, used only where something is live.
+  */
+  const primary = allowedTabs.filter(t => (t.section || 'STUDIO') === 'STUDIO');
+  const secondary = allowedTabs.filter(t => (t.section || 'STUDIO') !== 'STUDIO');
+
+  const navBtn = (tab: typeof TABS[number], quiet: boolean, idx: number) => {
+    const Icon = tab.icon;
+    const isActive = activeTab === tab.id;
+    return (
+      <button
+        key={tab.id}
+        data-tab={tab.id}
+        style={{ animationDelay: `${Math.min(idx, 9) * 45}ms` }}
+        onClick={() => setActiveTab(tab.id)}
+        aria-current={isActive ? 'page' : undefined}
+        title={tab.label}
+        className={`hud-rise group relative z-10 flex items-center gap-2 rounded-lg whitespace-nowrap cursor-pointer
+                    transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50
+                    ${quiet ? 'px-2.5 py-1.5 text-[12.5px]' : 'px-3 py-1.5 text-[13px]'}
+                    ${isActive
+                      ? 'text-white font-bold'
+                      : quiet
+                        ? 'text-slate-400 hover:text-[#0055B3] font-semibold'
+                        : 'text-slate-500 hover:text-[#0055B3] font-bold'}`}
+      >
+        {/* Hover bracket — the reticle's ghost, before you commit. */}
+        {!isActive && (
+          <span aria-hidden="true"
+                className="absolute inset-0 rounded-lg border border-transparent
+                           group-hover:border-sky-200/90 group-hover:bg-sky-50/60
+                           transition-colors duration-200" />
+        )}
+        <Icon className={`relative w-4 h-4 shrink-0 transition-transform duration-200 ease-out
+                          ${isActive ? 'scale-110 drop-shadow-[0_0_5px_rgba(103,232,249,.85)]'
+                                     : 'group-hover:-translate-y-0.5 group-hover:scale-110'}`} />
+        <span className={`relative tracking-tight ${quiet ? 'hidden xl:inline' : 'hidden sm:inline'}`}>
+          {tab.label}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <>
-      <aside 
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        className={`fixed top-0 left-0 bottom-0 z-[100] glass-light border-r border-sky-100 text-slate-800 flex flex-col justify-between transition-all duration-300 ${
-          isExpanded ? 'w-[250px] shadow-2xl md:shadow-sm' : 'w-[72px] shadow-sm'
-        } ${className || ''}`}
+      <header
+        className={`fixed top-0 left-0 right-0 z-[100] h-[74px] flex items-center gap-2.5 px-4 sm:px-6
+                    bg-gradient-to-b from-white to-[#F5F9FD] backdrop-blur-xl
+                    border-b border-slate-200/70 ${className || ''}`}
       >
-        {/* Top Section: Brand & Navigation */}
-        <div className="flex flex-col flex-1 min-h-0">
-          
-          {/* Header Brand & Dedicated Logo Space */}
-          {isExpanded ? (
-            <div className="p-3.5 border-b border-sky-100 flex items-center justify-between gap-2 shrink-0 bg-transparent">
-              <div className="flex items-center gap-2.5 min-w-0">
-                {/* Studio Logo Container Slot */}
-                <div className="w-10 h-10 rounded-xl bg-white border border-sky-100 shadow-sm flex items-center justify-center p-1.5 shrink-0 overflow-hidden">
-                  {activeLogo ? (
-                    <img src={activeLogo} alt="Studio Logo" className="max-w-full max-h-full object-contain" />
-                  ) : (
-                    <FFDSLogo mode="icon" className="w-full h-full" />
-                  )}
-                </div>
-                
-                <div className="flex flex-col min-w-0">
-                  <span className="font-['Plus_Jakarta_Sans'] text-xs font-black tracking-tight text-slate-900 truncate uppercase">
-                    {orgData?.orgName ? orgData.orgName : "STUDIO COPILOT"}
-                  </span>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[9px] font-mono font-extrabold text-[#0055B3] uppercase bg-sky-100/90 border border-sky-200/80 px-2 py-0.5 rounded-md">
-                      {currentRole}
-                    </span>
-                  </div>
-                </div>
-              </div>
+        {/* Energy rail — the one ambient motion on the bar. */}
+        <span aria-hidden="true" className="hud-rail absolute bottom-0 left-0 right-0 h-px" />
 
-              {/* Collapse Toggle Button */}
-              <motion.button
-                whileHover={{ scale: 1.1, rotate: -5 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={toggleSidebar}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-[#0055B3] hover:bg-sky-50 border border-transparent hover:border-sky-200 transition-all shrink-0 cursor-pointer"
-                title="Collapse Sidebar"
-              >
-                <PanelLeftClose className="w-4 h-4" />
-              </motion.button>
-            </div>
-          ) : (
-            <div className="p-3 border-b border-slate-200 flex flex-col items-center gap-2 shrink-0 bg-white/90">
-              <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 shadow-xs flex items-center justify-center p-1 shrink-0 overflow-hidden">
-                {activeLogo ? (
-                  <img src={activeLogo} alt="Studio Logo" className="max-w-full max-h-full object-contain" />
-                ) : (
-                  <FFDSLogo mode="icon" className="w-full h-full" />
-                )}
-              </div>
-              <motion.button
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={toggleSidebar}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-[#0055B3] hover:bg-sky-50 transition-all cursor-pointer"
-                title="Expand Sidebar"
-              >
-                <PanelLeft className="w-4 h-4 text-[#0066CC]" />
-              </motion.button>
-            </div>
+        {/* Brand: reactor + wordmark */}
+        <button
+          onClick={() => setActiveTab('home')}
+          title="Home"
+          className="group flex items-center gap-2.5 shrink-0 pr-1 cursor-pointer outline-none"
+        >
+          {logo
+            ? <img src={logo} alt="" className="h-10 w-auto max-w-[200px] object-contain transition-transform duration-300 group-hover:scale-[1.04]" />
+            : <FFDSLogo className="h-10 w-auto transition-transform duration-300 group-hover:scale-[1.04]" />}
+        </button>
+
+        <span className="w-px h-6 bg-gradient-to-b from-transparent via-slate-200 to-transparent shrink-0 hidden sm:block" />
+
+        {/* Destinations — the reticle locks onto whichever is active */}
+        <nav
+          ref={trackRef}
+          className="relative flex items-center gap-0.5 min-w-0 overflow-x-auto scrollbar-none py-1"
+          aria-label="Studio"
+        >
+          {echo && (
+            <span
+              key={echo.key}
+              aria-hidden="true"
+              className="hud-echo absolute top-1 bottom-1 rounded-lg bg-[#0066CC]/45 pointer-events-none"
+              style={{ transform: `translateX(${echo.left}px)`, width: `${echo.width}px` }}
+            />
           )}
 
-          {/* Active Project Banner (if inside a project) */}
-          {projectContext?.name && isExpanded && (
-            <motion.div 
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mx-3 mt-3 p-2.5 rounded-xl bg-gradient-to-r from-sky-500/10 via-amber-500/10 to-sky-500/10 border border-sky-200/80 flex items-center justify-between gap-2 shrink-0 shadow-2xs"
+          {pill && (
+            <span
+              aria-hidden="true"
+              className="nav-pill hud-reticle absolute top-1 bottom-1 rounded-lg
+                         bg-gradient-to-b from-[#1a7fd4] to-[#0055B3] pointer-events-none overflow-hidden"
+              style={{
+                transform: `translateX(${pill.left}px) scaleX(${stretch})`,
+                transformOrigin: `${origin} center`,
+                width: `${pill.width}px`,
+                transition: 'transform .42s cubic-bezier(.34,1.16,.44,1), width .42s cubic-bezier(.34,1.16,.44,1)',
+              }}
             >
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <span className="w-2 h-2 rounded-full bg-[#0066CC] animate-pulse" />
-                  <span className="text-[9px] font-mono font-black text-[#0055B3] uppercase tracking-wider">
-                    ACTIVE WORKSPACE
-                  </span>
-                </div>
-                <p className="text-xs font-black text-slate-900 truncate font-['Plus_Jakarta_Sans']">
-                  {projectContext.name}
-                </p>
-              </div>
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setActiveTab('dashboard')}
-                className="p-1.5 rounded-lg bg-[#0066CC] text-white hover:bg-[#0055B3] transition-all cursor-pointer shadow-xs"
-                title="Go to Project Dashboard"
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-              </motion.button>
-            </motion.div>
+              <span key={lockKey} className="hud-sweep absolute inset-y-0 w-1/3" />
+            </span>
           )}
 
-          {/* Navigation Items (Scrollable List) */}
-          <div className={`flex-1 overflow-y-auto scrollbar-none ${isExpanded ? 'p-3' : 'px-2 py-3'} space-y-4`}>
-            {sections.map(([sectionName, sectionTabs]) => (
-              <div key={sectionName} className="space-y-1.5">
-                {isExpanded && (
-                  <div className="flex items-center gap-1.5 px-2 py-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#0066CC]" />
-                    <p className="text-[10px] font-mono font-black uppercase tracking-widest text-slate-500">
-                      {sectionName}
+          {primary.map((t, i) => navBtn(t, false, i))}
+
+          {secondary.length > 0 && (
+            <span className="w-px h-5 bg-gradient-to-b from-transparent via-slate-200 to-transparent shrink-0 mx-1.5" aria-hidden="true" />
+          )}
+
+          {secondary.map((t, i) => navBtn(t, true, primary.length + i))}
+        </nav>
+
+        <div className="flex-1 min-w-[8px]" />
+
+        {/* Mobile App PWA Install Prompt */}
+        <div className="hidden sm:block shrink-0">
+          <PWAInstallPrompt variant="pill" label="Mobile App" />
+        </div>
+
+        {/* Telemetry */}
+        <button
+          onClick={() => setIsConfigOpen(true)}
+          title={isCloud ? 'Cloud sync active — configure' : 'Local storage — configure'}
+          className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer
+                      font-mono text-[9.5px] font-bold uppercase tracking-[0.14em] border
+                      transition-all duration-200 hover:-translate-y-px ${
+            isCloud
+              ? 'bg-emerald-50/80 text-emerald-700 border-emerald-200 hover:border-emerald-300 hover:shadow-[0_0_12px_rgba(16,185,129,.22)]'
+              : 'bg-amber-50/80 text-amber-700 border-amber-200 hover:border-amber-300 hover:shadow-[0_0_12px_rgba(245,158,11,.22)]'
+          }`}
+        >
+          <span className="relative flex w-1.5 h-1.5 shrink-0">
+            {isCloud && <span className="absolute inline-flex w-full h-full rounded-full bg-emerald-500 opacity-60 animate-ping" />}
+            <span className={`relative inline-flex w-1.5 h-1.5 rounded-full ${isCloud ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+          </span>
+          {isCloud ? <Cloud className="w-3 h-3" /> : <HardDrive className="w-3 h-3" />}
+          <span>{isCloud ? 'CLOUD' : 'LOCAL'}</span>
+        </button>
+
+        <div className="hidden lg:block scale-90 origin-right shrink-0">
+          <AIStatusIndicator status={aiStatus} />
+        </div>
+
+        {/* Account — the second reactor */}
+        <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => { setUserMenu(v => !v); setAdminMenu(false); }}
+            aria-expanded={userMenu}
+            aria-haspopup="menu"
+            title={`${userName} (${currentRole})`}
+            className="group flex items-center gap-2 pl-1 pr-1.5 py-1 rounded-xl hover:bg-sky-50/80
+                       transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50"
+          >
+            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#0a6fd0] to-[#0044A0] text-white
+                             flex items-center justify-center font-black text-[13px] shrink-0
+                             ring-1 ring-cyan-300/40 shadow-[0_2px_10px_rgba(0,102,204,.30)]
+                             transition-transform duration-200 group-hover:scale-105">
+              {userInitial}
+            </span>
+            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-300 ${userMenu ? 'rotate-180' : ''}`} />
+          </button>
+
+          <AnimatePresence>
+            {userMenu && (
+              <motion.div
+                role="menu"
+                initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                className="absolute right-0 top-full mt-2.5 w-64 bg-white rounded-2xl border border-slate-200
+                           shadow-[0_18px_50px_rgba(2,32,71,.18)] py-1.5 z-[110] origin-top-right overflow-hidden"
+              >
+                <span aria-hidden="true" className="hud-rail absolute top-0 left-0 right-0 h-px" />
+
+                <div className="px-3.5 py-3 border-b border-slate-100 flex items-center gap-3">
+                  <span className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#0a6fd0] to-[#0044A0] text-white
+                                   flex items-center justify-center font-black text-base shrink-0
+                                   ring-1 ring-cyan-300/40 shadow-[0_2px_12px_rgba(0,102,204,.30)]">
+                    {userInitial}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-extrabold text-slate-900 truncate leading-tight">{userName}</p>
+                    <p className="text-[9.5px] font-mono font-bold text-[#0066CC] uppercase tracking-[0.14em] mt-0.5">
+                      {currentRole}
                     </p>
                   </div>
-                )}
-                {sectionTabs.map(tab => {
-                  const isActive = activeTab === tab.id;
-                  const Icon = tab.icon;
-                  const theme = TAB_THEMES[tab.id] || { iconColor: 'text-[#0066CC]', bgLight: 'bg-sky-100/90', borderColor: 'border-sky-200', activeGradient: 'from-[#0066CC] to-[#0055B3]' };
+                </div>
 
-                  return (
-                    <motion.button
-                      key={tab.id}
-                      whileHover={{ scale: 1.02, x: !isExpanded ? 0 : 4 }}
-                      whileTap={{ scale: 0.96 }}
-                      onClick={() => setActiveTab(tab.id)}
-                      title={!isExpanded ? tab.label : undefined}
-                      className={`relative w-full group flex transition-all duration-200 outline-none cursor-pointer rounded-xl text-xs ${
-                        isActive
-                          ? 'text-sky-900 bg-white shadow-sm border border-sky-100/60'
-                          : 'text-slate-500 hover:text-slate-800 hover:bg-sky-50/50'
-                      } ${!isExpanded ? 'flex-col items-center justify-center py-2.5 px-1' : 'flex-row items-center gap-3 px-3 py-2'}`}
-                    >
-                      {isActive && (
-                        <motion.div
-                          layoutId="verticalSidebarActiveBar"
-                          className={`absolute bg-sky-500 ${
-                            !isExpanded 
-                              ? 'top-0 left-2 right-2 h-0.5 rounded-b-full' 
-                              : 'left-0 top-2 bottom-2 w-1 rounded-r-full'
-                          }`}
-                          transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                        />
-                      )}
-                      {/* Plush Icon */}
-                      <div className={`transition-all shrink-0 flex items-center justify-center ${
-                        isActive 
-                           ? `${theme.iconColor} drop-shadow-sm`
-                          : `${theme.iconColor} opacity-70 group-hover:opacity-100`
-                      }`}>
-                        <Icon className="w-5 h-5 stroke-[1.8]" />
-                      </div>
-
-                      {isExpanded && (
-                        <span className={`truncate font-['Plus_Jakarta_Sans'] ${isActive ? 'font-black tracking-tight' : 'font-bold tracking-tight text-slate-600 group-hover:text-slate-900'}`}>
-                          {tab.label}
-                        </span>
-                      )}
-                    </motion.button>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Bottom Section: Utility & User Profile */}
-        <div className={`border-t border-slate-200/80 bg-transparent shrink-0 flex flex-col ${isExpanded ? 'p-3 gap-2.5' : 'p-2 py-4'}`}>
-          {isExpanded ? (
-            <div className="flex flex-col gap-2.5">
-              
-              {/* Cloud Sync & AI Status */}
-              <div className="flex items-center justify-between px-1">
                 <button
-                  onClick={() => setIsConfigOpen(true)}
-                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[9px] font-bold border transition-all cursor-pointer ${
-                    isCloud
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-300'
-                      : 'bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300'
-                  }`}
+                  role="menuitem"
+                  onClick={() => { setUserMenu(false); setIsConfigOpen(true); }}
+                  className="group w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] font-semibold
+                             text-slate-600 hover:bg-sky-50 hover:text-[#0055B3] transition-colors cursor-pointer"
                 >
-                  {isCloud ? <Cloud className="w-2.5 h-2.5" /> : <HardDrive className="w-2.5 h-2.5" />}
-                  <span>{isCloud ? 'CLOUD' : 'LOCAL'}</span>
+                  {isCloud
+                    ? <Cloud className="w-4 h-4 opacity-70 transition-transform group-hover:scale-110" />
+                    : <HardDrive className="w-4 h-4 opacity-70 transition-transform group-hover:scale-110" />}
+                  Storage &amp; sync
                 </button>
-                <div className="scale-95 origin-right">
-                  <AIStatusIndicator status={aiStatus} />
-                </div>
-              </div>
 
-              {/* User Profile, Logout & Collapse */}
-              <div className="flex items-center justify-between px-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#0055B3] to-sky-600 text-white flex items-center justify-center font-black text-xs shadow-sm shrink-0">
-                    {userInitial}
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[11px] font-extrabold text-slate-900 truncate font-['Plus_Jakarta_Sans']">
-                      {userName}
-                    </span>
-                    <span className="text-[9px] font-mono font-bold text-slate-500 uppercase truncate">
-                      {currentRole}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {onLogout && (
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={onLogout}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
-                      title="Sign Out"
-                    >
-                      <LogOut className="w-4 h-4" />
-                    </motion.button>
-                  )}
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={toggleSidebar}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
-                    title="Collapse Sidebar"
+                {onLogout && (
+                  <button
+                    role="menuitem"
+                    onClick={() => { setUserMenu(false); onLogout(); }}
+                    className="group w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] font-semibold
+                               text-slate-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
                   >
-                    <PanelLeftClose className="w-4 h-4" />
-                  </motion.button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-4">
-              {/* Compact Combined Avatar & Indicators */}
-              <div className="relative">
-                <div 
-                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-800 to-sky-700 text-white flex items-center justify-center shadow-sm shrink-0 cursor-pointer border-2 border-transparent hover:border-sky-300 transition-all"
-                  title={`${userName} (${currentRole})`}
-                >
-                  <span className="font-black text-sm">{userInitial}</span>
-                </div>
-                {/* AI Status Dot */}
-                <div 
-                  className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${aiStatus === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-rose-500'}`} 
-                  title={aiStatus === 'online' ? 'System Online' : 'System Offline'} 
-                />
-                {/* Cloud Sync Icon */}
-                <div 
-                  onClick={() => setIsConfigOpen(true)}
-                  className={`absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center cursor-pointer shadow-sm ${isCloud ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200' : 'bg-amber-100 text-amber-600 hover:bg-amber-200'}`} 
-                  title={isCloud ? 'Cloud Sync Active' : 'Local Storage'}
-                >
-                  {isCloud ? <Cloud className="w-2.5 h-2.5" /> : <HardDrive className="w-2.5 h-2.5" />}
-                </div>
-              </div>
-              
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={toggleSidebar}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-[#0066CC] hover:bg-sky-50 transition-all cursor-pointer"
-                title="Expand Sidebar"
-              >
-                <PanelLeft className="w-4 h-4" />
-              </motion.button>
-            </div>
-          )}
+                    <LogOut className="w-4 h-4 opacity-70 transition-transform group-hover:translate-x-0.5" />
+                    Sign out
+                  </button>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-      </aside>
-      
+      </header>
+
       <CloudConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} />
     </>
   );

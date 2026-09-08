@@ -496,7 +496,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
           <div className="w-16 h-16 bg-amber-50/50 rounded-full flex items-center justify-center mb-6 border border-amber-100">
             <Calendar className="w-8 h-8 text-amber-600" />
           </div>
-          <h2 className="text-2xl font-black text-slate-800 mb-2 font-display">
+          <h2 className="text-2xl font-extrabold text-slate-800 mb-2">
             No Execution Schedule Found
           </h2>
           <p className="text-slate-500 mb-8 text-sm">
@@ -771,7 +771,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
               className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden"
             >
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="font-bold text-lg text-slate-800 font-display">Shift Timeline Range</h3>
+                <h3 className="font-bold text-lg text-slate-800">Shift Timeline Range</h3>
                 <button onClick={() => setShowShiftModal(false)} className="text-slate-400 hover:text-slate-600">
                   ✕
                 </button>
@@ -834,7 +834,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
               className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden"
             >
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2 font-display">
+                <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
                    <span className="text-green-500">💬</span> Quick Client Update
                 </h3>
                 <button onClick={() => setShowWhatsAppModal(false)} className="text-slate-400 hover:text-slate-600">
@@ -877,7 +877,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
               className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden"
             >
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="font-bold text-lg text-red-700 flex items-center gap-2 font-display">
+                <h3 className="font-bold text-lg text-red-700 flex items-center gap-2">
                   ⚠️ Reset Site Timeline
                 </h3>
                 <button onClick={() => setShowResetModal(false)} className="text-slate-400 hover:text-slate-600">
@@ -918,7 +918,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
               className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden"
             >
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="font-bold text-lg text-amber-700 flex items-center gap-2 font-display">
+                <h3 className="font-bold text-lg text-amber-700 flex items-center gap-2">
                   ⚠️ Reset Gantt Schedule
                 </h3>
                 <button onClick={() => setShowScheduleResetModal(false)} className="text-slate-400 hover:text-slate-600">

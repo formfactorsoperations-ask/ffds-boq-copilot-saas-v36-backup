@@ -32,6 +32,8 @@ interface SiteOpsTabProps {
   decisionBrainOutput?: any;
   boq?: FullBoqItem[];
   projectId: string;
+  /** Decision ledger, subscribed to once in App and forwarded to the tracker. */
+  decisionLedger?: any[];
   activeProject?: any;
   onProjectUpdate?: (updatedProject: any) => void;
   onAddCalculatedItem?: (
@@ -66,6 +68,7 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
   decisionBrainOutput,
   boq = [],
   projectId,
+  decisionLedger,
   activeProject,
   onProjectUpdate,
   onAddCalculatedItem,
@@ -139,6 +142,7 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
             projectContext={projectContext}
             setProjectContext={setProjectContext}
             projectId={projectId}
+            decisionLedger={decisionLedger || []}
           />
         )}
         {initialModule === "action-tracker" && (
@@ -359,6 +363,7 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
                   projectContext={projectContext}
                   setProjectContext={setProjectContext}
                   projectId={projectId}
+                  decisionLedger={decisionLedger || []}
                 />
               )}
             </div>

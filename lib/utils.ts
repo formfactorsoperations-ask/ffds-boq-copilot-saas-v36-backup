@@ -56,10 +56,39 @@ export const calculateSellPrice = (materials: number, labor: number, margin: num
   return cost * (1 + marginPercent / 100);
 };
 
-export const calculateGrossMargin = (sell: number, cost: number): number => {
+/**
+ * MARKUP vs MARGIN -- they are not the same number and this app needs both.
+ *
+ *   markup = profit / COST     28% markup on 100 cost -> sells for 128
+ *   margin = profit / SELL     that same job has a 21.9% margin
+ *
+ * `calculateSellPrice` above prices on MARKUP, so the `margin` field on a BOQ
+ * line is really a markup percentage -- that is the pricing model and it stays.
+ *
+ * What went wrong is that this function returned markup while being named
+ * `calculateGrossMargin`, and its callers printed it as "Gross Margin" and
+ * benchmarked it against margin-style targets. A job priced at 28% markup
+ * displayed "28% gross margin" while the Reports tab, correctly computing
+ * profit / revenue, called the same job 21.9%.
+ *
+ * So: `calculateMarkupPct` is the inverse of `calculateSellPrice` and is the
+ * right function when you are talking about what was ADDED to cost.
+ * `calculateGrossMargin` now returns a true margin and is the right function
+ * whenever the number sits next to revenue.
+ */
+export const calculateMarkupPct = (sell: number, cost: number): number => {
   if (cost === 0) return 0;
   return ((sell - cost) / cost) * 100;
 };
+
+export const calculateGrossMargin = (sell: number, cost: number): number => {
+  if (sell === 0) return 0;
+  return ((sell - cost) / sell) * 100;
+};
+
+/** 28 markup -> 21.9 margin. Used to restate markup-era benchmarks. */
+export const markupToMargin = (markupPct: number): number =>
+  (markupPct / (100 + markupPct)) * 100;
 
 // Keep a session-local counter to ensure uniqueness even in rapid succession
 let idCounter = 0;

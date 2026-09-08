@@ -24,7 +24,8 @@ import {
     ChevronRight,
     Maximize2,
     Share2,
-    Download
+    Download,
+    Camera
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -69,6 +70,49 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
         docType: '3d_render',
         thumbnailUrl: ''
     });
+
+    /**
+     * The site photo album.
+     *
+     * Progress photographs are not deliverables and were never a good fit for
+     * this vault — dozens a week, full resolution, and nobody wants them
+     * paginated. They live in the studio's Drive; this records where, and the
+     * portal shows the client one link on Design & Scope.
+     */
+    const sitePhotos = projectContext.sitePhotosLink;
+    const [editingPhotos, setEditingPhotos] = useState(false);
+    const [photoDraft, setPhotoDraft] = useState({ url: '', label: '' });
+
+    const openPhotoEditor = () => {
+        setPhotoDraft({ url: sitePhotos?.url || '', label: sitePhotos?.label || '' });
+        setEditingPhotos(true);
+    };
+
+    const saveSitePhotos = () => {
+        const url = photoDraft.url.trim();
+        if (!url) { showToast('⚠️ Paste the Drive folder link first'); return; }
+        if (!/^https?:\/\//i.test(url)) { showToast('⚠️ The link must start with http:// or https://'); return; }
+        setProjectContext(prev => ({
+            ...prev,
+            sitePhotosLink: {
+                url,
+                label: photoDraft.label.trim() || undefined,
+                updatedAt: new Date().toISOString(),
+            },
+        }));
+        setEditingPhotos(false);
+        showToast('✅ Site photo album linked — the client can now open it');
+    };
+
+    const removeSitePhotos = () => {
+        setProjectContext(prev => {
+            const next: any = { ...prev };
+            delete next.sitePhotosLink;
+            return next;
+        });
+        setEditingPhotos(false);
+        showToast('🗑️ Site photo album unlinked from the portal');
+    };
 
     const docs: ExtendedDesignDocument[] = (projectContext.designDocuments || []) as ExtendedDesignDocument[];
 
@@ -253,6 +297,132 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                         );
                     })}
                 </div>
+            </div>
+
+            {/*
+                Site photo album — one Drive link, not a file store.
+
+                The portal carried a "Site feed" lens that filtered the project
+                spine down to site updates. It subtracted from a page rather
+                than adding a view, and progress photographs belong somewhere
+                built for albums. Set the folder link once and the client opens
+                it from Design & Scope; leave it blank and nothing is shown.
+            */}
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-200 text-[#0066CC] flex items-center justify-center shrink-0">
+                            <Camera className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                            <h4 className="text-sm font-bold text-slate-900 tracking-tight">Site Progress Photos</h4>
+                            {sitePhotos ? (
+                                <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed break-all">
+                                    {sitePhotos.label ? <span className="font-bold text-slate-700">{sitePhotos.label} · </span> : null}
+                                    <span className="text-slate-400">{sitePhotos.url}</span>
+                                    {sitePhotos.updatedAt && (
+                                        <span className="block text-slate-400 mt-0.5">
+                                            Linked {new Date(sitePhotos.updatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · visible on the Client Portal
+                                        </span>
+                                    )}
+                                </p>
+                            ) : (
+                                <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed max-w-xl">
+                                    Keep the album in Google Drive and link it here. Nothing is shown to the client until a link is set.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {!editingPhotos && (
+                        <div className="flex items-center gap-2 shrink-0">
+                            {sitePhotos && (
+                                <a
+                                    href={sitePhotos.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                                >
+                                    <ExternalLink className="w-3.5 h-3.5" /> Open album
+                                </a>
+                            )}
+                            <button
+                                type="button"
+                                onClick={openPhotoEditor}
+                                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#0066CC] hover:bg-[#0055B3] text-white shadow-2xs transition-colors cursor-pointer whitespace-nowrap"
+                            >
+                                {sitePhotos ? 'Change link' : 'Link Drive album'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                <AnimatePresence>
+                    {editingPhotos && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden"
+                        >
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-4 mt-4 border-t border-slate-100">
+                                <div className="md:col-span-2">
+                                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">
+                                        Google Drive folder link
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={photoDraft.url}
+                                        onChange={e => setPhotoDraft({ ...photoDraft, url: e.target.value })}
+                                        placeholder="https://drive.google.com/drive/folders/..."
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-[#0066CC] outline-none"
+                                    />
+                                    <p className="text-[10.5px] text-slate-400 mt-1 leading-relaxed">
+                                        Set the folder to &ldquo;Anyone with the link can view&rdquo; in Drive, or the client lands on a request-access screen.
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">
+                                        Label <span className="text-slate-400 font-medium normal-case tracking-normal">(optional)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={photoDraft.label}
+                                        onChange={e => setPhotoDraft({ ...photoDraft, label: e.target.value })}
+                                        placeholder="Weekly site progress"
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-[#0066CC] outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 mt-3">
+                                <button
+                                    type="button"
+                                    onClick={saveSitePhotos}
+                                    className="px-4 py-2 rounded-xl text-xs font-bold bg-[#0066CC] hover:bg-[#0055B3] text-white shadow-2xs transition-colors cursor-pointer"
+                                >
+                                    Save link
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingPhotos(false)}
+                                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                {sitePhotos && (
+                                    <button
+                                        type="button"
+                                        onClick={removeSitePhotos}
+                                        className="ml-auto px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                    >
+                                        Remove from portal
+                                    </button>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
 
             {/* Add Deliverable Drawer / Form */}

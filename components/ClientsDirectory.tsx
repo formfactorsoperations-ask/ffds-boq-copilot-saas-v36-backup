@@ -5,6 +5,10 @@ import { getSingleProjectValue } from "../lib/financialsUtils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useOrg } from "../contexts/OrgContext";
 import { usePageHeader } from "../contexts/PageHeaderContext";
+import { db } from "../services/dbService";
+import { issuePortalAccess, PortalAccess } from "../services/portalAccessService";
+import { httpsCallable } from "firebase/functions";
+import { functions as fbFunctions } from "../services/firebaseClient";
 import { 
   Users, 
   Search, 
@@ -27,9 +31,11 @@ import {
   List, 
   Send, 
   Globe,
+  KeyRound,
   Pin,
   Sparkles,
-  Check
+  Check,
+  RefreshCw,
 } from "lucide-react";
 
 interface ClientsDirectoryProps {
@@ -176,17 +182,111 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const getClientPortalUrl = (projectId: string) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return `${origin}/?portal=${projectId}`;
+  /*
+    A client login is an email and a password the studio issues -- the portal
+    link on its own is no longer a way in. Creating the account has to happen
+    server-side: the client SDK's createUserWithEmailAndPassword switches the
+    signed-in user, so doing it here would sign the studio out of their own
+    account every time they set a client up.
+  */
+  const [issuingLoginFor, setIssuingLoginFor] = useState<string | null>(null);
+  const [issuedLogin, setIssuedLogin] = useState<
+    { email: string; tempPassword: string; clientName: string; reissued: boolean } | null
+  >(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [copiedPassword, setCopiedPassword] = useState(false);
+
+  const handleIssueClientLogin = async (
+    project: FullProjectData,
+    clientName: string,
+    reissue: boolean,
+    e?: React.MouseEvent,
+  ) => {
+    e?.stopPropagation();
+    const email = (project.context as any)?.clientEmail?.split(",")[0]?.trim();
+    if (!email) {
+      setLoginError("Add a client email to this project first — it is their username.");
+      return;
+    }
+    if (!fbFunctions) {
+      setLoginError("Cannot reach the server. Check your connection and try again.");
+      return;
+    }
+
+    setLoginError(null);
+    setIssuingLoginFor(project.id);
+    try {
+      const fn = httpsCallable(fbFunctions, reissue ? "resetClientPassword" : "createClientLogin");
+      const res: any = await fn({
+        email,
+        projectId: project.id,
+        tenantId: orgData?.tenantId || "demo-tenant-01",
+        clientName,
+      });
+      setIssuedLogin({
+        email: res?.data?.email || email,
+        tempPassword: res?.data?.tempPassword || "",
+        clientName,
+        reissued: reissue,
+      });
+      setCopiedPassword(false);
+    } catch (err: any) {
+      setLoginError(err?.message || "Could not create the login. Please try again.");
+    } finally {
+      setIssuingLoginFor(null);
+    }
   };
 
-  const handleCopyPortalUrl = (projectId: string, e?: React.MouseEvent) => {
+  /*
+    The portal link is `?portal=<token>`, never `?portal=<projectId>`.
+
+    The token is `${projectId}_${random}`, and `projectIdFromToken` splits on the
+    last underscore to extract the project ID for verification.
+    If no active token exists or it has expired, mint and persist a new one via
+    `issuePortalAccess` so copying always produces an authentic, functional link.
+  */
+  const handleCopyPortalUrl = async (projectId: string, e?: React.MouseEvent, forceNew: boolean = false) => {
     if (e) e.stopPropagation();
-    const url = getClientPortalUrl(projectId);
-    navigator.clipboard.writeText(url);
-    setCopiedId("portal-" + projectId);
-    setTimeout(() => setCopiedId(null), 2000);
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) {
+      setCopiedId("noportal-" + projectId);
+      setTimeout(() => setCopiedId(null), 3000);
+      return;
+    }
+
+    const existing = (project.context as any)?.portalAccess as
+      | { token: string; expiresAt?: string }
+      | undefined;
+    const live =
+      !forceNew &&
+      existing?.token &&
+      (!existing.expiresAt || new Date(existing.expiresAt).getTime() > Date.now());
+
+    let token = existing?.token;
+    if (!live || forceNew) {
+      const access = issuePortalAccess(project.id, (project.context as any)?.clientEmail);
+      token = access.token;
+      const updatedProject: FullProjectData = {
+        ...project,
+        context: { ...(project.context as any), portalAccess: access },
+        lastModified: Date.now(),
+      };
+      try {
+        await db.saveProject(updatedProject);
+      } catch (err) {
+        console.error("Could not persist portal access token:", err);
+      }
+    }
+
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const url = `${origin}/?portal=${token}`;
+    try {
+      await navigator.clipboard?.writeText(url);
+      setCopiedId((forceNew ? "newportal-" : "portal-") + projectId);
+    } catch {
+      setCopiedId((forceNew ? "newportal-" : "portal-") + projectId);
+    }
+    setTimeout(() => setCopiedId(null), 2500);
   };
 
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
@@ -613,6 +713,99 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
 
   return (
     <div className="flex flex-col h-full bg-slate-50/40 text-slate-900">
+
+      {/* The password is shown exactly once. It is never stored anywhere this
+          app can read it back -- Firebase Auth holds only a hash -- so if it is
+          lost the way forward is to reissue, not to look it up. */}
+      <AnimatePresence>
+        {issuedLogin && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
+            className="fixed inset-0 z-[200] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setIssuedLogin(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97, y: 8 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-5 sm:p-6 space-y-4">
+                <div>
+                  <h4 className="font-extrabold text-slate-900 text-[15px]">
+                    {issuedLogin.reissued ? "New password for" : "Portal login for"} {issuedLogin.clientName}
+                  </h4>
+                  <p className="text-[13px] text-slate-600 font-medium mt-1 leading-relaxed">
+                    Send these to your client. They will be asked to choose their own password when they first sign in.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                  <div className="px-3.5 py-2.5 bg-slate-50">
+                    <p className="text-[10px] uppercase font-black tracking-wider text-slate-400">Email</p>
+                    <p className="text-[13px] font-bold text-slate-800 mt-0.5 break-all">{issuedLogin.email}</p>
+                  </div>
+                  <div className="px-3.5 py-2.5">
+                    <p className="text-[10px] uppercase font-black tracking-wider text-slate-400">Temporary password</p>
+                    <p className="text-[15px] font-black text-slate-900 mt-0.5 font-mono select-all">{issuedLogin.tempPassword}</p>
+                  </div>
+                </div>
+
+                <p className="text-[11.5px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 font-medium">
+                  This password is shown once and cannot be looked up later. Copy it now.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 px-5 py-3.5 border-t border-slate-200 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIssuedLogin(null)}
+                  className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 transition"
+                >
+                  Done
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard?.writeText(
+                        `Email: ${issuedLogin.email}
+Temporary password: ${issuedLogin.tempPassword}`
+                      );
+                      setCopiedPassword(true);
+                    } catch {
+                      setCopiedPassword(false);
+                    }
+                  }}
+                  className="px-5 py-2 rounded-xl text-xs font-extrabold text-white bg-[#0066CC] hover:bg-[#0055B3] transition"
+                >
+                  {copiedPassword ? "Copied" : "Copy both"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {loginError && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[210] bg-white border border-rose-200 text-rose-800 text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg"
+            onClick={() => setLoginError(null)}
+          >
+            {loginError}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       
       {/* 1. FILTER & SEARCH TOOLBAR (Sky Blue Theme + Actual/Dummy Filter) */}
       <div className="px-4 lg:px-8 pt-2 pb-4">
@@ -1046,16 +1239,29 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
 
                         {/* Action Icons */}
                         <div className="flex items-center gap-1 shrink-0">
+                                                    {client.projects.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleIssueClientLogin(client.projects[0], client.name, false, e)}
+                              disabled={issuingLoginFor === client.projects[0].id}
+                              title="Create or reset this client's portal login"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-[#0055B3] hover:bg-sky-50 border border-slate-200/70 transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           {/* Portal Copy / Open */}
                           {client.projects.length > 0 && (
                             <button
                               type="button"
                               onClick={(e) => handleCopyPortalUrl(client.projects[0].id, e)}
-                              title="Copy Client Portal URL"
+                              title="Copy client portal link"
                               className="p-1.5 rounded-lg text-slate-500 hover:text-sky-700 hover:bg-sky-50 border border-slate-200/70 transition-colors cursor-pointer"
                             >
                               {copiedId === "portal-" + client.projects[0].id ? (
                                 <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : copiedId === "noportal-" + client.projects[0].id ? (
+                                <X className="w-3.5 h-3.5 text-amber-600" />
                               ) : (
                                 <Globe className="w-3.5 h-3.5" />
                               )}
@@ -1258,12 +1464,26 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
                         <td className="px-5 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {client.projects[0] && (
-                              <button
-                                onClick={() => onOpenProject(client.projects[0])}
-                                className="px-2.5 py-1 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg border border-sky-200 transition-colors cursor-pointer"
-                              >
-                                Open
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleCopyPortalUrl(client.projects[0].id, e)}
+                                  title="Copy client portal link"
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-sky-700 hover:bg-sky-50 border border-slate-200/70 transition-colors cursor-pointer"
+                                >
+                                  {copiedId === "portal-" + client.projects[0].id ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  ) : (
+                                    <Globe className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => onOpenProject(client.projects[0])}
+                                  className="px-2.5 py-1 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg border border-sky-200 transition-colors cursor-pointer"
+                                >
+                                  Open
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -1409,21 +1629,63 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
               </div>
 
               {/* Drawer Footer */}
-              <div className="p-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between">
+              <div className="p-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between gap-2">
                 <span className="text-[11px] text-slate-400">
                   Last active {timeAgo(dossierClient.lastActivity)}
                 </span>
-                {dossierClient.projects[0] && (
-                  <button
-                    onClick={() => {
-                      onOpenProject(dossierClient.projects[0]);
-                      setDossierClient(null);
-                    }}
-                    className="btn-primary px-4 py-2 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span>Open Active Project</span>
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {dossierClient.projects[0] && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={(e) => handleCopyPortalUrl(dossierClient.projects[0].id, e, false)}
+                        className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Copy active portal link"
+                      >
+                        {copiedId === "portal-" + dossierClient.projects[0].id ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Globe className="w-3.5 h-3.5 text-sky-600" />
+                            <span>Copy Link</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleCopyPortalUrl(dossierClient.projects[0].id, e, true)}
+                        className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Generate a brand new link and revoke earlier links"
+                      >
+                        {copiedId === "newportal-" + dossierClient.projects[0].id ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>New Link Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Reissue Link</span>
+                          </>
+                        )}
+                      </button>
+                    </>
+                  )}
+                  {dossierClient.projects[0] && (
+                    <button
+                      onClick={() => {
+                        onOpenProject(dossierClient.projects[0]);
+                        setDossierClient(null);
+                      }}
+                      className="btn-primary px-4 py-2 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Open Active Project</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </motion.div>
           </div>

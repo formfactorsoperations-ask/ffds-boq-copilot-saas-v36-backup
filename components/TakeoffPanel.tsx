@@ -457,7 +457,7 @@ export const TakeoffPanel: React.FC<Props> = ({
                         {/* the working, per room */}
                         <div className="mt-4 rounded-xl bg-slate-50/80 p-3 ring-1 ring-slate-200/70">
                           <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">How this room resolves</div>
-                          <div className="font-mono text-[10.5px] text-slate-500 leading-relaxed">{rt.derivation}</div>
+                          <div className="font-mono text-[10px] text-slate-500 leading-relaxed">{rt.derivation}</div>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 mt-2.5 text-[11px]">
                             {[['Wall paint', rt.wallPaintSft, 'sft'], ['Ceiling paint', rt.ceilingPaintSft, 'sft'],
                               ['False ceiling', rt.falseCeilingSft, 'sft'], ['Floor tile', rt.floorTileSft, 'sft'],

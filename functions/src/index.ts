@@ -10,6 +10,11 @@ const db = admin.firestore();
 import { GoogleGenAI } from "@google/genai";
 import { formatINR } from "../../lib/utils";
 import * as logger from "firebase-functions/logger";
+import * as pako from "pako";
+import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";
+import { recordDocumentView, signIssue } from "../../services/documentIssueEngine";
+import { raiseQuery } from "../../services/documentQueryEngine";
+import { buildPortalView } from "../../lib/portalProjection";
 
 const withDiagnostics = (functionName: string, handler: (request: any) => Promise<any>) => {
     return async (request: any) => {
@@ -547,4 +552,324 @@ export const compileWeeklyReports = onSchedule({
             });
         }
     }
+});
+
+// ============================================================================
+// CLIENT PORTAL LOGINS
+//
+// A client signs in with an email and a password the studio gives them, exactly
+// as ops does. Both live in the same Firebase Auth project and the same app;
+// what differs is the `role` on their users/{uid} document, which is what the
+// app routes on.
+//
+// This has to run in a function rather than the browser. The client SDK's
+// createUserWithEmailAndPassword *switches the signed-in user*, so a studio
+// creating a client login from their own tab would be signed out of their own
+// account every time. The Admin SDK has no such side effect.
+// ============================================================================
+
+/** Readable, unambiguous temp password — no l/1/O/0, said aloud over a phone. */
+function generateTempPassword(): string {
+    const words = ['amber', 'cedar', 'delta', 'ember', 'fable', 'grove', 'haven', 'ivory', 'jasper', 'linen', 'marble', 'nectar', 'onyx', 'pearl', 'quartz', 'raven', 'slate', 'thistle', 'umber', 'willow'];
+    const pick = () => words[Math.floor(Math.random() * words.length)];
+    const digits = String(Math.floor(Math.random() * 90) + 10);
+    return `${pick()}-${pick()}-${digits}`;
+}
+
+/** The caller must be signed in and belong to the tenant they are acting for. */
+async function assertStudioCaller(request: any, tenantId: string) {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sign in first.");
+    }
+    const callerSnap = await db.collection("users").doc(request.auth.uid).get();
+    const caller = callerSnap.exists ? callerSnap.data() : null;
+    const callerRole = caller?.role || "";
+    if (callerRole === "Client") {
+        throw new HttpsError("permission-denied", "Clients cannot issue logins.");
+    }
+    const callerTenant = caller?.tenantId;
+    const isSuperAdmin = callerRole === "Super Admin";
+    if (!isSuperAdmin && callerTenant !== tenantId) {
+        throw new HttpsError("permission-denied", "You can only manage your own studio's clients.");
+    }
+}
+
+/**
+ * Create (or re-point) a client login for one project.
+ *
+ * Idempotent on email: an existing client account gains the project rather than
+ * colliding, so a client with three projects has one login, not three.
+ */
+export const createClientLogin = onCall(withDiagnostics("createClientLogin", async (request) => {
+    const { email, projectId, tenantId, clientName } = request.data || {};
+    if (!email || !projectId || !tenantId) {
+        throw new HttpsError("invalid-argument", "email, projectId and tenantId are required.");
+    }
+    await assertStudioCaller(request, tenantId);
+
+    const normalised = String(email).trim().toLowerCase();
+    const tempPassword = generateTempPassword();
+
+    let userRecord;
+    try {
+        userRecord = await admin.auth().getUserByEmail(normalised);
+        await admin.auth().updateUser(userRecord.uid, { password: tempPassword });
+    } catch (e: any) {
+        if (e?.code !== "auth/user-not-found") throw e;
+        userRecord = await admin.auth().createUser({
+            email: normalised,
+            password: tempPassword,
+            displayName: clientName || undefined,
+        });
+    }
+
+    const userRef = db.collection("users").doc(userRecord.uid);
+    const existing = await userRef.get();
+    const priorProjects: string[] = existing.exists ? (existing.data()?.projectIds || []) : [];
+
+    // Refuse to convert a studio account into a client one.
+    if (existing.exists && existing.data()?.role && existing.data()?.role !== "Client") {
+        throw new HttpsError(
+            "failed-precondition",
+            "That email already belongs to a studio user. Use a different email for the client."
+        );
+    }
+
+    await userRef.set({
+        email: normalised,
+        role: "Client",
+        tenantId,
+        projectIds: Array.from(new Set([...priorProjects, projectId])),
+        mustChangePassword: true,
+        updatedAt: Date.now(),
+    }, { merge: true });
+
+    return { uid: userRecord.uid, email: normalised, tempPassword };
+}));
+
+/** Issue a fresh temp password for an existing client login. */
+export const resetClientPassword = onCall(withDiagnostics("resetClientPassword", async (request) => {
+    const { email, tenantId } = request.data || {};
+    if (!email || !tenantId) {
+        throw new HttpsError("invalid-argument", "email and tenantId are required.");
+    }
+    await assertStudioCaller(request, tenantId);
+
+    const normalised = String(email).trim().toLowerCase();
+    const userRecord = await admin.auth().getUserByEmail(normalised);
+
+    const userSnap = await db.collection("users").doc(userRecord.uid).get();
+    if (!userSnap.exists || userSnap.data()?.role !== "Client") {
+        throw new HttpsError("failed-precondition", "That email is not a client login.");
+    }
+    if (userSnap.data()?.tenantId !== tenantId) {
+        throw new HttpsError("permission-denied", "That client belongs to another studio.");
+    }
+
+    const tempPassword = generateTempPassword();
+    await admin.auth().updateUser(userRecord.uid, { password: tempPassword });
+    await db.collection("users").doc(userRecord.uid).set({ mustChangePassword: true, updatedAt: Date.now() }, { merge: true });
+
+    return { uid: userRecord.uid, email: normalised, tempPassword };
+}));
+
+/* ────────────────────────────────────────────────────────────────────────────
+   THE CLIENT'S WRITE PATH
+   ────────────────────────────────────────────────────────────────────────────
+
+   A portal client needs to change a few things about their project: record that
+   they opened a document, sign one, query a clause in one, dispute one, and
+   confirm a material selection.
+
+   Until now the browser did it, by saving the entire project document. The rule
+   that allowed it had to be this broad:
+
+     allow update: if ... ||
+       request.resource.data.diff(resource.data).affectedKeys()
+         .hasOnly(['context', 'lastModified', 'isCompressed', 'compressedData']);
+
+   — no authentication at all, and `context` is the whole project: every rate,
+   every internal note, every unpublished draft, the portal access token. Anyone
+   who knew a project id could replace all of it.
+
+   Narrowing that rule is not possible. A project of any size is stored as a
+   deflated blob in `compressedData`, and security rules cannot see inside it,
+   so there is no field-level condition that could permit "the client may set
+   documents.views" and nothing else.
+
+   So the client stops writing the document. It sends the *action* it wants
+   taken, and this decides whether that action is allowed and what it means. The
+   patch is computed here, from the same engines the browser uses — they are
+   pure functions over a context, which is why they can be shared rather than
+   reimplemented and left to drift.
+*/
+
+
+/** The whole project document, whether or not it was stored compressed. */
+function readStoredProject(data: any): { project: any; wasCompressed: boolean } {
+    if (data?.isCompressed && data?.compressedData) {
+        const bytes = Buffer.from(data.compressedData, "base64");
+        // pako's typings expose the text form as inflate(...) -> string only via
+        // the untyped overload; decode the bytes ourselves and keep it honest.
+        const json = Buffer.from(pako.inflate(bytes)).toString("utf-8");
+        return { project: JSON.parse(json), wasCompressed: true };
+    }
+    return { project: data, wasCompressed: false };
+}
+
+/** Put it back the way it was found. */
+function writeableProject(project: any, wasCompressed: boolean, previous: any): any {
+    if (!wasCompressed) return { ...project, lastModified: Date.now() };
+    const deflated = pako.deflate(JSON.stringify({ ...project, lastModified: Date.now() }));
+    return {
+        ...previous,
+        lastModified: Date.now(),
+        isCompressed: true,
+        compressedData: Buffer.from(deflated).toString("base64"),
+    };
+}
+
+/**
+ * Establish that the caller is this project's client.
+ *
+ * Their own users/{uid} document is the authority — the same record that
+ * decides which app they get. A portal link is not consulted: it names a
+ * project, it does not grant one, and it can be forwarded to anybody.
+ */
+async function assertPortalClient(request: any, projectId: string) {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+    if (!projectId || typeof projectId !== "string") {
+        throw new HttpsError("invalid-argument", "No project was named.");
+    }
+
+    const profile = await db.collection("users").doc(uid).get();
+    const data = profile.data() || {};
+    const allowed: string[] = data.projectIds || [];
+
+    if (data.role !== "Client" || !allowed.includes(projectId)) {
+        // Same answer whether the project does not exist or is somebody
+        // else's — the difference would tell a prober which ids are real.
+        throw new HttpsError("permission-denied", "This project is not open to you.");
+    }
+
+    return { uid, email: request.auth?.token?.email as string | undefined, profile: data };
+}
+
+/**
+ * Apply one client action to a project.
+ *
+ * Every branch returns a patch function built by a shared engine. Anything the
+ * client sends that is not one of these is refused: the action name is a closed
+ * set, not a path into the document.
+ */
+function patchFor(action: any, actor: string): (prev: any) => any {
+    switch (action?.type) {
+        case "documentView":
+            return recordDocumentView(action.kind);
+
+        case "signDocument":
+            return buildSignoffPatch(action.docType, action.docket, { surface: "client_portal" });
+
+        case "signIssue":
+            return signIssue(action.issueId, action.docket);
+
+        case "raiseQuery":
+            return raiseQuery({
+                issueId: action.issueId,
+                documentKind: action.documentKind,
+                clauseRef: action.clauseRef || "",
+                clauseExcerpt: action.clauseExcerpt || "",
+                question: action.question,
+                raisedBy: actor,
+            });
+
+        case "raiseDispute":
+            return buildDisputePatch(action.kind, action.reason, actor);
+
+        case "confirmSelection":
+            /*
+              Written here rather than shared, because there is no engine for it
+              — and this is the shape the portal has always produced. The client
+              may only move a selection to approved, and only one they were
+              shown: no rate, no name, no other field is reachable from here.
+            */
+            return (prev: any) => ({
+                ...prev,
+                materialSelections: (prev?.materialSelections || []).map((m: any) =>
+                    m.id === action.selectionId
+                        ? { ...m, status: "approved", clientConfirmedAt: new Date().toISOString() }
+                        : m,
+                ),
+            });
+
+        default:
+            throw new HttpsError("invalid-argument", `Unknown action: ${String(action?.type)}`);
+    }
+}
+
+export const submitClientAction = onCall({ cors: true }, async (request) => {
+    const projectId: string = request.data?.projectId;
+    const action = request.data?.action;
+
+    const { email, profile } = await assertPortalClient(request, projectId);
+    const actor = profile.displayName || email || "Client";
+
+    const ref = db.collection("projects").doc(projectId);
+
+    /*
+      In a transaction because the studio saves the same document every couple
+      of seconds while a project is open. Read-modify-write outside one would
+      lose whichever of the two finished second, and the client's signature is
+      the more likely loser: it is one write against a stream of them.
+    */
+    const viewRef = ref.collection("portalView").doc("current");
+
+    await db.runTransaction(async (tx) => {
+        // Every read before any write — a transaction requires it.
+        const snap = await tx.get(ref);
+        if (!snap.exists) throw new HttpsError("not-found", "This project no longer exists.");
+        const viewSnap = await tx.get(viewRef);
+
+        const stored = snap.data() as any;
+        const { project, wasCompressed } = readStoredProject(stored);
+        const nextContext = patchFor(action, actor)(project.context || {});
+
+        tx.set(ref, writeableProject({ ...project, context: nextContext }, wasCompressed, stored));
+
+        /*
+          Rebuild the client's own copy, so their action is there when they come
+          back to it.
+
+          The portal renders from this projection, not from the project — so
+          before this, a client could sign a document, watch it turn signed, and
+          find it unsigned again on refresh, waiting on the studio to publish.
+          The signature was recorded; they just could not see it.
+
+          Only ever rebuilt, never created. If the studio has not published this
+          project, a client action must not be the thing that publishes it —
+          that decision belongs to the studio, and buildPortalView filters by
+          what is published rather than deciding it.
+
+          Three things are carried across rather than rebuilt: the scope, the
+          baseline its change markers are measured against, and the studio's
+          contact and bank details. None of them can be derived from the project
+          context — they are assembled by the studio's session and sent with the
+          projection — so recomputing here would quietly empty them.
+        */
+        if (viewSnap.exists) {
+            const previous = (viewSnap.data() as any)?.context || {};
+            const rebuilt = buildPortalView(
+                projectId,
+                nextContext,
+                previous.portalStudio,
+                previous.clientBoq,
+                previous.clientBoqBaseline,
+            );
+            tx.set(viewRef, rebuilt as any);
+        }
+    });
+
+    logger.info("Client action applied", { projectId, type: action?.type });
+    return { ok: true };
 });

@@ -117,7 +117,20 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
         executionPaid: Math.round(executionPaid),
         totalInvoicedBaseAmt: Math.round(totalInvoicedBaseAmt),
         pendingAmt: Math.round(pendingAmt),
-        calculateMilestoneTotal
+        calculateMilestoneTotal,
+
+        /*
+          Taxable (ex-GST) values, exposed for margin work.
+
+          `currentProjectValue` INCLUDES GST, so comparing it against BOQ cost —
+          which is ex-GST — overstates margin by the whole tax rate. Anything
+          computing profit must use these instead. Added rather than recomputed
+          elsewhere so the discount logic above stays the only implementation.
+        */
+        taxableExecution: Math.round(taxableExecution),
+        taxableDesign: Math.round(taxableDesign),
+        gstOnExecution: Math.round(gstOnExecution),
+        gstOnDesign: Math.round(gstOnDesign),
     };
 }
 

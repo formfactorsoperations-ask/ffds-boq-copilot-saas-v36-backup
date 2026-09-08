@@ -75,7 +75,7 @@ export interface ClientActionItem {
   subtitle: string;
   description: string;
   amount?: number;
-  targetTab: 'overview' | 'approvals' | 'designs' | 'materials' | 'scope' | 'financials' | 'feed' | 'roadmap';
+  targetTab: 'overview' | 'approvals' | 'decisions' | 'designs' | 'materials' | 'scope' | 'financials' | 'feed' | 'roadmap';
   actionLabel: string;
   actionType:
     | 'sign_terms'
@@ -725,7 +725,27 @@ function materialActions(context: ProjectContext): ClientActionItem[] {
   return items;
 }
 
-function decisionActions(context: ProjectContext): ClientActionItem[] {
+/**
+ * Whether a decision is a design decision or a site decision.
+ *
+ * Read from the record when the studio has said so, and otherwise from where
+ * the project actually is: nothing can be held up on site before execution has
+ * started. The consequence line was hardcoded to "Site work on this item is
+ * held until confirmed" for every decision, so a client in stage 2 — months
+ * from a site being handed over — was told site work was waiting on them.
+ */
+export function decisionNature(
+  dec: { category?: string; decisionNature?: string },
+  currentStageNumber: number,
+): 'design' | 'site' {
+  const explicit = (dec as any).decisionNature;
+  if (explicit === 'design' || explicit === 'site') return explicit;
+  // 'Site Condition' is the only category that is inherently about the site.
+  if (dec.category === 'Site Condition' && currentStageNumber >= 5) return 'site';
+  return currentStageNumber >= 5 ? 'site' : 'design';
+}
+
+function decisionActions(context: ProjectContext, currentStageNumber: number): ClientActionItem[] {
   const decisions = context.projectDecisions || [];
 
   return decisions
@@ -736,17 +756,23 @@ function decisionActions(context: ProjectContext): ClientActionItem[] {
       severity: 'high' as const,
       owner: 'client' as ActionOwner,
       title: dec.title,
-      subtitle: dec.roomId ? `Design decision • ${dec.roomId}` : 'Design decision',
+      subtitle: (() => {
+        const nature = decisionNature(dec as any, currentStageNumber);
+        const label = nature === 'site' ? 'Site decision' : 'Design decision';
+        return dec.roomId ? `${label} • ${dec.roomId}` : label;
+      })(),
       description: dec.description || 'A design choice is waiting on your confirmation.',
-      targetTab: 'approvals' as const,
-      actionLabel: 'Confirm selection',
+      targetTab: 'decisions' as const,
+      actionLabel: 'Review and decide',
       actionType: 'confirm_decision' as const,
       actionPayload: dec,
       date: dec.date,
       statusBadge: 'Awaiting your choice',
       consequence: dec.impactSchedule
         ? `Schedule impact: ${dec.impactSchedule}.`
-        : 'Site work on this item is held until confirmed.'
+        : decisionNature(dec as any, currentStageNumber) === 'site'
+          ? 'Site work on this item is held until confirmed.'
+          : 'Drawings for this item are held until confirmed.'
     }));
 }
 
@@ -848,7 +874,7 @@ export function calculateClientActionItems(
     ...queryActions(safeContext),
     ...paymentActions(safeContext, milestoneTotals),
     ...variationActions(safeContext),
-    ...decisionActions(safeContext),
+    ...decisionActions(safeContext, lifecycle.currentStageNumber),
     ...materialActions(safeContext)
   ];
 

@@ -25,6 +25,8 @@ interface AnalyticsTabProps {
   aiStrategy: AIStrategy;
   tiers?: ProposalTier[];
   projectContext?: ProjectContext;
+  /** Real role from orgData. Repricing is owner-only. */
+  currentUserRole?: string;
 }
 
 export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
@@ -34,9 +36,15 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
   activeTab: _activeTab,
   aiStrategy,
   tiers = [],
-  projectContext
+  projectContext,
+  currentUserRole = 'Designer'
 }) => {
   const [subView, setSubView] = useState<'diagnostic' | 'margins' | 'gates' | 'simulator'>('diagnostic');
+
+  /* Only owners reprice, and never once the BOQ is frozen. Both guards are
+     passed down rather than assumed by the children -- this screen used to send
+     isOwner={true} unconditionally. */
+  const canReprice = currentUserRole !== 'Designer';
 
   // Compute Comprehensive Real-Time Project Health Report
   const healthReport = useMemo(() => {
@@ -114,13 +122,10 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
             boq={boq}
             setBoq={setBoq}
             bank={bank}
+            boqFrozen={healthReport.metrics.boqFrozen}
+            canEdit={canReprice}
           />
 
-          <GateReadinessAudit
-            projectContext={projectContext}
-            boq={boq}
-            totalSell={healthReport.metrics.totalSell}
-          />
         </div>
       )}
 
@@ -130,7 +135,8 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
           <ForensicMarginMatrix
             boq={boq}
             setBoq={setBoq}
-            isOwner={true}
+            isOwner={canReprice}
+            boqFrozen={healthReport.metrics.boqFrozen}
           />
         </div>
       )}

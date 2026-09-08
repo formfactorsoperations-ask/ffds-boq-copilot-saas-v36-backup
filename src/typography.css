@@ -1,0 +1,80 @@
+/* ============================================================================
+   TYPOGRAPHY — one scale, one family, in one place.
+
+   Type used to be decided at ~2,900 call sites. That is how the app ended up
+   with six half-pixel sizes sitting beside the whole ones they duplicated
+   (10.5 next to 10, 11.5 next to 11), and with the Execution Agreement set in
+   a different face from the Terms Docket a client had signed the week before.
+
+   Everything about type is now decided here:
+
+     - the family, once, for the app and for printed documents
+     - the scale, as tokens, so a step is changed in one line
+     - a guard that snaps stray off-scale sizes back onto the scale, so drift
+       corrects itself instead of needing another sweep through the components
+
+   Anything that legitimately needs its own face — code, reference numbers —
+   is listed explicitly at the bottom rather than opting out ad hoc.
+   ========================================================================= */
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto,
+               Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+               "Liberation Mono", "Courier New", monospace;
+
+  /* The studio's UI scale. Dense by design — this is an ops tool with tables
+     — but every step is a whole pixel and every step earns its place. */
+  --text-micro:    8px;   /* uppercase tags, table micro-labels          */
+  --text-mini:     9px;   /* dense table meta                           */
+  --text-label:   10px;   /* field labels, chips — the workhorse        */
+  --text-caption: 11px;   /* secondary lines under a heading            */
+  --text-body:    12px;   /* default reading size in the UI             */
+  --text-rich:    13px;   /* longer prose blocks                        */
+  --text-lead:    15px;   /* lead paragraphs, card titles               */
+}
+
+/* ── Family ───────────────────────────────────────────────────────────────
+   Set on the root and inherited. The ops font-choice classes in index.html
+   carry !important and still override this, which is what lets a studio pick
+   a different face without touching a component. */
+body {
+  font-family: var(--font-sans);
+}
+
+/* ── Printed documents ────────────────────────────────────────────────────
+   The document sheets are rendered to PDF, where inheritance from <body> is
+   not dependable, so the surfaces name the family themselves — once, here,
+   instead of in each sheet's own <style> block. */
+.pdf-document,
+.doc-body {
+  font-family: var(--font-sans);
+}
+
+/* ── Off-scale guard ──────────────────────────────────────────────────────
+   Arbitrary sizes are easy to type and impossible to police by review. Any
+   half-pixel value resolves to the nearest real step, so a stray `text-[10.5px]`
+   renders at 10px the day it is written rather than the day someone notices.
+
+   Deliberately narrow: it catches values that should never have existed and
+   leaves every legitimate size alone. */
+[class*="text-[7.5px]"]  { font-size: var(--text-micro)   !important; }
+[class*="text-[8.5px]"]  { font-size: var(--text-mini)    !important; }
+[class*="text-[9.5px]"]  { font-size: var(--text-label)   !important; }
+[class*="text-[10.5px]"] { font-size: var(--text-label)   !important; }
+[class*="text-[11.5px]"] { font-size: var(--text-caption) !important; }
+[class*="text-[12.5px]"] { font-size: var(--text-body)    !important; }
+[class*="text-[13.5px]"] { font-size: var(--text-rich)    !important; }
+
+/* Below 8px is not readable at any weight, and it had crept in twice. */
+[class*="text-[6px]"],
+[class*="text-[7px]"] { font-size: var(--text-micro) !important; }
+
+/* ── Deliberate exceptions ────────────────────────────────────────────────
+   Reference numbers, hashes and codes are compared character by character, so
+   they stay monospaced. This is the only face that is not the sans above. */
+.font-mono,
+code,
+pre {
+  font-family: var(--font-mono);
+}

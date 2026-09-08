@@ -1,11 +1,11 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, initializeFirestore, Firestore, setLogLevel } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, Firestore, setLogLevel, connectFirestoreEmulator } from 'firebase/firestore';
 
 setLogLevel('silent');
-import { getAuth, Auth } from 'firebase/auth';
+import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
-import { getFunctions, Functions } from 'firebase/functions';
+import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
 import { firebaseConfig as fileConfig } from './firebaseConfig';
 import appletConfig from '../firebase-applet-config.json';
 
@@ -91,13 +91,85 @@ if (finalConfig) {
             db = getFirestore(app);
         } else {
             app = initializeApp(finalConfig);
-            db = initializeFirestore(app, {
-                experimentalForceLongPolling: true,
-            });
+            /*
+              `experimentalForceLongPolling` is kept for the live project — it is
+              what makes Firestore work behind proxies that mangle streaming —
+              but it is a known contributor to the SDK's b815/ca9 watch-stream
+              assertions, and against a local emulator there is nothing to work
+              around. Left off there so emulator sessions exercise the normal
+              transport.
+            */
+            const emulating = (() => {
+                try {
+                    if ((import.meta as any).env?.VITE_USE_FIREBASE_EMULATOR === 'true') return true;
+                    return localStorage.getItem('ffds_use_emulator') === 'true';
+                } catch { return false; }
+            })();
+
+            /*
+              Transport: detected, not forced.
+
+              React.StrictMode (index.tsx) double-mounts every component in dev,
+              so each of the app's 25 onSnapshot listeners is subscribed, torn
+              down and resubscribed immediately. Long-polling carries watch-target
+              state across poll cycles, so that add/remove race has a far wider
+              window than it does over WebChannel — which is how the SDK ends up
+              processing a response for a target it has already dropped and
+              throwing the b815/ca9 assertion. Once thrown the client is dead
+              until the page reloads, which is the "Application Notice" screen.
+
+              `experimentalForceLongPolling` was on for every session. It was
+              there for the real problem it solves — proxies and networks that
+              mangle streaming — but forcing it made every developer session pay
+              a cost that only some networks incur. Auto-detect keeps the
+              protection: the SDK opens a stream, and falls back to long-polling
+              on its own when the network turns out to need it.
+
+              `ffds_force_long_polling` in localStorage pins it back on, for a
+              network where detection turns out not to be enough.
+            */
+            const forceLongPolling = (() => {
+                try { return localStorage.getItem('ffds_force_long_polling') === 'true'; }
+                catch { return false; }
+            })();
+
+            db = initializeFirestore(
+                app,
+                emulating
+                    ? {}
+                    : forceLongPolling
+                        ? { experimentalForceLongPolling: true }
+                        : { experimentalAutoDetectLongPolling: true },
+            );
         }
         auth = getAuth(app);
         storage = getStorage(app);
         functions = getFunctions(app);
+
+        /*
+          Local emulator, opt-in only.
+
+          Set localStorage.ffds_use_emulator = 'true' (or VITE_USE_FIREBASE_EMULATOR
+          at build time) to point this session at `firebase emulators:start`
+          rather than the live project, so the portal, the rules and the signed-in
+          paths can be exercised end to end without touching production data.
+
+          Never on by default: nothing changes unless the flag is set on this device.
+        */
+        const wantsEmulator = (() => {
+            try {
+                if ((import.meta as any).env?.VITE_USE_FIREBASE_EMULATOR === 'true') return true;
+                return localStorage.getItem('ffds_use_emulator') === 'true';
+            } catch { return false; }
+        })();
+
+        if (wantsEmulator && db) {
+            connectFirestoreEmulator(db, 'localhost', 8080);
+            connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+            connectFunctionsEmulator(functions, 'localhost', 5001);
+            console.warn('Firebase EMULATOR mode — not talking to the live project.');
+        }
+
         console.log("Firebase initialized successfully");
     } catch (e) {
         console.error("Firebase initialization error:", e);

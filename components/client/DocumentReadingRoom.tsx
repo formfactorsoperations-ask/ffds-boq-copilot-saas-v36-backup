@@ -47,7 +47,10 @@ import {
   AlertCircle,
   Clock,
   ChevronRight,
-  Eye
+  Eye,
+  ZoomIn,
+  ZoomOut,
+  Type
 } from 'lucide-react';
 
 const DOC_TITLES: Record<ClientDocumentKind, string> = {
@@ -56,7 +59,7 @@ const DOC_TITLES: Record<ClientDocumentKind, string> = {
   execution_agreement: 'Master Execution Agreement',
   onboarding_kit: 'Onboarding Kit',
   handover_docket: 'Handover & Acceptance Docket',
-  variation_order: 'Variation Order'
+  snag_list: 'Snag List & Defect Report'
 };
 
 interface DocumentReadingRoomProps {
@@ -77,6 +80,72 @@ interface ReadingProgress {
   maxScrollPercent: number;
   downloaded: boolean;
 }
+
+/**
+ * Scales a fixed-width page down to fit or lets the reader zoom in up to 200% for crystal-crisp text.
+ */
+const FitToWidth: React.FC<{
+  children: React.ReactNode;
+  userZoom?: number | 'fit';
+  textSize?: 'normal' | 'large';
+  onNaturalScaleChange?: (scale: number) => void;
+}> = ({ children, userZoom = 'fit', textSize = 'normal', onNaturalScaleChange }) => {
+  const outer = useRef<HTMLDivElement | null>(null);
+  const inner = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState({ fitScale: 1, height: 0 });
+
+  useEffect(() => {
+    const o = outer.current as HTMLElement | null;
+    const i = inner.current as HTMLElement | null;
+    if (!o || !i) return;
+
+    const measure = () => {
+      const available = o.clientWidth;
+      const natural = i.offsetWidth || available;
+      const fitScale = natural > available && available > 0 ? available / natural : 1;
+      const effectiveScale = typeof userZoom === 'number' ? userZoom : fitScale;
+      const height = i.offsetHeight * (Number(effectiveScale) || 1);
+      setBox(prev =>
+        Math.abs(prev.fitScale - fitScale) < 0.001 && Math.abs(prev.height - height) < 1
+          ? prev
+          : { fitScale, height }
+      );
+      if (onNaturalScaleChange) onNaturalScaleChange(fitScale);
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(o);
+    ro.observe(i);
+    return () => ro.disconnect();
+  }, [children, userZoom, textSize, onNaturalScaleChange]);
+
+  const activeScale = userZoom === 'fit' ? box.fitScale : userZoom;
+  const isZoomed = activeScale > box.fitScale + 0.02;
+
+  return (
+    <div
+      ref={outer}
+      className={`w-full ${isZoomed ? 'overflow-x-auto overflow-y-visible' : 'overflow-hidden'} transition-all`}
+      style={{
+        height: box.height || undefined,
+        WebkitOverflowScrolling: 'touch'
+      }}
+    >
+      <div
+        ref={inner}
+        className={textSize === 'large' ? 'text-[16px] leading-relaxed' : ''}
+        style={{
+          transform: activeScale === 1 ? undefined : `scale(${activeScale})`,
+          transformOrigin: 'top left',
+          width: 'max-content',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
 
 const emptyProgress = (): ReadingProgress => ({
   openedAt: Date.now(),
@@ -104,8 +173,25 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
       const found = (context.documents?.issues || []).find(i => i.id === issueId);
       if (found) return found;
     }
-    return getCurrentIssue(context, kind);
+    return getCurrentIssue(context, kind, { clientView: true });
   }, [context, kind, issueId]);
+
+  /*
+    Questions already on the record for this exact issue.
+
+    Scoped to the issue, not the kind: a reissued document is a different set of
+    words, and carrying a question about v1 onto v3 would attach it to text the
+    client never queried.
+  */
+  const clauseQueries = useMemo(
+    () => (context.documents?.queries || [])
+      .filter(q => q.issueId === issue?.id)
+      .map(q => ({
+        id: q.id, ref: q.clauseRef, question: q.question,
+        status: q.status, askedAt: q.raisedAt, replies: q.replies || [],
+      })),
+    [context.documents?.queries, issue?.id],
+  );
 
   const isAddendum = !!issue?.addendumTo;
   const docState = useMemo(() => resolveDocumentState(context, kind), [context, kind]);
@@ -126,6 +212,27 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
 
   const showRedlineFirst = docState === 'amended' && diff.length > 0;
   const [view, setView] = useState<'redline' | 'document'>(showRedlineFirst ? 'redline' : 'document');
+
+  // ── Zoom & Mobile Tabs Controls ──────────────────────────────────────────
+  const [userZoom, setUserZoom] = useState<number | 'fit'>('fit');
+  const [naturalFitScale, setNaturalFitScale] = useState<number>(1);
+  const [textSize, setTextSize] = useState<'normal' | 'large'>('normal');
+  const [mobileTab, setMobileTab] = useState<'document' | 'terms'>('document');
+
+  const handleZoomIn = () => {
+    setUserZoom(prev => {
+      const current = prev === 'fit' ? naturalFitScale : prev;
+      return Math.min(2.0, +(current + 0.2).toFixed(2));
+    });
+  };
+
+  const handleZoomOut = () => {
+    setUserZoom(prev => {
+      const current = prev === 'fit' ? naturalFitScale : prev;
+      const next = Math.max(0.4, +(current - 0.2).toFixed(2));
+      return next <= naturalFitScale ? 'fit' : next;
+    });
+  };
 
   // ── Persisted reading progress, keyed to the exact issue ─────────────────
   const storageKey = issue ? `ffds_reading_${projectData.id}_${issue.id}` : '';
@@ -275,16 +382,23 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
 
   const scrollToSection = (ref: string) => {
     setView('document');
+    setMobileTab('document');
     window.setTimeout(() => {
       const node = document.getElementById(`sec-${ref}`);
-      node?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (node) {
+        node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        node.classList.add('ring-4', 'ring-[#0066CC]/30', 'transition-all', 'duration-700');
+        setTimeout(() => {
+          node.classList.remove('ring-4', 'ring-[#0066CC]/30');
+        }, 2000);
+      }
     }, 60);
   };
 
   // ── Section index ────────────────────────────────────────────────────────
   // Read the sheet's own section anchors so the contents rail works for every
   // document, not only the ones with an authored clause list.
-  const [domSections, setDomSections] = useState<{ ref: string; title: string }[]>([]);
+  const [domSections, setDomSections] = useState<{ ref: string; title: string; words: number }[]>([]);
   useEffect(() => {
     let cancelled = false;
     const read = () => {
@@ -308,7 +422,10 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
             .replace(/\s+/g, ' ')
             .trim();
         }
-        return { ref, title: title || `Section ${ref}` };
+        // Word count off the rendered section, so a reading estimate works for
+        // every sheet rather than only the ones with an authored clause list.
+        const words = (el.textContent || '').trim().split(/\s+/).filter(Boolean).length;
+        return { ref, title: title || `Section ${ref}`, words };
       }).filter(s2 => s2.ref);
       setDomSections(prev =>
         prev.length === found.length && prev.every((p2, i) => p2.ref === found[i].ref)
@@ -330,11 +447,18 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
       return sections.map((s: any) => ({
         ref: String(s.n),
         // Titles carry the same {{token}} placeholders as clause bodies.
-        title: resolveTokens(String(s.title || ''), settings, studioName)
+        title: resolveTokens(String(s.title || ''), settings, studioName),
+        // Length comes from what was actually rendered — the authored blocks
+        // vary in shape per sheet, the DOM does not.
+        words: domSections.find(d => d.ref === String(s.n))?.words || 0,
       }));
     }
     if (materialSections.length > 0) {
-      return materialSections.map(s => ({ ref: s.ref, title: s.title }));
+      return materialSections.map(s => ({
+        ref: s.ref,
+        title: s.title,
+        words: domSections.find(d => d.ref === s.ref)?.words || 0,
+      }));
     }
     // Acknowledge and review documents have no authored clause list, so the
     // contents come from the sheet itself — whatever the studio's own page
@@ -343,6 +467,27 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
   }, [issue, materialSections, studioName, domSections]);
 
   const readCount = sectionIndex.filter(s => (progress.dwellByRef[s.ref] || 0) > 0).length;
+
+  /**
+   * How long a section takes to read, at 200 words a minute.
+   *
+   * Contract prose is slower than that in practice, but the number is here to
+   * let someone budget their evening — "this is four minutes, not forty" — not
+   * to be precise. Anything under a minute reads as "under a min" rather than
+   * "0 min", which would look like an error.
+   */
+  const readTime = (words: number): string | null => {
+    if (!words) return null;
+    const mins = words / 200;
+    if (mins < 1) return 'under a min';
+    return `${Math.round(mins)} min`;
+  };
+
+  /** Whole-document estimate, for the header. */
+  const totalMinutes = Math.max(
+    1,
+    Math.round(sectionIndex.reduce((n, s) => n + (s.words || 0), 0) / 200),
+  );
 
   // ── Clause query composer ────────────────────────────────────────────────
   const [queryDraft, setQueryDraft] = useState<{ ref: string; excerpt: string } | null>(null);
@@ -353,12 +498,32 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
     setQueryText('');
   }, []);
 
+  /*
+    Confirmation has to live here. The portal's success banner renders inside
+    the overview, underneath this z-50 overlay — it was only ever seen because
+    asking used to close the document. Now that the reader stays put, the
+    acknowledgement has to be on the surface the action happened on.
+  */
+  const [queryToast, setQueryToast] = useState<string | null>(null);
+
   const submitQuery = () => {
     if (!queryDraft || !queryText.trim() || !onRaiseQuery) return;
-    onRaiseQuery(queryDraft.ref, queryDraft.excerpt, queryText.trim());
+    const ref = queryDraft.ref;
+    onRaiseQuery(ref, queryDraft.excerpt, queryText.trim());
     setQueryDraft(null);
     setQueryText('');
+    setQueryToast(
+      ref === 'General'
+        ? 'Your question has been sent to your studio.'
+        : `Your question about clause ${ref} has been sent to your studio.`,
+    );
   };
+
+  useEffect(() => {
+    if (!queryToast) return;
+    const t = setTimeout(() => setQueryToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [queryToast]);
 
   // ── Signing ──────────────────────────────────────────────────────────────
   const [signing, setSigning] = useState(false);
@@ -428,7 +593,7 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
           </p>
           <button
             onClick={onClose}
-            className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl cursor-pointer"
+            className="px-5 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold text-xs rounded-xl cursor-pointer"
           >
             Close
           </button>
@@ -437,34 +602,66 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
     );
   }
 
+  const currentDisplayZoom = userZoom === 'fit' ? `${Math.round(naturalFitScale * 100)}%` : `${Math.round(userZoom * 100)}%`;
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex flex-col">
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between gap-4 shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-[#0066CC]/10 text-[#0066CC] flex items-center justify-center shrink-0">
-            <FileText className="w-4.5 h-4.5" />
+      <header className="bg-white border-b border-slate-200 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-4 shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#0066CC]/10 text-[#0066CC] flex items-center justify-center shrink-0">
+            <FileText className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-bold text-slate-900 leading-tight truncate">{title}</h2>
-            <p className="text-[11px] text-slate-400 font-medium">
+            <h2 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight truncate">{title}</h2>
+            <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate">
               {issue.reference} · Version {issue.version}
               {isExecuted && <span className="text-emerald-600 font-bold"> · Signed</span>}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Mobile View Switcher */}
+        {!readOnly && (
+          <div className="lg:hidden flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0">
+            <button
+              onClick={() => setMobileTab('document')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors ${
+                mobileTab === 'document' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
+              }`}
+            >
+              Document
+            </button>
+            <button
+              onClick={() => setMobileTab('terms')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors flex items-center gap-1 ${
+                mobileTab === 'terms' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
+              }`}
+            >
+              <span>Terms</span>
+              {materialSections.length > 0 && (
+                <span className={`px-1 rounded-full text-[9px] font-black ${
+                  allAcknowledged ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {ackCount}/{materialSections.length}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={handleDownload}
-            className="px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-1.5"
+            className="px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-1"
+            title="Download / Print"
           >
             <Download className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Download</span>
           </button>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -482,6 +679,7 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
               <>
                 <p className="text-xs font-bold text-slate-800 mt-1.5">
                   {readCount} of {sectionIndex.length} sections read
+                  <span className="font-medium text-slate-400"> · about {totalMinutes} min in total</span>
                 </p>
                 <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mt-2">
                   <div
@@ -539,15 +737,29 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
                       <span className="font-mono text-slate-400 mr-1.5">{s.ref}</span>
                       {s.title}
                     </span>
-                    {material && !acked && (
-                      <span className="block text-[9px] font-bold uppercase tracking-wider text-amber-700 mt-0.5">
-                        Needs your tick
-                      </span>
-                    )}
+                    {/* What this row still wants from the reader, and what it
+                        will cost them. The changed marker used to be a bare dot
+                        with a title attribute — invisible on touch, and
+                        meaningless to anyone who did not hover it. */}
+                    <span className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      {material && !acked && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700">
+                          Needs your tick
+                        </span>
+                      )}
+                      {changed && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          Changed
+                        </span>
+                      )}
+                      {readTime(s.words) && (
+                        <span className="text-[10px] font-semibold text-slate-400 tabular-nums">
+                          {readTime(s.words)}
+                        </span>
+                      )}
+                    </span>
                   </span>
-                  {changed && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0" title="Changed" />
-                  )}
                 </button>
               );
             })}
@@ -558,9 +770,76 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="flex-1 min-w-0 overflow-y-auto px-4 sm:px-8 py-6"
+          className={`flex-1 min-w-0 overflow-y-auto px-2 sm:px-8 py-3 sm:py-6 flex flex-col ${
+            mobileTab === 'terms' ? 'hidden lg:flex' : 'flex'
+          }`}
         >
-          <div className="max-w-3xl mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-10">
+          {/* Zoom & Reading Enhancement Toolbar */}
+          <div className="w-full max-w-[884px] mx-auto mb-3 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 px-3 py-2 flex flex-wrap items-center justify-between gap-2 shadow-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">Zoom:</span>
+              <button
+                onClick={handleZoomOut}
+                className="p-1 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setUserZoom('fit')}
+                className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
+                  userZoom === 'fit' ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+                title="Fit to screen width"
+              >
+                Fit
+              </button>
+              <button
+                onClick={() => setUserZoom(1.0)}
+                className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
+                  userZoom === 1.0 ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+                title="Actual 100% size (sharpest text)"
+              >
+                100%
+              </button>
+              <button
+                onClick={() => setUserZoom(1.25)}
+                className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer hidden sm:inline-block ${
+                  userZoom === 1.25 ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+                title="Comfortable 125% zoom"
+              >
+                125%
+              </button>
+              <button
+                onClick={handleZoomIn}
+                className="p-1 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+                title="Zoom In"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-[10px] font-mono text-slate-400 font-bold ml-1">
+                {currentDisplayZoom}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 ml-auto">
+              <button
+                onClick={() => setTextSize(prev => prev === 'normal' ? 'large' : 'normal')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border flex items-center gap-1 cursor-pointer transition-colors ${
+                  textSize === 'large' ? 'bg-amber-500 text-white border-amber-500' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+                title="Toggle large text mode for comfortable reading"
+              >
+                <Type className="w-3.5 h-3.5" />
+                <span>{textSize === 'large' ? 'Large Text' : 'Type'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Paper Container */}
+          <div className="w-full max-w-[884px] mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm p-2 sm:p-6 mb-16 lg:mb-0">
             {view === 'redline' && diff.length > 0 ? (
               <div className="space-y-5">
                 <div>
@@ -594,21 +873,63 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
                 </button>
               </div>
             ) : (
-              <DocumentRenderer
-                issue={issue}
-                surface="portal"
-                studioName={studioName}
-                onClauseQuery={readOnly || !onRaiseQuery ? undefined : handleClauseQuery}
-                highlightRefs={changedRefs}
-              />
+              <FitToWidth
+                userZoom={userZoom}
+                textSize={textSize}
+                onNaturalScaleChange={setNaturalFitScale}
+              >
+                <DocumentRenderer
+                  issue={issue}
+                  surface="portal"
+                  studioName={studioName}
+                  onClauseQuery={onRaiseQuery ? handleClauseQuery : undefined}
+                  clauseQueries={clauseQueries}
+                  highlightRefs={changedRefs}
+                />
+              </FitToWidth>
             )}
           </div>
+
+          {/* Floating Mobile Bottom Action Pill */}
+          {!readOnly && (
+            <div className="lg:hidden fixed bottom-4 left-4 right-4 z-40 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xl p-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className={`w-4 h-4 ${allAcknowledged ? 'text-emerald-600' : 'text-amber-600'}`} />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-900">
+                    {allAcknowledged ? 'All terms confirmed' : `${ackCount} of ${materialSections.length} terms confirmed`}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    {canSign ? 'Ready to sign' : 'Review & tick key terms'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setMobileTab('terms')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  canSign
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                    : 'bg-[#0066CC] hover:bg-[#0055B3] text-white shadow-sm'
+                }`}
+              >
+                {canSign ? 'Sign Document →' : 'Review Key Terms →'}
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Right rail — what it offers depends on what the document asks. */}
-        {!readOnly && mode !== 'review' && (
-          <aside className="lg:w-96 shrink-0 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col max-h-[52vh] lg:max-h-none">
-            {mode === 'acknowledge' ? (
+        {/* Right rail — what it offers depends on what the document asks.
+
+            Review-mode documents were excluded outright, so the Onboarding Kit
+            could be read to the last line and then simply closed: no receipt,
+            nothing on the record, and no way for the studio to know it had
+            landed. A review document still deserves an acknowledgement — it
+            just carries no legal weight, which the copy below says. */}
+        {!readOnly && (
+          <aside className={`lg:w-96 shrink-0 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col ${
+            mobileTab === 'document' ? 'hidden lg:flex' : 'flex flex-1'
+          }`}>
+            {(mode === 'acknowledge' || mode === 'review') ? (
               /* ── Acknowledge: one confirmation, no signature ceremony ── */
               <>
                 <div className="px-5 py-4 border-b border-slate-100">
@@ -633,7 +954,7 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
                     </p>
                     <p className="text-[11px] text-slate-500 leading-relaxed pt-1">
                       If anything here looks wrong, ask your studio about it before confirming —
-                      use “Ask about this” next to any line.
+                      hover any section and use the Ask button in the margin.
                     </p>
                   </div>
                 </div>
@@ -658,7 +979,9 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
                     }`}
                   >
                     <Check className="w-4 h-4" />
-                    {canAcknowledge ? 'I have received and read this' : 'Have a read first'}
+                    {canAcknowledge
+                      ? (mode === 'review' ? 'I have read this' : 'I have received and read this')
+                      : 'Have a read first'}
                   </button>
                   {!canAcknowledge && (
                     <p className="text-[11px] text-slate-400 mt-2 text-center">
@@ -772,6 +1095,29 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
         )}
       </div>
 
+      {/* Sent. The lasting record is the mark now sitting on the clause. */}
+      {queryToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] max-w-[calc(100vw-2rem)]">
+          <div className="flex items-start gap-2.5 rounded-2xl bg-white/95 backdrop-blur-md border border-sky-200
+                          shadow-xl shadow-sky-900/15 px-4 py-3">
+            <MessageCircleQuestion className="w-4 h-4 text-[#0066CC] shrink-0 mt-px" />
+            <div className="min-w-0">
+              <p className="text-[12px] font-bold text-slate-900">{queryToast}</p>
+              <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                It is marked on that clause — keep reading, your place is saved.
+              </p>
+            </div>
+            <button
+              onClick={() => setQueryToast(null)}
+              className="p-1 -m-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer shrink-0"
+              aria-label="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Clause query composer ──────────────────────────────────────── */}
       {queryDraft && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
@@ -810,7 +1156,9 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
 
               <p className="text-[10px] text-slate-400 leading-relaxed">
                 Your studio sees this clause exactly as written above, alongside your question.
-                Signing stays paused until they reply.
+                {readOnly
+                  ? ' Your question is added to this document — asking changes nothing you have already signed.'
+                  : ' Signing stays paused until they reply.'}
               </p>
 
               <div className="flex items-center justify-end gap-2">
