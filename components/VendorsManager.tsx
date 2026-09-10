@@ -42,6 +42,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
   projects?: FullProjectData[];
+  /*
+    Reports the directory's shape upward so the library header can show it.
+
+    The counts are held here because this is where the vendors are loaded; the
+    shell has no access to them, and duplicating the load to draw one dial
+    would mean two readers that could disagree.
+  */
+  onStats?: (stats: { total: number; active: number; reachable: number }) => void;
 }
 
 type ScopeFilter = 'all' | 'material' | 'labour' | 'turnkey' | 'active';
@@ -184,7 +192,7 @@ const WHATSAPP_VENDOR_TEMPLATES = [
   }
 ];
 
-export default function VendorsManager({ projects = [] }: Props) {
+export default function VendorsManager({ projects = [], onStats }: Props) {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -194,6 +202,15 @@ export default function VendorsManager({ projects = [] }: Props) {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   
   // Drawer / Modal States
+  useEffect(() => {
+    onStats?.({
+      total: vendors.length,
+      active: vendors.filter(v => v.active).length,
+      // A directory entry nobody can contact is not a supplier, it is a note.
+      reachable: vendors.filter(v => !!(v.phone || v.email)).length,
+    });
+  }, [vendors, onStats]);
+
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [editingVendor, setEditingVendor] = useState<Partial<Vendor> | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -523,26 +540,14 @@ export default function VendorsManager({ projects = [] }: Props) {
   }
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto pb-12">
+    <div className="space-y-6 w-full pb-12">
       
-      {/* 1. TOP HEADER & ACTIONS */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700">
-              <Store className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Studio Procurement & Supplier Network</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold font-serif tracking-tight text-slate-900">
-              Vendors Directory
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500 max-w-2xl leading-relaxed">
-              Central repository of verified material suppliers, specialist trade contractors, and turnkey execution partners across all studio projects.
-            </p>
-          </div>
-
-          {/* Action Toolbar */}
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+      {/*
+        Actions only. The title, the description and the reachability dial come
+        from the shared console header the library shell renders above this --
+        keeping a second heading here gave the screen two of everything.
+      */}
+      <div className="flex flex-wrap items-center justify-end gap-2.5">
             {vendors.length === 0 ? (
               <button
                 id="btn-seed-curated"
@@ -561,7 +566,7 @@ export default function VendorsManager({ projects = [] }: Props) {
                 className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all border border-slate-200 flex items-center gap-1.5 cursor-pointer"
                 title="Scan all project BOQs for new vendor names"
               >
-                <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
+                <RefreshCw className="w-3.5 h-3.5 text-[#0066CC]" />
                 <span className="hidden sm:inline">Sync from Projects</span>
               </button>
             )}
@@ -583,25 +588,23 @@ export default function VendorsManager({ projects = [] }: Props) {
               id="btn-add-vendor-main"
               type="button"
               onClick={openAddModal}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors shadow-xs flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-semibold transition-colors shadow-xs flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add Vendor</span>
             </button>
-          </div>
-        </div>
       </div>
 
       {/* 2. KPI METRIC SUMMARY STRIP */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 hud-panel-in">
         {/* Metric 1: Total Directory */}
         <div 
           onClick={() => { setScopeFilter('all'); setSelectedCategory('all'); }}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'all' && selectedCategory === 'all' ? 'bg-sky-50/80 border-sky-300 ring-2 ring-sky-400/20 shadow-sm' : 'bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs'}`}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'all' && selectedCategory === 'all' ? 'bg-[#0066CC]/5 border-[#0066CC]/40 ring-2 ring-[#0066CC]/15 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Directory</span>
-            <div className="w-7 h-7 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
               <Store className="w-4 h-4" />
             </div>
           </div>
@@ -615,7 +618,7 @@ export default function VendorsManager({ projects = [] }: Props) {
         {/* Metric 2: Material Suppliers */}
         <div 
           onClick={() => setScopeFilter('material')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'material' ? 'bg-blue-50/80 border-blue-300 ring-2 ring-blue-400/20 shadow-sm' : 'bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs'}`}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'material' ? 'bg-blue-50/80 border-blue-300 ring-2 ring-blue-400/20 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Material Suppliers</span>
@@ -633,17 +636,17 @@ export default function VendorsManager({ projects = [] }: Props) {
         {/* Metric 3: Labour Contractors */}
         <div 
           onClick={() => setScopeFilter('labour')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'labour' ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400/20 shadow-sm' : 'bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs'}`}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'labour' ? 'bg-[#0066CC]/5 border-[#0066CC]/40 ring-2 ring-[#0066CC]/15 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Labour Contractors</span>
-            <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
               <Users className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900">{metrics.labourCount}</span>
-            <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">Labour</span>
+            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">Labour</span>
           </div>
           <p className="text-[10px] text-slate-400 mt-0.5">Trade & artisan teams</p>
         </div>
@@ -651,26 +654,26 @@ export default function VendorsManager({ projects = [] }: Props) {
         {/* Metric 4: Turnkey Subcontractors */}
         <div 
           onClick={() => setScopeFilter('turnkey')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'turnkey' ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-400/20 shadow-sm' : 'bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs'}`}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'turnkey' ? 'bg-[#0066CC]/5 border-[#0066CC]/40 ring-2 ring-[#0066CC]/15 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Turnkey Partners</span>
-            <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
               <Briefcase className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900">{metrics.turnkeyCount}</span>
-            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded">Turnkey</span>
+            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">Turnkey</span>
           </div>
           <p className="text-[10px] text-slate-400 mt-0.5">End-to-end execution</p>
         </div>
 
         {/* Metric 5: Average Lead Time */}
-        <div className="p-4 rounded-2xl border bg-white border-slate-200/80 shadow-2xs">
+        <div className="p-4 rounded-2xl border hud-well border-slate-200/80">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Avg Lead Time</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
               <Clock className="w-4 h-4" />
             </div>
           </div>
@@ -783,7 +786,7 @@ export default function VendorsManager({ projects = [] }: Props) {
             onClick={() => setSelectedCategory('all')}
             className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
               selectedCategory === 'all'
-                ? 'bg-slate-900 text-white'
+                ? 'bg-[#0066CC] text-white'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >

@@ -1,12 +1,15 @@
 
 import React, { useState } from 'react';
+import { downscalePlanToBase64 } from '../lib/imageDownscale';
+import { uploadPlanImage } from '../services/planStorage';
 import { showSuccessWithNext } from './SuccessWithNextToast';
-import { Item, ProjectContext, ProposalTier, AIStrategy, MaterialSuggestion, TimelinePhase, LeadProfile, DecisionBrainOutput } from '../types';
-import { generateStandardPackages, TemplateData } from '../lib/standardPackages';
+import { Item, ProjectContext, ProposalTier, AIStrategy, MaterialSuggestion, TimelinePhase, LeadProfile, DecisionBrainOutput, Room } from '../types';
+import { generateStandardPackages, TemplateData, resolveActiveTemplate, ensureRoomsExistForTemplate, detectRoomType, roomFamily } from '../lib/standardPackages';
+import { ensureScopeRooms, uniqueRoomNames, polishRoomNames } from '../lib/scopeBuckets';
 import { SparklesIcon, PencilIcon, ArrowRightIcon, UploadIcon, ListIcon } from './Icons';
 import { FFDSLogo } from './FFDSLogo';
 import ProjectContextCard from './ProjectContextCard';
-import { analyzeFloorPlan, isAiAvailable, generateProjectTimeline, generateMaterialMoodBoard, generateTieredBoqPackages } from '../services/geminiService';
+import { analyzeFloorPlan, isAiAvailable, generateProjectTimeline, generateMaterialMoodBoard, generateTieredBoqPackages, estimateRoomSizes } from '../services/geminiService';
 import { id as generateId } from '../lib/utils';
 import { motion } from 'framer-motion';
 import { AI_STRATEGIES } from '../constants';
@@ -67,7 +70,10 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       onCancel
   } = props;
 
-  const [step, setStep] = useState(0); 
+  const [step, setStep] = useState(0);
+  // The plan itself, held for analysis and preview only — never persisted.
+  const [planBase64, setPlanBase64] = useState<string | null>(null);
+  const [planUploadError, setPlanUploadError] = useState<string | null>(null);
   const [setupMethod, setSetupMethod] = useState<SetupMethod>('manual');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -77,32 +83,186 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
   
   const isContextComplete = (projectContext.rooms || []).length > 0 && projectContext.area > 0;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = (reader.result as string).replace('data:', '').replace(/^.+,/, '');
-        setProjectContext(p => ({ ...p, floorplanImage: base64String }));
-      };
-      reader.readAsDataURL(file);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0]) return;
+    const file = e.target.files[0];
+    try {
+      // Shrunk before it goes anywhere: a 4000px plan costs the studio upload
+      // time and the client load time, and nothing here reads it at that size.
+      const base64String = await downscalePlanToBase64(file);
+
+      /*
+        The bytes stay in component state and the document gets a URL.
+
+        Analysis needs the image itself, and the preview below wants it before
+        any upload finishes, but neither needs it *stored*: written into
+        `floorplanImage` a plan was 200-270KB of a 1 MiB document, and once the
+        wizard is done nothing displays it again.
+      */
+      setPlanBase64(base64String);
+      setPlanUploadError(null);
+      setProjectContext(p => ({ ...p, floorplanImage: undefined }));
+
+      try {
+        const url = await uploadPlanImage(orgData?.tenantId, base64String);
+        setProjectContext(p => ({ ...p, floorplanImageUrl: url }));
+      } catch (uploadErr) {
+        /*
+          Setup continues without it. The plan is only needed here to read rooms
+          off, which works from what is already in state -- failing the whole
+          wizard because a bucket was unreachable would cost the studio the
+          setup, not just the stored copy.
+        */
+        console.error('Floor plan could not be uploaded', uploadErr);
+        setPlanUploadError('The plan could not be saved to storage. Setup can continue — room detection still works.');
+      }
+    } catch (err) {
+      console.error('Floor plan could not be read', err);
+      alert('That file could not be read. Please try another image.');
     }
   };
 
+  /**
+   * The BHK the plan actually shows.
+   *
+   * The studio was typing this in after the AI had just counted the bedrooms
+   * for them, and a wrong or empty config silently changes everything
+   * downstream — it picks the template, the room distribution, and therefore
+   * every quantity in the BOQ. Bedrooms are counted by room type rather than by
+   * name, so "Bed 1" and "Master Bedroom" both count once.
+   *
+   * Returns null when the plan yielded no bedrooms at all; a guess would be
+   * worse than leaving the field for a human.
+   */
+  const configFromRooms = (rooms: Room[]): string | null => {
+    const bedrooms = rooms.filter(r => detectRoomType(r.name).includes('bedroom')).length;
+    if (bedrooms < 1) return null;
+    return `${Math.min(bedrooms, 4)}-BHK`;
+  };
+
+  /**
+   * Top up a plan-derived room list with whatever the typology expects.
+   *
+   * Matched on room *type* rather than name, so "Bed 1" from a plan and
+   * "Master Bedroom" from the distribution are not both added. Returns the
+   * detected rooms first, in the order the plan gave them.
+   */
+  const autoMapMissingRooms = async (detected: Room[], area: number): Promise<Room[]> => {
+    const config = projectContext.config;
+    if (!config || !area) return detected;
+
+    let expected: Room[] = [];
+    try {
+      if (isAiAvailable() && detected.length === 0) {
+        expected = await estimateRoomSizes(area, config);
+      }
+    } catch { /* falls through to the distribution below */ }
+
+    if (expected.length === 0) {
+      const { activeTemplate, configKey } = resolveActiveTemplate(undefined, config);
+      expected = ensureRoomsExistForTemplate({ ...projectContext, rooms: [], area } as any, activeTemplate, configKey);
+    }
+
+    if (detected.length === 0) return expected;
+
+    /* The plan's own labels repeat — "Toilet" three times is normal draughting.
+       Counting by type below is unaffected; the names are separated when the
+       list is written, by ensureScopeRooms. */
+
+    /*
+      One slot per room FAMILY, not per exact type.
+
+      A plan labels its rooms "Bedroom" and "Toilet"; the typology calls the same
+      rooms "Master Bedroom" and "Common Bathroom". Matching on the exact type
+      meant none of them ever paired up, so a plan that already showed three
+      bedrooms and three toilets was topped up with a master bedroom, a guest
+      bedroom, a master bathroom and a common bathroom — a second set of rooms,
+      with no dimensions, inflating the flat.
+    */
+    const seen = new Map<string, number>();
+    detected.forEach(r => {
+      const k = roomFamily(r.name);
+      seen.set(k, (seen.get(k) || 0) + 1);
+    });
+
+    const additions: Room[] = [];
+    expected.forEach(r => {
+      const k = roomFamily(r.name);
+      const remaining = seen.get(k) || 0;
+      if (remaining > 0) { seen.set(k, remaining - 1); return; }
+      additions.push(r);
+    });
+
+    return [...detected, ...additions];
+  };
+
   const handleAnalyzeFloorplan = async () => {
-    if (!projectContext.floorplanImage) {
+    // Freshly uploaded bytes, or a legacy project whose plan is still inline.
+    const planForAnalysis = planBase64 || projectContext.floorplanImage;
+    if (!planForAnalysis) {
       alert("Please upload a floor plan image.");
       return;
     }
     setIsLoading(true);
     setLoadingMessage('Analyzing floor plan...');
     try {
-      const rooms = await analyzeFloorPlan(projectContext.floorplanImage, projectContext.area);
+      const rooms = await analyzeFloorPlan(planForAnalysis, projectContext.area);
       const totalAreaFromAI = rooms.reduce((sum, room) => sum + (room.size || 0), 0);
-      setProjectContext(p => ({ 
-          ...p, 
-          rooms,
-          area: totalAreaFromAI > 0 ? Number(totalAreaFromAI.toFixed(2)) : p.area 
+      const areaAfterPlan = totalAreaFromAI > 0 ? Number(totalAreaFromAI.toFixed(2)) : projectContext.area;
+
+      /*
+        Auto-map anything the plan did not yield.
+
+        Plan analysis reads what is drawn, and a plan that is partial, low
+        resolution or cropped comes back with two rooms for a 3-BHK — or none
+        at all. The BOQ generator prices per room, so a short room list is a
+        short bill, which is most of why a generated BOQ read as thin.
+
+        Detected rooms are never overwritten: this only tops up the rooms the
+        typology expects and the plan did not give, so a real plan always beats
+        a ratio.
+      */
+      setLoadingMessage('Auto-mapping rooms...');
+      const mapped = await autoMapMissingRooms(rooms, areaAfterPlan);
+
+      /*
+        The plan sets the configuration too.
+
+        It has just counted the bedrooms; asking the studio to type "3-BHK"
+        afterwards is asking them to repeat the answer. The config picks the
+        template and the room distribution, so getting it from the drawing
+        rather than from memory is worth more than it looks — an empty config
+        falls back to whichever template happens to be first.
+
+        Only filled in, never overwritten: a studio that has already set it
+        knows something about the flat that the drawing does not say.
+      */
+      const detectedConfig = configFromRooms(mapped);
+
+      /*
+        Named the way a studio names them, once, at creation.
+
+        A drawing says "Toilet"; a BOQ a client reads should say "Common
+        Bathroom". This runs here and nowhere else: the name is the identity a
+        BOQ line carries, so polishing it later would orphan every line already
+        priced against the old name.
+      */
+      const named = ensureScopeRooms(polishRoomNames(mapped, roomFamily));
+
+      setProjectContext(p => ({
+          ...p,
+          rooms: named,
+          area: areaAfterPlan,
+          /*
+            The plan sets the configuration outright.
+
+            `p.config || detected` never fired: a new project is created with
+            "2-BHK" already filled in, so there was no empty value for the
+            detection to fall into and a three-bedroom plan stayed 2-BHK. The
+            drawing counted the bedrooms; it wins. A studio who disagrees edits
+            the field, and analysis does not run again unless they ask for it.
+          */
+          config: detectedConfig || p.config,
       }));
       showSuccessWithNext("Project area is calculated. Check the rooms.", {
           label: "Review Rooms",
@@ -115,7 +275,9 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       });
     } catch (e) {
       console.error(e);
-      alert("Failed to analyze floor plan. Please try manual setup.");
+      // The reason, not a shrug. "Gemini API Key missing on server" is
+      // actionable; "please try manual setup" sent people round in circles.
+      alert(`Could not read the floor plan: ${e instanceof Error ? e.message : String(e)}\n\nYou can still set the rooms by hand, or use Auto-Map Rooms.`);
     } finally {
       setIsLoading(false);
     }
@@ -363,7 +525,20 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                             {isLoading ? loadingMessage : 'Analyze Plan'}
                          </button>
                     </div>
-                     {projectContext.floorplanImage && <img src={`data:image/jpeg;base64,${projectContext.floorplanImage}`} alt="floor plan preview" className="mt-6 max-h-64 rounded-xl shadow-md border border-white/50 mx-auto"/>}
+                     {(planBase64 || projectContext.floorplanImage || projectContext.floorplanImageUrl) && (
+                       <img
+                         src={planBase64 || projectContext.floorplanImage
+                           ? `data:image/jpeg;base64,${planBase64 || projectContext.floorplanImage}`
+                           : projectContext.floorplanImageUrl}
+                         alt="floor plan preview"
+                         className="mt-6 max-h-64 rounded-xl shadow-md border border-white/50 mx-auto"
+                       />
+                     )}
+                     {planUploadError && (
+                       <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                         {planUploadError}
+                       </p>
+                     )}
                 </Card>
             )}
              

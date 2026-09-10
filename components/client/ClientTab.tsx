@@ -6,15 +6,43 @@ import { motion } from 'framer-motion';
 import { ProjectContext, FullBoqItem, ProposalTier, Item, AiComparisonResult, MaterialSuggestion, TimelinePhase, PaymentMilestone, ProposalContent, DecisionBrainOutput, LeadProfile, ProposalLevel, ProposalType } from '../../types';
 import ClientExportView from './ClientExportView';
 import { useOrg } from '../../contexts/OrgContext';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { Download } from 'lucide-react';
 import { UI_STYLES, UI_CONSTANTS } from '../../lib/UIConstants';
  
 import { calculateSellPrice, generateDeterministicSchedule, formatINR } from '../../lib/utils';
+import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 import { generateLocalComparison } from '../../lib/comparison';
 import { CloseIcon, ExportIcon, PrintIcon, CheckBadgeIcon, PencilRulerIcon, BriefcaseIcon } from '../Icons';
 import { TEMPLATE_TURNKEY, TEMPLATE_DESIGN_ONLY } from '../../constants';
+
+export type PageOrientation = 'portrait' | 'landscape';
+
+/*
+  The one place that decides the printed sheet.
+
+  Nothing in the exported document set `@page { size }`. The only rule that
+  reached it came from index.html and carried a margin but no size, so the
+  sheet was whatever the browser's print dialog happened to remember — which
+  is why the booklet came out landscape. The pages are built at A4 portrait
+  height, so portrait is the default and landscape is now a deliberate choice.
+*/
+export const pageRuleFor = (orientation: PageOrientation): string => `
+  /* The sheet carries no margin of its own: .ff-page is exactly one sheet
+     tall and its padding is the visual margin. Splitting the margin between
+     the two is what made every page 12mm too tall for its sheet. */
+  @page { size: A4 ${orientation}; margin: 0; }
+  @media print {
+    html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+    :root {
+      --ff-page-h: ${orientation === 'landscape' ? '210mm' : '297mm'};
+      --ff-page-pad: ${orientation === 'landscape' ? '14mm' : '16mm'};
+    }
+    .proposal-container, .vnext-proposal-wrapper {
+      box-shadow: none !important; border: 0 !important; border-radius: 0 !important;
+      margin: 0 !important; padding: 0 !important; background: #fff !important;
+    }
+  }
+`;
 
 interface ClientTabProps {
   tiers: ProposalTier[];
@@ -27,7 +55,7 @@ interface ClientTabProps {
   decisionBrainOutput?: DecisionBrainOutput | null;
   leadProfile?: LeadProfile;
   setProjectContext?: React.Dispatch<React.SetStateAction<ProjectContext>>;
-  onExportHtml?: (fileName?: string) => void;
+  onExportHtml?: (fileName?: string, orientation?: PageOrientation) => void;
 }
 
 // Generic Field Renderer to handle any depth of content
@@ -449,7 +477,7 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
   // We patch the proposalType in context *just for the view*
   const viewContext = { ...projectContext, proposalType: activeMode, proposalContent: mergedContent };
 
-  const MODEL_SWITCHER = [
+const MODEL_SWITCHER = [
       { id: 'TURNKEY', label: 'Turnkey Proposal', icon: <CheckBadgeIcon className="w-4 h-4" /> },
       { id: 'DESIGN_ONLY', label: 'Design & PMC', icon: <PencilRulerIcon className="w-4 h-4" /> },
   ];
@@ -471,6 +499,9 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
         return `${activeMode}_${proposalLevel}_${safeProjectName}`;
   }
 
+  const [exportOrientation, setExportOrientation] = useState<PageOrientation>('portrait');
+  const [isBuildingPdf, setIsBuildingPdf] = useState(false);
+
   const handlePrint = () => {
       // Logic to generate HTML string
       const clientViewNode = document.querySelector('.vnext-proposal-wrapper');
@@ -489,6 +520,11 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
       
       // Cleanup
       doc.querySelectorAll('.no-print, script[type="module"], script[type="importmap"]').forEach(el => el.remove());
+
+      // Appended last so it beats the size-less @page rule from index.html.
+      const pageStyle = doc.createElement('style');
+      pageStyle.textContent = pageRuleFor(exportOrientation);
+      doc.head.appendChild(pageStyle);
 
       // Auto-print script with expanded details
       const script = document.createElement('script');
@@ -514,448 +550,140 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
       }
   }
 
+  /*
+    One proposal, two ways to get it out.
+
+    Download PDF used to be ~440 lines of jsPDF drawing a summary document from
+    scratch, while Save PDF printed the actual booklet — so the two buttons
+    handed the client visibly different papers. Both now produce the same
+    booklet at the same page geometry, honouring the same orientation toggle.
+
+    Rendered a page at a time, deliberately. Handing the whole 25,000px booklet
+    to html2canvas in one go returns a canvas that is structurally valid and
+    entirely blank; one A4 page at a time renders correctly, and it also lets a
+    long scope table be sliced across as many sheets as it needs.
+
+    The remaining difference from Save PDF is the pipeline, not the layout:
+    this route rasterises, so text in the file is not selectable. Save PDF goes
+    through the browser's own print engine and keeps text vector — reach for
+    that when the client needs to search or copy from the document.
+  */
   const handleDownloadPdf = async () => {
+    const root = document.querySelector('.vnext-proposal-wrapper') as HTMLElement | null;
+    const pages = root ? Array.from(root.querySelectorAll<HTMLElement>('.ff-page')) : [];
+    if (!root || pages.length === 0) {
+      alert('Proposal content is still loading. Please try again in a moment.');
+      return;
+    }
+
+    const landscape = exportOrientation === 'landscape';
+    // The sheet, in millimetres and in CSS pixels at 96dpi.
+    const sheet = landscape
+      ? { wMm: 297, hMm: 210, padMm: 14, wPx: 1123 }
+      : { wMm: 210, hMm: 297, padMm: 16, wPx: 794 };
+
+    setIsBuildingPdf(true);
     try {
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      }) as any;
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
 
-      const studioName = (orgData?.orgName || 'FORM FACTORS DESIGN STUDIO').toUpperCase();
-      const contactPhone = orgData?.contactPhone || '';
-      const contactEmail = orgData?.contactEmail || '';
-      const logoUrl = orgData?.orgLogo || '';
-      const tagline = orgData?.tagline || 'PREMIUM BESPOKE INTERIOR ARCHITECTURE & DESIGN';
-      const clientName = projectContext.clientName || 'Valued Client';
-      const projectName = projectContext.name || 'Residency Project';
-      const city = projectContext.city || 'Bengaluru';
-      const area = projectContext.areaSqFt ? `${projectContext.areaSqFt} SQ FT` : '—';
-      const dateStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: exportOrientation });
+      let firstSheet = true;
 
-      // Asynchronously load studio logo if available
-      let logoImg: HTMLImageElement | null = null;
-      if (logoUrl) {
-        logoImg = await new Promise((resolve) => {
-          const img = new Image();
-          img.crossOrigin = 'Anonymous';
-          img.onload = () => resolve(img);
-          img.onerror = () => resolve(null);
-          img.src = logoUrl;
-        });
-      }
+      for (const page of pages) {
+        const canvas = await html2canvas(page, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          /*
+            Pin the layout width to the sheet. Without this the PDF is laid out
+            at whatever width the studio's browser window happens to be, so the
+            same proposal exports differently on two machines.
+          */
+          windowWidth: sheet.wPx,
+          width: sheet.wPx,
+          onclone: (clonedDoc: Document) => {
+            /*
+              Tailwind v4 writes its palette in oklch()/oklab(), which
+              html2canvas cannot parse — it throws before drawing anything.
+              Rewrite those to rgb on the throwaway clone first.
+            */
+            prepareClonedDocForPdf(clonedDoc);
 
-      // Milky White Glossy/Sober Aesthetic Palette
-      const slateDark: [number, number, number] = [15, 23, 42];      // Primary text & headers (#0F172A)
-      const slateBody: [number, number, number] = [51, 65, 85];      // Body text color (#334155)
-      const goldAccent: [number, number, number] = [197, 168, 92];   // Gold hairline / branding (#C5A85C)
-      const backgroundLight: [number, number, number] = [253, 253, 251]; // Milky White creamy backdrop (#FDFDFB)
-      const tableHeaderBg: [number, number, number] = [30, 41, 59];  // Deep slate (#1E293B)
-      const alternateRowBg: [number, number, number] = [250, 250, 249]; // Soft cream row (#FAFAFA)
-
-      // ================= PAGE 1: COVER PAGE =================
-      doc.setFillColor(backgroundLight[0], backgroundLight[1], backgroundLight[2]);
-      doc.rect(0, 0, 210, 297, 'F');
-
-      // Gold Hairline across center
-      doc.setDrawColor(goldAccent[0], goldAccent[1], goldAccent[2]);
-      doc.setLineWidth(1.5);
-      doc.line(20, 120, 190, 120);
-
-      // Main Proposal Title
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(28);
-      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-      if (isDesigner) {
-        doc.text('DESIGN & SPECIFICATION', 20, 142);
-        doc.text('PROPOSAL', 20, 154);
-      } else {
-        doc.text('PROJECT ESTIMATE', 20, 142);
-        doc.text('& DESIGN PROPOSAL', 20, 154);
-      }
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(11);
-      doc.setTextColor(slateBody[0], slateBody[1], slateBody[2]);
-      doc.text(`Proposal Level: ${proposalLevel.replace('_', ' ')} (${activeMode === 'TURNKEY' ? 'Turnkey Services' : 'Design & PMC'})`, 20, 164);
-
-      // Client / Project details box
-      doc.setFillColor(248, 250, 252);
-      doc.rect(20, 200, 170, 60, 'F');
-      
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.5);
-      doc.rect(20, 200, 170, 60, 'S');
-
-      // Subtle gold indicator in the box corner
-      doc.setFillColor(goldAccent[0], goldAccent[1], goldAccent[2]);
-      doc.rect(20, 200, 3, 60, 'F');
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(120, 120, 120);
-      doc.text('PREPARED FOR', 30, 212);
-      doc.text('PROJECT INFO', 110, 212);
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-      doc.text(clientName, 30, 222);
-      doc.text(projectName, 110, 222);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.setTextColor(slateBody[0], slateBody[1], slateBody[2]);
-      doc.text(`Location: ${city}`, 110, 232);
-      doc.text(`Total Area: ${area}`, 110, 242);
-      doc.text(`Date: ${dateStr}`, 30, 232);
-      doc.text(`Doc Ref: ${getExportFileName()}`, 30, 242);
-
-      // ================= PAGE 2: EXEC SUMMARY & ROOM ESTIMATES =================
-      doc.addPage();
-      doc.setFillColor(backgroundLight[0], backgroundLight[1], backgroundLight[2]);
-      doc.rect(0, 0, 210, 297, 'F');
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-      doc.text('EXECUTIVE SUMMARY', 20, 30);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9.5);
-      doc.setTextColor(slateBody[0], slateBody[1], slateBody[2]);
-      doc.text('The following is a curated overview of the spatial specifications proposed for your residence. Each area has been analyzed carefully to ensure optimal utility and aesthetic balance matching our pristine architectural standards.', 20, 42, { maxWidth: 170 });
-
-      // Create Roomwise Estimates table
-      const activeTier = fullTiers.find(t => t.id === projectContext?.approvedTierId) || fullTiers[0];
-      const roomsData = Object.keys(activeTier?.groupedBoq || {}).map(roomName => {
-        const roomItems = activeTier.groupedBoq[roomName] || [];
-        const roomTotal = roomItems.reduce((sum, item) => sum + calculateSellPrice(item.materials, item.labor, item.margin) * item.qty, 0);
-        return isDesigner ? [
-          roomName,
-          `${roomItems.length} spec items`
-        ] : [
-          roomName,
-          `${roomItems.length} spec items`,
-          formatINR(roomTotal)
-        ];
-      });
-
-      // Calculate totals
-      const grandTotalVal = activeTier?.executionTotal || 0;
-
-      // Add table of rooms
-      autoTable(doc, {
-        startY: 55,
-        head: isDesigner 
-          ? [['Room / Living Zone', 'Specification Density']] 
-          : [['Room / Living Zone', 'Specification Density', 'Estimated Price (INR)']],
-        body: isDesigner ? roomsData : [
-          ...roomsData,
-          [{ content: 'Total Execution & Fit-out Estimate', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatINR(grandTotalVal), styles: { fontStyle: 'bold', textColor: [15, 23, 42] } }]
-        ],
-        theme: 'striped',
-        headStyles: {
-          fillColor: tableHeaderBg as any,
-          textColor: [255, 255, 255],
-          fontSize: 9,
-          fontStyle: 'bold'
-        },
-        bodyStyles: {
-          fontSize: 9,
-          textColor: slateBody as any
-        },
-        alternateRowStyles: {
-          fillColor: alternateRowBg as any
-        },
-        margin: { left: 20, right: 20 }
-      });
-
-      let currentY = (doc as any).lastAutoTable.finalY + 15;
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(13);
-      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-      doc.text('1. DESIGN & PLANNING PROCESS', 20, currentY);
-
-      currentY += 6;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9.5);
-      doc.setTextColor(slateBody[0], slateBody[1], slateBody[2]);
-      
-      const designFeeText = activeMode === 'TURNKEY'
-        ? 'Our comprehensive design services are bundled into the turnkey implementation project. In this model, detailed layout planning, 3D visualization, material curation, and general site PMC are integrated to ensure absolute fidelity.'
-        : 'Our professional fee structure is tailored to the project size and complexity. For a Turnkey design scope, our fee represents a highly optimized track ensuring premium delivery matching the exact material selections.';
-
-      doc.text(designFeeText, 20, currentY, { maxWidth: 170 });
-
-      // Render milestone schedule if not Designer
-      if (!isDesigner) {
-        currentY += 18;
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(11);
-        doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-        doc.text('Milestone & Payments Breakdown', 20, currentY);
-
-        const milestonesRows = paymentMilestones.map(m => {
-          const amt = (grandTotalVal * m.percentage) / 100;
-          return [
-            m.name,
-            `${m.percentage}%`,
-            m.type.toUpperCase(),
-            formatINR(amt)
-          ];
-        });
-
-        autoTable(doc, {
-          startY: currentY + 5,
-          head: [['Milestone Stage', 'Percentage', 'Type', 'Amount (INR)']],
-          body: milestonesRows,
-          theme: 'striped',
-          headStyles: {
-            fillColor: [51, 65, 85] as any,
-            textColor: [255, 255, 255],
-            fontSize: 8.5
+            const st = clonedDoc.createElement('style');
+            st.textContent = `
+              .ff-page {
+                box-sizing: border-box;
+                width: ${sheet.wMm}mm; padding: ${sheet.padMm}mm;
+                margin: 0; border: 0; box-shadow: none; overflow: visible;
+              }
+              .ff-page:not(.ff-page-flow) { height: ${sheet.hMm}mm; }
+              .ff-page-flow { height: auto; min-height: ${sheet.hMm}mm; }
+              .proposal-container, .vnext-proposal-wrapper {
+                box-shadow: none; border: 0; border-radius: 0;
+                margin: 0; padding: 0; background: #fff;
+              }
+              .ff-ed { background: none !important; box-shadow: none !important; }
+              /* html2canvas rasterises under screen media, so @media print
+                 never runs here — the editing furniture has to be hidden
+                 explicitly or it prints into the client's PDF. */
+              .ff-edlist-tools, .ff-edlist-item-tools { display: none !important; }
+              .no-print { display: none !important; }
+            `;
+            clonedDoc.head.appendChild(st);
           },
-          bodyStyles: {
-            fontSize: 8.5,
-            textColor: slateBody as any
-          },
-          alternateRowStyles: {
-            fillColor: alternateRowBg as any
-          },
-          margin: { left: 20, right: 20 }
         });
-      }
 
-      // ================= PAGE 3+: ITEMIZED BOQ DETAILS =================
-      doc.addPage();
-      doc.setFillColor(backgroundLight[0], backgroundLight[1], backgroundLight[2]);
-      doc.rect(0, 0, 210, 297, 'F');
+        const pxPerMm = canvas.width / sheet.wMm;
+        const sliceHpx = Math.max(1, Math.floor(sheet.hMm * pxPerMm));
 
-      // Page Header
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-      doc.text(studioName, 20, 20);
+        /*
+          Walk the page in sheet-high slices, and stop when what is left is a
+          sliver rather than a sheet.
 
-      doc.setDrawColor(goldAccent[0], goldAccent[1], goldAccent[2]);
-      doc.setLineWidth(0.5);
-      doc.line(20, 23, 190, 23);
+          A 297mm page rounds to a canvas a pixel or two taller than the
+          computed slice height, so dividing with ceil() emitted a second,
+          essentially empty sheet after every single page — the booklet came out
+          with a blank between each leaf. Anything under 2% of a sheet is
+          rounding noise, not content.
+        */
+        const MIN_SLICE = Math.max(4, Math.round(sliceHpx * 0.02));
+        let offset = 0;
 
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(15);
-      doc.text('DETAILED SPECIFICATIONS', 20, 35);
+        while (canvas.height - offset > MIN_SLICE) {
+          const hpx = Math.min(sliceHpx, canvas.height - offset);
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(slateBody[0], slateBody[1], slateBody[2]);
-      doc.text('Below is the itemized breakdown of premium fixtures, customized cabinetry, finishing works, civil installations, and site prep details included in the approved proposal scope.', 20, 41, { maxWidth: 170 });
+          const slice = document.createElement('canvas');
+          slice.width = canvas.width;
+          slice.height = hpx;
+          const ctx = slice.getContext('2d');
+          if (!ctx) break;
+          // Paint white first: a slice shorter than a full sheet would
+          // otherwise carry transparent pixels into the PDF as black.
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, slice.width, slice.height);
+          ctx.drawImage(canvas, 0, offset, canvas.width, hpx, 0, 0, canvas.width, hpx);
 
-      // Compile detailed items
-      const detailedItemsRows: any[] = [];
-      Object.keys(activeTier?.groupedBoq || {}).forEach(roomName => {
-        const roomItems = activeTier.groupedBoq[roomName] || [];
-        roomItems.forEach(item => {
-          const unitPrice = calculateSellPrice(item.materials, item.labor, item.margin);
-          const totalAmt = unitPrice * item.qty;
-          if (isDesigner) {
-            detailedItemsRows.push([
-              roomName,
-              item.name || item.item || 'Custom Spec Item',
-              item.unit || 'nos',
-              item.qty.toString()
-            ]);
-          } else {
-            detailedItemsRows.push([
-              roomName,
-              item.name || item.item || 'Custom Spec Item',
-              item.unit || 'nos',
-              item.qty.toString(),
-              formatINR(unitPrice),
-              formatINR(totalAmt)
-            ]);
-          }
-        });
-      });
+          if (!firstSheet) pdf.addPage();
+          firstSheet = false;
+          pdf.addImage(
+            slice.toDataURL('image/jpeg', 0.95),
+            'JPEG', 0, 0, sheet.wMm, hpx / pxPerMm,
+          );
 
-      autoTable(doc, {
-        startY: 50,
-        head: isDesigner
-          ? [['Room / Area', 'Item & Material Specifications', 'Unit', 'Qty']]
-          : [['Room / Area', 'Item & Material Specifications', 'Unit', 'Qty', 'Unit Rate', 'Total Amount']],
-        body: detailedItemsRows,
-        theme: 'striped',
-        headStyles: {
-          fillColor: tableHeaderBg as any,
-          textColor: [255, 255, 255],
-          fontSize: 8,
-          fontStyle: 'bold'
-        },
-        bodyStyles: {
-          fontSize: 7.5,
-          textColor: slateBody as any
-        },
-        alternateRowStyles: {
-          fillColor: alternateRowBg as any
-        },
-        columnStyles: isDesigner ? {
-          0: { cellWidth: 40 },
-          1: { cellWidth: 100 },
-          2: { cellWidth: 20 },
-          3: { cellWidth: 20 }
-        } : {
-          0: { cellWidth: 30 },
-          1: { cellWidth: 65 },
-          2: { cellWidth: 15 },
-          3: { cellWidth: 12 },
-          4: { cellWidth: 23 },
-          5: { cellWidth: 25 }
-        },
-        margin: { left: 20, right: 20, top: 22, bottom: 22 }
-      });
-
-      // ================= FINAL PAGE: STANDARD TERMS & SIGN OFF =================
-      doc.addPage();
-      doc.setFillColor(backgroundLight[0], backgroundLight[1], backgroundLight[2]);
-      doc.rect(0, 0, 210, 297, 'F');
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-      doc.text('STANDARD INCLUSIONS & WARRANTY TERMS', 20, 30);
-
-      const termsInclusions = [
-        `1. Material specifications as detailed in the BOQ represent the premium materials approved by ${orgData?.orgName || 'our'} Quality Control.`,
-        "2. Any alterations or structural changes requested on-site will be processed via formal Change Requests.",
-        "3. Standard execution duration is 90 working days from the clearance of the first material order advance (E1 payment).",
-        "4. A 5-year replacement warranty is applicable on all bespoke cabinetry hinges, tandem drawer runners, and modular hardware.",
-        "5. The project initiation fee is non-refundable and will be adjusted against the primary milestones schedule.",
-        "6. No vendor bookings or site procurement tasks may be initiated prior to the clearance of the Material Order Advance."
-      ];
-
-      let termsY = 40;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(slateBody[0], slateBody[1], slateBody[2]);
-
-      termsInclusions.forEach(term => {
-        doc.text(term, 20, termsY, { maxWidth: 170 });
-        termsY += 12;
-      });
-
-      // Sign-off section
-      termsY += 15;
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.5);
-      doc.line(20, termsY, 190, termsY);
-
-      termsY += 15;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-      doc.text('Accepted By Client:', 20, termsY);
-      doc.text('Authorized Studio Signatory:', 110, termsY);
-
-      termsY += 22;
-      doc.setDrawColor(180, 180, 180);
-      doc.setLineWidth(0.5);
-      doc.line(20, termsY, 80, termsY);
-      doc.line(110, termsY, 170, termsY);
-
-      termsY += 5;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor(140, 140, 140);
-      doc.text('Client Signature & Date', 20, termsY);
-      doc.text('Authorized Director / Partner', 110, termsY);
-
-      // ================= POST-PROCESSING: STUDIO BRANDING HEADER & FOOTER =================
-      const totalPages = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i);
-        const isCover = i === 1;
-
-        if (isCover) {
-          // Cover Page Branding Header
-          let headerLeft = 20;
-          if (logoImg) {
-            try {
-              doc.addImage(logoImg, 'PNG', 20, 16, 20, 10);
-              headerLeft = 44;
-            } catch {
-              headerLeft = 20;
-            }
-          }
-
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(11);
-          doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-          doc.text(studioName, headerLeft, 22);
-
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(7.5);
-          doc.setTextColor(120, 120, 120);
-          doc.text(tagline.toUpperCase(), headerLeft, 27);
-
-          if (contactPhone || contactEmail) {
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(8);
-            doc.setTextColor(100, 116, 139);
-            const contactStr = [contactPhone && `Tel: ${contactPhone}`, contactEmail].filter(Boolean).join('  |  ');
-            doc.text(contactStr, 190, 22, { align: 'right' });
-          }
-        } else {
-          // Inner Page Branding Header
-          let headerLeft = 20;
-          if (logoImg) {
-            try {
-              doc.addImage(logoImg, 'PNG', 20, 8, 14, 7);
-              headerLeft = 38;
-            } catch {
-              headerLeft = 20;
-            }
-          }
-
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(9);
-          doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-          doc.text(studioName, headerLeft, 13);
-
-          if (contactPhone || contactEmail) {
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7.5);
-            doc.setTextColor(100, 116, 139);
-            const contactStr = [contactPhone && `Tel: ${contactPhone}`, contactEmail].filter(Boolean).join('  •  ');
-            doc.text(contactStr, 190, 13, { align: 'right' });
-          }
-
-          // Gold Hairline Line under inner page header
-          doc.setDrawColor(goldAccent[0], goldAccent[1], goldAccent[2]);
-          doc.setLineWidth(0.5);
-          doc.line(20, 17, 190, 17);
-
-          // Inner Page Footer
-          doc.setDrawColor(226, 232, 240);
-          doc.setLineWidth(0.4);
-          doc.line(20, 282, 190, 282);
-
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(7.5);
-          doc.setTextColor(148, 163, 184);
-
-          const footerInfo = `${studioName}${contactPhone ? ` • ${contactPhone}` : ''} • Confidential Proposal`;
-          doc.text(footerInfo, 20, 287);
-          doc.text(`Page ${i} of ${totalPages}`, 190, 287, { align: 'right' });
+          offset += hpx;
         }
       }
 
-      // Save document
-      const fileName = `${getExportFileName()}.pdf`;
-      doc.save(fileName);
+      pdf.save(`${getExportFileName()}.pdf`);
     } catch (err) {
-      console.error("PDF generation failed", err);
-      alert("Professional PDF download failed. Please print to PDF or try again.");
+      console.error('PDF generation failed', err);
+      alert('PDF download failed. Use Save PDF to print to PDF instead.');
+    } finally {
+      setIsBuildingPdf(false);
     }
   };
 
@@ -987,10 +715,29 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
                         ))}
                      </div>
 
-                     <div className="flex gap-3">
+                     <div className="flex gap-3 items-center">
+                        {/* Portrait matches how the booklet pages are built; landscape
+                            is there for wide scope tables that read better across. */}
+                        <div className="bg-white p-1 rounded-lg border border-slate-300 shadow-sm flex items-center" role="group" aria-label="Export page orientation">
+                            {(['portrait', 'landscape'] as PageOrientation[]).map(o => (
+                                <button
+                                    key={o}
+                                    type="button"
+                                    onClick={() => setExportOrientation(o)}
+                                    aria-pressed={exportOrientation === o}
+                                    title={`Export as A4 ${o}`}
+                                    className={`px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-md transition-all ${
+                                        exportOrientation === o
+                                            ? 'bg-[#0066CC] text-white shadow-sm'
+                                            : 'text-slate-500 hover:text-[#0055B3] hover:bg-sky-50'
+                                    }`}
+                                >{o}</button>
+                            ))}
+                        </div>
+
                         {onExportHtml && (
                             <button 
-                                onClick={() => onExportHtml(getExportFileName())} 
+                                onClick={() => onExportHtml(getExportFileName(), exportOrientation)} 
                                 className={`${UI_STYLES.button.sm} ${UI_STYLES.button.secondary}`}
                             >
                                 <ExportIcon className="w-4 h-4" /> Export HTML
@@ -1001,9 +748,10 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
                          <button 
                              type="button"
                              onClick={handleDownloadPdf}
-                             className="flex items-center gap-2 px-4 py-2 bg-[#0066CC] text-white font-bold text-sm rounded-lg shadow-sm hover:bg-[#0055B3] transition-all"
+                             disabled={isBuildingPdf}
+                             className="flex items-center gap-2 px-4 py-2 bg-[#0066CC] text-white font-bold text-sm rounded-lg shadow-sm hover:bg-[#0055B3] transition-all disabled:opacity-60 disabled:cursor-wait"
                          >
-                             <Download className="w-4 h-4" /> Download PDF
+                             <Download className="w-4 h-4" /> {isBuildingPdf ? 'Building PDF…' : 'Download PDF'}
                          </button>
 
                          <button 

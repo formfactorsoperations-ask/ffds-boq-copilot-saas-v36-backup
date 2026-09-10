@@ -342,19 +342,6 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
     <div className="space-y-4 w-full h-[calc(100vh-120px)] flex flex-col">
       {/* Top Bar: Typology Switcher + Add Typology */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-sky-50 text-[#0066CC] rounded-xl border border-sky-100">
-            <Building className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
-              Standard BOQ Templates
-            </h2>
-            <p className="text-xs text-slate-500 font-medium">
-              Top Harmony Master Scope. Auto-derives Essential (Base) and Comfort (Mid) client proposals.
-            </p>
-          </div>
-        </div>
 
         {/* Typology Switcher Pills */}
         <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 custom-scrollbar">
@@ -413,7 +400,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                 onClick={() => setActiveRoomType(rk)}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 border ${
                   isActive
-                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                    ? 'bg-[#0066CC] text-white border-[#0066CC] shadow-sm'
                     : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
                 }`}
               >

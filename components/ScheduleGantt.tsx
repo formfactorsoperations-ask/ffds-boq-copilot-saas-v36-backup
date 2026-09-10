@@ -1,10 +1,14 @@
 import React, { useMemo, useState } from 'react';
+import MilestoneIcon from './MilestoneIcon';
+import { newSequenceWarnings, SequenceWarning } from '../lib/scheduleBuilder';
 import { ProjectSchedule, ScheduleGate, ScheduleHold, ProjectContext } from '../types';
 import WavyText from './ui/WavyText';
 import { StepDeliverableChecklist } from './studio/StepDeliverableChecklist';
 import {
   computeSchedule, varianceReport, daysLostByReason, ineffectiveHolds, holdImpact,
-  freezeBaseline, setTaskProgress, toDayNum, toISO, isWorkingDay, weekdayOf, GATE_LABEL,
+  freezeBaseline, setTaskProgress, reorderTaskInLane, toDayNum, toISO, isWorkingDay, weekdayOf, GATE_LABEL,
+  workingDaysBetween, DEFAULT_CALENDAR,
+  type ResolvedTask,
 } from '../lib/schedule';
 import { markersByDay, MARKER_LABEL } from '../lib/scheduleMarkers';
 import {
@@ -36,6 +40,81 @@ const STATUS_COLOR: Record<string, string> = {
   completed: '#4338ca', in_progress: '#059669', blocked: '#e11d48', pending: '#94a3b8',
 };
 
+/*
+  Where each stage stands, in a word.
+
+  The row carried a 1.5px coloured dot, which is a legend you have to remember
+  rather than a label you can read. Anyone scanning thirteen rows for "what is
+  actually finished" was reading the bars and guessing.
+*/
+const STATUS_TAG: Record<string, { label: string; className: string }> = {
+  completed:   { label: 'Done',        className: 'bg-indigo-50 text-indigo-700 border-indigo-200/60' },
+  in_progress: { label: 'Running',     className: 'bg-emerald-50 text-emerald-700 border-emerald-200/60' },
+  blocked:     { label: 'Blocked',     className: 'bg-rose-50 text-rose-700 border-rose-200/60' },
+  pending:     { label: 'Not started', className: 'bg-slate-100 text-slate-500 border-slate-200/60' },
+};
+
+const TAG_BASE = 'text-[8px] px-1.5 py-0.5 rounded border font-bold uppercase tracking-wider shrink-0';
+
+/**
+ * "in 9 working days", "today", "4 working days late".
+ *
+ * A milestone's whole meaning is when it happens, and a date alone makes the
+ * reader do the arithmetic against a calendar they cannot see. The count is in
+ * working days because that is what the schedule runs on — a Friday deadline
+ * three days out is not three days of work away if two of them are a weekend.
+ */
+function untilLabel(days: number): string {
+  if (days === 0) return 'today';
+  if (days > 0) return `in ${days} working day${days === 1 ? '' : 's'}`;
+  return `${-days} working day${days === -1 ? '' : 's'} late`;
+}
+
+/** "12 Aug" — short enough to sit beside a bar without becoming the bar. */
+const shortDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+/**
+ * The status tag, plus the overrun that the schedule has already absorbed.
+ *
+ * `driftDays` is the working days a task's forecast moved purely because it is
+ * unfinished and time has passed — the days the studio used to have to notice
+ * and type in by hand. Saying it out loud is the point: the bar quietly getting
+ * longer is easy to miss, and it is what pushes everything downstream.
+ */
+function StatusTags({ task }: { task: ResolvedTask }) {
+  /*
+    Nothing is said about work that has not started.
+
+    Every row began life as a "Not started" chip, so the column filled with the
+    least interesting fact on the screen and truncated the titles to make room
+    for it. The dot at the head of the row already carries it, and a reader
+    scanning for what is finished or late is not scanning for what has not begun.
+  */
+  const tag = task.status === 'pending' ? null : (STATUS_TAG[task.status] || null);
+  return (
+    <>
+      {tag && <span className={`${TAG_BASE} ${tag.className}`}>{tag.label}</span>}
+      {task.overrunning && (
+        <span
+          className={`${TAG_BASE} bg-amber-100 text-amber-900 border-amber-300/70`}
+          title={`Still open ${task.driftDays} working day${task.driftDays === 1 ? '' : 's'} past its planned end. Everything that depends on it has moved with it.`}
+        >
+          +{task.driftDays}d over
+        </span>
+      )}
+      {task.overdueToStart && !task.overrunning && (
+        <span
+          className={`${TAG_BASE} bg-amber-50 text-amber-800 border-amber-200/70`}
+          title={`Should have started ${task.driftDays} working day${task.driftDays === 1 ? '' : 's'} ago; forecast from today.`}
+        >
+          Late start
+        </span>
+      )}
+    </>
+  );
+}
+
 interface Props {
   schedule: ProjectSchedule;
   onChange?: (next: ProjectSchedule) => void;
@@ -64,6 +143,75 @@ export default function ScheduleGantt({
   const [zoom, setZoom] = useState<Zoom>('week');
   const [showBaseline, setShowBaseline] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  /*
+    Dragging a row is the Predecessor dropdown, done faster.
+
+    The rows are a dependency graph rather than a list, so a drag only means
+    something once it is translated into predecessors — which is exactly what
+    the detail panel already edits, one task at a time. Here it is the same edit
+    applied to a whole lane: pull the task out of the chain and splice it back
+    in where it was dropped.
+  */
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  /*
+    Which edge of the target row the drop lands on.
+
+    'before' alone could not express every move: a task could never be sent to
+    the end of its lane, and "put GFC after the last drawing but before the
+    gate" — the move this exists for — had nowhere to land, because everything
+    between them belongs to another lane and refuses the drop.
+  */
+  const [dropPos, setDropPos] = useState<'before' | 'after'>('before');
+
+  const canDrag = (t: ResolvedTask) => !readOnly && !!onChange && t.kind !== 'milestone';
+
+
+  /*
+    A move the building does not allow gets a question, not a refusal.
+
+    Nothing physical stops final paint being dragged above the carpentry it is
+    painting, and the chart will draw it happily. But a studio that wants second
+    fix before the ceiling boards — because the boards are late and the
+    electrician is on site today — knows something the template does not, so
+    this asks and then does as it is told.
+
+    The move is held in state rather than applied: `pendingMove.tasks` is the
+    schedule they get if they confirm.
+  */
+  const [pendingMove, setPendingMove] = useState<
+    { tasks: any[]; warnings: SequenceWarning[]; title: string } | null
+  >(null);
+
+  const handleDrop = (targetId: string) => {
+    const source = dragId;
+    const position = dropPos;
+    setDragId(null);
+    setDropTargetId(null);
+    if (!source || !onChange) return;
+
+    const base = schedule.tasks?.length ? schedule.tasks : result.tasks;
+    const next = reorderTaskInLane(base as any, source, targetId, position);
+    // Identity means the move was refused — across lanes, or onto a milestone.
+    if (next === base) return;
+
+    const warnings = newSequenceWarnings(base as any, next);
+    if (warnings.length) {
+      setPendingMove({
+        tasks: next,
+        warnings,
+        title: base.find(t => t.id === source)?.title || 'This stage',
+      });
+      return;
+    }
+    onChange({ ...schedule, tasks: next as any });
+  };
+
+  const confirmMove = () => {
+    if (pendingMove && onChange) onChange({ ...schedule, tasks: pendingMove.tasks as any });
+    setPendingMove(null);
+  };
   const [holdOpen, setHoldOpen] = useState<null | 'site' | 'trade'>(null);
   const [markerDay, setMarkerDay] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -90,6 +238,18 @@ export default function ScheduleGantt({
   );
 
   const todayDayNum = useMemo(() => toDayNum(new Date().toISOString().slice(0, 10)), []);
+  /*
+    The next milestone still ahead of today. One flag flies faster so the eye
+    lands on the thing that is actually coming, rather than on whichever
+    milestone happens to sit highest.
+  */
+  const nextMilestoneId = useMemo(() => {
+    const ahead = result.tasks
+      .filter(t => t.kind === 'milestone' && t.startDay >= todayDayNum
+        && t.status !== 'completed' && !t.actualEndISO)
+      .sort((a, b) => a.startDay - b.startDay);
+    return ahead.length ? ahead[0].id : null;
+  }, [result.tasks, todayDayNum]);
 
   const span = useMemo(() => {
     if (!result.tasks.length) return { from: 0, to: 0, days: 0 };
@@ -173,14 +333,14 @@ export default function ScheduleGantt({
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-left">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Schedule Start</p>
-            <p className="font-serif text-lg font-semibold text-slate-900 mt-1">
+            <p className="text-lg font-bold text-slate-900 mt-1">
               {result.startISO ? new Date(result.startISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
             </p>
             <p className="text-xs text-slate-400 mt-0.5">Configured start anchor</p>
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Projected Finish</p>
-            <p className="font-serif text-lg font-semibold mt-1" style={{
+            <p className="text-lg font-bold mt-1" style={{
               color: (result.overrunWorkDays ?? 0) > 0 ? '#e11d48' : '#059669',
             }}>
               {result.finishISO ? new Date(result.finishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
@@ -189,14 +349,14 @@ export default function ScheduleGantt({
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Total Duration</p>
-            <p className="font-serif text-lg font-semibold text-slate-900 mt-1">
+            <p className="text-lg font-bold text-slate-900 mt-1">
               {totalProjectDays ? `${totalProjectDays} days` : '—'}
             </p>
             <p className="text-xs text-slate-400 mt-0.5">Total project timeline</p>
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Target Handover</p>
-            <p className="font-serif text-lg font-semibold text-slate-900 mt-1">
+            <p className="text-lg font-bold text-slate-900 mt-1">
               {schedule.targetHandoverISO ? new Date(schedule.targetHandoverISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not configured'}
             </p>
             <p className="text-xs text-slate-400 mt-0.5">Deadline target</p>
@@ -205,7 +365,7 @@ export default function ScheduleGantt({
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Status Variance</p>
             {result.overrunWorkDays != null ? (
               <>
-                <p className="font-serif text-lg font-semibold mt-1" style={{
+                <p className="text-lg font-bold mt-1" style={{
                   color: result.overrunWorkDays > 0 ? '#e11d48' : '#059669',
                 }}>
                   {result.overrunWorkDays > 0 ? `+${result.overrunWorkDays}d Slip` : `${Math.abs(result.overrunWorkDays)}d Buffer`}
@@ -216,7 +376,7 @@ export default function ScheduleGantt({
               </>
             ) : (
               <>
-                <p className="font-serif text-lg font-semibold text-slate-400 mt-1">—</p>
+                <p className="text-lg font-bold text-slate-400 mt-1">—</p>
                 <p className="text-xs text-slate-400 mt-0.5 font-medium">Configure target to calculate</p>
               </>
             )}
@@ -510,9 +670,42 @@ export default function ScheduleGantt({
               </button>
             </div>
             {result.tasks.map((t, idx) => (
-              <button key={t.id} onClick={() => setSelectedId(t.id)}
-                className={`w-full h-9 px-3 flex items-center gap-2 border-b border-slate-100 text-left text-xs transition-colors group ${
-                  selectedId === t.id ? 'bg-sky-50 font-semibold' : 'hover:bg-slate-50'}`}>
+              <button
+                key={t.id}
+                onClick={() => setSelectedId(t.id)}
+                draggable={canDrag(t)}
+                onDragStart={e => {
+                  if (!canDrag(t)) return;
+                  setDragId(t.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  // Firefox will not start a drag without payload.
+                  e.dataTransfer.setData('text/plain', t.id);
+                }}
+                onDragEnd={() => { setDragId(null); setDropTargetId(null); }}
+                onDragOver={e => {
+                  const from = dragId && result.tasks.find(x => x.id === dragId);
+                  // Only show a drop line where the drop would actually be taken.
+                  if (!from || from.id === t.id || from.kind !== t.kind || t.kind === 'milestone') return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  // Top half drops above the row, bottom half below it.
+                  const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  const pos = e.clientY - box.top < box.height / 2 ? 'before' : 'after';
+                  if (dropTargetId !== t.id) setDropTargetId(t.id);
+                  if (dropPos !== pos) setDropPos(pos);
+                }}
+                onDragLeave={() => { if (dropTargetId === t.id) setDropTargetId(null); }}
+                onDrop={e => { e.preventDefault(); handleDrop(t.id); }}
+                title={canDrag(t) ? 'Drag to re-sequence within its lane' : undefined}
+                className={`w-full h-9 px-3 flex items-center gap-2 border-b text-left text-xs transition-colors group ${
+                  dropTargetId === t.id
+                    ? (dropPos === 'before'
+                        ? 'border-t-2 border-t-sky-500 border-b-slate-100'
+                        : 'border-b-2 border-b-sky-500 border-t-transparent')
+                    : 'border-slate-100'
+                } ${dragId === t.id ? 'opacity-40' : ''} ${
+                  canDrag(t) ? 'cursor-grab active:cursor-grabbing' : ''
+                } ${selectedId === t.id ? 'bg-sky-50 font-semibold' : 'hover:bg-slate-50'}`}>
                 <span className="w-1.5 h-1.5 rounded-full shrink-0"
                   style={{ background: STATUS_COLOR[t.status] || '#94a3b8' }} />
                 {t.kind === 'design' || t.id === 'ms-design-gate' ? (
@@ -525,6 +718,7 @@ export default function ScheduleGantt({
                   </span>
                 )}
                 <span className="flex-1 truncate text-slate-800">{t.title}</span>
+                <StatusTags task={t} />
                 {t.pinned && <Pin className="w-3 h-3 text-slate-400 shrink-0" />}
                 {t.onCriticalPath && <Zap className="w-3 h-3 text-amber-500 shrink-0" />}
                 {!!t.heldBy.length && <PauseCircle className="w-3 h-3 text-rose-500 shrink-0" />}
@@ -591,7 +785,7 @@ export default function ScheduleGantt({
               </div>
 
               {/* Rows */}
-              {result.tasks.map(t => (
+              {result.tasks.map((t, rowIndex) => (
                 <div key={t.id} className="gt-row h-9 border-b border-slate-100 relative">
                   {zoom === 'day' && Array.from({ length: span.days }, (_, i) => {
                     const d = span.from + i;
@@ -607,11 +801,75 @@ export default function ScheduleGantt({
                   )}
 
                   {t.kind === 'milestone' ? (
-                    <div className="gt-milestone-wrap absolute top-1.5 flex items-center gap-1.5" style={{ left: left(t.startDay), perspective: '500px' }}>
-                      <span className="gt-milestone block w-2.5 h-2.5 shrink-0"
-                        style={{ backgroundColor: KIND_COLOR.milestone }} />
-                      <span className="text-[9px] font-bold text-slate-900 whitespace-nowrap">{t.title}</span>
-                    </div>
+                    /*
+                      A milestone is a date, and it was the one thing on the
+                      chart that would not tell you its date. Bars carry theirs
+                      in a tooltip and open the detail panel when clicked; a
+                      milestone was a plain div — no title, not selectable — so
+                      the Design Gate could be read off the ruler by eye or not
+                      at all.
+                    */
+                    (() => {
+                      /*
+                        Reached is not the same as late, and both were drawn the
+                        same. A milestone the studio has signed off should stop
+                        counting down — the countdown on a passed date reads as
+                        an alarm about something that already happened.
+                      */
+                      const reached = t.status === 'completed' || !!t.actualEndISO;
+                      const until = workingDaysBetween(
+                        schedule.calendar || DEFAULT_CALENDAR, todayDayNum, t.startDay) - 1;
+                      /*
+                        Grey is behind us, green is ahead, rose is late — three
+                        states readable without a legend. The green is kept
+                        light: a programme with every milestone still to come
+                        should not turn into a wall of saturated colour.
+                      */
+                      const tone = reached
+                        ? { pole: '#94a3b8', ink: 'text-slate-400', name: 'text-slate-500' }
+                        : t.overdueToStart
+                          ? { pole: '#e11d48', ink: 'text-rose-600', name: 'text-rose-800' }
+                          : { pole: '#22c55e', ink: 'text-green-700', name: 'text-green-900' };
+                      return (
+                        <button
+                          onClick={() => setSelectedId(t.id)}
+                          title={`${t.title} — ${new Date(t.startISO).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}${
+                            reached ? ' · reached' : t.overdueToStart ? ` · ${t.driftDays} working days late` : ''
+                          }${t.slipDays > 0 ? ` · moved ${t.slipDays} working days since the baseline was frozen` : ''}`}
+                          className="gt-milestone-wrap absolute top-1.5 flex items-center gap-1.5 cursor-pointer group"
+                          style={{ left: left(t.startDay) }}
+                        >
+                          <span
+                            className={`ff-flag${nextMilestoneId === t.id ? ' ff-flag--next' : ''}`}
+                            style={{ color: tone.pole }}
+                          />
+                          {/* The flag says a date lands here, which is true of
+                              every row. The icon says which date. */}
+                          <MilestoneIcon
+                            label={t.milestoneLabel || t.title}
+                            className={`w-3 h-3 shrink-0 ${tone.name}`}
+                          />
+                          <span className={`text-[9px] font-black whitespace-nowrap group-hover:underline ${tone.name}`}>
+                            {t.title}
+                          </span>
+                          <span className={`text-[9px] font-semibold tabular-nums whitespace-nowrap ${tone.ink}`}>
+                            {shortDate(t.startISO)} · {reached ? 'reached' : untilLabel(until)}
+                          </span>
+                          {/*
+                            How far this date has walked away from the one the
+                            studio froze. A milestone slipping is the single
+                            number a programme review is actually about, and it
+                            was only visible by opening the detail panel and
+                            comparing two dates by eye.
+                          */}
+                          {!reached && t.slipDays > 0 && (
+                            <span className="text-[8px] font-bold uppercase tracking-wider px-1 py-0.5 rounded border bg-amber-50 text-amber-800 border-amber-200/70 whitespace-nowrap">
+                              +{t.slipDays}d vs baseline
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })()
                   ) : (
                     <button onClick={() => setSelectedId(t.id)}
                       title={`${t.title} (${t.workDays} working days: ${t.startISO} to ${t.endISO})`}
@@ -641,6 +899,35 @@ export default function ScheduleGantt({
                         ) : null
                       )}
                     </button>
+                  )}
+
+                  {/* The dates, on the chart.
+
+                      A Gantt that will not tell you when anything happens makes
+                      you count gridlines. They sit after the bar rather than
+                      inside it: the bar is already carrying a title and a day
+                      count, and squeezing dates in there is what forces every
+                      label to truncate. */}
+                  {t.kind !== 'milestone' && (
+                    <span
+                      className="gt-dates ff-banner-wrap absolute top-[7px] pointer-events-none"
+                      style={{
+                        left: left(t.endDay + 1) + 6,
+                        color: t.driftDays > 0 ? '#d97706' : (KIND_COLOR[t.kind] || '#94a3b8'),
+                        /* Every banner starts at a different point in the cycle,
+                           so the column reads as cloth in a breeze rather than
+                           as one animation playing thirteen times in unison. */
+                        ['--ff-delay' as string]: `-${(rowIndex * 370) % 5200}ms`,
+                      } as React.CSSProperties}
+                    >
+                      <span className="ff-banner-pole" />
+                      <span className={`ff-banner text-[8.5px] font-semibold tabular-nums whitespace-nowrap ${
+                        t.driftDays > 0 ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {shortDate(t.startISO)} – {shortDate(t.endISO)}
+                        {t.driftDays > 0 && <span className="font-black"> · +{t.driftDays}d</span>}
+                      </span>
+                    </span>
                   )}
                 </div>
               ))}
@@ -752,6 +1039,13 @@ export default function ScheduleGantt({
               {selected.trade && <Row k="Trade" v={selected.trade} />}
               {selected.orderByISO && <Row k="Order by" v={`${selected.orderByISO} · ${selected.leadTimeDays}d lead`} />}
               <Row k="Float" v={selected.onCriticalPath ? 'On the critical path' : `${selected.floatDays} working days`} />
+              {selected.driftDays > 0 && (
+                <Row
+                  k={selected.overrunning ? 'Running over' : 'Late to start'}
+                  v={`${selected.driftDays} working day${selected.driftDays === 1 ? '' : 's'} — forecast moved to today because this is not finished`}
+                  tone="bad"
+                />
+              )}
               {selected.openGates.length > 0 && (
                 <Row k="Blocked by" v={selected.openGates.map(g => GATE_LABEL[g as ScheduleGate]).join(', ')} tone="bad" />
               )}
@@ -1199,7 +1493,7 @@ export default function ScheduleGantt({
         <div className="fixed inset-0 z-[220] bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm flex items-center justify-center p-5 no-print"
           onClick={() => setBlockedAlert(null)}>
           <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="font-serif text-lg font-semibold text-rose-700 flex items-center gap-2 mb-2">
+            <h3 className="text-lg font-bold text-rose-700 flex items-center gap-2 mb-2">
               <ShieldAlert className="w-5 h-5 text-rose-600" /> Pinned Stages Blocked
             </h3>
             <p className="text-xs text-slate-500 mb-3 leading-relaxed">
@@ -1219,6 +1513,57 @@ export default function ScheduleGantt({
             <div className="flex justify-end">
               <button onClick={() => setBlockedAlert(null)} className="px-4 py-2 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white rounded-xl text-xs font-bold hover:bg-[#0055B3] shadow-sm transition-colors">
                 Understood
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/*
+          The sequence question.
+
+          Phrased as what the trades do, not as a rule being broken: the studio
+          is the one who knows whether today's exception is worth it, and a
+          dialog that lectures gets clicked through without being read. Cancel
+          is the default action — the move has not been applied yet.
+      */}
+      {pendingMove && (
+        <div className="fixed inset-0 z-[220] bg-[#0066CC]/90 backdrop-blur-md flex items-center justify-center p-5 no-print"
+          onClick={() => setPendingMove(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-amber-700 flex items-center gap-2 mb-2">
+              <ShieldAlert className="w-5 h-5 text-amber-600" /> Out of build sequence
+            </h3>
+            <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+              Moving <b className="text-slate-800">{pendingMove.title}</b> there puts it ahead of work
+              it is normally built after:
+            </p>
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 max-h-44 overflow-y-auto mb-4 space-y-1.5">
+              {pendingMove.warnings.slice(0, 6).map((w, i) => (
+                <div key={i} className="text-xs text-amber-900 font-medium flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 shrink-0 mt-1.5" />
+                  {w.reason}
+                </div>
+              ))}
+              {pendingMove.warnings.length > 6 && (
+                <div className="text-[11px] text-amber-700 font-semibold pl-3.5">
+                  and {pendingMove.warnings.length - 6} more
+                </div>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
+              Site sometimes has a reason the programme does not — a trade on site today, a
+              material still in transit. Nothing is stopping you; the dates will recalculate
+              either way.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setPendingMove(null)}
+                className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors">
+                Keep it where it was
+              </button>
+              <button onClick={confirmMove}
+                className="px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 shadow-sm transition-colors">
+                Move it anyway
               </button>
             </div>
           </div>
@@ -1744,7 +2089,7 @@ function ScheduleAnalysisReportModal({ projectContext, schedule, result, varianc
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="border border-slate-100 p-3 rounded-lg text-left bg-white">
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Start Anchor</p>
-                <p className="font-serif text-lg font-bold text-slate-900 mt-1">
+                <p className="text-lg font-bold text-slate-900 mt-1">
                   {result.startISO ? new Date(result.startISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : "—"}
                 </p>
                 <p className="text-[10px] text-slate-400 mt-0.5 truncate">
@@ -1754,7 +2099,7 @@ function ScheduleAnalysisReportModal({ projectContext, schedule, result, varianc
 
               <div className="border border-slate-100 p-3 rounded-lg text-left bg-white">
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Projected Finish</p>
-                <p className="font-serif text-lg font-bold mt-1" style={{
+                <p className="text-lg font-bold mt-1" style={{
                   color: (result.overrunWorkDays ?? 0) > 0 ? '#e11d48' : '#059669',
                 }}>
                   {result.finishISO ? new Date(result.finishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : "—"}
@@ -1764,7 +2109,7 @@ function ScheduleAnalysisReportModal({ projectContext, schedule, result, varianc
 
               <div className="border border-slate-100 p-3 rounded-lg text-left bg-white">
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Target Handover</p>
-                <p className="font-serif text-lg font-bold text-slate-900 mt-1">
+                <p className="text-lg font-bold text-slate-900 mt-1">
                   {schedule.targetHandoverISO ? new Date(schedule.targetHandoverISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : "—"}
                 </p>
                 <p className="text-[10px] text-slate-400 mt-0.5">Deadline target</p>
@@ -1774,7 +2119,7 @@ function ScheduleAnalysisReportModal({ projectContext, schedule, result, varianc
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Variance status</p>
                 {result.overrunWorkDays != null ? (
                   <>
-                    <p className="font-serif text-lg font-bold mt-1" style={{
+                    <p className="text-lg font-bold mt-1" style={{
                       color: result.overrunWorkDays > 0 ? '#e11d48' : '#059669',
                     }}>
                       {result.overrunWorkDays > 0 ? `+${result.overrunWorkDays}d Delay` : `${Math.abs(result.overrunWorkDays)}d Buffer`}
@@ -1785,7 +2130,7 @@ function ScheduleAnalysisReportModal({ projectContext, schedule, result, varianc
                   </>
                 ) : (
                   <>
-                    <p className="font-serif text-lg font-bold text-slate-400 mt-1">—</p>
+                    <p className="text-lg font-bold text-slate-400 mt-1">—</p>
                     <p className="text-[10px] text-slate-400 mt-0.5">Target not set</p>
                   </>
                 )}

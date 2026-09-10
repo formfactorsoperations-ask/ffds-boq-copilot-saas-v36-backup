@@ -3,6 +3,8 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ProjectContext, Item, BoqItem, Room, AIStrategy, FullBoqItem, CommandAction, ProposalTier, AuditResult } from '../types';
 import { id as generateId, calculateSellPrice } from '../lib/utils';
 import RoomCard from './RoomCard';
+import { SCOPE_BUCKETS, SCOPE_BUCKET_META, realRooms, isScopeBucket, asScopeBucket } from '../lib/scopeBuckets';
+import { planScopeMigration, applyScopeMigration, resolvedRoomId } from '../lib/scopeMigration';
 import StudioExcelGrid from './StudioExcelGrid';
 import AddItemModal from './AddItemModal';
 import InteractiveBoqEditor from './InteractiveBoqEditor';
@@ -267,16 +269,24 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   const groupedItems = useMemo(() => {
     const grouped: { [key: string]: FullBoqItem[] } = {};
     const unassigned: FullBoqItem[] = [];
-    const validRoomNames = new Set((projectContext.rooms || []).map(r => r.name));
+    const validRoomNames = new Set(realRooms(projectContext.rooms).map(r => r.name));
 
     fullBoq.forEach(item => {
-      const roomName = item.roomId;
-      if (roomName && validRoomNames.has(roomName)) {
-        if (!grouped[roomName]) grouped[roomName] = [];
-        grouped[roomName].push(item);
-      } else {
-        unassigned.push(item);
-      }
+      /*
+        Resolved, not just read.
+
+        A legacy project reads correctly the moment it is opened, whether or not
+        anyone has run the migration: a line whose room no longer exists, or
+        which was written as "General Scope" or "FUNCTIONAL", is shown under the
+        scope it belongs to. Display and storage are allowed to disagree here —
+        a reader seeing "Unassigned" against work that is plainly debris removal
+        is not.
+
+        A line sitting in a real room is never re-homed, in display or on disk.
+      */
+      const home = resolvedRoomId(item, item as any, validRoomNames);
+      if (!grouped[home]) grouped[home] = [];
+      grouped[home].push(item);
     });
     
     // Sort items by category within each room for cleaner display
@@ -309,6 +319,27 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
             })
         };
     }));
+  };
+
+  /*
+    Lines whose stored scope disagrees with where they are shown.
+
+    The editor already displays them in the right place, so this is not about
+    making the screen correct — it is about the file. Until it is written, every
+    export, proposal and client BOQ built straight off `tier.boq` still carries
+    the old assignment, and the two would quietly say different things.
+
+    Offered rather than applied: a priced BOQ is not something to rewrite on
+    someone's behalf while they are looking at another screen.
+  */
+  const scopePlan = useMemo(
+    () => planScopeMigration(activeTier?.boq, bank, projectContext.rooms),
+    [activeTier?.boq, bank, projectContext.rooms],
+  );
+
+  const applyScopePlan = () => {
+    if (!scopePlan.length) return;
+    handleBulkUpdateItems(scopePlan.map(a => ({ itemId: a.itemId, updates: { roomId: a.to } })));
   };
 
   const handleBulkUpdateItems = (updates: {itemId: string, updates: Partial<BoqItem>}[]) => {
@@ -513,7 +544,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               >
                   <GridIcon className="w-3.5 h-3.5" /> Cards
               </button>
-              <button 
+              <button
                   onClick={() => setViewMode('takeoff')}
                   className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'takeoff' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
               >
@@ -654,10 +685,41 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                   </MotionDiv>
               )}
 
+              {scopePlan.length > 0 && (
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 flex items-start justify-between gap-4 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-amber-900">
+                      {scopePlan.length} {scopePlan.length === 1 ? 'line is' : 'lines are'} shown in a scope they are not saved to
+                    </p>
+                    <p className="text-[11px] text-amber-800/80 mt-1 leading-relaxed">
+                      Shown correctly here, but exports and the client BOQ read the saved value.
+                      {' '}
+                      {Array.from(new Set(scopePlan.map(a => a.reason))).slice(0, 3).join('; ')}.
+                    </p>
+                  </div>
+                  <button
+                    onClick={applyScopePlan}
+                    className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors shrink-0"
+                  >
+                    Move {scopePlan.length} into scopes
+                  </button>
+                </div>
+              )}
+
               {/* CARDS MODE */}
               {viewMode === 'cards' && (
                   <MotionDiv variants={container} initial="hidden" animate="show">
-                    {(projectContext.rooms || []).map(room => (
+                    {/*
+                        Rooms, then project scopes.
+
+                        Civil, Functional and Others used to sit in this list as
+                        rooms — each one carrying the whole flat's area, which is
+                        what made an eight-room 904 sq ft project measure 2,710.
+                        They are scopes: no dimensions, nothing measured from
+                        them, and they always appear so a reader can see what the
+                        job carries beyond the rooms.
+                    */}
+                    {realRooms(projectContext.rooms).map(room => (
                         <MotionDiv key={room.name} variants={itemVar}>
                             <RoomCard
                                 room={room}
@@ -676,6 +738,32 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                         </MotionDiv>
                     ))}
                     
+                    {SCOPE_BUCKETS.map(bucket => {
+                        const items = groupedItems.grouped[bucket] || [];
+                        /* An empty scope is still worth showing while the
+                           project has any BOQ at all — its absence is a fact
+                           about the job, not a rendering decision. */
+                        if (items.length === 0 && fullBoq.length === 0) return null;
+                        return (
+                            <MotionDiv key={bucket} variants={itemVar}>
+                                <RoomCard
+                                    room={{ name: bucket, size: 0, unit: 'sq ft' }}
+                                    items={items}
+                                    allRooms={projectContext.rooms || []}
+                                    searchQuery={searchQuery}
+                                    onUpdate={handleUpdateItem}
+                                    onBulkUpdate={handleBulkUpdateItems}
+                                    onDelete={handleDeleteItem}
+                                    onAddItem={() => handleOpenAddModal(bucket)}
+                                    onViewInBank={onViewInBank}
+                                    selectedItemIds={selectedItemIds}
+                                    onSelectItemToggle={handleSelectItemToggle}
+                                    onSaveAsBundle={handleSaveAsBundle}
+                                />
+                            </MotionDiv>
+                        );
+                    })}
+
                     {/* Unassigned Items */}
                     {groupedItems.unassigned.length > 0 && (
                         <MotionDiv variants={itemVar}>

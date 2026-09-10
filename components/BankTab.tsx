@@ -67,6 +67,23 @@ const BankTab: React.FC<BankTabProps> = ({
   // Main View Mode: 'spreadsheet' | 'grouped' | 'grid' | 'bundles'
   const [viewMode, setViewMode] = useState<'spreadsheet' | 'grouped' | 'grid' | 'bundles'>('spreadsheet');
 
+  /*
+    How many rows are actually put in the document.
+
+    Every view rendered the whole bank -- 288 items became 289 table rows,
+    ~23,800 DOM nodes and 4,300 form controls, which is 98% of everything on the
+    page. That cost about four seconds to build and roughly a second to tear
+    down again, so switching tab read as a dead button: the click was heard, the
+    browser was just busy destroying twenty-four thousand nodes.
+
+    Filtering, search, counts and select-all still run over the full bank; only
+    the slice that gets rendered is capped. `Show all` is kept for anyone who
+    genuinely wants the lot -- it is their pricing screen, and the slow path
+    should be available, just not the default.
+  */
+  const PAGE = 60;
+  const [visibleCount, setVisibleCount] = useState(PAGE);
+
   // Search, Category, Health & Project Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -246,6 +263,18 @@ const BankTab: React.FC<BankTabProps> = ({
   };
 
   const isAllSelected = filteredBank.length > 0 && selectedItemIds.size === filteredBank.length;
+
+  /* What the views actually receive. */
+  const visibleBank = useMemo(
+    () => filteredBank.slice(0, visibleCount),
+    [filteredBank, visibleCount],
+  );
+  const hiddenCount = filteredBank.length - visibleBank.length;
+
+  /* A new filter starts a new window, or a narrow search would inherit a huge one. */
+  useEffect(() => {
+    setVisibleCount(PAGE);
+  }, [searchTerm, selectedCategory, selectedProjectId, healthFilter, viewMode]);
 
   // Selected items array
   const selectedItems = useMemo(() => {
@@ -534,10 +563,6 @@ const BankTab: React.FC<BankTabProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-50 border border-sky-200 text-[#0066CC] rounded-full text-xs font-bold uppercase tracking-wider">
-                <Briefcase className="w-3.5 h-3.5" />
-                Master Catalog & Pricing Engine
-              </span>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
                 {stats.totalItems} Active Items · {stats.totalCategories} Categories
               </span>
@@ -560,12 +585,6 @@ const BankTab: React.FC<BankTabProps> = ({
                 </button>
               )}
             </div>
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-              Studio Item Bank & Scope Library
-            </h2>
-            <p className="text-xs text-slate-500 max-w-2xl leading-relaxed">
-              The single source of truth for your studio's bill of quantities. Rapidly re-assign categories, update margins, inflate vendor rates, trace active project deployments, and package room deliverables in bulk.
-            </p>
           </div>
 
           {/* Quick Studio Actions */}
@@ -625,35 +644,35 @@ const BankTab: React.FC<BankTabProps> = ({
         </div>
 
         {/* Pulse Grid Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Items</div>
-            <div className="text-xl font-black text-slate-900 mt-1">{stats.totalItems}</div>
-            <div className="text-[10px] text-slate-400 font-medium mt-0.5">In Master Catalog</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 hud-panel-in">
+          <div className="hud-well rounded-2xl border p-3.5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Items</div>
+            <div className="text-xl font-black text-slate-800 mt-1">{stats.totalItems}</div>
+            <div className="text-[10px] text-slate-500 font-medium mt-0.5">In Master Catalog</div>
           </div>
 
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Categories</div>
-            <div className="text-xl font-black text-slate-900 mt-1">{stats.totalCategories}</div>
-            <div className="text-[10px] text-slate-400 font-medium mt-0.5">Active Scope Trades</div>
+          <div className="hud-well rounded-2xl border p-3.5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Categories</div>
+            <div className="text-xl font-black text-slate-800 mt-1">{stats.totalCategories}</div>
+            <div className="text-[10px] text-slate-500 font-medium mt-0.5">Active Scope Trades</div>
           </div>
 
-          <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Studio Avg Margin</div>
-            <div className="text-xl font-black text-emerald-700 mt-1">{stats.avgMargin}%</div>
-            <div className="text-[10px] text-emerald-600 font-medium mt-0.5">Markup over costs</div>
+          <div className="hud-well rounded-2xl border p-3.5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Studio Avg Margin</div>
+            <div className="text-xl font-black text-slate-800 mt-1">{stats.avgMargin}%</div>
+            <div className="text-[10px] text-slate-500 font-medium mt-0.5">Markup over costs</div>
           </div>
 
-          <div className="bg-sky-50/60 border border-sky-100 rounded-2xl p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[#0066CC]">In Project BOQs</div>
-            <div className="text-xl font-black text-[#0066CC] mt-1">{stats.itemsInProjectsCount}</div>
-            <div className="text-[10px] text-[#0066CC]/70 font-medium mt-0.5">Live project deployments</div>
+          <div className="hud-well rounded-2xl border p-3.5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">In Project BOQs</div>
+            <div className="text-xl font-black text-slate-800 mt-1">{stats.itemsInProjectsCount}</div>
+            <div className="text-[10px] text-slate-500 font-medium mt-0.5">Live project deployments</div>
           </div>
 
-          <div className="bg-slate-900 text-white rounded-2xl p-3.5 shadow-sm col-span-2 sm:col-span-4 lg:col-span-1">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Catalog Footprint</div>
-            <div className="text-xl font-black text-amber-300 mt-1">{formatCurrency(stats.totalCatalogValue)}</div>
-            <div className="text-[10px] text-slate-300 font-medium mt-0.5">Aggregated Unit Base</div>
+          <div className="hud-well rounded-2xl border p-3.5 col-span-2 sm:col-span-4 lg:col-span-1">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Catalog Footprint</div>
+            <div className="text-xl font-black text-slate-800 mt-1">{formatCurrency(stats.totalCatalogValue)}</div>
+            <div className="text-[10px] text-slate-500 font-medium mt-0.5">Aggregated Unit Base</div>
           </div>
         </div>
 
@@ -875,7 +894,7 @@ const BankTab: React.FC<BankTabProps> = ({
       {/* 4. MAIN VIEWS RENDER */}
       {viewMode === 'spreadsheet' && (
         <BankSpreadsheetTable
-          items={filteredBank}
+          items={visibleBank}
           selectedItemIds={selectedItemIds}
           onToggleSelectItem={handleToggleSelectItem}
           onToggleSelectAll={handleToggleSelectAll}
@@ -893,7 +912,7 @@ const BankTab: React.FC<BankTabProps> = ({
 
       {viewMode === 'grouped' && (
         <BankCategoryGroupedView
-          items={filteredBank}
+          items={visibleBank}
           selectedItemIds={selectedItemIds}
           onToggleSelectItem={handleToggleSelectItem}
           onSelectCategoryItems={handleSelectCategoryItems}
@@ -911,7 +930,7 @@ const BankTab: React.FC<BankTabProps> = ({
 
       {viewMode === 'grid' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredBank.map((item) => (
+          {visibleBank.map((item) => (
             <BankItemCard
               key={item.id}
               item={item}
@@ -927,6 +946,34 @@ const BankTab: React.FC<BankTabProps> = ({
               onViewProjectUsage={(item) => setUsageModalItem(item)}
             />
           ))}
+        </div>
+      )}
+
+      {/*
+        Nothing is hidden silently: the count is always visible, and the way to
+        see the rest is one click away. Rendering more is a deliberate choice
+        because it is the expensive one.
+      */}
+      {viewMode !== 'bundles' && hiddenCount > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-3 py-4">
+          <span className="text-xs font-semibold text-slate-500">
+            Showing {visibleBank.length} of {filteredBank.length} items
+          </span>
+          <button
+            type="button"
+            onClick={() => setVisibleCount((n) => n + PAGE)}
+            className="px-4 py-2 rounded-xl bg-[#0066CC] text-white text-xs font-bold hover:bg-[#0055B3]"
+          >
+            Show {Math.min(PAGE, hiddenCount)} more
+          </button>
+          <button
+            type="button"
+            onClick={() => setVisibleCount(filteredBank.length)}
+            className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50"
+            title="Renders every row at once — slower on a large bank"
+          >
+            Show all {filteredBank.length}
+          </button>
         </div>
       )}
 

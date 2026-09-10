@@ -1,8 +1,471 @@
 import React, { useMemo, useState } from 'react';
 import { ProposalTier, ProjectContext, TimelinePhase, PaymentMilestone, FullBoqItem, ProposalLevel } from '../../types';
 import { formatCurrency, calculateSellPrice } from '../../lib/utils';
+import { detectAllScopes, findScopeContradictions } from '../../lib/scopeDetect';
+import { groupPhasesIntoStages } from '../../lib/programmeStages';
 import { CheckIcon, XIcon, ShieldCheckIcon, HelpCircleIcon, Pencil, Save } from 'lucide-react';
 import { useOrg } from '../../contexts/OrgContext';
+
+/*
+  An editable run of prose inside the proposal.
+
+  The booklet ships with its wording baked into the JSX, which meant a studio
+  could not correct a clause without a code change. `Ed` keeps the shipped text
+  as the default and renders a studio override when one exists.
+
+  Defined at module scope on purpose: a component declared inside the render
+  body is a new type on every render, which would unmount and remount every
+  editable node — losing focus mid-edit.
+*/
+export type EdListItem = string | { title: string; desc?: string; meta?: string };
+
+export interface EdCtl {
+    on: boolean;
+    ov: Record<string, string>;
+    save: (key: string, value: string) => void;
+    clear: (key: string) => void;
+    /** Studio-customised lists, absent until a list is restructured. Plain
+        strings are clause lists; the pair shape is a title-and-blurb list. */
+    lists: Record<string, EdListItem[]>;
+    saveList: (key: string, items: EdListItem[]) => void;
+    clearList: (key: string) => void;
+}
+
+const Ed: React.FC<{ k: string; ctl: EdCtl; children: React.ReactNode }> = ({ k, ctl, children }) => {
+    const saved = ctl.ov[k];
+    const shown = saved !== undefined ? saved : children;
+    const ref = React.useRef<HTMLSpanElement | null>(null);
+
+    /*
+      What the booklet ships for this run.
+
+      A plain-text child is its own default, but a paragraph carrying live
+      figures — the programme length, the studio name — arrives as JSX and has
+      no string to compare against. Read it off the DOM once instead, so typing
+      such a paragraph back to its original wording still clears the override
+      rather than pinning today's numbers into stored content.
+    */
+    const shipped = React.useRef<string | null>(typeof children === 'string' ? children.trim() : null);
+    React.useLayoutEffect(() => {
+        if (shipped.current === null && saved === undefined && ref.current) {
+            shipped.current = ref.current.innerText.replace(/\u00a0/g, ' ').trim();
+        }
+    }, [saved]);
+
+    if (!ctl.on) return <>{shown}</>;
+
+    /*
+      Only ever make a single text node editable.
+
+      When the children are one string, React manages one text node and a
+      contentEditable edit reconciles cleanly. A paragraph built from several
+      children — text around {totalDays} and {designDays} — is different: typing
+      into it destroys nodes React still expects to own, and the next render
+      dies with "Failed to execute 'removeChild' on 'Node'", taking the whole
+      proposal with it.
+
+      So a mixed paragraph is rendered read-only until someone asks to edit it.
+      That click captures what is on screen, live figures resolved, and from
+      then on the run is one plain string and behaves like every other.
+    */
+    if (saved === undefined && typeof children !== 'string') {
+        return (
+            <span className="ff-ed-seed" ref={ref as any}>
+                {children}
+                <button
+                    type="button"
+                    className="ff-ed-seed-btn print:hidden"
+                    title="Edit this paragraph"
+                    onClick={() => {
+                        const text = (ref.current?.innerText || '')
+                            .replace(/ /g, ' ')
+                            .replace(/\s*Edit\s*$/, '')
+                            .trim();
+                        if (text) ctl.save(k, text);
+                    }}
+                >Edit</button>
+            </span>
+        );
+    }
+
+    /*
+      A seeded paragraph needs a way back.
+
+      Seeding stores the shipped wording verbatim, so the usual
+      "typed back to the default, drop the override" rule can never fire — the
+      component no longer has the original children to compare against. An
+      explicit control is the honest answer, and it matches how clause lists
+      are restored.
+    */
+    const resettable = saved !== undefined && typeof children !== 'string';
+
+    const editable = (
+        <span
+            ref={ref}
+            className="ff-ed"
+            contentEditable
+            suppressContentEditableWarning
+            spellCheck
+            data-ff-ed={k}
+            // Commit on blur only. Committing per keystroke would re-render the
+            // node the caret sits in and send the cursor back to the start.
+            onBlur={(e) => {
+                const next = e.currentTarget.innerText.replace(/\u00a0/g, ' ').trim();
+                const base = shipped.current ?? '';
+                if (next === base) {
+                    // Typed back to the shipped wording. Storing that as an
+                    // override would pin this run to today's text and shadow any
+                    // later revision of the default, so drop it instead.
+                    if (saved !== undefined) ctl.clear(k);
+                    return;
+                }
+                if (next !== saved) ctl.save(k, next);
+            }}
+        >{shown}</span>
+    );
+
+    if (!resettable) return editable;
+    return (
+        <span className="ff-ed-seed">
+            {editable}
+            <button
+                type="button"
+                className="ff-ed-seed-btn print:hidden"
+                title="Discard this edit and use the standard wording"
+                onClick={() => ctl.clear(k)}
+            >Use standard text</button>
+        </span>
+    );
+};
+
+/*
+  Keep only the emphasis a clause legitimately carries.
+
+  List items are seeded from rendered HTML so that bold runs and live figures
+  survive being edited. That means storing markup, so everything outside a
+  small allowlist is dropped on the way in — the studio writes prose, not tags.
+*/
+const ALLOWED_INLINE = /^(strong|b|em|i|br|span)$/i;
+
+const cleanInlineHtml = (html: string): string => {
+  const doc = document.implementation.createHTMLDocument('');
+  const holder = doc.createElement('div');
+  holder.innerHTML = html;
+  const walk = (node: Element) => {
+    Array.from(node.children).forEach((child) => {
+      walk(child);
+      if (!ALLOWED_INLINE.test(child.tagName)) {
+        child.replaceWith(...Array.from(child.childNodes));
+        return;
+      }
+      // Strip every attribute: class names carry the booklet's own styling and
+      // event handlers have no business in stored content.
+      Array.from(child.attributes).forEach((a) => child.removeAttribute(a.name));
+    });
+  };
+  walk(holder);
+  return holder.innerHTML.replace(/\s+/g, ' ').trim();
+};
+
+/*
+  The programme phases, as editable cards.
+
+  Derived from the project schedule, so the day ranges agree with the headline
+  total. Editing one freezes the row of cards for this project — the studio's
+  wording wins over the schedule's, which is the point on a proposal where the
+  phase names are a client-facing summary rather than an ops artefact.
+*/
+const EdPhaseCards: React.FC<{
+  k: string;
+  ctl: EdCtl;
+  items: { meta?: string; title: string; desc?: string }[];
+}> = ({ k, ctl, items }) => {
+  const savedRaw = ctl.lists[k];
+  const saved = savedRaw
+    ? savedRaw.map((it) => (typeof it === 'string' ? { title: it } : it))
+    : undefined;
+  const shown = (saved ?? items) as { meta?: string; title: string; desc?: string }[];
+
+  const apply = (fn: (l: any[]) => any[]) => ctl.saveList(k, fn(shown.map((it) => ({ ...it }))));
+
+  const btn =
+    'px-1.5 py-0.5 text-[10px] font-bold rounded border border-slate-200 bg-white ' +
+    'text-slate-500 hover:text-[#0055B3] hover:border-[#0066CC]/40 transition-colors';
+
+  const field = (value: string, onCommit: (v: string) => void, className: string) =>
+    ctl.on ? (
+      <span
+        className={`ff-ed ${className}`}
+        contentEditable
+        suppressContentEditableWarning
+        onBlur={(e) => {
+          const t = e.currentTarget.innerText.trim();
+          if (t !== value) onCommit(t);
+        }}
+      >{value}</span>
+    ) : <span className={className}>{value}</span>;
+
+  const grid = (
+    /* Written out rather than interpolated: Tailwind generates only the class
+       names it can see as literals in the source, so `md:grid-cols-${n}` would
+       compile to nothing and the cards would stack in a single column. */
+    <div className={`grid grid-cols-1 gap-4 my-auto ${
+      shown.length >= 5 ? 'md:grid-cols-5'
+      : shown.length === 4 ? 'md:grid-cols-4'
+      : shown.length === 3 ? 'md:grid-cols-3'
+      : shown.length === 2 ? 'md:grid-cols-2'
+      : 'md:grid-cols-1'
+    }`}>
+      {shown.map((ph, i) => (
+        <div key={i} className="group/item relative p-5 border border-slate-200 bg-slate-50 rounded-xl text-center">
+          <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-bold block mb-1">
+            {field(ph.meta || '', (v) => apply((l) => { l[i].meta = v; return l; }), '')}
+          </span>
+          <h4 className="font-bold text-[#0F172A] text-sm mb-2">
+            {field(ph.title || '', (v) => apply((l) => { l[i].title = v; return l; }), '')}
+          </h4>
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            {field(ph.desc || '', (v) => apply((l) => { l[i].desc = v; return l; }), '')}
+          </p>
+          {ctl.on && (
+            <span className="ff-edlist-item-tools absolute top-1 right-1 opacity-0 group-hover/item:opacity-100 print:hidden">
+              <button type="button" className={btn} title="Move earlier" disabled={i === 0}
+                onClick={() => apply((l) => { const [x] = l.splice(i, 1); l.splice(i - 1, 0, x); return l; })}>←</button>
+              <button type="button" className={btn} title="Move later" disabled={i === shown.length - 1}
+                onClick={() => apply((l) => { const [x] = l.splice(i, 1); l.splice(i + 1, 0, x); return l; })}>→</button>
+              <button type="button" className={btn} title="Remove phase"
+                onClick={() => apply((l) => { l.splice(i, 1); return l; })}>✕</button>
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  if (!ctl.on) return grid;
+
+  return (
+    <div className="ff-edlist group/list">
+      {grid}
+      <div className="ff-edlist-tools opacity-0 group-hover/list:opacity-100 print:hidden">
+        <button type="button" className={btn}
+          onClick={() => apply((l) => { l.push({ meta: 'Day —', title: 'New phase', desc: '' }); return l; })}>
+          + Add phase
+        </button>
+        {saved && (
+          <button type="button" className={btn} title="Go back to the phases from the project schedule"
+            onClick={() => ctl.clearList(k)}>
+            Use project schedule
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/*
+  A title-and-blurb list the studio can restructure.
+
+  The "What is included" columns are built from the BOQ as {title, desc} pairs,
+  so unlike the annexure clauses there is nothing to seed from the DOM — the
+  defaults are already structured data. Editing one freezes that column for this
+  project, which is the point: the derived version is a starting draft, and the
+  studio has the last word on what the client is told is in or out of scope.
+*/
+const EdPairList: React.FC<{
+  k: string;
+  ctl: EdCtl;
+  items: { title: string; desc?: string }[];
+  variant: 'include' | 'exclude';
+}> = ({ k, ctl, items, variant }) => {
+  const savedRaw = ctl.lists[k];
+  const saved = savedRaw
+    ? savedRaw.map((it) => (typeof it === 'string' ? { title: it } : it))
+    : undefined;
+  const shown = saved ?? items;
+
+  const apply = (fn: (list: { title: string; desc?: string }[]) => { title: string; desc?: string }[]) =>
+    ctl.saveList(k, fn(shown.map((it) => ({ ...it }))));
+
+  const isInclude = variant === 'include';
+  const btn =
+    'px-1.5 py-0.5 text-[10px] font-bold rounded border border-slate-200 bg-white ' +
+    'text-slate-500 hover:text-[#0055B3] hover:border-[#0066CC]/40 transition-colors';
+
+  const row = (it: { title: string; desc?: string }, i: number) => (
+    <li key={i} className={`group/item flex items-start gap-3 ${isInclude ? 'text-slate-700' : 'text-slate-500'}`}>
+      {isInclude
+        ? <CheckIcon className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+        : <XIcon className="w-5 h-5 text-slate-300 shrink-0 mt-0.5" />}
+      <div className="flex-1">
+        {isInclude ? (
+          <strong className="text-slate-900 block font-medium">
+            {ctl.on ? (
+              <span className="ff-ed" contentEditable suppressContentEditableWarning
+                onBlur={(e) => {
+                  const t = e.currentTarget.innerText.trim();
+                  if (t !== it.title) apply((l) => { l[i].title = t; return l; });
+                }}>{it.title}</span>
+            ) : it.title}
+          </strong>
+        ) : (
+          <span className="text-slate-400 block line-through">
+            {ctl.on ? (
+              <span className="ff-ed" contentEditable suppressContentEditableWarning
+                onBlur={(e) => {
+                  const t = e.currentTarget.innerText.trim();
+                  if (t !== it.title) apply((l) => { l[i].title = t; return l; });
+                }}>{it.title}</span>
+            ) : it.title}
+          </span>
+        )}
+        <span className={`text-xs block ${isInclude ? 'text-slate-500' : 'text-slate-400'}`}>
+          {ctl.on ? (
+            <span className="ff-ed" contentEditable suppressContentEditableWarning
+              onBlur={(e) => {
+                const d = e.currentTarget.innerText.trim();
+                if (d !== (it.desc || '')) apply((l) => { l[i].desc = d; return l; });
+              }}>{it.desc || ''}</span>
+          ) : it.desc}
+        </span>
+      </div>
+      {ctl.on && (
+        <span className="ff-edlist-item-tools opacity-0 group-hover/item:opacity-100 print:hidden">
+          <button type="button" className={btn} title="Move up" disabled={i === 0}
+            onClick={() => apply((l) => { const [x] = l.splice(i, 1); l.splice(i - 1, 0, x); return l; })}>↑</button>
+          <button type="button" className={btn} title="Move down" disabled={i === shown.length - 1}
+            onClick={() => apply((l) => { const [x] = l.splice(i, 1); l.splice(i + 1, 0, x); return l; })}>↓</button>
+          <button type="button" className={btn} title="Remove"
+            onClick={() => apply((l) => { l.splice(i, 1); return l; })}>✕</button>
+        </span>
+      )}
+    </li>
+  );
+
+  if (!ctl.on) return <ul className="space-y-4">{shown.map(row)}</ul>;
+
+  return (
+    <div className="ff-edlist group/list">
+      <ul className="space-y-4">{shown.map(row)}</ul>
+      <div className="ff-edlist-tools opacity-0 group-hover/list:opacity-100 print:hidden">
+        <button type="button" className={btn}
+          onClick={() => apply((l) => { l.push({ title: 'New item', desc: '' }); return l; })}>
+          + Add item
+        </button>
+        {saved && (
+          <button type="button" className={btn} title="Go back to the list derived from the BOQ"
+            onClick={() => ctl.clearList(k)}>
+            Use derived list
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/*
+  A clause list the studio can restructure.
+
+  Text editing already works through <Ed> on each item, so this deliberately
+  does nothing until someone needs to add, remove or reorder a clause. Until
+  then the booklet's own markup renders untouched — which keeps live figures
+  such as the programme length and the design fee live. The first structural
+  edit seeds a copy from what is on screen, and from then on the studio's list
+  is the one that prints. "Use standard list" puts it back.
+*/
+const EdList: React.FC<{
+  k: string;
+  ctl: EdCtl;
+  as?: 'ul' | 'ol';
+  className?: string;
+  children: React.ReactNode;
+}> = ({ k, ctl, as = 'ul', className = '', children }) => {
+  const Tag = as as any;
+  /* The store holds both clause lists and title/blurb lists; this component
+     only speaks the string form, so coerce rather than assume. */
+  const savedRaw = ctl.lists[k];
+  const saved = savedRaw
+    ? savedRaw.map((it) => (typeof it === 'string' ? it : it.title))
+    : undefined;
+  const ref = React.useRef<HTMLElement | null>(null);
+
+  // Read what the booklet currently renders, so a seeded list is identical to
+  // the one it replaces.
+  const seedFromDom = (): string[] => {
+    const el = ref.current;
+    if (!el) return [];
+    return Array.from(el.querySelectorAll(':scope > li')).map((li) =>
+      cleanInlineHtml((li as HTMLElement).innerHTML),
+    );
+  };
+
+  const apply = (fn: (items: string[]) => string[]) => {
+    const base = saved ?? seedFromDom();
+    ctl.saveList(k, fn([...base]));
+  };
+
+  if (!ctl.on) {
+    return saved ? (
+      <Tag className={className}>
+        {saved.map((html, i) => (
+          <li key={i} dangerouslySetInnerHTML={{ __html: html }} />
+        ))}
+      </Tag>
+    ) : (
+      <Tag className={className}>{children}</Tag>
+    );
+  }
+
+  const btn =
+    'px-1.5 py-0.5 text-[10px] font-bold rounded border border-slate-200 bg-white ' +
+    'text-slate-500 hover:text-[#0055B3] hover:border-[#0066CC]/40 transition-colors';
+
+  return (
+    <div className="ff-edlist group/list relative">
+      {saved ? (
+        <Tag className={className}>
+          {saved.map((html, i) => (
+            <li key={i} className="group/item relative">
+              <span
+                className="ff-ed"
+                contentEditable
+                suppressContentEditableWarning
+                onBlur={(e) => {
+                  const next = cleanInlineHtml(e.currentTarget.innerHTML);
+                  if (next !== html) apply((items) => { items[i] = next; return items; });
+                }}
+                dangerouslySetInnerHTML={{ __html: html }}
+              />
+              <span className="ff-edlist-item-tools opacity-0 group-hover/item:opacity-100 print:hidden">
+                <button type="button" className={btn} title="Move up" disabled={i === 0}
+                  onClick={() => apply((items) => { const [x] = items.splice(i, 1); items.splice(i - 1, 0, x); return items; })}>↑</button>
+                <button type="button" className={btn} title="Move down" disabled={i === saved.length - 1}
+                  onClick={() => apply((items) => { const [x] = items.splice(i, 1); items.splice(i + 1, 0, x); return items; })}>↓</button>
+                <button type="button" className={btn} title="Remove clause"
+                  onClick={() => apply((items) => { items.splice(i, 1); return items; })}>✕</button>
+              </span>
+            </li>
+          ))}
+        </Tag>
+      ) : (
+        <Tag ref={ref} className={className}>{children}</Tag>
+      )}
+
+      <div className="ff-edlist-tools opacity-0 group-hover/list:opacity-100 print:hidden">
+        <button type="button" className={btn}
+          onClick={() => apply((items) => { items.push('New clause'); return items; })}>
+          + Add clause
+        </button>
+        {saved && (
+          <button type="button" className={btn} title="Discard the studio's version of this list"
+            onClick={() => ctl.clearList(k)}>
+            Use standard list
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 interface ClientBookletProposalProps {
     tiers: ProposalTier[];
@@ -84,6 +547,21 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
         return designPhase ? designPhase.durationDays : 14;
     }, [timelinePhases]);
 
+    /*
+      The programme, at the level a first cut should state it.
+
+      The schedule is a CPM plan of ten overlapping site trades. Showing it
+      verbatim gave the client exact day ranges on a proposal that has not been
+      through design freeze, and the ranges overlapped, which reads as
+      confusion rather than a plan. It is grouped into a few named stages
+      instead — and design, which the schedule does not contain at all, is put
+      back at the front where it belongs.
+    */
+    const derivedPhases = useMemo(
+        () => groupPhasesIntoStages((timelinePhases || []) as any[], designDays),
+        [timelinePhases, designDays],
+    );
+
     const executionDays = useMemo(() => {
         return totalDays - designDays > 0 ? totalDays - designDays : 34;
     }, [totalDays, designDays]);
@@ -106,6 +584,142 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
     const taxableExecution = Math.max(0, baseExecution - executionSavings);
     const taxableDesign = Math.max(0, baseDesign - designSavings);
+
+    /*
+      How the design fee was actually arrived at.
+
+      This read "Fixed fee" unconditionally, so a percentage-of-cost or
+      per-sqft engagement was described to the client as fixed — the amount was
+      right, the basis line beside it was not. The client signs against this
+      table, so the basis has to match what the fee engine was set to.
+    */
+    const designFeeBasis = (() => {
+        const t = projectContext?.designFeeType;
+        const v = projectContext?.designFee;
+        if (t === 'percentage' || !t) return `${v || 0}% of execution cost`;
+        if (t === 'fixed_sqft') return `₹${(v || 0).toLocaleString('en-IN')} per sq ft`;
+        return 'Fixed fee';
+    })();
+
+    /*
+      Prose overrides. Stored per proposal mode alongside the material
+      overrides that already worked this way, so Turnkey and Design-only
+      booklets can word the same clause differently.
+    */
+    const blockOverrides: Record<string, string> = (
+        (projectContext as any)?.proposalContentByMode?.[(projectContext as any)?.activeProposalMode || 'TURNKEY']?.blocks
+        || projectContext?.proposalContent?.blocks
+        || {}
+    );
+
+    const saveBlock = React.useCallback((key: string, value: string) => {
+        if (!setProjectContext) return;
+        setProjectContext((prev: any) => {
+            const activeMode = prev.activeProposalMode || 'TURNKEY';
+            const modeContent = prev.proposalContentByMode?.[activeMode] || prev.proposalContent || {};
+            const blocks = { ...(modeContent.blocks || {}) };
+            blocks[key] = value;
+            const updatedModeContent = { ...modeContent, blocks };
+            return {
+                ...prev,
+                proposalContentByMode: {
+                    ...(prev.proposalContentByMode || {}),
+                    [activeMode]: updatedModeContent
+                },
+                ...(activeMode === 'TURNKEY' ? { proposalContent: updatedModeContent } : {})
+            };
+        });
+    }, [setProjectContext]);
+
+    const clearBlock = React.useCallback((key: string) => {
+        if (!setProjectContext) return;
+        setProjectContext((prev: any) => {
+            const activeMode = prev.activeProposalMode || 'TURNKEY';
+            const modeContent = prev.proposalContentByMode?.[activeMode] || prev.proposalContent || {};
+            if (!modeContent.blocks || modeContent.blocks[key] === undefined) return prev;
+            const blocks = { ...modeContent.blocks };
+            delete blocks[key];
+            const updatedModeContent = { ...modeContent, blocks };
+            return {
+                ...prev,
+                proposalContentByMode: {
+                    ...(prev.proposalContentByMode || {}),
+                    [activeMode]: updatedModeContent
+                },
+                ...(activeMode === 'TURNKEY' ? { proposalContent: updatedModeContent } : {})
+            };
+        });
+    }, [setProjectContext]);
+
+    const listOverrides: Record<string, string[]> = (
+        (projectContext as any)?.proposalContentByMode?.[(projectContext as any)?.activeProposalMode || 'TURNKEY']?.lists
+        || (projectContext as any)?.proposalContent?.lists
+        || {}
+    );
+
+    const writeContent = React.useCallback((mutate: (content: any) => any) => {
+        if (!setProjectContext) return;
+        setProjectContext((prev: any) => {
+            const activeMode = prev.activeProposalMode || 'TURNKEY';
+            const modeContent = prev.proposalContentByMode?.[activeMode] || prev.proposalContent || {};
+            const updated = mutate(modeContent);
+            if (updated === modeContent) return prev;
+            return {
+                ...prev,
+                proposalContentByMode: {
+                    ...(prev.proposalContentByMode || {}),
+                    [activeMode]: updated
+                },
+                ...(activeMode === 'TURNKEY' ? { proposalContent: updated } : {})
+            };
+        });
+    }, [setProjectContext]);
+
+    const saveList = React.useCallback((key: string, items: string[]) => {
+        writeContent((content) => ({ ...content, lists: { ...(content.lists || {}), [key]: items } }));
+    }, [writeContent]);
+
+    const clearList = React.useCallback((key: string) => {
+        writeContent((content) => {
+            if (!content.lists || content.lists[key] === undefined) return content;
+            const lists = { ...content.lists };
+            delete lists[key];
+            return { ...content, lists };
+        });
+    }, [writeContent]);
+
+    /* Editable for the studio, never for the client, and never in a print or
+       PDF pass — a caret outline has no business on a document a client signs. */
+    const edCtl: EdCtl = React.useMemo(() => ({
+        on: !!setProjectContext && !isClientViewOnly,
+        ov: blockOverrides,
+        save: saveBlock,
+        clear: clearBlock,
+        lists: listOverrides,
+        saveList,
+        clearList,
+    }), [setProjectContext, isClientViewOnly, blockOverrides, saveBlock, clearBlock, listOverrides, saveList, clearList]);
+
+    /*
+      Page numbers, counted rather than typed.
+
+      Nine footers carried a hardcoded "Page N of 15" while the booklet
+      actually rendered sixteen frames. The running numbers were right — they
+      skip (2, 3, 7, 8, 9, 11 …) because covers and dividers carry no footer,
+      which is deliberate — but the total was stale, and every one of them was
+      a literal. Sections render conditionally, so any number written by hand
+      is wrong on some project even when it is right on this one.
+
+      The running number comes from a CSS counter on .ff-page, which costs
+      nothing and follows document order through every conditional. Only the
+      total needs measuring, and it is one number read back after layout.
+    */
+    const wrapperRef = React.useRef<HTMLDivElement | null>(null);
+    const [pageTotal, setPageTotal] = React.useState(0);
+    React.useLayoutEffect(() => {
+        const n = wrapperRef.current?.querySelectorAll('.ff-page').length || 0;
+        setPageTotal((prev) => (prev === n ? prev : n));
+    });
 
     const gstOnDesign = taxableDesign * (gstRate / 100);
     const chargedGstOnExecution = isExecutionGstWaived ? 0 : (taxableExecution * (gstRate / 100));
@@ -575,111 +1189,49 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
         setIsEditingSpecs(false);
     };
 
-    // --- CLARITY - NOT IN SCOPE DYNAMIC CHECKS ---
-    const hasKitchenBaseWall = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            const cat = (i.cat || '').toLowerCase();
-            return (cat.includes('kitchen') || name.includes('kitchen')) && 
-                   (name.includes('base') || name.includes('wall') || name.includes('cabinet') || name.includes('carcass'));
-        });
-    }, [activeTier]);
+    /*
+      What the proposal is allowed to tell the client is included.
 
-    const hasKitchenShutters = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            const cat = (i.cat || '').toLowerCase();
-            return (cat.includes('kitchen') || name.includes('kitchen')) && name.includes('shutter');
-        });
-    }, [activeTier]);
+      These twelve answers used to be twelve inline substring tests over item
+      names. That produced statements in a signed document that the BOQ
+      contradicted — 'tall' matched "ins(tall)ation of sanitary ware", 'counter'
+      matched a bathroom washbasin and a *demolition* of the kitchen counter,
+      'wall' matched "kitchen - plastering wall". The rules now live in
+      lib/scopeDetect.ts, are whole-word, area-scoped, blind to removals, and
+      unit-tested against this project's real item names.
+    */
+    const scopes = useMemo(
+      () => detectAllScopes((activeTier.fullBoq || []) as any[]),
+      [activeTier],
+    );
 
-    const hasCountertop = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            const cat = (i.cat || '').toLowerCase();
-            return name.includes('counter') || name.includes('quartz') || name.includes('granite') || name.includes('stone') || name.includes('platform');
-        });
-    }, [activeTier]);
+    /*
+      A last look before the document goes out.
 
-    const hasTallUnit = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            return name.includes('tall') || name.includes('pantry');
-        });
-    }, [activeTier]);
+      The include and exclude lists come from the same rules, so they cannot
+      disagree with each other — but if a rule is wrong they are wrong
+      together, and the result is a booklet that prices something on one page
+      and excludes it on another. This asks the looser question the strict
+      rules refuse to answer, and only ever tells the studio.
+    */
+    const scopeContradictions = useMemo(
+      () => findScopeContradictions((activeTier.fullBoq || []) as any[], scopes),
+      [activeTier, scopes],
+    );
 
-    const hasKitchenAccessories = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            const cat = (i.cat || '').toLowerCase();
-            return name.includes('basket') || name.includes('hardware') || name.includes('tandem') || name.includes('pull out') || name.includes('accessory') || name.includes('cutlery');
-        });
-    }, [activeTier]);
-
-    const hasWardrobes = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            const cat = (i.cat || '').toLowerCase();
-            return name.includes('wardrobe') || name.includes('sliding wardrobe') || name.includes('swing wardrobe');
-        });
-    }, [activeTier]);
-
-    const hasLofts = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            const cat = (i.cat || '').toLowerCase();
-            return name.includes('loft') || name.includes('overhead');
-        });
-    }, [activeTier]);
-
-    const hasBeds = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            return name.includes('bed') || name.includes('headboard') || name.includes('cot');
-        });
-    }, [activeTier]);
-
-    const hasStudy = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            return name.includes('study') || name.includes('desk') || name.includes('writing');
-        });
-    }, [activeTier]);
-
-    const hasVanity = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            return name.includes('vanity') || name.includes('basin cabinet') || name.includes('under counter');
-        });
-    }, [activeTier]);
-
-    const hasMirrorUnit = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            return name.includes('mirror') || name.includes('looking glass');
-        });
-    }, [activeTier]);
-
-    const hasBathroomStorage = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            const cat = (i.cat || '').toLowerCase();
-            return (cat.includes('bath') || cat.includes('toilet') || cat.includes('vanity')) && 
-                   (name.includes('storage') || name.includes('cabinet') || name.includes('shelf') || name.includes('rack'));
-        });
-    }, [activeTier]);
+    const hasKitchenBaseWall = scopes.kitchenBaseWall;
+    const hasKitchenShutters = scopes.kitchenShutters;
+    const hasCountertop = scopes.kitchenCounter;
+    const hasTallUnit = scopes.kitchenTallUnit;
+    const hasKitchenAccessories = scopes.kitchenAccessories;
+    const hasKitchenLoft = scopes.kitchenLoft;
+    const hasWardrobes = scopes.wardrobes;
+    const hasLofts = scopes.lofts;
+    const hasBeds = scopes.beds;
+    const hasStudy = scopes.study;
+    const hasVanity = scopes.vanity;
+    const hasMirrorUnit = scopes.mirrorUnit;
+    const hasBathroomStorage = scopes.bathroomStorage;
 
     const hasAnyCarpentryIncluded = useMemo(() => {
         return hasKitchenBaseWall || hasKitchenShutters || hasCountertop || hasTallUnit || hasKitchenAccessories ||
@@ -691,46 +1243,15 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
         hasVanity, hasMirrorUnit, hasBathroomStorage
     ]);
 
-    const hasElectricalFittings = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            return name.includes('fixture') || name.includes('chandelier') || name.includes('pendant') || name.includes('appliance') || name.includes('switchgear') || name.includes('fitting');
-        });
-    }, [activeTier]);
+    const hasElectricalFittings = scopes.electricalFittings;
 
-    const hasLooseFurniture = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            return name.includes('sofa') || name.includes('dining table') || name.includes('chair') || name.includes('recliner') || name.includes('dining set') || name.includes('loose');
-        });
-    }, [activeTier]);
+    const hasLooseFurniture = scopes.looseFurniture;
 
-    const hasWhiteGoods = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            return name.includes('hob') || name.includes('chimney') || name.includes('microwave') || name.includes('refrigerator') || name.includes('appliance') || name.includes('ac') || name.includes('television') || name.includes('washing machine');
-        });
-    }, [activeTier]);
+    const hasWhiteGoods = scopes.whiteGoods;
 
-    const hasDecor = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            return name.includes('wallpaper') || name.includes('curtain') || name.includes('blind') || name.includes('decor') || name.includes('soft furnishing') || name.includes('mattress');
-        });
-    }, [activeTier]);
+    const hasDecor = scopes.decor;
 
-    const hasPlumbing = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            const cat = (i.cat || '').toLowerCase();
-            return cat.includes('plumbing') || name.includes('plumbing') || name.includes('sanitary') || name.includes('faucet') || name.includes('diverter') || name.includes('toilet') || name.includes('commode') || name.includes('basin') || name.includes('sink') || name.includes('tap');
-        });
-    }, [activeTier]);
+    const hasPlumbing = scopes.plumbing;
 
     const hasWaterproofing = useMemo(() => {
         const boq = activeTier.fullBoq || [];
@@ -741,14 +1262,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
         });
     }, [activeTier]);
 
-    const hasFlooring = useMemo(() => {
-        const boq = activeTier.fullBoq || [];
-        return boq.some(i => {
-            const name = (i.name || '').toLowerCase();
-            const cat = (i.cat || '').toLowerCase();
-            return cat.includes('flooring') || cat.includes('tile') || name.includes('flooring') || name.includes('tile') || name.includes('marble') || name.includes('granite') || name.includes('stone work');
-        });
-    }, [activeTier]);
+    const hasFlooring = scopes.flooring;
 
     const hasProfileCove = useMemo(() => {
         const boq = activeTier.fullBoq || [];
@@ -780,15 +1294,16 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
         if (!hasKitchenShutters) missing.push("shutters");
         if (!hasCountertop) missing.push("countertop");
         if (!hasTallUnit) missing.push("tall unit");
+        if (!hasKitchenLoft) missing.push("loft");
         if (!hasKitchenAccessories) missing.push("accessories");
-        if (missing.length === 5) {
-            return "Modular kitchen — base and wall units, shutters, counter, tall unit, accessories";
+        if (missing.length === 6) {
+            return "Modular kitchen — base and wall units, shutters, counter, tall unit, loft, accessories";
         }
         if (missing.length > 0) {
             return `Modular kitchen components: ${missing.join(", ")}`;
         }
         return null;
-    }, [hasKitchenBaseWall, hasKitchenShutters, hasCountertop, hasTallUnit, hasKitchenAccessories]);
+    }, [hasKitchenBaseWall, hasKitchenShutters, hasCountertop, hasTallUnit, hasKitchenLoft, hasKitchenAccessories]);
 
     const wardrobeExclusionText = useMemo(() => {
         const missing = [];
@@ -908,21 +1423,6 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
         veneerExclusionText
     ]);
 
-    const renderScopeItem = (label: string, isIncluded: boolean) => {
-        if (isIncluded) {
-            return (
-                <span key={label} className="text-slate-700 text-xs py-1 font-medium flex items-center gap-1.5">
-                    <span className="text-slate-900 font-serif">✓</span> {label}
-                </span>
-            );
-        } else {
-            return (
-                <span key={label} className="text-slate-400 text-xs py-1 line-through flex items-center gap-1.5">
-                    <span className="text-slate-300 font-serif">✕</span> {label}
-                </span>
-            );
-        }
-    };
 
     // Format utility
     const formatINR = (val: number) => {
@@ -934,7 +1434,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
     };
 
     return (
-        <div className="vnext-proposal-wrapper bg-white min-h-screen text-slate-800 font-sans print:bg-white print:text-black">
+        <div ref={wrapperRef} className="vnext-proposal-wrapper bg-white min-h-screen text-slate-800 font-sans print:bg-white print:text-black">
             
             {/* ================= PAGE 1: COVER ================= */}
             {/* ================= PAGE 1: COVER ================= */}
@@ -943,13 +1443,13 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                 
                 if (coverStyle === 'minimal') {
                     return (
-                        <div className="relative h-[29.7cm] flex flex-col justify-between bg-slate-50 text-[#1C1917] p-16 md:p-24 print:h-[28.5cm] print:page-break-after-always">
+                        <div className="ff-page relative h-[29.7cm] flex flex-col justify-between bg-slate-50 text-[#1C1917] p-20">
                             {/* Inner gold hairline frame */}
                             <div className="absolute inset-8 border border-[#C5A880]/30 pointer-events-none"></div>
                             
                             <div className="flex flex-col gap-1 border-l-2 border-[#C5A880] pl-4 relative z-10">
                                 <span className="text-xl font-black tracking-widest text-[#0F172A] font-serif">{settings?.companyName?.toUpperCase() || 'FORM FACTORS'}</span>
-                                <span className="text-[9px] uppercase tracking-[0.3em] text-stone-500 font-sans">DESIGN STUDIO</span>
+                                <span className="text-[9px] uppercase tracking-[0.3em] text-stone-500 font-sans"><Ed k="c350aa7c" ctl={edCtl}>DESIGN STUDIO</Ed></span>
                             </div>
 
                             <div className="flex-1 flex flex-col justify-center space-y-8 relative z-10 max-w-3xl">
@@ -969,31 +1469,31 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                     </p>
                                 </div>
                                 
-                                <p className="text-stone-500 font-light max-w-xl text-sm leading-relaxed font-sans">
+                                <p className="text-stone-500 font-light max-w-xl text-sm leading-relaxed font-sans"><Ed k="a32a5e8e" ctl={edCtl}>
                                     A curated turnkey architectural journey integrating spatial design, detailed craftsmanship, material procurement, and precise on-site execution under a singular, cohesive design intent.
-                                </p>
+                                </Ed></p>
                                 
-                                <div className="inline-flex w-fit items-center gap-2 px-4 py-2 border border-[#C5A880]/40 rounded bg-white/70 text-[9px] font-bold uppercase tracking-widest text-[#C5A880] shadow-sm font-sans">
+                                <div className="inline-flex w-fit items-center gap-2 px-4 py-2 border border-[#C5A880]/40 rounded bg-white/70 text-[9px] font-bold uppercase tracking-widest text-[#C5A880] shadow-sm font-sans"><Ed k="bf223466" ctl={edCtl}>
                                     DESIGN + EXECUTION + HANDOVER · COHESIVE SYSTEM
-                                </div>
+                                </Ed></div>
                             </div>
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 pt-8 border-t border-stone-200 mt-auto relative z-10">
                                 <div>
-                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold">PREPARED FOR</span>
+                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold"><Ed k="75469e61" ctl={edCtl}>PREPARED FOR</Ed></span>
                                     <span className="text-sm font-extrabold text-stone-900 mt-1 block">{projectContext.clientName || 'Valued Client'}</span>
                                 </div>
                                 <div>
-                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold">LOCATION</span>
+                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold"><Ed k="40c3322b" ctl={edCtl}>LOCATION</Ed></span>
                                     <span className="text-sm font-extrabold text-stone-900 mt-1 block">{projectContext.location || 'Mumbai'}</span>
                                 </div>
                                 <div>
-                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold">DATE</span>
+                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold"><Ed k="8c76abde" ctl={edCtl}>DATE</Ed></span>
                                     <span className="text-sm font-extrabold text-stone-900 mt-1 block">{today}</span>
                                 </div>
                                 <div>
-                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold">CONFIDENTIALITY</span>
-                                    <span className="text-sm font-extrabold text-stone-900 mt-1 block">CONFIDENTIAL</span>
+                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold"><Ed k="4ca06860" ctl={edCtl}>CONFIDENTIALITY</Ed></span>
+                                    <span className="text-sm font-extrabold text-stone-900 mt-1 block"><Ed k="84c9cc88" ctl={edCtl}>CONFIDENTIAL</Ed></span>
                                 </div>
                             </div>
                         </div>
@@ -1002,7 +1502,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                 if (coverStyle === 'photo') {
                     return (
-                        <div className="relative h-[29.7cm] flex flex-col justify-between bg-slate-50 text-stone-800 p-16 md:p-24 print:h-[28.5cm] print:page-break-after-always overflow-hidden">
+                        <div className="ff-page relative h-[29.7cm] flex flex-col justify-between bg-slate-50 text-stone-800 p-20 overflow-hidden">
                             {/* Abstract linear layout mimicking architecture blueprint */}
                             <div className="absolute top-0 right-0 w-2/5 h-full opacity-10 border-l border-dashed border-[#C5A880]/50 pointer-events-none hidden md:block">
                                 <div className="absolute top-1/4 right-0 w-96 h-96 rounded-full border border-[#C5A880]"></div>
@@ -1013,7 +1513,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                             <div className="flex flex-col gap-1 border-l-2 border-[#C5A880] pl-4 relative z-10">
                                 <span className="text-xl font-bold tracking-widest text-stone-900">{settings?.companyName?.toUpperCase() || 'FORM FACTORS'}</span>
-                                <span className="text-[10px] uppercase tracking-[0.3em] text-stone-500">DESIGN STUDIO</span>
+                                <span className="text-[10px] uppercase tracking-[0.3em] text-stone-500"><Ed k="c350aa7c_2" ctl={edCtl}>DESIGN STUDIO</Ed></span>
                             </div>
 
                             <div className="flex-1 flex flex-col justify-center space-y-8 relative z-10 max-w-3xl">
@@ -1031,28 +1531,28 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                     <p className="text-xl text-stone-600 font-light">
                                         {projectContext.config || '2 BHK Residence'} — {projectContext.location || 'Site Location'}
                                     </p>
-                                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-100 border border-stone-200 rounded text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-100 border border-stone-200 rounded text-[10px] font-bold uppercase tracking-wider text-stone-500"><Ed k="393b6e62" ctl={edCtl}>
                                         DESIGN + PLAN + BUILD
-                                    </div>
+                                    </Ed></div>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 pt-8 border-t border-stone-200 mt-auto relative z-10">
                                 <div>
-                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold font-sans">PREPARED FOR</span>
+                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold font-sans"><Ed k="75469e61_2" ctl={edCtl}>PREPARED FOR</Ed></span>
                                     <span className="text-sm font-bold text-stone-950 mt-block mt-1">{projectContext.clientName || 'Valued Client'}</span>
                                 </div>
                                 <div>
-                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold font-sans">LOCATION</span>
+                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold font-sans"><Ed k="40c3322b_2" ctl={edCtl}>LOCATION</Ed></span>
                                     <span className="text-sm font-bold text-stone-950 mt-block mt-1">{projectContext.location || 'Mumbai'}</span>
                                 </div>
                                 <div>
-                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold font-sans">DATE</span>
+                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold font-sans"><Ed k="8c76abde_2" ctl={edCtl}>DATE</Ed></span>
                                     <span className="text-sm font-bold text-stone-950 mt-block mt-1">{today}</span>
                                 </div>
                                 <div>
-                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold font-sans">CONFIDENTIALITY</span>
-                                    <span className="text-sm font-bold text-stone-950 mt-block mt-1">CONFIDENTIAL</span>
+                                    <span className="block text-[9px] uppercase tracking-widest text-[#C5A880] font-bold font-sans"><Ed k="4ca06860_2" ctl={edCtl}>CONFIDENTIALITY</Ed></span>
+                                    <span className="text-sm font-bold text-stone-950 mt-block mt-1"><Ed k="84c9cc88_2" ctl={edCtl}>CONFIDENTIAL</Ed></span>
                                 </div>
                             </div>
                         </div>
@@ -1061,10 +1561,10 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                 // Default "bold" (dark luxury slate)
                 return (
-                    <div className="relative h-[29.7cm] flex flex-col justify-between bg-[#0F172A] text-white p-16 md:p-24 print:h-[28.5cm] print:page-break-after-always">
+                    <div className="ff-page relative h-[29.7cm] flex flex-col justify-between bg-[#0F172A] text-white p-20">
                         <div className="flex flex-col gap-1 border-l-2 border-[#C5A880] pl-4">
                             <span className="text-xl font-bold tracking-widest text-[#C5A880]">{settings?.companyName?.toUpperCase() || 'FORM FACTORS'}</span>
-                            <span className="text-xs uppercase tracking-[0.3em] text-slate-400">DESIGN STUDIO</span>
+                            <span className="text-xs uppercase tracking-[0.3em] text-slate-400"><Ed k="c350aa7c_3" ctl={edCtl}>DESIGN STUDIO</Ed></span>
                         </div>
 
                         <div className="flex-1 flex flex-col justify-center space-y-6">
@@ -1078,27 +1578,27 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                 {projectContext.config || '2 BHK Residence'} — {projectContext.location || 'Site Location'}
                             </p>
                             
-                            <div className="inline-flex w-fit items-center gap-2 px-4 py-2 border border-slate-700 rounded bg-slate-800/50 text-xs font-bold uppercase tracking-widest text-slate-300">
+                            <div className="inline-flex w-fit items-center gap-2 px-4 py-2 border border-slate-700 rounded bg-slate-800/50 text-xs font-bold uppercase tracking-widest text-slate-300"><Ed k="457629c9" ctl={edCtl}>
                                 DESIGN + EXECUTION + HANDOVER · ONE ENGAGEMENT
-                            </div>
+                            </Ed></div>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 pt-8 border-t border-slate-800 mt-auto">
                             <div>
-                                <span className="block text-[10px] uppercase tracking-widest text-[#C5A880] font-bold">Prepared For</span>
+                                <span className="block text-[10px] uppercase tracking-widest text-[#C5A880] font-bold"><Ed k="7e219bf0" ctl={edCtl}>Prepared For</Ed></span>
                                 <span className="text-base font-bold text-white mt-1 block">{projectContext.clientName || 'Valued Client'}</span>
                             </div>
                             <div>
-                                <span className="block text-[10px] uppercase tracking-widest text-[#C5A880] font-bold">Location</span>
+                                <span className="block text-[10px] uppercase tracking-widest text-[#C5A880] font-bold"><Ed k="d219c681" ctl={edCtl}>Location</Ed></span>
                                 <span className="text-base font-bold text-white mt-1 block">{projectContext.location || 'Mumbai'}</span>
                             </div>
                             <div>
-                                <span className="block text-[10px] uppercase tracking-widest text-[#C5A880] font-bold">Date</span>
+                                <span className="block text-[10px] uppercase tracking-widest text-[#C5A880] font-bold"><Ed k="eb9a4bc1" ctl={edCtl}>Date</Ed></span>
                                 <span className="text-base font-bold text-white mt-1 block">{today}</span>
                             </div>
                             <div>
-                                <span className="block text-[10px] uppercase tracking-widest text-[#C5A880] font-bold">Confidentiality</span>
-                                <span className="text-base font-bold text-white mt-1 block">Confidential</span>
+                                <span className="block text-[10px] uppercase tracking-widest text-[#C5A880] font-bold"><Ed k="642e7d86" ctl={edCtl}>Confidentiality</Ed></span>
+                                <span className="text-base font-bold text-white mt-1 block"><Ed k="4f853c51" ctl={edCtl}>Confidential</Ed></span>
                             </div>
                         </div>
                     </div>
@@ -1106,10 +1606,10 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
             })()}
 
             {/* ================= PAGE 2: RECOMMENDATION ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-slate-50 border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page h-[29.7cm] flex flex-col justify-between p-20 bg-slate-50 border-b border-slate-200">
                 <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">Our Recommendation</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">One team, one responsibility</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="997e149f" ctl={edCtl}>Our Recommendation</Ed></span>
+                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight"><Ed k="de24ac9e" ctl={edCtl}>One team, one responsibility</Ed></h2>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 my-auto items-center">
@@ -1117,16 +1617,16 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                         <p className="text-xl font-bold leading-relaxed text-slate-800">
                             We recommend delivering your home as a <strong className="text-[#0F172A] border-b border-[#C5A880]">single design-led turnkey engagement</strong>.
                         </p>
-                        <p className="text-slate-600 text-base leading-relaxed">
+                        <p className="text-slate-600 text-base leading-relaxed"><Ed k="d6792a73" ctl={edCtl}>
                             Design, materials, procurement, execution, and handover stay under one coordinated responsibility. This completely eliminates alignment friction, vendor gaps, and surprise budget overruns, leaving you with one professional team to hold accountable rather than a fragmented chain of contractors.
-                        </p>
+                        </Ed></p>
                     </div>
 
                     <div className="lg:col-span-6 space-y-4">
                         <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm flex gap-4">
                             <span className="text-2xl font-black text-[#C5A880] shrink-0 font-mono">01</span>
                             <div>
-                                <h4 className="font-bold text-slate-900 text-base">End-to-end execution</h4>
+                                <h4 className="font-bold text-slate-900 text-base"><Ed k="6ddd4aad" ctl={edCtl}>End-to-end execution</Ed></h4>
                                 <p className="text-xs text-slate-500 mt-1">{settings?.companyName || 'FFDS'} contracts, procures, executes and supervises the listed scope entirely.</p>
                             </div>
                         </div>
@@ -1134,15 +1634,15 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                         <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm flex gap-4">
                             <span className="text-2xl font-black text-[#C5A880] shrink-0 font-mono">02</span>
                             <div>
-                                <h4 className="font-bold text-slate-900 text-base">Written specifications</h4>
-                                <p className="text-xs text-slate-500 mt-1">Every material grade, brand and finish is explicitly documented and confirmed against physical samples.</p>
+                                <h4 className="font-bold text-slate-900 text-base"><Ed k="8b8f29ee" ctl={edCtl}>Written specifications</Ed></h4>
+                                <p className="text-xs text-slate-500 mt-1"><Ed k="10e01851" ctl={edCtl}>Every material grade, brand and finish is explicitly documented and confirmed against physical samples.</Ed></p>
                             </div>
                         </div>
 
                         <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm flex gap-4">
                             <span className="text-2xl font-black text-[#C5A880] shrink-0 font-mono">03</span>
                             <div>
-                                <h4 className="font-bold text-slate-900 text-base">Defined programme</h4>
+                                <h4 className="font-bold text-slate-900 text-base"><Ed k="51e28c99" ctl={edCtl}>Defined programme</Ed></h4>
                                 <p className="text-xs text-slate-500 mt-1">{totalDays} working days with start conditions clearly defined, ensuring any delay has a transparent, visible cause.</p>
                             </div>
                         </div>
@@ -1151,21 +1651,21 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                 <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-slate-400 border-t border-slate-200 pt-8">
                     <span>{settings?.companyName || 'Form Factors Studio'}</span>
-                    <span>Page 2 of 15</span>
+                    <span>Page <span className="ff-pageno" /> of {pageTotal || '—'}</span>
                 </div>
             </div>
 
             {/* ================= PAGE 3: INVESTMENT ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-white border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page h-[29.7cm] flex flex-col justify-between p-20 bg-white border-b border-slate-200">
                 <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">The Investment</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">Total proposed project investment</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="bc1e536e" ctl={edCtl}>The Investment</Ed></span>
+                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight"><Ed k="bc21dc00" ctl={edCtl}>Total proposed project investment</Ed></h2>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 my-auto items-stretch">
                     <div className="lg:col-span-5 bg-[#0F172A] text-white p-8 rounded-2xl flex flex-col justify-between shadow-xl">
                         <div>
-                            <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-bold">TOTAL, ALL INCLUSIVE</span>
+                            <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-bold"><Ed k="922c6988" ctl={edCtl}>TOTAL, ALL INCLUSIVE</Ed></span>
                             <div className="text-3xl md:text-4xl font-black mt-4 font-mono text-white">
                                 {isL2 || investmentMin === investmentMax ? formatINR(totalProposedInvestment) : `${formatINR(investmentMin)} - ${formatINR(investmentMax)}`}
                             </div>
@@ -1190,27 +1690,27 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 <tr>
-                                    <td className="py-4 font-bold text-slate-800">Turnkey Execution Value</td>
-                                    <td className="py-4 text-slate-500">As listed scope</td>
+                                    <td className="py-4 font-bold text-slate-800"><Ed k="1c9dfb1a" ctl={edCtl}>Turnkey Execution Value</Ed></td>
+                                    <td className="py-4 text-slate-500"><Ed k="277d53ce" ctl={edCtl}>As listed scope</Ed></td>
                                     <td className="py-4 text-right font-mono font-bold text-slate-950">{formatINR(taxableExecution)}</td>
                                 </tr>
                                 <tr>
-                                    <td className="py-4 font-bold text-slate-800">Design & Coordination Fee</td>
-                                    <td className="py-4 text-slate-500">Fixed fee</td>
+                                    <td className="py-4 font-bold text-slate-800"><Ed k="b7b78706" ctl={edCtl}>Design & Coordination Fee</Ed></td>
+                                    <td className="py-4 text-slate-500">{designFeeBasis}</td>
                                     <td className="py-4 text-right font-mono font-bold text-slate-950">{formatINR(taxableDesign)}</td>
                                 </tr>
                                 <tr className="bg-slate-50 font-bold">
-                                    <td className="py-4 px-3 text-slate-800">Net Taxable Value</td>
+                                    <td className="py-4 px-3 text-slate-800"><Ed k="857af574" ctl={edCtl}>Net Taxable Value</Ed></td>
                                     <td className="py-4 px-3"></td>
                                     <td className="py-4 px-3 text-right font-mono text-slate-950">{formatINR(netTaxableValue)}</td>
                                 </tr>
                                 <tr>
-                                    <td className="py-4 font-bold text-slate-800">Applicable GST</td>
+                                    <td className="py-4 font-bold text-slate-800"><Ed k="a6bbe567" ctl={edCtl}>Applicable GST</Ed></td>
                                     <td className="py-4 text-slate-500">{gstRate}% on {settings?.companyName || 'FFDS'} invoiced value</td>
                                     <td className="py-4 text-right font-mono font-bold text-slate-950">{formatINR(gstOnDesign + chargedGstOnExecution)}</td>
                                 </tr>
                                 <tr className="border-t-2 border-[#0F172A] font-black text-base">
-                                    <td className="py-4 text-slate-950">Total Project Investment</td>
+                                    <td className="py-4 text-slate-950"><Ed k="ff35f1cc" ctl={edCtl}>Total Project Investment</Ed></td>
                                     <td className="py-4"></td>
                                     <td className="py-4 text-right font-mono text-[#0F172A]">{formatINR(totalProposedInvestment)}</td>
                                 </tr>
@@ -1221,60 +1721,40 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                 <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-slate-400 border-t border-slate-200 pt-8">
                     <span>{settings?.companyName || 'Form Factors Studio'}</span>
-                    <span>Page 3 of 15</span>
+                    <span>Page <span className="ff-pageno" /> of {pageTotal || '—'}</span>
                 </div>
             </div>
 
             {/* ================= PAGE 4: AT A GLANCE ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-slate-50 border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page h-[29.7cm] flex flex-col justify-between p-20 bg-slate-50 border-b border-slate-200">
                 <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">At a Glance</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">What is included</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="a2556701" ctl={edCtl}>At a Glance</Ed></span>
+                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight"><Ed k="2d1064e2" ctl={edCtl}>What is included</Ed></h2>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12 my-auto">
                     <div className="space-y-6">
-                        <span className="text-xs uppercase tracking-wider text-slate-400 font-bold block border-b border-slate-200 pb-2">IN THE TURNKEY SCOPE</span>
-                        <ul className="space-y-4">
-                            {dynamicInclusions.map((inc, i) => (
-                                <li key={i} className="flex items-start gap-3 text-slate-700">
-                                    <CheckIcon className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                                    <div>
-                                        <strong className="text-slate-900 block font-medium">{inc.title}</strong>
-                                        <span className="text-xs text-slate-500 block">{inc.desc}</span>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
+                        <span className="text-xs uppercase tracking-wider text-slate-400 font-bold block border-b border-slate-200 pb-2"><Ed k="fa2c179a" ctl={edCtl}>IN THE TURNKEY SCOPE</Ed></span>
+                        <EdPairList k="included.turnkey" ctl={edCtl} items={dynamicInclusions} variant="include" />
                     </div>
 
                     <div className="space-y-6">
-                        <span className="text-xs uppercase tracking-wider text-slate-400 font-bold block border-b border-slate-200 pb-2">NOT INCLUDED IN BASELINE</span>
-                        <ul className="space-y-4">
-                            {dynamicExclusions.map((exc, i) => (
-                                <li key={i} className="flex items-start gap-3 text-slate-500">
-                                    <XIcon className="w-5 h-5 text-slate-300 shrink-0 mt-0.5" />
-                                    <div>
-                                        <span className="text-slate-400 block line-through">{exc.title}</span>
-                                        <span className="text-xs text-slate-400 block">{exc.desc}</span>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
+                        <span className="text-xs uppercase tracking-wider text-slate-400 font-bold block border-b border-slate-200 pb-2"><Ed k="8abab0ff" ctl={edCtl}>NOT INCLUDED IN BASELINE</Ed></span>
+                        <EdPairList k="included.baseline" ctl={edCtl} items={dynamicExclusions} variant="exclude" />
                     </div>
                 </div>
 
                 <div className="bg-white p-6 rounded-xl border border-slate-200 text-xs text-slate-600 flex justify-between items-center">
                     <span><strong>Scope Discipline:</strong> This booklet prices only the turnkey package items. Other carpentry can be quoted separately as addendums.</span>
-                    <span className="font-bold uppercase tracking-wider text-slate-900 shrink-0 ml-4">Full Exclusions · Annexure A</span>
+                    <span className="font-bold uppercase tracking-wider text-slate-900 shrink-0 ml-4"><Ed k="2a663f52" ctl={edCtl}>Full Exclusions · Annexure A</Ed></span>
                 </div>
             </div>
 
             {/* ================= PAGE 5: HOW WE WORK ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-white border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page h-[29.7cm] flex flex-col justify-between p-20 bg-white border-b border-slate-200">
                 <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">How We Work</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">From concept to handover</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="d324337c" ctl={edCtl}>How We Work</Ed></span>
+                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight"><Ed k="9ff8a7d6" ctl={edCtl}>From concept to handover</Ed></h2>
                 </div>
 
                 <div className="grid grid-cols-5 gap-4 my-auto relative pt-12">
@@ -1283,32 +1763,32 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                     <div className="text-center px-2">
                         <span className="w-10 h-10 rounded-full bg-[#0F172A] text-white font-bold font-mono flex items-center justify-center mx-auto mb-4 border-2 border-white shadow-md">01</span>
-                        <h4 className="font-bold text-[#0F172A] text-xs uppercase tracking-wide">Discovery</h4>
-                        <p className="text-[10px] text-slate-500 mt-2">Brief capture & initial space measurement survey.</p>
+                        <h4 className="font-bold text-[#0F172A] text-xs uppercase tracking-wide"><Ed k="3b3290c7" ctl={edCtl}>Discovery</Ed></h4>
+                        <p className="text-[10px] text-slate-500 mt-2"><Ed k="ad257639" ctl={edCtl}>Brief capture & initial space measurement survey.</Ed></p>
                     </div>
 
                     <div className="text-center px-2">
                         <span className="w-10 h-10 rounded-full bg-[#0F172A] text-white font-bold font-mono flex items-center justify-center mx-auto mb-4 border-2 border-white shadow-md">02</span>
-                        <h4 className="font-bold text-[#0F172A] text-xs uppercase tracking-wide">Concept & 3D</h4>
-                        <p className="text-[10px] text-slate-500 mt-2">Detailed layout designs & 3D visual renders for approval.</p>
+                        <h4 className="font-bold text-[#0F172A] text-xs uppercase tracking-wide"><Ed k="d03f0fd3" ctl={edCtl}>Concept & 3D</Ed></h4>
+                        <p className="text-[10px] text-slate-500 mt-2"><Ed k="b483a809" ctl={edCtl}>Detailed layout designs & 3D visual renders for approval.</Ed></p>
                     </div>
 
                     <div className="text-center px-2">
                         <span className="w-10 h-10 rounded-full bg-[#0F172A] text-white font-bold font-mono flex items-center justify-center mx-auto mb-4 border-2 border-white shadow-md">03</span>
-                        <h4 className="font-bold text-[#0F172A] text-xs uppercase tracking-wide">Design Freeze</h4>
-                        <p className="text-[10px] text-slate-500 mt-2">GFC technical drawing releases & BOQ freeze.</p>
+                        <h4 className="font-bold text-[#0F172A] text-xs uppercase tracking-wide"><Ed k="f3925233" ctl={edCtl}>Design Freeze</Ed></h4>
+                        <p className="text-[10px] text-slate-500 mt-2"><Ed k="213dcccb" ctl={edCtl}>GFC technical drawing releases & BOQ freeze.</Ed></p>
                     </div>
 
                     <div className="text-center px-2">
                         <span className="w-10 h-10 rounded-full bg-[#0F172A] text-white font-bold font-mono flex items-center justify-center mx-auto mb-4 border-2 border-white shadow-md">04</span>
-                        <h4 className="font-bold text-[#0F172A] text-xs uppercase tracking-wide">Procurement</h4>
-                        <p className="text-[10px] text-slate-500 mt-2">Material ordering, carcass fabrication, and setup.</p>
+                        <h4 className="font-bold text-[#0F172A] text-xs uppercase tracking-wide"><Ed k="3fc79400" ctl={edCtl}>Procurement</Ed></h4>
+                        <p className="text-[10px] text-slate-500 mt-2"><Ed k="e2ffde06" ctl={edCtl}>Material ordering, carcass fabrication, and setup.</Ed></p>
                     </div>
 
                     <div className="text-center px-2">
                         <span className="w-10 h-10 rounded-full bg-[#C5A880] text-white font-bold font-mono flex items-center justify-center mx-auto mb-4 border-2 border-white shadow-md">05</span>
-                        <h4 className="font-bold text-[#0F172A] text-xs uppercase tracking-wide">Finishing</h4>
-                        <p className="text-[10px] text-slate-500 mt-2">Final site installations, quality audit, and handover.</p>
+                        <h4 className="font-bold text-[#0F172A] text-xs uppercase tracking-wide"><Ed k="18a88df1" ctl={edCtl}>Finishing</Ed></h4>
+                        <p className="text-[10px] text-slate-500 mt-2"><Ed k="e3d5790f" ctl={edCtl}>Final site installations, quality audit, and handover.</Ed></p>
                     </div>
                 </div>
 
@@ -1321,10 +1801,10 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
             </div>
 
             {/* ================= PAGE 6: DESIGN INTEGRATION ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-slate-50 border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page h-[29.7cm] flex flex-col justify-between p-20 bg-slate-50 border-b border-slate-200">
                 <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">Design & Execution</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">Design is integrated into the turnkey process</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="bac0bdd7" ctl={edCtl}>Design & Execution</Ed></span>
+                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight"><Ed k="e516995e" ctl={edCtl}>Design is integrated into the turnkey process</Ed></h2>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 my-auto items-stretch">
@@ -1332,29 +1812,29 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                         <p className="text-lg text-slate-700 leading-relaxed">
                             Planning, visualisation, detailing, and material specification are completed <strong className="text-[#0F172A] font-extrabold">before procurement and execution decisions are taken</strong>.
                         </p>
-                        <p className="text-sm text-slate-500 leading-relaxed">
+                        <p className="text-sm text-slate-500 leading-relaxed"><Ed k="362ddecb" ctl={edCtl}>
                             This reduces rework, controls scope changes, and gives the site team one clear reference to build to. Design is not an add-on — it is what makes a firm turnkey value possible.
-                        </p>
+                        </Ed></p>
                     </div>
 
                     <div className="lg:col-span-6 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
                         <div>
-                            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block mb-1">DESIGN & COORDINATION FEE</span>
+                            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block mb-1"><Ed k="97d5fce2" ctl={edCtl}>DESIGN & COORDINATION FEE</Ed></span>
                             <div className="text-3xl font-black font-mono text-[#0F172A]">{formatINR(taxableDesign)}</div>
-                            <span className="text-xs text-slate-400 block mt-1">Fixed fee, exclusive of GST</span>
+                            <span className="text-xs text-slate-400 block mt-1">{designFeeBasis}, exclusive of GST</span>
                         </div>
 
                         <div className="mt-6">
-                            <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-black block mb-3">WHAT IT COVERS</span>
+                            <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-black block mb-3"><Ed k="8d19175a" ctl={edCtl}>WHAT IT COVERS</Ed></span>
                             <div className="grid grid-cols-2 gap-2 text-xs">
-                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium">Layouts & space planning</span>
-                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium">3D views</span>
-                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium">GFC & joinery drawings</span>
-                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium">Electrical & ceiling layouts</span>
-                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium">Material specification</span>
-                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium">Schedule of Finishes</span>
-                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium">Final BOQ</span>
-                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium">Site coordination</span>
+                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium"><Ed k="0f759dd2" ctl={edCtl}>Layouts & space planning</Ed></span>
+                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium"><Ed k="46b04044" ctl={edCtl}>3D views</Ed></span>
+                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium"><Ed k="139f253c" ctl={edCtl}>GFC & joinery drawings</Ed></span>
+                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium"><Ed k="fb75daba" ctl={edCtl}>Electrical & ceiling layouts</Ed></span>
+                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium"><Ed k="ab5cc160" ctl={edCtl}>Material specification</Ed></span>
+                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium"><Ed k="3f3fa0a2" ctl={edCtl}>Schedule of Finishes</Ed></span>
+                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium"><Ed k="5b30dd3f" ctl={edCtl}>Final BOQ</Ed></span>
+                                <span className="bg-slate-50 py-1.5 px-3 rounded border border-slate-100 text-slate-700 font-medium"><Ed k="475957ac" ctl={edCtl}>Site coordination</Ed></span>
                             </div>
                         </div>
                     </div>
@@ -1366,16 +1846,16 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
             </div>
 
             {/* ================= PAGE 7: PROPOSED PACKAGE ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-white border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page h-[29.7cm] flex flex-col justify-between p-20 bg-white border-b border-slate-200">
                 <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">Section 3 · Scope</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">Proposed turnkey package</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="4321be74" ctl={edCtl}>Section 3 · Scope</Ed></span>
+                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight"><Ed k="e51393dd" ctl={edCtl}>Proposed turnkey package</Ed></h2>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 my-auto items-stretch">
                     <div className="lg:col-span-7 bg-slate-50 p-8 rounded-2xl border border-slate-200 flex flex-col justify-between">
                         <div>
-                            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">RECOMMENDED EXECUTION PACKAGE</span>
+                            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block"><Ed k="ba7c5345" ctl={edCtl}>RECOMMENDED EXECUTION PACKAGE</Ed></span>
                             <h3 className="text-2xl font-extrabold text-[#0F172A] mt-1">{projectContext.name} Turnkey Package</h3>
                             
                             <ul className="mt-6 space-y-3 text-slate-600 text-sm">
@@ -1386,51 +1866,51 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                         </div>
 
                         <div className="mt-8 pt-6 border-t border-slate-200 flex justify-between items-center">
-                            <span className="text-xs text-slate-500">Quantities are presently estimated.</span>
-                            <span className="text-xs font-bold text-slate-800">VARIATION TERMS · ANNEXURE A</span>
+                            <span className="text-xs text-slate-500"><Ed k="2c785757" ctl={edCtl}>Quantities are presently estimated.</Ed></span>
+                            <span className="text-xs font-bold text-slate-800"><Ed k="66cc6ac1" ctl={edCtl}>VARIATION TERMS · ANNEXURE A</Ed></span>
                         </div>
                     </div>
 
                     <div className="lg:col-span-5 flex flex-col justify-between border border-slate-200 rounded-2xl p-8">
                         <div>
-                            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">QUANTUM OF WORK</span>
+                            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block"><Ed k="d0d0f8ce" ctl={edCtl}>QUANTUM OF WORK</Ed></span>
                             
                             <div className="mt-6 space-y-4">
                                 <div className="flex justify-between items-center border-b border-slate-100 pb-2 text-sm">
-                                    <span className="font-bold text-[#0F172A]">Carpentry</span>
+                                    <span className="font-bold text-[#0F172A]"><Ed k="7318f6a2" ctl={edCtl}>Carpentry</Ed></span>
                                     <span className="font-mono text-slate-600 font-bold">{carpentryQuantum}</span>
                                 </div>
                                 <div className="flex justify-between items-center border-b border-slate-100 pb-2 text-sm">
-                                    <span className="font-bold text-[#0F172A]">Ceiling & paint</span>
+                                    <span className="font-bold text-[#0F172A]"><Ed k="b9c2becd" ctl={edCtl}>Ceiling & paint</Ed></span>
                                     <span className="font-mono text-slate-600 font-bold">{ceilingAndPaintQuantum}</span>
                                 </div>
                                 <div className="flex justify-between items-center border-b border-slate-100 pb-2 text-sm">
-                                    <span className="font-bold text-[#0F172A]">Electrical</span>
+                                    <span className="font-bold text-[#0F172A]"><Ed k="16ec3073" ctl={edCtl}>Electrical</Ed></span>
                                     <span className="font-mono text-slate-600 font-bold">{electricalQuantum}</span>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="mt-8 py-3 border-y border-slate-200 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                        <div className="mt-8 py-3 border-y border-slate-200 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500"><Ed k="33310bb0" ctl={edCtl}>
                             SINGLE PACKAGE · NO TIERS
-                        </div>
+                        </Ed></div>
                     </div>
                 </div>
 
                 <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-slate-400 border-t border-slate-200 pt-8">
                     <span>{settings?.companyName || 'Form Factors Studio'}</span>
-                    <span>Page 7 of 15</span>
+                    <span>Page <span className="ff-pageno" /> of {pageTotal || '—'}</span>
                 </div>
             </div>
 
             {/* ================= PAGE 8: SCOPE - CARPENTRY ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-white border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page ff-page-flow min-h-[29.7cm] flex flex-col justify-between p-20 bg-white border-b border-slate-200">
                 <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">Section 3.1</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">Scope of works — carpentry</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="6f9ca747" ctl={edCtl}>Section 3.1</Ed></span>
+                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight"><Ed k="7c1f8368" ctl={edCtl}>Scope of works — carpentry</Ed></h2>
                 </div>
 
-                <div className="my-auto overflow-hidden">
+                <div className="my-auto">
                     <table className="w-full text-sm border-collapse">
                         <thead>
                             <tr className="border-b border-slate-200 text-slate-400 uppercase text-[10px] tracking-wider text-left">
@@ -1469,10 +1949,10 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                             ) : (
                                 <>
                                     <tr>
-                                        <td className="py-4 font-bold text-slate-800">Security door laminate finish</td>
-                                        <td className="py-4 text-slate-500">Entrance</td>
+                                        <td className="py-4 font-bold text-slate-800"><Ed k="d4638d44" ctl={edCtl}>Security door laminate finish</Ed></td>
+                                        <td className="py-4 text-slate-500"><Ed k="aa4bbfb3" ctl={edCtl}>Entrance</Ed></td>
                                         <td className="py-4 text-right font-mono font-bold text-[#0F172A]">21</td>
-                                        <td className="py-4 text-left pl-4 text-slate-500">sq ft</td>
+                                        <td className="py-4 text-left pl-4 text-slate-500"><Ed k="77a7645b" ctl={edCtl}>sq ft</Ed></td>
                                         {showScopePricing && !isDesigner && (
                                             <>
                                                 <td className="py-4 text-right font-mono text-slate-600">{formatINR(1200)}</td>
@@ -1481,10 +1961,10 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                         )}
                                     </tr>
                                     <tr>
-                                        <td className="py-4 font-bold text-slate-800">T.V. unit (drawer)</td>
-                                        <td className="py-4 text-slate-500">Living</td>
+                                        <td className="py-4 font-bold text-slate-800"><Ed k="228f2b18" ctl={edCtl}>T.V. unit (drawer)</Ed></td>
+                                        <td className="py-4 text-slate-500"><Ed k="1f2b9fab" ctl={edCtl}>Living</Ed></td>
                                         <td className="py-4 text-right font-mono font-bold text-[#0F172A]">12</td>
-                                        <td className="py-4 text-left pl-4 text-slate-500">sq ft</td>
+                                        <td className="py-4 text-left pl-4 text-slate-500"><Ed k="77a7645b_2" ctl={edCtl}>sq ft</Ed></td>
                                         {showScopePricing && !isDesigner && (
                                             <>
                                                 <td className="py-4 text-right font-mono text-slate-600">{formatINR(1500)}</td>
@@ -1493,10 +1973,10 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                         )}
                                     </tr>
                                     <tr>
-                                        <td className="py-4 font-bold text-slate-800">TV wall panelling</td>
-                                        <td className="py-4 text-slate-500">Living</td>
+                                        <td className="py-4 font-bold text-slate-800"><Ed k="e1fc43d5" ctl={edCtl}>TV wall panelling</Ed></td>
+                                        <td className="py-4 text-slate-500"><Ed k="1f2b9fab_2" ctl={edCtl}>Living</Ed></td>
                                         <td className="py-4 text-right font-mono font-bold text-[#0F172A]">24</td>
-                                        <td className="py-4 text-left pl-4 text-slate-500">sq ft</td>
+                                        <td className="py-4 text-left pl-4 text-slate-500"><Ed k="77a7645b_3" ctl={edCtl}>sq ft</Ed></td>
                                         {showScopePricing && !isDesigner && (
                                             <>
                                                 <td className="py-4 text-right font-mono text-slate-600">{formatINR(800)}</td>
@@ -1508,11 +1988,11 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                             )}
                             {showScopePricing && !isDesigner && carpentryItems.length > 0 && (
                                 <tr className="border-t-2 border-slate-200 bg-slate-50/50 font-bold">
-                                    <td className="py-3 text-slate-800" colSpan={2}>Total Carpentry</td>
+                                    <td className="py-3 text-slate-800" colSpan={2}><Ed k="d1509fe5" ctl={edCtl}>Total Carpentry</Ed></td>
                                     <td className="py-3 text-right font-mono text-[#0F172A]">
-                                        {carpentryItems.reduce((sum, item) => sum + item.qty, 0)}
+                                        {carpentryItems.length}
                                     </td>
-                                    <td className="py-3 text-left pl-4 text-slate-500" colSpan={2}>units (Total:)</td>
+                                    <td className="py-3 text-left pl-4 text-slate-500" colSpan={2}>lines</td>
                                     <td className="py-3 text-right font-mono font-extrabold text-[#0F172A]">
                                         {formatINR(carpentryItems.reduce((sum, item) => sum + (calculateSellPrice(item.materials, item.labor, item.margin) * item.qty), 0))}
                                     </td>
@@ -1529,22 +2009,23 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                 <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-slate-400 border-t border-slate-200 pt-8">
                     <span>{settings?.companyName || 'Form Factors Studio'}</span>
-                    <span>Page 8 of 15</span>
+                    <span>Page <span className="ff-pageno" /> of {pageTotal || '—'}</span>
                 </div>
             </div>
 
             {/* ================= PAGE 9: SCOPE - CIVIL & FINISHING ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-white border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page ff-page-flow min-h-[29.7cm] flex flex-col justify-between p-20 bg-white border-b border-slate-200">
                 <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">Section 3.2</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">Scope of works — civil, services, finishing</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="b4e5ce56" ctl={edCtl}>Section 3.2</Ed></span>
+                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight"><Ed k="ddb5abea" ctl={edCtl}>Scope of works — civil, services, finishing</Ed></h2>
                 </div>
 
-                <div className="my-auto overflow-hidden">
+                <div className="my-auto">
                     <table className="w-full text-sm border-collapse">
                         <thead>
                             <tr className="border-b border-slate-200 text-slate-400 uppercase text-[10px] tracking-wider text-left">
                                 <th className="py-3">Item</th>
+                                <th className="py-3">Area</th>
                                 <th className="py-3">Trade</th>
                                 <th className="py-3 text-right">Qty</th>
                                 <th className="py-3 text-left pl-4">Unit</th>
@@ -1564,6 +2045,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                     return (
                                         <tr key={idx}>
                                             <td className="py-2 font-bold text-slate-800">{item.name}</td>
+                                            <td className="py-2 text-slate-500">{item.roomId || '\u2014'}</td>
                                             <td className="py-2 text-slate-500">{item.cat || 'Finishing'}</td>
                                             <td className="py-2 text-right font-mono font-bold text-[#0F172A]">{item.qty}</td>
                                             <td className="py-2 text-left pl-4 text-slate-500">{item.unit}</td>
@@ -1579,10 +2061,11 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                             ) : (
                                 <>
                                     <tr>
-                                        <td className="py-2 font-bold text-slate-800">POP false ceiling (Standard)</td>
-                                        <td className="py-2 text-slate-500">Civil</td>
+                                        <td className="py-2 font-bold text-slate-800"><Ed k="50b6a192" ctl={edCtl}>POP false ceiling (Standard)</Ed></td>
+                                        <td className="py-2 text-slate-500">—</td>
+                                        <td className="py-2 text-slate-500"><Ed k="496b2073" ctl={edCtl}>Civil</Ed></td>
                                         <td className="py-2 text-right font-mono font-bold text-[#0F172A]">720</td>
-                                        <td className="py-2 text-left pl-4 text-slate-500">sq ft</td>
+                                        <td className="py-2 text-left pl-4 text-slate-500"><Ed k="77a7645b_4" ctl={edCtl}>sq ft</Ed></td>
                                         {showScopePricing && !isDesigner && (
                                             <>
                                                 <td className="py-2 text-right font-mono text-slate-600">{formatINR(120)}</td>
@@ -1591,10 +2074,11 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                         )}
                                     </tr>
                                     <tr>
-                                        <td className="py-2 font-bold text-slate-800">Electrical (labour / point)</td>
-                                        <td className="py-2 text-slate-500">Services</td>
+                                        <td className="py-2 font-bold text-slate-800"><Ed k="3cc08028" ctl={edCtl}>Electrical (labour / point)</Ed></td>
+                                        <td className="py-2 text-slate-500">—</td>
+                                        <td className="py-2 text-slate-500"><Ed k="5cbd5840" ctl={edCtl}>Services</Ed></td>
                                         <td className="py-2 text-right font-mono font-bold text-[#0F172A]">30</td>
-                                        <td className="py-2 text-left pl-4 text-slate-500">nos</td>
+                                        <td className="py-2 text-left pl-4 text-slate-500"><Ed k="008870b4" ctl={edCtl}>nos</Ed></td>
                                         {showScopePricing && !isDesigner && (
                                             <>
                                                 <td className="py-2 text-right font-mono text-slate-600">{formatINR(250)}</td>
@@ -1603,10 +2087,11 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                         )}
                                     </tr>
                                     <tr>
-                                        <td className="py-2 font-bold text-slate-800">Electrical fittings (as actuals)</td>
-                                        <td className="py-2 text-slate-500">Services</td>
+                                        <td className="py-2 font-bold text-slate-800"><Ed k="b62aa3ac" ctl={edCtl}>Electrical fittings (as actuals)</Ed></td>
+                                        <td className="py-2 text-slate-500">—</td>
+                                        <td className="py-2 text-slate-500"><Ed k="5cbd5840_2" ctl={edCtl}>Services</Ed></td>
                                         <td className="py-2 text-right font-mono font-bold text-[#0F172A]">1</td>
-                                        <td className="py-2 text-left pl-4 text-slate-500">lumpsum</td>
+                                        <td className="py-2 text-left pl-4 text-slate-500"><Ed k="505e565c" ctl={edCtl}>lumpsum</Ed></td>
                                         {showScopePricing && !isDesigner && (
                                             <>
                                                 <td className="py-2 text-right font-mono text-slate-600">{formatINR(15000)}</td>
@@ -1615,10 +2100,11 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                         )}
                                     </tr>
                                     <tr>
-                                        <td className="py-2 font-bold text-slate-800">Interior painting (Standard)</td>
-                                        <td className="py-2 text-slate-500">Finishing</td>
+                                        <td className="py-2 font-bold text-slate-800"><Ed k="7df1b6eb" ctl={edCtl}>Interior painting (Standard)</Ed></td>
+                                        <td className="py-2 text-slate-500">—</td>
+                                        <td className="py-2 text-slate-500"><Ed k="18a88df1_2" ctl={edCtl}>Finishing</Ed></td>
                                         <td className="py-2 text-right font-mono font-bold text-[#0F172A]">1,575</td>
-                                        <td className="py-2 text-left pl-4 text-slate-500">sq ft</td>
+                                        <td className="py-2 text-left pl-4 text-slate-500"><Ed k="77a7645b_5" ctl={edCtl}>sq ft</Ed></td>
                                         {showScopePricing && !isDesigner && (
                                             <>
                                                 <td className="py-2 text-right font-mono text-slate-600">{formatINR(35)}</td>
@@ -1627,10 +2113,11 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                         )}
                                     </tr>
                                     <tr>
-                                        <td className="py-2 font-bold text-slate-800">Interior ceiling painting</td>
-                                        <td className="py-2 text-slate-500">Finishing</td>
+                                        <td className="py-2 font-bold text-slate-800"><Ed k="d6b3aea0" ctl={edCtl}>Interior ceiling painting</Ed></td>
+                                        <td className="py-2 text-slate-500">—</td>
+                                        <td className="py-2 text-slate-500"><Ed k="18a88df1_3" ctl={edCtl}>Finishing</Ed></td>
                                         <td className="py-2 text-right font-mono font-bold text-[#0F172A]">750</td>
-                                        <td className="py-2 text-left pl-4 text-slate-500">sq ft</td>
+                                        <td className="py-2 text-left pl-4 text-slate-500"><Ed k="77a7645b_6" ctl={edCtl}>sq ft</Ed></td>
                                         {showScopePricing && !isDesigner && (
                                             <>
                                                 <td className="py-2 text-right font-mono text-slate-600">{formatINR(30)}</td>
@@ -1642,11 +2129,11 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                             )}
                             {showScopePricing && !isDesigner && otherItems.length > 0 && (
                                 <tr className="border-t-2 border-slate-200 bg-slate-50/50 font-bold">
-                                    <td className="py-2 text-slate-800" colSpan={2}>Total Civil, Services & Finishing</td>
+                                    <td className="py-2 text-slate-800" colSpan={3}><Ed k="5baed93c" ctl={edCtl}>Total Civil, Services & Finishing</Ed></td>
                                     <td className="py-2 text-right font-mono text-[#0F172A]">
-                                        {otherItems.reduce((sum, item) => sum + item.qty, 0)}
+                                        {otherItems.length}
                                     </td>
-                                    <td className="py-2 text-left pl-4 text-slate-500" colSpan={2}>units (Total:)</td>
+                                    <td className="py-2 text-left pl-4 text-slate-500" colSpan={2}>lines</td>
                                     <td className="py-2 text-right font-mono font-extrabold text-[#0F172A]">
                                         {formatINR(otherItems.reduce((sum, item) => sum + (calculateSellPrice(item.materials, item.labor, item.margin) * item.qty), 0))}
                                     </td>
@@ -1655,78 +2142,24 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                         </tbody>
                     </table>
 
-                    <div className="mt-6 p-6 bg-slate-50 rounded-xl text-xs text-slate-500 leading-relaxed">
+                    <div className="mt-6 p-6 bg-slate-50 rounded-xl text-xs text-slate-500 leading-relaxed"><Ed k="38f2ba50" ctl={edCtl}>
                         Electrical fittings are billed at actual supplier cost against your approved selection and are not part of the fixed value. Electrical labour covers wiring, conduit, fixing and testing per point; materials are charged separately. Painting includes surface preparation, primer and two coats.
-                    </div>
+                    </Ed></div>
                 </div>
 
                 <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-slate-400 border-t border-slate-200 pt-8">
                     <span>{settings?.companyName || 'Form Factors Studio'}</span>
-                    <span>Page 9 of 15</span>
-                </div>
-            </div>
-
-            {/* ================= PAGE 10: CLARITY / NOT IN SCOPE ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-slate-50 border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
-                <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">Clarity</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">
-                        {hasAnyCarpentryIncluded ? "Scope boundaries & status" : "Not in the current scope"}
-                    </h2>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 my-auto text-center">
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200">
-                        <span className="text-xs uppercase tracking-wider text-[#C5A880] font-black block mb-4">KITCHEN</span>
-                        <div className="flex flex-wrap gap-2 justify-center">
-                            {renderScopeItem('Base & wall units', hasKitchenBaseWall)}
-                            {renderScopeItem('Shutters', hasKitchenShutters)}
-                            {renderScopeItem('Counter', hasCountertop)}
-                            {renderScopeItem('Tall unit', hasTallUnit)}
-                            {renderScopeItem('Accessories', hasKitchenAccessories)}
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200">
-                        <span className="text-xs uppercase tracking-wider text-[#C5A880] font-black block mb-4">BEDROOMS</span>
-                        <div className="flex flex-wrap gap-2 justify-center">
-                            {renderScopeItem('Wardrobes', hasWardrobes)}
-                            {renderScopeItem('Lofts', hasLofts)}
-                            {renderScopeItem('Beds', hasBeds)}
-                            {renderScopeItem('Study', hasStudy)}
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200">
-                        <span className="text-xs uppercase tracking-wider text-[#C5A880] font-black block mb-4">BATHROOMS</span>
-                        <div className="flex flex-wrap gap-2 justify-center">
-                            {renderScopeItem('Vanity', hasVanity)}
-                            {renderScopeItem('Mirror unit', hasMirrorUnit)}
-                            {renderScopeItem('Storage', hasBathroomStorage)}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-xl border border-slate-200 text-xs text-slate-500 leading-relaxed text-center">
-                    {hasAnyCarpentryIncluded ? (
-                        <span>
-                            Standard services (ceiling, paint, electrical) cover all rooms as shown. The specific carpentry items highlighted above with <strong className="text-emerald-700">✓</strong> are fully covered in your current contracted BOQ. Any pending items marked with <strong className="text-slate-400">✕</strong> can be added later via a priced addendum if needed.
-                        </span>
-                    ) : (
-                        <span>
-                            False ceiling, painting and electrical works on page 9 do cover these rooms, to the quantities shown. Should you wish to add kitchen or bedroom carpentry, we will issue a priced addendum for your approval and revise the order value accordingly.
-                        </span>
-                    )}
+                    <span>Page <span className="ff-pageno" /> of {pageTotal || '—'}</span>
                 </div>
             </div>
 
             {/* ================= PAGE 11: SPECIFICATIONS ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-white border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page h-[29.7cm] flex flex-col justify-between p-20 bg-white border-b border-slate-200">
                 <div>
                     <div className="flex justify-between items-start">
                         <div>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">Section 4</span>
-                            <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">Specifications</h2>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="6d1ba83e" ctl={edCtl}>Section 4</Ed></span>
+                            <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight"><Ed k="0c709f98" ctl={edCtl}>Specifications</Ed></h2>
                         </div>
                         {!isClientViewOnly && setProjectContext && (
                             <button
@@ -1762,12 +2195,12 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                     <div className="lg:col-span-5 flex flex-col justify-between border border-slate-200 rounded-2xl p-6 bg-slate-50">
                         <div>
-                            <span className="text-xs font-bold text-slate-900 block mb-2">Sample approvals</span>
-                            <p className="text-xs text-slate-500 leading-relaxed">Final brands, shades and finishes are selected against physical samples during the Schedule of Finishes stage and recorded in writing. No substitution is made without your approval.</p>
+                            <span className="text-xs font-bold text-slate-900 block mb-2"><Ed k="2af1d756" ctl={edCtl}>Sample approvals</Ed></span>
+                            <p className="text-xs text-slate-500 leading-relaxed"><Ed k="b5548d9e" ctl={edCtl}>Final brands, shades and finishes are selected against physical samples during the Schedule of Finishes stage and recorded in writing. No substitution is made without your approval.</Ed></p>
                         </div>
 
                         <div className="mt-6 pt-6 border-t border-slate-200">
-                            <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-black block mb-3">NOT SPECIFIED — NOT IN SCOPE</span>
+                            <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-black block mb-3"><Ed k="4cd58ab9" ctl={edCtl}>NOT SPECIFIED — NOT IN SCOPE</Ed></span>
                             <div className="flex flex-col gap-2 text-xs text-slate-400">
                                 {dynamicSpecExclusions.map((spec, i) => (
                                     <span key={i}>{spec}</span>
@@ -1779,48 +2212,18 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                 <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-slate-400 border-t border-slate-200 pt-8">
                     <span>{settings?.companyName || 'Form Factors Studio'}</span>
-                    <span>Page 11 of 15</span>
+                    <span>Page <span className="ff-pageno" /> of {pageTotal || '—'}</span>
                 </div>
             </div>
 
             {/* ================= PAGE 12: PROGRAMME ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-white border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page h-[29.7cm] flex flex-col justify-between p-20 bg-white border-b border-slate-200">
                 <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">Section 5</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">{totalDays}-day planned project programme</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="d64254df" ctl={edCtl}>Section 5</Ed></span>
+                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">{totalDays}-day site programme</h2>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 my-auto">
-                    <div className="p-5 border border-slate-200 bg-slate-50 rounded-xl text-center">
-                        <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-bold block mb-1">DAY 1-14</span>
-                        <h4 className="font-bold text-[#0F172A] text-sm mb-2">Design & Planning</h4>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">Validation, layouts, 3D, SOF freeze, GFC, final BOQ.</p>
-                    </div>
-
-                    <div className="p-5 border border-slate-200 bg-slate-50 rounded-xl text-center">
-                        <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-bold block mb-1">DAY 15-21</span>
-                        <h4 className="font-bold text-[#0F172A] text-sm mb-2">Setup & Rough-ins</h4>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">Mobilisation, protection, civil, electrical rough-in.</p>
-                    </div>
-
-                    <div className="p-5 border border-slate-200 bg-slate-50 rounded-xl text-center">
-                        <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-bold block mb-1">DAY 22-31</span>
-                        <h4 className="font-bold text-[#0F172A] text-sm mb-2">Structure & Utilities</h4>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">Ceiling framing, boarding, carcass assembly on site.</p>
-                    </div>
-
-                    <div className="p-5 border border-slate-200 bg-slate-50 rounded-xl text-center">
-                        <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-bold block mb-1">DAY 32-43</span>
-                        <h4 className="font-bold text-[#0F172A] text-sm mb-2">Finishes & Surfaces</h4>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">Laminate, polish, putty, panelling, first coat paint.</p>
-                    </div>
-
-                    <div className="p-5 border border-slate-200 bg-slate-50 rounded-xl text-center">
-                        <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-bold block mb-1">DAY 44-{totalDays}</span>
-                        <h4 className="font-bold text-[#0F172A] text-sm mb-2">Snagging & Handover</h4>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">Fittings, final coat, joint snag, deep clean, handover.</p>
-                    </div>
-                </div>
+                <EdPhaseCards k="programme.phases" ctl={edCtl} items={derivedPhases} />
 
                 <div className="bg-[#0F172A] text-white p-6 rounded-xl space-y-2">
                     <p className="text-xs text-slate-300">
@@ -1831,13 +2234,13 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
             </div>
 
             {/* ================= PAGE 13: PAYMENT SCHEDULE ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-white border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page ff-page-flow min-h-[29.7cm] flex flex-col justify-between p-20 bg-white border-b border-slate-200">
                 <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">Section 6</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">Payment schedule</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="0e8720cd" ctl={edCtl}>Section 6</Ed></span>
+                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight"><Ed k="17b13ad2" ctl={edCtl}>Payment schedule</Ed></h2>
                 </div>
 
-                <div className="my-auto overflow-hidden">
+                <div className="my-auto">
                     <table className="w-full text-sm border-collapse">
                         <thead>
                             <tr className="border-b border-slate-200 text-slate-400 uppercase text-[10px] tracking-wider text-left">
@@ -1849,8 +2252,8 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             <tr>
-                                <td className="py-3 font-bold text-[#0F172A]">Initiation</td>
-                                <td className="py-3 text-slate-500">On appointment, to commence site validation & planning</td>
+                                <td className="py-3 font-bold text-[#0F172A]"><Ed k="98bb44b9" ctl={edCtl}>Initiation</Ed></td>
+                                <td className="py-3 text-slate-500"><Ed k="28d06359" ctl={edCtl}>On appointment, to commence site validation & planning</Ed></td>
                                 <td className="py-3 text-right font-mono font-bold">-</td>
                                 <td className="py-3 text-right font-mono font-bold text-slate-900">{formatINR(4999)}</td>
                             </tr>
@@ -1860,20 +2263,20 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                 <td className="py-2.5 px-2"></td>
                             </tr>
                             <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700">Design 1</td>
-                                <td className="py-2.5 text-xs text-slate-500">Brief freeze, site measurement and commencement of concept</td>
+                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="f14492d5" ctl={edCtl}>Design 1</Ed></td>
+                                <td className="py-2.5 text-xs text-slate-500"><Ed k="c2b987f2" ctl={edCtl}>Brief freeze, site measurement and commencement of concept</Ed></td>
                                 <td className="py-2.5 text-right font-mono text-slate-600">25%</td>
                                 <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableDesign * 0.25)}</td>
                             </tr>
                             <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700">Design 2</td>
-                                <td className="py-2.5 text-xs text-slate-500">On presentation of layouts and 3D views for approval</td>
+                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="81ede823" ctl={edCtl}>Design 2</Ed></td>
+                                <td className="py-2.5 text-xs text-slate-500"><Ed k="e4232828" ctl={edCtl}>On presentation of layouts and 3D views for approval</Ed></td>
                                 <td className="py-2.5 text-right font-mono text-slate-600">40%</td>
                                 <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableDesign * 0.40)}</td>
                             </tr>
                             <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700">Design 3</td>
-                                <td className="py-2.5 text-xs text-slate-500">On release of GFC drawings, Schedule of Finishes and final BOQ</td>
+                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="4eefd70a" ctl={edCtl}>Design 3</Ed></td>
+                                <td className="py-2.5 text-xs text-slate-500"><Ed k="775ec892" ctl={edCtl}>On release of GFC drawings, Schedule of Finishes and final BOQ</Ed></td>
                                 <td className="py-2.5 text-right font-mono text-slate-600">35%</td>
                                 <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableDesign * 0.35)}</td>
                             </tr>
@@ -1883,31 +2286,31 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                 <td className="py-2.5 px-2"></td>
                             </tr>
                             <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700">Execution 1</td>
-                                <td className="py-2.5 text-xs text-slate-500">Before mobilisation and placement of material orders</td>
+                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="8b135a5f" ctl={edCtl}>Execution 1</Ed></td>
+                                <td className="py-2.5 text-xs text-slate-500"><Ed k="909d000c" ctl={edCtl}>Before mobilisation and placement of material orders</Ed></td>
                                 <td className="py-2.5 text-right font-mono text-slate-600">40%</td>
                                 <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableExecution * 0.40)}</td>
                             </tr>
                             <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700">Execution 2</td>
-                                <td className="py-2.5 text-xs text-slate-500">On completion of civil, services, ceiling framework and carcasses</td>
+                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="d4e949c7" ctl={edCtl}>Execution 2</Ed></td>
+                                <td className="py-2.5 text-xs text-slate-500"><Ed k="f09a996a" ctl={edCtl}>On completion of civil, services, ceiling framework and carcasses</Ed></td>
                                 <td className="py-2.5 text-right font-mono text-slate-600">30%</td>
                                 <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableExecution * 0.30)}</td>
                             </tr>
                             <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700">Execution 3</td>
-                                <td className="py-2.5 text-xs text-slate-500">Before shutters, finishes, hardware and final paint</td>
+                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="32ffe7f0" ctl={edCtl}>Execution 3</Ed></td>
+                                <td className="py-2.5 text-xs text-slate-500"><Ed k="a5b60cb3" ctl={edCtl}>Before shutters, finishes, hardware and final paint</Ed></td>
                                 <td className="py-2.5 text-right font-mono text-slate-600">20%</td>
                                 <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableExecution * 0.20)}</td>
                             </tr>
                             <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700">Execution 4</td>
-                                <td className="py-2.5 text-xs text-slate-500">Before final handover and key release, following agreed scope & snag list closure</td>
+                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="39e0e0f0" ctl={edCtl}>Execution 4</Ed></td>
+                                <td className="py-2.5 text-xs text-slate-500"><Ed k="98c3d2b7" ctl={edCtl}>Before final handover and key release, following agreed scope & snag list closure</Ed></td>
                                 <td className="py-2.5 text-right font-mono text-slate-600">10%</td>
                                 <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableExecution * 0.10)}</td>
                             </tr>
                             <tr className="border-t-2 border-[#0F172A] font-black">
-                                <td className="py-3 text-[#0F172A]">Net taxable value</td>
+                                <td className="py-3 text-[#0F172A]"><Ed k="a385af23" ctl={edCtl}>Net taxable value</Ed></td>
                                 <td className="py-3"></td>
                                 <td className="py-3 text-right font-mono">100%</td>
                                 <td className="py-3 text-right font-mono text-[#0F172A]">{formatINR(netTaxableValue)}</td>
@@ -1916,67 +2319,67 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     </table>
 
                     <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 flex justify-between gap-4">
-                        <span>Payable in advance of each stage. GST at 18% is added on every FFDS invoice. The ₹4,999 is adjusted against Design 1 and is not additional to the total.</span>
-                        <span className="font-bold shrink-0 text-slate-800">FULL TERMS · ANNEXURE A</span>
+                        <span><Ed k="1374c077" ctl={edCtl}>Payable in advance of each stage. GST at 18% is added on every FFDS invoice. The ₹4,999 is adjusted against Design 1 and is not additional to the total.</Ed></span>
+                        <span className="font-bold shrink-0 text-slate-800"><Ed k="3ce4832e" ctl={edCtl}>FULL TERMS · ANNEXURE A</Ed></span>
                     </div>
                 </div>
 
                 <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-slate-400 border-t border-slate-200 pt-8">
                     <span>{settings?.companyName || 'Form Factors Studio'}</span>
-                    <span>Page 13 of 15</span>
+                    <span>Page <span className="ff-pageno" /> of {pageTotal || '—'}</span>
                 </div>
             </div>
 
             {/* ================= PAGE 14: NEXT STEPS ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-slate-50 border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page h-[29.7cm] flex flex-col justify-between p-20 bg-slate-50 border-b border-slate-200">
                 <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">Next Step</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">Proceed with design-led turnkey execution</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="574f02b7" ctl={edCtl}>Next Step</Ed></span>
+                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight"><Ed k="150ec235" ctl={edCtl}>Proceed with design-led turnkey execution</Ed></h2>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 my-auto items-stretch">
                     <div className="lg:col-span-6 space-y-4">
-                        <span className="text-xs uppercase tracking-wider text-slate-400 font-bold block border-b pb-2">WHAT HAPPENS NEXT</span>
+                        <span className="text-xs uppercase tracking-wider text-slate-400 font-bold block border-b pb-2"><Ed k="560c1369" ctl={edCtl}>WHAT HAPPENS NEXT</Ed></span>
                         
                         <div className="space-y-3 text-sm text-slate-700">
                             <div className="flex gap-3">
                                 <span className="font-bold text-[#C5A880] font-mono">01</span>
-                                <p>Project initiation fee payment of ₹4,999.</p>
+                                <p><Ed k="dd8e8d7d" ctl={edCtl}>Project initiation fee payment of ₹4,999.</Ed></p>
                             </div>
                             <div className="flex gap-3">
                                 <span className="font-bold text-[#C5A880] font-mono">02</span>
-                                <p>Site measurement and scope validation survey.</p>
+                                <p><Ed k="37c726a2" ctl={edCtl}>Site measurement and scope validation survey.</Ed></p>
                             </div>
                             <div className="flex gap-3">
                                 <span className="font-bold text-[#C5A880] font-mono">03</span>
-                                <p>Layout, concept and detailed design development.</p>
+                                <p><Ed k="27c81bbe" ctl={edCtl}>Layout, concept and detailed design development.</Ed></p>
                             </div>
                             <div className="flex gap-3">
                                 <span className="font-bold text-[#C5A880] font-mono">04</span>
-                                <p>Schedule of Finishes (SOF) and physical material approvals.</p>
+                                <p><Ed k="fad362f2" ctl={edCtl}>Schedule of Finishes (SOF) and physical material approvals.</Ed></p>
                             </div>
                             <div className="flex gap-3">
                                 <span className="font-bold text-[#C5A880] font-mono">05</span>
-                                <p>Final detailed BOQ and commercial confirmation sign-off.</p>
+                                <p><Ed k="62df687b" ctl={edCtl}>Final detailed BOQ and commercial confirmation sign-off.</Ed></p>
                             </div>
                             <div className="flex gap-3">
                                 <span className="font-bold text-[#C5A880] font-mono">06</span>
-                                <p>Execution agreement sign-off and site mobilization.</p>
+                                <p><Ed k="24de6d5f" ctl={edCtl}>Execution agreement sign-off and site mobilization.</Ed></p>
                             </div>
                         </div>
                     </div>
 
                     <div className="lg:col-span-6 bg-white border border-slate-200 rounded-2xl p-8 flex flex-col justify-between shadow-sm">
                         <div className="text-center">
-                            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">PROJECT INITIATION FEE</span>
+                            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block"><Ed k="f4caddd0" ctl={edCtl}>PROJECT INITIATION FEE</Ed></span>
                             <div className="text-4xl font-black font-mono text-[#0F172A] mt-2">₹4,999</div>
-                            <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+                            <p className="text-xs text-slate-500 mt-3 leading-relaxed"><Ed k="d8a17b45" ctl={edCtl}>
                                 Commences site validation, requirement documentation, and preliminary scope finalisation. Non-refundable, but fully adjustable against the final turnkey order value.
-                            </p>
+                            </Ed></p>
                         </div>
 
                         <div className="mt-6 pt-6 border-t border-slate-100">
-                            <p className="text-[10px] text-slate-400 text-center italic mb-4">Not covered by this fee: layouts, 3D views, GFC drawings, SOF and final BOQ. These commence under main engagement design stages.</p>
+                            <p className="text-[10px] text-slate-400 text-center italic mb-4"><Ed k="1a8a34c3" ctl={edCtl}>Not covered by this fee: layouts, 3D views, GFC drawings, SOF and final BOQ. These commence under main engagement design stages.</Ed></p>
                             <button className="w-full bg-[#0066CC] text-white py-3.5 rounded-xl font-bold hover:bg-[#0055B3] transition-all text-sm uppercase tracking-wider shadow-md">
                                 Initiate Turnkey Planning
                             </button>
@@ -1986,15 +2389,15 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                 <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-slate-400 border-t border-slate-200 pt-8">
                     <span>{settings?.companyName || 'Form Factors Studio'}</span>
-                    <span>Page 14 of 15</span>
+                    <span>Page <span className="ff-pageno" /> of {pageTotal || '—'}</span>
                 </div>
             </div>
 
             {/* ================= PAGE 15: CONFIRMATION ================= */}
-            <div className="h-[29.7cm] flex flex-col justify-between p-16 md:p-24 bg-white border-b border-slate-200 print:h-[28.5cm] print:page-break-after-always">
+            <div className="ff-page h-[29.7cm] flex flex-col justify-between p-20 bg-white border-b border-slate-200">
                 <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]">Acceptance</span>
-                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight">Confirmation of engagement</h2>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#C5A880]"><Ed k="a69d9d5f" ctl={edCtl}>Acceptance</Ed></span>
+                    <h2 className="text-4xl font-extrabold text-[#0F172A] mt-2 tracking-tight"><Ed k="462cb5af" ctl={edCtl}>Confirmation of engagement</Ed></h2>
                 </div>
 
                 <div className="bg-slate-50 p-8 rounded-2xl border border-slate-200 text-slate-600 text-sm leading-relaxed my-auto space-y-4">
@@ -2007,7 +2410,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                 <ShieldCheckIcon className="w-3.5 h-3.5" />
                             </div>
                             <div>
-                                <span className="font-bold text-slate-700">Contractual Integration & Alignment:</span> This proposal and Annexure A are verbally and legally linked with Master Terms Docket <strong className="font-semibold text-slate-800">{latestDocket.docketRef}</strong> (Status: <span className="font-bold text-[#C5A880]">{latestDocket.status.toUpperCase()}</span>), which governs the overarching terms of service. In the event of any operational conflict, the clauses of the Master Terms Docket shall prevail.
+                                <span className="font-bold text-slate-700"><Ed k="1d06487e" ctl={edCtl}>Contractual Integration & Alignment:</Ed></span> This proposal and Annexure A are verbally and legally linked with Master Terms Docket <strong className="font-semibold text-slate-800">{latestDocket.docketRef}</strong> (Status: <span className="font-bold text-[#C5A880]">{latestDocket.status.toUpperCase()}</span>), which governs the overarching terms of service. In the event of any operational conflict, the clauses of the Master Terms Docket shall prevail.
                             </div>
                         </div>
                     ) : (
@@ -2016,7 +2419,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                 <ShieldCheckIcon className="w-3.5 h-3.5" />
                             </div>
                             <div>
-                                <span className="font-bold text-slate-700">Contractual Integration & Alignment:</span> This proposal and Annexure A are verbally and legally linked to the Master Terms Docket once issued for this project. The Master Terms Docket governs the overarching terms of service and takes precedence over any generic operational clauses.
+                                <span className="font-bold text-slate-700"><Ed k="1d06487e_2" ctl={edCtl}>Contractual Integration & Alignment:</Ed></span> This proposal and Annexure A are verbally and legally linked to the Master Terms Docket once issued for this project. The Master Terms Docket governs the overarching terms of service and takes precedence over any generic operational clauses.
                             </div>
                         </div>
                     )}
@@ -2024,13 +2427,13 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                 <div className="grid grid-cols-2 gap-12 mt-12 pt-12 border-t border-slate-200">
                     <div className="space-y-8">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">FOR FORM FACTORS DESIGN STUDIO</span>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block"><Ed k="ae1f3f57" ctl={edCtl}>FOR FORM FACTORS DESIGN STUDIO</Ed></span>
                         <div className="h-12 border-b border-slate-300"></div>
-                        <span className="text-[10px] text-slate-500 uppercase block tracking-widest">AUTHORISED SIGNATORY · NAME, SIGNATURE & DATE</span>
+                        <span className="text-[10px] text-slate-500 uppercase block tracking-widest"><Ed k="d9b85af9" ctl={edCtl}>AUTHORISED SIGNATORY · NAME, SIGNATURE & DATE</Ed></span>
                     </div>
 
                     <div className="space-y-8">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">ACCEPTED & APPROVED BY CLIENT</span>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block"><Ed k="865936f7" ctl={edCtl}>ACCEPTED & APPROVED BY CLIENT</Ed></span>
                         <div className="h-12 border-b border-slate-300"></div>
                         <span className="text-[10px] text-slate-500 uppercase block tracking-widest">{projectContext.clientName?.toUpperCase() || 'CLIENT'} · SIGNATURE & DATE</span>
                     </div>
@@ -2038,16 +2441,16 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                 <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-slate-400 border-t border-slate-200 pt-8 mt-auto">
                     <span>{settings?.companyName || 'Form Factors Studio'}</span>
-                    <span>Page 15 of 15</span>
+                    <span>Page <span className="ff-pageno" /> of {pageTotal || '—'}</span>
                 </div>
             </div>
 
             {/* ================= ANNEXURE A: TERMS & CONDITIONS ================= */}
-            <div className="p-16 md:p-24 bg-white space-y-8 print:p-8 print:page-break-before-always">
+            <div className="ff-page ff-page-flow p-20 bg-white space-y-8">
                 <div className="border-b-2 border-[#0F172A] pb-4">
-                    <span className="text-[11px] font-bold text-[#C5A880] uppercase tracking-wider block">ANNEXURE A</span>
-                    <h2 className="text-3xl font-extrabold tracking-tight text-[#0F172A] mt-1">Commercial Terms & Conditions</h2>
-                    <p className="text-xs text-slate-500 mt-1">Forms part of the Design-led Turnkey Proposal booklet and is to be read together with it.</p>
+                    <span className="text-[11px] font-bold text-[#C5A880] uppercase tracking-wider block"><Ed k="43ec7149" ctl={edCtl}>ANNEXURE A</Ed></span>
+                    <h2 className="text-3xl font-extrabold tracking-tight text-[#0F172A] mt-1"><Ed k="e555dbd3" ctl={edCtl}>Commercial Terms & Conditions</Ed></h2>
+                    <p className="text-xs text-slate-500 mt-1"><Ed k="530cebd7" ctl={edCtl}>Forms part of the Design-led Turnkey Proposal booklet and is to be read together with it.</Ed></p>
                 </div>
 
                 {latestDocket ? (
@@ -2074,17 +2477,17 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                 <div className="space-y-8 text-slate-700 text-xs leading-relaxed max-w-4xl">
                     <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2">1 · ENGAGEMENT MODEL AND BASIS OF VALUE</h4>
-                        <ol className="list-decimal pl-4 space-y-1.5 text-slate-600">
+                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="7d2f6696" ctl={edCtl}>1 · ENGAGEMENT MODEL AND BASIS OF VALUE</Ed></h4>
+                        <EdList k="annex.1-engagement-model-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1.5 text-slate-600">
                             <li>This engagement is a <strong className="text-[#0F172A]">single design-led turnkey engagement</strong>. FFDS contracts, procures, executes and supervises the scope listed in the proposal booklet, and carries contractual execution responsibility for that scope.</li>
                             <li>The figure stated in the booklet is the <strong className="text-[#0F172A]">Current Proposed Project Value</strong>, based on the scope, quantities and specifications presently recorded.</li>
                             <li>The <strong className="text-[#0F172A]">Final Turnkey Order Value</strong> will be issued after site validation, design freeze, Schedule of Finishes approval and final BOQ sign-off. Once accepted in writing, it becomes the contracted value for execution.</li>
-                            <li>Rates underlying the proposal are held for the validity period stated above.</li>
-                        </ol>
+                            <li><Ed k="324fa782" ctl={edCtl}>Rates underlying the proposal are held for the validity period stated above.</Ed></li>
+                        </EdList>
                     </div>
 
                     <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2">2 · COMMERCIAL SUMMARY</h4>
+                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="f5dd5c3b" ctl={edCtl}>2 · COMMERCIAL SUMMARY</Ed></h4>
                         <table className="w-full text-left border-collapse border border-slate-200 text-slate-600">
                             <thead>
                                 <tr className="bg-slate-50 border-b border-slate-200 font-bold">
@@ -2095,177 +2498,218 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 <tr>
-                                    <td className="p-2">Turnkey Execution Value</td>
-                                    <td className="p-2">As listed scope</td>
+                                    <td className="p-2"><Ed k="1c9dfb1a_2" ctl={edCtl}>Turnkey Execution Value</Ed></td>
+                                    <td className="p-2"><Ed k="277d53ce_2" ctl={edCtl}>As listed scope</Ed></td>
                                     <td className="p-2 text-right font-mono">{formatINR(taxableExecution)}</td>
                                 </tr>
                                 <tr>
-                                    <td className="p-2">Design & Coordination Fee</td>
-                                    <td className="p-2">Fixed fee</td>
+                                    <td className="p-2"><Ed k="b7b78706_2" ctl={edCtl}>Design & Coordination Fee</Ed></td>
+                                    <td className="p-2">{designFeeBasis}</td>
                                     <td className="p-2 text-right font-mono">{formatINR(taxableDesign)}</td>
                                 </tr>
                                 <tr className="bg-slate-50 font-bold border-t border-slate-300">
-                                    <td className="p-2">Net Taxable Value</td>
+                                    <td className="p-2"><Ed k="857af574_2" ctl={edCtl}>Net Taxable Value</Ed></td>
                                     <td className="p-2"></td>
                                     <td className="p-2 text-right font-mono">{formatINR(netTaxableValue)}</td>
                                 </tr>
                                 <tr>
-                                    <td className="p-2">Applicable GST</td>
-                                    <td className="p-2">18% on FFDS invoiced value</td>
+                                    <td className="p-2"><Ed k="a6bbe567_2" ctl={edCtl}>Applicable GST</Ed></td>
+                                    <td className="p-2"><Ed k="a7652052" ctl={edCtl}>18% on FFDS invoiced value</Ed></td>
                                     <td className="p-2 text-right font-mono">{formatINR(gstOnDesign + chargedGstOnExecution)}</td>
                                 </tr>
                                 <tr className="bg-slate-900 text-white font-bold">
-                                    <td className="p-2">Total Proposed Project Investment</td>
+                                    <td className="p-2"><Ed k="b41f3f00" ctl={edCtl}>Total Proposed Project Investment</Ed></td>
                                     <td className="p-2"></td>
                                     <td className="p-2 text-right font-mono">{formatINR(totalProposedInvestment)}</td>
                                 </tr>
                             </tbody>
                         </table>
-                        <p className="text-[10px] text-slate-400 mt-2 italic">This is the only commercial summary; no other figure in any document supersedes it.</p>
+                        <p className="text-[10px] text-slate-400 mt-2 italic"><Ed k="58ea405d" ctl={edCtl}>This is the only commercial summary; no other figure in any document supersedes it.</Ed></p>
                     </div>
 
                     <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2">3 · TAXES</h4>
-                        <p>GST shall be applicable on amounts invoiced by Form Factors Design Studio at the prevailing statutory rate, currently 18%, on both the execution value and the design and coordination fee.</p>
-                        <p className="mt-2">Where a direct client purchase or a payment to a third-party supplier is specifically agreed and documented in writing, that item shall be invoiced separately by the respective supplier and falls outside the FFDS contracted value.</p>
-                        <p className="mt-2">Any change in statutory rates or the introduction of any new levy after the date of this proposal shall apply to invoices raised thereafter.</p>
+                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="0f056cbb" ctl={edCtl}>3 · TAXES</Ed></h4>
+                        <p><Ed k="5a972bbe" ctl={edCtl}>GST shall be applicable on amounts invoiced by Form Factors Design Studio at the prevailing statutory rate, currently 18%, on both the execution value and the design and coordination fee.</Ed></p>
+                        <p className="mt-2"><Ed k="6277da00" ctl={edCtl}>Where a direct client purchase or a payment to a third-party supplier is specifically agreed and documented in writing, that item shall be invoiced separately by the respective supplier and falls outside the FFDS contracted value.</Ed></p>
+                        <p className="mt-2"><Ed k="951a9977" ctl={edCtl}>Any change in statutory rates or the introduction of any new levy after the date of this proposal shall apply to invoices raised thereafter.</Ed></p>
                     </div>
 
                     <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2">4 · PAYMENT TERMS</h4>
-                        <ol className="list-decimal pl-4 space-y-1 text-slate-600">
-                            <li>All stage payments are payable in advance of the corresponding stage. Material orders are placed only against cleared funds.</li>
+                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="d794fc18" ctl={edCtl}>4 · PAYMENT TERMS</Ed></h4>
+                        <EdList k="annex.4-payment-terms" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
+                            <li><Ed k="e5896545" ctl={edCtl}>All stage payments are payable in advance of the corresponding stage. Material orders are placed only against cleared funds.</Ed></li>
                             <li>Design fee shares are percentages of {formatINR(taxableDesign)}; execution shares are percentages of {formatINR(taxableExecution)}. Stage amounts are rounded to the nearest rupee, with Execution 1 carrying the rounding adjustment so that stages sum exactly to the net taxable value.</li>
-                            <li>GST is added on each invoice at the prevailing rate.</li>
-                            <li>The Project Initiation Fee of ₹4,999 is adjusted against the Design 1 invoice and is not additional to the total above.</li>
-                            <li>Delays in approvals or payments will proportionately revise the project programme.</li>
-                        </ol>
+                            <li><Ed k="7ed2b5a5" ctl={edCtl}>GST is added on each invoice at the prevailing rate.</Ed></li>
+                            <li><Ed k="12eac516" ctl={edCtl}>The Project Initiation Fee of ₹4,999 is adjusted against the Design 1 invoice and is not additional to the total above.</Ed></li>
+                            <li><Ed k="db32bcf7" ctl={edCtl}>Delays in approvals or payments will proportionately revise the project programme.</Ed></li>
+                        </EdList>
                     </div>
 
                     <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2">5 · PROJECT INITIATION FEE</h4>
+                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="73f70e57" ctl={edCtl}>5 · PROJECT INITIATION FEE</Ed></h4>
                         <div className="grid grid-cols-2 gap-4 border border-slate-200 rounded p-4 bg-slate-50">
                             <div>
                                 <strong className="text-slate-800 text-xs block mb-1">Covered by the fee</strong>
-                                <ul className="list-disc pl-4 text-slate-500">
-                                    <li>Site measurement</li>
-                                    <li>Requirement documentation</li>
-                                    <li>Preliminary scope validation</li>
-                                </ul>
+                                <EdList k="annex.5-project-initiation-fee" ctl={edCtl} as="ul" className="list-disc pl-4 text-slate-500">
+                                    <li><Ed k="c7d19951" ctl={edCtl}>Site measurement</Ed></li>
+                                    <li><Ed k="c944f2ce" ctl={edCtl}>Requirement documentation</Ed></li>
+                                    <li><Ed k="a2587158" ctl={edCtl}>Preliminary scope validation</Ed></li>
+                                </EdList>
                             </div>
                             <div>
                                 <strong className="text-slate-800 text-xs block mb-1 font-bold">Not covered by the fee</strong>
-                                <ul className="list-disc pl-4 text-slate-400">
-                                    <li>✕ Layouts and space planning</li>
-                                    <li>✕ 3D visualisation</li>
-                                    <li>✕ GFC and joinery drawings</li>
-                                    <li>✕ Schedule of Finishes</li>
-                                    <li>✕ Final BOQ</li>
-                                </ul>
+                                <EdList k="annex.5-project-initiation-fee.2" ctl={edCtl} as="ul" className="list-disc pl-4 text-slate-400">
+                                    <li><Ed k="dcaf0421" ctl={edCtl}>✕ Layouts and space planning</Ed></li>
+                                    <li><Ed k="0a39764b" ctl={edCtl}>✕ 3D visualisation</Ed></li>
+                                    <li><Ed k="ef057aa4" ctl={edCtl}>✕ GFC and joinery drawings</Ed></li>
+                                    <li><Ed k="596fda86" ctl={edCtl}>✕ Schedule of Finishes</Ed></li>
+                                    <li><Ed k="ea7bccb7" ctl={edCtl}>✕ Final BOQ</Ed></li>
+                                </EdList>
                             </div>
                         </div>
                     </div>
 
                     <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2">6 · SCOPE, QUANTITIES AND VARIATIONS</h4>
-                        <ol className="list-decimal pl-4 space-y-1 text-slate-600">
-                            <li>Only items listed in the proposal booklet are included. Any item not written into the scope is not included.</li>
-                            <li>Quantities are as presently measured or estimated and are re-verified at site validation. Variation of more than 5% on any line will be notified in writing with the revised value before the affected work is ordered or commenced. Quantities are then adjusted to actual measured quantity at the rates underlying this proposal.</li>
-                            <li>Any addition, deletion or specification change after design freeze will be quoted as a written variation and becomes payable with the next stage invoice once approved.</li>
-                            <li>Items marked as actuals are billed at actual supplier cost against the client's approved selection and are not part of the fixed value. An indicative allowance for electrical fittings will be issued with the Schedule of Finishes for budgeting.</li>
-                            <li>Kitchen, wardrobes, beds, lofts and bathroom carpentry are not priced in this proposal. If required, {settings?.companyName || 'the studio'} will issue a priced addendum with quantities and specifications for approval, and the order value will be revised.</li>
-                        </ol>
+                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="ec65632e" ctl={edCtl}>6 · SCOPE, QUANTITIES AND VARIATIONS</Ed></h4>
+                        <EdList k="annex.6-scope-quantities-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
+                            <li><Ed k="d0bdccbc" ctl={edCtl}>Only items listed in the proposal booklet are included. Any item not written into the scope is not included.</Ed></li>
+                            <li><Ed k="49611ff2" ctl={edCtl}>Quantities are as presently measured or estimated and are re-verified at site validation. Variation of more than 5% on any line will be notified in writing with the revised value before the affected work is ordered or commenced. Quantities are then adjusted to actual measured quantity at the rates underlying this proposal.</Ed></li>
+                            <li><Ed k="f8a0f6fc" ctl={edCtl}>Any addition, deletion or specification change after design freeze will be quoted as a written variation and becomes payable with the next stage invoice once approved.</Ed></li>
+                            <li><Ed k="844cdbdf" ctl={edCtl}>Items marked as actuals are billed at actual supplier cost against the client's approved selection and are not part of the fixed value. An indicative allowance for electrical fittings will be issued with the Schedule of Finishes for budgeting.</Ed></li>
+                            {/*
+                              This clause used to assert flatly that no carpentry
+                              was priced, on every proposal — including ones whose
+                              scope table carried nine lakh rupees of it. A clause
+                              the client signs cannot contradict the priced scope
+                              two pages earlier, so it now follows the BOQ.
+                            */}
+                            <li>{hasAnyCarpentryIncluded
+                                ? <>Carpentry priced in this proposal is limited to the items listed in the scope of works. Any kitchen, wardrobe, bed, loft or bathroom carpentry not listed there is not priced. If required, {settings?.companyName || 'the studio'} will issue a priced addendum with quantities and specifications for approval, and the order value will be revised.</>
+                                : <>Kitchen, wardrobes, beds, lofts and bathroom carpentry are not priced in this proposal. If required, {settings?.companyName || 'the studio'} will issue a priced addendum with quantities and specifications for approval, and the order value will be revised.</>
+                            }</li>
+                        </EdList>
                     </div>
 
                     <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2">7 · EXCLUSIONS</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-slate-500 text-[11px]">
-                            <ul className="space-y-1">
-                                {annexureExclusionsList.col1.map((exc, idx) => (
-                                    <li key={idx}>✕ {exc}</li>
-                                ))}
-                            </ul>
-                            <ul className="space-y-1">
-                                {annexureExclusionsList.col2.map((exc, idx) => (
-                                    <li key={idx}>✕ {exc}</li>
-                                ))}
-                            </ul>
-                        </div>
+                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="beca6efc" ctl={edCtl}>7 · EXCLUSIONS</Ed></h4>
+
+                        {/* Studio-only. `no-print` keeps it out of print, and the
+                            PDF clone hides the same class, so a client never sees it. */}
+                        {edCtl.on && scopeContradictions.length > 0 && (
+                            <div className="no-print mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                                <span className="font-bold uppercase tracking-wider block mb-1">
+                                    Check before sending — {scopeContradictions.length} exclusion{scopeContradictions.length > 1 ? 's' : ''} the BOQ may contradict
+                                </span>
+                                <ul className="space-y-0.5">
+                                    {scopeContradictions.map(c => (
+                                        <li key={c.key}>
+                                            <span className="font-semibold">{c.label}</span> is listed as excluded, but the BOQ prices{' '}
+                                            {c.evidence.map(e => `"${e}"`).join(', ')}.
+                                        </li>
+                                    ))}
+                                </ul>
+                                <span className="block mt-1 opacity-80">
+                                    Edit the list below if the exclusion is wrong. This note is never shown to the client.
+                                </span>
+                            </div>
+                        )}
+                        {/*
+                          One list, laid out in two columns by CSS rather than
+                          split into two arrays. Splitting it meant adding an
+                          exclusion to the left column could never rebalance
+                          into the right, and the two halves were separately
+                          overridable — so a studio edit could leave the section
+                          half derived and half hand-written.
+
+                          The ✕ is a CSS marker, not content: it must not end up
+                          inside an editable run where it can be deleted or
+                          duplicated.
+                        */}
+                        <EdList
+                            k="annex.7-exclusions"
+                            ctl={edCtl}
+                            as="ul"
+                            className="ff-x-list text-slate-500 text-[11px] space-y-1"
+                        >
+                            {[...annexureExclusionsList.col1, ...annexureExclusionsList.col2].map((exc, idx) => (
+                                <li key={idx}>{exc}</li>
+                            ))}
+                        </EdList>
                     </div>
 
                     <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2">8 · PROGRAMME AND START CONDITIONS</h4>
-                        <p>The programme is {totalDays} working days, excluding Sundays and public holidays, comprising {designDays} working days of design and {executionDays} working days of site execution. It is calculated from the date on which all four of the following are in place:</p>
-                        <ul className="list-disc pl-6 text-slate-600 mt-2">
-                            <li>Design and material selection freeze, with the Schedule of Finishes approved in writing</li>
-                            <li>Receipt of the required stage payment</li>
-                            <li>Availability of the site for uninterrupted work, vacant and free of stored goods</li>
-                            <li>Society permissions, work timings and lift or hoist access confirmed</li>
-                        </ul>
+                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="32cbf8a9" ctl={edCtl}>8 · PROGRAMME AND START CONDITIONS</Ed></h4>
+                        <p><Ed k="annex.8-programme-intro" ctl={edCtl}>The site programme is {totalDays} working days, excluding Sundays and public holidays. Design and planning runs for approximately {designDays} working days before it and is not counted within it. The site programme is calculated from the date on which all four of the following are in place:</Ed></p>
+                        <EdList k="annex.8-programme-and-start" ctl={edCtl} as="ul" className="list-disc pl-6 text-slate-600 mt-2">
+                            <li><Ed k="234b3c76" ctl={edCtl}>Design and material selection freeze, with the Schedule of Finishes approved in writing</Ed></li>
+                            <li><Ed k="8ce93c71" ctl={edCtl}>Receipt of the required stage payment</Ed></li>
+                            <li><Ed k="eccf2fa5" ctl={edCtl}>Availability of the site for uninterrupted work, vacant and free of stored goods</Ed></li>
+                            <li><Ed k="74529f93" ctl={edCtl}>Society permissions, work timings and lift or hoist access confirmed</Ed></li>
+                        </EdList>
                     </div>
 
                     <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2">9 · ASSUMPTIONS AND CLIENT RESPONSIBILITIES</h4>
+                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="1ecb13b3" ctl={edCtl}>9 · ASSUMPTIONS AND CLIENT RESPONSIBILITIES</Ed></h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                             <div>
-                                <span className="font-bold text-slate-800 block mb-1">Assumptions</span>
-                                <ul className="list-disc pl-4 space-y-1 text-slate-500">
-                                    <li>Single continuous mobilisation, flat vacant and available</li>
-                                    <li>Existing walls, slab, flooring and plumbing sound and reusable as-is</li>
-                                    <li>Existing distribution board adequate for the proposed load</li>
-                                    <li>Normal society working hours, lift or hoist access available</li>
-                                    <li>Water and power available at site for construction use</li>
-                                    <li>No structural alteration, waterproofing or slab work required</li>
-                                </ul>
+                                <span className="font-bold text-slate-800 block mb-1"><Ed k="8b593995" ctl={edCtl}>Assumptions</Ed></span>
+                                <EdList k="annex.9-assumptions-and-client" ctl={edCtl} as="ul" className="list-disc pl-4 space-y-1 text-slate-500">
+                                    <li><Ed k="290937c5" ctl={edCtl}>Single continuous mobilisation, flat vacant and available</Ed></li>
+                                    <li><Ed k="3fd1e7c5" ctl={edCtl}>Existing walls, slab, flooring and plumbing sound and reusable as-is</Ed></li>
+                                    <li><Ed k="1f030dd5" ctl={edCtl}>Existing distribution board adequate for the proposed load</Ed></li>
+                                    <li><Ed k="bc0d9cf4" ctl={edCtl}>Normal society working hours, lift or hoist access available</Ed></li>
+                                    <li><Ed k="9281477b" ctl={edCtl}>Water and power available at site for construction use</Ed></li>
+                                    <li><Ed k="a515cc89" ctl={edCtl}>No structural alteration, waterproofing or slab work required</Ed></li>
+                                </EdList>
                             </div>
                             <div>
-                                <span className="font-bold text-slate-800 block mb-1">Client responsibilities</span>
-                                <ul className="list-disc pl-4 space-y-1 text-slate-500">
-                                    <li>Timely approval of layouts, 3D views, samples and the Schedule of Finishes</li>
-                                    <li>Society intimation, permissions and any refundable deposits</li>
-                                    <li>Statutory, municipal and society charges</li>
-                                    <li>Vacant possession of the flat for the execution period</li>
-                                    <li>Selection of electrical fittings and appliances within the agreed window</li>
-                                    <li>Stage payments in advance of each stage</li>
-                                    <li>Attendance at the joint snag inspection before handover</li>
-                                </ul>
+                                <span className="font-bold text-slate-800 block mb-1"><Ed k="6f91b73a" ctl={edCtl}>Client responsibilities</Ed></span>
+                                <EdList k="annex.9-assumptions-and-client.2" ctl={edCtl} as="ul" className="list-disc pl-4 space-y-1 text-slate-500">
+                                    <li><Ed k="98841019" ctl={edCtl}>Timely approval of layouts, 3D views, samples and the Schedule of Finishes</Ed></li>
+                                    <li><Ed k="fe404b04" ctl={edCtl}>Society intimation, permissions and any refundable deposits</Ed></li>
+                                    <li><Ed k="8b9f6596" ctl={edCtl}>Statutory, municipal and society charges</Ed></li>
+                                    <li><Ed k="3ac27417" ctl={edCtl}>Vacant possession of the flat for the execution period</Ed></li>
+                                    <li><Ed k="bc982e1e" ctl={edCtl}>Selection of electrical fittings and appliances within the agreed window</Ed></li>
+                                    <li><Ed k="bb5a4459" ctl={edCtl}>Stage payments in advance of each stage</Ed></li>
+                                    <li><Ed k="454e9d53" ctl={edCtl}>Attendance at the joint snag inspection before handover</Ed></li>
+                                </EdList>
                             </div>
                         </div>
                     </div>
 
                     <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2">10 · MATERIALS, SAMPLES AND WORKMANSHIP</h4>
-                        <ol className="list-decimal pl-4 space-y-1 text-slate-600">
-                            <li>Final brands, shades and finishes are selected against physical samples during the Schedule of Finishes stage and recorded in writing.</li>
+                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="054a2193" ctl={edCtl}>10 · MATERIALS, SAMPLES AND WORKMANSHIP</Ed></h4>
+                        <EdList k="annex.10-materials-samples-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
+                            <li><Ed k="012d8dd8" ctl={edCtl}>Final brands, shades and finishes are selected against physical samples during the Schedule of Finishes stage and recorded in writing.</Ed></li>
                             <li>Where a specified brand is unavailable, {settings?.companyName || 'FFDS'} will propose an equivalent of the same or higher grade for written approval before ordering. No substitution will be made without approval.</li>
-                            <li>Carpentry is built to approved GFC drawings. Exposed surfaces are laminated, edges banded and carcass interiors finished. Electrical points are tested and recorded before ceiling closure.</li>
-                        </ol>
+                            <li><Ed k="03e3b121" ctl={edCtl}>Carpentry is built to approved GFC drawings. Exposed surfaces are laminated, edges banded and carcass interiors finished. Electrical points are tested and recorded before ceiling closure.</Ed></li>
+                        </EdList>
                     </div>
 
                     <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2">11 · HANDOVER, WARRANTY AND VALIDITY</h4>
-                        <ol className="list-decimal pl-4 space-y-1 text-slate-600">
-                            <li>Handover follows closure of the joint snag list, deep cleaning of the worked areas, and release of the handover dossier and warranty note.</li>
+                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="c6725020" ctl={edCtl}>11 · HANDOVER, WARRANTY AND VALIDITY</Ed></h4>
+                        <EdList k="annex.11-handover-warranty-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
+                            <li><Ed k="f5d39714" ctl={edCtl}>Handover follows closure of the joint snag list, deep cleaning of the worked areas, and release of the handover dossier and warranty note.</Ed></li>
                             <li>{settings?.companyName || 'FFDS'} provides a workmanship warranty of 6 months from handover on carpentry executed under this contract, covering manufacturing and installation defects.</li>
-                            <li>Manufacturer warranties on hardware, laminates, paint and electrical fittings apply as issued by the respective brand.</li>
-                            <li>Warranty excludes damage arising from misuse, water ingress, alteration by others and normal wear.</li>
+                            <li><Ed k="27cd97b9" ctl={edCtl}>Manufacturer warranties on hardware, laminates, paint and electrical fittings apply as issued by the respective brand.</Ed></li>
+                            <li><Ed k="992a1058" ctl={edCtl}>Warranty excludes damage arising from misuse, water ingress, alteration by others and normal wear.</Ed></li>
                             <li>This proposal is valid for 15 days from {today} and supersedes all prior estimates, verbal indications and written communication on this project. Where any earlier document conflicts, the proposal booklet and this Annexure prevail.</li>
-                            <li>On confirmation, the turnkey agreement and the final BOQ together form the contract; the proposal booklet forms the basis of scope.</li>
-                        </ol>
+                            <li><Ed k="9dbf30b1" ctl={edCtl}>On confirmation, the turnkey agreement and the final BOQ together form the contract; the proposal booklet forms the basis of scope.</Ed></li>
+                        </EdList>
                     </div>
 
                     <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2">12 · ACKNOWLEDGEMENT</h4>
-                        <p>The client acknowledges having read and accepted these Commercial Terms & Conditions together with the Design-led Turnkey Proposal booklet for the project named above.</p>
+                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="1db9c1f6" ctl={edCtl}>12 · ACKNOWLEDGEMENT</Ed></h4>
+                        <p><Ed k="d8bdaf37" ctl={edCtl}>The client acknowledges having read and accepted these Commercial Terms & Conditions together with the Design-led Turnkey Proposal booklet for the project named above.</Ed></p>
                         
                         <div className="grid grid-cols-2 gap-8 mt-6 pt-6 border-t border-slate-200">
                             <div>
                                 <span className="text-[10px] text-slate-400 block font-bold">FOR {(settings?.companyName || 'FORM FACTORS DESIGN STUDIO').toUpperCase()}</span>
                                 <div className="h-8 border-b border-slate-200 my-2"></div>
-                                <span className="text-[8px] text-slate-400">AUTHORISED SIGNATORY</span>
+                                <span className="text-[8px] text-slate-400"><Ed k="300d015e" ctl={edCtl}>AUTHORISED SIGNATORY</Ed></span>
                             </div>
                             <div>
-                                <span className="text-[10px] text-slate-400 block font-bold">ACCEPTED & APPROVED BY CLIENT</span>
+                                <span className="text-[10px] text-slate-400 block font-bold"><Ed k="865936f7_2" ctl={edCtl}>ACCEPTED & APPROVED BY CLIENT</Ed></span>
                                 <div className="h-8 border-b border-slate-200 my-2"></div>
                                 <span className="text-[8px] text-slate-400">{projectContext.clientName?.toUpperCase() || 'CLIENT'}</span>
                             </div>
@@ -2280,8 +2724,8 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                             <div>
-                                <h3 className="font-bold text-lg text-slate-900">Edit Material Specifications</h3>
-                                <p className="text-xs text-slate-500">Update values to override dynamic specifications for this project.</p>
+                                <h3 className="font-bold text-lg text-slate-900"><Ed k="9dfb4049" ctl={edCtl}>Edit Material Specifications</Ed></h3>
+                                <p className="text-xs text-slate-500"><Ed k="dd276d14" ctl={edCtl}>Update values to override dynamic specifications for this project.</Ed></p>
                             </div>
                             <button 
                                 onClick={() => setIsEditingSpecs(false)}

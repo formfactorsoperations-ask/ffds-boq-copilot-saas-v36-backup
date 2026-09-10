@@ -2,15 +2,45 @@ import * as fs from 'fs';
 import http from "http";
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
+import { createServer as createViteServer, loadEnv } from "vite";
 import cors from "cors";
 import { getAi } from "./services/aiClient";
 import { classifyRoom, defaultCeiling } from "./lib/takeoff";
 
-// It's important to use the process.env API key when running on the server
+/*
+  The server reads .env for itself.
+
+  vite.config.ts calls loadEnv and hands GEMINI_API_KEY to the browser bundle
+  through `define`, so the client believed AI was available while every /api
+  route on this process answered "Gemini API Key missing on server". Nothing
+  loaded .env into Node — there is no dotenv here — and the only symptom was
+  analyzeFloorPlan returning an empty array, which the UI rendered as no change
+  at all. "Analyze Plan does nothing" was six dead endpoints.
+
+  loadEnv rather than dotenv: it is already a dependency, and it applies exactly
+  the same file precedence the client build uses, so the two cannot disagree
+  about which key is in force.
+
+  A real environment variable always wins. In production the key comes from the
+  host, and a stale .env sitting in the image must not quietly replace it.
+*/
+const fileEnv = loadEnv(process.env.NODE_ENV || 'development', process.cwd(), '');
+for (const [k, v] of Object.entries(fileEnv)) {
+  if (process.env[k] === undefined && v !== '') process.env[k] = v;
+}
+
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  /*
+    3000 is the default, not a requirement.
+
+    The port was a literal, so a second instance — a reviewer's, a test run,
+    anything started while the studio's own dev server is up — died on
+    EADDRINUSE with nowhere to go. Nothing here needs 3000 specifically: the
+    client calls /api/* relative to whatever origin served it, and the sign-off
+    links fall back to window.location.origin.
+  */
+  const PORT = Number(process.env.PORT) || 3000;
 
   process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);

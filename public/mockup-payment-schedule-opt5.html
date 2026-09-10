@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Schedule — Option 5: Client Value-Deliverable Hub</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-serif { font-family: 'Playfair Display', serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .shadow-card { box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen p-4 sm:p-8">
+
+  <div id="toast-notify" class="fixed top-5 right-5 z-50 transform translate-y-[-150%] transition-transform duration-300 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-semibold max-w-md">
+    <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400 shrink-0"></i>
+    <span id="toast-message">Action processed</span>
+  </div>
+
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Navigation Bar -->
+    <div class="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-card text-xs">
+      <div class="flex items-center gap-2">
+        <a href="/mockup-payment-schedule.html" class="text-indigo-600 font-bold hover:underline flex items-center gap-1">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> All 5 Options Suite
+        </a>
+        <span class="text-slate-300">•</span>
+        <span class="font-semibold text-slate-600">Option 5 of 5</span>
+      </div>
+      <div class="flex items-center gap-1.5 font-medium">
+        <span class="text-slate-400">Jump to:</span>
+        <a href="/mockup-payment-schedule-opt1.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 1</a>
+        <a href="/mockup-payment-schedule-opt2.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 2</a>
+        <a href="/mockup-payment-schedule-opt3.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 3</a>
+        <a href="/mockup-payment-schedule-opt4.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 4</a>
+      </div>
+    </div>
+
+    <!-- Header Card -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-card space-y-3">
+      <div class="flex items-center gap-2">
+        <span class="px-2.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-extrabold uppercase tracking-wider">
+          Option 5: Client-Friendly Value Hub
+        </span>
+        <span class="text-xs text-slate-400 font-medium">Lodha Amara 2BHK • Homeowner White-Label View</span>
+      </div>
+      <h1 class="font-serif text-2xl sm:text-3xl font-bold text-slate-900">Client-Friendly Value-Deliverable Hub</h1>
+      <p class="text-xs sm:text-sm text-slate-500 leading-relaxed">
+        Frames milestone billing from the client's emotional and visual perspective. Highlights physical room deliverables rather than contractor codes, backed by Clause 6.4 snag guarantees and instant UPI QR integration.
+      </p>
+    </div>
+
+    <!-- Guarantee Banner -->
+    <div class="bg-amber-50/70 border border-amber-200 rounded-2xl p-5 flex items-start gap-3.5 text-xs text-amber-950">
+      <i data-lucide="shield-check" class="w-5 h-5 text-amber-600 shrink-0 mt-0.5"></i>
+      <div class="space-y-1">
+        <span class="font-bold text-sm">Form Factors Fair Handover Guarantee (Clause 6.4)</span>
+        <p class="text-amber-900/90 text-xs leading-relaxed">
+          Your final handover payment unlocks keys and initiates your 1-year structural defect warranty. Walkthrough touch-ups and snagging items are formally addressed under warranty and do not delay your move-in date.
+        </p>
+      </div>
+    </div>
+
+    <!-- Visual Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      
+      <!-- Card 1 -->
+      <div class="bg-white rounded-2xl border border-emerald-200 p-5 shadow-card space-y-3 relative">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-slate-400 font-semibold">Stage 1 of 4</span>
+          <span class="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">DELIVERED ✓</span>
+        </div>
+        <h3 class="text-base font-bold text-slate-900">Design Visuals & 3D Walkthrough</h3>
+        <p class="text-xs text-slate-500 leading-relaxed">
+          Photorealistic renders of your Living Room, Kitchen & Master Bedroom, fully approved by you.
+        </p>
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-mono">
+          <span class="font-bold text-slate-900">₹3,80,000</span>
+          <button onclick="showToast('Downloading Approved 3D Visuals Pack...')" class="text-indigo-600 font-sans font-bold hover:underline">
+            View Visuals →
+          </button>
+        </div>
+      </div>
+
+      <!-- Card 2 (Due Now) -->
+      <div id="client-card-due" class="bg-indigo-50/50 rounded-2xl border-2 border-indigo-500 p-5 shadow-md space-y-3 relative">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-indigo-700 font-bold">Stage 2 of 4</span>
+          <span class="text-[10px] font-extrabold bg-indigo-600 text-white px-2 py-0.5 rounded">DUE NOW</span>
+        </div>
+        <h3 class="text-base font-bold text-slate-900">Site Mobilization & Raw Timber</h3>
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Unlocks: Civil site demolition, electrical wiring rough-ins, and factory order for CenturyPly BWR boards.
+        </p>
+        <div class="pt-3 border-t border-indigo-200/80 flex items-center justify-between text-xs">
+          <span class="font-bold font-mono text-slate-900 text-base">₹6,30,000</span>
+          <button onclick="simulateQrPayment()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs cursor-pointer">
+            Pay via UPI / QR →
+          </button>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-3 opacity-80">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-slate-400 font-semibold">Stage 3 of 4</span>
+          <span class="text-[10px] text-slate-400">Target 18 Sep</span>
+        </div>
+        <h3 class="text-base font-bold text-slate-900">Modular Woodwork Delivery</h3>
+        <p class="text-xs text-slate-500 leading-relaxed">
+          Unlocks: Kitchen carcasses delivery at site, wardrobes skeleton installation & Hafele hardware testing.
+        </p>
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-mono">
+          <span class="font-bold text-slate-700">₹8,40,000</span>
+          <span class="text-slate-400 font-sans text-[11px]">Pending Step 2</span>
+        </div>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-3 opacity-80">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-slate-400 font-semibold">Stage 4 of 4</span>
+          <span class="text-[10px] text-slate-400">Target 05 Oct</span>
+        </div>
+        <h3 class="text-base font-bold text-slate-900">Finishes, Quartz & Painting</h3>
+        <p class="text-xs text-slate-500 leading-relaxed">
+          Unlocks: Asian Paints Royale luxury emulsion, Caesarstone quartz installation & lighting circuits.
+        </p>
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-mono">
+          <span class="font-bold text-slate-700">₹4,20,000</span>
+          <span class="text-slate-400 font-sans text-[11px]">Upcoming</span>
+        </div>
+      </div>
+
+      <!-- Card 5 -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-3 opacity-80">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-emerald-700 font-bold flex items-center gap-1"><i data-lucide="key" class="w-3.5 h-3.5"></i> Final Step</span>
+          <span class="text-[10px] text-slate-400">Target 20 Oct</span>
+        </div>
+        <h3 class="text-base font-bold text-slate-900">Keys & Handover Pack</h3>
+        <p class="text-xs text-slate-500 leading-relaxed">
+          Unlocks: Brass keys, digital warranties, touch-up kit & 12-month defect care pack.
+        </p>
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-mono">
+          <span class="font-bold text-slate-700">₹2,10,000</span>
+          <span class="text-slate-400 font-sans text-[11px]">Retainer</span>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast-notify');
+      document.getElementById('toast-message').innerText = msg;
+      toast.classList.remove('translate-y-[-150%]');
+      toast.classList.add('translate-y-0');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0');
+        toast.classList.add('translate-y-[-150%]');
+      }, 3500);
+    }
+
+    function simulateQrPayment() {
+      const card = document.getElementById('client-card-due');
+      card.className = "bg-white rounded-2xl border border-emerald-200 p-5 shadow-card space-y-3 relative";
+      card.innerHTML = `
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-slate-400 font-semibold">Stage 2 of 4</span>
+          <span class="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">PAID VIA UPI ✓</span>
+        </div>
+        <h3 class="text-base font-bold text-slate-900">Site Mobilization & Raw Timber</h3>
+        <p class="text-xs text-slate-500 leading-relaxed">
+          Cleared on 27 Aug 2026. Timber procurement initiated with CenturyPly.
+        </p>
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-mono">
+          <span class="font-bold text-slate-900">₹6,30,000</span>
+          <span class="text-emerald-700 font-sans text-xs font-bold">Receipt Generated</span>
+        </div>
+      `;
+      showToast('UPI payment simulation successful! Money receipt generated for client.');
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

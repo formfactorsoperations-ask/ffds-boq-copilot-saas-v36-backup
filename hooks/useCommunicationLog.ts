@@ -8,18 +8,42 @@ export function useCommunicationLog(projectId: string, studioId: string) {
   const { settings, loading: settingsLoading } = useStudioSettings(studioId);
   const [logs, setLogs] = useState<CommunicationLogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const [paymentMilestones, setPaymentMilestones] = useState<PaymentMilestone[]>([]);
   
   useEffect(() => {
-    if (!projectId || !db) return;
-    
-    const logRef = collection(db, `projects/${projectId}/communicationLog`);
-    const unsubscribe = onSnapshot(logRef, (snapshot) => {
-      const data = snapshot.docs.map(d => d.data() as CommunicationLogItem);
-      setLogs(data);
+    /*
+      Every exit from this effect has to clear `loading`.
+
+      It began at `true` and was only ever cleared inside the snapshot
+      callback, so any path that never reaches one — no project id, no
+      Firestore, or a listen that fails — left the tracker showing
+      "Loading tracker..." for ever. That is what a missing security rule
+      looked like from the outside: not an error, just a page that never
+      arrived.
+    */
+    if (!projectId || !db) {
       setLoading(false);
-    });
-    
+      return;
+    }
+
+    const logRef = collection(db, `projects/${projectId}/communicationLog`);
+    const unsubscribe = onSnapshot(
+      logRef,
+      (snapshot) => {
+        const data = snapshot.docs.map(d => d.data() as CommunicationLogItem);
+        setLogs(data);
+        setError(null);
+        setLoading(false);
+      },
+      (err) => {
+        // Most often a rules denial. Say so rather than hang.
+        console.error('Communication log listener failed', err);
+        setError(err as Error);
+        setLoading(false);
+      },
+    );
+
     return () => unsubscribe();
   }, [projectId]);
 
@@ -27,12 +51,16 @@ export function useCommunicationLog(projectId: string, studioId: string) {
     if (!projectId || !db) return;
     
     const pRef = doc(db, 'projects', projectId);
-    const unSub = onSnapshot(pRef, (docSnap) => {
-        if(docSnap.exists()){
-            const data = docSnap.data();
-            setPaymentMilestones(data.context?.paymentMilestones || []);
+    const unSub = onSnapshot(
+      pRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setPaymentMilestones(data.context?.paymentMilestones || []);
         }
-    });
+      },
+      (err) => console.error('Project listener failed (payment milestones)', err),
+    );
     return () => unSub();
   }, [projectId]);
   
@@ -86,6 +114,7 @@ export function useCommunicationLog(projectId: string, studioId: string) {
       sentCount,
       pendingCount,
       naCount,
-      loading: loading || settingsLoading
+      loading: loading || settingsLoading,
+      error
   };
 }

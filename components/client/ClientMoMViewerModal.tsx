@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 import { db } from '../../services/firebaseClient';
 import { doc, updateDoc } from 'firebase/firestore';
 import {
@@ -184,7 +185,13 @@ export const ClientMoMViewerModal: React.FC<ClientMoMViewerModalProps> = ({
                 margin: [10, 10, 10, 10],
                 filename: `Minutes_of_Meeting_${momRef}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    // Tailwind v4 colours are oklch/oklab; html2canvas rejects
+                    // them and the export falls through to window.print().
+                    onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc),
+                },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
 

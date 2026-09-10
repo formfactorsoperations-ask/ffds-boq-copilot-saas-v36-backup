@@ -18,7 +18,7 @@ interface Props {
 }
 
 export function CommunicationTracker({ projectId, studioId, projectContext, teamMembers, currentUserName, currentUserId }: Props) {
-    const { designItems, executionItems, healthScore, sentCount, pendingCount, naCount, loading, mergedItems } = useCommunicationLog(projectId, studioId);
+    const { designItems, executionItems, healthScore, sentCount, pendingCount, naCount, loading, mergedItems, error } = useCommunicationLog(projectId, studioId);
     const [activeTab, setActiveTab] = useState<'design' | 'execution'>('design');
     const [selectedItem, setSelectedItem] = useState<{template: CommunicationTemplateItem, log: CommunicationLogItem} | null>(null);
     const [modalStep, setModalStep] = useState<1 | 2>(1);
@@ -175,6 +175,33 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
     };
 
     if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">Loading tracker...</div>;
+
+    /*
+      A failed listener used to be indistinguishable from a slow one: the page
+      simply never finished loading. Saying what went wrong is the difference
+      between "the app is broken" and "the rules need deploying".
+    */
+    if (error) {
+        const denied = (error as any)?.code === 'permission-denied';
+        return (
+            <div className="p-8">
+                <div className="max-w-xl mx-auto rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+                    <span className="font-bold block mb-1">The communication log could not be read</span>
+                    {denied ? (
+                        <>
+                            Firestore denied access to this project's communication log. This
+                            usually means the security rules for{' '}
+                            <code className="mx-1 px-1 rounded bg-amber-100">projects/&lt;id&gt;/communicationLog</code>{' '}
+                            have not been deployed yet.
+                        </>
+                    ) : (
+                        <>Something went wrong reading the log: {String((error as any)?.message || error)}</>
+                    )}
+                    <span className="block mt-2 text-xs opacity-80">Nothing has been lost — this page only reads.</span>
+                </div>
+            </div>
+        );
+    }
 
     const itemsToShow = activeTab === 'design' ? designItems : executionItems;
     

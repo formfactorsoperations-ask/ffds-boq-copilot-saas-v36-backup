@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Schedule — Option 2: Dual-Track Workstream</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-serif { font-family: 'Playfair Display', serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .shadow-card { box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen p-4 sm:p-8">
+
+  <!-- Toast -->
+  <div id="toast-notify" class="fixed top-5 right-5 z-50 transform translate-y-[-150%] transition-transform duration-300 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-semibold max-w-md">
+    <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400 shrink-0"></i>
+    <span id="toast-message">Action processed</span>
+  </div>
+
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Navigation Bar -->
+    <div class="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-card text-xs">
+      <div class="flex items-center gap-2">
+        <a href="/mockup-payment-schedule.html" class="text-indigo-600 font-bold hover:underline flex items-center gap-1">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> All 5 Options Suite
+        </a>
+        <span class="text-slate-300">•</span>
+        <span class="font-semibold text-slate-600">Option 2 of 5</span>
+      </div>
+      <div class="flex items-center gap-1.5 font-medium">
+        <span class="text-slate-400">Jump to:</span>
+        <a href="/mockup-payment-schedule-opt1.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 1</a>
+        <a href="/mockup-payment-schedule-opt3.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 3</a>
+        <a href="/mockup-payment-schedule-opt4.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 4</a>
+        <a href="/mockup-payment-schedule-opt5.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 5</a>
+      </div>
+    </div>
+
+    <!-- Header Card -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-card space-y-3">
+      <div class="flex items-center gap-2">
+        <span class="px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-extrabold uppercase tracking-wider">
+          Option 2: Dual-Track Workstream
+        </span>
+        <span class="text-xs text-slate-400 font-medium">Lodha Amara 2BHK • Separate Design & Works Contracts</span>
+      </div>
+      <h1 class="font-serif text-2xl sm:text-3xl font-bold text-slate-900">Synchronized Dual-Track Workstream</h1>
+      <p class="text-xs sm:text-sm text-slate-500 leading-relaxed">
+        Splits financial tracking into two autonomous tracks: <strong>Track A (Design Retainer)</strong> and <strong>Track B (Execution Works Tranches)</strong>. Protects studio intellectual property and design fee cash flow regardless of site delays or landlord approvals.
+      </p>
+    </div>
+
+    <!-- 2 Column Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      
+      <!-- TRACK A -->
+      <div class="bg-white rounded-2xl border border-emerald-200 p-6 shadow-card space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-emerald-100">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">
+              A
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-slate-900">Track A: Design Retainer</h2>
+              <p class="text-xs text-emerald-800 font-medium">SAC 998341 (Pure Architectural Design)</p>
+            </div>
+          </div>
+          <span class="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full border border-emerald-200">
+            100% SETTLED
+          </span>
+        </div>
+
+        <div class="text-2xl font-bold font-mono text-slate-900">₹3,80,000 <span class="text-xs font-sans text-slate-400 font-normal">+ 18% GST</span></div>
+
+        <div class="space-y-3">
+          <div class="p-3.5 bg-emerald-50/30 rounded-xl border border-emerald-100 flex justify-between items-center text-xs">
+            <div>
+              <div class="font-bold text-slate-800">D1: Concept & Layout Freeze (20%)</div>
+              <div class="text-[10px] text-slate-400">Cleared 12 Aug • UTR #9812</div>
+            </div>
+            <span class="font-mono font-bold text-slate-900">₹76,000</span>
+          </div>
+
+          <div class="p-3.5 bg-emerald-50/30 rounded-xl border border-emerald-100 flex justify-between items-center text-xs">
+            <div>
+              <div class="font-bold text-slate-800">D2: 3D Visuals & Moodboards (40%)</div>
+              <div class="text-[10px] text-slate-400">Cleared 19 Aug • UPI #4410</div>
+            </div>
+            <span class="font-mono font-bold text-slate-900">₹1,52,000</span>
+          </div>
+
+          <div class="p-3.5 bg-emerald-50/30 rounded-xl border border-emerald-100 flex justify-between items-center text-xs">
+            <div>
+              <div class="font-bold text-slate-800">D3: Final GFC Drawing Release (40%)</div>
+              <div class="text-[10px] text-slate-400">Cleared 24 Aug • Cheque #00921</div>
+            </div>
+            <span class="font-mono font-bold text-slate-900">₹1,52,000</span>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+          <span class="flex items-center gap-1.5"><i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i> Design IP Cleared</span>
+          <button onclick="showToast('Archived Design Invoices (3) downloaded in ZIP')" class="text-indigo-600 font-bold hover:underline">
+            Download Invoices →
+          </button>
+        </div>
+      </div>
+
+      <!-- TRACK B -->
+      <div class="bg-white rounded-2xl border-2 border-indigo-500 p-6 shadow-card space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-indigo-100">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">
+              B
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-slate-900">Track B: Execution Tranches</h2>
+              <p class="text-xs text-slate-500">SAC 9954 (Works Contract Turnkey)</p>
+            </div>
+          </div>
+          <span class="text-[10px] font-extrabold bg-amber-100 text-amber-900 px-2.5 py-1 rounded-full border border-amber-300">
+            ACTIVE ON SITE
+          </span>
+        </div>
+
+        <div class="text-2xl font-bold font-mono text-slate-900">₹21,00,000 <span class="text-xs font-sans text-slate-400 font-normal">+ 18% GST</span></div>
+
+        <div class="space-y-3">
+          <!-- E1 Active -->
+          <div id="track-b-e1" class="p-4 bg-indigo-50/50 rounded-xl border border-indigo-300 text-xs space-y-2.5">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="font-bold text-slate-900">E1: Procurement & First-Fix Advance (35%)</span>
+                <p class="text-slate-600 text-[11px] mt-0.5">Demolition, electrical rough-in & CenturyPly BWR board order</p>
+                <div class="text-amber-800 font-bold text-[10px] mt-1">Due in 2 days • Invoice #INV-042</div>
+              </div>
+              <span class="font-mono font-bold text-indigo-950 text-sm">₹7,35,000</span>
+            </div>
+            <div class="pt-2 border-t border-indigo-200/80 flex items-center justify-between">
+              <span class="text-[11px] text-slate-500">Gross incl. GST: ₹8,67,300</span>
+              <button onclick="recordTrackBPaid()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer">
+                Mark Paid →
+              </button>
+            </div>
+          </div>
+
+          <!-- E2 -->
+          <div class="p-3.5 bg-white rounded-xl border border-slate-200 flex justify-between items-center text-xs opacity-80">
+            <div>
+              <div class="font-bold text-slate-800">E2: Woodwork & Carcass Assembly (35%)</div>
+              <div class="text-[10px] text-slate-400">Target: 18 Sep 2026</div>
+            </div>
+            <span class="font-mono font-bold text-slate-700">₹7,35,000</span>
+          </div>
+
+          <!-- E3 -->
+          <div class="p-3.5 bg-white rounded-xl border border-slate-200 flex justify-between items-center text-xs opacity-80">
+            <div>
+              <div class="font-bold text-slate-800">E3: Finishes, Painting & Polish (20%)</div>
+              <div class="text-[10px] text-slate-400">Target: 05 Oct 2026</div>
+            </div>
+            <span class="font-mono font-bold text-slate-700">₹4,20,000</span>
+          </div>
+
+          <!-- E4 -->
+          <div class="p-3.5 bg-white rounded-xl border border-slate-200 flex justify-between items-center text-xs opacity-80">
+            <div>
+              <div class="font-bold text-slate-800">E4: Final Handover & Dossier (10%)</div>
+              <div class="text-[10px] text-slate-400">Target: 20 Oct 2026 (Retainer)</div>
+            </div>
+            <span class="font-mono font-bold text-slate-700">₹2,10,000</span>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast-notify');
+      document.getElementById('toast-message').innerText = msg;
+      toast.classList.remove('translate-y-[-150%]');
+      toast.classList.add('translate-y-0');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0');
+        toast.classList.add('translate-y-[-150%]');
+      }, 3500);
+    }
+
+    function recordTrackBPaid() {
+      const e1 = document.getElementById('track-b-e1');
+      e1.className = "p-3.5 bg-emerald-50/30 rounded-xl border border-emerald-200 text-xs space-y-1";
+      e1.innerHTML = `
+        <div class="flex justify-between items-center">
+          <div>
+            <span class="font-bold text-slate-900">E1: Procurement & First-Fix Advance (35%)</span>
+            <div class="text-[10px] text-emerald-700 font-bold">PAID & CLEARED • UTR #98210</div>
+          </div>
+          <span class="font-mono font-bold text-slate-900">₹7,35,000</span>
+        </div>
+      `;
+      showToast('Track B Milestone E1 recorded as PAID! Factory order released.');
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

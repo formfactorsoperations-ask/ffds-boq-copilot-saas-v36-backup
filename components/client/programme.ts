@@ -52,6 +52,15 @@ export interface ProgrammeStage {
    */
   hasSchedule: boolean;
   status: 'completed' | 'active' | 'pending';
+  /*
+    Work in this stage that is past the date it was meant to end and has not
+    been closed. The schedule already carries the client's later dates because
+    of it — this is what lets the portal say so, rather than quietly showing a
+    handover that has moved and letting the client work out why.
+  */
+  runningLate: boolean;
+  /** Working days the stage has slipped, when it is running late. */
+  lateByDays: number;
   /** Dated points within this stage, oldest first. */
   milestones: ProgrammeMilestone[];
 }
@@ -144,6 +153,8 @@ export function buildProgramme(
       month: '',
       hasSchedule: false,
       status: s.status,
+      runningLate: false,
+      lateByDays: 0,
       milestones: [],
     })),
     startDay: 0, endDay: 0, todayDay,
@@ -164,6 +175,8 @@ export function buildProgramme(
   const designOrder = result.tasks.filter(t => t.kind === 'design').map(t => t.id);
 
   const windows = new Map<number, { s: number; e: number }>();
+  /** The worst overrun among the tasks that make up each stage. */
+  const drift = new Map<number, number>();
   /**
    * Milestones are the schedule's own zero-duration tasks — the Design Gate,
    * Handover, anything the studio added as a marker. They are the only points
@@ -178,6 +191,9 @@ export function buildProgramme(
       s: cur ? Math.min(cur.s, t.startDay) : t.startDay,
       e: cur ? Math.max(cur.e, t.endDay) : t.endDay,
     });
+    if (t.overrunning) {
+      drift.set(stage, Math.max(drift.get(stage) || 0, t.driftDays));
+    }
     if (t.kind === 'milestone') {
       if (!marks.has(stage)) marks.set(stage, []);
       marks.get(stage)!.push({
@@ -185,7 +201,7 @@ export function buildProgramme(
         label: t.milestoneLabel || t.title,
         dateISO: t.startISO,
         day: t.startDay,
-        done: t.status === 'done' || !!t.actualEndISO,
+        done: t.status === 'completed' || !!t.actualEndISO,
         date: '',
       });
     }
@@ -305,6 +321,11 @@ export function buildProgramme(
         month: monthOf(toISO(w.s)),
         hasSchedule: w.real,
         status: s.status,
+        /* Only where the schedule actually has work for this stage. An
+           unscheduled stage is placed by inference, so it has nothing that
+           could be running late. */
+        runningLate: w.real && (drift.get(s.stageNumber) || 0) > 0,
+        lateByDays: w.real ? (drift.get(s.stageNumber) || 0) : 0,
         milestones: (marks.get(s.stageNumber) || [])
           .map(m => ({ ...m, date: dayOf(m.dateISO) }))
           .sort((a, b) => a.day - b.day),

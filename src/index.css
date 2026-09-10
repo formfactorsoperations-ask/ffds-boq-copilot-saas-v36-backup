@@ -698,10 +698,22 @@ body {
 
 .gt-bar {
   transform-style: preserve-3d;
+  /*
+    `left` and `width` are in the transition so a bar SLIDES when the schedule
+    recomputes rather than teleporting. That matters more than decoration: when
+    a stage overruns, every dependent bar moves right, and watching them travel
+    is what makes the cause visible. A jump just looks like a different chart.
+  */
   transition:
+    left 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 420ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 180ms ease,
     filter 180ms ease;
+  /* Opacity only on entry. The hover lift is a transform, and an entrance
+     keyframe holding a transform would win against it for the life of the
+     element. */
+  animation: gt-bar-in 380ms ease-out both;
   /* Layered over the inline background COLOUR (not shorthand -- a shorthand
      would wipe this image out). */
   background-image: linear-gradient(
@@ -727,6 +739,37 @@ body {
     0 20px 34px -14px rgba(10, 27, 51, 0.5);
 }
 
+/* The client's programme draws itself left to right, one stage after the next.
+   Opacity and a short slide only -- the bar's own width is positional data, so
+   animating it would make the chart briefly lie about the dates. */
+@keyframes pt-stage-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.pt-stage { animation: pt-stage-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-stage { animation: none !important; }
+}
+
+@keyframes gt-bar-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* The dates beside each bar. Muted, tabular, and out of the way until the row
+   is hovered -- present enough to read down the chart, quiet enough not to
+   compete with the bars themselves. */
+.gt-dates {
+  transition: left 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
+  opacity: 0.55;
+}
+.gt-row:hover .gt-dates { opacity: 1; }
+
+.gt-milestone-wrap {
+  transition: left 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* Critical path uses outline, not another box-shadow ring: box-shadow is
    already carrying the extrusion, and a second one declared inline would
    replace it outright rather than adding to it. */
@@ -737,20 +780,117 @@ body {
 
 /* A milestone is a point, not a span, so it gets a faceted marker rather than
    a bar: two lit halves meeting at a ridge. */
-.gt-milestone {
-  transform: rotate(45deg);
-  border-radius: 3px;
-  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease;
-  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.42), rgba(0, 0, 0, 0.28));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    0 4px 8px -3px rgba(10, 27, 51, 0.5);
+/* ══════════════════════════════════════════════════════════════════════════
+   MILESTONE FLAGS
+   A milestone is a moment, not a span, and a rotated square says "shape" where
+   a flag says "a thing happens here". The pennant waves slowly — slowly enough
+   to notice only if you look, which is the right amount for something that
+   sits on screen all day.
+
+   Both timelines use this: the studio's Gantt and the client's programme, so a
+   Design Gate reads the same to both of them.
+   ══════════════════════════════════════════════════════════════════════════ */
+/*
+  A milestone is a point, and a flag is what you plant at one.
+
+  The banner treatment belongs to the dates that sit beside a span — a
+  milestone has no span, so it gets the pennant instead: pole on the day,
+  cloth flying off it.
+*/
+.ff-flag {
+  position: relative;
+  display: inline-block;
+  width: 11px;
+  height: 13px;
+  flex-shrink: 0;
 }
-.gt-milestone-wrap:hover .gt-milestone {
-  transform: rotate(45deg) translateZ(16px) scale(1.12);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    0 10px 16px -5px rgba(10, 27, 51, 0.55);
+.ff-flag::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0;
+  width: 1.5px; height: 13px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.7;
+}
+.ff-flag::after {
+  content: '';
+  position: absolute;
+  left: 1.5px; top: 1px;
+  width: 9px; height: 6.5px;
+  background: currentColor;
+  /* A pennant, not a rectangle: the trailing edge is what reads as cloth. */
+  clip-path: polygon(0 0, 100% 14%, 100% 86%, 0 100%);
+  transform-origin: left center;
+  animation: ff-flag-wave 2.8s ease-in-out infinite;
+}
+
+@keyframes ff-flag-wave {
+  0%, 100% { transform: skewY(0deg) scaleX(1); }
+  30%      { transform: skewY(-6deg) scaleX(0.93); }
+  62%      { transform: skewY(4.5deg) scaleX(0.98); }
+}
+
+/* The nearest milestone still ahead. One flag flying a little harder is enough
+   to pick it out of a row of them without colouring anything differently. */
+.ff-flag--next::after { animation-duration: 1.5s; }
+.ff-flag--next::before { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ff-flag::after, .ff-flag--next::after { animation: none !important; }
+}
+
+/*
+  A date written on cloth.
+
+  Dates on a chart were plain grey text sitting in space, which is legible and
+  says nothing about what it is attached to. A banner on a pole is the same
+  information with an anchor: the pole marks the day, the cloth carries the
+  words, and the whole thing moves the way something pinned to a point moves.
+
+  Split into a wrapper so the pole can take `currentColor` and the cloth its own
+  fill — `clip-path` on the banner eats borders and box-shadows, so the shape
+  does the work a border used to.
+*/
+.ff-banner-wrap {
+  display: inline-flex;
+  align-items: stretch;
+  line-height: 1;
+}
+.ff-banner-pole {
+  width: 2px;
+  flex-shrink: 0;
+  border-radius: 1px 0 0 1px;
+  background: currentColor;
+  opacity: 0.75;
+}
+.ff-banner {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2.5px 11px 2.5px 6px;
+  /* A swallowtail: the trailing edge is what makes it read as cloth rather
+     than as another rounded chip. */
+  clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 50%, 100% 100%, 0 100%);
+  transform-origin: left center;
+  animation: ff-banner-wave 5.2s ease-in-out var(--ff-delay, 0ms) infinite;
+}
+
+/*
+  Low amplitude on purpose. Thirteen rows of banner all swinging hard is a
+  novelty the second time and a headache the tenth; the stagger below means no
+  two are ever at the same point in the cycle, which is what makes the chart
+  look alive rather than animated.
+*/
+@keyframes ff-banner-wave {
+  0%, 100% { transform: skewY(0deg) scaleX(1); }
+  30%      { transform: skewY(-1.5deg) scaleX(0.985); }
+  64%      { transform: skewY(1.1deg) scaleX(0.996); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ff-banner { animation: none !important; }
 }
 
 /* The today line reads as a lit edge standing above the grid. */
@@ -759,10 +899,490 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gt-bar, .gt-bar:hover,
-  .gt-milestone, .gt-milestone-wrap:hover .gt-milestone {
+  .gt-bar, .gt-bar:hover, .gt-dates, .gt-milestone-wrap {
     transition: none !important;
   }
+  .gt-bar { animation: none !important; }
+  .gt-dates { opacity: 1; }
   .gt-bar:hover { transform: none !important; }
-  .gt-milestone-wrap:hover .gt-milestone { transform: rotate(45deg) !important; }
+}
+
+/* ── BOQ grid ──────────────────────────────────────────────────────────────
+   A total that changed under your hands should say so. The flash is one
+   beat of a tint and no movement: a figure that slides or scales is harder to
+   read at the exact moment someone is checking it. */
+@keyframes boq-flash {
+  0%   { background-color: rgba(0, 102, 204, 0.16); }
+  100% { background-color: transparent; }
+}
+.boq-flash { animation: boq-flash 620ms ease-out; }
+
+/* Rows settle in after a filter or a sort rather than snapping. Opacity and a
+   2px lift only — a longer travel turns re-sorting a long sheet into a wave. */
+@keyframes boq-row-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: none; }
+}
+.boq-row-in { animation: boq-row-in 180ms ease-out backwards; }
+
+/* The resize grip fades in with the header it belongs to. */
+.boq-grip { transition: background-color 120ms ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .boq-flash, .boq-row-in { animation: none !important; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Editable proposal prose.                                           */
+/*                                                                    */
+/* The booklet is a document a client signs, so the editing affordance */
+/* stays out of the way: nothing at rest, a faint dotted rule on hover,*/
+/* a sky ring while focused. Uses box-shadow rather than a border so   */
+/* nothing reflows when the studio starts editing, and prints clean.   */
+/* ------------------------------------------------------------------ */
+.ff-ed {
+  outline: none;
+  border-radius: 3px;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+.ff-ed:hover {
+  background-color: rgba(0, 102, 204, 0.05);
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.10);
+}
+.ff-ed:focus {
+  background-color: #fff;
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.55);
+}
+/* An empty run would otherwise collapse to zero width and be unclickable. */
+.ff-ed:empty::before {
+  content: 'Click to write';
+  color: #94a3b8;
+  font-style: italic;
+}
+@media print {
+  .ff-ed,
+  .ff-ed:hover,
+  .ff-ed:focus {
+    background: none !important;
+    box-shadow: none !important;
+  }
+  .ff-ed:empty::before { content: ''; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ff-ed { transition: none; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Proposal scope tables that outgrow one sheet.                       */
+/*                                                                     */
+/* These pages used to be a fixed A4 box with overflow:hidden, so a     */
+/* project with more lines than fitted simply lost them — 32 of 43      */
+/* civil lines were being clipped out of the client's copy. The page    */
+/* now grows, and print pagination is handled here: the header repeats  */
+/* on each sheet and a row is never split down the middle.              */
+/* ------------------------------------------------------------------ */
+@media print {
+  .vnext-proposal-wrapper thead { display: table-header-group; }
+  .vnext-proposal-wrapper tfoot { display: table-footer-group; }
+  .vnext-proposal-wrapper tr    { break-inside: avoid; page-break-inside: avoid; }
+  .vnext-proposal-wrapper table { break-inside: auto; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Proposal booklet page geometry.                                     */
+/*                                                                     */
+/* Every page used to be print:h-[28.5cm] = 285mm printed inside a      */
+/* 273mm printable area (A4 less a 12mm @page margin), so each page     */
+/* pushed 12mm of itself onto the next sheet. Padding was p-16 md:p-24, */
+/* and the md: breakpoint (768px) falls between the portrait content    */
+/* width (703px) and the landscape one (1032px) — so the two            */
+/* orientations silently used different margins, and the annexure did   */
+/* not line up with the main content.                                   */
+/*                                                                      */
+/* The page box is now stated once, in millimetres, and the sheet is    */
+/* the page: @page carries no margin, the frame is exactly one sheet    */
+/* tall, and its padding is the visual margin. --ff-page-h is set by    */
+/* the injected orientation rule (297mm portrait, 210mm landscape).     */
+/* ------------------------------------------------------------------ */
+.ff-page {
+  box-sizing: border-box;
+}
+
+@media print {
+  :root { --ff-page-h: 297mm; --ff-page-pad: 16mm; }
+
+  .ff-page {
+    width: 100%;
+    height: var(--ff-page-h);
+    padding: var(--ff-page-pad) !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    break-after: page;
+    page-break-after: always;
+    /* Not hidden: a page that overfills should show it rather than drop
+       the overflow silently, which is how 32 scope lines went missing. */
+    overflow: visible;
+  }
+
+  /* Pages carrying a data-driven table are allowed to run past one sheet;
+     the table breaks between rows instead of being cut off. */
+  .ff-page-flow {
+    height: auto;
+    min-height: var(--ff-page-h);
+    break-inside: auto;
+  }
+
+  .ff-page:last-child { break-after: auto; page-break-after: auto; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Editable annexure clause lists.                                     */
+/*                                                                     */
+/* The controls sit outside the printed flow entirely: they fade in on  */
+/* hover, take no layout space at rest, and are removed from print. A   */
+/* clause list is a legal document on the page — the editing furniture  */
+/* must never shift the text it edits.                                  */
+/* ------------------------------------------------------------------ */
+.ff-edlist { position: relative; }
+
+.ff-edlist-tools {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  transition: opacity 120ms ease;
+}
+
+.ff-edlist-item-tools {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 8px;
+  vertical-align: middle;
+  transition: opacity 120ms ease;
+  white-space: nowrap;
+}
+
+.ff-edlist-item-tools button[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+@media print {
+  .ff-edlist-tools,
+  .ff-edlist-item-tools { display: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ff-edlist-tools, .ff-edlist-item-tools { transition: none; }
+}
+
+/* A mixed-content run that has to be seeded before it can be edited. */
+.ff-ed-seed { position: relative; }
+.ff-ed-seed-btn {
+  margin-left: 6px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease;
+}
+.ff-ed-seed:hover .ff-ed-seed-btn { opacity: 1; }
+.ff-ed-seed-btn:hover { color: #0055B3; border-color: rgba(0, 102, 204, 0.4); }
+@media print { .ff-ed-seed-btn { display: none !important; } }
+@media (prefers-reduced-motion: reduce) { .ff-ed-seed-btn { transition: none; } }
+
+/* Annexure exclusions: one list flowed into two columns.                */
+/* The ✕ is a marker so it stays out of editable content — a studio      */
+/* cannot delete it by accident, and it is never stored twice.           */
+/*
+  Two columns, set here rather than with a `md:` utility.
+
+  Tailwind's md: breakpoint is 768px, but a printed A4 portrait page is only
+  about 673px of content — so a md:columns-2 list silently collapses to a
+  single column in the PDF while looking right on screen. The threshold below
+  sits under both the portrait (673px) and landscape (1017px) print widths.
+*/
+.ff-x-list {
+  /*
+    "At most two columns, each at least 240px" — no media query.
+
+    A viewport-based query cannot be trusted here: the PDF path rasterises at a
+    794px layout width while the browser window may be far narrower, and the
+    media query resolves against the window, not the layout. The list came out
+    as a single column in the PDF while looking correct on screen. Sizing by
+    column width instead makes the decision from the space the list actually
+    has: two columns at A4 width, one on a phone.
+  */
+  columns: 2 240px;
+  column-gap: 24px;
+}
+.ff-x-list > li {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.ff-x-list > li::before {
+  content: "✕";
+  margin-right: 6px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Booklet page numbers.                                               */
+/*                                                                     */
+/* The running number is a CSS counter, so it follows document order   */
+/* through conditionally rendered sections without any bookkeeping in  */
+/* React. Every .ff-page increments it, including the covers and       */
+/* dividers that show no footer — so a numbered page's ordinal matches  */
+/* its real position in the booklet. The total is supplied by the       */
+/* component, which is the one thing a counter cannot give us.          */
+/* ------------------------------------------------------------------ */
+.vnext-proposal-wrapper { counter-reset: ff-page; }
+.ff-page { counter-increment: ff-page; }
+.ff-pageno::before { content: counter(ff-page); }
+
+/* ==================================================================== */
+/* Platform admin console — heads-up display.                           */
+/*                                                                      */
+/* The console watches a live system, so it is allowed to look like it: */
+/* a scan that sweeps while it works, figures that spin up rather than  */
+/* appear, a gauge that draws itself. Every one of these is switched    */
+/* off wholesale under prefers-reduced-motion — a diagnostic screen is  */
+/* the last place to make someone motion-sick while they are trying to  */
+/* work out what is broken.                                             */
+/* ==================================================================== */
+
+/* Faint grid, so the surface reads as an instrument panel rather than paper. */
+.hud-grid {
+  background-image:
+    linear-gradient(rgba(0, 102, 204, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 102, 204, 0.055) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+/*
+  Milky-white glass, the studio's own surface.
+
+  The blueprint grid read as engineering diagnostics, which is right for a
+  console watching a live system and wrong for the screen where a design studio
+  sets its own name and signature. This is the signature Milky White palette
+  given physical depth instead: a top-lit pane with a specular sheen across its
+  upper edge, a bright rim where light catches the top border, a soft shade
+  along the bottom, and a wide low shadow so it sits above the page rather than
+  being printed on it.
+
+  Depth here is four layers doing four different jobs, not one shadow turned up:
+    - the vertical gradient establishes the light direction (from above),
+    - the radial sheen is the highlight that direction implies,
+    - the inset rim and floor give the pane a thickness,
+    - the drop shadow puts air underneath it.
+*/
+.hud-glass {
+  position: relative;
+  background-color: #fdfdfe;
+  background-image:
+    /* specular highlight, upper left, where the light lands */
+    radial-gradient(120% 80% at 12% -10%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 55%),
+    /* a breath of the brand blue, so the white is chosen rather than default */
+    radial-gradient(90% 60% at 88% 0%, rgba(0, 102, 204, 0.055) 0%, rgba(0, 102, 204, 0) 60%),
+    linear-gradient(180deg, #ffffff 0%, #fbfcfe 45%, #f6f8fb 100%);
+  border-color: rgba(226, 232, 240, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),          /* lit top rim */
+    inset 0 -1px 0 rgba(15, 23, 42, 0.045),           /* shaded floor */
+    inset 1px 0 0 rgba(255, 255, 255, 0.55),
+    0 1px 2px rgba(15, 23, 42, 0.04),                 /* contact shadow */
+    0 12px 28px -14px rgba(15, 23, 42, 0.20);         /* the air beneath */
+  backdrop-filter: blur(6px) saturate(1.15);
+  -webkit-backdrop-filter: blur(6px) saturate(1.15);
+}
+
+/*
+  The polished edge.
+
+  A one-pixel gloss running along the top, brightest in the middle — what you
+  see on a glass panel lit from above. Drawn as a pseudo-element so it follows
+  the radius without fighting the box-shadow stack.
+*/
+.hud-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.85) 22%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(255, 255, 255, 0.85) 78%,
+    rgba(255, 255, 255, 0) 100%);
+  height: 1px;
+  bottom: auto;
+}
+
+/*
+  A recess for something to sit in.
+
+  The dial reads as an instrument set into the panel rather than a card resting
+  on it: the light comes from the same direction, so the shadow is at the top
+  and the highlight at the bottom -- the inverse of the pane around it.
+*/
+.hud-well {
+  background-image: linear-gradient(180deg, #f4f6fa 0%, #fafbfd 100%);
+  border-color: rgba(226, 232, 240, 0.95);
+  box-shadow:
+    inset 0 2px 4px rgba(15, 23, 42, 0.055),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* The dark palette keeps the same construction, lit the same way. */
+.dark .hud-glass {
+  background-color: #0f1b2d;
+  background-image:
+    radial-gradient(120% 80% at 12% -10%, rgba(148, 197, 255, 0.10) 0%, rgba(148, 197, 255, 0) 55%),
+    linear-gradient(180deg, #16243a 0%, #121e31 100%);
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 12px 28px -14px rgba(0, 0, 0, 0.65);
+}
+.dark .hud-glass::before {
+  background: linear-gradient(90deg,
+    rgba(148, 197, 255, 0) 0%,
+    rgba(148, 197, 255, 0.35) 50%,
+    rgba(148, 197, 255, 0) 100%);
+}
+.dark .hud-well {
+  background-image: linear-gradient(180deg, #0e1828 0%, #132034 100%);
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45), inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* A band of light travelling down a panel while it is working. */
+@keyframes hud-scan {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { transform: translateY(2400%); opacity: 0; }
+}
+.hud-scanning { position: relative; overflow: hidden; }
+.hud-scanning::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 14px;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(0, 102, 204, 0.30), transparent);
+  animation: hud-scan 1.9s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Each row lands as its answer arrives. */
+@keyframes hud-row-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+.hud-row-in { animation: hud-row-in 260ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+
+/* Status lights. A steady dot is fine; a bad one should catch the eye. */
+@keyframes hud-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  50%      { box-shadow: 0 0 0 5px transparent; opacity: 0.65; }
+}
+.hud-dot {
+  width: 7px; height: 7px;
+  border-radius: 9999px;
+  background: currentColor;
+  display: inline-block;
+}
+.hud-dot-live { animation: hud-pulse 1.8s ease-in-out infinite; }
+
+/* The gauge draws itself once, then holds. */
+@keyframes hud-arc {
+  from { stroke-dashoffset: var(--arc-len); }
+}
+.hud-arc { animation: hud-arc 900ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+
+/* Panels arrive in sequence rather than all at once. */
+@keyframes hud-panel-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.hud-panel-in { animation: hud-panel-in 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+
+/* The boot line under the title, drawn left to right on first paint. */
+@keyframes hud-rule {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.hud-rule { transform-origin: left; animation: hud-rule 700ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+
+/*
+  Switching section swaps the whole right-hand column. Without a transition the
+  new panel simply replaces the old one and the eye cannot tell whether the page
+  moved or the content did -- the small rise says "this is the thing you asked
+  for", which a hard cut does not.
+*/
+@keyframes hud-swap {
+  from { opacity: 0; transform: translateY(8px) scale(0.995); }
+  to   { opacity: 1; transform: none; }
+}
+.hud-swap { animation: hud-swap 260ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+
+/* The rail's active item, arriving rather than blinking on. */
+@keyframes hud-rail-in {
+  from { box-shadow: inset 3px 0 0 0 rgba(255, 255, 255, 0.9); }
+  to   { box-shadow: inset 0 0 0 0 rgba(255, 255, 255, 0); }
+}
+.hud-rail-active { animation: hud-rail-in 380ms cubic-bezier(0.16, 1, 0.3, 1); }
+
+/*
+  A field that has just been jumped to.
+
+  The ring alone is easy to miss on a long form, so it pulses twice and stops --
+  long enough to find, short enough not to nag while it is being typed into.
+*/
+@keyframes hud-locate {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 102, 204, 0); }
+  25%      { box-shadow: 0 0 0 5px rgba(0, 102, 204, 0.20); }
+  50%      { box-shadow: 0 0 0 0 rgba(0, 102, 204, 0); }
+  75%      { box-shadow: 0 0 0 5px rgba(0, 102, 204, 0.20); }
+}
+.hud-locate { animation: hud-locate 1500ms ease-in-out; border-radius: 0.75rem; }
+
+/* The save bar rising from the bottom edge when the first edit is made. */
+@keyframes hud-dock-in {
+  from { opacity: 0; transform: translateY(120%); }
+  to   { opacity: 1; transform: none; }
+}
+.hud-dock-in { animation: hud-dock-in 340ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+
+/*
+  A counter ticking over.
+
+  Used on the unsaved-changes count, where the number changes while the eye is
+  elsewhere; the brief tint is what carries the change, not the digit.
+*/
+@keyframes hud-tick {
+  0%   { transform: translateY(0); }
+  40%  { transform: translateY(-2px); color: #0066CC; }
+  100% { transform: translateY(0); }
+}
+.hud-tick { animation: hud-tick 320ms ease-out; display: inline-block; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-scanning::after,
+  .hud-row-in,
+  .hud-dot-live,
+  .hud-arc,
+  .hud-panel-in,
+  .hud-swap,
+  .hud-rail-active,
+  .hud-locate,
+  .hud-dock-in,
+  .hud-tick,
+  .hud-rule { animation: none !important; }
+  .hud-scanning::after { display: none; }
 }

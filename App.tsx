@@ -15,6 +15,7 @@ import { PageHeaderProvider } from "./contexts/PageHeaderContext";
 import { BackgroundBeamsWithCollision } from "./components/ui/background-beams-with-collision";
 import StudioHomeOrbit from "./components/StudioHomeOrbit";
 import { buildProjectTemplate } from "./lib/cloneProject";
+import { ensureScopeRooms } from "./lib/scopeBuckets";
 import { showSuccessWithNext } from "./components/SuccessWithNextToast";
 import { OfflineIndicator } from "./components/OfflineIndicator";
 
@@ -79,7 +80,6 @@ const LandingPageOrbit = lazyWithRetry(() => import("./components/marketing/Land
 const TeamTab = lazyWithRetry(() => import("./components/TeamTab"));
 const SubscriptionTab = lazyWithRetry(() => import("./components/SubscriptionTab"));
 const StudioSetupWizard = lazyWithRetry(() => import("./components/StudioSetupWizard"));
-const StudioSettingsTab = lazyWithRetry(() => import("./components/studio/StudioSettingsTab"));
 const StudioSettingsShell = lazyWithRetry(() => import("./components/StudioSettingsShell"));
 const SuperAdminDashboard = lazyWithRetry(() => import("./components/SuperAdminDashboard"));
 const ClientLoginScreen = lazyWithRetry(() => import("./components/ClientLoginScreen"));
@@ -131,7 +131,7 @@ import PortalPublishControls from "./components/ops/PortalPublishControls";
 import { buildClientBoqRows, baselineFromSentRows, ClientBoqRow } from "./lib/clientBoq";
 import { sendPortalAccessLink } from "./services/emailService";
 import { verifyApiKey } from "./services/geminiService";
-import { id as generateId, calculateSellPrice } from "./lib/utils";
+import { id as generateId, calculateSellPrice, calculateCostFromSell } from "./lib/utils";
 import { initCommunicationLog } from "./services/communicationTrackerService";
 import { INITIAL_TEMPLATES } from "./lib/standardPackages";
 import { INITIAL_BANK } from "./constants";
@@ -905,7 +905,7 @@ export default function App() {
             itemSell = calculateSellPrice(effectiveMaterials, effectiveLabor, margin) * b.qty;
           } else if (b.selectedRate) {
             itemSell = b.selectedRate * b.qty;
-            itemCost = itemSell * (1 - margin / 100);
+            itemCost = calculateCostFromSell(itemSell, margin);
           } else {
             itemCost = 0;
             itemSell = 0;
@@ -1478,7 +1478,18 @@ export default function App() {
   const handleOpenProject = (project: FullProjectData, targetTab?: string) => {
     setActiveInternalId(project.id);
     setProjectArchitecture(project.architecture || 'legacy');
-    setProjectContext(project.context || DEFAULT_CONTEXT);
+    /*
+      Both room invariants applied on open, so they reach projects saved before
+      either existed and nobody has to run a migration:
+
+        - Civil, Functional and Others exist, at zero area. They were stored as
+          rooms carrying the whole flat, which measured the property three times.
+        - Room names are unique. A plan labels three rooms "Toilet", and the name
+          is the identity a BOQ line carries, so three bathrooms collapsed into
+          one heading and read as triplicated items.
+    */
+    const opened = project.context || DEFAULT_CONTEXT;
+    setProjectContext({ ...opened, rooms: ensureScopeRooms(opened.rooms) });
     setTiers(project.tiers || []);
 
     /*
@@ -1902,7 +1913,7 @@ export default function App() {
     );
   };
 
-  const handleExportHtml = (fileName?: string) => {
+  const handleExportHtml = (fileName?: string, orientation: 'portrait' | 'landscape' = 'portrait') => {
     const originalTab = activeTab;
     setActiveTab("client");
     setTimeout(() => {
@@ -1926,6 +1937,12 @@ export default function App() {
           '.no-print, script[type="module"], script[type="importmap"]',
         )
         .forEach((el) => el.remove());
+
+      // The exported file had no @page size, so opening it and hitting print
+      // produced whatever sheet the browser last used. Pin it here too.
+      const pageStyle = doc.createElement('style');
+      pageStyle.textContent = `@page { size: A4 ${orientation}; margin: 12mm; }`;
+      doc.head.appendChild(pageStyle);
 
       // Interactive Script for Static HTML
       const script = document.createElement("script");
@@ -3232,6 +3249,7 @@ export default function App() {
                           setBank={setBank} // NEW: Pass bank setter for dynamic creation
                           setActiveTab={setActiveTab}
                           projects={projectLibrary}
+                          templates={templates}
                         />
                       )}
                       {activeTab === "history" && (
@@ -3906,6 +3924,7 @@ export default function App() {
                           setBank={setBank} // NEW: Pass bank setter for dynamic creation
                           setActiveTab={setActiveTab}
                           projects={projectLibrary}
+                          templates={templates}
                         />
                       )}
                     </>

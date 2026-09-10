@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOQ Editor — Option 3: Visual Scope-Bundle & Client Pitch Deck</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-serif { font-family: 'Playfair Display', serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .shadow-card { box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen p-4 sm:p-8">
+
+  <div id="toast-notify" class="fixed top-5 right-5 z-50 transform translate-y-[-150%] transition-transform duration-300 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-semibold max-w-md">
+    <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400 shrink-0"></i>
+    <span id="toast-message">Action processed</span>
+  </div>
+
+  <div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- Navigation Breadcrumb -->
+    <div class="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-card text-xs">
+      <div class="flex items-center gap-2">
+        <a href="/mockup-boq-editor.html" class="text-indigo-600 font-bold hover:underline flex items-center gap-1">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> All 5 BOQ Options Suite
+        </a>
+        <span class="text-slate-300">•</span>
+        <span class="font-semibold text-slate-600">Option 3 of 5</span>
+      </div>
+      <div class="flex items-center gap-1.5 font-medium">
+        <span class="text-slate-400">Jump to:</span>
+        <a href="/mockup-boq-editor-opt1.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 1 (Split)</a>
+        <a href="/mockup-boq-editor-opt2.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 2 (Grid)</a>
+        <a href="/mockup-boq-editor-opt4.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 4 (Guard)</a>
+        <a href="/mockup-boq-editor-opt5.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 5 (3-Tier)</a>
+      </div>
+    </div>
+
+    <!-- Header Card -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-card space-y-3">
+      <div class="flex items-center gap-2">
+        <span class="px-2.5 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-extrabold uppercase tracking-wider">
+          Option 3: Visual Scope-Bundle & Client Pitch Deck
+        </span>
+        <span class="text-xs text-slate-400 font-medium">Lodha Amara 2BHK • Stage 3: Proposal BOQ</span>
+      </div>
+      <h1 class="font-serif text-2xl sm:text-3xl font-bold text-slate-900">Visual Scope-Bundle & Client Pitch Deck</h1>
+      <p class="text-xs sm:text-sm text-slate-500 leading-relaxed">
+        Replaces overwhelming multi-row spreadsheets with packaged architectural space cards. Crafted specifically for design review and closing meetings, empowering homeowners to toggle room bundles on or off with live budget feedback.
+      </p>
+    </div>
+
+    <!-- Visual Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      
+      <!-- Space Card 1 -->
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card hover:border-indigo-300 transition-all p-5 space-y-3.5">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-bold text-slate-400 uppercase tracking-wider">Space 1 of 5</span>
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">APPROVED SCOPE</span>
+        </div>
+
+        <div class="h-32 rounded-xl bg-gradient-to-tr from-slate-800 to-slate-700 p-4 flex flex-col justify-end text-white relative overflow-hidden">
+          <div class="text-[10px] font-bold uppercase tracking-widest text-indigo-300">Living Room Signature</div>
+          <div class="font-serif text-lg font-bold">Scandinavian Minimal Lounge</div>
+        </div>
+
+        <div class="space-y-2 text-xs">
+          <div class="flex items-center justify-between font-semibold text-slate-800">
+            <span>Included Line Items (9)</span>
+            <span class="font-mono text-indigo-700 font-bold">₹8,45,000</span>
+          </div>
+          <ul class="space-y-1.5 text-[11px] text-slate-600">
+            <li class="flex items-center gap-1.5">✓ 12ft Fluted TV Wall Unit with Quartz Sconce</li>
+            <li class="flex items-center gap-1.5">✓ False Ceiling with Philips 3000K Perimeter Coves</li>
+            <li class="flex items-center gap-1.5">✓ Asian Paints Royale Aspira Luxury Emulsion</li>
+          </ul>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+          <button onclick="showToast('Opened Living Room detailed items breakdown')" class="text-indigo-600 font-bold text-xs hover:underline">
+            Inspect Line Items →
+          </button>
+          <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">42% Margin</span>
+        </div>
+      </div>
+
+      <!-- Space Card 2 -->
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card hover:border-indigo-300 transition-all p-5 space-y-3.5">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-bold text-slate-400 uppercase tracking-wider">Space 2 of 5</span>
+          <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">APPROVED SCOPE</span>
+        </div>
+
+        <div class="h-32 rounded-xl bg-gradient-to-tr from-indigo-900 to-slate-800 p-4 flex flex-col justify-end text-white relative overflow-hidden">
+          <div class="text-[10px] font-bold uppercase tracking-widest text-emerald-300">Modular Kitchen</div>
+          <div class="font-serif text-lg font-bold">Chef's Ergonomic Kitchen</div>
+        </div>
+
+        <div class="space-y-2 text-xs">
+          <div class="flex items-center justify-between font-semibold text-slate-800">
+            <span>Included Line Items (7)</span>
+            <span class="font-mono text-indigo-700 font-bold">₹6,10,000</span>
+          </div>
+          <ul class="space-y-1.5 text-[11px] text-slate-600">
+            <li class="flex items-center gap-1.5">✓ Century Marine BWR 710 Carcasses</li>
+            <li class="flex items-center gap-1.5">✓ Hafele Tandem Box Soft-Close Drawers</li>
+            <li class="flex items-center gap-1.5">✓ Caesarstone Quartz Countertop (Provisional)</li>
+          </ul>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+          <button onclick="showToast('Opened Kitchen detailed items breakdown')" class="text-indigo-600 font-bold text-xs hover:underline">
+            Inspect Line Items →
+          </button>
+          <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">40% Margin</span>
+        </div>
+      </div>
+
+      <!-- Space Card 3: Optional Upgrade Pack -->
+      <div class="bg-indigo-50/40 rounded-2xl border-2 border-dashed border-indigo-300 overflow-hidden shadow-card p-5 space-y-3.5">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-bold text-indigo-700 uppercase tracking-wider">Client Add-On Bundle</span>
+          <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[10px] font-bold">POPULAR UPGRADE</span>
+        </div>
+
+        <div class="h-32 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-700 p-4 flex flex-col justify-end text-white relative overflow-hidden">
+          <div class="text-[10px] font-bold uppercase tracking-widest text-indigo-200">Smart Home Automation</div>
+          <div class="font-serif text-lg font-bold">Lutron Lighting & Sensor Pack</div>
+        </div>
+
+        <div class="space-y-2 text-xs">
+          <div class="flex items-center justify-between font-semibold text-slate-800">
+            <span>Upgrade Delta</span>
+            <span class="font-mono text-indigo-700 font-bold">+₹1,45,000</span>
+          </div>
+          <ul class="space-y-1.5 text-[11px] text-slate-600">
+            <li class="flex items-center gap-1.5">+ 8-Channel Smart Dimming Controller</li>
+            <li class="flex items-center gap-1.5">+ Motorized Curtain Tracks for Living Room</li>
+            <li class="flex items-center gap-1.5">+ Voice & Mobile App Bridge</li>
+          </ul>
+        </div>
+
+        <div class="pt-3 border-t border-indigo-200/70">
+          <button onclick="this.innerText='✓ Included in Proposal'; this.className='w-full py-2 bg-emerald-600 text-white font-bold rounded-xl text-xs shadow-xs'; showToast('Smart Home pack added to active client proposal!')" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-xs transition-all">
+            + Include in Proposal BOQ
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast-notify');
+      document.getElementById('toast-message').innerText = msg;
+      toast.classList.remove('translate-y-[-150%]');
+      toast.classList.add('translate-y-0');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0');
+        toast.classList.add('translate-y-[-150%]');
+      }, 3500);
+    }
+  </script>
+</body>
+</html>

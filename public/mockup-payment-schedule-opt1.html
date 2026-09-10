@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Schedule — Option 1: Unified Linear Milestone Flow</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-serif { font-family: 'Playfair Display', serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .shadow-card { box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen p-4 sm:p-8">
+
+  <!-- Toast -->
+  <div id="toast-notify" class="fixed top-5 right-5 z-50 transform translate-y-[-150%] transition-transform duration-300 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-semibold max-w-md">
+    <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400 shrink-0"></i>
+    <span id="toast-message">Action processed</span>
+  </div>
+
+  <div class="max-w-5xl mx-auto space-y-6">
+
+    <!-- Back to Suite Navigation Bar -->
+    <div class="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-card text-xs">
+      <div class="flex items-center gap-2">
+        <a href="/mockup-payment-schedule.html" class="text-indigo-600 font-bold hover:underline flex items-center gap-1">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> All 5 Options Suite
+        </a>
+        <span class="text-slate-300">•</span>
+        <span class="font-semibold text-slate-600">Option 1 of 5</span>
+      </div>
+      <div class="flex items-center gap-1.5 font-medium">
+        <span class="text-slate-400">Jump to:</span>
+        <a href="/mockup-payment-schedule-opt2.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 2</a>
+        <a href="/mockup-payment-schedule-opt3.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 3</a>
+        <a href="/mockup-payment-schedule-opt4.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 4</a>
+        <a href="/mockup-payment-schedule-opt5.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 5</a>
+      </div>
+    </div>
+
+    <!-- Header Card -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-card space-y-3">
+      <div class="flex items-center gap-2">
+        <span class="px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-extrabold uppercase tracking-wider">
+          Option 1: Single Continuous Stream
+        </span>
+        <span class="text-xs text-slate-400 font-medium">Lodha Amara 2BHK • Project #FFDS-2026-088</span>
+      </div>
+      <h1 class="font-serif text-2xl sm:text-3xl font-bold text-slate-900">Unified Linear Milestone Flow</h1>
+      <p class="text-xs sm:text-sm text-slate-500 leading-relaxed">
+        A single chronological sequence from kickoff to final handover. All 7 steps (both Design and Site execution) sit on one continuous track with a unified progress bar. Recommended for residential clients who value absolute simplicity over multi-bucket contractual nuances.
+      </p>
+    </div>
+
+    <!-- Vitals -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Contract Value</div>
+        <div class="text-xl font-bold font-mono text-slate-900 mt-1">₹24,80,000</div>
+        <div class="text-[11px] text-slate-500 mt-1">7 Scheduled Milestones</div>
+      </div>
+      <div class="bg-white rounded-2xl border border-emerald-200 bg-emerald-50/20 p-4 shadow-card">
+        <div class="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Realized in Bank</div>
+        <div class="text-xl font-bold font-mono text-emerald-700 mt-1" id="val-realized">₹9,92,000</div>
+        <div class="text-[11px] text-emerald-700 mt-1" id="val-cleared-text">3 of 7 Milestones Cleared (40%)</div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Balance Due</div>
+        <div class="text-xl font-bold font-mono text-slate-900 mt-1" id="val-due">₹6,20,000</div>
+        <div class="text-[11px] text-amber-700 mt-1">Invoice #INV-042 due in 2 days</div>
+      </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-2">
+      <div class="flex items-center justify-between text-xs font-bold text-slate-700">
+        <span>Linear Completion Track</span>
+        <span class="text-indigo-600 font-mono" id="val-pct-label">40% Realized • 60% Remaining</span>
+      </div>
+      <div class="h-3 bg-slate-100 rounded-full overflow-hidden flex">
+        <div id="bar-cleared" class="h-full bg-emerald-500 transition-all duration-500" style="width: 40%"></div>
+        <div id="bar-due" class="h-full bg-amber-400 animate-pulse transition-all duration-500" style="width: 25%"></div>
+      </div>
+    </div>
+
+    <!-- Milestone List -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-card space-y-3.5">
+      
+      <!-- Step 1 -->
+      <div class="p-4 rounded-xl border border-emerald-100 bg-emerald-50/25 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">✓</div>
+          <div>
+            <div class="text-xs font-bold text-slate-900">1. Booking & Discovery Advance (10%)</div>
+            <div class="text-[11px] text-slate-400">Paid on 10 Aug (NEFT #98124)</div>
+          </div>
+        </div>
+        <div class="text-right font-mono text-xs font-bold text-slate-900">₹2,48,000</div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="p-4 rounded-xl border border-emerald-100 bg-emerald-50/25 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">✓</div>
+          <div>
+            <div class="text-xs font-bold text-slate-900">2. Layout & Concept Approval (15%)</div>
+            <div class="text-[11px] text-slate-400">Paid on 18 Aug (UPI #44102)</div>
+          </div>
+        </div>
+        <div class="text-right font-mono text-xs font-bold text-slate-900">₹3,72,000</div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="p-4 rounded-xl border border-emerald-100 bg-emerald-50/25 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">✓</div>
+          <div>
+            <div class="text-xs font-bold text-slate-900">3. Technical GFCs & BOQ Freeze (15%)</div>
+            <div class="text-[11px] text-slate-400">Paid on 24 Aug (Cheque #00921)</div>
+          </div>
+        </div>
+        <div class="text-right font-mono text-xs font-bold text-slate-900">₹3,72,000</div>
+      </div>
+
+      <!-- Step 4 (Active Due) -->
+      <div id="row-step4" class="p-4.5 rounded-xl border-2 border-indigo-500 bg-indigo-50/40 space-y-3">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs mt-0.5">4</div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs font-bold text-slate-900">4. Site Mobilization & Raw Material Procurement (25%)</span>
+                <span class="text-[10px] font-bold bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded">DUE IN 2 DAYS</span>
+              </div>
+              <p class="text-xs text-slate-600 mt-1">Unlocks civil demolition, electrical conduit rough-ins & plywood purchase</p>
+            </div>
+          </div>
+          <div class="text-right shrink-0">
+            <span class="text-sm font-bold font-mono text-indigo-950 block">₹6,20,000</span>
+            <span class="text-[10px] text-indigo-700 font-semibold">+ GST ₹1,11,600</span>
+          </div>
+        </div>
+        <div class="pt-2 border-t border-indigo-200 flex items-center justify-between text-xs">
+          <span class="text-slate-500">Invoice: <strong>#INV-2026-042</strong></span>
+          <button onclick="recordStep4Paid()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer">
+            Mark Milestone Paid →
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 5 -->
+      <div class="p-4 rounded-xl border border-slate-200 bg-white flex items-center justify-between gap-4 opacity-80">
+        <div class="flex items-center gap-3">
+          <div class="w-6 h-6 rounded-full border border-slate-300 text-slate-400 flex items-center justify-center font-bold text-xs">5</div>
+          <div>
+            <div class="text-xs font-bold text-slate-800">5. Woodwork & Factory Carcass Assembly (20%)</div>
+            <div class="text-[11px] text-slate-400">Target: 18 Sep 2026</div>
+          </div>
+        </div>
+        <div class="text-right font-mono text-xs text-slate-600">₹4,96,000</div>
+      </div>
+
+      <!-- Step 6 -->
+      <div class="p-4 rounded-xl border border-slate-200 bg-white flex items-center justify-between gap-4 opacity-80">
+        <div class="flex items-center gap-3">
+          <div class="w-6 h-6 rounded-full border border-slate-300 text-slate-400 flex items-center justify-center font-bold text-xs">6</div>
+          <div>
+            <div class="text-xs font-bold text-slate-800">6. Finishes, Laminates & Painting (10%)</div>
+            <div class="text-[11px] text-slate-400">Target: 05 Oct 2026</div>
+          </div>
+        </div>
+        <div class="text-right font-mono text-xs text-slate-600">₹2,48,000</div>
+      </div>
+
+      <!-- Step 7 -->
+      <div class="p-4 rounded-xl border border-slate-200 bg-white flex items-center justify-between gap-4 opacity-80">
+        <div class="flex items-center gap-3">
+          <div class="w-6 h-6 rounded-full border border-slate-300 text-slate-400 flex items-center justify-center font-bold text-xs">7</div>
+          <div>
+            <div class="text-xs font-bold text-slate-800">7. Completion & Key Handover (5%)</div>
+            <div class="text-[11px] text-slate-400">Target: 20 Oct 2026 (Retainer)</div>
+          </div>
+        </div>
+        <div class="text-right font-mono text-xs text-slate-600">₹1,24,000</div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast-notify');
+      document.getElementById('toast-message').innerText = msg;
+      toast.classList.remove('translate-y-[-150%]');
+      toast.classList.add('translate-y-0');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0');
+        toast.classList.add('translate-y-[-150%]');
+      }, 3500);
+    }
+
+    function recordStep4Paid() {
+      document.getElementById('val-realized').innerText = '₹16,12,000';
+      document.getElementById('val-cleared-text').innerText = '4 of 7 Milestones Cleared (65%)';
+      document.getElementById('val-due').innerText = '₹4,96,000';
+      document.getElementById('val-pct-label').innerText = '65% Realized • 35% Remaining';
+      document.getElementById('bar-cleared').style.width = '65%';
+      document.getElementById('bar-due').style.width = '20%';
+
+      const r = document.getElementById('row-step4');
+      r.className = "p-4 rounded-xl border border-emerald-100 bg-emerald-50/25 flex items-center justify-between gap-4";
+      r.innerHTML = `
+        <div class="flex items-center gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">✓</div>
+          <div>
+            <div class="text-xs font-bold text-slate-900">4. Site Mobilization & Raw Material Procurement (25%)</div>
+            <div class="text-[11px] text-emerald-700 font-bold">PAID & SETTLED (27 Aug 2026 • Ref: UTR #98210)</div>
+          </div>
+        </div>
+        <div class="text-right font-mono text-xs font-bold text-slate-900">₹6,20,000</div>
+      `;
+      showToast('Step 4 recorded as PAID! Linear completion updated to 65%.');
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

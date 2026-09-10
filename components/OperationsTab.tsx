@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { ProposalTier, Item, ProjectContext, FullProjectData } from '../types';
 import TierManager from './TierManager';
+import { TemplateData } from '../lib/standardPackages';
 import ExcelImportModal from './ExcelImportModal';
 
 interface OperationsTabProps {
@@ -15,10 +16,12 @@ interface OperationsTabProps {
     setBank?: React.Dispatch<React.SetStateAction<Item[]>>; // Optional for this tab usually, but needed for import
     setActiveTab: (tab: string) => void;
     projects?: FullProjectData[];
+    /** The studio's own typology templates, for regenerating the BOQ. */
+    templates?: TemplateData;
 }
 
 const OperationsTab: React.FC<OperationsTabProps> = (props) => {
-    const { tiers, setTiers, activeTierId, setActiveTierId, projectContext, setProjectContext, bank, setBank, setActiveTab, projects } = props;
+    const { tiers, setTiers, activeTierId, setActiveTierId, projectContext, setProjectContext, bank, setBank, setActiveTab, projects, templates } = props;
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     const handleImportComplete = (newTier: ProposalTier, newBankItems: Item[]) => {
@@ -68,6 +71,7 @@ const OperationsTab: React.FC<OperationsTabProps> = (props) => {
                 setActiveTab={setActiveTab}
                 onImportClick={() => setIsImportModalOpen(true)}
                 projects={projects}
+                templates={templates}
             />
 
             <ExcelImportModal 

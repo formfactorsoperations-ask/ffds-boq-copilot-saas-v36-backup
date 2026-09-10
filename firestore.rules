@@ -301,6 +301,108 @@ service cloud.firestore {
       }
 
       // DECISIONS (Nested Collection)
+      /*
+        Studio-side project subcollections.
+
+        Firestore rules do not cascade: `match /projects/{projectId}` granting
+        read does nothing for the collections beneath it, and each of these had
+        no match block of its own, so every read was denied. The app's own
+        listeners pass no error callback, so the denial surfaced as a screen
+        that says "Loading..." forever rather than as an error — the
+        communication tracker was stuck on exactly that.
+
+        Access follows the model already used by `decisions` and `tierBoq`
+        below: the reader must be signed in and belong to the tenant that owns
+        the parent project. These are internal operational records — comms
+        logs, site visits, tasks, margin analytics — so unlike `portalView`
+        there is no client-facing path and no unauthenticated branch.
+      */
+      function ownsParentProject() {
+        return isAuthenticated() && (
+          isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
+          (isLegacyFFDS() && !('tenantId' in get(/databases/$(database)/documents/projects/$(projectId)).data)) ||
+          isSuperAdmin()
+        );
+      }
+
+      match /communicationLog/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
+      match /deliverables/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
+      match /designGate/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
+      match /journeySteps/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
+      match /liveFeed/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
+      match /marginAnalytics/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
+      match /moms/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
+      match /paymentRequests/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
+      match /scopeAdditions/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
+      match /siteVisits/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
+      match /stepProgress/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
+      match /tasks/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
+      match /timelinePhases/{docId} {
+        allow read: if ownsParentProject();
+        allow create, update: if ownsParentProject() && getUserData().role != 'Viewer';
+        allow delete: if ownsParentProject() && getUserData().role != 'Viewer';
+      }
+
       match /decisions/{decisionId} {
         allow read: if (isAuthenticated() && (
                           isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||

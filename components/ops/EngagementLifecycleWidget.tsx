@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ProjectContext } from '../../types';
 import { getTermsSettings, getPaymentStructure } from '../../services/engagementService';
 import { useOrg } from '../../contexts/OrgContext';
+import { stableHash } from '../../lib/stableHash';
 import { Lock } from 'lucide-react';
 
 export function EngagementLifecycleWidget({ projectContext, setProjectContext }: { projectContext: ProjectContext, setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>> }) {
@@ -45,7 +46,15 @@ export function EngagementLifecycleWidget({ projectContext, setProjectContext }:
             const termsVersion = engagement.termsVersion ? engagement.termsVersion + 1 : 1;
             const paymentVersion = engagement.paymentScheduleVersion ? engagement.paymentScheduleVersion + 1 : 4;
 
-            const settingsHash = JSON.stringify({ termsSettings, paymentStructure, orgData, projectContext });
+            /*
+              A fingerprint, not a copy. This used to be
+              `JSON.stringify({...})` of all four objects — projectContext
+              included, so every floor plan and logo image was written into the
+              docket, again into each history entry, and again into every tier
+              snapshot. It reached 509KB in one field against a 1 MiB document
+              limit, and nothing ever read it back.
+            */
+            const settingsHash = await stableHash({ termsSettings, paymentStructure, orgData, projectContext });
             
             // Generate simple HTML representation (we use JSON serialization to guarantee exact reproduction)
             const termsHtml = `<div><h1>Terms of Engagement v${termsVersion}</h1><pre>${JSON.stringify(termsSettings, null, 2)}</pre></div>`;

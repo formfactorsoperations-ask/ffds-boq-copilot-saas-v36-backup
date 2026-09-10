@@ -1,0 +1,1433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOQ Editor — 5 Architectural & UX Options (FFDS Studio OS)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-serif { font-family: 'Playfair Display', serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .shadow-card { box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04); }
+    .shadow-card-hover:hover { box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04); }
+    .tab-active { background-color: #4f46e5; color: #ffffff; box-shadow: 0 1px 3px 0 rgba(79, 70, 229, 0.3); }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen p-3 sm:p-6 lg:p-8">
+
+  <!-- Interactive Toast Notification -->
+  <div id="toast-notify" class="fixed top-5 right-5 z-50 transform translate-y-[-150%] transition-transform duration-300 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-semibold max-w-md">
+    <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400 shrink-0"></i>
+    <span id="toast-message" class="leading-relaxed">Action processed successfully</span>
+  </div>
+
+  <div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- TOP CONTROL & OPTION SWITCHER BAR -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-card space-y-5">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+            <span class="px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-extrabold uppercase tracking-wider">
+              Interactive Prototype Suite
+            </span>
+            <span class="text-xs text-slate-400 font-medium">Lodha Amara 2BHK (914 sq ft) • Stage 3: Proposal & BOQ</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-700 flex items-center gap-1">
+              <i data-lucide="lock" class="w-2.5 h-2.5"></i> BOQ Freeze: Advisory
+            </span>
+          </div>
+          <h1 class="font-serif text-2xl sm:text-3xl font-bold text-slate-900">BOQ Editor — 5 Architectural UX Options</h1>
+          <p class="text-xs sm:text-sm text-slate-500 mt-1">
+            Explore 5 specialized editing workflows for the studio's Bill of Quantities engine. Switch options below to evaluate each design paradigm.
+          </p>
+        </div>
+
+        <!-- Global Action Controls -->
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <!-- Active Tier Indicator -->
+          <div class="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold">
+            <button id="tier-btn-standard" onclick="setTier('Standard')" class="px-3 py-1.5 rounded-lg bg-white shadow-xs text-indigo-700">Standard (₹24.8L)</button>
+            <button id="tier-btn-lean" onclick="setTier('Lean')" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900">Lean (₹19.2L)</button>
+            <button id="tier-btn-luxe" onclick="setTier('Luxe')" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900">Luxe (₹31.5L)</button>
+          </div>
+
+          <!-- Add Item From Bank Button -->
+          <button onclick="openBankDrawer()" class="px-3.5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Add from Bank
+          </button>
+
+          <!-- Export BOQ Button -->
+          <button onclick="showToast('BOQ export generated with room sub-totals & HSN codes!')" class="px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-600"></i> Export Excel
+          </button>
+        </div>
+      </div>
+
+      <!-- 5-OPTION SWITCHER TABS -->
+      <div class="pt-2 border-t border-slate-100">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Select BOQ Editor Paradigm:</span>
+          <span class="text-xs text-indigo-600 font-semibold cursor-pointer hover:underline" onclick="switchOption('matrix')">
+            Compare All 5 Side-by-Side →
+          </span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-slate-100/70 p-1.5 rounded-xl text-xs font-bold">
+          <button id="tab-opt1" onclick="switchOption('opt1')" class="py-2.5 px-2 rounded-lg text-center transition-all cursor-pointer tab-active flex flex-col items-center justify-center gap-0.5">
+            <span class="truncate">Option 1</span>
+            <span class="text-[10px] font-medium opacity-90">Spatial Split-Pane</span>
+          </button>
+          <button id="tab-opt2" onclick="switchOption('opt2')" class="py-2.5 px-2 rounded-lg text-center transition-all cursor-pointer text-slate-600 hover:text-slate-900 flex flex-col items-center justify-center gap-0.5">
+            <span class="truncate">Option 2</span>
+            <span class="text-[10px] font-medium opacity-80">Financial Grid</span>
+          </button>
+          <button id="tab-opt3" onclick="switchOption('opt3')" class="py-2.5 px-2 rounded-lg text-center transition-all cursor-pointer text-slate-600 hover:text-slate-900 flex flex-col items-center justify-center gap-0.5">
+            <span class="truncate">Option 3</span>
+            <span class="text-[10px] font-medium opacity-80">Visual Scope-Bundle</span>
+          </button>
+          <button id="tab-opt4" onclick="switchOption('opt4')" class="py-2.5 px-2 rounded-lg text-center transition-all cursor-pointer text-slate-600 hover:text-slate-900 flex flex-col items-center justify-center gap-0.5">
+            <span class="truncate">Option 4</span>
+            <span class="text-[10px] font-medium opacity-80">Procurement & Guard</span>
+          </button>
+          <button id="tab-opt5" onclick="switchOption('opt5')" class="py-2.5 px-2 rounded-lg text-center transition-all cursor-pointer text-slate-600 hover:text-slate-900 flex flex-col items-center justify-center gap-0.5">
+            <span class="truncate">Option 5</span>
+            <span class="text-[10px] font-medium opacity-80">3-Tier Matrix</span>
+          </button>
+          <button id="tab-matrix" onclick="switchOption('matrix')" class="py-2.5 px-2 rounded-lg text-center transition-all cursor-pointer text-slate-600 hover:text-slate-900 flex flex-col items-center justify-center gap-0.5 bg-slate-200/50">
+            <span class="truncate">Comparison</span>
+            <span class="text-[10px] font-medium opacity-80">Feature Matrix</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUMMARY VITALS BAR (LIVE REACTIVE VALUES) -->
+    <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Client Sell</span>
+          <span class="w-6 h-6 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold">₹</span>
+        </div>
+        <div id="vital-grand-total" class="text-xl sm:text-2xl font-bold font-mono text-slate-900 mt-1">₹24,80,000</div>
+        <div class="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
+          <span id="vital-items-count" class="font-semibold text-slate-700">32 Line Items</span> across 5 Spaces
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Direct Studio Cost</span>
+          <span class="w-6 h-6 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center text-xs">
+            <i data-lucide="package" class="w-3.5 h-3.5"></i>
+          </span>
+        </div>
+        <div id="vital-cost-total" class="text-xl sm:text-2xl font-bold font-mono text-slate-700 mt-1">₹14,26,000</div>
+        <div class="text-[11px] text-slate-500 mt-1">
+          Mat: ₹9,85,000 • Labor: ₹4,41,000
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-emerald-200 bg-emerald-50/20 p-4 shadow-card">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Blended Gross Margin</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">Target: 40%</span>
+        </div>
+        <div id="vital-margin-pct" class="text-xl sm:text-2xl font-bold font-mono text-emerald-700 mt-1">42.50%</div>
+        <div class="text-[11px] text-emerald-700 mt-1 font-medium">
+          +₹10,54,000 Gross Studio Profit
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-amber-200 bg-amber-50/20 p-4 shadow-card">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Scope Exposure</span>
+          <span class="w-6 h-6 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center text-xs">
+            <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+          </span>
+        </div>
+        <div id="vital-provisional-total" class="text-xl sm:text-2xl font-bold font-mono text-amber-800 mt-1">₹3,40,000</div>
+        <div class="text-[11px] text-amber-700 mt-1">
+          3 Provisional Sums • 1 As-Actuals
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- OPTION 1 CONTAINER: Spatial Split-Pane Room & Spec Inspector -->
+    <!-- ========================================================================= -->
+    <div id="view-opt1" class="space-y-4">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-extrabold uppercase tracking-wider">
+              Option 1: Spatial Split-Pane CAD/BIM Inspector
+            </span>
+            <span class="text-xs text-slate-400">Default Studio Production Workflow</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">
+            <strong>Architecture:</strong> 3-column operational layout. Left column for room spatial tree & scope buckets; middle column for high-speed item listing & quantity steppers; right sliding inspector for deep material/labor breakdown, specs, and vendor notes.
+          </p>
+        </div>
+        <a href="/mockup-boq-editor-opt1.html" class="shrink-0 px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded-lg hover:bg-indigo-50 flex items-center gap-1">
+          Open Standalone Page <i data-lucide="arrow-up-right" class="w-3 h-3"></i>
+        </a>
+      </div>
+
+      <!-- 3-PANE WORKSPACE -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        
+        <!-- PANE 1: SPATIAL ROOM NAVIGATION (3 Cols) -->
+        <div class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 p-4 shadow-card space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <i data-lucide="layers" class="w-3.5 h-3.5 text-indigo-600"></i> Spaces & Buckets
+            </span>
+            <button onclick="showToast('Room added to spatial tree')" class="text-indigo-600 text-xs font-bold hover:underline flex items-center gap-0.5">
+              <i data-lucide="plus" class="w-3 h-3"></i> Add
+            </button>
+          </div>
+
+          <div class="space-y-1.5 text-xs">
+            <button onclick="setRoomFilter('all')" id="opt1-room-all" class="w-full text-left p-2.5 rounded-xl font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center justify-between transition-all">
+              <span>All Rooms & Scopes</span>
+              <span class="font-mono text-[11px] px-1.5 py-0.5 rounded bg-white text-indigo-900 border border-indigo-100">32 items</span>
+            </button>
+
+            <div class="pt-2 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Client Real Rooms</div>
+
+            <button onclick="setRoomFilter('Living Room')" id="opt1-room-living" class="w-full text-left p-2.5 rounded-xl font-medium text-slate-700 hover:bg-slate-50 flex items-center justify-between transition-all">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span>Living Room</span>
+              </div>
+              <span class="font-mono text-slate-500">₹8,45,000</span>
+            </button>
+
+            <button onclick="setRoomFilter('Master Bedroom')" id="opt1-room-master" class="w-full text-left p-2.5 rounded-xl font-medium text-slate-700 hover:bg-slate-50 flex items-center justify-between transition-all">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                <span>Master Bedroom</span>
+              </div>
+              <span class="font-mono text-slate-500">₹7,20,000</span>
+            </button>
+
+            <button onclick="setRoomFilter('Kitchen')" id="opt1-room-kitchen" class="w-full text-left p-2.5 rounded-xl font-medium text-slate-700 hover:bg-slate-50 flex items-center justify-between transition-all">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                <span>Modular Kitchen</span>
+              </div>
+              <span class="font-mono text-slate-500">₹6,10,000</span>
+            </button>
+
+            <button onclick="setRoomFilter('Foyer')" id="opt1-room-foyer" class="w-full text-left p-2.5 rounded-xl font-medium text-slate-700 hover:bg-slate-50 flex items-center justify-between transition-all">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+                <span>Foyer / Entrance</span>
+              </div>
+              <span class="font-mono text-slate-500">₹1,25,000</span>
+            </button>
+
+            <div class="pt-2 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Project Scope Buckets</div>
+
+            <button onclick="setRoomFilter('Site Works')" id="opt1-room-siteworks" class="w-full text-left p-2.5 rounded-xl font-medium text-slate-700 hover:bg-slate-50 flex items-center justify-between transition-all">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                <span>Site Works & Protection</span>
+              </div>
+              <span class="font-mono text-slate-500">₹95,000</span>
+            </button>
+
+            <button onclick="setRoomFilter('Others')" id="opt1-room-others" class="w-full text-left p-2.5 rounded-xl font-medium text-slate-700 hover:bg-slate-50 flex items-center justify-between transition-all">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                <span>Provisional / Others</span>
+              </div>
+              <span class="font-mono text-slate-500">₹85,000</span>
+            </button>
+          </div>
+
+          <!-- Quick Bundle Suggestion Box -->
+          <div class="mt-4 pt-3 border-t border-slate-100 space-y-2">
+            <span class="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-indigo-500"></i> Add-On Bundle
+            </span>
+            <div class="p-2.5 bg-indigo-50/60 border border-indigo-100 rounded-xl text-xs space-y-1.5">
+              <div class="font-bold text-slate-900">False Ceiling & Cove Pack</div>
+              <p class="text-[11px] text-slate-500">Gyproc board + perimeter warm LED coves (380 sq ft)</p>
+              <button onclick="addBundleToBoq('False Ceiling Pack')" class="w-full py-1 bg-white hover:bg-slate-50 text-indigo-700 font-bold border border-indigo-200 rounded-lg text-[11px] shadow-2xs">
+                + Add Bundle (₹68,400)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANE 2: INTERACTIVE ITEMS LIST (6 Cols) -->
+        <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-4 shadow-card space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
+              <input type="text" id="opt1-search-input" oninput="filterOpt1Items(this.value)" placeholder="Search specs, item codes, materials..." class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-indigo-500 font-medium">
+            </div>
+            <select id="opt1-cat-filter" onchange="filterOpt1Category(this.value)" class="text-xs font-semibold px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl">
+              <option value="all">All Categories</option>
+              <option value="Woodwork">Woodwork</option>
+              <option value="Finishes">Finishes</option>
+              <option value="Electrical">Electrical</option>
+              <option value="Civil">Civil</option>
+            </select>
+          </div>
+
+          <!-- Items Container -->
+          <div id="opt1-items-list" class="space-y-2.5 max-h-[640px] overflow-y-auto pr-1 custom-scrollbar">
+            
+            <!-- Item 1 -->
+            <div onclick="inspectItem('item1')" id="row-item1" class="p-3 rounded-xl border border-indigo-500 bg-indigo-50/20 shadow-xs cursor-pointer transition-all hover:border-indigo-600">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800">Living Room</span>
+                    <span class="text-[10px] font-bold text-slate-400">#ITM-301</span>
+                    <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">FIRM</span>
+                  </div>
+                  <h4 class="font-bold text-xs text-slate-900 mt-1">TV Console with Fluted Louvres</h4>
+                  <p class="text-[11px] text-slate-500 line-clamp-1 mt-0.5">CenturyPly BWR 710, Merino 1mm matte laminate, charcoal charcoal accents</p>
+                </div>
+                <div class="text-right shrink-0">
+                  <span class="text-xs font-mono font-bold text-slate-900 block">₹84,000</span>
+                  <span class="text-[10px] text-slate-400">₹1,750 / sq ft</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-indigo-100/80 text-xs">
+                <div class="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
+                  <button onclick="event.stopPropagation(); changeQty('item1', -1)" class="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 text-slate-600">-</button>
+                  <span id="qty-item1" class="px-2 font-mono font-bold text-xs">48</span>
+                  <span class="text-[10px] text-slate-400 pr-1">sq ft</span>
+                  <button onclick="event.stopPropagation(); changeQty('item1', 1)" class="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 text-slate-600">+</button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">42% Margin</span>
+                  <button onclick="event.stopPropagation(); deleteItem('item1')" class="text-slate-400 hover:text-red-500 p-1">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Item 2 -->
+            <div onclick="inspectItem('item2')" id="row-item2" class="p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700">Master Bedroom</span>
+                    <span class="text-[10px] font-bold text-slate-400">#ITM-308</span>
+                    <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">FIRM</span>
+                  </div>
+                  <h4 class="font-bold text-xs text-slate-900 mt-1">Full-Height Sliding Wardrobe</h4>
+                  <p class="text-[11px] text-slate-500 line-clamp-1 mt-0.5">Greenpanel Club HDHMR, tinted mirror sliding shutter, Hafele bottom track</p>
+                </div>
+                <div class="text-right shrink-0">
+                  <span class="text-xs font-mono font-bold text-slate-900 block">₹1,44,000</span>
+                  <span class="text-[10px] text-slate-400">₹2,250 / sq ft</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100 text-xs">
+                <div class="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
+                  <button onclick="event.stopPropagation(); changeQty('item2', -1)" class="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 text-slate-600">-</button>
+                  <span id="qty-item2" class="px-2 font-mono font-bold text-xs">64</span>
+                  <span class="text-[10px] text-slate-400 pr-1">sq ft</span>
+                  <button onclick="event.stopPropagation(); changeQty('item2', 1)" class="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 text-slate-600">+</button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">45% Margin</span>
+                  <button onclick="event.stopPropagation(); deleteItem('item2')" class="text-slate-400 hover:text-red-500 p-1">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Item 3 -->
+            <div onclick="inspectItem('item3')" id="row-item3" class="p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">Kitchen</span>
+                    <span class="text-[10px] font-bold text-slate-400">#ITM-412</span>
+                    <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">PROVISIONAL</span>
+                  </div>
+                  <h4 class="font-bold text-xs text-slate-900 mt-1">Quartz Countertop (Caesarstone Calacatta)</h4>
+                  <p class="text-[11px] text-slate-500 line-clamp-1 mt-0.5">20mm composite quartz, mitred waterfall edge, undermount Franke sink cutout</p>
+                </div>
+                <div class="text-right shrink-0">
+                  <span class="text-xs font-mono font-bold text-slate-900 block">₹62,500</span>
+                  <span class="text-[10px] text-slate-400">₹1,250 / sq ft</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100 text-xs">
+                <div class="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
+                  <button onclick="event.stopPropagation(); changeQty('item3', -1)" class="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 text-slate-600">-</button>
+                  <span id="qty-item3" class="px-2 font-mono font-bold text-xs">50</span>
+                  <span class="text-[10px] text-slate-400 pr-1">sq ft</span>
+                  <button onclick="event.stopPropagation(); changeQty('item3', 1)" class="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 text-slate-600">+</button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">32% Margin (Guard)</span>
+                  <button onclick="event.stopPropagation(); deleteItem('item3')" class="text-slate-400 hover:text-red-500 p-1">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Item 4 -->
+            <div onclick="inspectItem('item4')" id="row-item4" class="p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800">Foyer</span>
+                    <span class="text-[10px] font-bold text-slate-400">#ITM-105</span>
+                    <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">FIRM</span>
+                  </div>
+                  <h4 class="font-bold text-xs text-slate-900 mt-1">Shoe Cabinet & Sitter Bench</h4>
+                  <p class="text-[11px] text-slate-500 line-clamp-1 mt-0.5">BWR plywood, ventilation louvres, upholstered seat cushion with boucle fabric</p>
+                </div>
+                <div class="text-right shrink-0">
+                  <span class="text-xs font-mono font-bold text-slate-900 block">₹38,000</span>
+                  <span class="text-[10px] text-slate-400">₹1,900 / rft</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100 text-xs">
+                <div class="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
+                  <button onclick="event.stopPropagation(); changeQty('item4', -1)" class="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 text-slate-600">-</button>
+                  <span id="qty-item4" class="px-2 font-mono font-bold text-xs">20</span>
+                  <span class="text-[10px] text-slate-400 pr-1">rft</span>
+                  <button onclick="event.stopPropagation(); changeQty('item4', 1)" class="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 text-slate-600">+</button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">40% Margin</span>
+                  <button onclick="event.stopPropagation(); deleteItem('item4')" class="text-slate-400 hover:text-red-500 p-1">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- PANE 3: SPEC & FINANCIAL INSPECTOR (4 Cols) -->
+        <div class="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Spec Inspector</span>
+              <h3 id="inspector-title" class="font-serif text-base font-bold text-slate-900">TV Console with Fluted Louvres</h3>
+            </div>
+            <span id="inspector-status-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+              FIRM SCOPE
+            </span>
+          </div>
+
+          <!-- Specs Form -->
+          <div class="space-y-3 text-xs">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">Room Assignment</label>
+              <select id="inspector-room" class="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none">
+                <option value="Living Room">Living Room</option>
+                <option value="Master Bedroom">Master Bedroom</option>
+                <option value="Kitchen">Kitchen</option>
+                <option value="Foyer">Foyer</option>
+                <option value="Site Works">Site Works</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">Specifications & Finishes</label>
+              <textarea id="inspector-specs" rows="2" class="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none text-slate-700 leading-relaxed">CenturyPly BWR 710 base carcass, Merino 1mm anti-scratch matte laminate, charcoal PU fluted louvres, Hafele soft-close concealed hinges.</textarea>
+            </div>
+
+            <!-- Financial Pricing Formula Split -->
+            <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 block">Unit Rate Derivation (INR)</span>
+              
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <span class="text-[10px] text-slate-400 font-semibold">Material Base Cost</span>
+                  <div class="flex items-center gap-1 mt-0.5">
+                    <span class="text-slate-400 font-mono">₹</span>
+                    <input type="number" id="inspector-mat" value="700" oninput="recalcInspector()" class="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg font-mono font-bold text-slate-800 text-xs">
+                  </div>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 font-semibold">Labor / Install Cost</span>
+                  <div class="flex items-center gap-1 mt-0.5">
+                    <span class="text-slate-400 font-mono">₹</span>
+                    <input type="number" id="inspector-labor" value="315" oninput="recalcInspector()" class="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg font-mono font-bold text-slate-800 text-xs">
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200">
+                <div>
+                  <span class="text-[10px] text-slate-400 font-semibold">Margin Override (%)</span>
+                  <div class="flex items-center gap-1 mt-0.5">
+                    <input type="number" id="inspector-margin" value="42" oninput="recalcInspector()" class="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg font-mono font-bold text-emerald-700 text-xs">
+                    <span class="text-slate-400 font-mono">%</span>
+                  </div>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 font-semibold">Client Unit Sell Rate</span>
+                  <div id="inspector-sell-rate" class="mt-1 font-mono font-bold text-indigo-700 text-sm">₹1,750 / sq ft</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Scope Rationale / Clause -->
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">Contract Status & Rationale</label>
+              <select id="inspector-status" class="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none">
+                <option value="included_ffds_scope">Included in FFDS Fixed Scope (Firm)</option>
+                <option value="as_actuals">As-Actuals Site Measurement Required</option>
+                <option value="provisional_sum">Provisional Sum (Budget Placeholder)</option>
+                <option value="client_procured">Client Procured (Studio Install Only)</option>
+                <option value="excluded">Excluded from Project Scope</option>
+              </select>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="pt-2 flex items-center gap-2">
+              <button onclick="saveInspectorChanges()" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-xs transition-all">
+                Update Line Item
+              </button>
+              <button onclick="duplicateLineItem()" class="p-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-slate-600 text-xs" title="Duplicate Item">
+                <i data-lucide="copy" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- OPTION 2 CONTAINER: High-Density Financial Grid (Spreadsheet / Power-User) -->
+    <!-- ========================================================================= -->
+    <div id="view-opt2" class="space-y-4 hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-extrabold uppercase tracking-wider">
+              Option 2: High-Density Financial Grid (Spreadsheet Power-User)
+            </span>
+            <span class="text-xs text-slate-400">QS & Quantity Surveying Productivity</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">
+            <strong>Architecture:</strong> Airtable/Excel-style full-bleed data grid. Features inline cell editing, bulk row multi-select (bulk margin adjustments, bulk room relocations), keyboard arrow navigation, and frozen header/totals bar.
+          </p>
+        </div>
+        <a href="/mockup-boq-editor-opt2.html" class="shrink-0 px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded-lg hover:bg-indigo-50 flex items-center gap-1">
+          Open Standalone Page <i data-lucide="arrow-up-right" class="w-3 h-3"></i>
+        </a>
+      </div>
+
+      <!-- Bulk Actions Strip (Appears on select) -->
+      <div id="opt2-bulk-bar" class="bg-indigo-900 text-white p-3 rounded-xl flex items-center justify-between text-xs font-semibold shadow-md">
+        <div class="flex items-center gap-2">
+          <span class="w-5 h-5 rounded bg-indigo-700 flex items-center justify-center text-[10px] font-bold">2</span>
+          <span>Selected 2 items across Living Room & Kitchen</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="bulkSetMargin(40)" class="px-2.5 py-1 bg-indigo-700 hover:bg-indigo-600 rounded text-[11px] font-bold">
+            Set Margin to 40%
+          </button>
+          <button onclick="showToast('Assigned selected items to Master Bedroom')" class="px-2.5 py-1 bg-indigo-700 hover:bg-indigo-600 rounded text-[11px] font-bold">
+            Move to Master Bed
+          </button>
+          <button onclick="showToast('Bulk marked as Firm Scope')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-bold">
+            Mark Firm
+          </button>
+        </div>
+      </div>
+
+      <!-- Excel-Style Table -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                <th class="p-3 w-8 text-center"><input type="checkbox" checked class="rounded"></th>
+                <th class="p-3 min-w-[140px]">Space / Room</th>
+                <th class="p-3 min-w-[220px]">Item Description & Spec</th>
+                <th class="p-3 w-20 text-right">Qty</th>
+                <th class="p-3 w-16">Unit</th>
+                <th class="p-3 w-24 text-right">Mat. Cost</th>
+                <th class="p-3 w-24 text-right">Labor Cost</th>
+                <th class="p-3 w-20 text-right">Margin %</th>
+                <th class="p-3 w-28 text-right">Unit Sell</th>
+                <th class="p-3 w-28 text-right">Line Total</th>
+                <th class="p-3 w-24 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+              
+              <!-- Room Group Header -->
+              <tr class="bg-slate-100/60 font-bold text-[11px] text-slate-800">
+                <td colspan="9" class="px-3 py-1.5">
+                  <div class="flex items-center gap-2">
+                    <i data-lucide="folder" class="w-3.5 h-3.5 text-indigo-600"></i>
+                    <span>Living Room</span>
+                    <span class="text-slate-400 font-normal">• 9 Line Items</span>
+                  </div>
+                </td>
+                <td class="px-3 py-1.5 text-right font-mono text-indigo-900">₹8,45,000</td>
+                <td></td>
+              </tr>
+
+              <!-- Row 1 -->
+              <tr class="hover:bg-indigo-50/30 transition-colors">
+                <td class="p-3 text-center"><input type="checkbox" checked class="rounded"></td>
+                <td class="p-3 font-semibold text-slate-900">Living Room</td>
+                <td class="p-3">
+                  <div class="font-bold text-slate-900">TV Console with Fluted Louvres</div>
+                  <div class="text-[10px] text-slate-400 truncate max-w-[240px]">Century BWR 710, Merino laminate, PU louvres</div>
+                </td>
+                <td class="p-3 text-right font-mono font-bold">
+                  <input type="number" value="48" class="w-14 text-right px-1 py-0.5 bg-slate-50 border border-slate-200 rounded font-mono">
+                </td>
+                <td class="p-3 text-slate-500">sq ft</td>
+                <td class="p-3 text-right font-mono text-slate-600">₹700</td>
+                <td class="p-3 text-right font-mono text-slate-600">₹315</td>
+                <td class="p-3 text-right font-mono font-bold text-emerald-700">42%</td>
+                <td class="p-3 text-right font-mono font-bold text-slate-900">₹1,750</td>
+                <td class="p-3 text-right font-mono font-bold text-indigo-700">₹84,000</td>
+                <td class="p-3 text-center">
+                  <span class="px-2 py-0.5 rounded text-[9px] font-extrabold bg-emerald-100 text-emerald-800">FIRM</span>
+                </td>
+              </tr>
+
+              <!-- Row 2 -->
+              <tr class="hover:bg-indigo-50/30 transition-colors">
+                <td class="p-3 text-center"><input type="checkbox" checked class="rounded"></td>
+                <td class="p-3 font-semibold text-slate-900">Living Room</td>
+                <td class="p-3">
+                  <div class="font-bold text-slate-900">False Ceiling with Perimeter Coves</div>
+                  <div class="text-[10px] text-slate-400 truncate max-w-[240px]">Gyproc GI frame, Saint-Gobain plasterboard, 3000K warm strip</div>
+                </td>
+                <td class="p-3 text-right font-mono font-bold">
+                  <input type="number" value="280" class="w-14 text-right px-1 py-0.5 bg-slate-50 border border-slate-200 rounded font-mono">
+                </td>
+                <td class="p-3 text-slate-500">sq ft</td>
+                <td class="p-3 text-right font-mono text-slate-600">₹95</td>
+                <td class="p-3 text-right font-mono text-slate-600">₹65</td>
+                <td class="p-3 text-right font-mono font-bold text-emerald-700">40%</td>
+                <td class="p-3 text-right font-mono font-bold text-slate-900">₹265</td>
+                <td class="p-3 text-right font-mono font-bold text-indigo-700">₹74,200</td>
+                <td class="p-3 text-center">
+                  <span class="px-2 py-0.5 rounded text-[9px] font-extrabold bg-emerald-100 text-emerald-800">FIRM</span>
+                </td>
+              </tr>
+
+              <!-- Room Group Header 2 -->
+              <tr class="bg-slate-100/60 font-bold text-[11px] text-slate-800">
+                <td colspan="9" class="px-3 py-1.5">
+                  <div class="flex items-center gap-2">
+                    <i data-lucide="folder" class="w-3.5 h-3.5 text-indigo-600"></i>
+                    <span>Modular Kitchen</span>
+                    <span class="text-slate-400 font-normal">• 7 Line Items</span>
+                  </div>
+                </td>
+                <td class="px-3 py-1.5 text-right font-mono text-indigo-900">₹6,10,000</td>
+                <td></td>
+              </tr>
+
+              <!-- Row 3 -->
+              <tr class="hover:bg-indigo-50/30 transition-colors">
+                <td class="p-3 text-center"><input type="checkbox" class="rounded"></td>
+                <td class="p-3 font-semibold text-slate-900">Kitchen</td>
+                <td class="p-3">
+                  <div class="font-bold text-slate-900">Caesarstone Quartz Countertop</div>
+                  <div class="text-[10px] text-slate-400 truncate max-w-[240px]">20mm Calacatta Nuvo, double chamfer edge polish</div>
+                </td>
+                <td class="p-3 text-right font-mono font-bold">
+                  <input type="number" value="50" class="w-14 text-right px-1 py-0.5 bg-slate-50 border border-slate-200 rounded font-mono">
+                </td>
+                <td class="p-3 text-slate-500">sq ft</td>
+                <td class="p-3 text-right font-mono text-slate-600">₹620</td>
+                <td class="p-3 text-right font-mono text-slate-600">₹230</td>
+                <td class="p-3 text-right font-mono font-bold text-amber-700">32%</td>
+                <td class="p-3 text-right font-mono font-bold text-slate-900">₹1,250</td>
+                <td class="p-3 text-right font-mono font-bold text-indigo-700">₹62,500</td>
+                <td class="p-3 text-center">
+                  <span class="px-2 py-0.5 rounded text-[9px] font-extrabold bg-amber-100 text-amber-800">PROV</span>
+                </td>
+              </tr>
+
+            </tbody>
+            <!-- Sticky Grid Footer Aggregate -->
+            <tfoot>
+              <tr class="bg-slate-100 border-t-2 border-slate-300 font-mono font-bold text-xs text-slate-900">
+                <td colspan="5" class="p-3 text-left font-sans uppercase tracking-wider text-[11px]">Total Project Rollup</td>
+                <td class="p-3 text-right text-slate-700">₹9,85,000</td>
+                <td class="p-3 text-right text-slate-700">₹4,41,000</td>
+                <td class="p-3 text-right text-emerald-700">42.50%</td>
+                <td></td>
+                <td class="p-3 text-right text-indigo-700 text-sm">₹24,80,000</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- OPTION 3 CONTAINER: Visual Scope-Bundle & Client Pitch Deck -->
+    <!-- ========================================================================= -->
+    <div id="view-opt3" class="space-y-4 hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-extrabold uppercase tracking-wider">
+              Option 3: Visual Scope-Bundle & Client Pitch Deck
+            </span>
+            <span class="text-xs text-slate-400">Sales Presentation & Client Closing View</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">
+            <strong>Architecture:</strong> Replaces intimidating 100-row spreadsheets with packaged visual space cards. Allows clients to toggle room bundles on/off during design review meetings with instant total re-calculation.
+          </p>
+        </div>
+        <a href="/mockup-boq-editor-opt3.html" class="shrink-0 px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded-lg hover:bg-indigo-50 flex items-center gap-1">
+          Open Standalone Page <i data-lucide="arrow-up-right" class="w-3 h-3"></i>
+        </a>
+      </div>
+
+      <!-- Visual Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        
+        <!-- Room Package 1 -->
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card hover:border-indigo-300 transition-all space-y-3 p-5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Space 1 of 5</span>
+            <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">APPROVED SCOPE</span>
+          </div>
+          
+          <div class="h-32 rounded-xl bg-gradient-to-tr from-slate-800 to-slate-700 p-4 flex flex-col justify-end text-white relative overflow-hidden">
+            <div class="text-[10px] font-bold uppercase tracking-widest text-indigo-300">Living Room Signature</div>
+            <div class="font-serif text-lg font-bold">Scandinavian Minimal Lounge</div>
+          </div>
+
+          <div class="space-y-2 text-xs">
+            <div class="flex items-center justify-between font-semibold text-slate-800">
+              <span>Included Items (9)</span>
+              <span class="font-mono text-indigo-700 font-bold">₹8,45,000</span>
+            </div>
+            <ul class="space-y-1 text-[11px] text-slate-500">
+              <li class="flex items-center gap-1.5">✓ 12ft Fluted TV Wall Unit with Quartz Sconce</li>
+              <li class="flex items-center gap-1.5">✓ False Ceiling with Philips 3000K Perimeter Coves</li>
+              <li class="flex items-center gap-1.5">✓ Asian Paints Royale Aspira Luxury Emulsion</li>
+            </ul>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <button onclick="showToast('Opened Living Room granular line item breakout')" class="text-indigo-600 font-bold text-xs hover:underline">
+              Inspect 9 Line Items →
+            </button>
+            <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">42% Margin</span>
+          </div>
+        </div>
+
+        <!-- Room Package 2 -->
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card hover:border-indigo-300 transition-all space-y-3 p-5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Space 2 of 5</span>
+            <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">APPROVED SCOPE</span>
+          </div>
+          
+          <div class="h-32 rounded-xl bg-gradient-to-tr from-indigo-900 to-slate-800 p-4 flex flex-col justify-end text-white relative overflow-hidden">
+            <div class="text-[10px] font-bold uppercase tracking-widest text-emerald-300">Modular Kitchen</div>
+            <div class="font-serif text-lg font-bold">Chef's Ergonomic Kitchen</div>
+          </div>
+
+          <div class="space-y-2 text-xs">
+            <div class="flex items-center justify-between font-semibold text-slate-800">
+              <span>Included Items (7)</span>
+              <span class="font-mono text-indigo-700 font-bold">₹6,10,000</span>
+            </div>
+            <ul class="space-y-1 text-[11px] text-slate-500">
+              <li class="flex items-center gap-1.5">✓ Century Marine BWR 710 Carcasses</li>
+              <li class="flex items-center gap-1.5">✓ Hafele Tandem Box Soft-Close Drawers</li>
+              <li class="flex items-center gap-1.5">✓ Caesarstone Quartz Countertop (Provisional)</li>
+            </ul>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <button onclick="showToast('Opened Kitchen granular line item breakout')" class="text-indigo-600 font-bold text-xs hover:underline">
+              Inspect 7 Line Items →
+            </button>
+            <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">40% Margin</span>
+          </div>
+        </div>
+
+        <!-- Room Package 3: Optional Client Upgrade -->
+        <div class="bg-indigo-50/40 rounded-2xl border-2 border-dashed border-indigo-300 overflow-hidden shadow-card space-y-3 p-5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-indigo-600 uppercase tracking-wider">Client Add-On Bundle</span>
+            <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[10px] font-bold">RECOMMENDED</span>
+          </div>
+          
+          <div class="h-32 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-700 p-4 flex flex-col justify-end text-white relative overflow-hidden">
+            <div class="text-[10px] font-bold uppercase tracking-widest text-indigo-200">Smart Home Automation</div>
+            <div class="font-serif text-lg font-bold">Lutron Lighting & Sensor Pack</div>
+          </div>
+
+          <div class="space-y-2 text-xs">
+            <div class="flex items-center justify-between font-semibold text-slate-800">
+              <span>Upgrade Delta</span>
+              <span class="font-mono text-indigo-700 font-bold">+₹1,45,000</span>
+            </div>
+            <ul class="space-y-1 text-[11px] text-slate-600">
+              <li class="flex items-center gap-1.5">+ 8-Channel Smart Dimming Controller</li>
+              <li class="flex items-center gap-1.5">+ Motorized Curtain Tracks for Living Room</li>
+              <li class="flex items-center gap-1.5">+ Voice & Mobile App Bridge</li>
+            </ul>
+          </div>
+
+          <div class="pt-3 border-t border-indigo-200/60 flex items-center justify-between">
+            <button onclick="toggleUpgradeBundle(this)" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-xs transition-all">
+              + Include in Proposal BOQ
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- OPTION 4 CONTAINER: Margin-Guard & Procurement-Aware Execution BOQ -->
+    <!-- ========================================================================= -->
+    <div id="view-opt4" class="space-y-4 hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-extrabold uppercase tracking-wider">
+              Option 4: Margin-Guard & Procurement-Aware Execution BOQ
+            </span>
+            <span class="text-xs text-slate-400">Post-Signing Ops & Site Handover View</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">
+            <strong>Architecture:</strong> Protects the studio's bank balance by locking client-facing sell prices while calculating real-time material purchase orders, factory lead times, and warning when vendor rate inflation erodes margin buffers below 35%.
+          </p>
+        </div>
+        <a href="/mockup-boq-editor-opt4.html" class="shrink-0 px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded-lg hover:bg-indigo-50 flex items-center gap-1">
+          Open Standalone Page <i data-lucide="arrow-up-right" class="w-3 h-3"></i>
+        </a>
+      </div>
+
+      <!-- Procurement Vitals Strip -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-card">
+          <span class="text-slate-400 font-bold uppercase text-[10px]">Active Vendor POs</span>
+          <div class="text-lg font-bold font-mono text-slate-900 mt-0.5">8 Purchase Orders</div>
+          <div class="text-slate-500 mt-1">CenturyPly, Hafele, Caesarstone, Asian Paints</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-card">
+          <span class="text-slate-400 font-bold uppercase text-[10px]">Critical Factory Lead Time</span>
+          <div class="text-lg font-bold font-mono text-amber-700 mt-0.5">14 Calendar Days</div>
+          <div class="text-slate-500 mt-1">Woodwork pressing gate: Must order by Sep 14</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-emerald-200 bg-emerald-50/20 shadow-card">
+          <span class="text-emerald-800 font-bold uppercase text-[10px]">Locked Studio Profit</span>
+          <div class="text-lg font-bold font-mono text-emerald-700 mt-0.5">+₹10,54,000</div>
+          <div class="text-emerald-700 mt-1">Buffer Protected against site wastage</div>
+        </div>
+      </div>
+
+      <!-- Procurement-Linked Line Items -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="font-serif text-base font-bold text-slate-900">Execution Items with Linked PO Gates</h3>
+          <button onclick="showToast('Auto-generated 4 vendor purchase orders from active BOQ!')" class="px-3 py-1.5 bg-indigo-600 text-white font-bold rounded-lg text-xs hover:bg-indigo-700">
+            Generate All Vendor POs →
+          </button>
+        </div>
+
+        <div class="space-y-3">
+          <!-- Item with Procurement Alert -->
+          <div class="p-4 rounded-xl border border-amber-300 bg-amber-50/30 space-y-3 text-xs">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-slate-900 text-sm">Full-Height Sliding Wardrobe (Master Bed)</span>
+                  <span class="px-2 py-0.2 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">Lead Time Critical: 14 Days</span>
+                </div>
+                <p class="text-slate-500 text-[11px] mt-0.5">Linked PO #PO-9012 (CenturyPly BWR + Merino Laminate)</p>
+              </div>
+              <div class="text-right">
+                <span class="text-sm font-mono font-bold text-slate-900 block">Client Sell: ₹1,44,000</span>
+                <span class="text-[11px] font-mono text-slate-500">Procurement Cost: ₹79,200</span>
+              </div>
+            </div>
+
+            <!-- 3-Pillar Financial Guard Bar -->
+            <div class="grid grid-cols-3 gap-2 p-2 bg-white rounded-lg border border-amber-200 text-center font-mono">
+              <div>
+                <span class="text-[10px] text-slate-400 font-sans block">Client Rate</span>
+                <span class="font-bold text-slate-900">₹2,250 / sq ft</span>
+              </div>
+              <div class="border-x border-slate-100">
+                <span class="text-[10px] text-slate-400 font-sans block">Vendor PO Rate</span>
+                <span class="font-bold text-slate-700">₹1,237 / sq ft</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-emerald-700 font-sans block font-bold">Studio Margin</span>
+                <span class="font-bold text-emerald-700">45.0% (Safe)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Item Safe -->
+          <div class="p-4 rounded-xl border border-slate-200 bg-white space-y-3 text-xs">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-slate-900 text-sm">TV Console with Fluted Louvres (Living Room)</span>
+                  <span class="px-2 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">PO Ready for Dispatch</span>
+                </div>
+                <p class="text-slate-500 text-[11px] mt-0.5">Linked PO #PO-9015 (Hafele Soft-Close Hinges + Charcoal Louvres)</p>
+              </div>
+              <div class="text-right">
+                <span class="text-sm font-mono font-bold text-slate-900 block">Client Sell: ₹84,000</span>
+                <span class="text-[11px] font-mono text-slate-500">Procurement Cost: ₹48,720</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 text-center font-mono">
+              <div>
+                <span class="text-[10px] text-slate-400 font-sans block">Client Rate</span>
+                <span class="font-bold text-slate-900">₹1,750 / sq ft</span>
+              </div>
+              <div class="border-x border-slate-200">
+                <span class="text-[10px] text-slate-400 font-sans block">Vendor PO Rate</span>
+                <span class="font-bold text-slate-700">₹1,015 / sq ft</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-emerald-700 font-sans block font-bold">Studio Margin</span>
+                <span class="font-bold text-emerald-700">42.0% (Safe)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- OPTION 5 CONTAINER: 3-Tier Comparative Matrix (Lean vs Standard vs Luxe) -->
+    <!-- ========================================================================= -->
+    <div id="view-opt5" class="space-y-4 hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-extrabold uppercase tracking-wider">
+              Option 5: 3-Tier Comparative Matrix (Lean vs Standard vs Luxe)
+            </span>
+            <span class="text-xs text-slate-400">Proposal Drafting & Budget Negotiation</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">
+            <strong>Architecture:</strong> Renders the entire apartment scope across 3 simultaneous tiers (Lean vs Standard vs Luxe). Designers can promote or swap specs with 1 click while comparing material upgrades and client cost deltas.
+          </p>
+        </div>
+        <a href="/mockup-boq-editor-opt5.html" class="shrink-0 px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded-lg hover:bg-indigo-50 flex items-center gap-1">
+          Open Standalone Page <i data-lucide="arrow-up-right" class="w-3 h-3"></i>
+        </a>
+      </div>
+
+      <!-- Comparative Column Headers -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        
+        <!-- Tier 1: Lean -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4">
+          <div class="border-b border-slate-100 pb-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-slate-400">Tier A: Value</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">38% Margin</span>
+            </div>
+            <h3 class="font-serif text-xl font-bold text-slate-900 mt-1">Lean Essential</h3>
+            <div class="text-2xl font-mono font-bold text-slate-900 mt-1">₹19,20,000</div>
+            <div class="text-[11px] text-slate-500">Commercial MR Ply + 0.8mm standard laminate</div>
+          </div>
+
+          <!-- Key Scope Specs -->
+          <div class="space-y-3 text-xs">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+              <span class="font-bold text-slate-800 block">Living Room TV Unit</span>
+              <p class="text-slate-500 text-[11px]">8ft wide, MR ply carcass, standard laminate, manual touch latches</p>
+              <span class="font-mono font-bold text-slate-700 block">₹48,000</span>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+              <span class="font-bold text-slate-800 block">Master Bed Wardrobe</span>
+              <p class="text-slate-500 text-[11px]">Hinged 4-door wardrobe, laminate external finish, Godrej locks</p>
+              <span class="font-mono font-bold text-slate-700 block">₹95,000</span>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+              <span class="font-bold text-slate-800 block">Kitchen Countertop</span>
+              <p class="text-slate-500 text-[11px]">Jet Black Granite, single round nose edge polish</p>
+              <span class="font-mono font-bold text-slate-700 block">₹28,000</span>
+            </div>
+          </div>
+
+          <button onclick="showToast('Switched project active proposal to Lean Tier!')" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-all">
+            Select Lean Proposal
+          </button>
+        </div>
+
+        <!-- Tier 2: Standard (Active Recommended) -->
+        <div class="bg-indigo-50/40 rounded-2xl border-2 border-indigo-500 p-5 shadow-card space-y-4 relative">
+          <div class="absolute -top-3 right-6 bg-indigo-600 text-white text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full shadow-xs">
+            Current Active Proposal
+          </div>
+          <div class="border-b border-indigo-200 pb-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-indigo-700">Tier B: Studio Best</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">42.5% Margin</span>
+            </div>
+            <h3 class="font-serif text-xl font-bold text-slate-900 mt-1">Standard Premium</h3>
+            <div class="text-2xl font-mono font-bold text-indigo-950 mt-1">₹24,80,000</div>
+            <div class="text-[11px] text-slate-600">Century BWR 710 + 1mm Merino Matte + Hafele</div>
+          </div>
+
+          <!-- Key Scope Specs -->
+          <div class="space-y-3 text-xs">
+            <div class="p-3 bg-white rounded-xl border border-indigo-200 space-y-1 shadow-2xs">
+              <span class="font-bold text-slate-800 block">Living Room TV Unit</span>
+              <p class="text-slate-500 text-[11px]">12ft wide, BWR 710, Merino laminate, fluted PU louvres</p>
+              <span class="font-mono font-bold text-indigo-700 block">₹84,000 (+₹36k upgrade)</span>
+            </div>
+            <div class="p-3 bg-white rounded-xl border border-indigo-200 space-y-1 shadow-2xs">
+              <span class="font-bold text-slate-800 block">Master Bed Wardrobe</span>
+              <p class="text-slate-500 text-[11px]">Sliding wardrobe, tinted bronze mirror, Hafele soft-close tracks</p>
+              <span class="font-mono font-bold text-indigo-700 block">₹1,44,000 (+₹49k upgrade)</span>
+            </div>
+            <div class="p-3 bg-white rounded-xl border border-indigo-200 space-y-1 shadow-2xs">
+              <span class="font-bold text-slate-800 block">Kitchen Countertop</span>
+              <p class="text-slate-500 text-[11px]">Caesarstone Quartz Calacatta, mitred waterfall apron</p>
+              <span class="font-mono font-bold text-indigo-700 block">₹62,500 (+₹34.5k upgrade)</span>
+            </div>
+          </div>
+
+          <button class="w-full py-2 bg-indigo-600 text-white font-bold rounded-xl text-xs shadow-xs cursor-default">
+            ✓ Active In Proposal
+          </button>
+        </div>
+
+        <!-- Tier 3: Luxe -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4">
+          <div class="border-b border-slate-100 pb-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-slate-400">Tier C: Signature</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">46% Margin</span>
+            </div>
+            <h3 class="font-serif text-xl font-bold text-slate-900 mt-1">Luxe Bespoke</h3>
+            <div class="text-2xl font-mono font-bold text-slate-900 mt-1">₹31,50,000</div>
+            <div class="text-[11px] text-slate-500">Greenpanel Club HDHMR + Natural Veneer + Blum Legrabox</div>
+          </div>
+
+          <!-- Key Scope Specs -->
+          <div class="space-y-3 text-xs">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+              <span class="font-bold text-slate-800 block">Living Room TV Unit</span>
+              <p class="text-slate-500 text-[11px]">Natural American Walnut veneer, open-grain PU polish, integrated warm halo</p>
+              <span class="font-mono font-bold text-slate-700 block">₹1,32,000</span>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+              <span class="font-bold text-slate-800 block">Master Bed Wardrobe</span>
+              <p class="text-slate-500 text-[11px]">Fluted glass profile doors, internal warm LED shelf illumination, Blum soft-close</p>
+              <span class="font-mono font-bold text-slate-700 block">₹2,10,000</span>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+              <span class="font-bold text-slate-800 block">Kitchen Countertop</span>
+              <p class="text-slate-500 text-[11px]">Silestone Desert Silver, antibacterial bacteriostatic treatment</p>
+              <span class="font-mono font-bold text-slate-700 block">₹95,000</span>
+            </div>
+          </div>
+
+          <button onclick="showToast('Switched project active proposal to Luxe Bespoke!')" class="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-all">
+            Upgrade to Luxe Bespoke
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- COMPARISON MATRIX VIEW -->
+    <!-- ========================================================================= -->
+    <div id="view-matrix" class="space-y-4 hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-card space-y-4">
+        <div>
+          <span class="text-xs font-bold text-indigo-600 uppercase tracking-wider">Architecture Evaluation</span>
+          <h2 class="font-serif text-2xl font-bold text-slate-900 mt-1">BOQ Editor Options: Comprehensive Trade-Off Matrix</h2>
+          <p class="text-xs text-slate-500 mt-0.5">
+            Compare all 5 architectural paradigms against key operational parameters in interior design SaaS workflows.
+          </p>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                <th class="p-3">Architectural Option</th>
+                <th class="p-3">Primary User Persona</th>
+                <th class="p-3">Editing Velocity</th>
+                <th class="p-3">Margin Protection</th>
+                <th class="p-3">Client Readiness</th>
+                <th class="p-3 text-center">Standalone</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+              <tr class="hover:bg-slate-50">
+                <td class="p-3 font-bold text-slate-900">
+                  <div class="text-indigo-600">Option 1: Spatial Split-Pane</div>
+                  <div class="text-[11px] text-slate-400 font-normal">CAD/BIM style with room tree & deep spec inspector</div>
+                </td>
+                <td class="p-3">Studio Interior Designers & Drafters</td>
+                <td class="p-3 text-emerald-700 font-bold">High (Detailed Specs)</td>
+                <td class="p-3 text-emerald-700 font-bold">Excellent (Live Derivation)</td>
+                <td class="p-3 text-slate-600">Moderate</td>
+                <td class="p-3 text-center">
+                  <a href="/mockup-boq-editor-opt1.html" class="text-indigo-600 hover:underline font-bold">View Opt 1 →</a>
+                </td>
+              </tr>
+              <tr class="hover:bg-slate-50">
+                <td class="p-3 font-bold text-slate-900">
+                  <div class="text-emerald-700">Option 2: High-Density Grid</div>
+                  <div class="text-[11px] text-slate-400 font-normal">Excel/Airtable table with bulk actions & cell editing</div>
+                </td>
+                <td class="p-3">Quantity Surveyors & Ops Directors</td>
+                <td class="p-3 text-emerald-700 font-bold">Maximum (Bulk Edit)</td>
+                <td class="p-3 text-emerald-700 font-bold">Good (Column Formulas)</td>
+                <td class="p-3 text-slate-400">Low (Contractor Table)</td>
+                <td class="p-3 text-center">
+                  <a href="/mockup-boq-editor-opt2.html" class="text-indigo-600 hover:underline font-bold">View Opt 2 →</a>
+                </td>
+              </tr>
+              <tr class="hover:bg-slate-50">
+                <td class="p-3 font-bold text-slate-900">
+                  <div class="text-purple-700">Option 3: Scope-Bundle Cards</div>
+                  <div class="text-[11px] text-slate-400 font-normal">Visual moodboard cards & 1-click room upgrade bundles</div>
+                </td>
+                <td class="p-3">Sales Leads & Pitch Designers</td>
+                <td class="p-3 text-slate-600">Moderate</td>
+                <td class="p-3 text-slate-600">Moderate</td>
+                <td class="p-3 text-emerald-700 font-bold">Maximum (Retail Friendly)</td>
+                <td class="p-3 text-center">
+                  <a href="/mockup-boq-editor-opt3.html" class="text-indigo-600 hover:underline font-bold">View Opt 3 →</a>
+                </td>
+              </tr>
+              <tr class="hover:bg-slate-50">
+                <td class="p-3 font-bold text-slate-900">
+                  <div class="text-amber-700">Option 4: Procurement-Aware Guard</div>
+                  <div class="text-[11px] text-slate-400 font-normal">Locks client sell rates, maps PO costs & lead times</div>
+                </td>
+                <td class="p-3">Site Supervisors & Procurement Heads</td>
+                <td class="p-3 text-slate-600">Moderate</td>
+                <td class="p-3 text-emerald-700 font-bold">Maximum (Buffer Locked)</td>
+                <td class="p-3 text-slate-400">Internal Only</td>
+                <td class="p-3 text-center">
+                  <a href="/mockup-boq-editor-opt4.html" class="text-indigo-600 hover:underline font-bold">View Opt 4 →</a>
+                </td>
+              </tr>
+              <tr class="hover:bg-slate-50">
+                <td class="p-3 font-bold text-slate-900">
+                  <div class="text-blue-700">Option 5: 3-Tier Comparative Matrix</div>
+                  <div class="text-[11px] text-slate-400 font-normal">Side-by-side Lean vs Standard vs Luxe diff table</div>
+                </td>
+                <td class="p-3">Studio Partners & Proposal Architects</td>
+                <td class="p-3 text-emerald-700 font-bold">High (Fast Upgrades)</td>
+                <td class="p-3 text-emerald-700 font-bold">High (3-Tier Protection)</td>
+                <td class="p-3 text-emerald-700 font-bold">High (Proposal Comparison)</td>
+                <td class="p-3 text-center">
+                  <a href="/mockup-boq-editor-opt5.html" class="text-indigo-600 hover:underline font-bold">View Opt 5 →</a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ADD ITEM FROM BANK MODAL / SLIDE-IN -->
+  <div id="modal-bank" class="fixed inset-0 bg-slate-900/60 z-50 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div>
+          <span class="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700">Studio Item Bank</span>
+          <h3 class="font-serif text-lg font-bold text-slate-900">Add Item to Active BOQ</h3>
+        </div>
+        <button onclick="closeBankDrawer()" class="p-1 rounded-lg text-slate-400 hover:text-slate-700">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-500 mb-1">Target Space / Room</label>
+          <select id="modal-target-room" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold">
+            <option value="Living Room">Living Room</option>
+            <option value="Master Bedroom">Master Bedroom</option>
+            <option value="Kitchen">Kitchen</option>
+            <option value="Foyer">Foyer</option>
+            <option value="Site Works">Site Works</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-500 mb-1">Search Design Bank (Materials & Assemblies)</label>
+          <input type="text" placeholder="Type 'plywood', 'veneer', 'hinges', 'cove'..." class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl">
+        </div>
+
+        <div class="space-y-2 pt-1">
+          <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Popular Bank Assemblies</span>
+
+          <div onclick="addBankItemToBoq('Fluted Charcoal Wall Panelling', 1650, 42)" class="p-3 rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/20 cursor-pointer flex items-center justify-between transition-all">
+            <div>
+              <div class="font-bold text-slate-900">Fluted Charcoal Wall Panelling</div>
+              <div class="text-[11px] text-slate-500">Charcoal PU louvres on 8mm ply backing, warm LED provision</div>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="font-mono font-bold text-indigo-700">₹1,650 / sq ft</span>
+              <span class="text-[10px] text-emerald-700 block">42% Margin</span>
+            </div>
+          </div>
+
+          <div onclick="addBankItemToBoq('Kitchen Profile Handle-less Gola Cut', 850, 40)" class="p-3 rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/20 cursor-pointer flex items-center justify-between transition-all">
+            <div>
+              <div class="font-bold text-slate-900">Kitchen Aluminium Gola Profile Rail</div>
+              <div class="text-[11px] text-slate-500">Hafele black anodized C/L profile with corner caps</div>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="font-mono font-bold text-indigo-700">₹850 / rft</span>
+              <span class="text-[10px] text-emerald-700 block">40% Margin</span>
+            </div>
+          </div>
+
+          <div onclick="addBankItemToBoq('Toughened Glass Partition with Black Grid', 1450, 45)" class="p-3 rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/20 cursor-pointer flex items-center justify-between transition-all">
+            <div>
+              <div class="font-bold text-slate-900">Toughened Glass Black Grid Partition</div>
+              <div class="text-[11px] text-slate-500">10mm fluted glass with aluminium powder-coated frame</div>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="font-mono font-bold text-indigo-700">₹1,450 / sq ft</span>
+              <span class="text-[10px] text-emerald-700 block">45% Margin</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    // Data state
+    let activeOption = 'opt1';
+    let grandTotal = 2480000;
+    let costTotal = 1426000;
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast-notify');
+      document.getElementById('toast-message').innerText = msg;
+      toast.classList.remove('translate-y-[-150%]');
+      toast.classList.add('translate-y-0');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0');
+        toast.classList.add('translate-y-[-150%]');
+      }, 3500);
+    }
+
+    function switchOption(optId) {
+      activeOption = optId;
+      const options = ['opt1', 'opt2', 'opt3', 'opt4', 'opt5', 'matrix'];
+      options.forEach(opt => {
+        const viewEl = document.getElementById(`view-${opt}`);
+        const tabEl = document.getElementById(`tab-${opt}`);
+        if (viewEl) {
+          if (opt === optId) {
+            viewEl.classList.remove('hidden');
+          } else {
+            viewEl.classList.add('hidden');
+          }
+        }
+        if (tabEl) {
+          if (opt === optId) {
+            tabEl.className = 'py-2.5 px-2 rounded-lg text-center transition-all cursor-pointer tab-active flex flex-col items-center justify-center gap-0.5';
+          } else {
+            tabEl.className = 'py-2.5 px-2 rounded-lg text-center transition-all cursor-pointer text-slate-600 hover:text-slate-900 flex flex-col items-center justify-center gap-0.5';
+          }
+        }
+      });
+      lucide.createIcons();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function setTier(tierName) {
+      document.getElementById('tier-btn-standard').className = tierName === 'Standard' ? 'px-3 py-1.5 rounded-lg bg-white shadow-xs text-indigo-700 font-bold' : 'px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900';
+      document.getElementById('tier-btn-lean').className = tierName === 'Lean' ? 'px-3 py-1.5 rounded-lg bg-white shadow-xs text-indigo-700 font-bold' : 'px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900';
+      document.getElementById('tier-btn-luxe').className = tierName === 'Luxe' ? 'px-3 py-1.5 rounded-lg bg-white shadow-xs text-indigo-700 font-bold' : 'px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900';
+      
+      if (tierName === 'Lean') {
+        grandTotal = 1920000;
+        costTotal = 1190400;
+        document.getElementById('vital-grand-total').innerText = '₹19,20,000';
+        document.getElementById('vital-cost-total').innerText = '₹11,90,400';
+        document.getElementById('vital-margin-pct').innerText = '38.00%';
+        showToast('Switched BOQ active baseline to Lean Tier (₹19.20L)');
+      } else if (tierName === 'Luxe') {
+        grandTotal = 3150000;
+        costTotal = 1701000;
+        document.getElementById('vital-grand-total').innerText = '₹31,50,000';
+        document.getElementById('vital-cost-total').innerText = '₹17,01,000';
+        document.getElementById('vital-margin-pct').innerText = '46.00%';
+        showToast('Switched BOQ active baseline to Luxe Bespoke Tier (₹31.50L)');
+      } else {
+        grandTotal = 2480000;
+        costTotal = 1426000;
+        document.getElementById('vital-grand-total').innerText = '₹24,80,000';
+        document.getElementById('vital-cost-total').innerText = '₹14,26,000';
+        document.getElementById('vital-margin-pct').innerText = '42.50%';
+        showToast('Switched BOQ active baseline to Standard Tier (₹24.80L)');
+      }
+    }
+
+    function changeQty(itemId, delta) {
+      const qtyEl = document.getElementById(`qty-${itemId}`);
+      if (qtyEl) {
+        let current = parseInt(qtyEl.innerText) || 0;
+        let next = Math.max(1, current + delta);
+        qtyEl.innerText = next;
+        showToast(`Updated quantity for line item to ${next}`);
+      }
+    }
+
+    function inspectItem(itemId) {
+      document.querySelectorAll('#opt1-items-list > div').forEach(el => {
+        el.classList.remove('border-indigo-500', 'bg-indigo-50/20');
+        el.classList.add('border-slate-200', 'bg-white');
+      });
+      const selected = document.getElementById(`row-${itemId}`);
+      if (selected) {
+        selected.classList.remove('border-slate-200', 'bg-white');
+        selected.classList.add('border-indigo-500', 'bg-indigo-50/20');
+      }
+
+      if (itemId === 'item1') {
+        document.getElementById('inspector-title').innerText = 'TV Console with Fluted Louvres';
+        document.getElementById('inspector-room').value = 'Living Room';
+        document.getElementById('inspector-mat').value = '700';
+        document.getElementById('inspector-labor').value = '315';
+        document.getElementById('inspector-margin').value = '42';
+        document.getElementById('inspector-sell-rate').innerText = '₹1,750 / sq ft';
+        document.getElementById('inspector-status-badge').innerText = 'FIRM SCOPE';
+        document.getElementById('inspector-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800';
+      } else if (itemId === 'item2') {
+        document.getElementById('inspector-title').innerText = 'Full-Height Sliding Wardrobe';
+        document.getElementById('inspector-room').value = 'Master Bedroom';
+        document.getElementById('inspector-mat').value = '950';
+        document.getElementById('inspector-labor').value = '287';
+        document.getElementById('inspector-margin').value = '45';
+        document.getElementById('inspector-sell-rate').innerText = '₹2,250 / sq ft';
+        document.getElementById('inspector-status-badge').innerText = 'FIRM SCOPE';
+        document.getElementById('inspector-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800';
+      } else if (itemId === 'item3') {
+        document.getElementById('inspector-title').innerText = 'Caesarstone Quartz Countertop';
+        document.getElementById('inspector-room').value = 'Kitchen';
+        document.getElementById('inspector-mat').value = '620';
+        document.getElementById('inspector-labor').value = '230';
+        document.getElementById('inspector-margin').value = '32';
+        document.getElementById('inspector-sell-rate').innerText = '₹1,250 / sq ft';
+        document.getElementById('inspector-status-badge').innerText = 'PROVISIONAL';
+        document.getElementById('inspector-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800';
+      }
+    }
+
+    function recalcInspector() {
+      const mat = parseFloat(document.getElementById('inspector-mat').value) || 0;
+      const labor = parseFloat(document.getElementById('inspector-labor').value) || 0;
+      const margin = parseFloat(document.getElementById('inspector-margin').value) || 0;
+      const cost = mat + labor;
+      const sell = margin >= 100 ? cost : Math.round(cost / (1 - (margin / 100)));
+      document.getElementById('inspector-sell-rate').innerText = `₹${sell.toLocaleString('en-IN')} / unit`;
+    }
+
+    function saveInspectorChanges() {
+      showToast('Inspector updates saved to active tier BOQ!');
+    }
+
+    function duplicateLineItem() {
+      showToast('Line item duplicated as revision copy in spatial tree');
+    }
+
+    function deleteItem(itemId) {
+      const row = document.getElementById(`row-${itemId}`);
+      if (row) {
+        row.style.opacity = '0.4';
+        row.style.pointerEvents = 'none';
+        showToast('Item marked as deleted from BOQ scope');
+      }
+    }
+
+    function setRoomFilter(room) {
+      showToast(`Filtered BOQ view to ${room}`);
+    }
+
+    function filterOpt1Items(query) {
+      // live filter simulation
+    }
+
+    function filterOpt1Category(cat) {
+      showToast(`Filtered category: ${cat}`);
+    }
+
+    function addBundleToBoq(bundleName) {
+      showToast(`Added '${bundleName}' (3 line items) to spatial tree!`);
+    }
+
+    function toggleUpgradeBundle(btn) {
+      btn.innerText = '✓ Included in Proposal';
+      btn.className = 'w-full py-2 bg-emerald-600 text-white font-bold rounded-xl text-xs shadow-xs';
+      grandTotal += 145000;
+      document.getElementById('vital-grand-total').innerText = `₹${grandTotal.toLocaleString('en-IN')}`;
+      showToast('Smart Home bundle added to proposal! Contract total updated.');
+    }
+
+    function openBankDrawer() {
+      document.getElementById('modal-bank').classList.remove('hidden');
+    }
+
+    function closeBankDrawer() {
+      document.getElementById('modal-bank').classList.add('hidden');
+    }
+
+    function addBankItemToBoq(name, rate, margin) {
+      closeBankDrawer();
+      showToast(`Added '${name}' from Bank to ${document.getElementById('modal-target-room').value}!`);
+    }
+
+    function bulkSetMargin(pct) {
+      showToast(`Updated margin to ${pct}% across all selected rows!`);
+    }
+  </script>
+</body>
+</html>

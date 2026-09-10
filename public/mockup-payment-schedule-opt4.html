@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Schedule — Option 4: Cash Flow & Procurement-Linked</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-serif { font-family: 'Playfair Display', serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .shadow-card { box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen p-4 sm:p-8">
+
+  <div id="toast-notify" class="fixed top-5 right-5 z-50 transform translate-y-[-150%] transition-transform duration-300 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-semibold max-w-md">
+    <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400 shrink-0"></i>
+    <span id="toast-message">Action processed</span>
+  </div>
+
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Navigation Bar -->
+    <div class="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-card text-xs">
+      <div class="flex items-center gap-2">
+        <a href="/mockup-payment-schedule.html" class="text-indigo-600 font-bold hover:underline flex items-center gap-1">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> All 5 Options Suite
+        </a>
+        <span class="text-slate-300">•</span>
+        <span class="font-semibold text-slate-600">Option 4 of 5</span>
+      </div>
+      <div class="flex items-center gap-1.5 font-medium">
+        <span class="text-slate-400">Jump to:</span>
+        <a href="/mockup-payment-schedule-opt1.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 1</a>
+        <a href="/mockup-payment-schedule-opt2.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 2</a>
+        <a href="/mockup-payment-schedule-opt3.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 3</a>
+        <a href="/mockup-payment-schedule-opt5.html" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-700">Opt 5</a>
+      </div>
+    </div>
+
+    <!-- Header Card -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-card space-y-3">
+      <div class="flex items-center gap-2">
+        <span class="px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-extrabold uppercase tracking-wider">
+          Option 4: Cash Flow & Procurement-Linked
+        </span>
+        <span class="text-xs text-slate-400 font-medium">Lodha Amara 2BHK • Working Capital Buffer Protection</span>
+      </div>
+      <h1 class="font-serif text-2xl sm:text-3xl font-bold text-slate-900">Cash Flow & Procurement-Linked Schedule</h1>
+      <p class="text-xs sm:text-sm text-slate-500 leading-relaxed">
+        Synchronizes client inflows directly with factory purchase orders and trade vendor lead times. Ensures the studio never fronts working capital for plywood, hardware, or stone procurement.
+      </p>
+    </div>
+
+    <!-- Vitals -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Client Inflow Target</div>
+        <div class="text-xl font-bold font-mono text-slate-900 mt-1">₹24,80,000</div>
+        <div class="text-[11px] text-slate-500 mt-1">Total Client Contract Value</div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Committed Vendor Outflows</div>
+        <div class="text-xl font-bold font-mono text-slate-700 mt-1">₹14,25,000</div>
+        <div class="text-[11px] text-slate-500 mt-1">Plywood, Hardware, Labour & Paint</div>
+      </div>
+      <div class="bg-white rounded-2xl border border-emerald-200 bg-emerald-50/20 p-4 shadow-card">
+        <div class="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Studio Net Margin Buffer</div>
+        <div class="text-xl font-bold font-mono text-emerald-700 mt-1">+₹10,55,000</div>
+        <div class="text-[11px] text-emerald-700 mt-1">42.5% Protected Gross Margin</div>
+      </div>
+    </div>
+
+    <!-- Interactive Tranches List -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-card space-y-4">
+      
+      <!-- Tranche 1 (Settled) -->
+      <div class="border border-emerald-200 rounded-xl bg-emerald-50/20 p-4 space-y-2">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">✓</span>
+            <span class="text-xs font-bold text-slate-900">Tranche 1: Discovery & Concept Retainer</span>
+            <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.2 rounded-full">CLEARED</span>
+          </div>
+          <span class="text-xs font-mono font-bold text-slate-900">Inflow: +₹3,80,000 • Outflow: ₹85,000 (3D Renders)</span>
+        </div>
+      </div>
+
+      <!-- Tranche 2 (Active Due Now) -->
+      <div id="tranche2-box" class="border-2 border-indigo-500 rounded-xl bg-indigo-50/40 p-5 space-y-3.5">
+        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">2</span>
+              <span class="text-sm font-bold text-slate-900">Tranche 2: Raw Material Procurement & Site Prep</span>
+              <span class="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full">DUE NOW</span>
+            </div>
+            <p class="text-xs text-slate-600 mt-1">
+              <strong>Critical Material Gate:</strong> Clears 3 vendor POs with 14-day production lead times.
+            </p>
+          </div>
+          <div class="text-right shrink-0">
+            <span class="text-base font-bold font-mono text-indigo-950 block">Inflow Target: ₹6,30,000</span>
+            <button onclick="recordTranche2Paid()" class="mt-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs cursor-pointer">
+              Mark Inflow Received →
+            </button>
+          </div>
+        </div>
+
+        <!-- Vendor Orders Breakdown -->
+        <div class="bg-white rounded-lg border border-indigo-200 p-3 space-y-2 text-xs">
+          <div class="font-bold text-slate-800">Linked Vendor Purchase Orders:</div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+            <div class="p-2 bg-slate-50 rounded border border-slate-200">
+              <div class="font-semibold text-slate-800">CenturyPly BWR 710</div>
+              <div class="text-slate-500 text-[10px]">PO #PO-9012 • ₹2,40,000</div>
+              <div id="status-po1" class="text-amber-700 font-bold text-[9px] mt-0.5">Awaiting Inflow</div>
+            </div>
+            <div class="p-2 bg-slate-50 rounded border border-slate-200">
+              <div class="font-semibold text-slate-800">Hafele Hardware Hinges</div>
+              <div class="text-slate-500 text-[10px]">PO #PO-9015 • ₹95,000</div>
+              <div id="status-po2" class="text-amber-700 font-bold text-[9px] mt-0.5">Awaiting Inflow</div>
+            </div>
+            <div class="p-2 bg-slate-50 rounded border border-slate-200">
+              <div class="font-semibold text-slate-800">Demolition & Masonry Labour</div>
+              <div class="text-slate-500 text-[10px]">Advance • ₹75,000</div>
+              <div id="status-po3" class="text-amber-700 font-bold text-[9px] mt-0.5">Ready for dispatch</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tranche 3 -->
+      <div class="border border-slate-200 rounded-xl bg-white p-4 space-y-1 opacity-80">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full border border-slate-300 text-slate-400 flex items-center justify-center text-xs font-bold">3</span>
+            <span class="text-xs font-bold text-slate-800">Tranche 3: Factory Carcass Assembly & Laminate Pressing</span>
+            <span class="text-[10px] text-slate-400">Target 18 Sep 2026</span>
+          </div>
+          <span class="text-xs font-mono font-bold text-slate-700">Inflow: ₹8,40,000 • Outflow: ₹5,60,000</span>
+        </div>
+      </div>
+
+      <!-- Tranche 4 -->
+      <div class="border border-slate-200 rounded-xl bg-white p-4 space-y-1 opacity-80">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full border border-slate-300 text-slate-400 flex items-center justify-center text-xs font-bold">4</span>
+            <span class="text-xs font-bold text-slate-800">Tranche 4: Finishes, Asian Paints Royale & Electrical Trim</span>
+            <span class="text-[10px] text-slate-400">Target 05 Oct 2026</span>
+          </div>
+          <span class="text-xs font-mono font-bold text-slate-700">Inflow: ₹4,20,000 • Outflow: ₹2,80,000</span>
+        </div>
+      </div>
+
+      <!-- Tranche 5 -->
+      <div class="border border-slate-200 rounded-xl bg-white p-4 space-y-1 opacity-80">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full border border-slate-300 text-slate-400 flex items-center justify-center text-xs font-bold">5</span>
+            <span class="text-xs font-bold text-slate-800">Tranche 5: Final Handover & Retention</span>
+            <span class="text-[10px] text-slate-400">Target 20 Oct 2026</span>
+          </div>
+          <span class="text-xs font-mono font-bold text-slate-700">Inflow: ₹2,10,000 • Studio Profit Retention</span>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast-notify');
+      document.getElementById('toast-message').innerText = msg;
+      toast.classList.remove('translate-y-[-150%]');
+      toast.classList.add('translate-y-0');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0');
+        toast.classList.add('translate-y-[-150%]');
+      }, 3500);
+    }
+
+    function recordTranche2Paid() {
+      document.getElementById('status-po1').className = "text-emerald-700 font-bold text-[9px] mt-0.5";
+      document.getElementById('status-po1').innerText = "PO Released & Dispatched";
+      
+      document.getElementById('status-po2').className = "text-emerald-700 font-bold text-[9px] mt-0.5";
+      document.getElementById('status-po2').innerText = "PO Released & Dispatched";
+
+      document.getElementById('status-po3').className = "text-emerald-700 font-bold text-[9px] mt-0.5";
+      document.getElementById('status-po3').innerText = "Advance Released to Site";
+
+      showToast('Client payment verified! 3 Vendor POs unlocked and auto-dispatched.');
+    }
+  </script>
+</body>
+</html>

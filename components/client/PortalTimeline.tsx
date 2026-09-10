@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import MilestoneIcon from '../MilestoneIcon';
 import { ChevronDown } from 'lucide-react';
 import { PaymentMilestone, ProjectDecisionRecord } from '../../types';
 import { formatINR } from '../../lib/utils';
@@ -92,6 +93,10 @@ const clusterMarks = (marks: Mark[], span: number): Cluster[] => {
 
 const fmt = (day: number) =>
   new Date(day * 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+/** "14 Sept" — a day on the chart, where the year is already obvious. */
+const dayShort = (day: number) =>
+  new Date(day * 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 export default function PortalTimeline({
   programme, milestones, decisions, milestoneAmount, stageOfMilestone,
@@ -273,6 +278,44 @@ export default function PortalTimeline({
     </div>
   );
 
+  /*
+    The key dates, flattened out of the stages that carry them.
+
+    `ProgrammeStage.milestones` has been computed since the programme view was
+    written and rendered nowhere, so the client never saw their own Design Gate
+    or Handover — the two dates in the whole schedule they are most likely to be
+    looking for. They do not belong inside a 38px stage row next to its date
+    label; they are points, and they get their own lane.
+
+    `row` is a two-level collision pass: two flags closer together than a tenth
+    of the axis would print their labels on top of each other, so the later one
+    drops a line. Beyond two, they stack again from the top — three key dates in
+    one week is not a programme anyone is reading off a chart.
+  */
+  /* Plain, not memoised: this sits below the "no dated programme" early
+     return, and a hook here would be a conditional hook. It is two array
+     passes over a handful of milestones. */
+  const keyDates = (() => {
+    const all = programme.stages
+      .filter(s => s.hasSchedule)
+      .flatMap(s => s.milestones)
+      .filter(m => m.day >= axis.start && m.day <= axis.end)
+      .sort((a, b) => a.day - b.day);
+    let lastLeft = -Infinity;
+    let row = 0;
+    return all.map(m => {
+      const left = pct(m.day);
+      if (left - lastLeft < 10) row = (row + 1) % 2; else row = 0;
+      lastLeft = left;
+      return { ...m, left, row };
+    });
+  })();
+
+  /* The next one still ahead — the single date worth answering "when" with. */
+  const nextKeyDate = keyDates.find(m => !m.done && m.day >= programme.todayDay);
+
+  const daysAway = (day: number) => Math.round(day - programme.todayDay);
+
   const todayPct = pct(programme.todayDay);
   const todayInRange = programme.todayDay >= axis.start && programme.todayDay <= axis.end;
 
@@ -282,6 +325,21 @@ export default function PortalTimeline({
         <span className="inline-flex items-center gap-1.5"><span className="w-4 h-1.5 rounded bg-[#0066CC] inline-block" />Studio work</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />Your decisions</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rotate-45 bg-violet-500 inline-block" />Your payments</span>
+        {keyDates.length > 0 && (
+          <span className="inline-flex items-center gap-1.5"><span className="ff-flag text-green-500" />Key dates</span>
+        )}
+        {/* The one line most clients open this page to read. */}
+        {nextKeyDate && (
+          <span className="inline-flex items-center gap-1.5 text-green-700">
+            Next: <b className="font-black">{nextKeyDate.label}</b>
+            <span className="font-medium text-slate-400">
+              {fmt(nextKeyDate.day)}
+              {daysAway(nextKeyDate.day) === 0
+                ? ' · today'
+                : ` · in ${daysAway(nextKeyDate.day)} day${daysAway(nextKeyDate.day) === 1 ? '' : 's'}`}
+            </span>
+          </span>
+        )}
       </div>
 
       <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
@@ -318,7 +376,7 @@ export default function PortalTimeline({
             )}
 
             <Track label="Work">
-              {programme.stages.map(s => {
+              {programme.stages.map((s, i) => {
                 const left = pct(s.startDay);
                 const width = Math.max(1.5, pct(s.endDay) - left);
                 // A one-week stage on a six-month axis is ~4% wide, which fits
@@ -326,8 +384,27 @@ export default function PortalTimeline({
                 // ("2. Scope & Ter"). Below the threshold the bar keeps its
                 // position and the name sits beside it.
                 const inside = width >= 14;
+                /*
+                  Where the stage stands, in the client's language.
+
+                  The bar already says this in colour, which is a legend the
+                  reader has to hold in their head. The word costs nothing and
+                  removes the guess.
+                */
+                const standing = s.status === 'completed'
+                  ? 'Completed'
+                  : s.status === 'active' ? 'In progress' : 'Not started';
+
+                /*
+                  A stage still open past the date it was meant to end has
+                  already pushed the dates below it, so the client is looking at
+                  a later handover than they were last month. Saying which stage
+                  did it is the difference between a programme that moved and a
+                  programme that explains itself. No day count — the dates on the
+                  chart are the answer, and a number here reads as a bill.
+                */
                 const detail = s.hasSchedule
-                  ? `${fmt(s.startDay)} → ${fmt(s.endDay)}`
+                  ? `${standing} · ${fmt(s.startDay)} → ${fmt(s.endDay)}${s.runningLate ? ' · running later than planned' : ''}`
                   : `expected around ${fmt(s.startDay)} — not scheduled yet`;
                 const on = () => setFocus({ key: `st-${s.stageNumber}`, title: s.name, detail });
                 const off = () => setFocus(null);
@@ -338,10 +415,20 @@ export default function PortalTimeline({
                     <button
                       onMouseEnter={on} onMouseLeave={off} onFocus={on} onBlur={off}
                       aria-label={`${s.name} — ${detail}`}
-                      style={{ left: `${left}%`, width: `${width}%` }}
-                      className={`absolute top-1.5 h-5 rounded-md flex items-center transition-all cursor-default ${
+                      style={{ left: `${left}%`, width: `${width}%`, animationDelay: `${Math.min(i, 8) * 70}ms` }}
+                      /*
+                        Stages arrive in order, a beat apart.
+
+                        The programme is a sequence, and having it draw itself
+                        left to right says so before a single date is read. The
+                        delay is capped so a long project does not keep the
+                        client waiting on an animation.
+                      */
+                      className={`pt-stage absolute top-1.5 h-5 rounded-md flex items-center transition-all cursor-default ${
                         inside ? 'px-2' : ''
                       } ${
+                        s.runningLate ? 'ring-1 ring-amber-400/70 ring-offset-1 ring-offset-white ' : ''
+                      }${
                         // Dashed and hollow: placed in the gap between scheduled
                         // stages, not a duration the studio has committed to.
                         !s.hasSchedule
@@ -377,17 +464,96 @@ export default function PortalTimeline({
                         reading their own programme learned nothing without a
                         mouse — and nothing at all on a phone. */}
                     <span
-                      style={{ left: `${left}%` }}
-                      className={`absolute top-[25px] text-[10px] font-semibold tabular-nums whitespace-nowrap pointer-events-none ${
-                        s.hasSchedule ? 'text-slate-400' : 'text-slate-300 italic'
-                      } ${dim(`st-${s.stageNumber}`)}`}
+                      style={{
+                        left: `${left}%`,
+                        color: s.runningLate ? '#d97706' : s.hasSchedule ? '#0066CC' : '#cbd5e1',
+                        /* Offset per stage so the column breathes instead of
+                           pulsing in unison. */
+                        ['--ff-delay' as string]: `-${(i * 430) % 5200}ms`,
+                      } as React.CSSProperties}
+                      className={`ff-banner-wrap absolute top-[25px] pointer-events-none ${dim(`st-${s.stageNumber}`)}`}
                     >
-                      {s.hasSchedule ? `${short(s.startDay)} – ${short(s.endDay)}` : `~ ${short(s.startDay)}`}
+                      <span className="ff-banner-pole" />
+                      <span className={`ff-banner text-[10px] font-semibold tabular-nums whitespace-nowrap ${
+                        s.runningLate
+                          ? 'bg-amber-50 text-amber-800'
+                          : s.hasSchedule ? 'bg-slate-100 text-slate-500' : 'bg-slate-50 text-slate-300 italic'
+                      }`}>
+                        {s.hasSchedule ? `${short(s.startDay)} – ${short(s.endDay)}` : `~ ${short(s.startDay)}`}
+                        {s.hasSchedule && (
+                          <span className={s.status === 'completed' ? 'text-emerald-600' : ''}>
+                            · {standing}
+                          </span>
+                        )}
+                        {s.runningLate && <span className="font-bold">· running later than planned</span>}
+                      </span>
                     </span>
                   </div>
                 );
               })}
             </Track>
+
+            {/* Key dates.
+
+                A flag rather than a diamond, because a flag is planted at a
+                point — which is what a zero-duration milestone is — and because
+                one that moves picks itself out of a static chart without
+                needing a colour nobody has been taught. The pole sits exactly
+                on the date; the label leans away from whichever edge is
+                nearer, so nothing runs off the chart. */}
+            {keyDates.length > 0 && (
+              <Track label="Key dates">
+                <div className="relative h-11">
+                  {keyDates.map(m => {
+                    const away = daysAway(m.day);
+                    const detail = m.done
+                      ? `Reached ${fmt(m.day)}`
+                      : `${fmt(m.day)}${away === 0 ? ' · today' : away > 0
+                          ? ` · in ${away} day${away === 1 ? '' : 's'}`
+                          : ` · ${-away} day${away === -1 ? '' : 's'} ago, not yet marked complete`}`;
+                    const flip = m.left > 78;
+                    /*
+                      Grey for what is behind us, light green for what is ahead,
+                      amber for a date that has passed without being marked
+                      reached. Three states a client can read without being
+                      taught a legend, and a green light enough that a programme
+                      of nothing but future dates stays calm.
+                    */
+                    const tone = m.done
+                      ? { pole: '#94a3b8', ink: 'text-slate-400', name: 'text-slate-500' }
+                      : away < 0
+                        ? { pole: '#d97706', ink: 'text-amber-700', name: 'text-amber-900' }
+                        : { pole: '#22c55e', ink: 'text-green-700', name: 'text-green-900' };
+                    const on = () => setFocus({ key: `ms-${m.id}`, title: m.label, detail });
+                    const off = () => setFocus(null);
+                    return (
+                      <button
+                        key={m.id}
+                        onMouseEnter={on} onMouseLeave={off} onFocus={on} onBlur={off}
+                        aria-label={`${m.label} — ${detail}`}
+                        style={{ left: `${m.left}%`, top: m.row === 0 ? 2 : 22, color: tone.pole }}
+                        className={`absolute z-10 flex items-start gap-1 cursor-default ${
+                          flip ? 'flex-row-reverse -translate-x-full' : ''
+                        } ${dim(`ms-${m.id}`)}`}
+                      >
+                        <span className={`ff-flag${m.id === nextKeyDate?.id ? ' ff-flag--next' : ''}`} />
+                        <span className="flex flex-col items-start leading-tight -mt-0.5">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold whitespace-nowrap ${tone.name}`}>
+                            {/* Which date, not just that there is one. */}
+                            <MilestoneIcon label={m.label} className="w-3 h-3 shrink-0" />
+                            {m.label}
+                          </span>
+                          <span className={`text-[9px] font-semibold tabular-nums whitespace-nowrap ${tone.ink}`}>
+                            {dayShort(m.day)}
+                            {m.done ? ' · reached' : away === 0 ? ' · today' : away > 0 ? ` · in ${away}d` : ' · overdue'}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Track>
+            )}
 
             {/* Decisions and payments as clustered chips.
 

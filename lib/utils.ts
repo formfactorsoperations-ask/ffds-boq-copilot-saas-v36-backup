@@ -76,6 +76,17 @@ export const calculateSellPrice = (materials: number, labor: number, margin: num
  * `calculateGrossMargin` now returns a true margin and is the right function
  * whenever the number sits next to revenue.
  */
+/**
+ * The exact inverse of `calculateSellPrice`: recover cost from a known selling
+ * rate. Use this wherever only `selectedRate` survives and the cost has to be
+ * backed out — writing `sell * (1 - margin/100)` there silently applies the
+ * margin model to a markup-priced number and understates the cost.
+ */
+export const calculateCostFromSell = (sell: number, margin: number): number => {
+  const marginPercent = (Number(margin) || 0);
+  return (Number(sell) || 0) / (1 + marginPercent / 100);
+};
+
 export const calculateMarkupPct = (sell: number, cost: number): number => {
   if (cost === 0) return 0;
   return ((sell - cost) / cost) * 100;

@@ -66,6 +66,14 @@ export interface TeamMember {
     email: string;
     role: UserRole;
     status: 'Active' | 'Pending';
+    /**
+     * What this person is called on a document — "Principal Architect", not
+     * their access level. Email drafts already read it (`team[uid].title`) and
+     * fall back to "Architect" for everyone, because nothing ever set it.
+     */
+    title?: string;
+    /** Firebase Auth uid, when this member has actually signed in. */
+    uid?: string;
 }
 
 export type AIStrategy = 'balanced' | 'conservative' | 'aggressive';
@@ -75,6 +83,27 @@ export type AIStatus = 'checking' | 'online' | 'error' | 'unavailable';
 export type DesignFeeType = 'percentage' | 'fixed_sqft' | 'fixed_lumpsum';
 
 export type PropertyStatus = 'raw_shell' | 'semi_finished' | 'finished';
+
+/**
+ * What the site actually needs doing, beyond the typology template.
+ *
+ * `propertyStatus` has been on the form since the beginning and was read in
+ * exactly one place in the app — a portal message — so a raw shell and a
+ * finished refit generated identical bills. These switches are what the BOQ
+ * generator reads; the site state supplies their defaults. See lib/civilScope.
+ */
+export interface CivilScope {
+    /** Lift and relay floors, or lay them for the first time. */
+    flooring?: boolean;
+    /** Full wet-area overhaul: BBC, waterproofing, tiling, counter, sanitary. */
+    bathrooms?: boolean;
+    /** Kitchen dado and plumbing point shifts. */
+    kitchenCivil?: boolean;
+    rewiring?: boolean;
+    plumbing?: boolean;
+    falseCeiling?: boolean;
+    painting?: boolean;
+}
 
 export type ProposalType = 'TURNKEY' | 'DESIGN_ONLY';
 
@@ -224,6 +253,15 @@ export interface ProposalContent {
     footer?: { orgName: string; tagline: string; contactInfo: string; phoneNumber: string };
     visibleSections?: Record<string, boolean>;
     materials?: { overrides?: Record<string, Record<string, string>> };
+    /* Free-text overrides for the booklet's own prose, keyed by a hash of the
+       shipped default. A key falls out of use when the default text is edited
+       in source, which is the wanted behaviour: a reworded clause should not
+       silently keep a studio override written against the old wording. */
+    blocks?: Record<string, string>;
+    /* Studio-customised clause lists in the annexure, keyed the same way as
+       `blocks`. Absent means "use the list the booklet ships with", so a list
+       is only frozen once someone actually restructures it. */
+    lists?: Record<string, Array<string | { title: string; desc?: string; meta?: string }>>;
     l2_cover?: { title: string; text: string };
     l2_snapshot?: { title: string; subtitle: string };
     l2_fees?: { title: string; subtitle: string };
@@ -635,6 +673,22 @@ export interface ProjectContext {
     designFeeType?: DesignFeeType;
     designScope?: DesignScope;
     propertyStatus?: PropertyStatus;
+    /**
+     * Set once the studio has touched the Civil & Site Scope block. Absent
+     * means "never reviewed", which reads the defaults off propertyStatus —
+     * so a correction survives the next regeneration and a project that has
+     * never been reviewed still gets a sensible scope.
+     */
+    civilScope?: CivilScope;
+    /**
+     * The requirement in the client's own words.
+     *
+     * One field the studio was already going to type somewhere, read by
+     * `suggestScopeFromBrief` to propose the civil scope. It suggests; nothing
+     * is applied without a click — a bill that changed because a regex fired is
+     * worse than one nobody configured.
+     */
+    clientBrief?: string;
     proposalType?: ProposalType;
     proposalMode?: 'single' | 'tiered';
     gstRate?: number;
@@ -695,7 +749,17 @@ export interface ProjectContext {
     designAgreementSignoff?: SignoffRecord;
     proposalSignoff?: SignoffRecord;
     termsSignoff?: SignoffRecord;
+    /**
+     * Legacy: the plan as base64, stored in the document.
+     *
+     * At 200-270KB it was the largest single field on several projects, against
+     * Firestore's 1 MiB document limit. New uploads go to Storage and set
+     * `floorplanImageUrl` instead; this stays readable so existing projects keep
+     * showing their plan until they are repaired.
+     */
     floorplanImage?: string;
+    /** Storage URL of the floor plan. Roughly a hundred bytes in the document. */
+    floorplanImageUrl?: string;
     paymentMilestones?: PaymentMilestone[];
     designPaymentStages?: {
         stage1?: any;

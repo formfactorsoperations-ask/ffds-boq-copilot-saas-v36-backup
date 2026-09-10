@@ -1,236 +1,128 @@
 /**
- * Shared utility for generating PDF options with html2pdf.js / html2canvas.
- * Converts modern CSS color functions like `oklab`, `oklch`, `lab`, and `lch` that html2canvas cannot parse natively
- * into plain `rgb(...)` / `rgba(...)` strings across stylesheets, inline styles, and computed properties.
+ * Preparing a cloned document for html2pdf.js / html2canvas.
+ *
+ * html2canvas cannot parse the modern CSS colour functions, and Tailwind v4
+ * writes its entire palette in them, so every canvas-based PDF export in this
+ * app throws "Attempting to parse an unsupported color function" before it
+ * draws anything. This module makes a throwaway clone safe to rasterise.
+ *
+ * The conversion itself lives in ./oklch, which is unit-tested against
+ * Chromium's own colour conversions. This file used to carry a second,
+ * independent implementation of the same maths; that copy had three defects
+ * worth naming, because any re-implementation invites them again:
+ *
+ *   - its oklab->LMS matrix used 0.1291980507 where the standard is
+ *     1.2914855480, a factor of ten that skewed anything blue or yellow;
+ *   - it matched colour functions with /\(([^)]+)\)/, which stops at the first
+ *     bracket and so cut Tailwind's own shadow value —
+ *     `oklab(from rgb(0 0 0 / 0.1) l a b / 5%)` — in half;
+ *   - it only scanned <style> elements, which works under the dev server but
+ *     finds nothing in a production build, where CSS arrives as <link>.
+ *
+ * The exported names and signatures are unchanged, so the twelve components
+ * that call `prepareClonedDocForPdf` need no edit.
  */
 
-function clamp01(val: number): number {
-  return Math.max(0, Math.min(1, val));
-}
+import {
+  convertOklchInValue,
+  flattenOklchColors,
+  flattenOklchStylesheets,
+} from './oklch';
 
-function oklabToRgb(l: number, a: number, b: number, alpha: number = 1): string {
-  // Normalize L to 0..1
-  if (l > 1) l = l / 100;
-  l = clamp01(l);
-
-  const l_ = l + 0.3963377774 * a + 0.2158037573 * b;
-  const m_ = l - 0.1055613458 * a - 0.0638541728 * b;
-  const s_ = l - 0.0894841775 * a - 0.1291980507 * b;
-
-  const l3 = l_ * l_ * l_;
-  const m3 = m_ * m_ * m_;
-  const s3 = s_ * s_ * s_;
-
-  const rLin = 4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3;
-  const gLin = -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3;
-  const bLin = -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3;
-
-  const toSrgb = (c: number) => {
-    const clamped = clamp01(c);
-    return clamped <= 0.0031308
-      ? Math.round(clamped * 12.92 * 255)
-      : Math.round((1.055 * Math.pow(clamped, 1 / 2.4) - 0.055) * 255);
-  };
-
-  const r = toSrgb(rLin);
-  const g = toSrgb(gLin);
-  const bVal = toSrgb(bLin);
-
-  if (alpha < 1) {
-    return `rgba(${r}, ${g}, ${bVal}, ${Math.max(0, Math.min(1, alpha))})`;
-  }
-  return `rgb(${r}, ${g}, ${bVal})`;
-}
-
-function parseAngle(val: string): number {
-  val = val.trim().toLowerCase();
-  if (val.endsWith('deg')) return parseFloat(val);
-  if (val.endsWith('rad')) return (parseFloat(val) * 180) / Math.PI;
-  if (val.endsWith('turn')) return parseFloat(val) * 360;
-  return parseFloat(val) || 0;
-}
-
-function oklchToRgb(l: number, c: number, h: number, alpha: number = 1): string {
-  if (l > 1) l = l / 100;
-  const hRad = (h * Math.PI) / 180;
-  const a = c * Math.cos(hRad);
-  const b = c * Math.sin(hRad);
-  return oklabToRgb(l, a, b, alpha);
-}
-
-function labToRgb(l: number, a: number, b: number, alpha: number = 1): string {
-  // Approximate standard CIELAB to RGB
-  if (l > 1) l = l / 100;
-  l = clamp01(l);
-  const y = (l + 0.16) / 1.16;
-  const x = a / 500 + y;
-  const z = y - b / 200;
-
-  const fInv = (t: number) => (t > 0.206897 ? t * t * t : (t - 16 / 116) / 7.787);
-  const xN = 0.95047 * fInv(x);
-  const yN = 1.00000 * fInv(y);
-  const zN = 1.08883 * fInv(z);
-
-  const rLin = 3.2406 * xN - 1.5372 * yN - 0.4986 * zN;
-  const gLin = -0.9689 * xN + 1.8758 * yN + 0.0415 * zN;
-  const bLin = 0.0557 * xN - 0.2040 * yN + 1.0570 * zN;
-
-  const toSrgb = (c: number) => {
-    const clamped = clamp01(c);
-    return clamped <= 0.0031308
-      ? Math.round(clamped * 12.92 * 255)
-      : Math.round((1.055 * Math.pow(clamped, 1 / 2.4) - 0.055) * 255);
-  };
-
-  const r = toSrgb(rLin);
-  const g = toSrgb(gLin);
-  const bVal = toSrgb(bLin);
-
-  if (alpha < 1) {
-    return `rgba(${r}, ${g}, ${bVal}, ${alpha})`;
-  }
-  return `rgb(${r}, ${g}, ${bVal})`;
-}
-
-export function convertColorFunctionToRgb(match: string, type: string, argsStr: string): string {
-  try {
-    const typeLower = type.toLowerCase();
-    const parts = argsStr.split('/');
-    const mainArgs = parts[0].trim().replace(/,/g, ' ').split(/\s+/).filter(Boolean);
-    let alpha = 1;
-    if (parts[1]) {
-      const alphaStr = parts[1].trim();
-      alpha = alphaStr.endsWith('%') ? parseFloat(alphaStr) / 100 : parseFloat(alphaStr);
-      if (isNaN(alpha)) alpha = 1;
-    }
-
-    const p0Str = mainArgs[0] || '0';
-    const p0 = p0Str.endsWith('%') ? parseFloat(p0Str) / 100 : parseFloat(p0Str);
-    const p1 = parseFloat(mainArgs[1] || '0');
-    const p2Str = mainArgs[2] || '0';
-
-    if (isNaN(p0) || isNaN(p1)) {
-      return 'rgb(51, 65, 85)';
-    }
-
-    if (typeLower === 'oklab') {
-      const p2 = parseFloat(p2Str);
-      return oklabToRgb(p0, p1, isNaN(p2) ? 0 : p2, alpha);
-    } else if (typeLower === 'oklch') {
-      const h = parseAngle(p2Str);
-      return oklchToRgb(p0, p1, h, alpha);
-    } else if (typeLower === 'lab') {
-      const p2 = parseFloat(p2Str);
-      return labToRgb(p0 * 100, p1, isNaN(p2) ? 0 : p2, alpha);
-    } else if (typeLower === 'lch') {
-      const h = parseAngle(p2Str);
-      const hRad = (h * Math.PI) / 180;
-      const a = p1 * Math.cos(hRad);
-      const b = p1 * Math.sin(hRad);
-      return labToRgb(p0 * 100, a, b, alpha);
-    }
-
-    return 'rgb(51, 65, 85)';
-  } catch (e) {
-    return 'rgb(51, 65, 85)';
-  }
-}
-
+/**
+ * Convert any oklch/oklab/lab/lch inside a CSS value string to rgb().
+ * Kept for callers that only need the string transform.
+ */
 export function sanitizeCssColorString(str: string): string {
   if (!str || typeof str !== 'string') return str;
-  const strLower = str.toLowerCase();
-  if (!strLower.includes('oklab') && !strLower.includes('oklch') && !strLower.includes('lab(') && !strLower.includes('lch(')) {
-    return str;
-  }
+  return convertOklchInValue(str);
+}
 
-  return str.replace(/(oklab|oklch|lab|lch)\s*\(([^)]+)\)/gi, (match, type, args) => {
-    return convertColorFunctionToRgb(match, type, args);
+/**
+ * Make `clonedDoc` safe for html2canvas.
+ *
+ * Runs from html2canvas's `onclone`, so it only ever touches the throwaway
+ * document about to be rasterised — the live page is untouched.
+ *
+ * `targetElementId` is accepted for call-site compatibility; the whole cloned
+ * document is sanitised regardless, since a colour inherited from an ancestor
+ * outside the target still reaches the render.
+ */
+/**
+ * Stop every transition and animation in the cloned document.
+ *
+ * Two reasons, and the first is not cosmetic. While a colour transition is in
+ * flight, Chromium reports the interpolated value as `oklab(...)` — and a
+ * running transition sits *above* author `!important` in the cascade, so an
+ * inline rgb written onto that element is simply ignored. Fifteen elements
+ * mid-hover were enough to fail an entire export.
+ *
+ * The second reason is that a document captured mid-animation prints a
+ * half-faded element, which is not what anyone wants in a client PDF.
+ */
+export function freezeMotionForPdf(clonedDoc: Document): void {
+  const style = clonedDoc.createElement('style');
+  style.setAttribute('data-ff-freeze', 'motion');
+  style.textContent =
+    '*, *::before, *::after {' +
+    'transition: none !important;' +
+    'animation: none !important;' +
+    '}';
+  (clonedDoc.head || clonedDoc.documentElement).appendChild(style);
+}
+
+/**
+ * Work around two html2canvas layout quirks, on the clone only.
+ *
+ * Both were found by rasterising a page and counting pixels, because both look
+ * perfectly correct on screen:
+ *
+ *   1. An `inline-flex` container renders its background and border but *drops
+ *      any element child entirely*. A badge reading "DESIGN + PLAN + BUILD"
+ *      came out as an empty grey pill. Bare text inside the same container is
+ *      fine; it is specifically an element child that disappears. `flex`,
+ *      `block` and `inline-block` are all unaffected.
+ *
+ *   2. A bottom border on an *inline* element is drawn across the full width of
+ *      the line box rather than under the text. Where the run ends on a short
+ *      final line, the border trails off as a rule to the margin — under
+ *      "engagement." it ran the width of the page.
+ */
+export function neutraliseHtml2CanvasQuirks(clonedDoc: Document): void {
+  const view = clonedDoc.defaultView;
+  if (!view) return;
+
+  clonedDoc.querySelectorAll('*').forEach((el) => {
+    const cs = view.getComputedStyle(el);
+
+    if (cs.display === 'inline-flex') {
+      (el as HTMLElement).style.setProperty('display', 'inline-block', 'important');
+    }
+
+    const bw = parseFloat(cs.borderBottomWidth || '0');
+    if (cs.display === 'inline' && bw > 0 && cs.borderBottomStyle !== 'none') {
+      const colour = cs.borderBottomColor;
+      (el as HTMLElement).style.setProperty('border-bottom', 'none', 'important');
+      (el as HTMLElement).style.setProperty('text-decoration', 'underline', 'important');
+      (el as HTMLElement).style.setProperty('text-decoration-color', colour, 'important');
+      (el as HTMLElement).style.setProperty('text-underline-offset', '3px', 'important');
+    }
   });
 }
 
-const KEBAB_COLOR_PROPERTIES = [
-  'color',
-  'background-color',
-  'border-top-color',
-  'border-right-color',
-  'border-bottom-color',
-  'border-left-color',
-  'outline-color',
-  'fill',
-  'stroke',
-  'box-shadow',
-  'text-shadow',
-  'text-decoration-color',
-  'caret-color',
-  'accent-color',
-  'column-rule-color',
-  'background-image'
-];
-
-export function prepareClonedDocForPdf(clonedDoc: Document, targetElementId?: string) {
+export function prepareClonedDocForPdf(clonedDoc: Document, targetElementId?: string): void {
   if (!clonedDoc) return;
 
-  // 1. Sanitize all <style> elements across the cloned document
-  const styleElements = Array.from(clonedDoc.querySelectorAll('style'));
-  styleElements.forEach((styleEl) => {
-    const rawCss = styleEl.textContent || '';
-    if (rawCss.toLowerCase().includes('oklab') || rawCss.toLowerCase().includes('oklch') || rawCss.toLowerCase().includes('lab(') || rawCss.toLowerCase().includes('lch(')) {
-      const sanitized = sanitizeCssColorString(rawCss);
-      const replacement = clonedDoc.createElement('style');
-      replacement.textContent = sanitized;
-      if (styleEl.parentNode) {
-        styleEl.parentNode.replaceChild(replacement, styleEl);
-      } else {
-        styleEl.textContent = sanitized;
-      }
-    }
-  });
+  // Motion first — an in-flight transition outranks anything written below.
+  freezeMotionForPdf(clonedDoc);
 
-  // 2. Iterate all elements from documentElement down to all children
-  const rootElements: HTMLElement[] = [];
-  if (clonedDoc.documentElement) rootElements.push(clonedDoc.documentElement as HTMLElement);
-  if (clonedDoc.body) rootElements.push(clonedDoc.body as HTMLElement);
-  
-  const allNodes = clonedDoc.querySelectorAll('*');
-  allNodes.forEach((node) => {
-    rootElements.push(node as HTMLElement);
-  });
+  // Then the renderer's own blind spots, before colours are read off the clone.
+  neutraliseHtml2CanvasQuirks(clonedDoc);
 
-  const win = clonedDoc.defaultView || window;
+  // Stylesheets next: a ::before / ::after has no node to hang an inline
+  // style on, so its colour can only be reached through the rule itself.
+  flattenOklchStylesheets(clonedDoc);
 
-  rootElements.forEach((htmlEl) => {
-    if (!htmlEl || !htmlEl.style) return;
-
-    // A. Check inline style attribute
-    const styleAttr = htmlEl.getAttribute('style');
-    if (styleAttr && (styleAttr.toLowerCase().includes('oklab') || styleAttr.toLowerCase().includes('oklch') || styleAttr.toLowerCase().includes('lab(') || styleAttr.toLowerCase().includes('lch('))) {
-      htmlEl.setAttribute('style', sanitizeCssColorString(styleAttr));
-    }
-
-    // A2. Check SVG color attributes
-    ['fill', 'stroke', 'stop-color'].forEach((attr) => {
-      const attrVal = htmlEl.getAttribute(attr);
-      if (attrVal && (attrVal.toLowerCase().includes('oklab') || attrVal.toLowerCase().includes('oklch') || attrVal.toLowerCase().includes('lab(') || attrVal.toLowerCase().includes('lch('))) {
-        htmlEl.setAttribute(attr, sanitizeCssColorString(attrVal));
-      }
-    });
-
-    // B. Check computed styles for all color properties using proper kebab-case names
-    try {
-      const computed = win.getComputedStyle(htmlEl);
-      if (computed) {
-        KEBAB_COLOR_PROPERTIES.forEach((prop) => {
-          const compVal = computed.getPropertyValue(prop);
-          if (compVal && (compVal.toLowerCase().includes('oklab') || compVal.toLowerCase().includes('oklch') || compVal.toLowerCase().includes('lab(') || compVal.toLowerCase().includes('lch('))) {
-            const rgbVal = sanitizeCssColorString(compVal);
-            htmlEl.style.setProperty(prop, rgbVal, 'important');
-          }
-        });
-      }
-    } catch (e) {
-      // ignore getComputedStyle exceptions
-    }
-  });
+  // Then computed styles, inline style attributes and SVG paint attributes.
+  flattenOklchColors(clonedDoc);
 }
-
-

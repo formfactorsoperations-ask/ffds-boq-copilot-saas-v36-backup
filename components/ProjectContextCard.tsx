@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ProjectContext, Room, AIStrategy, DesignScope } from '../types';
+import { ProjectContext, Room, AIStrategy, DesignScope, CivilScope } from '../types';
+import { CIVIL_SCOPE_FIELDS, DEFAULT_CIVIL_SCOPE, resolveCivilScope, isScopeCustomised, pendingSuggestions, applySuggestions } from '../lib/civilScope';
+import { ROOM_DISTRIBUTIONS, resolveActiveTemplate, ensureRoomsExistForTemplate, roomFamily } from '../lib/standardPackages';
+import { isScopeBucket, realRooms, ensureScopeRooms, polishRoomNames, SCOPE_BUCKETS, SCOPE_BUCKET_META } from '../lib/scopeBuckets';
 import { estimateRoomSizes, isAiAvailable } from '../services/geminiService';
 import { useOrg } from '../contexts/OrgContext';
 import TakeoffPanel from './TakeoffPanel';
@@ -116,28 +119,148 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
     setProjectContext(prev => ({ ...prev, rooms: [...(prev.rooms || []), newRoom] }));
   };
 
-  const handleAddSpecialRoom = (type: 'Functional' | 'Others') => {
-    const newRoom: Room = { name: type, size: projectContext.area || 100, unit: 'sq ft' };
-    setProjectContext(prev => ({ ...prev, rooms: [...(prev.rooms || []), newRoom] }));
-  };
+  /*
+    Buckets were added here as rooms carrying the whole flat's area, which is
+    what made a 904 sq ft project measure 2,710. They are not rooms and are not
+    created: Civil, Functional and Others always exist as places for a line to
+    sit, and the BOQ puts lines in them. See lib/scopeBuckets.
+
+    Anything a previous version stored as a bucket-room is filtered out of the
+    planner rather than deleted, so nothing is destroyed on projects that have
+    BOQ lines pointing at those names.
+  */
+  const plannerRooms = realRooms(projectContext.rooms);
+  /*
+    Only a scope carrying an AREA is a legacy entry worth warning about — that
+    is the shape that got measured as a room. The three zero-area scopes are
+    supposed to be there, and calling them "legacy entries hidden from
+    measurement" made the correct state read like a fault.
+  */
+  const legacyBucketRooms = (projectContext.rooms || [])
+    .filter(r => isScopeBucket(r?.name) && (r?.size || 0) > 0);
   
   const handleDeleteRoom = (index: number) => {
     setProjectContext(prev => ({ ...prev, rooms: (prev.rooms || []).filter((_, i) => i !== index) }));
   };
 
+  /*
+    The civil scope, and the one thing that made Current Site State matter.
+
+    Picking a site state used to change nothing: the field was read in one
+    place in the whole app, for a portal message, so a raw shell and a finished
+    refit generated identical bills. It now seeds these switches, and the
+    switches are what the BOQ generator reads — which also means the studio can
+    disagree with it. A finished flat having its floors and bathrooms redone is
+    an ordinary brief, and it is the reason the block is editable at all.
+  */
+  const civilScope = resolveCivilScope(projectContext);
+
+  const setCivilScope = (key: keyof CivilScope, value: boolean) => {
+    setProjectContext(prev => ({
+      ...prev,
+      // Materialised in full on first edit, so an untouched switch reads as the
+      // studio's choice from here on rather than drifting when the site state
+      // is changed later.
+      civilScope: { ...resolveCivilScope(prev), [key]: value },
+    }));
+  };
+
+  /*
+    The brief does the typing.
+
+    Seven switches is seven decisions, and the studio has already written the
+    requirement down in a sentence. This reads it back and offers the switches
+    it implies — it never sets them. A bill that changed because a regex fired
+    is worse than one nobody configured, because nobody knows to check it.
+  */
+  const briefSuggestions = pendingSuggestions(projectContext);
+
+  const applyBriefSuggestions = () => {
+    setProjectContext(prev => ({ ...prev, civilScope: applySuggestions(prev, pendingSuggestions(prev)) }));
+  };
+
+  const resetCivilScope = () => {
+    setProjectContext(prev => ({ ...prev, civilScope: undefined }));
+  };
+
+  const handleSiteStateChange = (status: string) => {
+    setProjectContext(prev => ({
+      ...prev,
+      propertyStatus: status as any,
+      /* Changing the site state re-suggests the scope. It only overwrites a
+         scope the studio has not touched — an explicit choice survives. */
+      civilScope: prev.civilScope && isScopeCustomised(prev) ? prev.civilScope : undefined,
+    }));
+  };
+
+  /*
+    Auto-map rooms, with a floor under it.
+
+    The button used to be disabled whenever the AI key was missing or the call
+    failed, which left the manual path with no way to get a room list at all —
+    and without rooms the BOQ generator has nothing to price against. The
+    typology's own distribution is a perfectly good answer: ROOM_DISTRIBUTIONS
+    already knows a 3-BHK is three bedrooms and three bathrooms. AI refines it
+    where it is available; it is no longer the only way through.
+  */
+  const distributionRooms = (): Room[] => {
+    const { activeTemplate, configKey } = resolveActiveTemplate(undefined, projectContext.config || '');
+    return ensureRoomsExistForTemplate({ ...projectContext, rooms: [] } as any, activeTemplate, configKey);
+  };
+
+  /*
+    Rooms map themselves.
+
+    Disabling the button once rooms exist was half a fix: on a project that has
+    never had any, the studio still had to notice a button and press it before
+    anything could be priced, and a BOQ generated with no rooms is a BOQ of
+    nothing. The typology's own distribution is deterministic — no AI call, no
+    cost, no waiting — so there is no reason to make anyone ask for it.
+
+    Runs once per project, only when there are no rooms at all and the two
+    inputs it needs are present. It never overwrites: the moment a room exists,
+    whether from a plan, the AI or by hand, this stops. `mappedFor` is keyed on
+    the project so opening a second project re-arms it.
+  */
+  const mappedFor = React.useRef<string | null>(null);
+
+  useEffect(() => {
+    const key = `${projectContext.name}|${projectContext.config}|${projectContext.area}`;
+    if (mappedFor.current === key) return;
+    if (realRooms(projectContext.rooms).length > 0) return;
+    if (!projectContext.area || !projectContext.config) return;
+
+    mappedFor.current = key;
+    const seeded = distributionRooms();
+    if (seeded.length > 0) {
+      setProjectContext(prev =>
+        realRooms(prev.rooms).length > 0 ? prev : { ...prev, rooms: ensureScopeRooms(polishRoomNames(seeded, roomFamily)) },
+      );
+    }
+  }, [projectContext.name, projectContext.config, projectContext.area, projectContext.rooms]);
+
   const handleEstimateRooms = async () => {
-    if (!isAiAvailable() || !projectContext.area || !projectContext.config) {
-      alert("Please provide total area and configuration to estimate rooms.");
+    if (!projectContext.area || !projectContext.config) {
+      alert("Please provide total area and configuration to map rooms.");
       return;
     }
     setIsEstimating(true);
     try {
-      const estimatedRooms = await estimateRoomSizes(projectContext.area, projectContext.config);
-      if (estimatedRooms.length > 0) {
-        setProjectContext(prev => ({...prev, rooms: estimatedRooms }));
+      if (isAiAvailable()) {
+        const estimatedRooms = await estimateRoomSizes(projectContext.area, projectContext.config);
+        if (estimatedRooms.length > 0) {
+          setProjectContext(prev => ({ ...prev, rooms: ensureScopeRooms(polishRoomNames(estimatedRooms, roomFamily)) }));
+          return;
+        }
       }
+      const fallback = distributionRooms();
+      if (fallback.length > 0) setProjectContext(prev => ({ ...prev, rooms: ensureScopeRooms(polishRoomNames(fallback, roomFamily)) }));
     } catch (err) {
       console.error(err);
+      // A failed call is not a dead end — fall back rather than leave the
+      // planner empty and the BOQ with nothing to price.
+      const fallback = distributionRooms();
+      if (fallback.length > 0) setProjectContext(prev => ({ ...prev, rooms: ensureScopeRooms(polishRoomNames(fallback, roomFamily)) }));
     } finally {
       setIsEstimating(false);
     }
@@ -146,8 +269,6 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
   const deliverablesCount = Object.entries(projectContext.designScope || {})
     .filter(([k, v]) => k !== 'visitCount' && v === true).length;
     
-  const hasFunctionalRoom = (projectContext.rooms || []).some(r => r?.name?.toLowerCase() === 'functional');
-  const hasOthersRoom = (projectContext.rooms || []).some(r => r?.name?.toLowerCase() === 'others');
   
   const feeLabel = projectContext.designFeeType === 'percentage' ? `${projectContext.designFee || 10}% of Cost` : 
                    projectContext.designFeeType === 'fixed_sqft' ? `₹${projectContext.designFee || 0}/sqft` : 
@@ -253,7 +374,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                     <button
                       key={status.id}
                       type="button"
-                      onClick={() => handleContextChange('propertyStatus', status.id)}
+                      onClick={() => handleSiteStateChange(status.id)}
                       className={`flex flex-col text-left p-3 rounded-xl border transition-all duration-200 ${
                         projectContext.propertyStatus === status.id 
                           ? 'bg-[#0066CC] border-[#0066CC] text-white shadow-md' 
@@ -266,6 +387,124 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                       </span>
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* The requirement, in the client's own words. */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Client Requirement / Brief
+                  </label>
+                  <span className="text-[11px] text-slate-400">Sets the scope below — one paragraph, not seven switches</span>
+                </div>
+                <textarea
+                  value={projectContext.clientBrief || ''}
+                  onChange={e => handleContextChange('clientBrief', e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Civil refresh to the entire flooring of the house and both bathrooms. Kitchen and wardrobes in modular. Keep the existing electricals."
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/40 backdrop-blur-sm text-sm text-sky-950 placeholder:text-slate-300 focus:border-[#0066CC]/40 focus:outline-none focus:ring-1 focus:ring-[#0066CC]/20 resize-y leading-relaxed"
+                />
+                {briefSuggestions.length > 0 && (
+                  <div className="rounded-xl border border-[#0066CC]/25 bg-sky-50/50 p-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <span className="text-[11px] font-bold text-[#0055B3] inline-flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        The brief suggests {briefSuggestions.length} change{briefSuggestions.length === 1 ? '' : 's'} to the scope
+                      </span>
+                      <button
+                        type="button"
+                        onClick={applyBriefSuggestions}
+                        className="px-3 py-1 text-[10px] font-black uppercase tracking-wider bg-[#0066CC] text-white rounded-lg hover:bg-[#0055B3] transition-colors"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                    {/* The words that led here, so the studio can disagree with
+                        the reading rather than with a silent result. */}
+                    <div className="flex flex-col gap-1">
+                      {briefSuggestions.map(sug => {
+                        const field = CIVIL_SCOPE_FIELDS.find(f => f.key === sug.key);
+                        return (
+                          <div key={sug.key} className="text-[11px] text-slate-600 flex items-start gap-2">
+                            <span className={`font-black shrink-0 ${sug.value ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {sug.value ? '+' : '−'}
+                            </span>
+                            <span>
+                              <b className="text-slate-800">{field?.label || sug.key}</b>
+                              <span className="text-slate-400"> — “{sug.quote}”</span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/*
+                  Civil & Site Scope.
+
+                  Every switch here changes which bank items get priced. A
+                  switch that changed nothing would not belong — that was the
+                  problem with Current Site State on its own.
+              */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Civil &amp; Site Scope
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] text-slate-400">Drives which items the BOQ generates</span>
+                    {isScopeCustomised(projectContext) && (
+                      <button
+                        type="button"
+                        onClick={resetCivilScope}
+                        className="text-[10px] font-bold uppercase tracking-wider text-[#0066CC] hover:underline"
+                      >
+                        Reset to site state
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {CIVIL_SCOPE_FIELDS.map(field => {
+                    const on = !!civilScope[field.key];
+                    const suggested = !!DEFAULT_CIVIL_SCOPE[projectContext.propertyStatus || 'finished'][field.key];
+                    return (
+                      <button
+                        key={field.key}
+                        type="button"
+                        onClick={() => setCivilScope(field.key, !on)}
+                        className={`flex items-start gap-2.5 text-left p-3 rounded-xl border transition-all duration-200 ${
+                          on
+                            ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950'
+                            : 'bg-white/40 backdrop-blur-sm border-slate-200 text-slate-500 hover:border-[#0066CC]/30'
+                        }`}
+                      >
+                        <span className={`w-4 h-4 mt-0.5 rounded-md flex items-center justify-center shrink-0 border transition-colors ${
+                          on ? 'bg-emerald-600 border-emerald-600' : 'bg-white border-slate-300'
+                        }`}>
+                          {on && <Check className="w-3 h-3 text-white" strokeWidth={3.5} />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-black tracking-wide leading-normal">{field.label}</span>
+                            {/* Says which way this switch was moved, so a
+                                deliberate exception is legible months later. */}
+                            {on !== suggested && (
+                              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200/70">
+                                {on ? 'added' : 'removed'}
+                              </span>
+                            )}
+                          </span>
+                          <span className={`block text-[10px] leading-tight mt-0.5 ${on ? 'text-emerald-700/80' : 'text-slate-400'}`}>
+                            {field.detail}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -774,33 +1013,35 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
 
             {plannerTab === 'editor' && (
               <>
-                {!hasFunctionalRoom && (
-                  <button 
-                    type="button"
-                    onClick={() => handleAddSpecialRoom('Functional')} 
-                    className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 rounded-lg hover:bg-emerald-100 border border-emerald-200/50 transition-colors"
-                  >
-                    + Functional
-                  </button>
-                )}
-                {!hasOthersRoom && (
-                  <button 
-                    type="button"
-                    onClick={() => handleAddSpecialRoom('Others')} 
-                    className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 rounded-lg hover:bg-amber-100 border border-amber-200/50 transition-colors"
-                  >
-                    + Others
-                  </button>
-                )}
-                
-                <button 
+                {/* Civil, Functional and Others are project scopes, not rooms.
+                    They used to be created here as rooms carrying the whole
+                    flat's area, which is what made an eight-room 904 sq ft
+                    project measure 2,710 sq ft. They always exist now, and the
+                    BOQ groups lines into them. */}
+                                {/*
+                    Auto-map stands down once there are rooms.
+
+                    It replaces the room list wholesale, so on a project whose
+                    rooms came off a floor plan it is a destructive button
+                    sitting next to the thing it would destroy — the plan is the
+                    better source and re-deriving from a BHK ratio throws it
+                    away. Still reachable: clear the rooms and it comes back.
+                */}
+                <button
                   type="button"
                   onClick={handleEstimateRooms}
-                  disabled={isEstimating || !isAiAvailable()}
+                  disabled={isEstimating || plannerRooms.length > 0}
+                  title={plannerRooms.length > 0
+                    ? 'Rooms are already mapped. Delete them to re-map from the configuration.'
+                    : 'Derive rooms from the area and BHK configuration'}
                   className="flex items-center gap-1.5 px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wider bg-sky-50/50 text-[#0066CC] rounded-lg hover:bg-[#0066CC]/10 disabled:opacity-50 border border-[#0066CC]/30 transition-all duration-150 animate-pulse-subtle"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-[#0066CC]"/>
-                  {isEstimating ? 'AI Planning...' : 'AI Auto-Map Rooms'}
+                  {isEstimating
+                    ? 'Mapping rooms...'
+                    : plannerRooms.length > 0
+                      ? 'Rooms mapped'
+                      : (isAiAvailable() ? 'AI Auto-Map Rooms' : 'Auto-Map Rooms')}
                 </button>
 
                 <button 
@@ -818,7 +1059,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
         <div className="p-6 md:p-8">
           {plannerTab === 'takeoff' ? (
             <TakeoffPanel projectContext={projectContext} setProjectContext={setProjectContext} />
-          ) : (projectContext.rooms || []).length === 0 ? (
+          ) : plannerRooms.length === 0 ? (
             <div className="p-12 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
               <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 shadow-sm">
                 <List className="w-5 h-5 text-slate-300" />
@@ -830,9 +1071,29 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Where everything that is not a room ends up. Without this the
+                  planner reads as though painting and debris were forgotten. */}
+              <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-400 pb-1">
+                <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400">Project scopes</span>
+                {SCOPE_BUCKETS.map(bucket => (
+                  <span key={bucket} title={SCOPE_BUCKET_META[bucket].detail}
+                    className="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200/70 font-semibold text-slate-500">
+                    {bucket}
+                  </span>
+                ))}
+                <span className="text-slate-300">— priced across the flat, not per room</span>
+                {legacyBucketRooms.length > 0 && (
+                  <span className="text-amber-600 font-semibold">
+                    · {legacyBucketRooms.length} legacy scope {legacyBucketRooms.length === 1 ? 'entry' : 'entries'} hidden from measurement
+                  </span>
+                )}
+              </div>
               <AnimatePresence>
+                {/* Mapped over the original array so `index` still addresses the
+                    right room for edits and deletes; buckets are skipped rather
+                    than filtered out, which would shift every index below them. */}
                 {projectContext.rooms.map((room, index) => {
-                  if (!room) return null;
+                  if (!room || isScopeBucket(room.name)) return null;
                   return (
                     <motion.div 
                       initial={{ opacity: 0, y: 8 }}

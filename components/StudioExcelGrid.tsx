@@ -29,7 +29,7 @@ const FastInput: React.FC<{
     placeholder?: string;
 }> = ({ value, onChange, type = 'text', className = "", placeholder }) => {
     return (
-        <input 
+        <input
             type={type}
             value={value !== undefined ? value : ''}
             onChange={(e) => onChange(type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
@@ -52,7 +52,229 @@ const STATUS_OPTIONS = [
     { value: 'substituted', label: 'Substituted' },
 ];
 
+/*
+  A figure that flashes once when it changes.
+
+  Editing a quantity moves the line total, the room subtotal and the sheet
+  total at once, and none of them are near the cursor. Without a cue the only
+  way to know an edit landed is to go and look — which is exactly the doubt
+  that made people re-type numbers.
+
+  The first render never flashes: mounting a sheet is not a change.
+*/
+const FlashValue: React.FC<{ value: number; className?: string; children: React.ReactNode }> = ({ value, className = '', children }) => {
+  const [flash, setFlash] = React.useState(false);
+  const prev = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    if (prev.current !== null && prev.current !== value) {
+      setFlash(false);
+      // Two frames, so the class is genuinely removed before it is re-added —
+      // otherwise a second edit inside the animation window does nothing.
+      requestAnimationFrame(() => requestAnimationFrame(() => setFlash(true)));
+    }
+    prev.current = value;
+  }, [value]);
+  return (
+    <span onAnimationEnd={() => setFlash(false)} className={`${flash ? 'boq-flash' : ''} rounded px-1 -mx-1 ${className}`}>
+      {children}
+    </span>
+  );
+};
+
+/*
+  A column header that can be sorted and dragged.
+
+  The grip is a 5px strip on the trailing edge rather than a visible divider —
+  it appears on hover, so the header stays quiet until someone reaches for it.
+  Double-clicking it forgets the stored width and returns the column to auto.
+*/
+const HeadCell: React.FC<{
+  label: string;
+  colKey?: string;
+  sortKey?: 'name' | 'qty' | 'cost' | 'margin' | 'rate' | 'total';
+  align?: 'left' | 'right' | 'center';
+  className?: string;
+  width?: React.CSSProperties;
+  sort: { key: string; dir: 'asc' | 'desc' } | null;
+  onSort?: (k: any) => void;
+  onResizeStart?: (e: React.MouseEvent) => void;
+  onResizeReset?: () => void;
+  dragging?: boolean;
+}> = ({ label, sortKey, align = 'left', className = '', width, sort, onSort, onResizeStart, onResizeReset, dragging }) => {
+  const active = sortKey && sort?.key === sortKey;
+  const justify = align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start';
+  return (
+    <th className={`p-3 relative group/head select-none ${className}`} style={width}
+        aria-sort={active ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+      <button
+        type="button"
+        disabled={!sortKey}
+        onClick={() => sortKey && onSort?.(sortKey)}
+        className={`flex items-center gap-1 w-full ${justify} ${
+          sortKey ? 'cursor-pointer hover:text-slate-700' : 'cursor-default'
+        } ${active ? 'text-[#0066CC]' : ''} uppercase tracking-wider font-bold text-[10px] transition-colors`}
+      >
+        <span className="truncate">{label}</span>
+        {sortKey && (
+          <span className={`text-[9px] leading-none transition-all duration-150 ${
+            active ? 'opacity-100' : 'opacity-0 group-hover/head:opacity-40'
+          }`}>{active && sort!.dir === 'desc' ? '▼' : '▲'}</span>
+        )}
+      </button>
+      {onResizeStart && (
+        <span
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={`Resize ${label}`}
+          onMouseDown={onResizeStart}
+          onDoubleClick={onResizeReset}
+          title="Drag to resize · double-click to reset"
+          className={`boq-grip absolute top-0 right-0 h-full w-[5px] cursor-col-resize print:hidden ${
+            dragging ? 'bg-[#0066CC]' : 'bg-transparent hover:bg-[#0066CC]/40'
+          }`}
+        />
+      )}
+    </th>
+  );
+};
+
 const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdate, onBulkUpdate, onDelete, onViewInBank, onAddItem, isOwner, boqFrozen, highlightedItemIds = [], lensEnabled, marginAnalytics, searchQuery }) => {
+    /*
+      What the grid shows, and why so little of it by default.
+
+      Fourteen columns were always on and every row printed its full spec
+      paragraph under the name, so a row was three lines tall and the same
+      sentence — "including carcass, shutters/panels, basic hardware and
+      laminate/paint finish as per approved drawings" — repeated down the
+      screen. The information is real; showing all of it at once is what made
+      the grid unreadable.
+
+      Compact is the default: one line per row, spec on demand. Nothing is
+      removed, only folded.
+    */
+    /*
+      The grid could not tell you what the BOQ came to.
+
+      Every other surface in the app shows a total; the one screen where the
+      lines are actually edited had none, so checking the effect of an edit
+      meant leaving the grid. Excluded and deleted lines are counted separately
+      rather than silently dropped — a line taken out of the firm scope is a
+      decision worth seeing the size of.
+    */
+    const sheetTotals = React.useMemo(() => {
+      let firm = 0, excluded = 0, cost = 0, live = 0;
+      items.forEach(i => {
+        const value = calculateSellPrice(i.materials, i.labor, i.margin) * (i.qty || 0);
+        const out = i.boqStatus === 'deleted' || i.boqStatus === 'excluded' || i.boqStatus === 'client_procured';
+        if (out) { excluded += value; return; }
+        firm += value;
+        cost += ((i.materials || 0) + (i.labor || 0)) * (i.qty || 0);
+        live += 1;
+      });
+      return { firm, excluded, cost, live, margin: firm > 0 ? ((firm - cost) / firm) * 100 : 0 };
+    }, [items]);
+
+    /*
+      Sorting inside the room, never across it.
+
+      Room grouping is the structure of a BOQ — a contractor is handed a room,
+      not a global list — so sorting reorders within each group and leaves the
+      groups where they are. Sorting the whole sheet by value would destroy the
+      only organising principle the document has.
+    */
+    const [sort, setSort] = useState<{ key: 'name' | 'qty' | 'cost' | 'margin' | 'rate' | 'total'; dir: 'asc' | 'desc' } | null>(null);
+
+    /*
+      Flags, not filters.
+
+      Each answers a question an estimator asks out loud while reviewing — what
+      is under margin, what did I leave at zero, what is not linked to a
+      drawing. They stack, and each carries its own count, so a flag with
+      nothing behind it says so instead of filtering to an empty sheet.
+    */
+    const [flags, setFlags] = useState<Set<string>>(new Set());
+    const toggleFlag = (f: string) => setFlags(prev => {
+      const next = new Set(prev);
+      if (next.has(f)) next.delete(f); else next.add(f);
+      return next;
+    });
+
+    /* Column widths, dragged by the studio and remembered per browser. */
+    const [colW, setColW] = useState<Record<string, number>>(() => {
+      try { return JSON.parse(localStorage.getItem('ffds_boq_colw') || '{}'); } catch { return {}; }
+    });
+    const [dragCol, setDragCol] = useState<string | null>(null);
+    useEffect(() => {
+      try { localStorage.setItem('ffds_boq_colw', JSON.stringify(colW)); } catch { /* private mode */ }
+    }, [colW]);
+
+    const startResize = (key: string, startX: number, startW: number) => {
+      setDragCol(key);
+      const move = (e: MouseEvent) => {
+        // 90px floor: below this the header label itself clips.
+        setColW(prev => ({ ...prev, [key]: Math.max(90, Math.round(startW + (e.clientX - startX))) }));
+      };
+      const up = () => {
+        setDragCol(null);
+        window.removeEventListener('mousemove', move);
+        window.removeEventListener('mouseup', up);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', up);
+    };
+
+    /* One handler for every header: click sorts, second click reverses,
+       third clears — so a column can always be put back the way it was. */
+    const cycleSort = (key: any) => setSort(prev =>
+      !prev || prev.key !== key ? { key, dir: 'asc' }
+      : prev.dir === 'asc' ? { key, dir: 'desc' }
+      : null);
+
+    const headProps = (colKey: string) => ({
+      sort,
+      onSort: cycleSort,
+      width: wOf(colKey),
+      dragging: dragCol === colKey,
+      onResizeStart: (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const th = (e.currentTarget as HTMLElement).closest('th') as HTMLElement;
+        startResize(colKey, e.clientX, th?.getBoundingClientRect().width || 120);
+      },
+      onResizeReset: () => setColW(prev => {
+        const next = { ...prev };
+        delete next[colKey];
+        return next;
+      }),
+    });
+
+    /** Width style for a resizable column; undefined until it has been dragged. */
+    const wOf = (key: string) =>
+      colW[key] ? { width: colW[key], minWidth: colW[key], maxWidth: colW[key] } : undefined;
+
+    const [density, setDensity] = useState<'compact' | 'comfortable'>('compact');
+    const [dimsOverride, setDimsOverride] = useState<boolean | null>(null);
+
+    /*
+      L, W and M are three narrow columns that are empty on most projects —
+      quantities usually arrive from the takeoff or by hand, not from
+      dimensions typed here. So they appear when the project actually uses
+      them, and the studio can force them on for one that is about to.
+    */
+    const projectUsesDims = React.useMemo(
+      () => items.some(i => (i.calcLength || 0) > 0 || (i.calcWidth || 0) > 0 || (i.calcMultiplier || 0) > 1),
+      [items],
+    );
+    const showDims = dimsOverride !== null ? dimsOverride : projectUsesDims;
+
+    /* colSpan has to follow the columns, or every group header and empty state
+       tears its row open by three cells. */
+    const COLS = 14 - (showDims ? 0 : 3);
+
     const [coModal, setCoModal] = useState<{itemId: string, newStatus: string} | null>(null);
     const [bulkCoModal, setBulkCoModal] = useState<{itemIds: string[], newStatus: string} | null>(null);
     const [coRef, setCoRef] = useState("");
@@ -90,7 +312,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
 
     const handleStatusSelect = (itemId: string, newStatus: string) => {
         const needsCo = boqFrozen || ['deleted', 'substituted', 'approved_variation'].includes(newStatus);
-        
+
         if (needsCo) {
             setCoModal({ itemId, newStatus });
         } else {
@@ -102,7 +324,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
         if (!coModal) return;
         if (!coRef.trim()) return alert('Change Order Reference is required.');
         if (!coReason.trim()) return alert('Reason is required.');
-        
+
         const item = items.find(i => i.id === coModal.itemId);
         if (!item) return;
 
@@ -129,9 +351,9 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
 
     const confirmBulkStatusChange = () => {
         if (!bulkCoModal || !onBulkUpdate) return;
-        
+
         const needsCo = boqFrozen || ['deleted', 'substituted', 'approved_variation'].includes(bulkCoModal.newStatus);
-        
+
         if (needsCo) {
             if (!coRef.trim()) return alert('Change Order Reference is required.');
             if (!coReason.trim()) return alert('Reason is required.');
@@ -146,7 +368,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
 
             const currentHistory = Array.isArray(item.statusHistory) ? item.statusHistory : [];
             let newHistoryEntry: any = null;
-            
+
             if (needsCo) {
                 newHistoryEntry = {
                     changedAt: new Date().toISOString(),
@@ -159,7 +381,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
             }
 
             prevStates.push({ boqStatus: item.boqStatus, statusHistory: item.statusHistory });
-            
+
             updates.push({
                 itemId: id,
                 updates: {
@@ -171,7 +393,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
 
         setUndoStack(prev => [...prev, { itemIds: bulkCoModal.itemIds, prevStates }]);
         onBulkUpdate(updates);
-        
+
         setBulkCoModal(null);
         setCoRef("");
         setCoReason("");
@@ -179,14 +401,56 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
     };
 
     // Filter items based on search query
+    /*
+      What each flag means, defined once so a chip's count and the filter it
+      applies can never drift apart.
+    */
+    const FLAG_TESTS: Record<string, { label: string; test: (i: FullBoqItem) => boolean }> = {
+        lowMargin:  { label: 'Under 15% margin', test: i => (i.margin ?? 0) < 15 && i.boqStatus !== 'deleted' && i.boqStatus !== 'excluded' },
+        zeroQty:    { label: 'Zero quantity',    test: i => !(i.qty > 0) },
+        outOfScope: { label: 'Out of firm scope',test: i => i.boqStatus === 'deleted' || i.boqStatus === 'excluded' || i.boqStatus === 'client_procured' },
+        unlinked:   { label: 'No drawing link',  test: i => !(i as any).linkageRef && !(i as any).drawingRef },
+    };
+
+    const flagCounts = React.useMemo(() => {
+        const c: Record<string, number> = {};
+        Object.keys(FLAG_TESTS).forEach(k => { c[k] = items.filter(FLAG_TESTS[k].test).length; });
+        return c;
+    }, [items]);
+
     const filteredItems = items.filter(item => {
+        // Flags stack: a line has to satisfy every flag that is switched on.
+        for (const f of Array.from(flags) as string[]) {
+            if (!FLAG_TESTS[f]?.test(item)) return false;
+        }
         if (!searchQuery) return true;
         const q = searchQuery.toLowerCase();
-        return (item.name?.toLowerCase().includes(q)) || 
-               (item.description?.toLowerCase().includes(q)) || 
+        return (item.name?.toLowerCase().includes(q)) ||
+               (item.description?.toLowerCase().includes(q)) ||
                (item.cat?.toLowerCase().includes(q)) ||
                (item.roomId?.toLowerCase().includes(q));
     });
+
+    /** Ordering applied inside a room, leaving the rooms themselves alone. */
+    const sortRows = (rows: FullBoqItem[]): FullBoqItem[] => {
+        if (!sort) return rows;
+        const val = (i: FullBoqItem): string | number => {
+            switch (sort.key) {
+                case 'name':   return (i.name || '').toLowerCase();
+                case 'qty':    return i.qty || 0;
+                case 'cost':   return ((i.baseRate !== undefined ? i.baseRate : i.materials) || 0) + (i.labor || 0);
+                case 'margin': return i.margin || 0;
+                case 'rate':   return calculateSellPrice(i.materials, i.labor, i.margin);
+                default:       return calculateSellPrice(i.materials, i.labor, i.margin) * (i.qty || 0);
+            }
+        };
+        const dir = sort.dir === 'asc' ? 1 : -1;
+        return [...rows].sort((a, z) => {
+            const av = val(a), zv = val(z);
+            if (typeof av === 'string' || typeof zv === 'string') return String(av).localeCompare(String(zv)) * dir;
+            return ((av as number) - (zv as number)) * dir;
+        });
+    };
 
     // Group items by room
     const grouped: { [key: string]: FullBoqItem[] } = {};
@@ -209,12 +473,12 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
     const handleUndo = () => {
         if (undoStack.length === 0 || !onBulkUpdate) return;
         const lastAction = undoStack[undoStack.length - 1];
-        
+
         const updates = lastAction.itemIds.map((id, index) => ({
             itemId: id,
             updates: lastAction.prevStates[index]
         }));
-        
+
         onBulkUpdate(updates);
         setUndoStack(prev => prev.slice(0, prev.length - 1));
     };
@@ -243,7 +507,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
         const l = field === 'l' ? val : item.calcLength || 0;
         const w = field === 'w' ? val : item.calcWidth || 0;
         const m = field === 'm' ? val : item.calcMultiplier || 1;
-        
+
         // Auto-calculate Qty if any dimension is entered. If only one is entered, treat the other as 1 (linear measurement)
         let newQty = item.qty;
         if (l > 0 || w > 0) {
@@ -252,7 +516,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
             const mEff = m > 0 ? m : 1;
             newQty = parseFloat((lEff * wEff * mEff).toFixed(2));
         }
-        
+
         const updates: Partial<BoqItem> = {
             calcLength: l,
             calcWidth: w,
@@ -265,13 +529,13 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
 
         onUpdate(item.id, updates);
     };
-    
+
     const getStatusUI = (item: FullBoqItem) => {
         const status = item.boqStatus || 'included_ffds_scope';
-        
+
         let colorClass = "";
         let displayLabel = "Included";
-        
+
         switch (status) {
             case 'included_ffds_scope':
                 colorClass = "bg-[#dcfce7] text-[#15803d]";
@@ -316,8 +580,8 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
         }
 
         return (
-            <div 
-                className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold whitespace-nowrap cursor-pointer flex items-center justify-between transition-colors hover:shadow-sm ${colorClass}`} 
+            <div
+                className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold whitespace-nowrap cursor-pointer flex items-center justify-between transition-colors hover:shadow-sm ${colorClass}`}
                 title={boqFrozen ? "BOQ is frozen — changes require a Change Order" : "Click to change status"}
                 onClick={() => setStatusModalId(item.id)}
             >
@@ -331,7 +595,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
         const linkage = item.linkage;
         if (!linkage || linkage.type === 'direct_execution') {
             return (
-                <div 
+                <div
                     title="No formal link (direct execution)"
                     className="text-[10px] text-slate-400 border-b border-dashed border-slate-300 w-max cursor-help"
                 >
@@ -339,7 +603,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                 </div>
             );
         }
-        
+
         return (
             <div className="flex flex-col gap-0.5">
                 <span className="text-[10px] font-bold text-[#0055B3] uppercase">{linkage.type.replace('_', ' ')}</span>
@@ -368,13 +632,13 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
     const renderRow = (item: FullBoqItem) => {
         const sellPrice = calculateSellPrice(item.materials, item.labor, item.margin);
         const total = sellPrice * item.qty;
-        
+
         const isDeletedOrSub = item.boqStatus === 'deleted' || item.boqStatus === 'substituted';
         const opacityClass = isDeletedOrSub ? 'opacity-50' : '';
         const strikeClass = isDeletedOrSub ? 'line-through text-slate-400' : '';
         const isHighlighted = highlightedItemIds?.includes(item.id);
         const isSelected = selectedIds.has(item.id);
-        
+
         let lensTint = '';
         let rowMargin = item.margin || 0;
         if (lensEnabled && isOwner && !isDeletedOrSub) {
@@ -382,7 +646,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
              if (mPct < 15) lensTint = 'bg-red-50 hover:bg-red-100 shadow-[inset_4px_0_0_#ef4444]';
              else if (mPct < 18) lensTint = 'bg-amber-50 hover:bg-amber-100 shadow-[inset_4px_0_0_#f59e0b]';
         }
-        
+
         const highlightClass = isSelected ? 'bg-sky-50/70 hover:bg-sky-50 shadow-[inset_4px_0_0_#6366f1]' : isHighlighted ? 'bg-amber-100/50 hover:bg-amber-100/70 shadow-[inset_4px_0_0_#f59e0b]' : lensTint;
 
         return (
@@ -397,13 +661,18 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                         e.preventDefault();
                         toggleSelection(item.id);
                     }
-                }} className={`group border-b border-slate-100 last:border-0 transition-colors focus:bg-sky-50/30 outline-none ${opacityClass} ${highlightClass || 'bg-white hover:bg-slate-50'}`}>
+                }} className={`group boq-row-in border-b border-slate-100 last:border-0 transition-colors focus:bg-sky-50/30 outline-none ${opacityClass} ${highlightClass || 'bg-white hover:bg-slate-50'}`}>
                     {/* Actions */}
-                    <td className="p-2 w-10 text-center align-top pt-3 print:hidden">
-                        <div className="flex flex-col items-center gap-2">
-                            <input 
-                                type="checkbox" 
-                                checked={isSelected} 
+                    {/* Checkbox and chevron side by side, not stacked.
+
+                        Stacked they were ~40px tall and set the floor for every
+                        row in the sheet — taller than the content, so folding
+                        the spec to one line changed nothing until this did too. */}
+                    <td className="p-2 w-14 text-center align-top pt-2.5 print:hidden">
+                        <div className="flex items-center justify-center gap-1.5">
+                            <input
+                                type="checkbox"
+                                checked={isSelected}
                                 onChange={(e) => toggleSelection(item.id)}
                                 className="w-3.5 h-3.5 text-[#0066CC] rounded border-slate-300 focus:ring-[#0066CC] cursor-pointer"
                             />
@@ -412,15 +681,26 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                             </button>
                         </div>
                     </td>
-                    
-                    {/* Item Details */}
-                    <td className="p-2 min-w-[200px] align-top">
-                        <div className={`font-bold text-slate-700 text-sm whitespace-normal leading-tight mb-1 ${strikeClass}`}>{item.name}</div>
-                        <div className="text-[10px] text-slate-400 whitespace-normal leading-relaxed">{item.specs}</div>
+
+                    {/* Item Details.
+                        The spec is one line in compact and wraps in full-spec
+                        mode. It is never dropped — the row still carries it as
+                        a title, so hovering reads the whole thing without
+                        changing view. */}
+                    <td className="p-2 min-w-[200px] align-top" style={wOf('name')}>
+                        <div className={`font-bold text-slate-700 text-sm whitespace-normal leading-tight ${strikeClass}`}>{item.name}</div>
+                        {item.specs && (
+                            <div
+                                title={density === 'compact' ? item.specs : undefined}
+                                className={`text-[10px] text-slate-400 leading-relaxed mt-0.5 ${
+                                    density === 'compact' ? 'truncate max-w-[420px]' : 'whitespace-normal'
+                                }`}
+                            >{item.specs}</div>
+                        )}
                     </td>
-                    
+
                     {/* Status */}
-                    <td className="p-2 w-[140px] text-xs align-top pt-3">
+                    <td className="p-2 w-[140px] text-xs align-top pt-2.5" style={wOf('status')}>
                         {getStatusUI(item)}
                         {item.boqStatus === 'substituted' && Array.isArray(item.statusHistory) && (
                             <div className="text-[9px] text-slate-400 mt-1">
@@ -430,50 +710,52 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                     </td>
 
                     {/* Drawing Ref/Linkage */}
-                    <td className="p-2 w-[120px] text-xs align-top pt-3 hidden lg:table-cell cursor-pointer" onClick={() => openLinkageModal(item)}>
+                    <td className="p-2 w-[120px] text-xs align-top pt-2.5 hidden lg:table-cell cursor-pointer" onClick={() => openLinkageModal(item)}>
                         {getLinkageUI(item)}
                     </td>
 
                     {/* Dimensions (L x W x M) */}
                     <td className="p-2 w-[50px] align-top pt-3 hidden print:table-cell text-[10px] text-slate-500 text-center">
-                        {(item.calcLength || 1) * (item.calcWidth || 1) * (item.calcMultiplier || 1) > 1 ? 
+                        {(item.calcLength || 1) * (item.calcWidth || 1) * (item.calcMultiplier || 1) > 1 ?
                         `${item.calcLength || 1} x ${item.calcWidth || 1} x ${item.calcMultiplier || 1}` : '-'}
                     </td>
+                    {showDims && (<>
                     <td className="p-2 w-[50px] align-top pt-2 print:hidden">
-                        <FastInput 
-                            type="number" 
-                            value={item.calcLength || ''} 
+                        <FastInput
+                            type="number"
+                            value={item.calcLength || ''}
                             onChange={(v) => handleCalcChange(item, 'l', Number(v))}
                             placeholder="L"
                             className="text-center font-medium text-slate-500 bg-slate-50/50 rounded focus:bg-white text-xs"
                         />
                     </td>
                     <td className="p-2 w-[50px] align-top pt-2 print:hidden">
-                        <FastInput 
-                            type="number" 
-                            value={item.calcWidth || ''} 
+                        <FastInput
+                            type="number"
+                            value={item.calcWidth || ''}
                             onChange={(v) => handleCalcChange(item, 'w', Number(v))}
                             placeholder="W"
                             className="text-center font-medium text-slate-500 bg-slate-50/50 rounded focus:bg-white text-xs"
                         />
                     </td>
                     <td className="p-2 w-[50px] align-top pt-2 print:hidden">
-                        <FastInput 
-                            type="number" 
-                            value={item.calcMultiplier || ''} 
+                        <FastInput
+                            type="number"
+                            value={item.calcMultiplier || ''}
                             onChange={(v) => handleCalcChange(item, 'm', Number(v))}
                             placeholder="M"
                             className="text-center font-medium text-slate-500 bg-slate-50/50 rounded focus:bg-white text-xs text-[#0066CC]"
                         />
                     </td>
+                    </>)}
 
                     {/* Qty & Unit */}
-                    <td className="p-2 w-[90px] align-top pt-2">
+                    <td className="p-2 w-[90px] align-top pt-2" style={wOf('qty')}>
                         <div className="flex items-center">
-                            <FastInput 
-                                type="number" 
-                                value={item.qty} 
-                                onChange={(v) => onUpdate(item.id, 'qty', v)} 
+                            <FastInput
+                                type="number"
+                                value={item.qty}
+                                onChange={(v) => onUpdate(item.id, 'qty', v)}
                                 className="text-center font-bold text-slate-800 bg-slate-100 rounded w-16"
                             />
                             <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap ml-1">{item.unit}</span>
@@ -484,9 +766,9 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                     {isOwner ? (
                         <>
                             <td className="p-2 w-[80px] text-right align-top pt-2 hidden sm:table-cell">
-                                <FastInput 
-                                    type="number" 
-                                    value={parseFloat((Number(item.baseRate !== undefined ? item.baseRate : item.materials) + Number(item.labor || 0)).toFixed(2))} 
+                                <FastInput
+                                    type="number"
+                                    value={parseFloat((Number(item.baseRate !== undefined ? item.baseRate : item.materials) + Number(item.labor || 0)).toFixed(2))}
                                     onChange={(v) => {
                                         const newCost = Number(v);
                                         const newBaseRate = Math.max(0, newCost - Number(item.labor || 0));
@@ -497,16 +779,16 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                             </td>
                             <td className="p-2 w-[70px] text-right align-top pt-2 hidden sm:table-cell">
                                 <div className="flex items-center justify-end gap-0.5">
-                                    <FastInput 
-                                        type="number" 
-                                        value={item.margin} 
-                                        onChange={(v) => onUpdate(item.id, 'marginOverride', v)} 
+                                    <FastInput
+                                        type="number"
+                                        value={item.margin}
+                                        onChange={(v) => onUpdate(item.id, 'marginOverride', v)}
                                         className={`text-right font-bold ${item.margin < 15 ? 'text-red-500' : 'text-emerald-600'}`}
                                     />
                                     <span className="text-xs text-slate-400">%</span>
                                 </div>
                             </td>
-                            <td className="p-2 w-[100px] text-right font-mono text-xs text-slate-600 align-top pt-3 hidden sm:table-cell">
+                            <td className="p-2 w-[100px] text-right font-mono text-xs tabular-nums text-slate-600 align-top pt-3 hidden sm:table-cell">
                                 {formatCurrency(sellPrice)}
                             </td>
                         </>
@@ -517,11 +799,11 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                     )}
 
                     {/* Total */}
-                    <td className="p-2 w-[120px] text-right font-bold text-slate-800 font-mono align-top pt-3">
-                        <span className={strikeClass}>{formatCurrency(total)}</span>
+                    <td className="p-2 w-[120px] text-right font-bold text-slate-800 font-mono tabular-nums align-top pt-3" style={wOf('total')}>
+                        <FlashValue value={total} className={strikeClass}>{formatCurrency(total)}</FlashValue>
                         {item.boqStatus === 'deleted' && <div className="text-[9px] text-rose-500 mt-1">₹0 Billed</div>}
                     </td>
-                    
+
                     {/* Bank Link */}
                     <td className="p-2 w-10 text-center align-top pt-3 print:hidden">
                         <button onClick={() => onViewInBank(item.bankId)} className="text-sky-300 hover:text-[#0066CC] opacity-0 group-hover:opacity-100 transition-opacity" title="Edit Master in Bank">
@@ -531,7 +813,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                 </tr>
                 {expandedRows[item.id] && (
                     <tr className="bg-slate-50/50">
-                        <td colSpan={14} className="p-4 border-b border-slate-100">
+                        <td colSpan={COLS} className="p-4 border-b border-slate-100">
                             <div className="pl-12 pr-4">
                                 <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Status History</h4>
                                 {Array.isArray(item.statusHistory) && item.statusHistory.length > 0 ? (
@@ -626,43 +908,120 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                     )}
                 </div>
             )}
+            {/* View controls. Deliberately three, and each one earns its place. */}
+            <div className="flex items-center gap-2.5 px-3 py-2 border-b border-slate-200 bg-white/70 backdrop-blur-sm flex-wrap print:hidden">
+                <span className="text-[9.5px] font-black uppercase tracking-[0.14em] text-slate-400">View</span>
+                <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-white">
+                    {(['compact', 'comfortable'] as const).map(d => (
+                        <button
+                            key={d}
+                            type="button"
+                            onClick={() => setDensity(d)}
+                            aria-pressed={density === d}
+                            className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                                density === d ? 'bg-[#0066CC] text-white' : 'text-slate-500 hover:bg-sky-50'
+                            }`}
+                        >{d === 'compact' ? 'Compact' : 'Full spec'}</button>
+                    ))}
+                </div>
+
+                <button
+                    type="button"
+                    onClick={() => setDimsOverride(showDims ? false : true)}
+                    aria-pressed={showDims}
+                    title={projectUsesDims
+                        ? 'This project has dimensions on some lines'
+                        : 'No line in this project uses L × W × M'}
+                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-lg transition-colors ${
+                        showDims
+                            ? 'bg-[#0066CC] text-white border-[#0066CC]'
+                            : 'text-slate-500 border-slate-200 bg-white hover:bg-sky-50'
+                    }`}
+                >L × W × M</button>
+
+                <span className="text-[10.5px] text-slate-400">
+                    {filteredItems.length} of {items.length} lines
+                    {!projectUsesDims && !showDims && ' · dimension columns hidden, nothing uses them'}
+                </span>
+
+                <span className="w-px h-4 bg-slate-200 mx-0.5" aria-hidden="true" />
+
+                {/* A flag with nothing behind it stays visible and says zero —
+                    "no line is under margin" is information worth reading. */}
+                {Object.keys(FLAG_TESTS).map(key => {
+                    const on = flags.has(key);
+                    const n = flagCounts[key] || 0;
+                    return (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => toggleFlag(key)}
+                            aria-pressed={on}
+                            disabled={n === 0 && !on}
+                            className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-lg transition-all duration-150 flex items-center gap-1.5 ${
+                                on
+                                    ? 'bg-[#0066CC] text-white border-[#0066CC] shadow-sm'
+                                    : n === 0
+                                        ? 'text-slate-300 border-slate-100 bg-white cursor-default'
+                                        : 'text-slate-500 border-slate-200 bg-white hover:bg-sky-50 hover:border-[#0066CC]/30'
+                            }`}
+                        >
+                            {FLAG_TESTS[key].label}
+                            <span className={`font-mono tabular-nums px-1 rounded ${
+                                on ? 'bg-white/20' : n === 0 ? 'bg-slate-50' : 'bg-slate-100'
+                            }`}>{n}</span>
+                        </button>
+                    );
+                })}
+
+                {(flags.size > 0 || sort) && (
+                    <button
+                        type="button"
+                        onClick={() => { setFlags(new Set()); setSort(null); }}
+                        className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-700 transition-colors"
+                    >Clear</button>
+                )}
+            </div>
+
             <table className="w-full text-left border-collapse min-w-[1000px]">
-                <thead className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <thead className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 shadow-[0_1px_0_rgba(203,213,225,1)]">
                     <tr>
-                        <th className="p-3 text-center w-10 print:hidden relative">
-                             <input 
-                                 type="checkbox" 
+                        <th className="p-3 text-center w-14 print:hidden relative">
+                             <input
+                                 type="checkbox"
                                  checked={filteredItems.length > 0 && selectedIds.size === filteredItems.length}
                                  ref={input => { if (input) input.indeterminate = selectedIds.size > 0 && selectedIds.size < filteredItems.length; }}
                                  onChange={toggleSelectAll}
                                  className="w-3.5 h-3.5 text-[#0066CC] rounded border-slate-300 focus:ring-[#0066CC] cursor-pointer absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
                              />
                         </th>
-                        <th className="p-3">Item Description</th>
-                        <th className="p-3 w-[140px]">Status</th>
-                        <th className="p-3 w-[120px] hidden lg:table-cell">Drawing Ref</th>
-                        
+                        <HeadCell label="Item Description" sortKey="name" {...headProps('name')} />
+                        <HeadCell label="Status" className="w-[140px]" {...headProps('status')} />
+                        <HeadCell label="Drawing Ref" className="w-[120px] hidden lg:table-cell" {...headProps('drawing')} />
+
                         <th className="p-3 w-[50px] text-center text-sky-400 hidden print:table-cell">Area</th>
+                        {showDims && (<>
                         <th className="p-3 w-[50px] text-center text-sky-400 print:hidden">L</th>
                         <th className="p-3 w-[50px] text-center text-sky-400 print:hidden">W</th>
                         <th className="p-3 w-[50px] text-center text-sky-400 print:hidden">M</th>
-                        
-                        <th className="p-3 w-[90px] text-center">Qty</th>
-                        
+                        </>)}
+
+                        <HeadCell label="Qty" sortKey="qty" align="center" className="w-[90px]" {...headProps('qty')} />
+
                         {isOwner ? (
                             <>
-                                <th className="p-3 text-right w-[80px] hidden sm:table-cell">Cost</th>
-                                <th className="p-3 text-right w-[70px] hidden sm:table-cell">Margin</th>
-                                <th className="p-3 text-right w-[100px] hidden sm:table-cell">Rate</th>
+                                <HeadCell label="Cost" sortKey="cost" align="right" className="w-[80px] hidden sm:table-cell" {...headProps('cost')} />
+                                <HeadCell label="Margin" sortKey="margin" align="right" className="w-[70px] hidden sm:table-cell" {...headProps('margin')} />
+                                <HeadCell label="Rate" sortKey="rate" align="right" className="w-[100px] hidden sm:table-cell" {...headProps('rate')} />
                             </>
                         ) : (
                             <th colSpan={3} className="p-3 text-center text-slate-400 hidden sm:table-cell">Financials</th>
                         )}
-                        <th className="p-3 text-right w-[120px]">Total</th>
+                        <HeadCell label="Total" sortKey="total" align="right" className="w-[120px]" {...headProps('total')} />
                         <th className="p-3 w-10 print:hidden"></th>
                     </tr>
                 </thead>
-                <tbody className="bg-white">
+                <tbody className="bg-white" key={`${sort?.key || 'none'}-${sort?.dir || ''}-${Array.from(flags).sort().join(',')}`}>
                     {roomOrder.map(roomName => {
                         const roomItems = grouped[roomName] || [];
                         const roomTotal = roomItems.reduce((sum, i) => sum + (calculateSellPrice(i.materials, i.labor, i.margin) * i.qty), 0);
@@ -670,7 +1029,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                         return (
                             <React.Fragment key={roomName}>
                                 <tr className="bg-slate-100 border-y border-slate-200">
-                                    <td colSpan={14} className="px-4 py-2">
+                                    <td colSpan={COLS} className="px-4 py-2">
                                         <div className="flex justify-between items-center pr-2">
                                             <span className="font-bold text-slate-800 text-xs uppercase tracking-wide flex items-center gap-2">
                                                 🏠 {roomName}
@@ -686,7 +1045,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                                 })()}
                                             </span>
                                             <div className="flex items-center gap-4">
-                                                <button 
+                                                <button
                                                     onClick={() => onAddItem(roomName)}
                                                     className="flex items-center gap-1 text-[10px] font-bold text-[#0066CC] bg-white border border-sky-100 px-3 py-1.5 rounded hover:bg-sky-50 transition-colors shadow-sm whitespace-nowrap print:hidden"
                                                 >
@@ -701,9 +1060,9 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                         </div>
                                     </td>
                                 </tr>
-                                {roomItems.length > 0 ? roomItems.map(renderRow) : (
+                                {roomItems.length > 0 ? sortRows(roomItems).map(renderRow) : (
                                     <tr>
-                                        <td colSpan={14} className="p-4 text-center text-slate-400 text-xs italic border-b border-slate-100">
+                                        <td colSpan={COLS} className="p-4 text-center text-slate-400 text-xs italic border-b border-slate-100">
                                             No items in {roomName} yet.
                                         </td>
                                     </tr>
@@ -715,10 +1074,10 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                     {unassigned.length > 0 && (
                         <>
                             <tr className="bg-slate-100 border-y border-slate-200">
-                                <td colSpan={14} className="px-4 py-2">
+                                <td colSpan={COLS} className="px-4 py-2">
                                     <div className="flex justify-between items-center pr-2">
                                         <span className="font-bold text-slate-600 text-xs uppercase tracking-wide">📦 Unassigned Items</span>
-                                        <button 
+                                        <button
                                             onClick={() => onAddItem("Unassigned")}
                                             className="flex items-center gap-1 text-[10px] font-bold text-[#0066CC] bg-white border border-sky-100 px-3 py-1.5 rounded hover:bg-sky-50 transition-colors shadow-sm whitespace-nowrap print:hidden"
                                         >
@@ -727,24 +1086,63 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                     </div>
                                 </td>
                             </tr>
-                            {unassigned.map(renderRow)}
+                            {sortRows(unassigned).map(renderRow)}
                         </>
                     )}
-                    
+
                     {items.length === 0 && (
                         <tr>
-                            <td colSpan={14} className="p-12 text-center text-slate-400 italic">
+                            <td colSpan={COLS} className="p-12 text-center text-slate-400 italic">
                                 No items in this BOQ yet. Click "+ Add Item" in any room header to start.
                             </td>
                         </tr>
                     )}
                 </tbody>
+
+                {/* Sticky, because the figure it carries is the reason for the
+                    edit you are making at the top of a long sheet. */}
+                {items.length > 0 && (
+                    <tfoot className="sticky bottom-0 z-20">
+                        <tr className="bg-slate-50/95 backdrop-blur-sm border-t-2 border-slate-300">
+                            <td colSpan={COLS - 1} className="px-4 py-2.5">
+                                <div className="flex items-center gap-4 flex-wrap text-[11px]">
+                                    <span className="text-[9.5px] font-black uppercase tracking-[0.14em] text-slate-400">
+                                        Firm scope
+                                    </span>
+                                    <span className="text-slate-500">
+                                        {sheetTotals.live} {sheetTotals.live === 1 ? 'line' : 'lines'}
+                                    </span>
+                                    {isOwner && (
+                                        <span className="text-slate-500 font-mono tabular-nums">
+                                            cost {formatCurrency(sheetTotals.cost)}
+                                        </span>
+                                    )}
+                                    {isOwner && (
+                                        <span className={`font-mono tabular-nums font-bold ${
+                                            sheetTotals.margin < 15 ? 'text-rose-600' : 'text-emerald-600'
+                                        }`}>
+                                            {sheetTotals.margin.toFixed(1)}% blended
+                                        </span>
+                                    )}
+                                    {sheetTotals.excluded > 0 && (
+                                        <span className="text-slate-400 font-mono tabular-nums" title="Deleted, excluded or client-procured lines — not billed">
+                                            {formatCurrency(sheetTotals.excluded)} out of scope
+                                        </span>
+                                    )}
+                                </div>
+                            </td>
+                            <td className="px-2 py-2.5 text-right font-mono tabular-nums font-bold text-slate-900 text-[15px] whitespace-nowrap">
+                                <FlashValue value={sheetTotals.firm}>{formatCurrency(sheetTotals.firm)}</FlashValue>
+                            </td>
+                        </tr>
+                    </tfoot>
+                )}
             </table>
 
             {/* Selection Bulk Action Bar */}
             <AnimatePresence>
                 {selectedIds.size > 0 && (
-                    <motion.div 
+                    <motion.div
                         initial={{ y: 100, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 100, opacity: 0 }}
@@ -765,9 +1163,9 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                      )}
                                  </span>
                              </div>
-                             
+
                              <div className="h-6 w-px bg-slate-700 mx-2"></div>
-                             
+
                              <div className="flex flex-wrap gap-2">
                                  <button onClick={() => setBulkCoModal({ itemIds: Array.from(selectedIds), newStatus: 'included_ffds_scope' })} className="px-3 py-1.5 bg-sky-900 hover:bg-[#0066CC] hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Set Status</button>
                                  <button onClick={() => {/* TODO */}} className="px-3 py-1.5 bg-sky-900 hover:bg-[#0066CC] hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Move Room</button>
@@ -797,7 +1195,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
             <AnimatePresence>
                 {bulkCoModal && (
                     <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm shadow-2xl flex items-center justify-center p-4 z-[100]">
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
@@ -814,13 +1212,13 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                 <div className="space-y-4">
                                     <div>
                                         <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Select Status</label>
-                                        <select 
+                                        <select
                                             value={bulkCoModal.newStatus}
                                             onChange={e => setBulkCoModal({...bulkCoModal, newStatus: e.target.value})}
                                             className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white"
                                         >
-                                            {STATUS_OPTIONS.filter(o => 
-                                                isOwner || 
+                                            {STATUS_OPTIONS.filter(o =>
+                                                isOwner ||
                                                 ['included_ffds_scope', 'pending_finalisation', 'on_hold'].includes(o.value)
                                             ).map(opt => (
                                                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -857,7 +1255,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
             <AnimatePresence>
                 {coModal && (
                     <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/20 backdrop-blur-sm shadow-2xl flex items-center justify-center p-4 z-[100]">
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
@@ -869,15 +1267,15 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                             </div>
                             <div className="p-6">
                                 <p className="text-sm text-slate-600 mb-6 font-medium">
-                                    {boqFrozen 
-                                        ? "The BOQ is frozen. ALL status changes require a formal Change Order reference to ensure client signoffs are preserved." 
+                                    {boqFrozen
+                                        ? "The BOQ is frozen. ALL status changes require a formal Change Order reference to ensure client signoffs are preserved."
                                         : "This status change alters the financial baseline or scope commitments."}
                                 </p>
                                 <div className="space-y-4">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">CO Reference</label>
-                                        <input 
-                                            type="text" 
+                                        <input
+                                            type="text"
                                             value={coRef}
                                             onChange={e => setCoRef(e.target.value)}
                                             placeholder="e.g. CO-001"
@@ -886,7 +1284,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Reason / Note</label>
-                                        <textarea 
+                                        <textarea
                                             value={coReason}
                                             onChange={e => setCoReason(e.target.value)}
                                             placeholder="Client requested alternative finish..."
@@ -907,7 +1305,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
             <AnimatePresence>
                 {linkageModal && (
                     <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/20 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
@@ -917,7 +1315,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                 <h3 className="font-bold text-slate-800">Edit Traceability Linkage</h3>
                                 <button onClick={() => setLinkageModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
                             </div>
-                            
+
                             <div className="p-4 bg-slate-100 flex gap-2 border-b border-slate-200">
                                 {['drawing', 'selection_sheet', 'change_order', 'direct_execution'].map(type => (
                                     <button
@@ -929,7 +1327,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                     </button>
                                 ))}
                             </div>
-                            
+
                             <div className="p-6">
                                 {linkageType === 'direct_execution' ? (
                                     <div className="text-sm text-slate-500 italic text-center py-4">
@@ -939,8 +1337,8 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                     <div className="space-y-4">
                                         <div>
                                             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Document Reference ID</label>
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 value={linkageRef}
                                                 onChange={e => setLinkageRef(e.target.value)}
                                                 placeholder={linkageType === 'drawing' ? 'e.g. DWG-ELEC-04' : linkageType === 'change_order' ? 'e.g. CO-002' : 'e.g. SS-LIVING-01'}
@@ -949,8 +1347,8 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                         </div>
                                         <div>
                                             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Friendly Label / Description</label>
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 value={linkageLabel}
                                                 onChange={e => setLinkageLabel(e.target.value)}
                                                 placeholder="e.g. Living Room Ceiling Plan"
@@ -965,7 +1363,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                     </div>
                                 )}
                             </div>
-                            
+
                             <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
                                 <button onClick={() => setLinkageModal(null)} className="px-4 py-2 font-bold text-slate-500 hover:text-slate-700 text-sm">Cancel</button>
                                 <button onClick={saveLinkage} className="px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold rounded shadow text-sm">Save Linkage</button>
@@ -978,7 +1376,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
             <AnimatePresence>
                 {statusModalId && (
                     <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/20 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, scale: 0.95, y: 10 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -993,11 +1391,11 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                     ✕
                                 </button>
                             </div>
-                            
+
                             <div className="p-6 overflow-y-auto bg-slate-50/50 flex-1">
                                 <div className="grid grid-cols-2 gap-3">
-                                    {STATUS_OPTIONS.filter(o => 
-                                        isOwner || 
+                                    {STATUS_OPTIONS.filter(o =>
+                                        isOwner ||
                                         ['included_ffds_scope', 'pending_finalisation', 'on_hold'].includes(o.value)
                                     ).map(opt => {
                                         let colorClass = "";
@@ -1042,7 +1440,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                     })}
                                 </div>
                             </div>
-                            
+
                         </motion.div>
                     </div>
                 )}

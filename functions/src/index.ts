@@ -10,6 +10,14 @@ const db = admin.firestore();
 import { GoogleGenAI } from "@google/genai";
 import { formatINR } from "../../lib/utils";
 import * as logger from "firebase-functions/logger";
+
+/*
+  Platform admin read-models. Kept in their own module: they are the only
+  functions that read across every tenant, and that is worth being able to see
+  at a glance rather than buried in this file.
+*/
+export { platformOverview, platformIntegritySweep } from "./platformAdmin";
+export { platformRepairDocuments } from "./platformRepair";
 import * as pako from "pako";
 import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";
 import { recordDocumentView, signIssue } from "../../services/documentIssueEngine";

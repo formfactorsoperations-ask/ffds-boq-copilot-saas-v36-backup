@@ -60,7 +60,7 @@ export const TemplateMetricsBar: React.FC<TemplateMetricsBarProps> = ({
   ];
 
   return (
-    <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3 shrink-0">
+    <div className="hud-well p-4 rounded-2xl border space-y-3 shrink-0 hud-panel-in">
       {/* Top row: Metrics + Actions */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4">
@@ -77,7 +77,7 @@ export const TemplateMetricsBar: React.FC<TemplateMetricsBarProps> = ({
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
               Unique Bank SKUs
             </span>
-            <span className="text-sm font-black text-[#0055B3]">
+            <span className="text-sm font-black text-slate-800">
               {uniqueItemIds.length} Master Items
             </span>
           </div>
@@ -96,7 +96,7 @@ export const TemplateMetricsBar: React.FC<TemplateMetricsBarProps> = ({
                     key={trade.name}
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                       isCovered
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        ? 'bg-[#0066CC]/10 text-[#0055B3] border-[#0066CC]/25'
                         : 'bg-slate-100 text-slate-400 border-slate-200'
                     }`}
                   >
@@ -112,23 +112,23 @@ export const TemplateMetricsBar: React.FC<TemplateMetricsBarProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={onOpenAiArchitect}
-            className="px-3.5 py-1.5 bg-gradient-to-r from-sky-900 to-slate-900 text-white rounded-xl text-xs font-bold hover:shadow-md hover:from-sky-800 hover:to-slate-800 transition-all flex items-center gap-1.5 border border-sky-700/50"
+            className="px-3.5 py-1.5 bg-[#0066CC] text-white rounded-xl text-xs font-bold hover:bg-[#0055B3] transition-colors flex items-center gap-1.5"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <Sparkles className="w-3.5 h-3.5" />
             AI Architect
           </button>
 
           <button
             onClick={onOpenAiAudit}
-            className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+            className="px-3 py-1.5 bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
             AI Audit
           </button>
 
           <button
             onClick={onOpenTierPreview}
-            className="px-3 py-1.5 bg-sky-50 text-[#0055B3] border border-sky-200 hover:bg-sky-100 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+            className="px-3 py-1.5 bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
           >
             <Eye className="w-3.5 h-3.5" />
             3-Tier Simulation

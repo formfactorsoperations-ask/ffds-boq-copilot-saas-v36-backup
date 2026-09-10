@@ -1,7 +1,7 @@
 import {
   ProjectSchedule, ScheduleTask, ProjectContext, FullBoqItem, WorkCalendar,
 } from '../types';
-import { DEFAULT_CALENDAR, toISO, toDayNum } from './schedule';
+import { DEFAULT_CALENDAR, toISO, toDayNum, laneOrder } from './schedule';
 
 // ============================================================================
 // scheduleBuilder — derive a first schedule from what the project already knows.
@@ -41,6 +41,41 @@ const tradeOf = (cat: string): string => {
  */
 const durationFor = (share: number, totalWorkDays: number): number =>
   Math.max(3, Math.round(share * totalWorkDays));
+
+/*
+  The canonical build sequence, at module scope so it has two readers.
+
+  It used to live inside buildScheduleFromProject, which made it a detail of
+  how a first schedule is generated. It is more than that: `dependsOnStages`
+  is the studio's statement of what physically has to be finished before what,
+  and the drag-to-reorder check reads the same table rather than carrying a
+  second copy that could drift away from it.
+*/
+interface StageTemplate {
+  id: string;
+  title: string;
+  trade: string;
+  share: number; // fraction of the trade's total duration
+  dependsOnStages: string[]; // list of stage IDs it depends on
+}
+
+const EXECUTION_TEMPLATES: StageTemplate[] = [
+  { id: 'site-prelims', title: 'Site Setup & Preliminaries', trade: 'Site & Preliminaries', share: 1.0, dependsOnStages: [] },
+  { id: 'civil-demolition', title: 'Civil & Demolition Works', trade: 'Civil & Demolition', share: 1.0, dependsOnStages: ['site-prelims'] },
+  { id: 'plumb-concealed', title: 'Plumbing - Concealed Piping', trade: 'Plumbing', share: 0.6, dependsOnStages: ['civil-demolition'] },
+  { id: 'elec-conduit', title: 'Electrical - Conduit & First-Fixing', trade: 'Electrical', share: 0.35, dependsOnStages: ['civil-demolition'] },
+  { id: 'flooring-tiling', title: 'Flooring & Tiling Works', trade: 'Flooring & Tiling', share: 1.0, dependsOnStages: ['plumb-concealed', 'elec-conduit'] },
+  { id: 'ceiling-framing', title: 'False Ceiling - Framing & Channeling', trade: 'False Ceiling', share: 0.5, dependsOnStages: ['flooring-tiling'] },
+  { id: 'elec-wiring', title: 'Electrical - Wiring & Box Installation', trade: 'Electrical', share: 0.35, dependsOnStages: ['ceiling-framing'] },
+  { id: 'ceiling-boarding', title: 'False Ceiling - Sheet Boarding & Taping', trade: 'False Ceiling', share: 0.5, dependsOnStages: ['elec-wiring'] },
+  { id: 'carp-carcass', title: 'Carpentry - Carcass & Woodwork Structure', trade: 'Carpentry', share: 0.6, dependsOnStages: ['ceiling-boarding'] },
+  { id: 'paint-first', title: 'Painting - Primer & First Coats', trade: 'Painting & Finishing', share: 0.5, dependsOnStages: ['carp-carcass'] },
+  { id: 'carp-shutters', title: 'Carpentry - Laminates, Shutters & Hardware', trade: 'Carpentry', share: 0.4, dependsOnStages: ['paint-first'] },
+  { id: 'elec-final', title: 'Electrical - Final Fixtures & Plates', trade: 'Electrical', share: 0.3, dependsOnStages: ['carp-shutters'] },
+  { id: 'plumb-fixtures', title: 'Plumbing - Sanitary Fixture Fittings', trade: 'Plumbing', share: 0.4, dependsOnStages: ['elec-final'] },
+  { id: 'paint-final', title: 'Painting - Final Touchups & Coating', trade: 'Painting & Finishing', share: 0.5, dependsOnStages: ['plumb-fixtures'] },
+  { id: 'other-works', title: 'Other Miscellaneous Works', trade: 'Other works', share: 1.0, dependsOnStages: ['paint-final'] }
+];
 
 export interface BuildOptions {
   /** Total execution working days to distribute. Default from studio history. */
@@ -110,42 +145,29 @@ export function buildScheduleFromProject(
     prevDesignId = id;
   });
 
-  // Design Gate is the handoff: execution cannot begin before it closes.
+  /*
+    Design Gate is the handoff: execution cannot begin before it closes.
+
+    It depends on EVERY design task, not merely the last one added. Depending on
+    `prevDesignId` alone made the rule an accident of insertion order — the gate
+    was after the last step in the array, and any design work that arrived out of
+    order, or was added later with a date of its own, sat outside the chain
+    entirely. A Good-For-Construction drawing could then be scheduled after
+    demolition had started, which is the one thing the gate exists to prevent.
+
+    Depending on all of them says the rule directly: the gate closes when design
+    is finished, whatever order the steps were written in.
+  */
   const gateId = 'ms-design-gate';
   if (steps.length) {
+    const designTaskIds = tasks.filter(t => t.kind === 'design').map(t => t.id);
     tasks.push({
       id: gateId, title: 'Design Gate', kind: 'milestone', workDays: 0,
-      dependencies: prevDesignId ? [prevDesignId] : [], status: 'pending',
+      dependencies: designTaskIds, status: 'pending',
     });
   }
 
-  // ---- Execution lane, multi-stage templates ------------------------------
-  interface StageTemplate {
-    id: string;
-    title: string;
-    trade: string;
-    share: number; // fraction of the trade's total duration
-    dependsOnStages: string[]; // list of stage IDs it depends on
-  }
-
-  const EXECUTION_TEMPLATES: StageTemplate[] = [
-    { id: 'site-prelims', title: 'Site Setup & Preliminaries', trade: 'Site & Preliminaries', share: 1.0, dependsOnStages: [] },
-    { id: 'civil-demolition', title: 'Civil & Demolition Works', trade: 'Civil & Demolition', share: 1.0, dependsOnStages: ['site-prelims'] },
-    { id: 'plumb-concealed', title: 'Plumbing - Concealed Piping', trade: 'Plumbing', share: 0.6, dependsOnStages: ['civil-demolition'] },
-    { id: 'elec-conduit', title: 'Electrical - Conduit & First-Fixing', trade: 'Electrical', share: 0.35, dependsOnStages: ['civil-demolition'] },
-    { id: 'flooring-tiling', title: 'Flooring & Tiling Works', trade: 'Flooring & Tiling', share: 1.0, dependsOnStages: ['plumb-concealed', 'elec-conduit'] },
-    { id: 'ceiling-framing', title: 'False Ceiling - Framing & Channeling', trade: 'False Ceiling', share: 0.5, dependsOnStages: ['flooring-tiling'] },
-    { id: 'elec-wiring', title: 'Electrical - Wiring & Box Installation', trade: 'Electrical', share: 0.35, dependsOnStages: ['ceiling-framing'] },
-    { id: 'ceiling-boarding', title: 'False Ceiling - Sheet Boarding & Taping', trade: 'False Ceiling', share: 0.5, dependsOnStages: ['elec-wiring'] },
-    { id: 'carp-carcass', title: 'Carpentry - Carcass & Woodwork Structure', trade: 'Carpentry', share: 0.6, dependsOnStages: ['ceiling-boarding'] },
-    { id: 'paint-first', title: 'Painting - Primer & First Coats', trade: 'Painting & Finishing', share: 0.5, dependsOnStages: ['carp-carcass'] },
-    { id: 'carp-shutters', title: 'Carpentry - Laminates, Shutters & Hardware', trade: 'Carpentry', share: 0.4, dependsOnStages: ['paint-first'] },
-    { id: 'elec-final', title: 'Electrical - Final Fixtures & Plates', trade: 'Electrical', share: 0.3, dependsOnStages: ['carp-shutters'] },
-    { id: 'plumb-fixtures', title: 'Plumbing - Sanitary Fixture Fittings', trade: 'Plumbing', share: 0.4, dependsOnStages: ['elec-final'] },
-    { id: 'paint-final', title: 'Painting - Final Touchups & Coating', trade: 'Painting & Finishing', share: 0.5, dependsOnStages: ['plumb-fixtures'] },
-    { id: 'other-works', title: 'Other Miscellaneous Works', trade: 'Other works', share: 1.0, dependsOnStages: ['paint-final'] }
-  ];
-
+  // ---- Execution lane, from the templates hoisted above -------------------
   const activeTemplates = byTrade.size > 0
     ? EXECUTION_TEMPLATES.filter(t => byTrade.has(t.trade))
     : EXECUTION_TEMPLATES.filter(t => t.trade !== 'Other works');
@@ -233,4 +255,125 @@ export function buildScheduleFromProject(
 /** True when the project has enough to draw a schedule worth looking at. */
 export function canBuildSchedule(boq: FullBoqItem[] = [], designSteps: any[] = []): boolean {
   return boq.length > 0 || designSteps.length > 0;
+}
+
+
+// ============================================================================
+// Sequence check — is the order the studio just dragged into buildable?
+//
+// The Gantt lets a row be dragged up or down its lane, which is the right tool
+// and a dangerous one: nothing physical stops you putting final paint before
+// the carpentry it is painting, and the chart will happily draw it.
+//
+// The knowledge needed to catch that is already written down. EXECUTION_TEMPLATES
+// is the canonical build sequence — `dependsOnStages` says which trade has to be
+// finished before which — so the check reads that table rather than inventing a
+// second one that could drift away from it. Anything the studio wrote itself,
+// with a title the table does not recognise, falls back to the coarse trade
+// order in TRADE_ORDER.
+//
+// It warns; it never refuses. A studio that wants second-fix electricals before
+// the ceiling boards, because the boards are late and the sparky is on site
+// today, knows something the table does not.
+// ============================================================================
+
+export interface SequenceWarning {
+  /** The task now scheduled too early. */
+  taskId: string;
+  title: string;
+  /** The task it is normally built after. */
+  afterId: string;
+  afterTitle: string;
+  reason: string;
+}
+
+/** Everything that must be finished before `id`, followed transitively. */
+function precedingStages(id: string, seen = new Set<string>()): Set<string> {
+  const template = EXECUTION_TEMPLATES.find(t => t.id === id);
+  if (!template) return seen;
+  template.dependsOnStages.forEach(dep => {
+    if (seen.has(dep)) return;
+    seen.add(dep);
+    precedingStages(dep, seen);
+  });
+  return seen;
+}
+
+/** `exec-civil-demolition` → `civil-demolition`, when the table knows it. */
+const templateIdOf = (taskId: string): string | null => {
+  const bare = taskId.replace(/^exec-/, '');
+  return EXECUTION_TEMPLATES.some(t => t.id === bare) ? bare : null;
+};
+
+const tradeRank = (task: ScheduleTask): number => {
+  const hay = `${task.trade || ''} ${task.title || ''}`;
+  const i = TRADE_ORDER.findIndex(t => t.match.test(hay));
+  return i < 0 ? TRADE_ORDER.length : i;
+};
+
+/**
+ * Pairs in this execution lane that are built in the wrong order.
+ *
+ * Compared against the same call on the schedule before an edit, so the studio
+ * is told about the problem it just introduced rather than every departure from
+ * the template that was already there and deliberate.
+ */
+export function sequenceWarnings(tasks: ScheduleTask[]): SequenceWarning[] {
+  const ordered = laneOrder(tasks, 'execution');
+  if (ordered.length < 2) return [];
+
+  const out: SequenceWarning[] = [];
+  const positionOf = new Map(ordered.map((t, i) => [t.id, i]));
+
+  ordered.forEach((task, i) => {
+    const tid = templateIdOf(task.id);
+
+    if (tid) {
+      // Precise: the table names exactly what has to come first.
+      const must = precedingStages(tid);
+      ordered.forEach(other => {
+        const otherTid = templateIdOf(other.id);
+        if (!otherTid || !must.has(otherTid)) return;
+        if ((positionOf.get(other.id) ?? 0) < i) return;   // already ahead, fine
+        out.push({
+          taskId: task.id, title: task.title,
+          afterId: other.id, afterTitle: other.title,
+          reason: `${task.title} is built after ${other.title}, not before it.`,
+        });
+      });
+      return;
+    }
+
+    /*
+      A task the studio wrote itself. The trade order is all that is known, so
+      the test is coarser: only flag it against the task immediately in front,
+      and only when the trades are genuinely out of sequence. Two tasks of the
+      same trade say nothing about which comes first.
+    */
+    const prev = ordered[i - 1];
+    if (!prev || templateIdOf(prev.id)) return;
+    const a = tradeRank(task);
+    const p = tradeRank(prev);
+    if (a >= p || a === TRADE_ORDER.length || p === TRADE_ORDER.length) return;
+    out.push({
+      taskId: task.id, title: task.title,
+      afterId: prev.id, afterTitle: prev.title,
+      reason: `${TRADE_ORDER[a].trade} normally comes before ${TRADE_ORDER[p].trade}.`,
+    });
+  });
+
+  return out;
+}
+
+/**
+ * The warnings an edit *introduces* — what the studio needs to be asked about.
+ *
+ * A schedule already out of template order stays that way silently: it was
+ * either edited deliberately or built from a BOQ with trades the template does
+ * not cover, and re-reporting it on every drag would train everyone to click
+ * through the dialog without reading it.
+ */
+export function newSequenceWarnings(before: ScheduleTask[], after: ScheduleTask[]): SequenceWarning[] {
+  const known = new Set(sequenceWarnings(before).map(w => `${w.taskId}>${w.afterId}`));
+  return sequenceWarnings(after).filter(w => !known.has(`${w.taskId}>${w.afterId}`));
 }

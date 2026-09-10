@@ -37,7 +37,7 @@ const STRUCTURAL_FIELDS = [
   // How the studio presents and runs this kind of job
   'proposalType', 'proposalMode', 'activeProposalFormat', 'activeProposalLevel',
   'activeProposalMode', 'showScopePricing', 'coverStyle', 'logoImage',
-  'logoHeight', 'theme', 'propertyStatus',
+  'logoHeight', 'theme', 'propertyStatus', 'civilScope', 'clientBrief',
   'procurementModes', 'tradeSequence', 'procurementLeadTimeWeeks',
   // A clone of a demo stays a demo; a clone of a real job stays real.
   'isDummy', 'projectCategory',

@@ -439,31 +439,49 @@ Return JSON array {name, size, unit:'sq ft'}. DO NOT include functional or misce
         });
         const rooms = parseJsonResponse<Room[]>(response.text, []);
         if (rooms.length > 0) {
-            rooms.push({ name: 'Functional', size: area, unit: 'sq ft' });
-            rooms.push({ name: 'Others', size: area, unit: 'sq ft' });
+            /*
+              Buckets are not rooms and were never measurable.
+
+              These two were appended with `size: area` — the whole flat, each —
+              so an eight-room 904 sq ft project reported ~2,710 sq ft of room
+              area and every whole-house quantity was measured against three
+              times the property. See lib/scopeBuckets.
+            */
         }
         return rooms;
     } catch (e) { return []; }
 }
 
+/**
+ * Rooms read off a floor plan.
+ *
+ * Throws rather than returning []. It used to catch everything and hand back an
+ * empty array, so a server with no API key was indistinguishable from a plan
+ * with no rooms in it: the caller set `rooms: []`, showed a success toast, and
+ * the studio saw the button do nothing at all. An empty result now means the
+ * model genuinely found nothing; a failure says what failed.
+ */
 export async function analyzeFloorPlan(imageBase64: string, area: number): Promise<Room[]> {
-    try {
-        const response = await fetch('/api/analyze-floorplan', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ imageBase64, area })
-        });
-        if (!response.ok) {
-            throw new Error('Server error analyzing floor plan');
-        }
-        const data = await response.json();
-        return data.rooms || [];
-    } catch (e) {
-        console.error("Error in analyzeFloorPlan API call:", e);
-        return [];
+    const response = await fetch('/api/analyze-floorplan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64, area })
+    });
+
+    if (!response.ok) {
+        // The route reports the real reason — a missing key, a refused image —
+        // and that sentence is worth more to whoever is looking at it than
+        // "Server error".
+        let detail = `HTTP ${response.status}`;
+        try {
+            const body = await response.json();
+            if (body?.error) detail = String(body.error);
+        } catch { /* not JSON; the status is all there is */ }
+        throw new Error(detail);
     }
+
+    const data = await response.json();
+    return data.rooms || [];
 }
 
 export async function generateBoqPackage(projectContext: ProjectContext, theme: string, bank: Item[]): Promise<AIGeneratedBoqItem[]> {

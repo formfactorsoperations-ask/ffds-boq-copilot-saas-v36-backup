@@ -175,6 +175,17 @@ export interface ResolvedTask extends ScheduleTask {
   orderByISO?: string;
   slipDays: number;
   originalWorkDays?: number;
+  /*
+    Working days this task's forecast has been pushed out purely because it is
+    unfinished and time has passed — not because of a hold, a gate or a
+    predecessor. It is the number the studio would otherwise have had to work
+    out by eye and then type in as a new end date.
+  */
+  driftDays: number;
+  /** Started, not finished, and already past the day it was meant to end. */
+  overrunning: boolean;
+  /** Neither started nor finished, and the day it should have begun has passed. */
+  overdueToStart: boolean;
 }
 
 export interface ScheduleResult {
@@ -268,7 +279,8 @@ function runSchedulePass(
   tasksToRun: ScheduleTask[],
   schedule: ProjectSchedule,
   cal: WorkCalendar,
-  hol: Set<number>
+  hol: Set<number>,
+  today: number
 ) {
   const byId = new Map(tasksToRun.map(t => [t.id, t]));
   const { order, cycles } = topoOrder(tasksToRun);
@@ -285,10 +297,20 @@ function runSchedulePass(
     const t = byId.get(id)!;
 
     // Earliest from dependencies: the day after the last predecessor ends.
-    let start = t.notBeforeISO ? toDayNum(t.notBeforeISO) : anchor;
+    let start = anchor;
     if (schedule.projectStartISO && (!t.dependencies || t.dependencies.length === 0)) {
       start = toDayNum(schedule.projectStartISO);
     }
+    /*
+      `notBeforeISO` is a floor, not a suggestion — "the earliest the task may
+      start regardless of dependencies". The project-start line above used to
+      overwrite it outright for any task with no predecessors, so work deliberately
+      held until a later date was scheduled at the start of the project instead.
+
+      Harmless while nothing looked at whether a task was late; not harmless now,
+      because work that cannot begin yet was being reported as overdue to start.
+    */
+    if (t.notBeforeISO) start = Math.max(start, toDayNum(t.notBeforeISO));
 
     (t.dependencies || []).forEach(dep => {
       const r = resolved.get(dep);
@@ -324,7 +346,53 @@ function runSchedulePass(
       start = pinnedDay;
     }
 
-    const end = actualEnd != null ? actualEnd : workSpanEnd(cal, start, t.workDays, hol, blocked);
+    /*
+      Unfinished work cannot be scheduled in the past.
+
+      This is what the timeline was missing. A stage that had started and not
+      been closed kept the end date it was planned to have, so nothing after it
+      moved: the studio had to notice the overrun, edit the end date by hand,
+      and let every later stage shift from there. Two weeks of slippage looked
+      exactly like a project on plan until somebody typed.
+
+      Two halves of the same rule:
+
+        - work that has not started cannot start before today, so a stage whose
+          planned start has passed moves forward to today
+        - work that has not finished cannot have finished before today, so a
+          stage still open past its planned end keeps extending
+
+      Either way the successors follow, because they are already scheduled from
+      this task's end. Nothing is pushed that does not depend on it, which is
+      why parallel work stays where it is.
+
+      `status: 'completed'` counts as finished even without an actual end date:
+      the studio has said it is done, and stretching it to today would contradict
+      them. A pinned start is left alone — it is a date promised to someone, and
+      `pinConflict` already reports it rather than moving it quietly.
+    */
+    const finished = actualEnd != null || t.status === 'completed';
+
+    let driftDays = 0;
+    let overdueToStart = false;
+
+    if (!finished && actualStart == null && !t.pinned && start < today) {
+      const pushed = nextWorkingDay(cal, today, hol);
+      driftDays = Math.max(0, workingDaysBetween(cal, start, pushed, hol) - 1);
+      overdueToStart = pushed > start;
+      start = pushed;
+    }
+
+    const plannedEnd = actualEnd != null ? actualEnd : workSpanEnd(cal, start, t.workDays, hol, blocked);
+
+    let end = plannedEnd;
+    let overrunning = false;
+    if (!finished && plannedEnd < today) {
+      end = nextWorkingDay(cal, today, hol);
+      driftDays += Math.max(0, workingDaysBetween(cal, plannedEnd, end, hol) - 1);
+      overrunning = actualStart != null || t.status === 'in_progress';
+    }
+
     const openGates = actualEnd != null ? []
       : (Object.keys(t.gates || {}) as ScheduleGate[]).filter(g => t.gates![g] === false);
 
@@ -343,6 +411,9 @@ function runSchedulePass(
       onCriticalPath: false,
       pinConflict,
       slipDays: Math.max(0, slipDays),
+      driftDays,
+      overrunning,
+      overdueToStart,
       orderByISO: t.kind === 'procurement' && t.leadTimeDays
         ? toISO(start - t.leadTimeDays)
         : undefined,
@@ -355,6 +426,7 @@ function runSchedulePass(
     resolved.set(id, {
       ...t, startDay: anchor, endDay: end, startISO: toISO(anchor), endISO: toISO(end),
       openGates: [], heldBy: [], floatDays: 0, onCriticalPath: false, slipDays: 0,
+      driftDays: 0, overrunning: false, overdueToStart: false,
     });
   });
 
@@ -393,13 +465,19 @@ function runSchedulePass(
   };
 }
 
-export function computeSchedule(schedule: ProjectSchedule): ScheduleResult {
+/**
+ * @param todayISO  The day to treat as today. Defaults to the real one; passed
+ *                  explicitly by tests, and by anything rendering a schedule as
+ *                  it stood on some other date.
+ */
+export function computeSchedule(schedule: ProjectSchedule, todayISO?: string): ScheduleResult {
   const cal = schedule.calendar || DEFAULT_CALENDAR;
   const hol = holidaySet(cal);
   let tasks = schedule.tasks || [];
+  const today = toDayNum(todayISO || toISO(Math.floor(Date.now() / MS_DAY)));
 
   // Run the uncompressed pass first
-  const basePass = runSchedulePass(tasks, schedule, cal, hol);
+  const basePass = runSchedulePass(tasks, schedule, cal, hol, today);
 
   const target = schedule.targetHandoverISO ? toDayNum(schedule.targetHandoverISO) : null;
   const startDay = basePass.startDay;
@@ -442,7 +520,7 @@ export function computeSchedule(schedule: ProjectSchedule): ScheduleResult {
         };
       });
 
-      const compressedPass = runSchedulePass(compressedTasks, schedule, cal, hol);
+      const compressedPass = runSchedulePass(compressedTasks, schedule, cal, hol, today);
       
       compressionInfo = {
         isCompressed: true,
@@ -565,6 +643,117 @@ export function ineffectiveHolds(holds: ScheduleHold[], result: ScheduleResult):
 }
 
 /** Freeze the current dates as the baseline. Called once, at Design Gate close. */
+/**
+ * The tasks of one lane, in the order they actually run.
+ *
+ * Array position is not the order — a reorder rewires predecessors and leaves
+ * the array alone, because the array is storage and the dependencies are the
+ * schedule. Reading the sequence back therefore means walking the chain, which
+ * two callers now need to do: the reorder itself, and the check that asks
+ * whether the resulting sequence is buildable.
+ *
+ * Anything the links do not reach — a broken or branching chain — is appended
+ * in array order rather than dropped, so the caller always gets every task in
+ * the lane back.
+ */
+export function laneOrder(tasks: ScheduleTask[], kind: ScheduleTask['kind']): ScheduleTask[] {
+  const lane = tasks.filter(t => t.kind === kind);
+  if (lane.length < 2) return lane;
+
+  const laneIds = new Set(lane.map(t => t.id));
+  const inLaneDep = (t: ScheduleTask) => (t.dependencies || []).find(d => laneIds.has(d));
+  const head = lane.find(t => !inLaneDep(t)) || lane[0];
+
+  const ordered: ScheduleTask[] = [];
+  const seen = new Set<string>();
+  let cursor: ScheduleTask | undefined = head;
+  while (cursor && !seen.has(cursor.id)) {
+    ordered.push(cursor);
+    seen.add(cursor.id);
+    cursor = lane.find(t => inLaneDep(t) === cursor!.id);
+  }
+  lane.forEach(t => { if (!seen.has(t.id)) ordered.push(t); });
+  return ordered;
+}
+
+/**
+ * Move one task to sit after another in its lane, and rewire the chain.
+ *
+ * The Gantt's rows are a dependency graph, not a list, so "drag this above
+ * that" only means something if it is translated into predecessors. Design and
+ * execution each run as a chain of single-predecessor tasks — which is also
+ * what the detail panel's Predecessor dropdown edits, one task at a time — so a
+ * drag is that same edit for the whole lane at once: pull the task out of the
+ * chain, splice it back in at its new position, and re-point everything after.
+ *
+ * Constrained deliberately:
+ *
+ *  - within one lane only. Execution is gated behind the whole design phase, so
+ *    dragging a trade in among the drawings does not describe anything.
+ *  - milestones stay put. The Design Gate depends on every design task rather
+ *    than on one predecessor, and splicing it into a chain would silently
+ *    replace that with a single link — the exact rule that stops construction
+ *    starting before the drawings are done.
+ *  - the lane's first task keeps whatever it depended on, so execution stays
+ *    hung off the gate rather than floating free.
+ *
+ * Returns the original array when the move is not allowed, so callers can
+ * compare by identity and do nothing.
+ */
+export function reorderTaskInLane(
+  tasks: ScheduleTask[],
+  draggedId: string,
+  targetId: string,
+  position: 'before' | 'after' = 'before',
+): ScheduleTask[] {
+  if (!tasks?.length || draggedId === targetId) return tasks;
+
+  const dragged = tasks.find(t => t.id === draggedId);
+  const target = tasks.find(t => t.id === targetId);
+  if (!dragged || !target) return tasks;
+  if (dragged.kind !== target.kind) return tasks;
+  if (dragged.kind === 'milestone' || target.kind === 'milestone') return tasks;
+
+  const lane = tasks.filter(t => t.kind === dragged.kind);
+  if (lane.length < 2) return tasks;
+
+  const laneIds = new Set(lane.map(t => t.id));
+  const ordered = laneOrder(tasks, dragged.kind).slice();
+  // Captured before the splice: after it, ordered[0] may be the dragged task.
+  const head = ordered[0];
+
+  const from = ordered.findIndex(t => t.id === draggedId);
+  if (from < 0) return tasks;
+  const [moved] = ordered.splice(from, 1);
+  let to = ordered.findIndex(t => t.id === targetId);
+  if (to < 0) return tasks;
+  if (position === 'after') to += 1;
+  ordered.splice(to, 0, moved);
+
+  /*
+    Whatever the lane hangs off belongs to the lane, not to the task that
+    happened to be first.
+
+    Execution depends on the Design Gate through its opening task. Moving a
+    different trade to the front without carrying that link across left the
+    whole execution lane with no predecessor at all — free to start before the
+    drawings were done, which is the one thing the gate exists to prevent. The
+    entry dependency is read from the old head and given to the new one.
+  */
+  const entryDeps = (head.dependencies || []).filter(d => !laneIds.has(d));
+
+  const rewired = new Map<string, string[]>();
+  ordered.forEach((t, i) => {
+    const outside = (t.dependencies || []).filter(d => !laneIds.has(d));
+    const merged = i === 0
+      ? Array.from(new Set([...outside, ...entryDeps]))
+      : [...outside, ordered[i - 1].id];
+    rewired.set(t.id, merged);
+  });
+
+  return tasks.map(t => (rewired.has(t.id) ? { ...t, dependencies: rewired.get(t.id)! } : t));
+}
+
 export function freezeBaseline(schedule: ProjectSchedule): ProjectSchedule {
   const result = computeSchedule(schedule);
   const byId = new Map(result.tasks.map(t => [t.id, t]));

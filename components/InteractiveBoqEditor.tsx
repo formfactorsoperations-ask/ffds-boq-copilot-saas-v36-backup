@@ -2,6 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ProjectContext, Item, BoqItem, Room, FullBoqItem } from '../types';
 import { calculateSellPrice, formatCurrency, generateId } from '../lib/utils';
 import { ADDON_BUNDLES } from '../lib/standardPackages';
+import { SCOPE_BUCKETS, SCOPE_BUCKET_META, realRooms } from '../lib/scopeBuckets';
+import { resolvedRoomId } from '../lib/scopeMigration';
 import { 
   FolderIcon, 
   Trash2, 
@@ -77,18 +79,36 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
     setSelectedItemId(null);
   }, [selectedRoomId]);
 
+  /*
+    Rooms and scopes, kept apart.
+
+    `rooms` still arrives with whatever a project has stored, and legacy
+    projects store "Functional" and "Others" as rooms carrying the whole flat's
+    area — this strip was printing "0 items • 914.59 sq ft" for each of them,
+    which reads as two enormous empty rooms rather than as the project-level
+    buckets they are.
+  */
+  const spaceRooms = useMemo(() => realRooms(rooms), [rooms]);
+  const roomNameSet = useMemo(() => new Set(spaceRooms.map(r => r.name)), [spaceRooms]);
+
   // Memoize room statistics
   const roomStats = useMemo(() => {
     const stats: Record<string, { count: number; total: number; materials: number; labor: number }> = {};
     
     // Initialize
-    rooms.forEach(r => {
+    spaceRooms.forEach(r => {
       stats[r.name] = { count: 0, total: 0, materials: 0, labor: 0 };
+    });
+    SCOPE_BUCKETS.forEach(bucket => {
+      stats[bucket] = { count: 0, total: 0, materials: 0, labor: 0 };
     });
     stats['Unassigned'] = { count: 0, total: 0, materials: 0, labor: 0 };
 
     items.forEach(item => {
-      const room = item.roomId || 'Unassigned';
+      /* Counted where the line is shown, not where it happens to be stored —
+         otherwise a legacy "General Scope" line sits in Unassigned while the
+         editor displays it under Others. */
+      const room = resolvedRoomId(item as any, item as any, roomNameSet) || 'Unassigned';
       if (!stats[room]) {
         stats[room] = { count: 0, total: 0, materials: 0, labor: 0 };
       }
@@ -104,7 +124,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
     });
 
     return stats;
-  }, [items, rooms]);
+  }, [items, spaceRooms, roomNameSet]);
 
   // Project-wide stats
   const projectStats = useMemo(() => {
@@ -306,7 +326,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Design Spaces Overview</span>
             <span className="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-bold">
-              {rooms.length} Rooms registered
+              {spaceRooms.length} Rooms registered
             </span>
           </div>
           <div className="text-xs text-slate-500 font-normal">
@@ -348,7 +368,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
           </button>
 
           {/* ROOM CARDS */}
-          {rooms.map(room => {
+          {spaceRooms.map(room => {
             const stats = roomStats[room.name] || { count: 0, total: 0 };
             const isActive = selectedRoomId === room.name;
 
@@ -379,6 +399,44 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                   <div className="flex justify-between items-center mt-0.5">
                     <span className={`text-[9px] font-bold ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
                       {stats.count} items • {room.size} {room.unit}
+                    </span>
+                    <span className={`text-xs font-mono font-black ${isActive ? 'text-white' : 'text-slate-800'}`}>
+                      {formatCurrency(stats.total)}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+
+          {/* PROJECT SCOPES — always present, never measured. */}
+          {SCOPE_BUCKETS.map(bucket => {
+            const stats = roomStats[bucket] || { count: 0, total: 0 };
+            const isActive = selectedRoomId === bucket;
+            return (
+              <button
+                key={bucket}
+                onClick={() => { setSelectedRoomId(bucket); setActiveCategory('All'); }}
+                title={SCOPE_BUCKET_META[bucket].detail}
+                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all border text-left min-w-[200px] shrink-0 group ${
+                  isActive
+                    ? 'bg-slate-800 border-slate-800 text-white shadow-md'
+                    : 'bg-slate-50 border-slate-200 border-dashed hover:border-slate-300 hover:shadow-sm text-slate-700'
+                }`}
+              >
+                <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                  isActive ? 'bg-white/15 text-white' : 'bg-white text-slate-500 group-hover:bg-slate-200'
+                }`}>
+                  <FolderOpen className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-grow">
+                  <div className={`text-xs font-black truncate ${isActive ? 'text-white' : 'text-slate-900'}`}>
+                    {bucket}
+                  </div>
+                  <div className="flex justify-between items-center mt-0.5">
+                    {/* No area: a scope covers the flat, it does not have a size. */}
+                    <span className={`text-[9px] font-bold ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
+                      {stats.count} items • project-wide
                     </span>
                     <span className={`text-xs font-mono font-black ${isActive ? 'text-white' : 'text-slate-800'}`}>
                       {formatCurrency(stats.total)}

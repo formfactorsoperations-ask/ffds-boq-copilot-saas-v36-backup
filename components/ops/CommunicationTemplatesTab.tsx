@@ -24,6 +24,7 @@ import {
   Code
 } from 'lucide-react';
 import { useOrg } from '../../contexts/OrgContext';
+import ConsoleHeader from '../ui/ConsoleHeader';
 
 // Helper to reliably merge Firestore settings with the baseline template library
 function getValidTemplates(settings: any): CommunicationTemplateItem[] {
@@ -291,71 +292,61 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
         expiryDate: "30 Dec 2026"
     };
 
-    return (
-        <div className="bg-white rounded-3xl shadow-xs border border-slate-200 overflow-hidden text-left space-y-0">
-            
-            {/* Header */}
-            <div className="px-6 py-6 border-b border-slate-100 bg-slate-50/70 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <div className="flex items-center gap-2 mb-1">
-                        <span className="p-1.5 bg-sky-50 text-[#0066CC] rounded-lg">
-                            <Mail className="w-4 h-4" />
-                        </span>
-                        <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                            Global Email & Communication Templates
-                        </h2>
-                        <span className="px-2.5 py-0.5 bg-sky-100 text-[#0055B3] text-[10px] font-mono font-bold rounded-full">
-                            {templates.length} Active Scripts
-                        </span>
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium">
-                        Configure global studio email notifications, WhatsApp messages, and digital signature invitations across all project lifecycles.
-                    </p>
-                </div>
-                
-                <div className="flex items-center gap-2 flex-wrap">
-                    <button 
-                        type="button"
-                        onClick={handleResetAll} 
-                        disabled={isSaving} 
-                        className="text-xs font-bold px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl flex items-center gap-1.5 text-slate-700 transition shadow-2xs cursor-pointer"
-                    >
-                        <RotateCcw className="w-3.5 h-3.5 text-slate-500" /> Restore All Standard Defaults
-                    </button>
-                </div>
-            </div>
+    /*
+      How much of this has been made the studio's own.
 
-            {/* Notification Toast */}
+      The parallel of the readiness dial on the settings tab: the scripts ship
+      as standard wording, and the ones still untouched are the ones going out
+      to clients in a voice nobody here chose.
+    */
+    const customisedCount = templates.filter((t: any) => t.isCustomised).length;
+    const customisedPct = templates.length ? Math.round((customisedCount / templates.length) * 100) : 0;
+
+    return (
+        <div className="text-left">
+            <ConsoleHeader
+                title="Communication templates"
+                state={customisedCount === 0 ? 'All standard' : `${customisedCount} tailored`}
+                tone={customisedCount === 0 ? 'warn' : 'ok'}
+                blurb="Email and WhatsApp wording sent to clients at each step of a project."
+                search={{
+                    value: search,
+                    onChange: setSearch,
+                    placeholder: 'Search scripts by title, keyword or subject…',
+                }}
+                gauge={{
+                    pct: customisedPct,
+                    label: 'In your voice',
+                    sub: `${customisedCount} of ${templates.length} scripts tailored`,
+                }}
+                aside={(
+                    <div className="mt-4 pt-4 border-t border-slate-200 max-w-xs flex flex-wrap gap-2">
+                        <select
+                            value={filterCategory}
+                            onChange={(e) => setFilterCategory(e.target.value)}
+                            className="border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-[#0066CC]/30 outline-none cursor-pointer"
+                        >
+                            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <button
+                            type="button"
+                            onClick={handleResetAll}
+                            disabled={isSaving}
+                            className="text-xs font-bold px-3 py-1.5 border border-slate-300 bg-white hover:bg-slate-50 rounded-lg flex items-center gap-1.5 text-slate-700 disabled:opacity-50"
+                        >
+                            <RotateCcw className="w-3.5 h-3.5 text-slate-500" /> Restore defaults
+                        </button>
+                    </div>
+                )}
+            />
+
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hud-panel-in">
             {saveSuccessMsg && (
-                <div className="mx-6 mt-4 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-xs">
+                <div className="mx-6 mt-4 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-xs hud-dock-in">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span>{saveSuccessMsg}</span>
                 </div>
             )}
-
-            {/* Filter & Search Bar */}
-            <div className="p-5 border-b border-slate-100 bg-slate-50/40 flex flex-col md:flex-row gap-3">
-                <div className="flex-1 relative">
-                    <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
-                    <input 
-                        type="text" 
-                        placeholder="Search scripts by title, keyword, or subject..." 
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="pl-10 pr-4 py-2.5 w-full border border-slate-200 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-[#0066CC] outline-none transition"
-                    />
-                </div>
-                <div className="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 md:pb-0">
-                    <Filter className="w-4 h-4 text-slate-400 shrink-0" />
-                    <select 
-                        value={filterCategory} 
-                        onChange={(e) => setFilterCategory(e.target.value)}
-                        className="border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold bg-white focus:ring-2 focus:ring-[#0066CC] outline-none cursor-pointer"
-                    >
-                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                </div>
-            </div>
 
             {/* Templates List */}
             <div className="p-6 space-y-4 max-h-[850px] overflow-y-auto">
@@ -636,6 +627,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                 )}
             </div>
 
+        </div>
         </div>
     );
 }
