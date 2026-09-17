@@ -3,6 +3,7 @@ import { PurchaseOrder, POPayment, POStatus } from '../types';
 import { db } from '../services/dbService';
 import { generateId } from '../lib/utils';
 import { ChevronDown, Trash2, ShieldAlert, Plus, Landmark, Truck, FileText, Check } from 'lucide-react';
+import DateField from './ui/DateField';
 
 interface OrdersCardProps {
   po: PurchaseOrder;
@@ -69,6 +70,13 @@ const OrdersCard: React.FC<OrdersCardProps> = ({ po, paidTotal, projectId, onUpd
   const [receivedAt, setReceivedAt] = useState<string>(
     po.receivedAt ? new Date(po.receivedAt).toISOString().split('T')[0] : '',
   );
+  /*
+    Expected delivery was display-only on this card and settable only in
+    the Raise PO modal, so once an order existed its delivery date could
+    never be corrected — the field the cash forecast depends on was the
+    one field nobody could edit.
+  */
+  const [expectedDelivery, setExpectedDelivery] = useState<string>(po.expectedDelivery || '');
   const [receivedNote, setReceivedNote] = useState<string>(po.receivedNote || '');
   const [billNumber, setBillNumber] = useState<string>(po.billNumber || '');
   const [billAmount, setBillAmount] = useState<number>(po.billAmount || 0);
@@ -107,13 +115,14 @@ const OrdersCard: React.FC<OrdersCardProps> = ({ po, paidTotal, projectId, onUpd
   const patch = useMemo(
     () => ({
       status,
+      expectedDelivery: expectedDelivery || null,
       receivedAt: dayStamp(receivedAt),
       receivedNote: receivedNote || null,
       billNumber: billNumber || null,
       billAmount: billAmount || null,
       billDate: billDate || null,
     }),
-    [status, receivedAt, receivedNote, billNumber, billAmount, billDate],
+    [status, expectedDelivery, receivedAt, receivedNote, billNumber, billAmount, billDate],
   );
 
   /*
@@ -127,6 +136,7 @@ const OrdersCard: React.FC<OrdersCardProps> = ({ po, paidTotal, projectId, onUpd
   const baseline = useMemo(
     () => ({
       status: po.status,
+      expectedDelivery: po.expectedDelivery || null,
       receivedAt: dayStamp(po.receivedAt),
       receivedNote: po.receivedNote || null,
       billNumber: po.billNumber || null,
@@ -359,10 +369,16 @@ const OrdersCard: React.FC<OrdersCardProps> = ({ po, paidTotal, projectId, onUpd
               </label>
               <div>
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Expected delivery</span>
-                <div className={`text-xs font-bold py-2 ${stage === 'overdue' ? 'text-rose-700' : 'text-slate-700'}`}>
-                  {po.expectedDelivery ? new Date(po.expectedDelivery).toLocaleDateString('en-IN') : 'Not specified'}
-                  {stage === 'overdue' && ' · overdue'}
-                </div>
+                <DateField
+                  value={expectedDelivery}
+                  onChange={setExpectedDelivery}
+                  placeholder="Not specified"
+                  showRelative
+                  title="When the goods are due — this is what the cash-flow forecast places the payment against"
+                />
+                {stage === 'overdue' && (
+                  <p className="text-[10px] font-bold text-rose-700 mt-1">Overdue</p>
+                )}
               </div>
               <div>
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Payment terms</span>
@@ -380,12 +396,7 @@ const OrdersCard: React.FC<OrdersCardProps> = ({ po, paidTotal, projectId, onUpd
             <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <label className="block">
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Received on</span>
-                <input
-                  type="date"
-                  value={receivedAt}
-                  onChange={e => setReceivedAt(e.target.value)}
-                  className="w-full text-xs font-semibold rounded-xl border border-slate-200 bg-white px-3 py-2 focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] focus:outline-none"
-                />
+                <DateField value={receivedAt} onChange={setReceivedAt} placeholder="Not received yet" />
               </label>
               <label className="block sm:col-span-2">
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Condition on arrival</span>
@@ -436,12 +447,7 @@ const OrdersCard: React.FC<OrdersCardProps> = ({ po, paidTotal, projectId, onUpd
               </label>
               <label className="block">
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Bill date</span>
-                <input
-                  type="date"
-                  value={billDate}
-                  onChange={e => setBillDate(e.target.value)}
-                  className="w-full text-xs font-semibold rounded-xl border border-slate-200 bg-white px-3 py-2 focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] focus:outline-none"
-                />
+                <DateField value={billDate} onChange={setBillDate} placeholder="No bill date" />
               </label>
             </div>
 
@@ -491,12 +497,7 @@ const OrdersCard: React.FC<OrdersCardProps> = ({ po, paidTotal, projectId, onUpd
                   </label>
                   <label className="md:col-span-2 block">
                     <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Paid on</span>
-                    <input
-                      type="date"
-                      value={paymentDate}
-                      onChange={e => setPaymentDate(e.target.value)}
-                      className="w-full text-xs font-semibold rounded-lg border border-slate-200 bg-white px-2.5 py-1.5"
-                    />
+                    <DateField value={paymentDate} onChange={setPaymentDate} placeholder="Date paid" />
                   </label>
                   <label className="md:col-span-2 block">
                     <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Mode</span>

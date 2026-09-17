@@ -79,6 +79,24 @@ export interface ChaseItem {
     level: ChaseLevel;
     remindersSent: number;
     daysSinceReminder: number | null;
+    /** Invoice number, when the item came from a raised invoice. */
+    reference?: string | null;
+}
+
+/**
+ * A milestone that has been invoiced and not yet paid.
+ *
+ * The amount is passed in already priced. Working it out here would mean a
+ * second copy of the studio's GST, billable-split and initiation-fee rules,
+ * and the two copies would drift.
+ */
+export interface InvoicedLike {
+    id: string;
+    name: string;
+    amount: number;
+    /** When the invoice went out. */
+    invoicedAt?: string | number | null;
+    invoiceNumber?: string | null;
 }
 
 export interface Collections {
@@ -100,6 +118,7 @@ export interface Collections {
  */
 export function collections(
     requests: RequestLike[],
+    invoiced: InvoicedLike[] = [],
     thresholds: EscalationThresholds = DEFAULT_ESCALATION,
     now = Date.now(),
 ): Collections {
@@ -125,6 +144,40 @@ export function collections(
             daysSinceReminder: lastRem ? dayDiff(lastRem, now) : null,
         };
     });
+
+    /*
+      Invoices raised by hand.
+
+      A paymentRequest document is only ever created by completing a design
+      process step that has a milestone trigger configured. The Raise button
+      on the milestone list does not go near it — it sets status 'invoiced'
+      on the milestone itself. So a studio that raises its own invoices had
+      an empty collections panel no matter how much was owed, which is what
+      this second source fixes.
+    */
+    const claimed = new Set(items.map(i => i.label));
+    for (const inv of invoiced || []) {
+        if (!inv.amount) continue;
+        if (claimed.has(inv.name)) continue;   // a request already covers it
+        const since = msOf(inv.invoicedAt);
+        const days = since ? dayDiff(since, now) : 0;
+        let level: ChaseLevel = 0;
+        if (since) {
+            if (days >= thresholds.pauseDays) level = 3;
+            else if (days >= thresholds.warnDays) level = 2;
+            else if (days >= thresholds.reminderDays) level = 1;
+        }
+        items.push({
+            id: inv.id,
+            label: inv.name || 'Invoice',
+            amount: inv.amount,
+            daysOutstanding: days,
+            level,
+            remindersSent: 0,
+            daysSinceReminder: null,
+            reference: inv.invoiceNumber || null,
+        });
+    }
 
     // Worst first: the one to deal with before the others.
     items.sort((a, b) => (b.level - a.level) || (b.daysOutstanding - a.daysOutstanding));
@@ -299,6 +352,132 @@ export function runway(
         undated,
         undatedAmount,
         peak: months.reduce((mx, m) => Math.max(mx, m.expected), 0),
+    };
+}
+
+// ── money in against money already promised out ──────────────────────────
+
+/** Anything shaped like a purchase order; kept loose so the type is not a dependency. */
+export interface OrderLike {
+    id: string;
+    poNumber?: string;
+    vendorName?: string;
+    total?: number;
+    billAmount?: number | null;
+    payments?: { amount?: number }[];
+    expectedDelivery?: string;
+    /** Epoch ms, set when the goods actually landed. */
+    receivedAt?: number | null;
+    status?: string;
+}
+
+export interface GapMonth {
+    key: string;
+    label: string;
+    inflow: number;
+    outflow: number;
+    net: number;
+    /** Running total of net across the months, in order. */
+    cumulative: number;
+    /** The month has already closed, so these figures are history, not forecast. */
+    isPast: boolean;
+}
+
+export interface CashGap {
+    months: GapMonth[];
+    /** The first month the running total goes below zero, if any. */
+    firstNegative: GapMonth | null;
+    inflowTotal: number;
+    outflowTotal: number;
+    /** Committed to vendors with no delivery date, so it cannot be placed in a month. */
+    undatedOutflow: number;
+    undatedOrders: number;
+    /** Milestone money with no target date. */
+    undatedInflow: number;
+    worstCumulative: number;
+}
+
+/**
+ * When the money promised out lands against the money coming in.
+ *
+ * Outflow is what is still owed on a purchase order — the bill if one has
+ * arrived, otherwise the order total, less anything already paid.
+ *
+ * It lands in the month the goods actually arrived, falling back to the month
+ * they are expected. Delivery is what makes a vendor bill payable, so once
+ * something is on site its own receipt date is the better evidence of when
+ * the money leaves than a delivery date that has already been overtaken.
+ *
+ * An order with no expected delivery is NOT guessed into a month. A date
+ * invented for money leaving the account would produce a confident cash
+ * forecast built on nothing, so undated commitments are reported as a
+ * separate figure and deliberately left out of the running total.
+ */
+export function cashGap(
+    milestones: PaymentMilestone[],
+    amountOf: (m: PaymentMilestone) => number,
+    orders: OrderLike[],
+    now = Date.now(),
+): CashGap {
+    const inflowBy = new Map<string, number>();
+    const outflowBy = new Map<string, number>();
+    let undatedInflow = 0, undatedOutflow = 0, undatedOrders = 0;
+
+    const monthKey = (iso: string) => {
+        const d = new Date(iso.slice(0, 10) + 'T00:00:00');
+        return isNaN(d.getTime())
+            ? null
+            : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    };
+
+    for (const m of milestones || []) {
+        if (m.status === 'paid') continue;
+        const amount = amountOf(m);
+        if (!amount) continue;
+        const key = m.date ? monthKey(m.date) : null;
+        if (!key) { undatedInflow += amount; continue; }
+        inflowBy.set(key, (inflowBy.get(key) || 0) + amount);
+    }
+
+    for (const o of orders || []) {
+        if (o.status === 'cancelled') continue;
+        const paid = (o.payments || []).reduce((a, p) => a + (Number(p?.amount) || 0), 0);
+        const owed = (Number(o.billAmount) || Number(o.total) || 0) - paid;
+        if (owed <= 0) continue;
+        const landed = o.receivedAt ? new Date(o.receivedAt).toISOString().slice(0, 10) : null;
+        const when = landed || o.expectedDelivery || null;
+        const key = when ? monthKey(when) : null;
+        if (!key) { undatedOutflow += owed; undatedOrders++; continue; }
+        outflowBy.set(key, (outflowBy.get(key) || 0) + owed);
+    }
+
+    const keys = Array.from(new Set([...inflowBy.keys(), ...outflowBy.keys()])).sort();
+    const nowDate = new Date(now);
+    const thisMonth = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}`;
+    const months: GapMonth[] = [];
+    let cumulative = 0;
+    for (const key of keys) {
+        const inflow = inflowBy.get(key) || 0;
+        const outflow = outflowBy.get(key) || 0;
+        const net = inflow - outflow;
+        cumulative += net;
+        const [y, mo] = key.split('-');
+        months.push({
+            key,
+            label: new Date(Number(y), Number(mo) - 1, 1)
+                .toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+            inflow, outflow, net, cumulative,
+            isPast: key < thisMonth,
+        });
+    }
+
+    return {
+        months,
+        firstNegative: months.find(m => m.cumulative < 0) || null,
+        inflowTotal: months.reduce((a, m) => a + m.inflow, 0),
+        outflowTotal: months.reduce((a, m) => a + m.outflow, 0),
+        undatedOutflow, undatedOrders, undatedInflow,
+        worstCumulative: months.reduce((w, m) => Math.min(w, m.cumulative), 0),
     };
 }
 

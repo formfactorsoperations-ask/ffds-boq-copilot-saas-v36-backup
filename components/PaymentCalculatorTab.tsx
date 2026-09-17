@@ -7,7 +7,7 @@ import { formatCurrency, formatINR, id as generateId } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RotateCcw, Coins, CheckCircle, TrendingUp, Info, AlertTriangle, Sparkles, Sliders, History, FileText, Lock } from 'lucide-react';
 import Card from './shared/Card';
-import { CalculatorIcon, ShieldCheckIcon, AlertIcon, CheckIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon, DeleteIcon, PlusIcon, ScissorsIcon, ClockIcon, CalendarIcon, XIcon } from './Icons';
+import { CalculatorIcon, ShieldCheckIcon, AlertIcon, CheckIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon, DeleteIcon, PlusIcon, ScissorsIcon, ClockIcon, CalendarIcon } from './Icons';
 import { useOrg } from '../contexts/OrgContext';
 import { resolveDocumentState } from '../services/documentIssueEngine';
 import { usePageHeader } from '../contexts/PageHeaderContext';
@@ -18,9 +18,12 @@ import Tabs from './ui/Tabs';
 import AnimatedNumber from './ui/AnimatedNumber';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import { usePaymentRequests } from '../hooks/usePaymentRequests';
-import { collections, billableNow, runway, contractDrift, deriveDatesFromTimeline, paymentBehaviour, benchmarkOf, CHASE_LABEL, DEFAULT_ESCALATION } from '../lib/moneyIntel';
+import { collections, billableNow, contractDrift, deriveDatesFromTimeline, paymentBehaviour, benchmarkOf, cashGap, CHASE_LABEL, DEFAULT_ESCALATION } from '../lib/moneyIntel';
+import type { GapMonth } from '../lib/moneyIntel';
+import DateField from './ui/DateField';
 import { collection as fsCollection, getDocs as fsGetDocs } from 'firebase/firestore';
 import { db as fsDb } from '../services/firebaseClient';
+import { db as projectDb } from '../services/dbService';
 import { useTimelinePhases } from '../hooks/useTimelinePhases';
 import TermsAndPaymentTab from './studio/TermsAndPaymentTab';
 
@@ -48,6 +51,185 @@ const DEFAULT_MILESTONES: PaymentMilestone[] = [
     { id: 'e3', type: 'execution', name: 'Execution Advance 3', percentage: 40, description: 'Finishing', unlocks: 'Carpentry, Painting & Finishes' },
     { id: 'e4', type: 'execution', name: 'Execution Final Advance', percentage: 10, description: 'Handover', unlocks: 'Handover Document & Keys', isHandoverAdvance: true },
 ];
+
+/*
+  Where the cash position stands, month by month.
+
+  This was a diverging bar chart of money in against money committed out,
+  and it could not work: on this book inflow runs to lakhs and vendor
+  commitments to tens of thousands, so at any scale that fits the inflow the
+  outflow is a one-pixel smear. Worse, the figure that answers the question —
+  the running balance — was never drawn at all, only stated in a sentence
+  underneath.
+
+  So the line is the cumulative position and the zero axis is the thing it
+  can cross. A real shortfall dives below the axis where it cannot be missed,
+  and the month figures sit underneath as numbers, where small amounts stay
+  legible instead of competing for pixels.
+
+  Geometry is stretched to the panel width (preserveAspectRatio="none") with
+  a non-scaling stroke, so the plot fills its card at any column width; every
+  label is HTML underneath, which is why nothing distorts with it.
+*/
+const CashGapChart: React.FC<{ months: GapMonth[] }> = ({ months }) => {
+    const H = 92;
+
+    const compact = (n: number) => n >= 1e7 ? `${(n / 1e7).toFixed(1)}Cr`
+        : n >= 1e5 ? `${(n / 1e5).toFixed(2)}L`
+        : `${Math.round(n / 1e3)}k`;
+    // Full figures while they fit; compact once the columns get narrow.
+    const cell = (n: number) => !n ? '—'
+        : months.length <= 5 ? Math.round(n).toLocaleString('en-IN') : compact(n);
+
+    const hi = Math.max(0, ...months.map(m => m.cumulative));
+    const lo = Math.min(0, ...months.map(m => m.cumulative));
+    const span = (hi - lo) || 1;
+    const yOf = (v: number) => ((hi - v) / span) * 100;
+    const zeroY = yOf(0);
+    const dips = lo < 0;
+
+    const pts: [number, number][] = months.length === 1
+        ? [[8, yOf(months[0].cumulative)], [92, yOf(months[0].cumulative)]]
+        : months.map((m, i) => [((i + 0.5) / months.length) * 100, yOf(m.cumulative)]);
+
+    const line = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
+    const area = `${line} L${pts[pts.length - 1][0].toFixed(2)},${zeroY.toFixed(2)} L${pts[0][0].toFixed(2)},${zeroY.toFixed(2)} Z`;
+
+    // The tightest the account gets — the number this panel exists to give you.
+    const low = months.reduce((a, m) => (m.cumulative < a.cumulative ? m : a), months[0]);
+    const lowIdx = months.indexOf(low);
+    const lowPt = months.length === 1 ? [50, yOf(low.cumulative)] : [((lowIdx + 0.5) / months.length) * 100, yOf(low.cumulative)];
+
+    const ink = dips ? '#C4574F' : '#3D52A0';
+
+    return (
+        <div className="mt-3">
+            <div className="flex justify-end">
+                <span className="text-[9px] text-[#ADBBDA] tabular-nums leading-none">₹{compact(hi)}</span>
+            </div>
+
+            <div className="relative mt-1" style={{ height: `${H}px` }}>
+                <svg
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    className="absolute inset-0 w-full h-full overflow-visible"
+                    role="img"
+                    aria-label={`Running cash position across ${months.length} months`}
+                >
+                    <defs>
+                        <linearGradient id="gapFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={ink} stopOpacity="0.26" />
+                            <stop offset="100%" stopColor={ink} stopOpacity="0.02" />
+                        </linearGradient>
+                    </defs>
+                    <path d={area} fill="url(#gapFill)" />
+                    <path
+                        d={line}
+                        fill="none"
+                        stroke={ink}
+                        strokeWidth="2"
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                        pathLength={1}
+                        className="mny-draw"
+                    />
+                </svg>
+
+                {/* zero, in HTML so it spans the card and keeps a true 1px rule */}
+                <div
+                    className="absolute inset-x-0 border-t border-dashed"
+                    style={{ top: `${zeroY}%`, borderColor: dips ? '#E8A6A0' : '#CBD1E4' }}
+                />
+                <span
+                    className="absolute left-0 text-[9px] text-[#ADBBDA] leading-none"
+                    style={{ top: `calc(${zeroY}% + 3px)` }}
+                >₹0</span>
+
+                {/* the low point, marked because it is the answer */}
+                <span
+                    className="absolute rounded-full"
+                    style={{
+                        left: `${lowPt[0]}%`, top: `${lowPt[1]}%`,
+                        width: 7, height: 7, marginLeft: -3.5, marginTop: -3.5,
+                        background: '#fff', border: `2px solid ${ink}`,
+                    }}
+                    title={`Lowest: ${formatCurrency(low.cumulative)} in ${low.label}`}
+                />
+            </div>
+
+            {/* the months, as numbers rather than pixels */}
+            <div
+                className="mt-2 grid gap-x-1 items-baseline"
+                style={{ gridTemplateColumns: `26px repeat(${months.length}, minmax(0,1fr))` }}
+            >
+                <span />
+                {months.map(m => (
+                    <span key={m.key} className={`text-[9px] text-center truncate ${m.isPast ? 'text-[#C3CBE4]' : 'text-[#8E96B8]'}`}>
+                        {m.label}
+                    </span>
+                ))}
+
+                <span className="text-[9px] text-[#ADBBDA]">in</span>
+                {months.map(m => (
+                    <span key={m.key} className="text-[9px] text-center tabular-nums truncate text-[#3A416B] font-semibold">
+                        {cell(m.inflow)}
+                    </span>
+                ))}
+
+                <span className="text-[9px] text-[#ADBBDA]">out</span>
+                {months.map(m => (
+                    <span key={m.key} className={`text-[9px] text-center tabular-nums truncate font-semibold ${m.outflow ? 'text-[#C4574F]' : 'text-[#C3CBE4]'}`}>
+                        {cell(m.outflow)}
+                    </span>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+/*
+  One shell for the four Overview panels.
+
+  They used to be four identical flat boxes with the same grey uppercase
+  label, so nothing on the grid said which one needed attention — a project
+  with two overdue requests looked exactly like a project with none. Each
+  panel now carries its own state as a coloured rail and chip, and leads
+  with the single figure that state is about.
+*/
+type PanelTone = 'clear' | 'watch' | 'alert';
+
+const TONE: Record<PanelTone, { rail: string; chip: string; dot: string }> = {
+    clear: { rail: '#CBD1E4', chip: 'bg-[#F6F7FB] text-[#5A628A] border-[#E2E5F0]', dot: 'bg-[#8E96B8]' },
+    watch: { rail: '#D9A441', chip: 'bg-amber-50 text-amber-800 border-amber-200',  dot: 'bg-amber-500' },
+    alert: { rail: '#C4574F', chip: 'bg-rose-50 text-rose-800 border-rose-200',     dot: 'bg-rose-600' },
+};
+
+const PANEL_CLASS = 'group/panel relative overflow-hidden text-left w-full bg-white border border-[#E2E5F0] rounded-2xl p-5 pl-6 mny-rise mny-card cursor-pointer';
+
+const PanelHead: React.FC<{ title: string; state: string; tone: PanelTone; action: string }> = ({ title, state, tone, action }) => (
+    <>
+        <span aria-hidden className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: TONE[tone].rail }} />
+        <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+                <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#5A628A] shrink-0">{title}</h3>
+                <span className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded-full border px-1.5 py-0.5 min-w-0 ${TONE[tone].chip}`}>
+                    <i className={`w-1.5 h-1.5 rounded-full not-italic shrink-0 ${TONE[tone].dot}`} />
+                    <span className="truncate">{state}</span>
+                </span>
+            </div>
+            <span className="text-[10px] font-semibold text-[#ADBBDA] group-hover/panel:text-[#3D52A0] transition-colors shrink-0">{action}</span>
+        </div>
+    </>
+);
+
+/** The one figure the panel is about, at a size you can read across the room. */
+const PanelMetric: React.FC<{ value: string; caption: string; muted?: boolean }> = ({ value, caption, muted }) => (
+    <div className="mt-3 flex items-baseline gap-2 flex-wrap">
+        <span className={`text-[26px] leading-none font-black tabular-nums ${muted ? 'text-[#8E96B8]' : 'text-[#12182F]'}`}>{value}</span>
+        <span className="text-[11px] text-[#8E96B8]">{caption}</span>
+    </div>
+);
 
 const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectContext, setProjectContext, activeTier, tiers = [], allProjects = [], bank = [], fullBoq = [], setBoq, aiStrategy = 'balanced', projectId }) => {
     // --- STATE ---
@@ -982,6 +1164,23 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
       the book, so it is fetched only when asked for, once, and never on load.
     */
     const behaviour = useMemo(() => paymentBehaviour(moneyRequests as any), [moneyRequests]);
+
+    /*
+      What has already been promised to vendors.
+
+      Purchase orders are the only record of money committed out of this
+      project, and nothing on this screen had ever read them — so the money
+      view showed everything coming in and nothing going out.
+    */
+    const [projectOrders, setProjectOrders] = useState<any[]>([]);
+    useEffect(() => {
+        if (!projectId) return;
+        let alive = true;
+        projectDb.getPurchaseOrders(projectId)
+            .then(list => { if (alive) setProjectOrders(list || []); })
+            .catch(() => { if (alive) setProjectOrders([]); });
+        return () => { alive = false; };
+    }, [projectId]);
     const [benchmark, setBenchmark] = useState<ReturnType<typeof benchmarkOf> | null>(null);
     const [benchmarking, setBenchmarking] = useState(false);
 
@@ -1093,18 +1292,55 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         return (Number(m?.percentage) || 0) / 100 * (Number(base) || 0);
     }, [taxableDesign, taxableExecution]);
 
+    /*
+      What has been invoiced and not yet paid, priced exactly as the milestone
+      row prices it — locked taxable base, the billable split on execution,
+      GST at the applicable rate, less the initiation fee on the first design
+      invoice. Same arithmetic as totalPaid above, for the invoiced state.
+    */
+    const invoicedOutstanding = useMemo(() => {
+        const out: { id: string; name: string; amount: number; invoicedAt?: string | null; invoiceNumber?: string | null }[] = [];
+
+        designMilestones.forEach((m, i) => {
+            if (m.status !== 'invoiced') return;
+            let base = m.isFixedAmount && m.fixedAmount !== undefined
+                ? m.fixedAmount
+                : (m.lockedTaxableBase || originalNetDesign) * (m.percentage / 100);
+            base = Math.round(base);
+            const gst = Math.round(base * (gstRate / 100));
+            let total = Math.round(base + gst);
+            if (i === 0 && initiationFee > 0) total = Math.max(0, total - initiationFee);
+            out.push({ id: m.id, name: m.name, amount: total, invoicedAt: m.invoiceDate || null, invoiceNumber: m.invoiceNumber || null });
+        });
+
+        executionMilestones.forEach(m => {
+            if (m.status !== 'invoiced') return;
+            let base = m.isFixedAmount && m.fixedAmount !== undefined
+                ? m.fixedAmount
+                : (m.lockedTaxableBase || originalNetExecution) * (m.percentage / 100);
+            base = Math.round(base);
+            const billableAmt = Math.round(base * (billablePercent / 100));
+            const gst = Math.round(billableAmt * ((executionGstEnabled ? gstRate : 0) / 100));
+            // The cash side is still owed even though no tax rides on it.
+            const cash = Math.round(base * ((100 - billablePercent) / 100));
+            out.push({ id: m.id, name: m.name, amount: billableAmt + gst + cash, invoicedAt: m.invoiceDate || null, invoiceNumber: m.invoiceNumber || null });
+        });
+
+        return out;
+    }, [designMilestones, executionMilestones, originalNetDesign, originalNetExecution, gstRate, initiationFee, billablePercent, executionGstEnabled]);
+
     const escalationCfg = (moneySettings as any)?.paymentMilestones?.escalation || DEFAULT_ESCALATION;
     const chase = useMemo(
-        () => collections(moneyRequests as any, escalationCfg),
-        [moneyRequests, escalationCfg],
+        () => collections(moneyRequests as any, invoicedOutstanding, escalationCfg),
+        [moneyRequests, invoicedOutstanding, escalationCfg],
     );
     const billable = useMemo(
         () => billableNow(milestones, amountOfMilestone),
         [milestones, amountOfMilestone],
     );
-    const inflow = useMemo(
-        () => runway(milestones, amountOfMilestone),
-        [milestones, amountOfMilestone],
+    const gap = useMemo(
+        () => cashGap(milestones, amountOfMilestone, projectOrders as any),
+        [milestones, amountOfMilestone, projectOrders],
     );
     const drift = useMemo(
         () => contractDrift(financials?.paymentRevisions, milestones),
@@ -1972,31 +2208,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     : 'no target date'}
                                             </span>
                                         ) : (
-                                            <label className="inline-flex items-center gap-1.5 group/date">
-                                                <CalendarIcon className={`w-3 h-3 ${m.date ? 'text-[#3D52A0]' : 'text-[#8E96B8]'}`} />
-                                                <input
-                                                    type="date"
-                                                    value={m.date || ''}
-                                                    onChange={e => handleUpdateMilestone(mainIndex, { date: e.target.value || undefined })}
-                                                    title="Target date — drives the cash-flow forecast and is shown to the client"
-                                                    className={`text-[10px] font-semibold bg-transparent outline-none rounded px-1 py-0.5 border border-transparent hover:border-[#E2E5F0] focus:border-[#ADBBDA] focus:bg-[#F6F7FB] transition-colors ${
-                                                        m.date ? 'text-[#3A416B]' : 'text-[#8E96B8]'
-                                                    }`}
-                                                />
-                                                {!m.date && (
-                                                    <span className="text-[10px] text-[#8E96B8] pointer-events-none">set target date</span>
-                                                )}
-                                                {m.date && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleUpdateMilestone(mainIndex, { date: undefined })}
-                                                        title="Clear the target date"
-                                                        className="opacity-0 group-hover/date:opacity-100 focus:opacity-100 text-[#8E96B8] hover:text-red-500 transition-opacity"
-                                                    >
-                                                        <XIcon className="w-3 h-3" />
-                                                    </button>
-                                                )}
-                                            </label>
+                                            <DateField
+                                                size="sm"
+                                                value={m.date || ''}
+                                                onChange={v => handleUpdateMilestone(mainIndex, { date: v || undefined })}
+                                                placeholder="set target date"
+                                                showRelative
+                                                title="Target date — drives the cash-flow forecast and is shown to the client"
+                                            />
                                         )}
                                     </div>
                                     {m.invoiceNumber && (
@@ -2570,45 +2789,78 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
 
                         {/* Who is late */}
-                        <button type="button" onClick={() => setMoneyTab('milestones')} className="group/panel text-left w-full bg-white border border-[#E2E5F0] rounded-2xl p-5 mny-rise mny-card cursor-pointer" style={{ animationDelay: '.08s' }}>
-                            <div className="flex items-baseline justify-between gap-3">
-                                <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#5A628A] flex items-center justify-between gap-2"><span>Collections</span><span className="text-[10px] font-semibold text-[#ADBBDA] group-hover/panel:text-[#3D52A0] transition-colors normal-case tracking-normal">See the schedule &rsaquo;</span></h3>
-                                {chase.items.length > 0 && (
-                                    <span className="text-[11px] font-semibold text-[#8E96B8]">
-                                        after {chase.thresholds.reminderDays}d · {chase.thresholds.warnDays}d · {chase.thresholds.pauseDays}d
-                                    </span>
-                                )}
-                            </div>
+                        <button type="button" onClick={() => setMoneyTab('milestones')} className={PANEL_CLASS} style={{ animationDelay: '.08s' }}>
+                            <PanelHead
+                                title="Collections"
+                                action="See the schedule &rsaquo;"
+                                tone={chase.chaseNow > 0 ? 'alert' : chase.items.length > 0 ? 'watch' : 'clear'}
+                                state={chase.chaseNow > 0
+                                    ? `${chase.chaseNow} past due`
+                                    : chase.items.length > 0
+                                        ? `${chase.items.length} open`
+                                        : 'Nothing to chase'}
+                            />
+                            <PanelMetric
+                                value={formatCurrency(chase.amountOutstanding)}
+                                caption="outstanding"
+                                muted={chase.amountOutstanding === 0}
+                            />
 
                             {chase.items.length === 0 ? (
                                 <>
-                                    <p className="text-xs text-[#5A628A] mt-2.5 leading-relaxed">
-                                        No payment request is open. Nothing to chase.
+                                    {/*
+                                      The escalation ladder was drawn here in full colour
+                                      whatever the state, so a project with nothing
+                                      outstanding showed an amber-to-red bar under the
+                                      words "nothing to chase". With no request open the
+                                      terms are just terms, so they read as a line of text
+                                      and the ladder returns when something is on it.
+                                    */}
+                                    <p className="text-[11px] text-[#8E96B8] mt-1.5 leading-snug">
+                                        No request open &middot; terms {chase.thresholds.reminderDays}d remind
+                                        &middot; {chase.thresholds.warnDays}d call
+                                        &middot; {chase.thresholds.pauseDays}d hold
                                     </p>
-                                    {/* The ladder still shown, so the terms are visible before they bite. */}
-                                    <div className="mt-4">
-                                        <div className="flex h-2 rounded-full overflow-hidden bg-[#EDEFF7]">
-                                            <div className="mny-bar" style={{ width: `${(chase.thresholds.reminderDays / chase.thresholds.pauseDays) * 100}%`, background: '#ADBBDA' }} />
-                                            <div className="mny-bar" style={{ width: `${((chase.thresholds.warnDays - chase.thresholds.reminderDays) / chase.thresholds.pauseDays) * 100}%`, background: '#D9A441', animationDelay: '.1s' }} />
-                                            <div className="mny-bar flex-1" style={{ background: '#C4574F', animationDelay: '.2s' }} />
-                                        </div>
-                                        <div className="flex justify-between mt-1.5 text-[10px] text-[#8E96B8]">
-                                            <span>day 0</span>
-                                            <span>{chase.thresholds.reminderDays}d remind</span>
-                                            <span>{chase.thresholds.warnDays}d call</span>
-                                            <span>{chase.thresholds.pauseDays}d hold</span>
-                                        </div>
-                                    </div>
                                     {behaviourBlock}
                                 </>
                             ) : (
                                 <>
-                                    <div className="mt-2 flex items-baseline gap-2">
-                                        <span className="text-2xl font-black text-[#12182F] tabular-nums mny-underline">
-                                            {formatCurrency(chase.amountOutstanding)}
-                                        </span>
-                                        <span className="text-xs text-[#5A628A]">outstanding</span>
-                                    </div>
+                                    {/*
+                                      The ladder, now that something is actually on it.
+                                      A caret marks where the oldest item stands against
+                                      the studio's own thresholds, so the terms are read
+                                      as a position rather than as decoration.
+                                    */}
+                                    {(() => {
+                                        const th = chase.thresholds;
+                                        const pause = th.pauseDays || 1;
+                                        const at = (d: number) => Math.min(100, Math.max(0, (d / pause) * 100));
+                                        const worst = chase.worst;
+                                        return (
+                                            <div className="mt-3">
+                                                <div className="relative">
+                                                    <div className="flex h-2 rounded-full overflow-hidden bg-[#EDEFF7]">
+                                                        <div className="mny-bar" style={{ width: `${at(th.reminderDays)}%`, background: '#ADBBDA' }} />
+                                                        <div className="mny-bar" style={{ width: `${at(th.warnDays) - at(th.reminderDays)}%`, background: '#D9A441', animationDelay: '.1s' }} />
+                                                        <div className="mny-bar flex-1" style={{ background: '#C4574F', animationDelay: '.2s' }} />
+                                                    </div>
+                                                    {worst && (
+                                                        <span
+                                                            title={`Oldest: ${worst.daysOutstanding}d`}
+                                                            className="absolute w-[2px] rounded-full bg-[#12182F]"
+                                                            style={{ left: `${at(worst.daysOutstanding)}%`, top: -3, bottom: -3, marginLeft: -1 }}
+                                                        />
+                                                    )}
+                                                </div>
+                                                <div className="flex justify-between mt-1.5 text-[10px] text-[#8E96B8]">
+                                                    <span>day 0</span>
+                                                    <span>{th.reminderDays}d remind</span>
+                                                    <span>{th.warnDays}d call</span>
+                                                    <span>{th.pauseDays}d hold</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                     {chase.chaseNow > 0 && (
                                         <p className="text-[11px] text-rose-700 font-semibold mt-1.5">
                                             {chase.chaseNow} past the reminder threshold
@@ -2623,7 +2875,12 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     : item.level === 2 ? 'bg-rose-400'
                                                     : item.level === 1 ? 'bg-amber-500' : 'bg-[#ADBBDA]'
                                                 }`} />
-                                                <span className="text-xs text-[#2B3358] flex-1 min-w-0 truncate">{item.label}</span>
+                                                <span className="flex-1 min-w-0">
+                                                    <span className="block text-xs text-[#2B3358] truncate">{item.label}</span>
+                                                    {item.reference && (
+                                                        <span className="block text-[10px] text-[#8E96B8] truncate">{item.reference}</span>
+                                                    )}
+                                                </span>
                                                 <span className="text-[10px] font-bold text-[#8E96B8] shrink-0">{CHASE_LABEL[item.level]}</span>
                                                 <span className="text-[11px] font-black text-[#12182F] tabular-nums shrink-0 w-12 text-right">
                                                     {item.daysOutstanding}d
@@ -2637,22 +2894,36 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         </button>
 
                         {/* Earned, not invoiced */}
-                        <button type="button" onClick={() => setMoneyTab('milestones')} className="group/panel text-left w-full bg-white border border-[#E2E5F0] rounded-2xl p-5 mny-rise mny-card cursor-pointer" style={{ animationDelay: '.16s' }}>
-                            <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#5A628A] flex items-center justify-between gap-2"><span>Next to bill</span><span className="text-[10px] font-semibold text-[#ADBBDA] group-hover/panel:text-[#3D52A0] transition-colors normal-case tracking-normal">Open milestones &rsaquo;</span></h3>
+                        <button type="button" onClick={() => setMoneyTab('milestones')} className={PANEL_CLASS} style={{ animationDelay: '.16s' }}>
+                            <PanelHead
+                                title="Next to bill"
+                                action="Open milestones &rsaquo;"
+                                tone={billable.earnedTotal > 0 ? 'watch' : 'clear'}
+                                state={billable.items.length === 0
+                                    ? 'All invoiced'
+                                    : billable.earnedTotal > 0
+                                        ? 'Ready to raise'
+                                        : `${billable.items.length} queued`}
+                            />
+                            {/*
+                              The earned figure, not the total: the total is already
+                              stated on the dial at the top of the screen, and repeating
+                              it here would be the fourth copy of one number.
+                            */}
+                            <PanelMetric
+                                value={formatCurrency(billable.earnedTotal)}
+                                caption="earned, not yet invoiced"
+                                muted={billable.earnedTotal === 0}
+                            />
                             {billable.items.length === 0 ? (
                                 <p className="text-xs text-[#5A628A] mt-3 leading-relaxed">
                                     Every milestone on both tracks is already invoiced or paid.
                                 </p>
                             ) : (
                                 <>
-                                    {/* The total is on the dial; this panel is the breakdown behind it. */}
-                                    <p className="text-xs text-[#5A628A] mt-2">
-                                        {billable.items.length} {billable.items.length === 1 ? 'milestone' : 'milestones'} up next
-                                        {billable.items.filter(i => i.earned).length > 1
-                                            ? <>, <b className="text-[#12182F]">{formatCurrency(billable.earnedTotal)}</b> of it already earned</>
-                                            : billable.earnedTotal > 0
-                                                ? ', one of them already earned'
-                                                : ', none earned yet'}
+                                    <p className="text-[11px] text-[#8E96B8] mt-1.5 leading-snug">
+                                        {billable.items.length} {billable.items.length === 1 ? 'milestone' : 'milestones'} up next,
+                                        worth <b className="text-[#5A628A]">{formatCurrency(billable.total)}</b> in all
                                     </p>
                                     <ul className="mt-3 space-y-1.5">
                                         {billable.items.slice(0, 4).map(item => (
@@ -2684,49 +2955,102 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         </button>
 
                         {/* When the money lands */}
-                        <button type="button" onClick={() => setMoneyTab('milestones')} className="group/panel text-left w-full bg-white border border-[#E2E5F0] rounded-2xl p-5 mny-rise mny-card cursor-pointer" style={{ animationDelay: '.24s' }}>
-                            <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#5A628A] flex items-center justify-between gap-2"><span>Expected inflow</span><span className="text-[10px] font-semibold text-[#ADBBDA] group-hover/panel:text-[#3D52A0] transition-colors normal-case tracking-normal">Set target dates &rsaquo;</span></h3>
-                            {inflow.months.length === 0 ? (
+                        {/*
+                          Does the money coming in cover what is already promised out.
+
+                          This replaced the Expected inflow panel, which drew the same
+                          months from the same milestones — this one adds the vendor
+                          side, so it answers what that one did and more.
+                        */}
+                        <button type="button" onClick={() => setMoneyTab('milestones')} className={PANEL_CLASS} style={{ animationDelay: '.24s' }}>
+                            <PanelHead
+                                title="Cash gap"
+                                action="Set target dates &rsaquo;"
+                                tone={gap.firstNegative ? 'alert' : gap.undatedOutflow > 0 ? 'watch' : 'clear'}
+                                state={gap.firstNegative
+                                    ? `Short in ${gap.firstNegative.label}`
+                                    : gap.undatedOutflow > 0
+                                        ? `${gap.undatedOrders} undated`
+                                        : gap.outflowTotal > 0 ? 'Covered' : 'Nothing committed'}
+                            />
+                            <PanelMetric
+                                value={gap.firstNegative
+                                    ? formatCurrency(Math.abs(gap.firstNegative.cumulative))
+                                    : formatCurrency(gap.outflowTotal + gap.undatedOutflow)}
+                                caption={gap.firstNegative
+                                    ? `short by ${gap.firstNegative.label}`
+                                    : 'committed to vendors'}
+                                muted={!gap.firstNegative && gap.outflowTotal + gap.undatedOutflow === 0}
+                            />
+                            {gap.months.length === 0 ? (
                                 <p className="text-xs text-[#5A628A] mt-3 leading-relaxed">
-                                    No milestone carries a date, so nothing can be forecast yet.
+                                    Nothing carries a date &mdash; no milestone, no purchase order &mdash; so there is no timeline to set them against.
                                 </p>
                             ) : (
                                 <>
-                                    <div className="mt-3 flex items-end gap-1.5 h-20">
-                                        {inflow.months.slice(0, 10).map((m, i) => (
-                                            <div key={m.key} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                                                <div
-                                                    className="w-full rounded-t"
-                                                    title={`${m.label}: ${formatCurrency(m.expected)}`}
-                                                    style={{
-                                                        height: `${inflow.peak > 0 ? Math.max(4, (m.expected / inflow.peak) * 64) : 4}px`,
-                                                        background: m.isPast ? '#ADBBDA' : 'linear-gradient(180deg,#7091E6,#3D52A0)',
-                                                        animation: `mny-bar .6s cubic-bezier(.22,1,.36,1) ${0.3 + i * 0.04}s backwards`,
-                                                        transformOrigin: 'bottom center',
-                                                    }}
-                                                />
-                                                <span className="text-[9px] text-[#8E96B8] truncate w-full text-center">{m.label}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <p className="text-[11px] text-[#5A628A] mt-2.5 leading-snug">
-                                        <b className="text-[#12182F]">{formatCurrency(inflow.scheduled)}</b> scheduled across{' '}
-                                        {inflow.months.length} {inflow.months.length === 1 ? 'month' : 'months'}
-                                        {inflow.undated > 0 && (
-                                            <> · <b className="text-amber-700">{formatCurrency(inflow.undatedAmount)}</b> undated</>
-                                        )}
+                                    <CashGapChart months={gap.months} />
+                                    {/*
+                                      The verdict, stated. Without this the reader has to
+                                      infer the tightest month off the line by eye, which
+                                      is exactly the work the panel should be doing.
+                                    */}
+                                    {(() => {
+                                        const low = gap.months.reduce((a, m) => (m.cumulative < a.cumulative ? m : a), gap.months[0]);
+                                        return gap.firstNegative ? (
+                                            <p className="text-[11px] font-semibold text-rose-700 mt-2 leading-snug">
+                                                Short {formatCurrency(Math.abs(gap.firstNegative.cumulative))} by {gap.firstNegative.label}
+                                            </p>
+                                        ) : (
+                                            <p className="text-[11px] text-[#5A628A] mt-2 leading-snug">
+                                                Tightest at <b className="text-[#12182F]">{formatCurrency(low.cumulative)}</b> in {low.label}
+                                                <span className="text-[#8E96B8]"> · never below zero</span>
+                                            </p>
+                                        );
+                                    })()}
+                                    <p className="text-[11px] text-[#8E96B8] mt-0.5 leading-snug">
+                                        <b className="text-[#5A628A]">{formatCurrency(gap.inflowTotal)}</b> expected in across{' '}
+                                        {gap.months.length} {gap.months.length === 1 ? 'month' : 'months'}
                                     </p>
                                 </>
+                            )}
+                            {(gap.undatedOutflow > 0 || gap.undatedInflow > 0) && (
+                                <p className="text-[11px] text-amber-700 mt-2 leading-snug border-t border-[#EDEFF7] pt-2">
+                                    {gap.undatedOutflow > 0 && (
+                                        <>
+                                            <b>{formatCurrency(gap.undatedOutflow)}</b> committed to vendors with no delivery date
+                                            {gap.undatedOrders > 0 && <> ({gap.undatedOrders} {gap.undatedOrders === 1 ? 'order' : 'orders'})</>}
+                                            , so it sits outside this chart.
+                                        </>
+                                    )}
+                                    {gap.undatedOutflow > 0 && gap.undatedInflow > 0 && ' '}
+                                    {gap.undatedInflow > 0 && (
+                                        <><b>{formatCurrency(gap.undatedInflow)}</b> of milestone money is undated too.</>
+                                    )}
+                                </p>
                             )}
                         </button>
 
                         {/* Does the schedule still match the contract */}
-                        <button type="button" onClick={() => setMoneyTab('history')} className="group/panel text-left w-full bg-white border border-[#E2E5F0] rounded-2xl p-5 mny-rise mny-card cursor-pointer" style={{ animationDelay: '.32s' }}>
-                            <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#5A628A] flex items-center justify-between gap-2"><span>Contract drift</span><span className="text-[10px] font-semibold text-[#ADBBDA] group-hover/panel:text-[#3D52A0] transition-colors normal-case tracking-normal">Open history &rsaquo;</span></h3>
+                        <button type="button" onClick={() => setMoneyTab('history')} className={PANEL_CLASS} style={{ animationDelay: '.32s' }}>
+                            <PanelHead
+                                title="Contract drift"
+                                action="Open history &rsaquo;"
+                                tone={(!drift.designBalanced || !drift.executionBalanced) ? 'alert' : drift.revisions > 0 ? 'watch' : 'clear'}
+                                state={(!drift.designBalanced || !drift.executionBalanced)
+                                    ? 'Schedule off 100%'
+                                    : drift.revisions > 0
+                                        ? `${drift.revisions} revised`
+                                        : 'Matches contract'}
+                            />
+                            <PanelMetric
+                                value={String(drift.revisions)}
+                                caption={drift.revisions === 1 ? 'revision logged' : 'revisions logged'}
+                                muted={drift.revisions === 0}
+                            />
                             {(drift.designBalanced && drift.executionBalanced && drift.revisions === 0) ? (
                                 <>
-                                    <p className="text-xs text-[#5A628A] mt-2.5 leading-relaxed">
-                                        The schedule adds up and the contract has not been revised.
+                                    <p className="text-[11px] text-[#8E96B8] mt-1.5 leading-snug">
+                                        Both tracks total 100% and the contract has not been revised.
                                     </p>
                                     {/* Both tracks drawn, because "it adds up" is worth seeing, not just reading. */}
                                     <div className="mt-4 space-y-2.5">

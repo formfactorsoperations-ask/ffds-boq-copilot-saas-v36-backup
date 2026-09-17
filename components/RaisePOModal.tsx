@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import DateField from './ui/DateField';
 import { ProjectContext, MaterialSelection, PurchaseOrder, POLine, Vendor, POScope, POStatus } from '../types';
 import { db } from '../services/dbService';
 import { generateId } from '../lib/utils';
@@ -439,11 +440,11 @@ export default function RaisePOModal({
 
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Expected Delivery</label>
-              <input
-                type="date"
+              <DateField
                 value={expectedDelivery}
-                onChange={e => setExpectedDelivery(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
+                onChange={setExpectedDelivery}
+                placeholder="When is it due?"
+                showRelative
               />
             </div>
 

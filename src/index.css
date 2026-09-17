@@ -1813,8 +1813,22 @@ body {
 .mny-card { transition: transform .18s cubic-bezier(.22,1,.36,1), border-color .18s, box-shadow .18s; }
 .mny-card:hover { transform: translateY(-2px); border-color: #ADBBDA; box-shadow: 0 10px 24px -18px rgba(18,24,47,.45); }
 
+/* The cash-position line draws itself in, left to right. pathLength normalises
+   the dash maths so one rule works whatever the path's real length is. */
+@keyframes mny-draw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+.mny-draw {
+  /* pathLength="1" is set as an SVG attribute on the path itself — it is not
+     a CSS property — which is what makes this single dash rule work. */
+  stroke-dasharray: 1;
+  animation: mny-draw .9s cubic-bezier(.22,1,.36,1) .25s backwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .mny-ring, .mny-float { animation: none !important; }
+  .mny-ring, .mny-float, .mny-draw { animation: none !important; }
+  .mny-draw { stroke-dasharray: none; }
   .mny-progress::after { display: none; }
   .mny-card:hover { transform: none; }
 }
