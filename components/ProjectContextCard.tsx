@@ -277,18 +277,18 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
   return (
     <div className="space-y-6 w-full">
       {/* 1. Brand Identity & Project Metadata Section */}
-      <div className="glass-light rounded-2xl border border-[#0066CC]/15 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
-        <div className="px-6 py-4 glass-light border-b border-[#0066CC]/10 flex items-center justify-between">
+      <div className="glass-light rounded-2xl border border-[#3D52A0]/15 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
+        <div className="px-6 py-4 glass-light border-b border-[#3D52A0]/10 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#0066CC]/5 rounded-lg">
-              <Briefcase className="w-5 h-5 text-[#0066CC]" />
+            <div className="p-2 bg-[#3D52A0]/5 rounded-lg">
+              <Briefcase className="w-5 h-5 text-[#3D52A0]" />
             </div>
             <div>
               <h4 className="text-base font-bold text-sky-950">Client Handoff & Project Identity</h4>
               <p className="text-xs text-slate-400 font-medium">Core contact information and site details</p>
             </div>
           </div>
-          <span className="text-[10px] font-black tracking-widest text-[#0066CC] uppercase bg-sky-50/50 px-2.5 py-1 rounded border border-[#0066CC]/20">
+          <span className="text-[10px] font-black tracking-widest text-[#3D52A0] uppercase bg-sky-50/50 px-2.5 py-1 rounded border border-[#3D52A0]/20">
             CLIENT & SITE PROFILE
           </span>
         </div>
@@ -303,7 +303,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   type="text" 
                   value={projectContext?.name || ''} 
                   onChange={e => handleContextChange('name', e.target.value)} 
-                  className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-slate-200 rounded-xl text-sm font-bold text-sky-950 focus:border-[#0066CC] focus:bg-white focus:ring-1 focus:ring-[#0066CC]/10 outline-none transition-all duration-200" 
+                  className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-slate-200 rounded-xl text-sm font-bold text-sky-950 focus:border-[#3D52A0] focus:bg-white focus:ring-1 focus:ring-[#3D52A0]/10 outline-none transition-all duration-200" 
                   placeholder="e.g. Lodha Amara 402" 
                 />
               </div>
@@ -313,7 +313,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   type="text" 
                   value={projectContext.clientName || ''} 
                   onChange={e => handleContextChange('clientName', e.target.value)} 
-                  className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-slate-200 rounded-xl text-sm font-bold text-sky-950 focus:border-[#0066CC] focus:bg-white focus:ring-1 focus:ring-[#0066CC]/10 outline-none transition-all duration-200" 
+                  className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-slate-200 rounded-xl text-sm font-bold text-sky-950 focus:border-[#3D52A0] focus:bg-white focus:ring-1 focus:ring-[#3D52A0]/10 outline-none transition-all duration-200" 
                   placeholder="e.g. Rahul Sharma" 
                 />
               </div>
@@ -323,7 +323,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   type="email" 
                   value={projectContext.clientEmail || ''} 
                   onChange={e => handleContextChange('clientEmail', e.target.value)} 
-                  className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-slate-200 rounded-xl text-sm font-bold text-sky-950 focus:border-[#0066CC] focus:bg-white focus:ring-1 focus:ring-[#0066CC]/10 outline-none transition-all duration-200" 
+                  className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-slate-200 rounded-xl text-sm font-bold text-sky-950 focus:border-[#3D52A0] focus:bg-white focus:ring-1 focus:ring-[#3D52A0]/10 outline-none transition-all duration-200" 
                   placeholder="email@example.com" 
                 />
               </div>
@@ -333,7 +333,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   type="text" 
                   value={projectContext.clientPhone || ''} 
                   onChange={e => handleContextChange('clientPhone', e.target.value)} 
-                  className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-slate-200 rounded-xl text-sm font-bold text-sky-950 focus:border-[#0066CC] focus:bg-white focus:ring-1 focus:ring-[#0066CC]/10 outline-none transition-all duration-200" 
+                  className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-slate-200 rounded-xl text-sm font-bold text-sky-950 focus:border-[#3D52A0] focus:bg-white focus:ring-1 focus:ring-[#3D52A0]/10 outline-none transition-all duration-200" 
                   placeholder="e.g. +91 98765 43210" 
                 />
               </div>
@@ -345,7 +345,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                       type="text" 
                       value={projectContext.location || ''} 
                       onChange={e => handleContextChange('location', e.target.value)} 
-                      className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-slate-200 rounded-xl text-sm font-bold text-sky-950 focus:border-[#0066CC] focus:bg-white focus:ring-1 focus:ring-[#0066CC]/10 outline-none transition-all duration-200" 
+                      className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-slate-200 rounded-xl text-sm font-bold text-sky-950 focus:border-[#3D52A0] focus:bg-white focus:ring-1 focus:ring-[#3D52A0]/10 outline-none transition-all duration-200" 
                       placeholder="e.g. Thane West, Mumbai" 
                     />
                   </div>
@@ -355,7 +355,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                       type="number" 
                       value={projectContext.area || ''} 
                       onChange={e => handleContextChange('area', Number(e.target.value))} 
-                      className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-[#0066CC]/30 rounded-xl text-sm font-black text-[#0066CC] focus:border-[#0066CC] focus:bg-white focus:ring-1 focus:ring-[#0066CC]/10 outline-none transition-all duration-200" 
+                      className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-[#3D52A0]/30 rounded-xl text-sm font-black text-[#3D52A0] focus:border-[#3D52A0] focus:bg-white focus:ring-1 focus:ring-[#3D52A0]/10 outline-none transition-all duration-200" 
                     />
                   </div>
                 </div>
@@ -377,8 +377,8 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                       onClick={() => handleSiteStateChange(status.id)}
                       className={`flex flex-col text-left p-3 rounded-xl border transition-all duration-200 ${
                         projectContext.propertyStatus === status.id 
-                          ? 'bg-[#0066CC] border-[#0066CC] text-white shadow-md' 
-                          : 'bg-white/40 backdrop-blur-sm border-slate-200 text-sky-950 hover:border-[#0066CC]/30 hover:bg-sky-50/50/30'
+                          ? 'bg-[#3D52A0] border-[#3D52A0] text-white shadow-md' 
+                          : 'bg-white/40 backdrop-blur-sm border-slate-200 text-sky-950 hover:border-[#3D52A0]/30 hover:bg-sky-50/50/30'
                       }`}
                     >
                       <span className="text-xs font-black tracking-wide leading-normal">{status.label}</span>
@@ -403,19 +403,19 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   onChange={e => handleContextChange('clientBrief', e.target.value)}
                   rows={2}
                   placeholder="e.g. Civil refresh to the entire flooring of the house and both bathrooms. Kitchen and wardrobes in modular. Keep the existing electricals."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/40 backdrop-blur-sm text-sm text-sky-950 placeholder:text-slate-300 focus:border-[#0066CC]/40 focus:outline-none focus:ring-1 focus:ring-[#0066CC]/20 resize-y leading-relaxed"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/40 backdrop-blur-sm text-sm text-sky-950 placeholder:text-slate-300 focus:border-[#3D52A0]/40 focus:outline-none focus:ring-1 focus:ring-[#3D52A0]/20 resize-y leading-relaxed"
                 />
                 {briefSuggestions.length > 0 && (
-                  <div className="rounded-xl border border-[#0066CC]/25 bg-sky-50/50 p-3 flex flex-col gap-2">
+                  <div className="rounded-xl border border-[#3D52A0]/25 bg-sky-50/50 p-3 flex flex-col gap-2">
                     <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <span className="text-[11px] font-bold text-[#0055B3] inline-flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-[#334486] inline-flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5" />
                         The brief suggests {briefSuggestions.length} change{briefSuggestions.length === 1 ? '' : 's'} to the scope
                       </span>
                       <button
                         type="button"
                         onClick={applyBriefSuggestions}
-                        className="px-3 py-1 text-[10px] font-black uppercase tracking-wider bg-[#0066CC] text-white rounded-lg hover:bg-[#0055B3] transition-colors"
+                        className="px-3 py-1 text-[10px] font-black uppercase tracking-wider bg-[#3D52A0] text-white rounded-lg hover:bg-[#334486] transition-colors"
                       >
                         Apply
                       </button>
@@ -460,7 +460,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                       <button
                         type="button"
                         onClick={resetCivilScope}
-                        className="text-[10px] font-bold uppercase tracking-wider text-[#0066CC] hover:underline"
+                        className="text-[10px] font-bold uppercase tracking-wider text-[#3D52A0] hover:underline"
                       >
                         Reset to site state
                       </button>
@@ -479,7 +479,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                         className={`flex items-start gap-2.5 text-left p-3 rounded-xl border transition-all duration-200 ${
                           on
                             ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950'
-                            : 'bg-white/40 backdrop-blur-sm border-slate-200 text-slate-500 hover:border-[#0066CC]/30'
+                            : 'bg-white/40 backdrop-blur-sm border-slate-200 text-slate-500 hover:border-[#3D52A0]/30'
                         }`}
                       >
                         <span className={`w-4 h-4 mt-0.5 rounded-md flex items-center justify-center shrink-0 border transition-colors ${
@@ -583,10 +583,10 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
       {/* 2. Configuration & Aesthetic Palette Hub */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Configuration Selector */}
-        <div className="glass-light rounded-2xl border border-[#0066CC]/15 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+        <div className="glass-light rounded-2xl border border-[#3D52A0]/15 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.02)] flex flex-col justify-between">
           <div>
-            <div className="px-6 py-4 glass-light border-b border-[#0066CC]/10 flex items-center gap-3">
-              <Grid className="w-4 h-4 text-[#0066CC]" />
+            <div className="px-6 py-4 glass-light border-b border-[#3D52A0]/10 flex items-center gap-3">
+              <Grid className="w-4 h-4 text-[#3D52A0]" />
               <h5 className="text-sm font-bold text-sky-950">Configuration Alignment</h5>
             </div>
             
@@ -601,8 +601,8 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                     onClick={() => handleConfigSelect(opt.id)}
                     className={`p-4 rounded-xl text-left border relative transition-all duration-200 flex items-start gap-3.5 ${
                       isSelected 
-                        ? 'border-[#0066CC] bg-sky-50/50 shadow-[0_4px_16px_rgba(181,148,91,0.06)]' 
-                        : 'border-slate-200 bg-white hover:border-[#0066CC]/30 hover:bg-slate-50/50'
+                        ? 'border-[#3D52A0] bg-sky-50/50 shadow-[0_4px_16px_rgba(181,148,91,0.06)]' 
+                        : 'border-slate-200 bg-white hover:border-[#3D52A0]/30 hover:bg-slate-50/50'
                     }`}
                   >
                     {opt.isNew && (
@@ -610,7 +610,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                         NEW
                       </span>
                     )}
-                    <div className={`p-2 rounded-lg shrink-0 ${isSelected ? 'bg-[#0066CC]/10 text-[#0066CC]' : 'bg-slate-50 text-slate-400'}`}>
+                    <div className={`p-2 rounded-lg shrink-0 ${isSelected ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-slate-50 text-slate-400'}`}>
                       <Icon className="w-5 h-5" />
                     </div>
                     <div>
@@ -628,16 +628,16 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
           </div>
           
           <div className="px-6 py-4 bg-white/50 backdrop-blur-sm border-t border-slate-100 text-[11px] text-slate-400 leading-normal flex items-center gap-2">
-            <span className="inline-block w-1.5 h-1.5 bg-[#0066CC] rounded-full"></span>
+            <span className="inline-block w-1.5 h-1.5 bg-[#3D52A0] rounded-full"></span>
             Configuring Bathroom Remodels automatically sets area defaults to 45 sqft and scopes a Master Bathroom.
           </div>
         </div>
 
         {/* Aesthetic Persona Selector */}
-        <div className="glass-light rounded-2xl border border-[#0066CC]/15 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+        <div className="glass-light rounded-2xl border border-[#3D52A0]/15 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.02)] flex flex-col justify-between">
           <div>
-            <div className="px-6 py-4 glass-light border-b border-[#0066CC]/10 flex items-center gap-3">
-              <Sparkles className="w-4 h-4 text-[#0066CC]" />
+            <div className="px-6 py-4 glass-light border-b border-[#3D52A0]/10 flex items-center gap-3">
+              <Sparkles className="w-4 h-4 text-[#3D52A0]" />
               <h5 className="text-sm font-bold text-sky-950">Aesthetic Palette / Mood Persona</h5>
             </div>
             
@@ -652,11 +652,11 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                     onClick={() => handleContextChange('theme', opt.id)}
                     className={`p-4 rounded-xl text-left border transition-all duration-200 flex items-start gap-3.5 ${
                       isSelected 
-                        ? 'border-[#0066CC] bg-sky-50/50 shadow-[0_4px_16px_rgba(181,148,91,0.06)]' 
-                        : 'border-slate-200 bg-white hover:border-[#0066CC]/30 hover:bg-slate-50/50'
+                        ? 'border-[#3D52A0] bg-sky-50/50 shadow-[0_4px_16px_rgba(181,148,91,0.06)]' 
+                        : 'border-slate-200 bg-white hover:border-[#3D52A0]/30 hover:bg-slate-50/50'
                     }`}
                   >
-                    <div className={`p-2 rounded-lg shrink-0 ${isSelected ? 'bg-[#0066CC]/10 text-[#0066CC]' : 'bg-slate-50 text-slate-400'}`}>
+                    <div className={`p-2 rounded-lg shrink-0 ${isSelected ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-slate-50 text-slate-400'}`}>
                       <Icon className="w-5 h-5" />
                     </div>
                     <div>
@@ -674,23 +674,23 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
           </div>
 
           <div className="px-6 py-4 bg-white/50 backdrop-blur-sm border-t border-slate-100 text-[11px] text-slate-400 leading-normal flex items-center gap-2">
-            <span className="inline-block w-1.5 h-1.5 bg-[#0066CC] rounded-full"></span>
+            <span className="inline-block w-1.5 h-1.5 bg-[#3D52A0] rounded-full"></span>
             Selecting an aesthetic theme primes the AI assistant's material suggestions inside the BOQ.
           </div>
         </div>
       </div>
 
       {/* 3. Live Design Scope Checklist & Commercial Fees Panel */}
-      <div className="glass-light rounded-2xl border border-[#0066CC]/15 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
-        <div className="px-6 py-4 glass-light border-b border-[#0066CC]/10 flex items-center justify-between">
+      <div className="glass-light rounded-2xl border border-[#3D52A0]/15 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
+        <div className="px-6 py-4 glass-light border-b border-[#3D52A0]/10 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <CheckSquare className="w-4 h-4 text-[#0066CC]" />
+            <CheckSquare className="w-4 h-4 text-[#3D52A0]" />
             <div>
               <h5 className="text-sm font-bold text-sky-950">Scope of Deliverables & Commercials</h5>
               <p className="text-xs text-slate-400 font-medium">Design scope checksheets paired with active studio fee model</p>
             </div>
           </div>
-          <span className="text-xs font-black text-[#0066CC]">
+          <span className="text-xs font-black text-[#3D52A0]">
             {deliverablesCount} Active Deliverables
           </span>
         </div>
@@ -698,15 +698,15 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
         <div className="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Deliverables Checklist */}
           <div className="lg:col-span-7 space-y-3.5">
-            <p className="text-[10px] font-bold text-[#0066CC] uppercase tracking-widest mb-4">Milestone Deliverables</p>
+            <p className="text-[10px] font-bold text-[#3D52A0] uppercase tracking-widest mb-4">Milestone Deliverables</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-100 rounded-xl bg-slate-50/20 hover:border-[#0066CC]/30 hover:bg-sky-50/50/20 transition-all duration-150">
+              <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-100 rounded-xl bg-slate-50/20 hover:border-[#3D52A0]/30 hover:bg-sky-50/50/20 transition-all duration-150">
                 <input 
                   type="checkbox" 
                   checked={!!projectContext.designScope?.has3DRenders} 
                   onChange={e => handleDesignScopeChange('has3DRenders', e.target.checked)} 
-                  className="mt-0.5 rounded text-[#0066CC] focus:ring-[#0066CC] border-slate-300 cursor-pointer" 
+                  className="mt-0.5 rounded text-[#3D52A0] focus:ring-[#3D52A0] border-slate-300 cursor-pointer" 
                 />
                 <div>
                   <span className="block text-xs font-bold text-sky-950">3D Visualizations</span>
@@ -714,12 +714,12 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                 </div>
               </label>
 
-              <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-100 rounded-xl bg-slate-50/20 hover:border-[#0066CC]/30 hover:bg-sky-50/50/20 transition-all duration-150">
+              <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-100 rounded-xl bg-slate-50/20 hover:border-[#3D52A0]/30 hover:bg-sky-50/50/20 transition-all duration-150">
                 <input 
                   type="checkbox" 
                   checked={!!projectContext.designScope?.has2DDrawings} 
                   onChange={e => handleDesignScopeChange('has2DDrawings', e.target.checked)} 
-                  className="mt-0.5 rounded text-[#0066CC] focus:ring-[#0066CC] border-slate-300 cursor-pointer" 
+                  className="mt-0.5 rounded text-[#3D52A0] focus:ring-[#3D52A0] border-slate-300 cursor-pointer" 
                 />
                 <div>
                   <span className="block text-xs font-bold text-sky-950">2D GFC Drawing Set</span>
@@ -727,12 +727,12 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                 </div>
               </label>
 
-              <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-100 rounded-xl bg-slate-50/20 hover:border-[#0066CC]/30 hover:bg-sky-50/50/20 transition-all duration-150">
+              <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-100 rounded-xl bg-slate-50/20 hover:border-[#3D52A0]/30 hover:bg-sky-50/50/20 transition-all duration-150">
                 <input 
                   type="checkbox" 
                   checked={!!projectContext.designScope?.hasFurnitureSelection} 
                   onChange={e => handleDesignScopeChange('hasFurnitureSelection', e.target.checked)} 
-                  className="mt-0.5 rounded text-[#0066CC] focus:ring-[#0066CC] border-slate-300 cursor-pointer" 
+                  className="mt-0.5 rounded text-[#3D52A0] focus:ring-[#3D52A0] border-slate-300 cursor-pointer" 
                 />
                 <div>
                   <span className="block text-xs font-bold text-sky-950">Loose Furniture Spec</span>
@@ -740,12 +740,12 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                 </div>
               </label>
 
-              <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-100 rounded-xl bg-slate-50/20 hover:border-[#0066CC]/30 hover:bg-sky-50/50/20 transition-all duration-150">
+              <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-100 rounded-xl bg-slate-50/20 hover:border-[#3D52A0]/30 hover:bg-sky-50/50/20 transition-all duration-150">
                 <input 
                   type="checkbox" 
                   checked={!!projectContext.designScope?.hasVrWalkthrough} 
                   onChange={e => handleDesignScopeChange('hasVrWalkthrough', e.target.checked)} 
-                  className="mt-0.5 rounded text-[#0066CC] focus:ring-[#0066CC] border-slate-300 cursor-pointer" 
+                  className="mt-0.5 rounded text-[#3D52A0] focus:ring-[#3D52A0] border-slate-300 cursor-pointer" 
                 />
                 <div>
                   <span className="block text-xs font-bold text-sky-950">Interactive VR Walkthrough</span>
@@ -760,7 +760,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   type="checkbox" 
                   checked={!!projectContext.designScope?.hasSiteVisits} 
                   onChange={e => handleDesignScopeChange('hasSiteVisits', e.target.checked)} 
-                  className="rounded text-[#0066CC] focus:ring-[#0066CC] border-slate-300 cursor-pointer" 
+                  className="rounded text-[#3D52A0] focus:ring-[#3D52A0] border-slate-300 cursor-pointer" 
                 />
                 <div>
                   <span className="block text-xs font-bold text-sky-950">Professional Site Visits Included</span>
@@ -774,16 +774,16 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   value={projectContext.designScope?.visitCount || 0} 
                   onChange={e => handleDesignScopeChange('visitCount', parseInt(e.target.value) || 0)} 
                   disabled={!projectContext.designScope?.hasSiteVisits}
-                  className="w-14 p-1.5 text-center border border-slate-200 rounded-lg text-xs font-black focus:border-[#0066CC] outline-none disabled:opacity-50 disabled:bg-slate-100" 
+                  className="w-14 p-1.5 text-center border border-slate-200 rounded-lg text-xs font-black focus:border-[#3D52A0] outline-none disabled:opacity-50 disabled:bg-slate-100" 
                 />
               </div>
             </div>
           </div>
 
           {/* Fee Model Display */}
-          <div className="lg:col-span-5 bg-sky-50/50 rounded-xl border border-[#0066CC]/25 p-6 flex flex-col justify-between">
+          <div className="lg:col-span-5 bg-sky-50/50 rounded-xl border border-[#3D52A0]/25 p-6 flex flex-col justify-between">
             <div className="space-y-4">
-              <span className="text-[10px] font-bold text-[#0066CC] uppercase tracking-widest block">Professional Fee Engine</span>
+              <span className="text-[10px] font-bold text-[#3D52A0] uppercase tracking-widest block">Professional Fee Engine</span>
               
               <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/50">
                 {[
@@ -797,7 +797,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                     onClick={() => handleContextChange('designFeeType', model.id)}
                     className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-150 ${
                       projectContext.designFeeType === model.id 
-                        ? 'bg-[#0066CC] text-white shadow-sm' 
+                        ? 'bg-[#3D52A0] text-white shadow-sm' 
                         : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
@@ -807,24 +807,24 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
               </div>
 
               <div className="relative glass-light border border-slate-200 rounded-xl overflow-hidden shadow-sm flex items-center px-4 py-3">
-                <span className="text-[#0066CC] font-black text-lg select-none mr-2">
+                <span className="text-[#3D52A0] font-black text-lg select-none mr-2">
                   {projectContext.designFeeType === 'percentage' ? '' : '₹'}
                 </span>
                 <input 
                   type="number" 
                   value={projectContext.designFee !== undefined ? projectContext.designFee : ''} 
                   onChange={e => handleContextChange('designFee', parseFloat(e.target.value) || 0)} 
-                  className="w-full font-black text-[#0066CC] text-2xl outline-none" 
+                  className="w-full font-black text-[#3D52A0] text-2xl outline-none" 
                   placeholder="0"
                 />
-                <span className="text-[#0066CC] font-black text-lg select-none ml-2">
+                <span className="text-[#3D52A0] font-black text-lg select-none ml-2">
                   {projectContext.designFeeType === 'percentage' ? '%' : ''}
                 </span>
               </div>
             </div>
 
-            <div className="mt-6 border-t border-[#0066CC]/15 pt-4 text-[11px] text-slate-400 leading-normal flex items-start gap-2.5">
-              <span className="bg-[#0066CC]/10 text-[#0066CC] p-1 rounded font-black text-[9px] shrink-0">ACTIVE</span>
+            <div className="mt-6 border-t border-[#3D52A0]/15 pt-4 text-[11px] text-slate-400 leading-normal flex items-start gap-2.5">
+              <span className="bg-[#3D52A0]/10 text-[#3D52A0] p-1 rounded font-black text-[9px] shrink-0">ACTIVE</span>
               <p>
                 Calculates to <span className="font-bold text-sky-950">{feeLabel}</span>. Directly affects automated invoices inside client contract bundles.
               </p>
@@ -835,19 +835,19 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
 
       {/* 4. Execution Intelligence & Operations Layer */}
       {!hideExecutionControls && (
-        <div className="bg-[#111C30] border border-[#0066CC]/30 p-6 md:p-8 rounded-2xl text-white relative overflow-hidden shadow-xl">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-[#0066CC]/5 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="bg-[#111C30] border border-[#3D52A0]/30 p-6 md:p-8 rounded-2xl text-white relative overflow-hidden shadow-xl">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[#3D52A0]/5 rounded-full blur-3xl pointer-events-none"></div>
           
           <div className="relative z-10 space-y-6">
-            <div className="flex items-center justify-between border-b border-[#0066CC]/15 pb-4">
+            <div className="flex items-center justify-between border-b border-[#3D52A0]/15 pb-4">
               <div className="flex items-center gap-3">
-                <Sliders className="w-5 h-5 text-[#0066CC]" />
+                <Sliders className="w-5 h-5 text-[#3D52A0]" />
                 <div>
                   <h5 className="font-bold text-white text-base">Execution Intelligence & Site Controls</h5>
                   <p className="text-slate-400 text-xs font-medium">Coordinate on-site workflows, target dates, and gating checksheets</p>
                 </div>
               </div>
-              <span className="text-[10px] font-bold tracking-widest text-[#0066CC] uppercase bg-[#0066CC] border border-[#0066CC]/30 px-3 py-1 rounded">
+              <span className="text-[10px] font-bold tracking-widest text-[#3D52A0] uppercase bg-[#3D52A0] border border-[#3D52A0]/30 px-3 py-1 rounded">
                 SITE OPERATIONS COCKPIT
               </span>
             </div>
@@ -860,7 +860,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                     type="date" 
                     value={projectContext.targetHandoverDate || ''} 
                     onChange={e => handleContextChange('targetHandoverDate', e.target.value)} 
-                    className="w-full px-3 py-2.5 bg-[#0066CC]/60 border border-slate-700 rounded-xl text-xs font-bold text-white focus:border-[#0066CC] outline-none transition-all" 
+                    className="w-full px-3 py-2.5 bg-[#3D52A0]/60 border border-slate-700 rounded-xl text-xs font-bold text-white focus:border-[#3D52A0] outline-none transition-all" 
                   />
                 </div>
               </div>
@@ -872,7 +872,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                     type="date" 
                     value={projectContext.sofFreezeDate || ''} 
                     onChange={e => handleContextChange('sofFreezeDate', e.target.value)} 
-                    className="w-full px-3 py-2.5 bg-[#0066CC]/60 border border-slate-700 rounded-xl text-xs font-bold text-white focus:border-[#0066CC] outline-none transition-all" 
+                    className="w-full px-3 py-2.5 bg-[#3D52A0]/60 border border-slate-700 rounded-xl text-xs font-bold text-white focus:border-[#3D52A0] outline-none transition-all" 
                   />
                 </div>
               </div>
@@ -884,7 +884,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                     type="number" 
                     value={projectContext.procurementLeadTimeWeeks || 4} 
                     onChange={e => handleContextChange('procurementLeadTimeWeeks', Number(e.target.value) || 0)} 
-                    className="w-full px-3 py-2.5 bg-[#0066CC]/60 border border-slate-700 rounded-xl text-xs font-bold text-white focus:border-[#0066CC] outline-none transition-all pr-12" 
+                    className="w-full px-3 py-2.5 bg-[#3D52A0]/60 border border-slate-700 rounded-xl text-xs font-bold text-white focus:border-[#3D52A0] outline-none transition-all pr-12" 
                   />
                   <span className="absolute right-4 text-slate-400 text-xs font-bold">Wks</span>
                 </div>
@@ -896,7 +896,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   <select 
                     value={projectContext.assignedSupervisors?.[0] || ''} 
                     onChange={e => handleContextChange('assignedSupervisors', [e.target.value])} 
-                    className="w-full px-3 py-2.5 bg-[#0066CC]/60 border border-slate-700 rounded-xl text-xs font-bold text-white focus:border-[#0066CC] outline-none appearance-none cursor-pointer pr-10"
+                    className="w-full px-3 py-2.5 bg-[#3D52A0]/60 border border-slate-700 rounded-xl text-xs font-bold text-white focus:border-[#3D52A0] outline-none appearance-none cursor-pointer pr-10"
                   >
                     <option value="" className="bg-[#111C30]">Unassigned (Reviewing...)</option>
                     {siteSupervisors.map(s => (
@@ -904,20 +904,20 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                     ))}
                   </select>
                   <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none">
-                    <ChevronDown className="w-4 h-4 text-[#0066CC]" />
+                    <ChevronDown className="w-4 h-4 text-[#3D52A0]" />
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-4 border-t border-[#0066CC]/15">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-4 border-t border-[#3D52A0]/15">
               <div className="lg:col-span-4 space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Active Execution Milestone</label>
                 <div className="relative">
                   <select 
                     value={projectContext.currentExecutionBundle || 'pre_execution'} 
                     onChange={e => handleContextChange('currentExecutionBundle', e.target.value)} 
-                    className="w-full px-3 py-3 bg-[#0066CC]/60 border border-slate-700 rounded-xl text-xs font-bold text-white focus:border-[#0066CC] outline-none appearance-none cursor-pointer pr-10"
+                    className="w-full px-3 py-3 bg-[#3D52A0]/60 border border-slate-700 rounded-xl text-xs font-bold text-white focus:border-[#3D52A0] outline-none appearance-none cursor-pointer pr-10"
                   >
                     <option value="pre_execution" className="bg-[#111C30]">Pre-Execution & Approvals</option>
                     <option value="civil_mep" className="bg-[#111C30]">Civil & MEP Layouts</option>
@@ -926,7 +926,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                     <option value="handover" className="bg-[#111C30]">Final Snag Checklist & Handover</option>
                   </select>
                   <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none">
-                    <ChevronDown className="w-4 h-4 text-[#0066CC]" />
+                    <ChevronDown className="w-4 h-4 text-[#3D52A0]" />
                   </div>
                 </div>
               </div>
@@ -939,8 +939,8 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                     onClick={() => handleContextChange('briefFrozenAt', projectContext.briefFrozenAt ? null : Date.now())}
                     className={`py-3 px-1.5 rounded-xl text-xs font-bold border transition-all duration-150 flex items-center justify-center gap-1.5 ${
                       projectContext.briefFrozenAt 
-                        ? 'bg-[#0066CC] border-[#0066CC] text-white shadow-md' 
-                        : 'bg-[#0066CC]/40 border-slate-700 text-slate-300 hover:bg-[#0066CC]/80 hover:text-white'
+                        ? 'bg-[#3D52A0] border-[#3D52A0] text-white shadow-md' 
+                        : 'bg-[#3D52A0]/40 border-slate-700 text-slate-300 hover:bg-[#3D52A0]/80 hover:text-white'
                     }`}
                   >
                     <Check className={`w-3.5 h-3.5 transition-transform ${projectContext.briefFrozenAt ? 'scale-100' : 'scale-75'}`} />
@@ -953,7 +953,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                     className={`py-3 px-1.5 rounded-xl text-xs font-bold border transition-all duration-150 flex items-center justify-center gap-1.5 ${
                       projectContext.designApprovedAt 
                         ? 'bg-emerald-600 border-emerald-600 text-white shadow-md' 
-                        : 'bg-[#0066CC]/40 border-slate-700 text-slate-300 hover:bg-[#0066CC]/80 hover:text-white'
+                        : 'bg-[#3D52A0]/40 border-slate-700 text-slate-300 hover:bg-[#3D52A0]/80 hover:text-white'
                     }`}
                   >
                     <Check className={`w-3.5 h-3.5 transition-transform ${projectContext.designApprovedAt ? 'scale-100' : 'scale-75'}`} />
@@ -965,8 +965,8 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                     onClick={() => handleContextChange('handoverDate', projectContext.handoverDate ? null : Date.now())}
                     className={`py-3 px-1.5 rounded-xl text-xs font-bold border transition-all duration-150 flex items-center justify-center gap-1.5 ${
                       projectContext.handoverDate 
-                        ? 'bg-[#0066CC] border-[#0066CC] text-white shadow-md' 
-                        : 'bg-[#0066CC]/40 border-slate-700 text-slate-300 hover:bg-[#0066CC]/80 hover:text-white'
+                        ? 'bg-[#3D52A0] border-[#3D52A0] text-white shadow-md' 
+                        : 'bg-[#3D52A0]/40 border-slate-700 text-slate-300 hover:bg-[#3D52A0]/80 hover:text-white'
                     }`}
                   >
                     <Check className={`w-3.5 h-3.5 transition-transform ${projectContext.handoverDate ? 'scale-100' : 'scale-75'}`} />
@@ -980,10 +980,10 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
       )}
 
       {/* 5. Room Specifications (Dynamic Architectural Dimension Space Planner) */}
-      <div id="dimensional-space-planner" className="glass-light rounded-2xl border border-[#0066CC]/15 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
-        <div className="px-6 py-5 glass-light border-b border-[#0066CC]/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div id="dimensional-space-planner" className="glass-light rounded-2xl border border-[#3D52A0]/15 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
+        <div className="px-6 py-5 glass-light border-b border-[#3D52A0]/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#0066CC]/5 rounded-lg text-[#0066CC]">
+            <div className="p-2 bg-[#3D52A0]/5 rounded-lg text-[#3D52A0]">
               <List className="w-5 h-5" />
             </div>
             <div>
@@ -1034,9 +1034,9 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   title={plannerRooms.length > 0
                     ? 'Rooms are already mapped. Delete them to re-map from the configuration.'
                     : 'Derive rooms from the area and BHK configuration'}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wider bg-sky-50/50 text-[#0066CC] rounded-lg hover:bg-[#0066CC]/10 disabled:opacity-50 border border-[#0066CC]/30 transition-all duration-150 animate-pulse-subtle"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wider bg-sky-50/50 text-[#3D52A0] rounded-lg hover:bg-[#3D52A0]/10 disabled:opacity-50 border border-[#3D52A0]/30 transition-all duration-150 animate-pulse-subtle"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-[#0066CC]"/>
+                  <Sparkles className="w-3.5 h-3.5 text-[#3D52A0]"/>
                   {isEstimating
                     ? 'Mapping rooms...'
                     : plannerRooms.length > 0
@@ -1047,7 +1047,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                 <button 
                   type="button"
                   onClick={handleAddRoom} 
-                  className="px-4 py-1.5 text-[10px] font-black uppercase tracking-wider bg-[#0066CC] text-white rounded-lg hover:bg-[#0055B3] transition-all shadow-sm"
+                  className="px-4 py-1.5 text-[10px] font-black uppercase tracking-wider bg-[#3D52A0] text-white rounded-lg hover:bg-[#334486] transition-all shadow-sm"
                 >
                   + Create Room
                 </button>
@@ -1101,10 +1101,10 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                       exit={{ opacity: 0, scale: 0.98 }}
                       transition={{ duration: 0.15 }}
                       key={index} 
-                      className="p-5 glass-light border border-slate-200/80 rounded-xl hover:border-[#0066CC]/30 hover:bg-sky-50/50 transition-all duration-200 shadow-sm relative group"
+                      className="p-5 glass-light border border-slate-200/80 rounded-xl hover:border-[#3D52A0]/30 hover:bg-sky-50/50 transition-all duration-200 shadow-sm relative group"
                     >
                       {/* Left elegant gold hairline indicator */}
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0066CC]/30 group-hover:bg-[#0066CC] rounded-l transition-all"></div>
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#3D52A0]/30 group-hover:bg-[#3D52A0] rounded-l transition-all"></div>
                       
                       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-center pl-3">
                         {/* Room Name */}
@@ -1114,7 +1114,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                             type="text" 
                             value={room.name || ''} 
                             onChange={e => handleRoomChange(index, 'name', e.target.value)} 
-                            className="w-full px-3 py-2 bg-slate-50/80 border border-slate-200 rounded-lg focus:bg-white focus:border-[#0066CC] font-bold text-sky-950 text-xs outline-none transition-all" 
+                            className="w-full px-3 py-2 bg-slate-50/80 border border-slate-200 rounded-lg focus:bg-white focus:border-[#3D52A0] font-bold text-sky-950 text-xs outline-none transition-all" 
                             placeholder="e.g. Master Bedroom" 
                           />
                         </div>
@@ -1128,7 +1128,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                                 type="number" 
                                 value={room.length || ''} 
                                 onChange={e => handleRoomChange(index, 'length', e.target.value)} 
-                                className="w-20 px-2 py-2 bg-slate-50/80 border border-slate-200 rounded-lg text-center text-xs font-bold focus:bg-white focus:border-[#0066CC] outline-none transition-all" 
+                                className="w-20 px-2 py-2 bg-slate-50/80 border border-slate-200 rounded-lg text-center text-xs font-bold focus:bg-white focus:border-[#3D52A0] outline-none transition-all" 
                                 placeholder="Length" 
                               />
                               <span className="absolute right-2 text-[10px] text-slate-400 font-bold select-none pointer-events-none">ft</span>
@@ -1139,7 +1139,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                                 type="number" 
                                 value={room.width || ''} 
                                 onChange={e => handleRoomChange(index, 'width', e.target.value)} 
-                                className="w-20 px-2 py-2 bg-slate-50/80 border border-slate-200 rounded-lg text-center text-xs font-bold focus:bg-white focus:border-[#0066CC] outline-none transition-all" 
+                                className="w-20 px-2 py-2 bg-slate-50/80 border border-slate-200 rounded-lg text-center text-xs font-bold focus:bg-white focus:border-[#3D52A0] outline-none transition-all" 
                                 placeholder="Width" 
                               />
                               <span className="absolute right-2 text-[10px] text-slate-400 font-bold select-none pointer-events-none">ft</span>
@@ -1156,7 +1156,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                               value={room.height || ''} 
                               placeholder={String(projectContext.ceilingHeight || 9.5)} 
                               onChange={e => handleRoomChange(index, 'height', e.target.value)} 
-                              className="w-full px-2 py-2 bg-slate-50/80 border border-slate-200 rounded-lg text-center text-xs font-bold focus:bg-white focus:border-[#0066CC] outline-none transition-all" 
+                              className="w-full px-2 py-2 bg-slate-50/80 border border-slate-200 rounded-lg text-center text-xs font-bold focus:bg-white focus:border-[#3D52A0] outline-none transition-all" 
                             />
                             <span className="absolute right-2.5 text-[10px] text-slate-400 font-bold select-none pointer-events-none">ft</span>
                           </div>
@@ -1173,7 +1173,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                               className={`w-full px-2 py-2 border rounded-lg text-center text-xs font-black transition-all ${
                                 room.length && room.width 
                                   ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed font-medium' 
-                                  : 'bg-sky-50/50 border-[#0066CC]/30 text-[#0066CC]'
+                                  : 'bg-sky-50/50 border-[#3D52A0]/30 text-[#3D52A0]'
                               }`}
                               readOnly={!!(room.length && room.width)}
                             />
@@ -1200,7 +1200,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                           type="text" 
                           value={room.notes || ''} 
                           onChange={e => handleRoomChange(index, 'notes', e.target.value)} 
-                          className="w-full px-3 py-2 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-lg text-xs text-slate-600 placeholder-slate-400 focus:bg-white focus:border-[#0066CC] outline-none transition-all"
+                          className="w-full px-3 py-2 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-lg text-xs text-slate-600 placeholder-slate-400 focus:bg-white focus:border-[#3D52A0] outline-none transition-all"
                           placeholder="Add site notes / special layout features (e.g. 'Pillar on east wall, requires custom wardrobe framing')"
                         />
                       </div>

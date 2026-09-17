@@ -672,7 +672,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     <div className="space-y-4 mb-4 border border-sky-100 p-4 rounded-xl bg-sky-50/25">
                         <table className="w-full text-xs">
                             <thead>
-                                <tr className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white text-[10px] uppercase tracking-wider font-bold">
+                                <tr className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white text-[10px] uppercase tracking-wider font-bold">
                                     <th className="p-2 text-left">Milestone Name</th>
                                     <th className="p-2 text-left">Due Trigger Condition</th>
                                     <th className="p-2 text-left w-20">%</th>
@@ -688,7 +688,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                                                 type="text" 
                                                 value={m.label} 
                                                 onChange={(e) => updateMilestone(i, 'label', e.target.value)}
-                                                className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#0066CC] outline-none" 
+                                                className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#3D52A0] outline-none" 
                                             />
                                         </td>
                                         <td className="p-2">
@@ -696,7 +696,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                                                 rows={2}
                                                 value={m.dueCondition} 
                                                 onChange={(e) => updateMilestone(i, 'dueCondition', e.target.value)}
-                                                className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#0066CC] outline-none resize-none" 
+                                                className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#3D52A0] outline-none resize-none" 
                                             />
                                         </td>
                                         <td className="p-2">
@@ -705,7 +705,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                                                     type="number" 
                                                     value={m.percentage} 
                                                     onChange={(e) => updateMilestone(i, 'percentage', parseFloat(e.target.value) || 0)}
-                                                    className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-bold focus:border-[#0066CC] outline-none text-center" 
+                                                    className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-bold focus:border-[#3D52A0] outline-none text-center" 
                                                 />
                                                 <span className="text-[11px] font-bold text-slate-900">%</span>
                                             </div>
@@ -729,7 +729,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                         <div className="flex justify-between items-center pt-2 border-t border-sky-100">
                             <button 
                                 onClick={addMilestone}
-                                className="px-3 py-1.5 bg-sky-50 border border-sky-200 hover:bg-sky-100/50 text-[#0055B3] text-xs font-bold rounded-lg transition flex items-center gap-1 cursor-pointer"
+                                className="px-3 py-1.5 bg-sky-50 border border-sky-200 hover:bg-sky-100/50 text-[#334486] text-xs font-bold rounded-lg transition flex items-center gap-1 cursor-pointer"
                             >
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
                                 Add Milestone

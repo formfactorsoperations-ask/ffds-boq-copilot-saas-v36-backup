@@ -96,13 +96,13 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
                             placeholder="Search scripts..." 
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="pl-9 pr-4 py-2 w-full border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-[#0066CC] outline-none"
+                            className="pl-9 pr-4 py-2 w-full border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-[#3D52A0] outline-none"
                         />
                     </div>
                     <select 
                         value={filterCategory} 
                         onChange={(e) => setFilterCategory(e.target.value)}
-                        className="w-full sm:w-auto border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0066CC] outline-none"
+                        className="w-full sm:w-auto border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none"
                     >
                         {categories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
@@ -121,7 +121,7 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
                                         {template.title}
                                     </h3>
                                     <div className="text-xs text-slate-500 font-medium flex gap-3 mt-1.5 align-center">
-                                        <span>Phase: <span className="text-[#0066CC] bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">{template.phase}</span></span>
+                                        <span>Phase: <span className="text-[#3D52A0] bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">{template.phase}</span></span>
                                         <span>Category: <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">{template.category}</span></span>
                                     </div>
                                 </div>
@@ -139,7 +139,7 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
                                         />
                                         <button 
                                             onClick={() => handleCopy(resolveTemplate(template.email?.subject || '', vars), `${template.key}_subject`)}
-                                            className="absolute top-3 right-3 text-slate-400 hover:text-[#0066CC] p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 transition-all flex items-center gap-1 text-xs"
+                                            className="absolute top-3 right-3 text-slate-400 hover:text-[#3D52A0] p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 transition-all flex items-center gap-1 text-xs"
                                         >
                                             {copySuccess === `${template.key}_subject` ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                                         </button>
@@ -152,7 +152,7 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
                                         />
                                         <button 
                                             onClick={() => handleCopy(resolveTemplate(template.email?.body || '', vars), `${template.key}_body`)}
-                                            className="absolute top-3 right-3 text-slate-400 hover:text-[#0066CC] p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 transition-all flex items-center gap-1 text-xs"
+                                            className="absolute top-3 right-3 text-slate-400 hover:text-[#3D52A0] p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 transition-all flex items-center gap-1 text-xs"
                                         >
                                             {copySuccess === `${template.key}_body` ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                                         </button>

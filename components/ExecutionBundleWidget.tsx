@@ -41,7 +41,7 @@ export function ExecutionBundleWidget({
       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6">Bundles & Progress</p>
       
       <div className="flex items-center gap-6 mb-8">
-        <div className={`text-6xl font-light tracking-tighter ${progressPct === 100 ? 'text-emerald-500' : progressPct > 0 ? 'text-[#0066CC]' : 'text-slate-400'}`}>
+        <div className={`text-6xl font-light tracking-tighter ${progressPct === 100 ? 'text-emerald-500' : progressPct > 0 ? 'text-[#3D52A0]' : 'text-slate-400'}`}>
           {progressPct}%
         </div>
         <div className="flex flex-col">
@@ -61,8 +61,8 @@ export function ExecutionBundleWidget({
                 <span className="text-[9px] font-bold uppercase tracking-widest text-rose-600/70">Blocked</span>
             </div>
             <div className="flex-1 bg-sky-50/50 border border-sky-100 rounded-2xl p-3 flex flex-col items-center justify-center">
-                <span className="text-xl font-bold text-[#0066CC]">{completedCount}</span>
-                <span className="text-[9px] font-bold uppercase tracking-widest text-[#0066CC]/70">Done</span>
+                <span className="text-xl font-bold text-[#3D52A0]">{completedCount}</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-[#3D52A0]/70">Done</span>
             </div>
         </div>
 
@@ -78,7 +78,7 @@ export function ExecutionBundleWidget({
                 </div>
                 <div className="flex flex-col items-center flex-1">
                     <span className="text-[9px] font-bold uppercase text-slate-400">Comm</span>
-                    <span className={`text-xs font-bold ${commBlocked > 0 ? 'text-[#0066CC]' : 'text-slate-300'}`}>{commBlocked}</span>
+                    <span className={`text-xs font-bold ${commBlocked > 0 ? 'text-[#3D52A0]' : 'text-slate-300'}`}>{commBlocked}</span>
                 </div>
                 <div className="flex flex-col items-center flex-1">
                     <span className="text-[9px] font-bold uppercase text-slate-400">Site</span>
@@ -123,7 +123,7 @@ export function ExecutionBundleWidget({
       </div>
 
       <div className="mt-4 text-right">
-        <span className="text-sm font-semibold text-[#0066CC] flex items-center gap-1 justify-end">
+        <span className="text-sm font-semibold text-[#3D52A0] flex items-center gap-1 justify-end">
           Execution Workspace <ArrowRight className="w-4 h-4"/>
         </span>
       </div>

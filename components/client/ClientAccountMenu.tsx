@@ -108,7 +108,7 @@ export default function ClientAccountMenu({ clientName, projectName, onSignOut }
 
   const field =
     'w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-medium text-slate-900 ' +
-    'placeholder:text-slate-400 focus:bg-white focus:border-[#0066CC] focus:ring-4 focus:ring-[#0066CC]/10 outline-none ' +
+    'placeholder:text-slate-400 focus:bg-white focus:border-[#3D52A0] focus:ring-4 focus:ring-[#3D52A0]/10 outline-none ' +
     'transition-[background-color,border-color,box-shadow] duration-200 disabled:opacity-60';
 
   return (
@@ -119,7 +119,7 @@ export default function ClientAccountMenu({ clientName, projectName, onSignOut }
         aria-expanded={open}
         className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
       >
-        <span className="w-6 h-6 rounded-full bg-[#0066CC] text-white text-[10px] font-black grid place-items-center">
+        <span className="w-6 h-6 rounded-full bg-[#3D52A0] text-white text-[10px] font-black grid place-items-center">
           {initial}
         </span>
         <span className="text-[10px] sm:text-[11px] font-bold text-slate-600 max-w-[130px] truncate">
@@ -224,7 +224,7 @@ export default function ClientAccountMenu({ clientName, projectName, onSignOut }
                         <button
                           type="submit"
                           disabled={busy}
-                          className="flex-1 bg-[#0066CC] hover:bg-[#0055B3] text-white py-2.5 rounded-xl font-bold text-[12.5px] transition-colors disabled:opacity-60 cursor-pointer"
+                          className="flex-1 bg-[#3D52A0] hover:bg-[#334486] text-white py-2.5 rounded-xl font-bold text-[12.5px] transition-colors disabled:opacity-60 cursor-pointer"
                         >
                           {busy ? 'Saving…' : 'Save password'}
                         </button>

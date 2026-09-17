@@ -148,7 +148,7 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
             </button>
             <button
               onClick={add}
-              className="px-4 py-2 rounded-xl bg-[#0066CC] text-white font-bold text-xs hover:bg-[#0055B3] flex items-center gap-2 whitespace-nowrap"
+              className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white font-bold text-xs hover:bg-[#334486] flex items-center gap-2 whitespace-nowrap"
             >
               <UserPlus className="w-3.5 h-3.5" /> Add person
             </button>
@@ -188,7 +188,7 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
                       disabled={!canEdit}
                       onChange={(e) => update(m.id, { name: e.target.value })}
                       placeholder="Full name"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-[#0066CC]/30 focus:border-[#0066CC] outline-none disabled:bg-slate-50"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] outline-none disabled:bg-slate-50"
                     />
                   </div>
                   <div className="md:col-span-3">
@@ -198,7 +198,7 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
                       disabled={!canEdit}
                       onChange={(e) => update(m.id, { email: e.target.value })}
                       placeholder="name@studio.in"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-[#0066CC]/30 focus:border-[#0066CC] outline-none disabled:bg-slate-50"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] outline-none disabled:bg-slate-50"
                     />
                   </div>
                   <div className="md:col-span-3">
@@ -207,7 +207,7 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
                       value={m.role as string}
                       disabled={!canEdit}
                       onChange={(e) => update(m.id, { role: e.target.value as UserRole })}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-[#0066CC]/30 focus:border-[#0066CC] outline-none disabled:bg-slate-50"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] outline-none disabled:bg-slate-50"
                     >
                       {ROLES.map((r) => <option key={r as string} value={r as string}>{r as string}</option>)}
                     </select>
@@ -222,7 +222,7 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
                         disabled={!canEdit}
                         onChange={(e) => update(m.id, { title: e.target.value })}
                         placeholder="Principal Architect"
-                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-[#0066CC]/30 focus:border-[#0066CC] outline-none disabled:bg-slate-50"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] outline-none disabled:bg-slate-50"
                       />
                       {canEdit && !isYou && (
                         confirmRemove === m.id ? (

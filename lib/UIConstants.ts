@@ -14,9 +14,9 @@ export const COLOR_TOKENS = {
   milkyWhite: '#FDFDFB',
   milkyWhiteCream: '#FAFAFA',
   milkyWhiteSubtle: '#F8F9FA',
-  teamIndiaBlue: '#0066CC',
-  teamIndiaBlueGlass: 'rgba(0, 102, 204, 0.9)',
-  teamIndiaBlueHover: '#0055B3',
+  teamIndiaBlue: '#3D52A0',
+  teamIndiaBlueGlass: 'rgba(61, 82, 160, 0.9)',
+  teamIndiaBlueHover: '#334486',
   goldAccent: '#C5A85C',
   goldAccentHover: '#B4964B',
   navyDark: '#0F172A',
@@ -56,7 +56,7 @@ export const UI_STYLES = {
     goldHairline: "border-[#C5A85C]",
     skyGlass: "border-sky-300/30",
     dark: "border-slate-800",
-    focus: "focus:ring-2 focus:ring-[#0066CC]/50 focus:border-[#0066CC]",
+    focus: "focus:ring-2 focus:ring-[#3D52A0]/50 focus:border-[#3D52A0]",
   },
 
   // Padding with strict horizontal padding = 2x vertical padding
@@ -67,7 +67,7 @@ export const UI_STYLES = {
     lg: "px-8 py-4 text-base rounded-xl font-semibold inline-flex items-center justify-center gap-3 transition-all active:scale-[0.98]",
 
     // Theme-specific button variants with glass polished finish
-    primary: "bg-[#0066CC]/90 hover:bg-[#0055B3] text-white backdrop-blur-md border border-white/20 shadow-md shadow-sky-500/20 transition-all",
+    primary: "bg-[#3D52A0]/90 hover:bg-[#334486] text-white backdrop-blur-md border border-white/20 shadow-md shadow-sky-500/20 transition-all",
     secondary: "bg-[#FDFDFB] hover:bg-slate-50 text-slate-700 border border-slate-200/80 transition-colors shadow-sm",
     accent: "bg-[#C5A85C] hover:bg-[#B4964B] text-[#FDFDFB] transition-colors shadow-sm",
     ghost: "text-slate-600 hover:bg-slate-100 transition-colors",
@@ -91,7 +91,7 @@ export const UI_STYLES = {
     base: "p-6 bg-[#FDFDFB] border border-slate-200/80 rounded-xl shadow-sm",
     inner: "p-4 bg-slate-50/50 rounded-lg",
     card: "p-6 bg-[#FDFDFB] border border-slate-200/80 rounded-xl shadow-sm hover:shadow-md transition-all duration-200",
-    glassBanner: "p-6 bg-[#0066CC]/90 backdrop-blur-md text-white border border-white/20 rounded-xl shadow-lg shadow-sky-600/20",
+    glassBanner: "p-6 bg-[#3D52A0]/90 backdrop-blur-md text-white border border-white/20 rounded-xl shadow-lg shadow-sky-600/20",
     header: "p-4 bg-[#FDFDFB] border-b border-slate-200/80 flex items-center justify-between",
   },
 };

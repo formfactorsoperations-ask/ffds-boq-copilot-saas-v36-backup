@@ -202,7 +202,7 @@ export function MomAcknowledgePage({ token }: { token: string }) {
                 <div className="fixed top-4 right-4 bg-white p-4 rounded-xl shadow-xl flex flex-col gap-2 no-print">
                    <p className="font-bold text-slate-800">Generating PDF...</p>
                    <p className="text-xs text-slate-500">Please wait or click download manually.</p>
-                   <button onClick={handlePrintPdf} className="bg-[#0066CC] text-white rounded px-3 py-1.5 text-sm font-bold mt-2">Download Now</button>
+                   <button onClick={handlePrintPdf} className="bg-[#3D52A0] text-white rounded px-3 py-1.5 text-sm font-bold mt-2">Download Now</button>
                 </div>
             </div>
         );

@@ -167,7 +167,7 @@ export default function PortalOverview({
                 ) : null}
                 <button
                   onClick={() => onRunAction(item)}
-                  className="px-3.5 py-1.5 rounded-lg text-[11px] font-bold bg-[#0066CC] text-white hover:bg-[#0055B3] transition-colors cursor-pointer shrink-0"
+                  className="px-3.5 py-1.5 rounded-lg text-[11px] font-bold bg-[#3D52A0] text-white hover:bg-[#334486] transition-colors cursor-pointer shrink-0"
                 >
                   {item.actionLabel || 'Review'}
                 </button>
@@ -186,7 +186,7 @@ export default function PortalOverview({
           ) : (
             <button
               onClick={onClearFilter}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0055B3] bg-sky-50 border border-sky-200 rounded-full px-2.5 py-1 hover:bg-sky-100 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#334486] bg-sky-50 border border-sky-200 rounded-full px-2.5 py-1 hover:bg-sky-100 transition-colors cursor-pointer"
             >
               Showing one kind only — clear filter
               <span aria-hidden="true">×</span>
@@ -206,7 +206,7 @@ export default function PortalOverview({
           <h2 className="text-base font-bold text-slate-900">Money</h2>
           <button
             onClick={() => onOpenTab('financials')}
-            className="text-xs font-bold text-[#0066CC] hover:underline cursor-pointer"
+            className="text-xs font-bold text-[#3D52A0] hover:underline cursor-pointer"
           >
             See all payments
           </button>
@@ -281,7 +281,7 @@ export default function PortalOverview({
             )}
             <div className="min-w-0">
               <p className="text-[15px] font-bold text-slate-900 leading-tight">{studio.name}</p>
-              {studio.tagline && <p className="text-[11px] text-[#0055B3] font-semibold mt-0.5">{studio.tagline}</p>}
+              {studio.tagline && <p className="text-[11px] text-[#334486] font-semibold mt-0.5">{studio.tagline}</p>}
             </div>
           </div>
 
@@ -295,7 +295,7 @@ export default function PortalOverview({
               </p>
               {studio.pmName && (
                 <div className="flex items-center gap-2.5 mt-4">
-                  <span className="w-9 h-9 rounded-full bg-[#0066CC] text-white grid place-items-center text-[11px] font-black shrink-0">
+                  <span className="w-9 h-9 rounded-full bg-[#3D52A0] text-white grid place-items-center text-[11px] font-black shrink-0">
                     {studio.pmName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
                   </span>
                   <div className="min-w-0">
@@ -352,7 +352,7 @@ export default function PortalOverview({
                   {studio.credentials.map(c => (
                     <span
                       key={c}
-                      className="text-[10px] font-bold rounded-full px-2.5 py-1 bg-sky-50 text-[#0055B3] border border-sky-100"
+                      className="text-[10px] font-bold rounded-full px-2.5 py-1 bg-sky-50 text-[#334486] border border-sky-100"
                     >
                       {c}
                     </span>
@@ -375,7 +375,7 @@ export default function PortalOverview({
                         href={/^https?:\/\//.test(studio.website) ? studio.website : `https://${studio.website}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-[11px] font-bold text-[#0055B3] hover:underline break-all"
+                        className="flex items-center gap-1.5 text-[11px] font-bold text-[#334486] hover:underline break-all"
                       >
                         <Globe className="w-3.5 h-3.5 shrink-0" />
                         {studio.website.replace(/^https?:\/\//, '')}
@@ -386,7 +386,7 @@ export default function PortalOverview({
                         href={/^https?:\/\//.test(studio.instagramUrl) ? studio.instagramUrl : `https://${studio.instagramUrl}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-[11px] font-bold text-[#0055B3] hover:underline break-all"
+                        className="flex items-center gap-1.5 text-[11px] font-bold text-[#334486] hover:underline break-all"
                       >
                         <AtSign className="w-3.5 h-3.5 shrink-0" />
                         {studio.instagramUrl.replace(/^https?:\/\/(www\.)?instagram\.com\//, '@').replace(/\/$/, '')}
@@ -398,7 +398,7 @@ export default function PortalOverview({
 
               <button
                 onClick={onContactStudio}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#0066CC] text-white text-xs font-bold hover:bg-[#0055B3] transition-colors cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486] transition-colors cursor-pointer"
               >
                 Message your studio
               </button>

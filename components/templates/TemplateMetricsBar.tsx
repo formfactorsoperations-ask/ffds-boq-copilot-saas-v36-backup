@@ -96,7 +96,7 @@ export const TemplateMetricsBar: React.FC<TemplateMetricsBarProps> = ({
                     key={trade.name}
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                       isCovered
-                        ? 'bg-[#0066CC]/10 text-[#0055B3] border-[#0066CC]/25'
+                        ? 'bg-[#3D52A0]/10 text-[#334486] border-[#3D52A0]/25'
                         : 'bg-slate-100 text-slate-400 border-slate-200'
                     }`}
                   >
@@ -112,7 +112,7 @@ export const TemplateMetricsBar: React.FC<TemplateMetricsBarProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={onOpenAiArchitect}
-            className="px-3.5 py-1.5 bg-[#0066CC] text-white rounded-xl text-xs font-bold hover:bg-[#0055B3] transition-colors flex items-center gap-1.5"
+            className="px-3.5 py-1.5 bg-[#3D52A0] text-white rounded-xl text-xs font-bold hover:bg-[#334486] transition-colors flex items-center gap-1.5"
           >
             <Sparkles className="w-3.5 h-3.5" />
             AI Architect

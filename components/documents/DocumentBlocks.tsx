@@ -70,7 +70,7 @@ const QueryHandle: React.FC<QueryHandleProps> = ({ onQuery, refId, excerpt }) =>
     <button
       type="button"
       onClick={() => onQuery(refId, excerpt)}
-      className="doc-query-handle opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-[#0066CC] hover:bg-[#0066CC]/10 cursor-pointer"
+      className="doc-query-handle opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-[#3D52A0] hover:bg-[#3D52A0]/10 cursor-pointer"
       title={`Ask a question about clause ${refId}`}
     >
       <MessageCircleQuestion className="w-3.5 h-3.5" />
@@ -107,7 +107,7 @@ export const CalloutBlock: React.FC<BlockProps> = ({ block, settings, studioName
 
   return (
     <div
-      className={`group ${isHighlight ? 'highlight bg-amber-50 border-amber-500' : 'principle bg-slate-50 border-[#0066CC]'} ${
+      className={`group ${isHighlight ? 'highlight bg-amber-50 border-amber-500' : 'principle bg-slate-50 border-[#3D52A0]'} ${
         highlighted ? 'ring-2 ring-amber-400' : ''
       } highlight-box border-l-4 py-3 pl-4 pr-3 rounded-r-md my-4 shadow-sm`}
       style={{ pageBreakInside: 'avoid' }}

@@ -286,13 +286,13 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
                                     <div className="flex justify-between items-center group bg-slate-50 p-2 -mx-2 rounded-lg border border-slate-100">
                                         <div>
                                             <p className="text-sm font-bold text-slate-800">Project Management (PMC)</p>
-                                            <p className="text-xs text-[#0066CC]/90">Site Supervision & Vendor Coordination</p>
+                                            <p className="text-xs text-[#3D52A0]/90">Site Supervision & Vendor Coordination</p>
                                         </div>
                                         <div className="text-right">
                                             <div className="font-mono font-bold text-slate-800 text-lg">
                                                 {formatCurrency(pmcTotal)}
                                             </div>
-                                            <p className="text-xs text-[#0066CC] mt-0.5">
+                                            <p className="text-xs text-[#3D52A0] mt-0.5">
                                                 {area} sqft × ₹{pmcRate}/sqft
                                             </p>
                                         </div>

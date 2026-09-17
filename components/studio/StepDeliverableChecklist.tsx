@@ -91,7 +91,7 @@ export function StepDeliverableChecklist({ step, projectId, onUpdateDeliverable,
             {/* Header */}
             <div className="bg-slate-50 px-6 py-4 flex items-center justify-between border-b border-slate-200">
                 <div className="flex items-center gap-3">
-                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-[#0055B3] font-bold text-sm">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-[#334486] font-bold text-sm">
                         {step.stepNumber}
                     </span>
                     <h3 className="font-bold text-slate-800">{step.title}</h3>
@@ -131,7 +131,7 @@ export function StepDeliverableChecklist({ step, projectId, onUpdateDeliverable,
                                 </div>
                                 <div className="ml-4 flex-shrink-0 flex items-center gap-2">
                                     {d.fileUrl ? (
-                                        <a href={d.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-[#0066CC] hover:text-[#0055B3] bg-sky-50 px-3 py-1.5 rounded-lg font-medium transition-colors">
+                                        <a href={d.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-[#3D52A0] hover:text-[#334486] bg-sky-50 px-3 py-1.5 rounded-lg font-medium transition-colors">
                                             <Download className="w-4 h-4" />
                                             {d.fileName}
                                         </a>
@@ -163,7 +163,7 @@ export function StepDeliverableChecklist({ step, projectId, onUpdateDeliverable,
                             
                             {uploadingId === d.id && (
                                 <div className="mt-4 bg-slate-100 h-2 rounded-full overflow-hidden">
-                                     <div className="bg-[#0066CC] h-full" style={{ width: `${uploadProgress}%` }}></div>
+                                     <div className="bg-[#3D52A0] h-full" style={{ width: `${uploadProgress}%` }}></div>
                                 </div>
                             )}
                         </div>
@@ -194,7 +194,7 @@ export function StepDeliverableChecklist({ step, projectId, onUpdateDeliverable,
                                 <button
                                     onClick={() => setShowConfirm(true)}
                                     disabled={!canComplete}
-                                    className="px-6 py-3 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 disabled:bg-slate-300 text-white font-bold rounded-xl disabled:cursor-not-allowed transition-colors shadow-sm"
+                                    className="px-6 py-3 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 disabled:bg-slate-300 text-white font-bold rounded-xl disabled:cursor-not-allowed transition-colors shadow-sm"
                                 >
                                     Mark Step Complete
                                 </button>

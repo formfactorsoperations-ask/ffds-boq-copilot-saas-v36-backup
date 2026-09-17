@@ -110,7 +110,7 @@ export default function ProposalAcceptanceCard({ projectContext, setProjectConte
         {!open && (
           <button
             onClick={() => setOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-[#0066CC] hover:bg-[#0055B3] text-white text-[11.5px] font-bold cursor-pointer transition-colors shrink-0"
+            className="px-3.5 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] text-white text-[11.5px] font-bold cursor-pointer transition-colors shrink-0"
           >
             Record acceptance
           </button>
@@ -137,8 +137,8 @@ export default function ProposalAcceptanceCard({ projectContext, setProjectConte
                       onClick={() => setVia(c)}
                       aria-pressed={via === c}
                       className={`px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer border transition-colors ${
-                        via === c ? 'bg-sky-50 text-[#0055B3] border-sky-200'
-                                  : 'text-slate-500 border-slate-200 hover:border-sky-300 hover:text-[#0055B3]'
+                        via === c ? 'bg-sky-50 text-[#334486] border-sky-200'
+                                  : 'text-slate-500 border-slate-200 hover:border-sky-300 hover:text-[#334486]'
                       }`}
                     >
                       {CHANNEL_LABEL[c].replace('Accepted ', '')}
@@ -154,7 +154,7 @@ export default function ProposalAcceptanceCard({ projectContext, setProjectConte
                     value={acceptedBy}
                     onChange={e => setAcceptedBy(e.target.value)}
                     placeholder="Name of the person at the client"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-[12px] font-medium outline-none focus:border-[#0066CC] transition-colors"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-[12px] font-medium outline-none focus:border-[#3D52A0] transition-colors"
                   />
                 </div>
                 <div>
@@ -163,7 +163,7 @@ export default function ProposalAcceptanceCard({ projectContext, setProjectConte
                     type="date"
                     value={at}
                     onChange={e => setAt(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-[12px] font-medium outline-none focus:border-[#0066CC] transition-colors"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-[12px] font-medium outline-none focus:border-[#3D52A0] transition-colors"
                   />
                 </div>
               </div>
@@ -181,7 +181,7 @@ export default function ProposalAcceptanceCard({ projectContext, setProjectConte
                   <select
                     value={tierId}
                     onChange={e => setTierId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-[12px] font-medium outline-none focus:border-[#0066CC] transition-colors"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-[12px] font-medium outline-none focus:border-[#3D52A0] transition-colors"
                   >
                     {tiers.map(t => (
                       <option key={t.id} value={t.id}>
@@ -200,7 +200,7 @@ export default function ProposalAcceptanceCard({ projectContext, setProjectConte
                   value={reference}
                   onChange={e => setReference(e.target.value)}
                   placeholder={via === 'verbal' ? 'e.g. Confirmed on call with Mr Naik, 4pm' : 'e.g. Email subject, or document reference'}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-[12px] font-medium outline-none focus:border-[#0066CC] transition-colors"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-[12px] font-medium outline-none focus:border-[#3D52A0] transition-colors"
                 />
                 {via === 'verbal' && (
                   <p className="text-[10.5px] text-slate-400 font-medium mt-1">
@@ -219,7 +219,7 @@ export default function ProposalAcceptanceCard({ projectContext, setProjectConte
                 <button
                   onClick={save}
                   disabled={!canSave}
-                  className="px-4 py-2 rounded-xl text-[11.5px] font-bold text-white bg-[#0066CC] hover:bg-[#0055B3]
+                  className="px-4 py-2 rounded-xl text-[11.5px] font-bold text-white bg-[#3D52A0] hover:bg-[#334486]
                              disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed cursor-pointer transition-colors"
                 >
                   Record acceptance

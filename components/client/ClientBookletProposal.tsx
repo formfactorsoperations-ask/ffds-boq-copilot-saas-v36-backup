@@ -190,7 +190,7 @@ const EdPhaseCards: React.FC<{
 
   const btn =
     'px-1.5 py-0.5 text-[10px] font-bold rounded border border-slate-200 bg-white ' +
-    'text-slate-500 hover:text-[#0055B3] hover:border-[#0066CC]/40 transition-colors';
+    'text-slate-500 hover:text-[#334486] hover:border-[#3D52A0]/40 transition-colors';
 
   const field = (value: string, onCommit: (v: string) => void, className: string) =>
     ctl.on ? (
@@ -290,7 +290,7 @@ const EdPairList: React.FC<{
   const isInclude = variant === 'include';
   const btn =
     'px-1.5 py-0.5 text-[10px] font-bold rounded border border-slate-200 bg-white ' +
-    'text-slate-500 hover:text-[#0055B3] hover:border-[#0066CC]/40 transition-colors';
+    'text-slate-500 hover:text-[#334486] hover:border-[#3D52A0]/40 transition-colors';
 
   const row = (it: { title: string; desc?: string }, i: number) => (
     <li key={i} className={`group/item flex items-start gap-3 ${isInclude ? 'text-slate-700' : 'text-slate-500'}`}>
@@ -418,7 +418,7 @@ const EdList: React.FC<{
 
   const btn =
     'px-1.5 py-0.5 text-[10px] font-bold rounded border border-slate-200 bg-white ' +
-    'text-slate-500 hover:text-[#0055B3] hover:border-[#0066CC]/40 transition-colors';
+    'text-slate-500 hover:text-[#334486] hover:border-[#3D52A0]/40 transition-colors';
 
   return (
     <div className="ff-edlist group/list relative">
@@ -2380,7 +2380,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                         <div className="mt-6 pt-6 border-t border-slate-100">
                             <p className="text-[10px] text-slate-400 text-center italic mb-4"><Ed k="1a8a34c3" ctl={edCtl}>Not covered by this fee: layouts, 3D views, GFC drawings, SOF and final BOQ. These commence under main engagement design stages.</Ed></p>
-                            <button className="w-full bg-[#0066CC] text-white py-3.5 rounded-xl font-bold hover:bg-[#0055B3] transition-all text-sm uppercase tracking-wider shadow-md">
+                            <button className="w-full bg-[#3D52A0] text-white py-3.5 rounded-xl font-bold hover:bg-[#334486] transition-all text-sm uppercase tracking-wider shadow-md">
                                 Initiate Turnkey Planning
                             </button>
                         </div>
@@ -2720,7 +2720,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
             {/* ================= MODAL: EDIT SPECIFICATIONS ================= */}
             {isEditingSpecs && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm no-print">
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm no-print">
                     <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                             <div>
@@ -2758,7 +2758,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                             </button>
                             <button
                                 onClick={saveSpecs}
-                                className="flex items-center gap-2 px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-lg transition duration-150 shadow-sm"
+                                className="flex items-center gap-2 px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold rounded-lg transition duration-150 shadow-sm"
                             >
                                 <Save className="w-3.5 h-3.5" />
                                 Save Overrides

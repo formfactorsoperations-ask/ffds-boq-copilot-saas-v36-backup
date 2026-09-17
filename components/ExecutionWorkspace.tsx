@@ -737,7 +737,7 @@ const ExecutionWorkspace = ({
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-50 border border-sky-200/60 text-[#0066CC] rounded-full text-xs font-bold uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-50 border border-sky-200/60 text-[#3D52A0] rounded-full text-xs font-bold uppercase tracking-wider">
                 <HardHat className="w-3.5 h-3.5" />
                 Site Control Room
               </span>
@@ -792,7 +792,7 @@ const ExecutionWorkspace = ({
 
             <button
               onClick={handleAddBundle}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[#0066CC] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-2 bg-[#3D52A0] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Add Package
@@ -849,12 +849,12 @@ const ExecutionWorkspace = ({
           </div>
 
           <div className="bg-sky-50/50 border border-sky-100 rounded-2xl p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[#0066CC]">Completed</div>
-            <div className="text-xl font-black text-[#0066CC] mt-1">{completedCount}</div>
-            <div className="text-[10px] text-[#0066CC]/70 font-medium mt-0.5">Signed off packages</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#3D52A0]">Completed</div>
+            <div className="text-xl font-black text-[#3D52A0] mt-1">{completedCount}</div>
+            <div className="text-[10px] text-[#3D52A0]/70 font-medium mt-0.5">Signed off packages</div>
           </div>
 
-          <div className="bg-[#0066CC] text-white rounded-2xl p-3.5 shadow-xs">
+          <div className="bg-[#3D52A0] text-white rounded-2xl p-3.5 shadow-xs">
             <div className="text-[10px] font-bold uppercase tracking-wider text-sky-100">Total Deliverables QA</div>
             <div className="text-xl font-black text-white mt-1">{overallItemProgress}%</div>
             <div className="text-[10px] text-sky-100 font-medium mt-0.5">
@@ -870,7 +870,7 @@ const ExecutionWorkspace = ({
               onClick={() => setActiveSubView("packages")}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeSubView === "packages"
-                  ? "bg-white text-[#0066CC] shadow-xs border border-slate-200/60"
+                  ? "bg-white text-[#3D52A0] shadow-xs border border-slate-200/60"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -882,7 +882,7 @@ const ExecutionWorkspace = ({
               onClick={() => setActiveSubView("room-progress")}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeSubView === "room-progress"
-                  ? "bg-white text-[#0066CC] shadow-xs border border-slate-200/60"
+                  ? "bg-white text-[#3D52A0] shadow-xs border border-slate-200/60"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -894,7 +894,7 @@ const ExecutionWorkspace = ({
               onClick={() => setActiveSubView("controls")}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeSubView === "controls"
-                  ? "bg-white text-[#0066CC] shadow-xs border border-slate-200/60"
+                  ? "bg-white text-[#3D52A0] shadow-xs border border-slate-200/60"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -934,7 +934,7 @@ const ExecutionWorkspace = ({
                 placeholder="Search packages, trades, or BOQ deliverables..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0066CC] focus:bg-white transition-all"
+                className="w-full pl-10 pr-4 py-2 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3D52A0] focus:bg-white transition-all"
               />
               {searchQuery && (
                 <button
@@ -952,7 +952,7 @@ const ExecutionWorkspace = ({
                 onClick={() => setStatusFilter("all")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   statusFilter === "all"
-                    ? "bg-[#0066CC] text-white"
+                    ? "bg-[#3D52A0] text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
@@ -1038,7 +1038,7 @@ const ExecutionWorkspace = ({
                   key={trade}
                   onClick={() => setSelectedTrade(trade)}
                   className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors ${
-                    selectedTrade === trade ? "bg-[#0066CC] text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                    selectedTrade === trade ? "bg-[#3D52A0] text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
                 >
                   {trade}
@@ -1097,7 +1097,7 @@ const ExecutionWorkspace = ({
                           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Package Code</label>
                           <input
                             type="text"
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#0066CC]"
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#3D52A0]"
                             value={editForm.code || ""}
                             onChange={(e) => setEditForm({ ...editForm, code: e.target.value })}
                           />
@@ -1106,7 +1106,7 @@ const ExecutionWorkspace = ({
                           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Package Name</label>
                           <input
                             type="text"
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#0066CC]"
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#3D52A0]"
                             value={editForm.name || ""}
                             onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                           />
@@ -1116,7 +1116,7 @@ const ExecutionWorkspace = ({
                         <div>
                           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Ops Act Today</label>
                           <textarea
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-[#0066CC] h-20 resize-none"
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-[#3D52A0] h-20 resize-none"
                             value={editForm.actToday || ""}
                             onChange={(e) => setEditForm({ ...editForm, actToday: e.target.value })}
                           />
@@ -1124,7 +1124,7 @@ const ExecutionWorkspace = ({
                         <div>
                           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Breaks Tomorrow</label>
                           <textarea
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-[#0066CC] h-20 resize-none"
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-[#3D52A0] h-20 resize-none"
                             value={editForm.breaksTomorrow || ""}
                             onChange={(e) => setEditForm({ ...editForm, breaksTomorrow: e.target.value })}
                           />
@@ -1139,7 +1139,7 @@ const ExecutionWorkspace = ({
                         </button>
                         <button
                           onClick={() => handleSaveBundle(bundle.id)}
-                          className="flex items-center gap-1.5 px-6 py-2 bg-[#0066CC] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase shadow-sm"
+                          className="flex items-center gap-1.5 px-6 py-2 bg-[#3D52A0] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase shadow-sm"
                         >
                           <Save className="w-4 h-4" /> Save Package
                         </button>
@@ -1174,7 +1174,7 @@ const ExecutionWorkspace = ({
                             {bundle.name}
                             <button
                               onClick={() => { setEditingBundleId(bundle.id); setEditForm(bundle); }}
-                              className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-[#0066CC] rounded transition-opacity"
+                              className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-[#3D52A0] rounded transition-opacity"
                               title="Edit Package"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
@@ -1241,7 +1241,7 @@ const ExecutionWorkspace = ({
                         {/* Linked Deliverables & Progress summary strip */}
                         <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
                           <span className="flex items-center gap-1.5 font-bold text-slate-700">
-                            <PackageCheck className="w-3.5 h-3.5 text-[#0066CC]" />
+                            <PackageCheck className="w-3.5 h-3.5 text-[#3D52A0]" />
                             {items.length} BOQ Deliverables
                           </span>
 
@@ -1263,7 +1263,7 @@ const ExecutionWorkspace = ({
                             <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
                               <div
                                 className={`h-full transition-all duration-500 ${
-                                  itemProgress === 100 ? 'bg-emerald-500' : itemProgress > 50 ? 'bg-[#0066CC]' : 'bg-amber-400'
+                                  itemProgress === 100 ? 'bg-emerald-500' : itemProgress > 50 ? 'bg-[#3D52A0]' : 'bg-amber-400'
                                 }`}
                                 style={{ width: `${itemProgress}%` }}
                               />
@@ -1274,7 +1274,7 @@ const ExecutionWorkspace = ({
 
                           <button
                             onClick={() => toggleBundleExpand(bundle.id)}
-                            className="text-xs font-bold text-[#0066CC] hover:underline flex items-center gap-1 cursor-pointer"
+                            className="text-xs font-bold text-[#3D52A0] hover:underline flex items-center gap-1 cursor-pointer"
                           >
                             {isExpanded ? 'Hide Deliverables' : `View ${items.length} Items`}
                             {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1357,7 +1357,7 @@ const ExecutionWorkspace = ({
                               const next = bundlesToRender.map(b => b.id === bundle.id ? { ...b, status: 'active' as const } : b);
                               updateBundles(next);
                             }}
-                            className="flex items-center justify-center gap-1.5 px-4 py-1.5 bg-[#0066CC] hover:bg-[#0052A3] text-white text-[11px] font-semibold rounded-lg transition-colors cursor-pointer"
+                            className="flex items-center justify-center gap-1.5 px-4 py-1.5 bg-[#3D52A0] hover:bg-[#0052A3] text-white text-[11px] font-semibold rounded-lg transition-colors cursor-pointer"
                           >
                             <PlayCircle className="w-3.5 h-3.5" />
                             Start execution
@@ -1378,7 +1378,7 @@ const ExecutionWorkspace = ({
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/60 pb-3">
                             <div>
                               <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                                <PackageCheck className="w-4 h-4 text-[#0066CC]" />
+                                <PackageCheck className="w-4 h-4 text-[#3D52A0]" />
                                 Linked BOQ Deliverables ({items.length})
                               </h4>
                               <p className="text-[11px] text-slate-500">
@@ -1392,7 +1392,7 @@ const ExecutionWorkspace = ({
                                 actions, so the common case stays one click. */}
                             {selectedCount > 0 ? (
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[11px] font-black text-[#0055B3] tabular-nums">
+                                <span className="text-[11px] font-black text-[#334486] tabular-nums">
                                   {selectedCount} selected
                                 </span>
                                 <button
@@ -1460,7 +1460,7 @@ const ExecutionWorkspace = ({
                                   <div
                                     key={itemId}
                                     className={`p-3.5 rounded-xl border transition-all ${
-                                      isPicked ? 'ring-2 ring-[#0066CC] ring-offset-1 ' : ''
+                                      isPicked ? 'ring-2 ring-[#3D52A0] ring-offset-1 ' : ''
                                     }${
                                       currentItemStatus === 'completed'
                                         ? 'bg-emerald-50/50 border-emerald-200'
@@ -1480,7 +1480,7 @@ const ExecutionWorkspace = ({
                                           handleToggleItemSelection(bundle.id, iIdx, orderedItemIds, !!ev.shiftKey);
                                         }}
                                         aria-label={`Select ${item.name}`}
-                                        className="mt-0.5 w-4 h-4 shrink-0 accent-[#0066CC] cursor-pointer"
+                                        className="mt-0.5 w-4 h-4 shrink-0 accent-[#3D52A0] cursor-pointer"
                                       />
                                       <div className="space-y-1 min-w-0 flex-1">
                                         <div className="flex items-center gap-2">
@@ -1516,7 +1516,7 @@ const ExecutionWorkspace = ({
                                           onChange={(e) => handleItemStatusChange(itemId, e.target.value as ItemExecStatus)}
                                           aria-label={`Execution status for ${item.name}`}
                                           title="Set execution status"
-                                          className={`px-2 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer border outline-none focus:ring-2 focus:ring-[#0066CC]/40 ${
+                                          className={`px-2 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer border outline-none focus:ring-2 focus:ring-[#3D52A0]/40 ${
                                             currentItemStatus === 'completed'
                                               ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
                                               : currentItemStatus === 'in_progress'
@@ -1554,7 +1554,7 @@ const ExecutionWorkspace = ({
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
               <div>
                 <h3 className="font-extrabold text-slate-900 text-lg tracking-tight flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-[#0066CC]" />
+                  <Building2 className="w-5 h-5 text-[#3D52A0]" />
                   Live Room Progress Matrix
                 </h3>
                 <p className="text-slate-500 text-xs mt-0.5">
@@ -1580,7 +1580,7 @@ const ExecutionWorkspace = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
                 <h3 className="font-extrabold text-slate-900 text-lg tracking-tight flex items-center gap-2">
-                  <Sliders className="w-5 h-5 text-[#0066CC]" />
+                  <Sliders className="w-5 h-5 text-[#3D52A0]" />
                   Site Controls, Supervisors & Key Milestones
                 </h3>
                 <p className="text-slate-500 text-xs mt-0.5">
@@ -1596,7 +1596,7 @@ const ExecutionWorkspace = ({
                   type="date"
                   value={projectContext?.targetHandoverDate || ''}
                   onChange={e => handleContextChange('targetHandoverDate', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#0066CC] outline-none transition-all shadow-2xs"
+                  className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#3D52A0] outline-none transition-all shadow-2xs"
                 />
               </div>
 
@@ -1606,7 +1606,7 @@ const ExecutionWorkspace = ({
                   type="date"
                   value={projectContext?.sofFreezeDate || ''}
                   onChange={e => handleContextChange('sofFreezeDate', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#0066CC] outline-none transition-all shadow-2xs"
+                  className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#3D52A0] outline-none transition-all shadow-2xs"
                 />
               </div>
 
@@ -1617,7 +1617,7 @@ const ExecutionWorkspace = ({
                     type="number"
                     value={projectContext?.procurementLeadTimeWeeks || 4}
                     onChange={e => handleContextChange('procurementLeadTimeWeeks', Number(e.target.value) || 0)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#0066CC] outline-none transition-all pr-12 shadow-2xs"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#3D52A0] outline-none transition-all pr-12 shadow-2xs"
                   />
                   <span className="absolute right-4 text-slate-400 text-xs font-bold">Wks</span>
                 </div>
@@ -1629,7 +1629,7 @@ const ExecutionWorkspace = ({
                   <select
                     value={projectContext?.assignedSupervisors?.[0] || ''}
                     onChange={e => handleContextChange('assignedSupervisors', [e.target.value])}
-                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#0066CC] outline-none appearance-none cursor-pointer pr-10 shadow-2xs"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#3D52A0] outline-none appearance-none cursor-pointer pr-10 shadow-2xs"
                   >
                     <option value="">Unassigned (Reviewing...)</option>
                     {siteSupervisors.map((s: any) => (
@@ -1678,7 +1678,7 @@ const ExecutionWorkspace = ({
                   onClick={() => handleContextChange('handoverDate', projectContext?.handoverDate ? null : Date.now())}
                   className={`py-3 px-4 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-2 shadow-2xs cursor-pointer ${
                     projectContext?.handoverDate
-                      ? 'bg-[#0066CC] border-[#0066CC] text-white shadow-sm'
+                      ? 'bg-[#3D52A0] border-[#3D52A0] text-white shadow-sm'
                       : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                   }`}
                 >

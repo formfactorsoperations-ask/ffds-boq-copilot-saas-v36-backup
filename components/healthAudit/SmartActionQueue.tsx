@@ -145,7 +145,7 @@ export const SmartActionQueue: React.FC<SmartActionQueueProps> = ({
           >
             <div>
               <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-[10px] font-bold font-mono tracking-widest uppercase px-2.5 py-0.5 rounded-md bg-[#0066CC] text-white">
+                <span className="text-[10px] font-bold font-mono tracking-widest uppercase px-2.5 py-0.5 rounded-md bg-[#3D52A0] text-white">
                   {action.badge}
                 </span>
                 <span className="text-xs font-bold text-emerald-600 font-mono">
@@ -167,7 +167,7 @@ export const SmartActionQueue: React.FC<SmartActionQueueProps> = ({
                   onClick={handleAutoFixMargins}
                   disabled={locked || activeFixing === 'auto_fix_margins'}
                   title={locked ? lockReason : undefined}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold rounded-xl shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   {activeFixing === 'auto_fix_margins' ? 'Normalizing Margins...' : '1-Click Auto-Normalize to 28%'}
@@ -179,7 +179,7 @@ export const SmartActionQueue: React.FC<SmartActionQueueProps> = ({
                   onClick={() => handleInjectTrade(action.data?.missingTrades?.[0] || 'Surface Protection')}
                   disabled={locked || activeFixing === 'inject_trade'}
                   title={locked ? lockReason : undefined}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold rounded-xl shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Layers className="w-3.5 h-3.5" />
                   {activeFixing === 'inject_trade' ? 'Injecting Pack...' : `1-Click Auto-Inject ${action.data?.missingTrades?.[0] || 'Trade'}`}

@@ -37,7 +37,7 @@ const CATEGORY_COLORS: Record<string, string> = {
     'painting': 'bg-pink-100 text-pink-700',
     'finish': 'bg-purple-100 text-purple-700',
     'hvac': 'bg-cyan-100 text-cyan-700',
-    'default': 'bg-sky-50 text-[#0055B3]'
+    'default': 'bg-sky-50 text-[#334486]'
 };
 
 const getCategoryStyle = (category: string) => {
@@ -213,14 +213,14 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
         whileHover={{ y: -2, transition: { duration: 0.2 } }}
-        className={`bg-white rounded-md border transition-all duration-200 hover:shadow-md ${isSelected ? 'ring-2 ring-[#0066CC] border-transparent shadow-sm' : 'border-slate-300 hover:border-slate-400'} flex flex-col overflow-hidden relative group`}
+        className={`bg-white rounded-md border transition-all duration-200 hover:shadow-md ${isSelected ? 'ring-2 ring-[#3D52A0] border-transparent shadow-sm' : 'border-slate-300 hover:border-slate-400'} flex flex-col overflow-hidden relative group`}
     >
         {/* Hover Actions */}
         <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200 flex gap-1.5 z-10">
-             <MotionButton whileHover={{scale: 1.05}} whileTap={{scale: 0.95}} onClick={() => setIsAdvancedOpen(!isAdvancedOpen)} className={`p-1.5 rounded-md shadow-sm border transition-colors flex items-center justify-center ${isAdvancedOpen ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-[#0066CC]'}`} title="Advanced Settings">
+             <MotionButton whileHover={{scale: 1.05}} whileTap={{scale: 0.95}} onClick={() => setIsAdvancedOpen(!isAdvancedOpen)} className={`p-1.5 rounded-md shadow-sm border transition-colors flex items-center justify-center ${isAdvancedOpen ? 'bg-[#3D52A0] text-white border-[#3D52A0]' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-[#3D52A0]'}`} title="Advanced Settings">
                 {isAdvancedOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </MotionButton>
-             <MotionButton whileHover={{scale: 1.05}} whileTap={{scale: 0.95}} onClick={() => onViewInBank(item.bankId)} className="p-1.5 bg-white text-slate-400 rounded-md shadow-sm border border-slate-200 hover:border-slate-300 hover:text-[#0066CC]" title="View in Bank">
+             <MotionButton whileHover={{scale: 1.05}} whileTap={{scale: 0.95}} onClick={() => onViewInBank(item.bankId)} className="p-1.5 bg-white text-slate-400 rounded-md shadow-sm border border-slate-200 hover:border-slate-300 hover:text-[#3D52A0]" title="View in Bank">
                 <LinkIcon className="w-3.5 h-3.5" />
             </MotionButton>
             <MotionButton whileHover={{scale: 1.05}} whileTap={{scale: 0.95}} onClick={() => onDelete(item.id)} className="p-1.5 bg-white text-rose-400 rounded-md shadow-sm border border-slate-200 hover:border-rose-200 hover:text-rose-500 hover:bg-rose-50" title="Remove Item">
@@ -237,7 +237,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => onSelectToggle()}
-                            className="w-4 h-4 rounded text-[#0066CC] focus:ring-[#0066CC] border-slate-300 cursor-pointer shadow-sm transition-all"
+                            className="w-4 h-4 rounded text-[#3D52A0] focus:ring-[#3D52A0] border-slate-300 cursor-pointer shadow-sm transition-all"
                         />
                     </div>
                 )}
@@ -258,12 +258,12 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                             <select 
                                 value={item.boqStatus || 'included_ffds_scope'}
                                 onChange={(e) => onUpdate(item.id, 'boqStatus', e.target.value)}
-                                className={`appearance-none border text-[9px] font-bold uppercase tracking-wide cursor-pointer transition-colors max-w-[150px] px-2.5 py-0.5 pr-6 rounded-sm outline-none focus:ring-1 focus:ring-[#0066CC] ${
+                                className={`appearance-none border text-[9px] font-bold uppercase tracking-wide cursor-pointer transition-colors max-w-[150px] px-2.5 py-0.5 pr-6 rounded-sm outline-none focus:ring-1 focus:ring-[#3D52A0] ${
                                     item.boqStatus === 'excluded' || item.boqStatus === 'deleted' ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100' :
                                     item.boqStatus === 'client_procured' ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100' :
                                     item.boqStatus === 'approved_variation' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100' :
                                     item.boqStatus === 'pending_finalisation' || item.boqStatus === 'on_hold' ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100' :
-                                    'bg-[#0066CC]/5 text-[#0066CC] border-[#0066CC]/20 hover:bg-[#0066CC]/10'
+                                    'bg-[#3D52A0]/5 text-[#3D52A0] border-[#3D52A0]/20 hover:bg-[#3D52A0]/10'
                                 }`}
                                 onClick={(e) => e.stopPropagation()}
                                 title="BOQ Status"
@@ -284,7 +284,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                                 item.boqStatus === 'client_procured' ? 'text-amber-400' :
                                 item.boqStatus === 'approved_variation' ? 'text-emerald-400' :
                                 item.boqStatus === 'pending_finalisation' || item.boqStatus === 'on_hold' ? 'text-orange-400' :
-                                'text-[#0066CC]/60'
+                                'text-[#3D52A0]/60'
                             }`}>
                                 <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                             </div>
@@ -293,7 +293,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                             <select 
                                 value={item.roomId || 'Unassigned'} 
                                 onChange={(e) => onUpdate(item.id, 'roomId', e.target.value === 'Unassigned' ? undefined : e.target.value)}
-                                className="appearance-none bg-slate-100 hover:bg-slate-200 border border-transparent text-slate-600 focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] outline-none rounded-sm px-2.5 py-0.5 pr-6 text-[9px] font-bold uppercase tracking-wide cursor-pointer transition-colors max-w-[140px]"
+                                className="appearance-none bg-slate-100 hover:bg-slate-200 border border-transparent text-slate-600 focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] outline-none rounded-sm px-2.5 py-0.5 pr-6 text-[9px] font-bold uppercase tracking-wide cursor-pointer transition-colors max-w-[140px]"
                                 onClick={(e) => e.stopPropagation()}
                                 title="Assign to Room"
                             >
@@ -319,10 +319,10 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                     value={item.specs}
                     onChange={(e) => onUpdate(item.id, 'specs', e.target.value)}
                     placeholder="Enter item specifications..."
-                    className="w-full text-[11px] text-slate-600 leading-relaxed bg-transparent hover:bg-slate-50 focus:bg-white p-2 rounded border border-transparent hover:border-slate-200 focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] outline-none resize-y min-h-[48px] transition-all"
+                    className="w-full text-[11px] text-slate-600 leading-relaxed bg-transparent hover:bg-slate-50 focus:bg-white p-2 rounded border border-transparent hover:border-slate-200 focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] outline-none resize-y min-h-[48px] transition-all"
                 />
                 {item.rationale && (
-                    <p className="text-[10px] text-[#0066CC] mt-1 italic px-2 font-medium bg-sky-50/50 py-1 rounded">
+                    <p className="text-[10px] text-[#3D52A0] mt-1 italic px-2 font-medium bg-sky-50/50 py-1 rounded">
                         {item.rationale}
                     </p>
                 )}
@@ -331,7 +331,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                 <button 
                     onClick={handleMagicRationale}
                     disabled={isRefining}
-                    className="absolute bottom-1 right-2 bg-white border border-slate-200 text-[#0066CC] p-1.5 rounded shadow-sm hover:border-[#0066CC] hover:bg-sky-50 transition-all opacity-0 group-hover/specs:opacity-100 z-10"
+                    className="absolute bottom-1 right-2 bg-white border border-slate-200 text-[#3D52A0] p-1.5 rounded shadow-sm hover:border-[#3D52A0] hover:bg-sky-50 transition-all opacity-0 group-hover/specs:opacity-100 z-10"
                     title="AI Enhance Specs"
                 >
                     <WandIcon className={`w-3 h-3 ${isRefining ? 'animate-spin' : ''}`} />
@@ -399,7 +399,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                             <select 
                                 value={item.assumptionTag || 'none'}
                                 onChange={e => onUpdate(item.id, 'assumptionTag', e.target.value === 'none' ? undefined : e.target.value)}
-                                className="w-full text-[11px] bg-white border border-slate-200 rounded px-2 py-1 text-slate-700 font-medium outline-none focus:border-[#0066CC]"
+                                className="w-full text-[11px] bg-white border border-slate-200 rounded px-2 py-1 text-slate-700 font-medium outline-none focus:border-[#3D52A0]"
                             >
                                 <option value="none">None</option>
                                 <option value="client_to_provide">Client to Provide</option>
@@ -437,7 +437,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                                 <span className="text-[11px] bg-slate-100 p-0.5 rounded">📐</span> Auto-Calculate Quantity
                             </label>
                             <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-                                L × W × Mult = <span className="text-[#0066CC]">Qty</span>
+                                L × W × Mult = <span className="text-[#3D52A0]">Qty</span>
                             </div>
                         </div>
                         <div className="grid grid-cols-3 gap-3">
@@ -448,7 +448,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                                     value={item.calcLength || ''}
                                     onChange={e => handleCalcChange('l', Number(e.target.value))}
                                     placeholder="0"
-                                    className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 text-slate-700 font-medium outline-none focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] transition-all"
+                                    className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 text-slate-700 font-medium outline-none focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] transition-all"
                                 />
                             </div>
                             <div>
@@ -458,7 +458,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                                     value={item.calcWidth || ''}
                                     onChange={e => handleCalcChange('w', Number(e.target.value))}
                                     placeholder="0"
-                                    className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 text-slate-700 font-medium outline-none focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] transition-all"
+                                    className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 text-slate-700 font-medium outline-none focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] transition-all"
                                 />
                             </div>
                             <div>
@@ -468,7 +468,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                                     value={item.calcMultiplier || 1}
                                     onChange={e => handleCalcChange('m', Number(e.target.value))}
                                     step="0.1"
-                                    className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 text-slate-700 font-medium outline-none focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] transition-all"
+                                    className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 text-slate-700 font-medium outline-none focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] transition-all"
                                 />
                             </div>
                         </div>
@@ -477,12 +477,12 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                     {isLumpsum && (
                         <div className="pt-2 border-t border-slate-200">
                             <div className="flex items-center justify-between mb-2">
-                                <label className="text-[9px] font-bold text-[#0066CC] uppercase tracking-wider">Lumpsum Breakdown</label>
+                                <label className="text-[9px] font-bold text-[#3D52A0] uppercase tracking-wider">Lumpsum Breakdown</label>
                                 <div className="flex items-center gap-2">
                                     <button 
                                         onClick={handleGenerateBreakdown} 
                                         disabled={isGeneratingBreakdown}
-                                        className="text-[10px] font-bold text-[#0066CC] hover:text-[#0055B3] bg-sky-50 hover:bg-sky-100 px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+                                        className="text-[10px] font-bold text-[#3D52A0] hover:text-[#334486] bg-sky-50 hover:bg-sky-100 px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
                                     >
                                         <WandIcon className={`w-3 h-3 ${isGeneratingBreakdown ? 'animate-spin' : ''}`} />
                                         AI Breakdown
@@ -573,7 +573,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                         <Tag className="w-2.5 h-2.5" /> Sell Rate
                      </div>
                      <div className="flex items-center gap-2">
-                        <div className="font-bold text-slate-800 text-xs group-hover/sell:text-[#0066CC] transition-colors">{formatCurrency(sellPrice)}</div>
+                        <div className="font-bold text-slate-800 text-xs group-hover/sell:text-[#3D52A0] transition-colors">{formatCurrency(sellPrice)}</div>
                         {/* Profit Tag */}
                         <div className="hidden sm:flex items-center gap-0.5 text-[9px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded font-bold border border-emerald-100" title="Profit per item">
                             +{formatCurrency(sellPrice - (item.materials + item.labor))}
@@ -592,7 +592,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                             onChange={v => onUpdate(item.id, 'qty', v)}
                             onBlur={() => {}}
                             inputType="number"
-                            className="w-12 font-bold text-sm bg-sky-50/50 border border-transparent hover:border-sky-200 focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] focus:bg-white rounded text-center text-[#0066CC] py-0.5 transition-all shadow-inner"
+                            className="w-12 font-bold text-sm bg-sky-50/50 border border-transparent hover:border-sky-200 focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] focus:bg-white rounded text-center text-[#3D52A0] py-0.5 transition-all shadow-inner"
                         />
                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{item.unit}</span>
                     </div>
@@ -601,7 +601,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                     <div className="text-[9px] font-bold uppercase text-slate-400 tracking-widest mb-0.5">Total Value</div>
                     <motion.div 
                         key={totalLineItem}
-                        initial={{ scale: 1.1, color: '#0066CC' }}
+                        initial={{ scale: 1.1, color: '#3D52A0' }}
                         animate={{ scale: 1, color: '#0f172a' }}
                         transition={{ duration: 0.3 }}
                         className="font-black text-lg text-slate-900 tracking-tight leading-none"

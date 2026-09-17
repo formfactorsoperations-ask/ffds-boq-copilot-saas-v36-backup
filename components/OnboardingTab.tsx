@@ -103,7 +103,7 @@ const OnboardingTab: React.FC<OnboardingTabProps> = ({ projectContext, setProjec
                         </button>
                         <button 
                             onClick={handlePrint}
-                            className="px-6 py-3 bg-[#0066CC]/90 text-white backdrop-blur-md border border-white/20 font-bold rounded-xl shadow-md shadow-sky-600/20 hover:bg-[#0055B3] flex items-center gap-2 transition-all active:scale-95"
+                            className="px-6 py-3 bg-[#3D52A0]/90 text-white backdrop-blur-md border border-white/20 font-bold rounded-xl shadow-md shadow-sky-600/20 hover:bg-[#334486] flex items-center gap-2 transition-all active:scale-95"
                         >
                             <PrintIcon className="w-4 h-4"/> Quick Print
                         </button>

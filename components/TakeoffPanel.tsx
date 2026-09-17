@@ -30,7 +30,7 @@ const ft = (v?: number) => {
 
 const SOURCE_STYLE: Record<DimSource, string> = {
   read:      'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  confirmed: 'bg-sky-50 text-[#0055B3] ring-sky-200',
+  confirmed: 'bg-sky-50 text-[#334486] ring-sky-200',
   calculated:'bg-sky-50 text-sky-700 ring-sky-200',
   assumed:   'bg-amber-50 text-amber-700 ring-amber-200',
 };
@@ -216,7 +216,7 @@ export const TakeoffPanel: React.FC<Props> = ({
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ceiling ht</label>
             <input type="number" step="0.5" value={defaultHeight}
               onChange={e => setHeight(Number(e.target.value) || 9)}
-              className="w-16 text-sm font-bold text-slate-900 tabular-nums bg-white/80 rounded-lg px-2 py-1.5 ring-1 ring-slate-200 focus:ring-2 focus:ring-[#0066CC] outline-none" />
+              className="w-16 text-sm font-bold text-slate-900 tabular-nums bg-white/80 rounded-lg px-2 py-1.5 ring-1 ring-slate-200 focus:ring-2 focus:ring-[#3D52A0] outline-none" />
             <span className="text-xs text-slate-400">ft</span>
           </div>
         </div>
@@ -263,23 +263,23 @@ export const TakeoffPanel: React.FC<Props> = ({
 
       {/* ── SYNC TO BOQ ACTION CARD ── */}
       {tiers && setTiers && (
-        <div className="rounded-2xl bg-gradient-to-r from-sky-50/90 via-indigo-50/70 to-blue-50/90 p-5 ring-1 ring-[#0066CC]/20 shadow-sm space-y-3">
+        <div className="rounded-2xl bg-gradient-to-r from-sky-50/90 via-indigo-50/70 to-blue-50/90 p-5 ring-1 ring-[#3D52A0]/20 shadow-sm space-y-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-start gap-3">
-              <div className="p-2.5 bg-[#0066CC] text-white rounded-xl shadow-xs shrink-0 mt-0.5">
+              <div className="p-2.5 bg-[#3D52A0] text-white rounded-xl shadow-xs shrink-0 mt-0.5">
                 <Sparkles className="w-4 h-4" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h4 className="text-sm font-bold text-slate-900">Sync Takeoff Quantities into BOQ</h4>
-                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[#0066CC]/10 text-[#0066CC]">
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[#3D52A0]/10 text-[#3D52A0]">
                     Live Engine
                   </span>
                 </div>
                 <p className="text-xs text-slate-600 mt-0.5">
                   {livePreview && livePreview.matchedCount > 0 ? (
                     <span>
-                      <b className="text-[#0066CC] font-bold">{livePreview.matchedCount} line items</b> in <i>{activeTier?.name || 'Active Tier'}</i> can be automatically updated with exact mathematical derivations.
+                      <b className="text-[#3D52A0] font-bold">{livePreview.matchedCount} line items</b> in <i>{activeTier?.name || 'Active Tier'}</i> can be automatically updated with exact mathematical derivations.
                     </span>
                   ) : (
                     <span>All matching BOQ line items currently match floor-plan geometry.</span>
@@ -305,7 +305,7 @@ export const TakeoffPanel: React.FC<Props> = ({
                 disabled={!livePreview || livePreview.matchedCount === 0}
                 className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer ${
                   livePreview && livePreview.matchedCount > 0
-                    ? 'bg-[#0066CC] hover:bg-[#0055B3] text-white'
+                    ? 'bg-[#3D52A0] hover:bg-[#334486] text-white'
                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                 }`}
               >
@@ -317,7 +317,7 @@ export const TakeoffPanel: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={() => handleSyncToBoq('all')}
-                  className="px-3 py-2 rounded-xl text-xs font-bold text-[#0066CC] bg-white/90 hover:bg-white border border-[#0066CC]/30 shadow-2xs transition-all cursor-pointer"
+                  className="px-3 py-2 rounded-xl text-xs font-bold text-[#3D52A0] bg-white/90 hover:bg-white border border-[#3D52A0]/30 shadow-2xs transition-all cursor-pointer"
                   title="Sync takeoff across all proposal tiers"
                 >
                   All Tiers ({tiers.length})
@@ -360,7 +360,7 @@ export const TakeoffPanel: React.FC<Props> = ({
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-slate-900">{d.itemName}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-[#0066CC] font-semibold border border-sky-100">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-[#3D52A0] font-semibold border border-sky-100">
                             {d.roomName}
                           </span>
                         </div>
@@ -369,7 +369,7 @@ export const TakeoffPanel: React.FC<Props> = ({
                       <div className="flex items-center gap-2 shrink-0 font-mono">
                         <span className="text-slate-400 line-through tabular-nums">{d.oldQty} {d.unit}</span>
                         <ArrowRight className="w-3 h-3 text-slate-400" />
-                        <span className="font-bold text-[#0066CC] tabular-nums">{d.newQty} {d.unit}</span>
+                        <span className="font-bold text-[#3D52A0] tabular-nums">{d.newQty} {d.unit}</span>
                       </div>
                     </div>
                   ))}
@@ -424,14 +424,14 @@ export const TakeoffPanel: React.FC<Props> = ({
                               <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{label}</label>
                               <input type="number" step={key === 'doors' || key === 'windows' ? 1 : 0.25} value={val}
                                 onChange={e => patchRoom(r.name, { [key]: Number(e.target.value) } as Partial<Room>)}
-                                className="w-full text-sm font-mono tabular-nums bg-white rounded-lg px-2 py-1.5 ring-1 ring-slate-200 focus:ring-2 focus:ring-[#0066CC] outline-none" />
+                                className="w-full text-sm font-mono tabular-nums bg-white rounded-lg px-2 py-1.5 ring-1 ring-slate-200 focus:ring-2 focus:ring-[#3D52A0] outline-none" />
                             </div>
                           ))}
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Ceiling</label>
                             <select value={r.ceiling}
                               onChange={e => patchRoom(r.name, { ceiling: e.target.value as CeilingDesign }, false)}
-                              className="w-full text-sm bg-white rounded-lg px-2 py-1.5 ring-1 ring-slate-200 focus:ring-2 focus:ring-[#0066CC] outline-none capitalize">
+                              className="w-full text-sm bg-white rounded-lg px-2 py-1.5 ring-1 ring-slate-200 focus:ring-2 focus:ring-[#3D52A0] outline-none capitalize">
                               {CEILINGS.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                           </div>

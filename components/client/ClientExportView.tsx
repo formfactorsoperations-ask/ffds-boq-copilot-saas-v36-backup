@@ -54,7 +54,7 @@ interface SectionVisibilityModalProps {
 const SectionVisibilityModal: React.FC<SectionVisibilityModalProps> = ({ isOpen, onClose, visibility, onChange }) => {
     if (!isOpen) return null;
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
                 <div className="p-4 border-b flex justify-between items-center bg-slate-50">
                     <h3 className="font-bold text-slate-800">Section Visibility</h3>
@@ -67,7 +67,7 @@ const SectionVisibilityModal: React.FC<SectionVisibilityModalProps> = ({ isOpen,
                                 type="checkbox" 
                                 checked={visibility[key]} 
                                 onChange={(e) => onChange({...visibility, [key]: e.target.checked})}
-                                className="w-4 h-4 text-[#0066CC] rounded focus:ring-[#0066CC] border-gray-300"
+                                className="w-4 h-4 text-[#3D52A0] rounded focus:ring-[#3D52A0] border-gray-300"
                             />
                             <span className="text-sm font-medium text-slate-700 capitalize">{key.replace(/_/g, ' ')}</span>
                         </label>
@@ -84,7 +84,7 @@ const SectionWrapper: React.FC<{ id: string; onEdit?: (id: string) => void; chil
         {onEdit && (
             <button 
                 onClick={(e) => { e.stopPropagation(); onEdit(id); }}
-                className={`absolute z-20 p-2 bg-white/90 backdrop-blur rounded-full text-slate-400 hover:text-[#0066CC] hover:bg-white shadow-sm border border-slate-200 transition-all opacity-0 group-hover/section:opacity-100 print:hidden ${editButtonClass}`}
+                className={`absolute z-20 p-2 bg-white/90 backdrop-blur rounded-full text-slate-400 hover:text-[#3D52A0] hover:bg-white shadow-sm border border-slate-200 transition-all opacity-0 group-hover/section:opacity-100 print:hidden ${editButtonClass}`}
                 title="Edit Section Text"
             >
                 <PencilIcon className="w-3.5 h-3.5" />
@@ -101,7 +101,7 @@ const ScanFirstSection: React.FC<{ title: string; cue: string; children: React.R
     >
         <summary className="flex items-center justify-between p-2 cursor-pointer list-none outline-none select-none [&::-webkit-details-marker]:hidden mb-2 rounded-xl hover:bg-slate-50 transition-colors">
             <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:text-slate-600 group-open:bg-[#0066CC] group-open:text-white transition-all shadow-sm border border-slate-200 group-open:border-[#0066CC] shrink-0">
+                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:text-slate-600 group-open:bg-[#3D52A0] group-open:text-white transition-all shadow-sm border border-slate-200 group-open:border-[#3D52A0] shrink-0">
                     <ChevronDownIcon className="w-5 h-5 transition-transform duration-300 group-open:rotate-180" />
                 </div>
                 <div>
@@ -142,8 +142,8 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
         footerText: orgData?.footerText || `${orgData?.orgName || 'Your Studio Name'} · ${orgData?.tagline || fetchedSettings?.clientPortalConfig?.introMessage || 'Minimal Design. Maximum Impact.'}`,
         address: orgData?.officeAddress || 'Studio Office, City',
         email: orgData?.contactEmail || fetchedSettings?.clientPortalConfig?.supportContact || 'hello@studio.com',
-        primaryColor: orgData?.themeColor || '#0066CC',
-        accentColor: orgData?.accentColor || orgData?.themeColor || '#0066CC',
+        primaryColor: orgData?.themeColor || '#3D52A0',
+        accentColor: orgData?.accentColor || orgData?.themeColor || '#3D52A0',
         ...fetchedSettings
     }), [orgData, fetchedSettings]);
 
@@ -496,7 +496,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
             {/* Footer */}
             <div id="terms" className="page-break-before rounded-3xl border border-slate-200 bg-white p-8 md:p-12 print-only-block hidden print:block">
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Annexure A</div>
-                <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 border-b-2 border-[#0055B3] pb-4">Standard Terms & Conditions</h2>
+                <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 border-b-2 border-[#334486] pb-4">Standard Terms & Conditions</h2>
                 
                 <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-12 text-xs text-slate-600 leading-relaxed">
                     <div className="space-y-6">
@@ -535,7 +535,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
             </div>
 
             {/* Footer */}
-            <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-slate-400 py-12 text-center print:hidden">
+            <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-slate-400 py-12 text-center print:hidden">
                 <SectionWrapper id="footer" onEdit={onEditSection}>
                     <p className="font-bold text-white text-lg mb-2">{settings.companyName}</p>
                     <p className="text-sm">{settings.tagline}</p>

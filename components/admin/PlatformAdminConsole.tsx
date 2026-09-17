@@ -29,6 +29,7 @@ import { BuildingOfficeIcon, UserIcon, ShieldCheckIcon } from '../Icons';
 import { useOrg } from '../../contexts/OrgContext';
 import { runPermissionProbe, summariseProbe, PROBE_PATHS, ProbeResult } from '../../lib/platformProbe';
 import { CountUp, Gauge, Dot } from '../ui/HudBits';
+import Tabs from '../ui/Tabs';
 
 /*
   Telling "not deployed" from "deployed and unhappy".
@@ -301,7 +302,7 @@ export default function PlatformAdminConsole() {
   return (
     <div className="flex-1 bg-slate-50 overflow-y-auto">
       <header className="px-6 sm:px-10 pt-7 pb-0 border-b border-slate-200 hud-glass">
-        <div className="flex items-center gap-3 text-[#0066CC]">
+        <div className="flex items-center gap-3 text-[#3D52A0]">
           <ShieldCheckIcon className="w-7 h-7" />
           <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Platform Admin</h1>
           {/* Live only when something is genuinely in flight. A status light
@@ -311,24 +312,18 @@ export default function PlatformAdminConsole() {
             {busy ? 'Working' : overviewErr ? 'Degraded' : 'Nominal'}
           </span>
         </div>
-        <div className="hud-rule h-px bg-gradient-to-r from-[#0066CC]/50 to-transparent mt-3" />
+        <div className="hud-rule h-px bg-gradient-to-r from-[#3D52A0]/50 to-transparent mt-3" />
         <p className="text-slate-500 text-sm mt-2 mb-4">
           Tenants, access, and the health of the platform underneath them.
         </p>
-        <nav className="flex gap-1 -mb-px overflow-x-auto">
-          {TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              title={t.blurb}
-              className={`px-4 py-2.5 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-                tab === t.id
-                  ? 'border-[#0066CC] text-[#0066CC]'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >{t.label}</button>
-          ))}
-        </nav>
+        <div className="pb-4">
+          <Tabs
+            ariaLabel="Platform admin sections"
+            value={tab}
+            onChange={(id) => setTab(id as TabId)}
+            items={TABS.map(t => ({ id: t.id, label: t.label }))}
+          />
+        </div>
       </header>
 
       <div className="p-6 sm:p-10 space-y-6">
@@ -422,7 +417,7 @@ export default function PlatformAdminConsole() {
                 value={studioFilter}
                 onChange={e => setStudioFilter(e.target.value)}
                 placeholder="Filter studios…"
-                className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
               />
               <span className="text-xs text-slate-500">{tenants.length} studios</span>
             </div>
@@ -460,7 +455,7 @@ export default function PlatformAdminConsole() {
                         </td>
                         <td className="p-3 text-right">
                           <button onClick={() => handleSwitchToStudio(t.tenantId, t.orgName)}
-                                  className="text-[#0066CC] font-medium hover:text-[#0055B3] text-sm">
+                                  className="text-[#3D52A0] font-medium hover:text-[#334486] text-sm">
                             Switch to
                           </button>
                         </td>
@@ -481,14 +476,14 @@ export default function PlatformAdminConsole() {
                 ] as const).map(([k, label]) => (
                   <input key={k} value={(form as any)[k]} placeholder={label}
                     onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
-                    className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066CC]" />
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D52A0]" />
                 ))}
                 <select value={form.tier} onChange={e => setForm(f => ({ ...f, tier: e.target.value }))}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066CC]">
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D52A0]">
                   {['Starter', 'Professional', 'Enterprise'].map(p => <option key={p}>{p}</option>)}
                 </select>
                 <button type="submit" disabled={creating || !form.name.trim()}
-                  className="md:col-span-3 justify-self-start px-5 py-2.5 rounded-xl bg-[#0066CC] text-white font-bold text-sm hover:bg-[#0055B3] disabled:opacity-50">
+                  className="md:col-span-3 justify-self-start px-5 py-2.5 rounded-xl bg-[#3D52A0] text-white font-bold text-sm hover:bg-[#334486] disabled:opacity-50">
                   {creating ? 'Creating…' : 'Create studio'}
                 </button>
               </form>
@@ -502,7 +497,7 @@ export default function PlatformAdminConsole() {
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <input value={userFilter} onChange={e => setUserFilter(e.target.value)}
                 placeholder="Filter by email, role or tenant…"
-                className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm w-80 focus:outline-none focus:ring-2 focus:ring-[#0066CC]" />
+                className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm w-80 focus:outline-none focus:ring-2 focus:ring-[#3D52A0]" />
               <span className="text-xs text-slate-500">{users.length} users</span>
             </div>
             <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -531,7 +526,7 @@ export default function PlatformAdminConsole() {
                           </td>
                           <td className="p-3 text-right">
                             <button onClick={() => { setSelectedUser(u); setEditRole(u.role || 'Admin'); setEditTenant(u.tenantId || 'demo-tenant-01'); }}
-                              className="text-[#0066CC] font-medium hover:text-[#0055B3] text-sm">Edit access</button>
+                              className="text-[#3D52A0] font-medium hover:text-[#334486] text-sm">Edit access</button>
                           </td>
                         </tr>
                       );
@@ -560,7 +555,7 @@ export default function PlatformAdminConsole() {
                   </p>
                 </div>
                 <button onClick={runProbe} disabled={probing}
-                  className="px-5 py-2.5 rounded-xl bg-[#0066CC] text-white font-bold text-sm hover:bg-[#0055B3] disabled:opacity-50 whitespace-nowrap">
+                  className="px-5 py-2.5 rounded-xl bg-[#3D52A0] text-white font-bold text-sm hover:bg-[#334486] disabled:opacity-50 whitespace-nowrap">
                   {probing
                     ? `Probing ${probeProgress.done}/${probeProgress.total || PROBE_PATHS.length}…`
                     : 'Run probe'}
@@ -647,7 +642,7 @@ export default function PlatformAdminConsole() {
                   </button>
                   {repair && !repair.apply && repair.reclaimedKB > 0 && (
                     <button onClick={() => setConfirmRepair(true)} disabled={repairing}
-                      className="px-5 py-2.5 rounded-xl bg-[#0066CC] text-white font-bold text-sm hover:bg-[#0055B3] disabled:opacity-50 whitespace-nowrap">
+                      className="px-5 py-2.5 rounded-xl bg-[#3D52A0] text-white font-bold text-sm hover:bg-[#334486] disabled:opacity-50 whitespace-nowrap">
                       Apply
                     </button>
                   )}
@@ -760,7 +755,7 @@ export default function PlatformAdminConsole() {
                   </p>
                 </div>
                 <button onClick={runSweep} disabled={sweeping}
-                  className="px-5 py-2.5 rounded-xl bg-[#0066CC] text-white font-bold text-sm hover:bg-[#0055B3] disabled:opacity-50 whitespace-nowrap">
+                  className="px-5 py-2.5 rounded-xl bg-[#3D52A0] text-white font-bold text-sm hover:bg-[#334486] disabled:opacity-50 whitespace-nowrap">
                   {sweeping ? 'Sweeping…' : 'Run sweep'}
                 </button>
               </div>
@@ -827,14 +822,14 @@ export default function PlatformAdminConsole() {
               <div>
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Tenant</label>
                 <select value={editTenant} onChange={e => setEditTenant(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#0066CC]">
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#3D52A0]">
                   {tenants.map(t => <option key={t.tenantId} value={t.tenantId}>{t.orgName} — {t.tenantId}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Role</label>
                 <select value={editRole} onChange={e => setEditRole(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066CC]">
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#3D52A0]">
                   {['Super Admin', 'Admin', 'Designer', 'Viewer', 'Client'].map(r => <option key={r}>{r}</option>)}
                 </select>
               </div>
@@ -843,7 +838,7 @@ export default function PlatformAdminConsole() {
               <button onClick={() => setSelectedUser(null)}
                 className="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100">Cancel</button>
               <button onClick={handleUpdateUser}
-                className="px-5 py-2 rounded-xl bg-[#0066CC] text-white text-sm font-bold hover:bg-[#0055B3]">Save</button>
+                className="px-5 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486]">Save</button>
             </div>
           </div>
         </div>

@@ -226,7 +226,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                     onClick={() => setIsEditMode(!isEditMode)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer ${
                         isEditMode 
-                        ? 'bg-[#0066CC] border-[#0055B3] text-white hover:bg-[#0055B3]' 
+                        ? 'bg-[#3D52A0] border-[#334486] text-white hover:bg-[#334486]' 
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                     }`}
                 >
@@ -238,7 +238,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                 <button 
                     onClick={handleDownloadPdf} 
                     disabled={isGenerating}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#0066CC] text-white rounded-lg text-xs font-bold shadow-xs hover:bg-[#0055B3] transition disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#3D52A0] text-white rounded-lg text-xs font-bold shadow-xs hover:bg-[#334486] transition disabled:opacity-50 cursor-pointer"
                 >
                     <Download className="w-3.5 h-3.5" />
                     {isGenerating ? 'Generating PDF...' : 'Download PDF'}
@@ -252,14 +252,14 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
 
             {isEditMode && (
                 <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 flex items-start gap-3">
-                    <div className="bg-sky-100 text-[#0055B3] p-1.5 rounded-full mt-0.5">
+                    <div className="bg-sky-100 text-[#334486] p-1.5 rounded-full mt-0.5">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
                     <div>
                         <h4 className="text-sm font-bold text-slate-900">Agreement Editor Active</h4>
-                        <p className="text-xs text-[#0055B3] mt-0.5 leading-relaxed">
+                        <p className="text-xs text-[#334486] mt-0.5 leading-relaxed">
                             You can now edit the agreement's parameters (dates, estimated timeline, financial totals, and individual milestone stages) directly on the pages below. All edits are saved instantly. Close the editor when ready to preview or send the agreement to the client.
                         </p>
                     </div>
@@ -835,7 +835,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                 <div className="space-y-4 mb-4 border border-sky-100 p-4 rounded-xl bg-sky-50/25">
                                     <table className="w-full text-xs">
                                         <thead>
-                                            <tr className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white text-[10px] uppercase tracking-wider font-bold">
+                                            <tr className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white text-[10px] uppercase tracking-wider font-bold">
                                                 <th className="p-2 text-left">Milestone Name</th>
                                                 <th className="p-2 text-left">Due Trigger Condition</th>
                                                 <th className="p-2 text-left w-20">%</th>
@@ -851,7 +851,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                                             type="text" 
                                                             value={m.label} 
                                                             onChange={(e) => updateMilestone(i, 'label', e.target.value)}
-                                                            className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#0066CC] outline-none" 
+                                                            className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#3D52A0] outline-none" 
                                                         />
                                                     </td>
                                                     <td className="p-2">
@@ -859,7 +859,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                                             rows={2}
                                                             value={m.dueCondition} 
                                                             onChange={(e) => updateMilestone(i, 'dueCondition', e.target.value)}
-                                                            className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#0066CC] outline-none resize-none" 
+                                                            className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#3D52A0] outline-none resize-none" 
                                                         />
                                                     </td>
                                                     <td className="p-2">
@@ -868,7 +868,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                                                 type="number" 
                                                                 value={m.percentage} 
                                                                 onChange={(e) => updateMilestone(i, 'percentage', parseFloat(e.target.value) || 0)}
-                                                                className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-bold focus:border-[#0066CC] outline-none text-center" 
+                                                                className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-bold focus:border-[#3D52A0] outline-none text-center" 
                                                             />
                                                             <span className="text-[11px] font-bold text-slate-900">%</span>
                                                         </div>
@@ -892,7 +892,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                     <div className="flex justify-between items-center pt-2 border-t border-sky-100">
                                         <button 
                                             onClick={addMilestone}
-                                            className="px-3 py-1.5 bg-sky-50 border border-sky-200 hover:bg-sky-100/50 text-[#0055B3] text-xs font-bold rounded-lg transition flex items-center gap-1 cursor-pointer"
+                                            className="px-3 py-1.5 bg-sky-50 border border-sky-200 hover:bg-sky-100/50 text-[#334486] text-xs font-bold rounded-lg transition flex items-center gap-1 cursor-pointer"
                                         >
                                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
                                             Add Milestone
@@ -1370,7 +1370,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
             </div>
             
             {/* Sign-off & Execution Protocol */}
-            <div className="mt-8 pt-8 border-t-4 border-[#0055B3] break-inside-avoid">
+            <div className="mt-8 pt-8 border-t-4 border-[#334486] break-inside-avoid">
                 <h3 className="text-lg font-bold text-slate-900 uppercase tracking-wide mb-6 font-opensans">
                     Acceptance & Sign-off
                 </h3>
@@ -1629,9 +1629,9 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                          <div className="mt-4 p-4 bg-white rounded-xl border border-amber-200 shadow-xs space-y-3">
                              <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
                                  <div className="flex items-center gap-2">
-                                     <KeyRound className="w-4 h-4 text-[#0066CC]" />
+                                     <KeyRound className="w-4 h-4 text-[#3D52A0]" />
                                      <span className="text-xs font-bold text-slate-900">Document Access PIN:</span>
-                                     <span className="font-mono text-sm font-extrabold text-[#0066CC] bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                                     <span className="font-mono text-sm font-extrabold text-[#3D52A0] bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
                                          {accessPin}
                                      </span>
                                  </div>
@@ -1665,7 +1665,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                                      href={link} 
                                      target="_blank" 
                                      rel="noopener noreferrer" 
-                                     className="px-3.5 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg text-xs font-bold tracking-tight inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                     className="px-3.5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-xs font-bold tracking-tight inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
                                  >
                                      <ExternalLink className="w-3.5 h-3.5" />
                                      Open Client Sign-Off Screen
@@ -1704,7 +1704,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                     <div className="no-print shrink-0 border-t md:border-t-0 md:border-l border-amber-200 pt-4 md:pt-0 md:pl-6 space-y-2.5 w-full md:w-auto">
                         <button 
                             onClick={() => setShowInPersonModal(true)}
-                            className="w-full flex justify-center items-center gap-2 px-4 py-2.5 bg-[#0066CC] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#0055B3] transition-all cursor-pointer"
+                            className="w-full flex justify-center items-center gap-2 px-4 py-2.5 bg-[#3D52A0] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#334486] transition-all cursor-pointer"
                         >
                             <Tablet className="w-4 h-4" />
                             Client In-Person Signing (Tablet)
@@ -1723,7 +1723,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                         <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
                             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                                 <div className="flex items-center gap-2 text-slate-900 font-bold">
-                                    <Tablet className="w-5 h-5 text-[#0066CC]" />
+                                    <Tablet className="w-5 h-5 text-[#3D52A0]" />
                                     <span>In-Person Client Signing</span>
                                 </div>
                                 <button onClick={() => setShowInPersonModal(false)} className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">&times;</button>
@@ -1780,7 +1780,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                                     const emailVal = e.target.value;
                                     setProjectContext?.((prev: any) => ({ ...prev, clientEmail: emailVal }));
                                 }} 
-                                className="flex-grow text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] shadow-sm" 
+                                className="flex-grow text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] shadow-sm" 
                                 placeholder="Enter client's email address (e.g. client@example.com)" 
                             />
                             {projectContext.clientEmail && projectContext.clientEmail.includes('@') ? (
@@ -1827,7 +1827,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                                             setIsSending(false);
                                         }
                                     }}
-                                    className="px-3 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold rounded-md text-[10px] shadow-sm uppercase tracking-wider cursor-pointer inline-block text-center"
+                                    className="px-3 py-1.5 bg-[#3D52A0] hover:bg-[#334486] text-white font-bold rounded-md text-[10px] shadow-sm uppercase tracking-wider cursor-pointer inline-block text-center"
                                 >
                                     Force Generate Digital Sign-Off Link (Sandbox Bypass)
                                 </button>
@@ -1842,7 +1842,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                         <button 
                             onClick={() => setShowSendConfirm(true)}
                             disabled={isSending}
-                            className="flex justify-center items-center gap-2 px-4 py-2.5 bg-[#0066CC] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#0055B3] transition-all w-full cursor-pointer disabled:opacity-50"
+                            className="flex justify-center items-center gap-2 px-4 py-2.5 bg-[#3D52A0] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#334486] transition-all w-full cursor-pointer disabled:opacity-50"
                         >
                             <ShieldCheckIcon className="w-4 h-4" /> {isSending ? 'Dispatching...' : 'Send to Client'}
                         </button>
@@ -1853,7 +1853,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                                 <button 
                                     onClick={sendEmailSignoff} 
                                     disabled={isSending} 
-                                    className="px-3 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] disabled:opacity-60 text-white font-bold rounded-lg text-xs flex-1 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                                    className="px-3 py-1.5 bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-60 text-white font-bold rounded-lg text-xs flex-1 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                                 >
                                     {isSending ? (
                                         <>
@@ -1867,7 +1867,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                                 <button 
                                     onClick={() => setShowSendConfirm(false)} 
                                     disabled={isSending} 
-                                    className="px-3 py-1.5 bg-white border border-sky-200 text-[#0055B3] font-bold rounded-lg text-xs flex-1 hover:bg-sky-100 transition cursor-pointer disabled:opacity-50"
+                                    className="px-3 py-1.5 bg-white border border-sky-200 text-[#334486] font-bold rounded-lg text-xs flex-1 hover:bg-sky-100 transition cursor-pointer disabled:opacity-50"
                                 >
                                     Cancel
                                 </button>

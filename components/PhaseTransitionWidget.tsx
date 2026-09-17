@@ -122,7 +122,7 @@ export default function PhaseTransitionWidget({
             <select
               value={currentStage}
               onChange={(e) => handleStepClick(Number(e.target.value))}
-              className="bg-white border border-slate-200 text-slate-900 font-bold text-xs rounded-xl px-3.5 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0066CC] cursor-pointer"
+              className="bg-white border border-slate-200 text-slate-900 font-bold text-xs rounded-xl px-3.5 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3D52A0] cursor-pointer"
             >
               {phases.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -189,13 +189,13 @@ export default function PhaseTransitionWidget({
               className="relative z-10 flex flex-col items-center gap-3 group focus:outline-none cursor-pointer"
             >
               <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-all duration-200 ${
-                  phase.active ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20/90 backdrop-blur-xl border border-sky-800/50 text-white shadow-2xl shadow-sky-600/30 scale-110 ring-4 ring-slate-100' : 
+                  phase.active ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/90 backdrop-blur-xl border border-sky-800/50 text-white shadow-2xl shadow-sky-600/30 scale-110 ring-4 ring-slate-100' : 
                   phase.completed ? 'bg-sky-900 text-white hover:scale-105' : 
-                  'bg-white text-slate-400 border border-slate-200 hover:border-sky-300 hover:text-[#0066CC]'
+                  'bg-white text-slate-400 border border-slate-200 hover:border-sky-300 hover:text-[#3D52A0]'
               }`}>
                 {phase.completed ? '✓' : phase.id}
               </div>
-              <span className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${phase.active ? 'text-slate-900' : phase.completed ? 'text-slate-700' : 'text-slate-400 group-hover:text-[#0066CC]'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${phase.active ? 'text-slate-900' : phase.completed ? 'text-slate-700' : 'text-slate-400 group-hover:text-[#3D52A0]'}`}>
                   {phase.label}
               </span>
             </button>
@@ -229,7 +229,7 @@ export default function PhaseTransitionWidget({
                                             id="substantiallyDone" 
                                             checked={isSubstantiallyDone}
                                             onChange={(e) => setIsSubstantiallyDone(e.target.checked)}
-                                            className="w-4 h-4 text-[#0066CC] border-slate-300 rounded focus:ring-[#0066CC]"
+                                            className="w-4 h-4 text-[#3D52A0] border-slate-300 rounded focus:ring-[#3D52A0]"
                                         />
                                         <label htmlFor="substantiallyDone" className="text-xs font-semibold text-slate-700 cursor-pointer select-none">
                                             Site work substantially complete
@@ -244,7 +244,7 @@ export default function PhaseTransitionWidget({
                     ) : (
                         <button 
                             onClick={() => advanceLifecycle(currentStage + 1)}
-                            className="w-full md:w-auto px-8 py-3.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 hover:bg-[#0055B3] text-white font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                            className="w-full md:w-auto px-8 py-3.5 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 hover:bg-[#334486] text-white font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                         >
                             Advance to Stage {currentStage + 1} →
                         </button>

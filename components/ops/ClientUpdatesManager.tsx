@@ -247,7 +247,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-5">
                 <div>
                     <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                        <Camera className="w-5 h-5 text-[#0066CC]" />
+                        <Camera className="w-5 h-5 text-[#3D52A0]" />
                         Live Client Feed & Daily Site Journal
                     </h3>
                     <p className="text-xs text-slate-500 font-medium mt-0.5">Share photo updates, site logs, and quick progress digests directly with the client.</p>
@@ -281,7 +281,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                     
                     <button 
                         onClick={() => setIsAdding(!isAdding)}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-xs"
+                        className="flex items-center gap-1.5 px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-xs"
                     >
                         {isAdding ? 'Cancel' : <><Plus className="w-4 h-4" /> New Update</>}
                     </button>
@@ -290,7 +290,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
 
             {/* WhatsApp modal summary */}
             {summaryModalOpen && (
-                <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
                         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-emerald-50">
                             <h3 className="font-black text-emerald-900 text-sm flex items-center gap-2 uppercase tracking-wider">
@@ -329,7 +329,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                         <h4 className="font-black text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
-                            <Camera className="w-5 h-5 text-[#0066CC]" />
+                            <Camera className="w-5 h-5 text-[#3D52A0]" />
                             Post Site Progress Update
                         </h4>
                     </div>
@@ -346,18 +346,18 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                                 onChange={e => setRawInput(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleQuickParse()}
                                 placeholder="e.g., 'Finished master bedroom tile floor, plumbing lines in toilet tested and ready'"
-                                className="flex-1 px-4 py-2.5 bg-white border border-sky-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                                className="flex-1 px-4 py-2.5 bg-white border border-sky-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                                 disabled={isParsing}
                             />
                             <button 
                                 onClick={handleQuickParse} 
                                 disabled={isParsing || !rawInput.trim()}
-                                className="px-5 py-2.5 bg-[#0066CC] text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-[#0055B3] disabled:opacity-50 flex items-center gap-1.5 shrink-0 transition-colors shadow-sm"
+                                className="px-5 py-2.5 bg-[#3D52A0] text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-[#334486] disabled:opacity-50 flex items-center gap-1.5 shrink-0 transition-colors shadow-sm"
                             >
                                 {isParsing ? 'Parsing...' : <><Sparkles className="w-3.5 h-3.5" /> Auto-Fill</>}
                             </button>
                         </div>
-                        <p className="text-[10px] text-[#0066CC] font-semibold mt-2">Type rough notes from site checkups. AI will structure, correct nomenclature, and add appropriate tags.</p>
+                        <p className="text-[10px] text-[#3D52A0] font-semibold mt-2">Type rough notes from site checkups. AI will structure, correct nomenclature, and add appropriate tags.</p>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -368,7 +368,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                                 value={newUpdate.title}
                                 onChange={e => setNewUpdate({...newUpdate, title: e.target.value})}
                                 placeholder="e.g., Tiling Completion & Sanitary Testing"
-                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                             />
                         </div>
                         <div>
@@ -376,7 +376,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                             <select
                                 value={newUpdate.type || 'site'}
                                 onChange={e => setNewUpdate({...newUpdate, type: e.target.value as 'site' | 'design'})}
-                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                             >
                                 <option value="site">Site Execution Progress</option>
                                 <option value="design">Design Meeting / Revision update</option>
@@ -395,7 +395,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                                         setNewUpdate({...newUpdate, date: d.toISOString()});
                                     }
                                 }}
-                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                             />
                         </div>
                     </div>
@@ -445,7 +445,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                             onChange={e => setNewUpdate({...newUpdate, description: e.target.value})}
                             placeholder="Describe what occurred. Highlight milestones achieved, delays faced, or upcoming schedules. Use tools above for formatting."
                             rows={4}
-                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-[#0066CC] focus:outline-none resize-none leading-relaxed"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-[#3D52A0] focus:outline-none resize-none leading-relaxed"
                         />
                     </div>
 
@@ -480,7 +480,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                                         <button
                                             type="button"
                                             onClick={() => handleRemoveUploadedImage(idx)}
-                                            className="absolute top-1 right-1 p-1 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/80 hover:bg-rose-600 text-white rounded-full transition-colors shadow"
+                                            className="absolute top-1 right-1 p-1 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/80 hover:bg-rose-600 text-white rounded-full transition-colors shadow"
                                         >
                                             <X className="w-3 h-3" />
                                         </button>
@@ -500,16 +500,16 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                                 onChange={e => setTagInput(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                                 placeholder="Press Enter to add tag (e.g. Living, Tiles, Civil)"
-                                className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                                className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                             />
-                            <button onClick={handleAddTag} className="px-4 py-2 bg-sky-50 hover:bg-sky-100 text-[#0055B3] border border-sky-100 rounded-xl text-xs font-black uppercase tracking-wider">Add</button>
+                            <button onClick={handleAddTag} className="px-4 py-2 bg-sky-50 hover:bg-sky-100 text-[#334486] border border-sky-100 rounded-xl text-xs font-black uppercase tracking-wider">Add</button>
                         </div>
                         {newUpdate.tags && newUpdate.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mt-2.5">
                                 {newUpdate.tags.map(tag => (
                                     <span key={tag} className="flex items-center gap-1 bg-sky-50 text-sky-800 border border-sky-100 px-2 py-1 rounded-lg text-xs font-bold">
                                         {tag}
-                                        <button onClick={() => handleRemoveTag(tag)} className="text-sky-400 hover:text-[#0066CC]"><X className="w-3 h-3" /></button>
+                                        <button onClick={() => handleRemoveTag(tag)} className="text-sky-400 hover:text-[#3D52A0]"><X className="w-3 h-3" /></button>
                                     </span>
                                 ))}
                             </div>
@@ -519,7 +519,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                     <div className="flex justify-end pt-4 border-t border-slate-100">
                         <button 
                             onClick={handleSaveUpdate}
-                            className="flex items-center gap-1.5 px-6 py-3 bg-[#0066CC] text-white font-black rounded-xl hover:bg-[#0055B3] transition-colors shadow-md shadow-sky-100 uppercase text-xs tracking-wider"
+                            className="flex items-center gap-1.5 px-6 py-3 bg-[#3D52A0] text-white font-black rounded-xl hover:bg-[#334486] transition-colors shadow-md shadow-sky-100 uppercase text-xs tracking-wider"
                         >
                             <Send className="w-4 h-4" /> Publish Update & Send
                         </button>
@@ -538,7 +538,7 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                         </p>
                         <button
                             onClick={() => setIsAdding(true)}
-                            className="px-4 py-2 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-[#0055B3] transition-all"
+                            className="px-4 py-2 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-[#334486] transition-all"
                         >
                             Publish First Update
                         </button>
@@ -551,8 +551,8 @@ export default function ClientUpdatesManager({ projectContext, setProjectContext
                             return (
                                 <div key={update.id} className="relative">
                                     {/* Circle node on the timeline line */}
-                                    <div className={`absolute -left-6 sm:-left-10 top-1 w-4 h-4 rounded-full border-2 bg-white flex items-center justify-center ${isSite ? 'border-sky-500' : 'border-[#0066CC]'}`}>
-                                        <div className={`w-1.5 h-1.5 rounded-full ${isSite ? 'bg-sky-500' : 'bg-[#0066CC]'}`} />
+                                    <div className={`absolute -left-6 sm:-left-10 top-1 w-4 h-4 rounded-full border-2 bg-white flex items-center justify-center ${isSite ? 'border-sky-500' : 'border-[#3D52A0]'}`}>
+                                        <div className={`w-1.5 h-1.5 rounded-full ${isSite ? 'bg-sky-500' : 'bg-[#3D52A0]'}`} />
                                     </div>
 
                                     {/* Timeline Event Content */}

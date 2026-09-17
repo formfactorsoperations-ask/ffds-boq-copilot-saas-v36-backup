@@ -228,7 +228,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
         <div className="px-6 py-5 bg-white border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isSite ? 'bg-amber-500 animate-pulse' : 'bg-[#0066CC] animate-pulse'}`}></span>
+              <span className={`w-2.5 h-2.5 rounded-full ${isSite ? 'bg-amber-500 animate-pulse' : 'bg-[#3D52A0] animate-pulse'}`}></span>
               <h2 className="text-base font-bold text-stone-900 tracking-tight font-sans">
                 {isSite ? 'Log Dynamic Site Visit' : 'Schedule Client Interaction'}
               </h2>
@@ -261,7 +261,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
                 }}
                 className={`flex items-center gap-1.5 py-1.5 px-3 text-xs font-semibold rounded-lg transition-all duration-200 ${
                   !isSite 
-                    ? 'bg-[#0066CC] text-white shadow-sm' 
+                    ? 'bg-[#3D52A0] text-white shadow-sm' 
                     : 'text-stone-600 hover:text-stone-950 hover:bg-stone-50'
                 }`}
               >
@@ -330,7 +330,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
                        onClick={() => setType(opt.id as SiteVisitType)}
                        className={`flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-xl border transition-all duration-200 ${
                          type === opt.id
-                           ? 'bg-[#0066CC] border-[#0066CC] text-white shadow-md'
+                           ? 'bg-[#3D52A0] border-[#3D52A0] text-white shadow-md'
                            : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100 hover:text-stone-950'
                        }`}
                      >
@@ -700,7 +700,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
         <div className="p-5 border-t bg-stone-900 text-stone-200 rounded-b-2xl flex flex-col sm:flex-row gap-5 items-stretch sm:items-center justify-between">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 mb-1 bg-stone-880 w-fit px-2 py-0.5 rounded border border-stone-800">
-              <span className={`w-1.5 h-1.5 rounded-full ${isSite ? 'bg-amber-500' : 'bg-[#0066CC]'}`}></span>
+              <span className={`w-1.5 h-1.5 rounded-full ${isSite ? 'bg-amber-500' : 'bg-[#3D52A0]'}`}></span>
               <p className="text-[9px] font-bold text-stone-400 tracking-wider uppercase">Google Calendar Synchronization</p>
             </div>
             <p className="text-xs font-semibold text-stone-100 truncate">{previewTitle}</p>

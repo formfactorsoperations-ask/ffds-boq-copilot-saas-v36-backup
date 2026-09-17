@@ -23,7 +23,7 @@ export function WhatsAppReminderModal({ isOpen, onClose, onSend, template, varia
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}

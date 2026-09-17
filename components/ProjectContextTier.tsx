@@ -64,7 +64,7 @@ export const ProjectContextTier: React.FC<Props> = ({ projectContext }) => {
       <button
         onClick={toggle}
         aria-expanded={open}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold text-[#0066CC] bg-sky-50 border border-sky-100 hover:bg-sky-100 transition-colors shrink-0 cursor-pointer"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold text-[#3D52A0] bg-sky-50 border border-sky-100 hover:bg-sky-100 transition-colors shrink-0 cursor-pointer"
       >
         Details
         <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />

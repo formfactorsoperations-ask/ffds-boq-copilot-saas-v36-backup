@@ -73,8 +73,8 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                 const el = document.getElementById(focus);
                 if (el) {
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    el.classList.add('ring-2', 'ring-[#0066CC]', 'ring-offset-2');
-                    setTimeout(() => el.classList.remove('ring-2', 'ring-[#0066CC]', 'ring-offset-2'), 3000);
+                    el.classList.add('ring-2', 'ring-[#3D52A0]', 'ring-offset-2');
+                    setTimeout(() => el.classList.remove('ring-2', 'ring-[#3D52A0]', 'ring-offset-2'), 3000);
                 }
             }, 500);
         }
@@ -610,7 +610,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
             doc.setTextColor(5, 150, 105); // emerald 600
             doc.text(`Rs ${Math.floor(authorizedValue).toLocaleString('en-IN')}`, 105, 96);
             
-            doc.setTextColor(0, 102, 204); // indigo 600
+            doc.setTextColor(61, 82, 160); // indigo 600
             doc.text(`Rs ${Math.floor(totalPaid).toLocaleString('en-IN')}`, 150, 96);
 
             // Chronological Ledger table
@@ -761,7 +761,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                 startY: tableStartY,
                 head: [['S No.', 'Item Specification Spec', 'Category', 'Qty', 'Unit', 'Base Rate', 'Markup', 'Base Cost']],
                 body: itemizedRows,
-                headStyles: { fillColor: [0, 102, 204], textColor: [255, 255, 255], fontSize: 8 },
+                headStyles: { fillColor: [61, 82, 160], textColor: [255, 255, 255], fontSize: 8 },
                 bodyStyles: { fontSize: 8, textColor: [51, 65, 85] },
                 columnStyles: {
                     0: { cellWidth: 10 },
@@ -815,7 +815,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(10);
             doc.text('Grand Total Payable:', 115, finalY + 31);
-            doc.setTextColor(0, 102, 204);
+            doc.setTextColor(61, 82, 160);
             doc.text(`Rs ${Math.floor(add.grandTotal || 0).toLocaleString('en-IN')}`, 175, finalY + 31, { align: 'right' });
 
             // Signature approval lines
@@ -851,7 +851,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                 {/* Integration Info Box */}
                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 text-left mb-8">
                     <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50">
-                        <span className="text-[10px] font-bold tracking-wider text-[#0066CC] uppercase block mb-1">Method 1 (Standard Operations)</span>
+                        <span className="text-[10px] font-bold tracking-wider text-[#3D52A0] uppercase block mb-1">Method 1 (Standard Operations)</span>
                         <h4 className="font-bold text-slate-800 text-xs mb-1.5">Activate Design Complete Gate</h4>
                         <p className="text-slate-500 text-[11px] leading-relaxed">
                             Under <strong>Design & Proposals</strong> &gt; <strong>Design Complete</strong>, tick all items on the design closeout checklist and choose "Activate Design Gate". This automatically freezes the BOQ, shifts the project stage to Execution, and activates this module.
@@ -859,7 +859,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                     </div>
 
                     <div className="p-4 rounded-xl border border-sky-200 bg-sky-50/35">
-                        <span className="text-[10px] font-bold tracking-wider text-[#0055B3] uppercase block mb-1">Method 2 (Ops Sandbox Bypass)</span>
+                        <span className="text-[10px] font-bold tracking-wider text-[#334486] uppercase block mb-1">Method 2 (Ops Sandbox Bypass)</span>
                         <h4 className="font-bold text-slate-900 text-xs mb-1.5">Instant Execution Override</h4>
                         <p className="text-sky-800/80 text-[11px] leading-relaxed">
                             For administrators, sandbox users, and operations managers, click the toggle below to bypass the checklist gate, freeze the current BOQ snapshot in the cloud, and unlock the workspace immediately.
@@ -872,7 +872,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                     <button
                         onClick={handleBypassUnlock}
                         disabled={isUnlocking}
-                        className="bg-[#0066CC] hover:bg-[#0055B3] font-bold text-xs text-white px-6 py-3 rounded-xl transition duration-150 flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-98 disabled:opacity-50"
+                        className="bg-[#3D52A0] hover:bg-[#334486] font-bold text-xs text-white px-6 py-3 rounded-xl transition duration-150 flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-98 disabled:opacity-50"
                     >
                         {isUnlocking ? (
                             <>
@@ -908,14 +908,14 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                 <div className="flex gap-2">
                     <button 
                         onClick={() => setIsFormOpen(!isFormOpen)}
-                        className="bg-[#0066CC] hover:bg-[#0055B3] font-bold text-xs text-white px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-sm transition duration-150"
+                        className="bg-[#3D52A0] hover:bg-[#334486] font-bold text-xs text-white px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-sm transition duration-150"
                     >
                         <Plus className="w-4 h-4" /> Log Proposed Alteration
                     </button>
                     {additions.length > 0 && (
                         <button 
                             onClick={generateLifetimeLedger}
-                            className="bg-sky-900 hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 font-bold text-xs text-white px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-sm transition duration-150"
+                            className="bg-sky-900 hover:bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 font-bold text-xs text-white px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-sm transition duration-150"
                         >
                             <FileText className="w-4 h-4" /> Export Combined Ledger PDF
                         </button>
@@ -928,7 +928,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                 <div className="bg-white border border-slate-300 rounded-2xl p-6 shadow-md space-y-6 transition duration-200">
                     <div className="flex justify-between items-center pb-4 border-b border-slate-100">
                         <div>
-                            <span className="text-[10px] font-bold text-[#0066CC] tracking-wider uppercase">Active Draft Phase</span>
+                            <span className="text-[10px] font-bold text-[#3D52A0] tracking-wider uppercase">Active Draft Phase</span>
                             <h3 className="font-bold text-slate-900 text-lg">Formulate Contract Modification</h3>
                         </div>
                         <button 
@@ -955,7 +955,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                 <button 
                                     disabled={isAnalyzing || !clientRequest.trim()}
                                     onClick={handleAnalyzeRequest}
-                                    className="bg-[#0066CC] font-bold text-xs text-white px-5 py-3 rounded-xl disabled:opacity-50 hover:bg-[#0055B3] transition duration-150 flex items-center justify-center gap-2 shadow-sm"
+                                    className="bg-[#3D52A0] font-bold text-xs text-white px-5 py-3 rounded-xl disabled:opacity-50 hover:bg-[#334486] transition duration-150 flex items-center justify-center gap-2 shadow-sm"
                                 >
                                     {isAnalyzing ? (
                                         <>
@@ -985,7 +985,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                             {/* Classification result banner */}
                             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col md:flex-row items-start justify-between gap-4">
                                 <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center text-[#0055B3] font-extrabold text-base border border-sky-200">
+                                    <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center text-[#334486] font-extrabold text-base border border-sky-200">
                                         {classification.type.split('_')[1] || classification.type}
                                     </div>
                                     <div>
@@ -997,7 +997,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                         </h4>
                                         <p className="text-slate-600 text-xs mt-1 leading-relaxed">{classification.reasoning}</p>
                                         {classification.newDrawingsRequired?.length > 0 && (
-                                            <div className="mt-2 text-[10px] font-bold text-[#0055B3] bg-sky-50 inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-sky-100">
+                                            <div className="mt-2 text-[10px] font-bold text-[#334486] bg-sky-50 inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-sky-100">
                                                 <Info className="w-3 h-3" /> Creates {classification.newDrawingsRequired.length} working drawing tasks: {classification.newDrawingsRequired.join(', ')}
                                             </div>
                                         )}
@@ -1011,7 +1011,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
 
                             {/* Portfolio margin warning preview */}
                             {currentRole && ['Super Admin', 'Admin', 'Ops Director'].includes(currentRole) && marginAnalytics && (
-                                <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-slate-200 border border-sky-900 p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-slate-200 border border-sky-900 p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                     <div className="flex items-center gap-3">
                                         <TrendingUp className="w-5 h-5 text-sky-400" />
                                         <div>
@@ -1044,7 +1044,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                     <div className="relative">
                                         <button 
                                             onClick={() => setIsLibraryDropdownOpen(!isLibraryDropdownOpen)}
-                                            className="bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[#0055B3] font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition"
+                                            className="bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[#334486] font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition"
                                         >
                                             <Search className="w-3.5 h-3.5" /> Log item from Rate Library
                                         </button>
@@ -1109,7 +1109,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                     <td className="py-2 px-4">
                                                         <input 
                                                             type="text" 
-                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#0066CC] rounded px-2 py-1 text-xs outline-none bg-transparent"
+                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#3D52A0] rounded px-2 py-1 text-xs outline-none bg-transparent"
                                                             value={item.description}
                                                             onChange={e => updateDraftItem(index, { description: e.target.value })}
                                                         />
@@ -1117,7 +1117,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                     <td className="py-2 px-4">
                                                         <input 
                                                             type="text" 
-                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#0066CC] rounded px-2 py-1 text-xs outline-none bg-transparent"
+                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#3D52A0] rounded px-2 py-1 text-xs outline-none bg-transparent"
                                                             value={item.category}
                                                             onChange={e => updateDraftItem(index, { category: e.target.value })}
                                                         />
@@ -1125,14 +1125,14 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                     <td className="py-2 px-4">
                                                         <input 
                                                             type="number" 
-                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#0066CC] rounded px-2 py-1 text-xs outline-none bg-transparent text-center font-mono font-bold"
+                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#3D52A0] rounded px-2 py-1 text-xs outline-none bg-transparent text-center font-mono font-bold"
                                                             value={item.qty}
                                                             onChange={e => updateDraftItem(index, { qty: Math.max(1, Number(e.target.value) || 1) })}
                                                         />
                                                     </td>
                                                     <td className="py-2 px-4">
                                                         <select
-                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#0066CC] rounded px-2 py-1 text-xs outline-none bg-transparent"
+                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#3D52A0] rounded px-2 py-1 text-xs outline-none bg-transparent"
                                                             value={item.unit}
                                                             onChange={e => updateDraftItem(index, { unit: e.target.value })}
                                                         >
@@ -1148,7 +1148,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                     <td className="py-2 px-4">
                                                         <input 
                                                             type="number" 
-                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#0066CC] rounded px-2 py-1 text-xs outline-none bg-transparent font-mono text-slate-800"
+                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#3D52A0] rounded px-2 py-1 text-xs outline-none bg-transparent font-mono text-slate-800"
                                                             value={item.estimatedUnitRate}
                                                             onChange={e => updateDraftItem(index, { estimatedUnitRate: Math.max(0, Number(e.target.value) || 0) })}
                                                         />
@@ -1156,7 +1156,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                     <td className="py-2 px-4">
                                                         <input 
                                                             type="number" 
-                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#0066CC] rounded px-2 py-1 text-xs outline-none bg-transparent text-center font-mono"
+                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#3D52A0] rounded px-2 py-1 text-xs outline-none bg-transparent text-center font-mono"
                                                             value={item.marginOverride !== undefined ? item.marginOverride : 20}
                                                             onChange={e => updateDraftItem(index, { marginOverride: Math.max(0, Number(e.target.value) || 0) })}
                                                         />
@@ -1171,7 +1171,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                             </span>
                                                         )}
                                                         {item.source === 'ai' && (
-                                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#0055B3] bg-sky-50 px-2 py-0.5 rounded border border-sky-100 animate-pulse">
+                                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#334486] bg-sky-50 px-2 py-0.5 rounded border border-sky-100 animate-pulse">
                                                                 <Sparkles className="w-3 h-3" /> ⚡ AI Estimate Link
                                                             </span>
                                                         )}
@@ -1198,7 +1198,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                 <div className="flex gap-2 text-xs">
                                     <button 
                                         onClick={addCustomRow}
-                                        className="text-[#0066CC] hover:text-[#0055B3] font-bold flex items-center gap-1 border border-sky-100 bg-sky-50/20 hover:bg-sky-50 text-[11px] px-3 py-1.5 rounded-lg"
+                                        className="text-[#3D52A0] hover:text-[#334486] font-bold flex items-center gap-1 border border-sky-100 bg-sky-50/20 hover:bg-sky-50 text-[11px] px-3 py-1.5 rounded-lg"
                                     >
                                         <PlusCircle className="w-3.5 h-3.5" /> + Append Custom Scope Item
                                     </button>
@@ -1251,7 +1251,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                 </div>
 
                                 {/* Section B: Costing Analytics Preview card */}
-                                <div className="lg:col-span-2 space-y-4 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white p-5 rounded-xl border border-sky-900 shadow-sm self-start">
+                                <div className="lg:col-span-2 space-y-4 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white p-5 rounded-xl border border-sky-900 shadow-sm self-start">
                                     <h5 className="text-xs font-bold text-sky-200 uppercase tracking-wider pb-2 border-b border-sky-900">
                                         Contract Invoice Financial Analytics
                                     </h5>
@@ -1292,7 +1292,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                 <button 
                                     disabled={isCreating}
                                     onClick={handleCreateAddition}
-                                    className="bg-[#0066CC] text-white px-6 py-2.5 rounded-lg font-bold disabled:opacity-50 hover:bg-[#0055B3] transition duration-150 flex items-center gap-1.5"
+                                    className="bg-[#3D52A0] text-white px-6 py-2.5 rounded-lg font-bold disabled:opacity-50 hover:bg-[#334486] transition duration-150 flex items-center gap-1.5"
                                 >
                                     {isCreating ? (
                                         <>
@@ -1349,7 +1349,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                             <div className="border border-sky-100 bg-sky-50/20 rounded-lg p-3">
                                 <div className="flex justify-between items-center border-b border-sky-100 pb-2 mb-2">
                                     <h4 className="text-[11px] font-bold uppercase tracking-wider text-sky-800">Section A: Architectural Design Fee</h4>
-                                    <span className="text-[10px] font-semibold text-[#0066CC] bg-white border border-sky-100 px-1.5 py-0.5 rounded">Tax 18% GST</span>
+                                    <span className="text-[10px] font-semibold text-[#3D52A0] bg-white border border-sky-100 px-1.5 py-0.5 rounded">Tax 18% GST</span>
                                 </div>
                                 <div className="space-y-1.5 text-xs">
                                     <div className="flex justify-between">
@@ -1362,7 +1362,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                     </div>
                                     <div className="flex justify-between font-bold text-sm text-slate-900 pt-1">
                                         <span>Total Design Payable</span>
-                                        <span className="font-mono text-[#0055B3]">{formatINR(add.designFeeTotal)}</span>
+                                        <span className="font-mono text-[#334486]">{formatINR(add.designFeeTotal)}</span>
                                     </div>
                                 </div>
 
@@ -1376,7 +1376,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                     ) : (
                                         <button 
                                             onClick={() => handlePayment(add.internalDocId, 'design', add)}
-                                            className="w-full bg-[#0066CC] hover:bg-[#0055B3] font-bold text-xs text-white py-1.5 rounded transition shadow-sm"
+                                            className="w-full bg-[#3D52A0] hover:bg-[#334486] font-bold text-xs text-white py-1.5 rounded transition shadow-sm"
                                         >
                                             Mark Section A Paid (Clearance)
                                         </button>
@@ -1461,7 +1461,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                         <td className="py-2 px-3 font-semibold text-slate-700">{formatINR(item.baseCost)}</td>
                                                         <td className="py-2 px-3">
                                                             {item.source === 'library' && <span className="text-[9px] font-bold text-emerald-600">Rate Library</span>}
-                                                            {item.source === 'ai' && <span className="text-[9px] font-bold text-[#0066CC]">AI Estimate</span>}
+                                                            {item.source === 'ai' && <span className="text-[9px] font-bold text-[#3D52A0]">AI Estimate</span>}
                                                             {item.source === 'custom' && <span className="text-[9px] font-bold text-amber-600">Custom Manual</span>}
                                                             {!item.source && <span className="text-[9px] font-bold text-slate-400">Archived Record</span>}
                                                         </td>
@@ -1482,7 +1482,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                             <div className="flex gap-2">
                                 <button 
                                     onClick={() => generateInvoicePDF(add)}
-                                    className="text-[#0066CC] hover:text-[#0055B3] font-bold flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-md shadow-sm transition"
+                                    className="text-[#3D52A0] hover:text-[#334486] font-bold flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-md shadow-sm transition"
                                 >
                                     <Printer className="w-3.5 h-3.5" /> Download Tax Invoice PDF
                                 </button>

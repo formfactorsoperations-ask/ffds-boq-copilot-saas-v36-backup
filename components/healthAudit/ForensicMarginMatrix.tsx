@@ -272,7 +272,7 @@ export const ForensicMarginMatrix: React.FC<ForensicMarginMatrixProps> = ({ boq,
             </button>
             <button
               onClick={() => setFilterMode('engines')}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${filterMode === 'engines' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-emerald-700 hover:text-emerald-900'}`}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${filterMode === 'engines' ? 'bg-[#3D52A0] text-white shadow-xs' : 'text-emerald-700 hover:text-emerald-900'}`}
             >
               <TrendingUp className="w-3.5 h-3.5" /> Profit Engines ({processedItems.filter(i => i.isProfitEngine).length})
             </button>
@@ -302,19 +302,19 @@ export const ForensicMarginMatrix: React.FC<ForensicMarginMatrixProps> = ({ boq,
             <span className="text-[11px] uppercase font-bold tracking-wider text-slate-400">Sort by:</span>
             <button
               onClick={() => { if (sortField === 'profit') setSortAsc(!sortAsc); else { setSortField('profit'); setSortAsc(false); } }}
-              className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${sortField === 'profit' ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-white text-slate-600 border-slate-200'}`}
+              className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${sortField === 'profit' ? 'bg-[#3D52A0] text-white border-[#3D52A0]' : 'bg-white text-slate-600 border-slate-200'}`}
             >
               Profit {sortField === 'profit' ? (sortAsc ? '↑' : '↓') : ''}
             </button>
             <button
               onClick={() => { if (sortField === 'margin') setSortAsc(!sortAsc); else { setSortField('margin'); setSortAsc(false); } }}
-              className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${sortField === 'margin' ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-white text-slate-600 border-slate-200'}`}
+              className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${sortField === 'margin' ? 'bg-[#3D52A0] text-white border-[#3D52A0]' : 'bg-white text-slate-600 border-slate-200'}`}
             >
               Margin {sortField === 'margin' ? (sortAsc ? '↑' : '↓') : ''}
             </button>
             <button
               onClick={() => { if (sortField === 'sell') setSortAsc(!sortAsc); else { setSortField('sell'); setSortAsc(false); } }}
-              className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${sortField === 'sell' ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-white text-slate-600 border-slate-200'}`}
+              className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${sortField === 'sell' ? 'bg-[#3D52A0] text-white border-[#3D52A0]' : 'bg-white text-slate-600 border-slate-200'}`}
             >
               Sell Value {sortField === 'sell' ? (sortAsc ? '↑' : '↓') : ''}
             </button>

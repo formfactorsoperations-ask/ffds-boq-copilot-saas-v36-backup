@@ -71,7 +71,7 @@ export default function TeamTab() {
                         <select 
                             value={currentPlan}
                             onChange={(e) => setCurrentPlan(e.target.value as PlanTier)}
-                            className="bg-transparent text-[#0066CC] outline-none cursor-pointer"
+                            className="bg-transparent text-[#3D52A0] outline-none cursor-pointer"
                         >
                             <option value="Free">Free</option>
                             <option value="Professional">Professional</option>
@@ -84,7 +84,7 @@ export default function TeamTab() {
                         className={`px-5 py-2.5 text-white rounded-lg font-bold transition-all shadow-sm ${
                             isAtLimit 
                             ? 'bg-slate-300 cursor-not-allowed'
-                            : 'bg-[#0066CC] hover:bg-[#0055B3] hover:scale-105 active:scale-95 shadow-md'
+                            : 'bg-[#3D52A0] hover:bg-[#334486] hover:scale-105 active:scale-95 shadow-md'
                         }`}
                     >
                         + Invite Member
@@ -104,7 +104,7 @@ export default function TeamTab() {
                 </div>
                 <div className="w-1/3 bg-slate-100 rounded-full h-2.5 overflow-hidden">
                     <div 
-                        className={`h-2.5 rounded-full ${isAtLimit ? 'bg-rose-500' : 'bg-[#0066CC]'}`} 
+                        className={`h-2.5 rounded-full ${isAtLimit ? 'bg-rose-500' : 'bg-[#3D52A0]'}`} 
                         style={{ width: `${currentPlan === 'Enterprise' ? (teamMembers.length / 20) * 100 : (teamMembers.length / currentLimit) * 100}%` }}
                     ></div>
                 </div>
@@ -157,7 +157,7 @@ export default function TeamTab() {
                                     </td>
                                     <td className="py-4 px-4">
                                         <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${
-                                            member.role === 'Admin' ? 'bg-sky-100 text-[#0055B3]' :
+                                            member.role === 'Admin' ? 'bg-sky-100 text-[#334486]' :
                                             member.role === 'Ops Director' ? 'bg-blue-100 text-blue-700' :
                                             member.role === 'Site Supervisor' ? 'bg-amber-100 text-amber-700' :
                                             'bg-slate-100 text-slate-700'
@@ -190,7 +190,7 @@ export default function TeamTab() {
 
             <AnimatePresence>
                 {isInviteModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm">
                         <motion.div 
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}

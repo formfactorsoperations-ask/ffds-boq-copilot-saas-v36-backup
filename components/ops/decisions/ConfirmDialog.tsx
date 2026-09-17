@@ -53,7 +53,7 @@ export default function ConfirmDialog({
           <div className="flex items-start gap-3">
             <span
               className={`shrink-0 w-9 h-9 rounded-xl grid place-items-center ${
-                danger ? 'bg-rose-50 text-rose-600' : 'bg-sky-50 text-[#0055B3]'
+                danger ? 'bg-rose-50 text-rose-600' : 'bg-sky-50 text-[#334486]'
               }`}
             >
               <AlertTriangle className="w-4.5 h-4.5" />
@@ -80,7 +80,7 @@ export default function ConfirmDialog({
             autoFocus
             onClick={() => { request.onConfirm(); onCancel(); }}
             className={`px-5 py-2 rounded-xl text-xs font-extrabold text-white transition ${
-              danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-[#0066CC] hover:bg-[#0055B3]'
+              danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-[#3D52A0] hover:bg-[#334486]'
             }`}
           >
             {request.confirmLabel}

@@ -32,7 +32,7 @@ const Pill: React.FC<{ tone: 'wait' | 'ok' | 'soon' | 'new'; children: React.Rea
     wait: 'text-amber-800 bg-amber-50 border-amber-200',
     ok:   'text-emerald-800 bg-emerald-50 border-emerald-200',
     soon: 'text-slate-500 bg-slate-50 border-slate-200',
-    new:  'text-[#0055B3] bg-sky-50 border-sky-200',
+    new:  'text-[#334486] bg-sky-50 border-sky-200',
   }[tone];
   return <span className={`inline-block text-[10px] font-bold rounded-md border px-2 py-0.5 whitespace-nowrap ${styles}`}>{children}</span>;
 };
@@ -96,7 +96,7 @@ export const DecisionsTable: React.FC<{ decisions: ProjectDecisionRecord[]; stag
                 {d.description && <p className="text-[10px] text-slate-500 mt-0.5">{d.description}</p>}
                 {d.drawingUrl && (
                   <a href={d.drawingUrl} target="_blank" rel="noopener noreferrer"
-                     className="text-[10px] font-bold text-[#0066CC] hover:text-[#0055B3] underline underline-offset-2">
+                     className="text-[10px] font-bold text-[#3D52A0] hover:text-[#334486] underline underline-offset-2">
                     View drawing
                   </a>
                 )}

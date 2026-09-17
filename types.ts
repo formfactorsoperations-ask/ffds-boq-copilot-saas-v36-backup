@@ -434,7 +434,14 @@ export interface MaterialSelection {
     clientSignoffStatus?: 'not_required' | 'pending' | 'approved' | 'rejected';
     boqAbsorbed?: boolean;
     timelineApplied?: boolean;
+    /** Set when the change needs the client's agreement but has not reached the ledger yet. */
     needsSignoffRouting?: boolean;
+    /**
+     * The decision in projects/{id}/decisions that carries this change to the
+     * client. Written once the variation has been routed; it is what lets the
+     * client's answer find its way back to the selection.
+     */
+    signoffDecisionId?: string | null;
 
     changeRequestedAt?: string | null;
     changeReason?: string | null;

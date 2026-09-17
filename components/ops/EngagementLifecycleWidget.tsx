@@ -261,11 +261,11 @@ export function EngagementLifecycleWidget({ projectContext, setProjectContext }:
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <Lock className="w-5 h-5 text-[#0066CC]" />
+                    <Lock className="w-5 h-5 text-[#3D52A0]" />
                     Engagement Lifecycle
                 </h3>
                 <p className="text-sm text-slate-500">
-                    Status: <span className="font-bold text-[#0055B3] capitalize">{engagement.status || 'draft'}</span>
+                    Status: <span className="font-bold text-[#334486] capitalize">{engagement.status || 'draft'}</span>
                     {engagement.docketRef && ` • Ref: ${engagement.docketRef} • Terms v${engagement.termsVersion} • Payment v${engagement.paymentScheduleVersion}`}
                 </p>
             </div>
@@ -276,7 +276,7 @@ export function EngagementLifecycleWidget({ projectContext, setProjectContext }:
                         <button 
                             onClick={handleIssue} 
                             disabled={isIssuing}
-                            className="bg-[#0066CC] text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-[#0055B3] transition"
+                            className="bg-[#3D52A0] text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-[#334486] transition"
                         >
                             {isIssuing ? 'Issuing...' : 'Issue Documents'}
                         </button>

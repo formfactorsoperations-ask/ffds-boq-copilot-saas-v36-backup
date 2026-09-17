@@ -352,7 +352,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                 onClick={() => setActiveConfig(conf)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                   activeConfig === conf
-                    ? 'bg-white text-[#0055B3] shadow-sm'
+                    ? 'bg-white text-[#334486] shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -363,7 +363,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
 
           <button
             onClick={() => setIsAddTypologyOpen(true)}
-            className="px-3 py-1.5 bg-sky-50 text-[#0066CC] hover:bg-[#0066CC] hover:text-white border border-sky-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0"
+            className="px-3 py-1.5 bg-sky-50 text-[#3D52A0] hover:bg-[#3D52A0] hover:text-white border border-sky-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0"
           >
             <Plus className="w-3.5 h-3.5" />
             New Typology
@@ -400,7 +400,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                 onClick={() => setActiveRoomType(rk)}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 border ${
                   isActive
-                    ? 'bg-[#0066CC] text-white border-[#0066CC] shadow-sm'
+                    ? 'bg-[#3D52A0] text-white border-[#3D52A0] shadow-sm'
                     : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
                 }`}
               >
@@ -416,7 +416,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
 
           <button
             onClick={() => setIsAddRoomScopeOpen(true)}
-            className="px-3 py-1.5 border border-dashed border-sky-300 text-[#0066CC] hover:bg-sky-50 rounded-xl text-xs font-bold flex items-center gap-1 transition-all shrink-0"
+            className="px-3 py-1.5 border border-dashed border-sky-300 text-[#3D52A0] hover:bg-sky-50 rounded-xl text-xs font-bold flex items-center gap-1 transition-all shrink-0"
           >
             <Plus className="w-3.5 h-3.5" />
             Add Room Scope
@@ -443,7 +443,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
           <div className="p-3.5 border-b border-slate-200 bg-slate-50/70 shrink-0 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                <List className="w-4 h-4 text-[#0066CC]" />
+                <List className="w-4 h-4 text-[#3D52A0]" />
                 Master Item Bank
               </span>
               <span className="text-[11px] font-semibold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
@@ -460,14 +460,14 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                   placeholder="Search bank items..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-[#0066CC] text-slate-800"
+                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-[#3D52A0] text-slate-800"
                 />
               </div>
 
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-36 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#0066CC]"
+                className="w-36 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#3D52A0]"
               >
                 <option value="ALL">All Trades</option>
                 {categories.map(c => (
@@ -525,7 +525,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                       className={`p-2 rounded-xl transition-all shrink-0 ${
                         isAdded
                           ? 'bg-emerald-50 text-emerald-600 cursor-default'
-                          : 'bg-sky-50 text-[#0066CC] hover:bg-[#0066CC] hover:text-white border border-sky-100'
+                          : 'bg-sky-50 text-[#3D52A0] hover:bg-[#3D52A0] hover:text-white border border-sky-100'
                       }`}
                     >
                       {isAdded ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
@@ -542,7 +542,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
           {/* Header */}
           <div className="p-3.5 border-b border-slate-200 bg-gradient-to-r from-sky-50/50 via-white to-sky-50/50 shrink-0 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#0066CC]" />
+              <div className="w-2.5 h-2.5 rounded-full bg-[#3D52A0]" />
               <div>
                 <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
                   {activeConfig} &gt; {activeRoomType.replace(/_/g, ' ')} Scope
@@ -554,7 +554,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 bg-sky-100 text-[#0055B3] rounded-full text-xs font-bold">
+              <span className="px-2.5 py-0.5 bg-sky-100 text-[#334486] rounded-full text-xs font-bold">
                 {currentRoomItemIds.length} Items
               </span>
               {currentRoomItemIds.length > 0 && (
@@ -591,9 +591,9 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                   <button
                     key={idx}
                     onClick={() => handleAddItem(sug.item.id)}
-                    className="px-2.5 py-1 bg-white border border-amber-200 hover:border-[#0066CC] hover:bg-sky-50 text-slate-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs group"
+                    className="px-2.5 py-1 bg-white border border-amber-200 hover:border-[#3D52A0] hover:bg-sky-50 text-slate-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs group"
                   >
-                    <Plus className="w-3 h-3 text-[#0066CC] group-hover:scale-125 transition-transform" />
+                    <Plus className="w-3 h-3 text-[#3D52A0] group-hover:scale-125 transition-transform" />
                     <span>{sug.item.name}</span>
                     <span className="text-[10px] text-slate-400 font-normal">({sug.item.unit})</span>
                   </button>
@@ -636,7 +636,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                         <span className="text-xs font-bold text-slate-400 w-5 shrink-0 text-center">
                           {idx + 1}
                         </span>
-                        <div className="w-1.5 h-8 bg-[#0066CC] rounded-full shrink-0" />
+                        <div className="w-1.5 h-8 bg-[#3D52A0] rounded-full shrink-0" />
                         <div className="min-w-0">
                           <p className="font-bold text-slate-800 text-xs truncate">{item.name}</p>
                           <div className="flex flex-wrap items-center gap-2 mt-0.5">

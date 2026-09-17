@@ -391,7 +391,7 @@ export default function TermsAndPaymentTab() {
                     <div className="flex gap-2">
                         <button
                             onClick={() => setPaymentStr(JSON.parse(JSON.stringify(FFDS_PAYMENT_STRUCTURE_DEFAULTS)))}
-                            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-sky-200 text-[#0055B3] hover:bg-sky-50 transition"
+                            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-sky-200 text-[#334486] hover:bg-sky-50 transition"
                         >
                             Load FFDS Defaults
                         </button>

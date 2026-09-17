@@ -4,7 +4,7 @@
  * Before this file there were two competing sets. The project report used a
  * muted trio (#0E7C5A / #C77700 / #B4436A) while the Health Check & Audit
  * screen used raw Tailwind defaults (#10B981 / #F59E0B / #EF4444), and the two
- * screens disagreed on the brand blue as well (#0066CC vs #0284C7). The same
+ * screens disagreed on the brand blue as well (#3D52A0 vs #0284C7). The same
  * project could therefore be "green" on one screen and a different green on the
  * other, which quietly undermines the numbers: if the colours are not the same
  * language, neither are the readings.
@@ -18,8 +18,8 @@
  */
 
 /* Brand — the only saturated blue in the product. */
-export const BRAND       = '#0066CC';
-export const BRAND_HOVER = '#0055B3';
+export const BRAND       = '#3D52A0';
+export const BRAND_HOVER = '#334486';
 
 /* Studio accent. Hairlines, locks and dashed borders only. */
 export const GOLD        = '#B5945B';

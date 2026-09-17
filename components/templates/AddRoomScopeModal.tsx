@@ -93,13 +93,13 @@ export const AddRoomScopeModal: React.FC<AddRoomScopeModalProps> = ({
                   setError(null);
                 }}
                 placeholder="e.g. powder_room, terrace_deck, study"
-                className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
               />
               <button
                 type="button"
                 onClick={() => handleAdd(customRoomKey)}
                 disabled={!customRoomKey.trim()}
-                className="px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors shrink-0"
+                className="px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors shrink-0"
               >
                 Add Custom
               </button>
@@ -122,14 +122,14 @@ export const AddRoomScopeModal: React.FC<AddRoomScopeModalProps> = ({
                     className={`p-2 rounded-xl text-left text-xs font-semibold border transition-all flex items-center justify-between ${
                       isExisting
                         ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
-                        : 'bg-white text-slate-700 border-slate-200 hover:border-[#0066CC] hover:bg-sky-50'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-[#3D52A0] hover:bg-sky-50'
                     }`}
                   >
                     <span className="truncate mr-1">{s.label}</span>
                     {isExisting ? (
                       <span className="text-[10px] text-slate-400">Added</span>
                     ) : (
-                      <Plus className="w-3.5 h-3.5 text-[#0066CC] shrink-0" />
+                      <Plus className="w-3.5 h-3.5 text-[#3D52A0] shrink-0" />
                     )}
                   </button>
                 );

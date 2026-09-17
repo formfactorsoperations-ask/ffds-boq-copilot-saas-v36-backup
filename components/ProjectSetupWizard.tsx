@@ -462,15 +462,15 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                     whileHover={{ scale: 1.02, y: -5 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => { setSetupMethod('floorplan'); setStep(1); }} 
-                    className="relative bg-white border-2 border-sky-100 rounded-3xl p-8 text-left shadow-xl shadow-sky-500/10 hover:shadow-2xl hover:border-[#0066CC]/50 transition-all group overflow-hidden"
+                    className="relative bg-white border-2 border-sky-100 rounded-3xl p-8 text-left shadow-xl shadow-sky-500/10 hover:shadow-2xl hover:border-[#3D52A0]/50 transition-all group overflow-hidden"
                   >
                       <div className="absolute top-0 right-0 p-3">
-                          <span className="bg-[#0066CC] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-md">Recommended</span>
+                          <span className="bg-[#3D52A0] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-md">Recommended</span>
                       </div>
-                      <div className="w-14 h-14 bg-sky-50 rounded-2xl flex items-center justify-center mb-6 text-[#0066CC] group-hover:scale-110 transition-transform">
+                      <div className="w-14 h-14 bg-sky-50 rounded-2xl flex items-center justify-center mb-6 text-[#3D52A0] group-hover:scale-110 transition-transform">
                           <SparklesIcon className="w-7 h-7" />
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-[#0055B3] transition-colors">AI Floor Plan Analysis</h3>
+                      <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-[#334486] transition-colors">AI Floor Plan Analysis</h3>
                       <p className="text-sm text-slate-500 leading-relaxed">
                           Upload a floor plan image. Our AI will automatically detect rooms, calculate areas, and prepare your BOQ structure.
                       </p>

@@ -168,7 +168,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <MotionDiv
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -192,7 +192,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                       </button>
                       <button 
                         onClick={() => setMode('bundles')} 
-                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${mode === 'bundles' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${mode === 'bundles' ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
                       >
                           <SparklesIcon className="w-3 h-3" /> Smart Bundles
                       </button>
@@ -261,7 +261,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                     {/* Render Standard Templates Section */}
                     <div className="space-y-3">
                         <h4 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#0066CC]"></span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#3D52A0]"></span>
                             Standard Templates
                         </h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -269,7 +269,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                                 <div 
                                     key={bundle.id} 
                                     onClick={() => handleSelectBundle(bundle.id)}
-                                    className="bg-white border-2 border-sky-50 hover:border-[#0066CC] rounded-xl p-5 hover:shadow-lg transition-all cursor-pointer group"
+                                    className="bg-white border-2 border-sky-50 hover:border-[#3D52A0] rounded-xl p-5 hover:shadow-lg transition-all cursor-pointer group"
                                 >
                                     <div className="flex items-center gap-3 mb-2">
                                         <div className="text-2xl bg-sky-50 w-10 h-10 flex items-center justify-center rounded-full group-hover:scale-110 transition-transform">{bundle.icon}</div>
@@ -277,8 +277,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                                     </div>
                                     <p className="text-xs text-slate-500 mb-4 h-8 leading-relaxed line-clamp-2">{bundle.description}</p>
                                     <div className="flex justify-between items-center border-t border-slate-100 pt-3">
-                                        <span className="text-xs font-bold text-[#0066CC] bg-sky-50 px-2 py-1 rounded">{bundle.itemIds.length} Items</span>
-                                        <span className="text-xs font-bold text-slate-400 group-hover:text-[#0066CC] transition-colors">Select & Review →</span>
+                                        <span className="text-xs font-bold text-[#3D52A0] bg-sky-50 px-2 py-1 rounded">{bundle.itemIds.length} Items</span>
+                                        <span className="text-xs font-bold text-slate-400 group-hover:text-[#3D52A0] transition-colors">Select & Review →</span>
                                     </div>
                                 </div>
                             ))}
@@ -301,7 +301,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                                     <input type="number" min="0" value={quantities[item.id]?.qty || 0} disabled={quantities[item.id]?.isLoading} onChange={e => handleQuantityChange(item.id, parseFloat(e.target.value))} className="w-20 p-1.5 border border-slate-300 rounded text-center font-bold text-slate-800" />
                                 </div>
                            </div>
-                           <div className="mt-2 text-xs text-[#0055B3] italic bg-sky-50 border border-sky-100 p-2 rounded-md flex gap-2">
+                           <div className="mt-2 text-xs text-[#334486] italic bg-sky-50 border border-sky-100 p-2 rounded-md flex gap-2">
                             {quantities[item.id]?.isLoading ? (
                                 <span className="animate-pulse">AI is calculating...</span>
                             ) : (
@@ -330,7 +330,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                     Cancel
                 </button>
                 {stage === 'select' ? (
-                    <button onClick={handleNext} disabled={selectedItems.size === 0} className="px-6 py-2 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white font-bold rounded-lg shadow-md hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 disabled:bg-slate-300 disabled:shadow-none transition-all text-sm">
+                    <button onClick={handleNext} disabled={selectedItems.size === 0} className="px-6 py-2 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white font-bold rounded-lg shadow-md hover:bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 disabled:bg-slate-300 disabled:shadow-none transition-all text-sm">
                         Review Selection ({selectedItems.size})
                     </button>
                 ) : (

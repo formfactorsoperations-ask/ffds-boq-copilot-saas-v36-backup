@@ -122,7 +122,7 @@ const EditableText: React.FC<{
 
 const ContractSection: React.FC<{ number: number; title: React.ReactNode; children: React.ReactNode, className?: string }> = ({ number, title, children, className = "" }) => (
     <div className={`mb-12 break-inside-avoid ${className}`}>
-        <h3 className="text-xl font-bold text-slate-900 uppercase tracking-wide border-b-2 border-[#0055B3] pb-3 mb-6 font-opensans flex gap-2 items-start">
+        <h3 className="text-xl font-bold text-slate-900 uppercase tracking-wide border-b-2 border-[#334486] pb-3 mb-6 font-opensans flex gap-2 items-start">
             <span className="text-slate-400">{number}.</span> 
             <div className="flex-grow">{title}</div>
         </h3>
@@ -146,7 +146,7 @@ const PaymentTable: React.FC<{
 }> = ({ milestones, isEditing, onUpdateMilestone, onAddMilestone, onDeleteMilestone }) => (
     <div className="mb-6 break-inside-avoid shadow-sm rounded-lg border border-slate-200 overflow-hidden">
         <table className="w-full text-sm">
-            <thead className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white font-bold text-[10px] uppercase">
+            <thead className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white font-bold text-[10px] uppercase">
                 <tr>
                     <th className="text-left p-3 w-1/4">Stage</th>
                     <th className="text-left p-3">Milestone Trigger</th>
@@ -220,7 +220,7 @@ const PaymentTable: React.FC<{
             <div className="bg-slate-50 p-2 border-t border-slate-200 flex justify-center">
                 <button 
                     onClick={onAddMilestone}
-                    className="flex items-center gap-1 text-xs font-bold text-[#0066CC] hover:text-[#0055B3] bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-full transition-colors"
+                    className="flex items-center gap-1 text-xs font-bold text-[#3D52A0] hover:text-[#334486] bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-full transition-colors"
                 >
                     <PlusIcon className="w-3 h-3" /> Add Milestone
                 </button>
@@ -512,7 +512,7 @@ const ExecutionBlock: React.FC<{ clientName: string, location: string, projectId
                                     const emailVal = e.target.value;
                                     setProjectContext?.((prev: any) => ({ ...prev, clientEmail: emailVal }));
                                 }} 
-                                className="flex-grow text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] shadow-sm" 
+                                className="flex-grow text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] shadow-sm" 
                                 placeholder="Enter client's email address (e.g. client@example.com)" 
                             />
                             {projectContext.clientEmail && projectContext.clientEmail.includes('@') ? (
@@ -559,7 +559,7 @@ const ExecutionBlock: React.FC<{ clientName: string, location: string, projectId
                                             setIsSending(false);
                                         }
                                     }}
-                                    className="px-3 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold rounded-md text-[10px] shadow-sm uppercase tracking-wider cursor-pointer inline-block text-center"
+                                    className="px-3 py-1.5 bg-[#3D52A0] hover:bg-[#334486] text-white font-bold rounded-md text-[10px] shadow-sm uppercase tracking-wider cursor-pointer inline-block text-center"
                                 >
                                     Force Generate Digital Sign-Off Link (Sandbox Bypass)
                                 </button>
@@ -574,7 +574,7 @@ const ExecutionBlock: React.FC<{ clientName: string, location: string, projectId
                         <button 
                             onClick={() => setShowSendConfirm(true)}
                             disabled={isSending}
-                            className="flex justify-center items-center gap-2 px-4 py-2 bg-[#0066CC] text-white text-xs font-bold rounded-lg shadow-lg hover:bg-[#0055B3] transition-all w-full"
+                            className="flex justify-center items-center gap-2 px-4 py-2 bg-[#3D52A0] text-white text-xs font-bold rounded-lg shadow-lg hover:bg-[#334486] transition-all w-full"
                         >
                             <ShieldCheckIcon className="w-4 h-4" /> {isSending ? 'Sending...' : 'Send to Client'}
                         </button>
@@ -582,8 +582,8 @@ const ExecutionBlock: React.FC<{ clientName: string, location: string, projectId
                         <div className="p-3 border border-sky-200 bg-sky-50 rounded-lg flex flex-col gap-2">
                             <p className="text-xs font-bold text-slate-800">Send Agreement via Email?</p>
                             <div className="flex items-center gap-2">
-                                <button onClick={sendEmailSignoff} className="px-3 py-1 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold rounded text-xs flex-1">Confirm</button>
-                                <button onClick={() => setShowSendConfirm(false)} className="px-3 py-1 bg-white border border-sky-200 text-[#0055B3] font-bold rounded text-xs flex-1">Cancel</button>
+                                <button onClick={sendEmailSignoff} className="px-3 py-1 bg-[#3D52A0] hover:bg-[#334486] text-white font-bold rounded text-xs flex-1">Confirm</button>
+                                <button onClick={() => setShowSendConfirm(false)} className="px-3 py-1 bg-white border border-sky-200 text-[#334486] font-bold rounded text-xs flex-1">Cancel</button>
                             </div>
                         </div>
                     )}
@@ -600,7 +600,7 @@ const ExecutionBlock: React.FC<{ clientName: string, location: string, projectId
                             <p className="text-[10px] uppercase tracking-widest font-bold text-slate-500">Manual Approval Reference</p>
                             <input type="text" value={manualRef} onChange={e => setManualRef(e.target.value)} className="text-xs p-2 border border-slate-200 rounded w-full outline-none focus:border-slate-400" placeholder="e.g. Email from Client" />
                             <div className="flex items-center gap-2">
-                                <button onClick={handleMarkExecuted} className="px-3 py-2 bg-sky-900 hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white font-bold rounded text-xs flex-1">Mark Executed</button>
+                                <button onClick={handleMarkExecuted} className="px-3 py-2 bg-sky-900 hover:bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white font-bold rounded text-xs flex-1">Mark Executed</button>
                                 <button onClick={() => setShowMarkManual(false)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded text-xs flex-1">Cancel</button>
                             </div>
                         </div>
@@ -976,7 +976,7 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
         <div id="execution-contract-root" className="bg-white p-8 md:p-16 max-w-5xl mx-auto shadow-2xl my-8 font-opensans text-slate-800 print:shadow-none print:my-0 print:w-full print:max-w-none print:p-0 print:mx-0">
             
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b-4 border-[#0055B3] pb-8 mb-12 gap-6 relative">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b-4 border-[#334486] pb-8 mb-12 gap-6 relative">
                 {isShowingOperative && operativeBoq && (
                     <div className="absolute top-0 right-0 -mt-16 bg-blue-50 border border-blue-200 text-blue-800 text-[10px] uppercase font-bold py-1 px-3 rounded shadow-sm flex items-center space-x-1">
                         <CheckBadgeIcon className="w-3 h-3 text-blue-500" />
@@ -1029,7 +1029,7 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
                 </div>
 
                 {/* Unified Value Block */}
-                <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white p-6 rounded-xl shadow-lg print:bg-white print:text-slate-900 print:border-2 print:border-[#0055B3]">
+                <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white p-6 rounded-xl shadow-lg print:bg-white print:text-slate-900 print:border-2 print:border-[#334486]">
                     <div className="flex flex-col md:flex-row justify-between items-start gap-8">
                         <div className="flex-grow max-w-md">
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-700 pb-2">Financial Summary</p>
@@ -1531,7 +1531,7 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
             )}
 
             {/* Sign-off & Execution Protocol */}
-            <div className="mt-20 pt-10 border-t-4 border-[#0055B3] break-inside-avoid">
+            <div className="mt-20 pt-10 border-t-4 border-[#334486] break-inside-avoid">
                 <h3 className="text-lg font-bold text-slate-900 uppercase tracking-wide mb-6 font-opensans">
                     <EditableText isEditing={isEditing} value={content.signoffTitle} onChange={v => updateContent('signoffTitle', v)} />
                 </h3>

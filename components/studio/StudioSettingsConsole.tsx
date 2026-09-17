@@ -87,7 +87,7 @@ const Field: React.FC<FieldProps> = ({ field, value, onChange, disabled, multili
   return (
     <div
       id={`set-${field.key.replace(/\./g, '-')}`}
-      className={`rounded-xl transition-shadow ${highlight ? 'ring-2 ring-[#0066CC] ring-offset-2 hud-locate' : ''}`}
+      className={`rounded-xl transition-shadow ${highlight ? 'ring-2 ring-[#3D52A0] ring-offset-2 hud-locate' : ''}`}
     >
       <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
         {field.label}
@@ -102,7 +102,7 @@ const Field: React.FC<FieldProps> = ({ field, value, onChange, disabled, multili
         disabled={disabled}
         placeholder={placeholder}
         onChange={(e: any) => onChange(type === 'number' ? Number(e.target.value) : e.target.value)}
-        className={`w-full px-3 py-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-[#0066CC]/30 focus:border-[#0066CC] disabled:bg-slate-50 ${
+        className={`w-full px-3 py-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] disabled:bg-slate-50 ${
           missingRequired ? 'border-rose-300 bg-rose-50/40' : 'border-slate-300'
         }`}
       />
@@ -123,7 +123,7 @@ const Panel: React.FC<{ id: SectionId; title: string; blurb: string; missing: nu
     return (
       <section id={`section-${id}`} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in scroll-mt-24">
         <div className="flex items-start gap-3 mb-5">
-          <div className="w-9 h-9 rounded-xl bg-[#0066CC]/10 text-[#0066CC] flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] flex items-center justify-center shrink-0">
             <Icon className="w-4.5 h-4.5" />
           </div>
           <div className="min-w-0">
@@ -144,6 +144,8 @@ const Panel: React.FC<{ id: SectionId; title: string; blurb: string; missing: nu
   };
 
 export default function StudioSettingsConsole(props: {
+  /** The settings/templates switcher, rendered inside the header. */
+  tabs?: React.ReactNode;
   onDownloadBackup?: () => void;
   onImportProject?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClearProject?: () => void;
@@ -302,6 +304,7 @@ export default function StudioSettingsConsole(props: {
         tone={saving || dirty ? 'warn' : tone}
         live={saving}
         blurb="Everything this studio prints, charges and signs in."
+        tabs={props.tabs}
         search={{
           value: q,
           onChange: setQ,
@@ -377,7 +380,7 @@ export default function StudioSettingsConsole(props: {
                 key={s.id}
                 onClick={() => setActiveSection(s.id)}
                 className={`w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-colors hud-row-in ${
-                  isActive ? 'bg-[#0066CC] text-white shadow-sm hud-rail-active' : 'text-slate-700 hover:bg-slate-100'
+                  isActive ? 'bg-[#3D52A0] text-white shadow-sm hud-rail-active' : 'text-slate-700 hover:bg-slate-100'
                 }`}
                 style={{ animationDelay: `${i * 30}ms` }}
               >
@@ -545,7 +548,7 @@ export default function StudioSettingsConsole(props: {
                   </div>
                   <button
                     onClick={() => { const v = !compact; setCompact(v); applyPersonalization(font, theme, v); }}
-                    className={`w-12 h-6 rounded-full transition-colors relative shrink-0 ${compact ? 'bg-[#0066CC]' : 'bg-slate-300'}`}
+                    className={`w-12 h-6 rounded-full transition-colors relative shrink-0 ${compact ? 'bg-[#3D52A0]' : 'bg-slate-300'}`}
                     aria-pressed={compact}
                   >
                     <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${compact ? 'left-6.5' : 'left-0.5'}`} />
@@ -685,7 +688,7 @@ export default function StudioSettingsConsole(props: {
                 </button>
               )}
               <button onClick={save} disabled={!dirty || saving}
-                      className="px-5 py-2 rounded-xl bg-[#0066CC] text-white font-bold text-sm hover:bg-[#0055B3] disabled:opacity-50 flex items-center gap-2">
+                      className="px-5 py-2 rounded-xl bg-[#3D52A0] text-white font-bold text-sm hover:bg-[#334486] disabled:opacity-50 flex items-center gap-2">
                 <Save className="w-4 h-4" />
                 {saving ? 'Saving…' : 'Save changes'}
               </button>

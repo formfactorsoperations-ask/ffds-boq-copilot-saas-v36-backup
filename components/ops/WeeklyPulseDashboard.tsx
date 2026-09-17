@@ -242,7 +242,7 @@ export default function WeeklyPulseDashboard({ projectContext, setProjectContext
       {/* Clean Header & Navigation */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-2 border-b border-slate-200">
         <div>
-          <span className="text-[10px] font-bold tracking-widest text-[#0066CC] uppercase block mb-1">Site Operations</span>
+          <span className="text-[10px] font-bold tracking-widest text-[#3D52A0] uppercase block mb-1">Site Operations</span>
           <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
             Site Progress & Client Experience
           </h3>
@@ -369,7 +369,7 @@ export default function WeeklyPulseDashboard({ projectContext, setProjectContext
 
             {/* Card 4: Updates This Week */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#0066CC]/90 backdrop-blur-md border border-white/20" />
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#3D52A0]/90 backdrop-blur-md border border-white/20" />
               <div className="space-y-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Activity Logged</span>
                 <span className="text-3xl font-light text-slate-900 tracking-tight block">
@@ -411,7 +411,7 @@ export default function WeeklyPulseDashboard({ projectContext, setProjectContext
                       {/* Elegant Progress Line */}
                       <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-200/20">
                         <div 
-                          className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 h-full rounded-full transition-all duration-500" 
+                          className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 h-full rounded-full transition-all duration-500" 
                           style={{ width: `${item.progress}%` }} 
                         />
                       </div>
@@ -435,7 +435,7 @@ export default function WeeklyPulseDashboard({ projectContext, setProjectContext
                         {/* Status dot */}
                         <div className={`absolute -left-[16px] w-2 h-2 rounded-full border ${
                           isActive ? 'bg-[#B5945B] border-amber-300 ring-2 ring-[#B5945B]/10' : 
-                          isPassed ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 border-[#0055B3]' : 'bg-white border-slate-300'
+                          isPassed ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 border-[#334486]' : 'bg-white border-slate-300'
                         }`} />
                         <span className={`text-xs ${
                           isActive ? 'text-slate-900 font-bold' : 
@@ -581,7 +581,7 @@ export default function WeeklyPulseDashboard({ projectContext, setProjectContext
                 ) : (
                   <div className="space-y-4 max-h-80 overflow-y-auto pr-1">
                     {weeklyFeedItems.map((item, idx) => (
-                      <div key={item.id || idx} className="relative pl-3.5 before:absolute before:left-0 before:top-2 before:bottom-0 before:w-[1px] before:bg-[#0066CC]/90 backdrop-blur-md border border-white/20/20">
+                      <div key={item.id || idx} className="relative pl-3.5 before:absolute before:left-0 before:top-2 before:bottom-0 before:w-[1px] before:bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/20">
                         <div className="flex justify-between items-start">
                           <span className="text-[9px] font-bold text-[#B5945B] uppercase tracking-wider block">
                             {item.type === 'site_update' ? 'Site Update' : 'Payment Cleared'}

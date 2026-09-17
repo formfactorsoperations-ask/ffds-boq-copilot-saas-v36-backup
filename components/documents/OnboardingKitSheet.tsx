@@ -115,7 +115,7 @@ const OnboardingKitSheet: React.FC<OnboardingKitSheetProps> = ({
                             <div>
                                 <div className="font-bold">Kickoff & Brief Freeze <span className="text-xs font-normal text-slate-500 ml-2">Week 1</span></div>
                                 <p className="text-sm text-slate-600 mt-1">We sit together, walk through your lifestyle, storage needs, and inspirations, and freeze the design brief in writing.</p>
-                                <p className="text-xs font-semibold text-[#0055B3] mt-2">Your part: both decision-makers attend; bring the checklist in Section C.</p>
+                                <p className="text-xs font-semibold text-[#334486] mt-2">Your part: both decision-makers attend; bring the checklist in Section C.</p>
                             </div>
                         </div>
                         <div className="flex gap-4 p-4 border border-slate-200 rounded-lg items-start">
@@ -123,7 +123,7 @@ const OnboardingKitSheet: React.FC<OnboardingKitSheetProps> = ({
                             <div>
                                 <div className="font-bold">Site Measurement & Survey <span className="text-xs font-normal text-slate-500 ml-2">Week 1–2</span></div>
                                 <p className="text-sm text-slate-600 mt-1">Our team measures the apartment, photographs every wall, and verifies electrical and plumbing positions against the builder plan.</p>
-                                <p className="text-xs font-semibold text-[#0055B3] mt-2">Your part: arrange flat access and society entry permissions for our team.</p>
+                                <p className="text-xs font-semibold text-[#334486] mt-2">Your part: arrange flat access and society entry permissions for our team.</p>
                             </div>
                         </div>
                         <div className="flex gap-4 p-4 border border-slate-200 rounded-lg items-start">
@@ -131,7 +131,7 @@ const OnboardingKitSheet: React.FC<OnboardingKitSheetProps> = ({
                             <div>
                                 <div className="font-bold">Concept & Space Planning <span className="text-xs font-normal text-slate-500 ml-2">Week 2–4</span></div>
                                 <p className="text-sm text-slate-600 mt-1">Furniture layouts, zoning options, and the design direction — presented and refined with you until the layout is locked.</p>
-                                <p className="text-xs font-semibold text-[#0055B3] mt-2">Your part: consolidated feedback as one list per review (see Section D, Rule 1).</p>
+                                <p className="text-xs font-semibold text-[#334486] mt-2">Your part: consolidated feedback as one list per review (see Section D, Rule 1).</p>
                             </div>
                         </div>
                         <div className="flex gap-4 p-4 border border-slate-200 rounded-lg items-start">
@@ -139,7 +139,7 @@ const OnboardingKitSheet: React.FC<OnboardingKitSheetProps> = ({
                             <div>
                                 <div className="font-bold">Design Development & 3D <span className="text-xs font-normal text-slate-500 ml-2">Week 4–8</span></div>
                                 <p className="text-sm text-slate-600 mt-1">Detailed designs and 3D visuals room by room, with materials, finishes, and lighting resolved. Unlocks the D2 milestone.</p>
-                                <p className="text-xs font-semibold text-[#0055B3] mt-2">Your part: material & finish selections, recorded on your Client Portal.</p>
+                                <p className="text-xs font-semibold text-[#334486] mt-2">Your part: material & finish selections, recorded on your Client Portal.</p>
                             </div>
                         </div>
                         <div className="flex gap-4 p-4 border border-slate-200 rounded-lg items-start">
@@ -147,7 +147,7 @@ const OnboardingKitSheet: React.FC<OnboardingKitSheetProps> = ({
                             <div>
                                 <div className="font-bold">Technical Drawings & BOQ Lock <span className="text-xs font-normal text-slate-500 ml-2">Week 8–11</span></div>
                                 <p className="text-sm text-slate-600 mt-1">Good-for-Construction drawings and the final Bill of Quantities. When every drawing is approved, the design phase formally closes — this is the Design Complete milestone, and it unlocks D3.</p>
-                                <p className="text-xs font-semibold text-[#0055B3] mt-2">Your part: final drawing approvals on the portal — these are your sign-offs.</p>
+                                <p className="text-xs font-semibold text-[#334486] mt-2">Your part: final drawing approvals on the portal — these are your sign-offs.</p>
                             </div>
                         </div>
                         <div className="flex gap-4 p-4 border border-slate-200 rounded-lg items-start">
@@ -155,7 +155,7 @@ const OnboardingKitSheet: React.FC<OnboardingKitSheetProps> = ({
                             <div>
                                 <div className="font-bold">Execution & Handover <span className="text-xs font-normal text-slate-500 ml-2">~12–14 weeks on site</span></div>
                                 <p className="text-sm text-slate-600 mt-1">Material orders, site work, installation, and finishing — through to your final walkthrough, Handover Docket, and Warranty Certificate.</p>
-                                <p className="text-xs font-semibold text-[#0055B3] mt-2">Your part: E1 clears before any vendor order is placed; site decisions via the group.</p>
+                                <p className="text-xs font-semibold text-[#334486] mt-2">Your part: E1 clears before any vendor order is placed; site decisions via the group.</p>
                             </div>
                         </div>
                     </div>

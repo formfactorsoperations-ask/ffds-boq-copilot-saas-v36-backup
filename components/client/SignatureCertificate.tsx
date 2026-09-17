@@ -112,7 +112,7 @@ const SignatureCertificate: React.FC<SignatureCertificateProps> = ({
         >
           {/* Masthead */}
           <header className="border-b-2 border-slate-900 pb-5">
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#0066CC] mb-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#3D52A0] mb-1">
               {studioName}
             </p>
             <h1 className="text-[22px] font-black text-slate-900 leading-tight tracking-tight">

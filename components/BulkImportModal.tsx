@@ -153,7 +153,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClose, onIm
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
+            <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
                 <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-auto flex flex-col max-h-[90vh]">
                     <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl">
                         <div>
@@ -175,7 +175,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClose, onIm
                         ) : step === 1 ? (
                             <div className="border-2 border-dashed border-slate-300 rounded-2xl p-12 text-center bg-slate-50 hover:bg-slate-100 transition-colors relative cursor-pointer group">
                                 <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                                <div className="w-20 h-20 bg-white rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform text-[#0066CC] font-bold text-xl">
+                                <div className="w-20 h-20 bg-white rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform text-[#3D52A0] font-bold text-xl">
                                     XLSX
                                 </div>
                                 <h3 className="text-lg font-bold text-slate-700 mb-2">Drop your BOQ file here, or click to browse</h3>
@@ -196,7 +196,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClose, onIm
                                             <select 
                                                 value={mapping[f.key] || ''}
                                                 onChange={(e) => setMapping(prev => ({ ...prev, [f.key]: e.target.value }))}
-                                                className="w-full bg-white border border-slate-300 p-2.5 rounded-lg text-sm font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                                                className="w-full bg-white border border-slate-300 p-2.5 rounded-lg text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                                             >
                                                 <option value="">-- Ignore / Not Mapped --</option>
                                                 {headers.map((h, i) => (
@@ -281,7 +281,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClose, onIm
                             Cancel
                         </button>
                         {!frozen && step === 2 && (
-                            <button onClick={validateAndProcess} className="px-6 py-2.5 rounded-xl font-bold bg-[#0066CC] hover:bg-[#0055B3] text-white shadow-md transition-all hover:shadow-sky-200 hover:-translate-y-0.5">
+                            <button onClick={validateAndProcess} className="px-6 py-2.5 rounded-xl font-bold bg-[#3D52A0] hover:bg-[#334486] text-white shadow-md transition-all hover:shadow-sky-200 hover:-translate-y-0.5">
                                 Validate Data
                             </button>
                         )}

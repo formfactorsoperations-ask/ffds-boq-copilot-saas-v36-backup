@@ -97,11 +97,11 @@ const BankCategoryGroupedView: React.FC<BankCategoryGroupedViewProps> = ({
                 <button
                   type="button"
                   onClick={() => onSelectCategoryItems(category, !isAllCatSelected)}
-                  className="text-slate-500 hover:text-[#0066CC] transition-colors p-1"
+                  className="text-slate-500 hover:text-[#3D52A0] transition-colors p-1"
                   title={isAllCatSelected ? 'Deselect all items in this category' : 'Select all items in this category'}
                 >
                   {isAllCatSelected ? (
-                    <CheckSquare className="w-4 h-4 text-[#0066CC]" />
+                    <CheckSquare className="w-4 h-4 text-[#3D52A0]" />
                   ) : (
                     <Square className="w-4 h-4 text-slate-400" />
                   )}
@@ -138,7 +138,7 @@ const BankCategoryGroupedView: React.FC<BankCategoryGroupedViewProps> = ({
                 <button
                   type="button"
                   onClick={() => onOpenBulkModalForCategory(category)}
-                  className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-bold text-[#0066CC] shadow-2xs transition-colors cursor-pointer"
+                  className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-bold text-[#3D52A0] shadow-2xs transition-colors cursor-pointer"
                 >
                   Bulk Edit {category}
                 </button>

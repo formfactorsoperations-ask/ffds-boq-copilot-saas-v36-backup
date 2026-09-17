@@ -278,11 +278,11 @@ export default function RaisePOModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-4xl w-full border border-slate-200/60 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
-        <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 px-6 py-4 flex items-center justify-between text-white">
+        <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 px-6 py-4 flex items-center justify-between text-white">
           <div>
             <h3 className="text-lg font-black tracking-tight">Raise Purchase Order</h3>
             <p className="text-xs text-sky-200/80 mt-0.5">Pre-filled with selections for {projectContext.name}</p>
@@ -309,7 +309,7 @@ export default function RaisePOModal({
                 type="text"
                 value={poNumber}
                 onChange={e => setPoNumber(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
               />
             </div>
 
@@ -318,7 +318,7 @@ export default function RaisePOModal({
               <select
                 value={selectedVendorId}
                 onChange={handleVendorChange}
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none bg-white"
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none bg-white"
               >
                 <option value="">-- Choose Vendor --</option>
                 {vendors.map(v => (
@@ -335,7 +335,7 @@ export default function RaisePOModal({
                 value={vendorName}
                 onChange={e => setVendorName(e.target.value)}
                 disabled={selectedVendorId !== 'custom' && selectedVendorId !== ''}
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none disabled:bg-slate-50 disabled:text-slate-500"
                 placeholder="Enter vendor name"
               />
             </div>
@@ -357,7 +357,7 @@ export default function RaisePOModal({
                       setRoomId('');
                     }
                   }}
-                  className="flex-1 rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none bg-white"
+                  className="flex-1 rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none bg-white"
                 >
                   {roomsOptions.map(r => (
                     <option key={r} value={r}>{r}</option>
@@ -370,7 +370,7 @@ export default function RaisePOModal({
                     value={roomId}
                     onChange={e => setRoomId(e.target.value)}
                     placeholder="Custom room name"
-                    className="flex-1 rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                    className="flex-1 rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                   />
                 )}
               </div>
@@ -390,7 +390,7 @@ export default function RaisePOModal({
                       setCategory('');
                     }
                   }}
-                  className="flex-1 rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none bg-white"
+                  className="flex-1 rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none bg-white"
                 >
                   {categoriesOptions.map(c => (
                     <option key={c} value={c}>{c}</option>
@@ -403,7 +403,7 @@ export default function RaisePOModal({
                     value={category}
                     onChange={e => setCategory(e.target.value)}
                     placeholder="Custom category name"
-                    className="flex-1 rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                    className="flex-1 rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                   />
                 )}
               </div>
@@ -416,7 +416,7 @@ export default function RaisePOModal({
               <select
                 value={scope}
                 onChange={e => setScope(e.target.value as POScope)}
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none bg-white"
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none bg-white"
               >
                 <option value="material">Materials Only</option>
                 <option value="labour">Labour / Installation</option>
@@ -429,7 +429,7 @@ export default function RaisePOModal({
               <select
                 value={status}
                 onChange={e => setStatus(e.target.value as POStatus)}
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none bg-white"
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none bg-white"
               >
                 <option value="draft">Draft PO</option>
                 <option value="pending_approval">Pending Approval</option>
@@ -443,7 +443,7 @@ export default function RaisePOModal({
                 type="date"
                 value={expectedDelivery}
                 onChange={e => setExpectedDelivery(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
               />
             </div>
 
@@ -453,7 +453,7 @@ export default function RaisePOModal({
                 type="number"
                 value={taxRate}
                 onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
               />
             </div>
           </div>
@@ -465,7 +465,7 @@ export default function RaisePOModal({
               <button
                 type="button"
                 onClick={handleAddLine}
-                className="flex items-center gap-1 text-[11px] font-bold text-[#0066CC] hover:text-[#0055B3] uppercase tracking-wider"
+                className="flex items-center gap-1 text-[11px] font-bold text-[#3D52A0] hover:text-[#334486] uppercase tracking-wider"
               >
                 <Plus className="w-3.5 h-3.5" /> Add line
               </button>
@@ -481,7 +481,7 @@ export default function RaisePOModal({
                         placeholder="Description"
                         value={line.description}
                         onChange={e => handleLineChange(index, 'description', e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                       />
                     </div>
                     <div className="md:col-span-2">
@@ -490,7 +490,7 @@ export default function RaisePOModal({
                         placeholder="Qty"
                         value={line.qty === 0 ? '' : line.qty}
                         onChange={e => handleLineChange(index, 'qty', e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-right focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-right focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                       />
                     </div>
                     <div className="md:col-span-2">
@@ -499,7 +499,7 @@ export default function RaisePOModal({
                         placeholder="Rate"
                         value={line.rate === 0 ? '' : line.rate}
                         onChange={e => handleLineChange(index, 'rate', e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-right focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-right focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                       />
                     </div>
                     <div className="md:col-span-2 flex items-center justify-end font-mono font-bold text-xs text-slate-700 px-2 select-none">
@@ -527,7 +527,7 @@ export default function RaisePOModal({
                 <textarea
                   value={terms}
                   onChange={e => setTerms(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 p-3 text-xs font-semibold focus:ring-2 focus:ring-[#0066CC] focus:outline-none h-16"
+                  className="w-full rounded-xl border border-slate-200 p-3 text-xs font-semibold focus:ring-2 focus:ring-[#3D52A0] focus:outline-none h-16"
                   placeholder="e.g. 50% advance, 50% on delivery"
                 />
               </div>
@@ -536,7 +536,7 @@ export default function RaisePOModal({
                 <textarea
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 p-3 text-xs font-semibold focus:ring-2 focus:ring-[#0066CC] focus:outline-none h-16"
+                  className="w-full rounded-xl border border-slate-200 p-3 text-xs font-semibold focus:ring-2 focus:ring-[#3D52A0] focus:outline-none h-16"
                   placeholder="e.g. Delivery instructions, quality check remarks"
                 />
               </div>
@@ -575,7 +575,7 @@ export default function RaisePOModal({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="bg-[#0066CC] hover:bg-[#0055B3] disabled:bg-sky-400 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-sky-100 flex items-center gap-1.5"
+            className="bg-[#3D52A0] hover:bg-[#334486] disabled:bg-sky-400 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-sky-100 flex items-center gap-1.5"
           >
             {saving ? 'Saving...' : 'Raise Purchase Order'}
           </button>

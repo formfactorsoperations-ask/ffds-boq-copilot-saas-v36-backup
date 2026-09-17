@@ -473,7 +473,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   if (loading) {
     return (
       <div className="p-12 text-center text-slate-500 flex flex-col items-center justify-center min-h-[350px]">
-        <div className="w-8 h-8 border-2 border-[#0066CC] border-t-transparent rounded-full animate-spin mb-4"></div>
+        <div className="w-8 h-8 border-2 border-[#3D52A0] border-t-transparent rounded-full animate-spin mb-4"></div>
         <p className="text-sm font-medium">Retrieving site timeline & progress engine...</p>
       </div>
     );
@@ -506,7 +506,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
 
           <div className="grid grid-cols-1 gap-6 w-full max-w-md text-left">
             <div className="border border-sky-100 rounded-2xl p-6 bg-white shadow-lg shadow-sky-50/30">
-              <div className="flex items-center gap-1.5 mb-4 text-[#0055B3] font-bold uppercase tracking-widest text-[10px]">
+              <div className="flex items-center gap-1.5 mb-4 text-[#334486] font-bold uppercase tracking-widest text-[10px]">
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>AI Recommended</span>
               </div>
@@ -524,7 +524,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                 </label>
                 <input
                   type="date"
-                  className="w-full border border-slate-200 rounded-xl p-3 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none transition-all font-medium"
+                  className="w-full border border-slate-200 rounded-xl p-3 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none transition-all font-medium"
                   value={kickoffDate}
                   onChange={(e) => setKickoffDate(e.target.value)}
                 />
@@ -539,7 +539,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
               <button
                 onClick={handleGenerateTimeline}
                 disabled={generating}
-                className={`w-full text-white font-bold py-3.5 px-4 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 text-sm ${generating ? 'bg-sky-400 cursor-not-allowed' : 'bg-[#0066CC] hover:bg-[#0055B3] cursor-pointer active:scale-[0.99]'}`}
+                className={`w-full text-white font-bold py-3.5 px-4 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 text-sm ${generating ? 'bg-sky-400 cursor-not-allowed' : 'bg-[#3D52A0] hover:bg-[#334486] cursor-pointer active:scale-[0.99]'}`}
               >
                 {generating ? (
                     <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Structuring calendar...</>
@@ -555,7 +555,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
             <div className="text-center">
               <button
                 onClick={() => setManualMode(true)}
-                className="text-xs font-semibold text-slate-400 hover:text-[#0066CC] transition-colors underline underline-offset-4"
+                className="text-xs font-semibold text-slate-400 hover:text-[#3D52A0] transition-colors underline underline-offset-4"
               >
                 Or construct schedule manually
               </button>
@@ -594,7 +594,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
       {/* 1. Header Toolbar */}
       <div className="bg-slate-50 border-b border-slate-200 p-4 md:px-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 -mt-6 -mx-6 mb-6 rounded-t-2xl">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-[#0066CC]/10 text-[#0066CC] rounded-xl border border-sky-200/50">
+          <div className="p-2 bg-[#3D52A0]/10 text-[#3D52A0] rounded-xl border border-sky-200/50">
             <Calendar className="w-5 h-5" />
           </div>
           <div>
@@ -627,7 +627,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
           </button>
           <button
             onClick={() => setShowShiftModal(true)}
-            className="text-[10px] uppercase tracking-wider font-bold text-[#0055B3] bg-white border border-sky-200 hover:bg-sky-50/50 px-3 py-2 rounded-xl flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="text-[10px] uppercase tracking-wider font-bold text-[#334486] bg-white border border-sky-200 hover:bg-sky-50/50 px-3 py-2 rounded-xl flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer"
           >
             ⏭️ Shift
           </button>
@@ -713,14 +713,14 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                 <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl leading-relaxed">
                   <div className="flex items-center justify-between mb-1.5 border-b border-slate-200 pb-1.5">
                     <h6 className="font-bold text-slate-800 flex items-center gap-1.5">
-                      <MessageSquare className="w-3.5 h-3.5 text-[#0055B3]" /> Client Portal Update Draft
+                      <MessageSquare className="w-3.5 h-3.5 text-[#334486]" /> Client Portal Update Draft
                     </h6>
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(aiDelayData.clientUpdate);
                         showSuccessWithNext('Draft copied to clipboard!');
                       }}
-                      className="text-[9px] font-bold uppercase tracking-wider text-[#0066CC] hover:underline cursor-pointer"
+                      className="text-[9px] font-bold uppercase tracking-wider text-[#3D52A0] hover:underline cursor-pointer"
                     >
                       Copy Draft
                     </button>
@@ -785,7 +785,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                   <select 
                     value={shiftFromPhase} 
                     onChange={e => setShiftFromPhase(Number(e.target.value))}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none text-sm font-medium"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none text-sm font-medium"
                   >
                     {phases.map(p => (
                       <option key={p.stepNumber} value={p.stepNumber}>{p.stepNumber}. {p.title}</option>
@@ -799,7 +799,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                     value={shiftDays} 
                     onChange={e => setShiftDays(Number(e.target.value) || 0)}
                     placeholder="e.g. 5 (delay) or -3 (pull forward)"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none text-sm font-bold text-slate-800"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none text-sm font-bold text-slate-800"
                   />
                 </div>
               </div>
@@ -813,7 +813,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                     }
                     setShowShiftModal(false);
                   }} 
-                  className="px-5 py-2.5 bg-[#0066CC] text-white rounded-xl text-sm font-bold hover:bg-[#0055B3] shadow-sm"
+                  className="px-5 py-2.5 bg-[#3D52A0] text-white rounded-xl text-sm font-bold hover:bg-[#334486] shadow-sm"
                 >
                   Apply Shift
                 </button>
@@ -976,7 +976,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
             >
               <div className="bg-white border-b border-slate-200 p-6 flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-[#0066CC]/90 backdrop-blur-md border border-white/20 flex items-center justify-center text-amber-500">
+                  <div className="w-8 h-8 rounded-lg bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 flex items-center justify-center text-amber-500">
                     <Sparkles className="w-4 h-4" />
                   </div>
                   <div>
@@ -1135,7 +1135,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                 {aiRiskResult && !aiRiskLoading && (
                   <button
                     onClick={handleSaveRiskAlerts}
-                    className="px-5 py-2.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#0055B3] border border-[#B5945B]/30 rounded-xl text-xs font-bold uppercase tracking-wider font-mono flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition-all"
+                    className="px-5 py-2.5 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#334486] border border-[#B5945B]/30 rounded-xl text-xs font-bold uppercase tracking-wider font-mono flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition-all"
                   >
                     💾 Save & Surface to Dashboard
                   </button>
@@ -1350,13 +1350,13 @@ const OldTimelineBuilder: React.FC<any> = ({
     >
       <button
         onClick={onBack}
-        className="text-[#0066CC] underline text-sm font-bold mb-6 hover:text-[#0055B3]"
+        className="text-[#3D52A0] underline text-sm font-bold mb-6 hover:text-[#334486]"
       >
         &larr; Back to Template Auto-Build
       </button>
 
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 mb-8 text-white shadow-xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 border border-slate-700 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[#0066CC] opacity-10 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2"></div>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#3D52A0] opacity-10 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2"></div>
         <div className="relative z-10">
            <h3 className="text-2xl font-black tracking-tight mb-2 text-white">Timeline Summary</h3>
            <p className="text-slate-400 text-sm font-medium">Review and dynamically scale your project schedule.</p>
@@ -1375,12 +1375,12 @@ const OldTimelineBuilder: React.FC<any> = ({
                     placeholder="New Total" 
                     value={targetDays} 
                     onChange={e => setTargetDays(Number(e.target.value) || '')} 
-                    className="w-24 px-3 py-2 text-sm rounded-lg bg-white/10 border border-white/20 text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-[#0066CC] focus:border-transparent transition-all font-bold" 
+                    className="w-24 px-3 py-2 text-sm rounded-lg bg-white/10 border border-white/20 text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-[#3D52A0] focus:border-transparent transition-all font-bold" 
                  />
                  <button 
                     onClick={handleScaleTimeline} 
                     disabled={!targetDays} 
-                    className="px-4 py-2 bg-[#0066CC] text-white rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-sky-400 transition-colors shadow-sm"
+                    className="px-4 py-2 bg-[#3D52A0] text-white rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-sky-400 transition-colors shadow-sm"
                   >
                     Apply
                   </button>
@@ -1394,7 +1394,7 @@ const OldTimelineBuilder: React.FC<any> = ({
         <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 mb-8">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div className="flex items-center gap-2.5">
-              <Sparkles className="w-5 h-5 text-[#0066CC] fill-sky-100 animate-pulse" />
+              <Sparkles className="w-5 h-5 text-[#3D52A0] fill-sky-100 animate-pulse" />
               <div>
                 <h4 className="font-extrabold text-slate-900 text-sm">AI Smart Schedule Calculator</h4>
                 <p className="text-xs text-slate-500">Computes realistic design + execution timelines based on active BOQ scope, room count, and areas.</p>
@@ -1404,7 +1404,7 @@ const OldTimelineBuilder: React.FC<any> = ({
             <button 
               onClick={handleRunSmartAlgo}
               disabled={isCalculating}
-              className="flex items-center gap-2 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#0055B3] active:scale-95 disabled:opacity-50 transition-all text-xs font-bold px-4 py-2.5 rounded-xl shadow-md cursor-pointer"
+              className="flex items-center gap-2 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#334486] active:scale-95 disabled:opacity-50 transition-all text-xs font-bold px-4 py-2.5 rounded-xl shadow-md cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isCalculating ? 'animate-spin' : ''}`} />
               {isCalculating ? 'Analyzing Scope...' : 'Run Smart Calculator'}
@@ -1500,7 +1500,7 @@ const OldTimelineBuilder: React.FC<any> = ({
                   type="text"
                   value={phase.phaseName}
                   onChange={(e) => handlePhaseChange(i, 'phaseName', e.target.value)}
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0066CC] outline-none text-sm font-bold text-slate-800 bg-slate-50 focus:bg-white transition-colors"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3D52A0] outline-none text-sm font-bold text-slate-800 bg-slate-50 focus:bg-white transition-colors"
                   placeholder="e.g. Demolition & Civil"
                 />
               </div>
@@ -1512,7 +1512,7 @@ const OldTimelineBuilder: React.FC<any> = ({
                        type="number"
                        value={phase.startDay}
                        onChange={(e) => handlePhaseChange(i, 'startDay', parseInt(e.target.value) || 0)}
-                       className="w-full px-4 py-3 pl-10 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0066CC] outline-none text-sm font-bold text-slate-800 bg-slate-50 focus:bg-white transition-colors"
+                       className="w-full px-4 py-3 pl-10 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3D52A0] outline-none text-sm font-bold text-slate-800 bg-slate-50 focus:bg-white transition-colors"
                      />
                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">Day</span>
                   </div>
@@ -1524,7 +1524,7 @@ const OldTimelineBuilder: React.FC<any> = ({
                        type="number"
                        value={phase.durationDays}
                        onChange={(e) => handlePhaseChange(i, 'durationDays', parseInt(e.target.value) || 0)}
-                       className="w-full px-4 py-3 pl-4 pr-12 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0066CC] outline-none text-sm font-bold text-slate-800 bg-slate-50 focus:bg-white transition-colors"
+                       className="w-full px-4 py-3 pl-4 pr-12 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3D52A0] outline-none text-sm font-bold text-slate-800 bg-slate-50 focus:bg-white transition-colors"
                      />
                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">Days</span>
                   </div>
@@ -1537,7 +1537,7 @@ const OldTimelineBuilder: React.FC<any> = ({
                   type="text"
                   value={phase.description}
                   onChange={(e) => handlePhaseChange(i, 'description', e.target.value)}
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0066CC] outline-none text-sm text-slate-600 bg-slate-50 focus:bg-white transition-colors"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3D52A0] outline-none text-sm text-slate-600 bg-slate-50 focus:bg-white transition-colors"
                   placeholder="Optional details about this phase"
                />
             </div>

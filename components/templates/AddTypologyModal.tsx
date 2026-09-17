@@ -84,7 +84,7 @@ export const AddTypologyModal: React.FC<AddTypologyModalProps> = ({
                 setError(null);
               }}
               placeholder="e.g. 4-BHK Luxury, Studio-1RK, Duplex-Villa"
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
             />
           </div>
 
@@ -95,7 +95,7 @@ export const AddTypologyModal: React.FC<AddTypologyModalProps> = ({
             <select
               value={cloneFrom}
               onChange={(e) => setCloneFrom(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
             >
               <option value="none">Start Fresh with Standard Preset</option>
               {existingConfigs.map(c => (
@@ -116,7 +116,7 @@ export const AddTypologyModal: React.FC<AddTypologyModalProps> = ({
                     onClick={() => setSelectedPresetKey(presetName)}
                     className={`p-2.5 rounded-xl border flex items-start justify-between cursor-pointer transition-all ${
                       selectedPresetKey === presetName
-                        ? 'border-[#0066CC] bg-sky-50/60 ring-1 ring-[#0066CC]'
+                        ? 'border-[#3D52A0] bg-sky-50/60 ring-1 ring-[#3D52A0]'
                         : 'border-slate-200 bg-white hover:bg-slate-50'
                     }`}
                   >
@@ -125,7 +125,7 @@ export const AddTypologyModal: React.FC<AddTypologyModalProps> = ({
                       <p className="text-[10px] text-slate-500 mt-0.5">{rooms.join(', ')}</p>
                     </div>
                     {selectedPresetKey === presetName && (
-                      <Check className="w-4 h-4 text-[#0066CC] shrink-0 mt-0.5" />
+                      <Check className="w-4 h-4 text-[#3D52A0] shrink-0 mt-0.5" />
                     )}
                   </label>
                 ))}
@@ -143,7 +143,7 @@ export const AddTypologyModal: React.FC<AddTypologyModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg text-xs font-bold shadow-md shadow-sky-600/20"
+              className="px-5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-xs font-bold shadow-md shadow-sky-600/20"
             >
               Create Template
             </button>

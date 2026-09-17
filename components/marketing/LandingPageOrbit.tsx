@@ -40,13 +40,13 @@ const TRADES = Object.entries(TRADE_COUNTS).sort((a, b) => b[1] - a[1]);
 const BANK_TOTAL = INITIAL_BANK.length;
 
 const INK = "#0A1B33";
-const BRAND = "#0066CC";
+const BRAND = "#3D52A0";
 const GOLD = "#B5945B";
 
 /* Accents stay inside the studio's own range — blues, gold, and the tones
    already used for good/caution elsewhere in the app. */
 const ACCENTS = [
-  "#0066CC", "#B5945B", "#0E7C5A", "#1D4ED8", "#C77700", "#0F766E",
+  "#3D52A0", "#B5945B", "#0E7C5A", "#1D4ED8", "#C77700", "#0F766E",
   "#4A9BE4", "#8A6D3B", "#2563EB", "#3FAE87", "#946A00",
 ];
 
@@ -245,7 +245,7 @@ const LandingPageOrbit: React.FC<Props> = ({ onEnter, videoSrc = VIDEO_SRC }) =>
                 onClick={onEnter}
                 className={`${pill} px-[26px] py-3 text-[15px]`}
                 style={{ background: BRAND }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#0055B3")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#334486")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = BRAND)}
               >
                 Open the studio
@@ -282,7 +282,7 @@ const LandingPageOrbit: React.FC<Props> = ({ onEnter, videoSrc = VIDEO_SRC }) =>
                 onClick={onEnter}
                 className={`${pill} px-7 py-3.5 text-[16px]`}
                 style={{ background: BRAND }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#0055B3")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#334486")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = BRAND)}
               >
                 Start a project

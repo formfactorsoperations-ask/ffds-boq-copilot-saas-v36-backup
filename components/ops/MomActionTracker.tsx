@@ -262,7 +262,7 @@ export function MomActionTracker({
           <span className="text-xs uppercase font-extrabold tracking-widest text-[#B89047]">Open Actions</span>
           <div className="flex items-baseline gap-2 mt-2">
             <span className="text-3xl font-black text-slate-900 font-sans tracking-tight">{openActionsCount}</span>
-            <span className="w-2.5 h-2.5 rounded-full bg-[#0066CC] animate-pulse"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#3D52A0] animate-pulse"></span>
           </div>
           <span className="text-xs text-slate-400 mt-1 font-semibold">Pending action items</span>
         </div>
@@ -320,7 +320,7 @@ export function MomActionTracker({
           {/* Record Button */}
           <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 hover:bg-[#0055B3] text-white hover:text-amber-400 px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-widest transition duration-200 shadow-sm border border-[#0055B3]"
+            className="inline-flex items-center gap-2 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 hover:bg-[#334486] text-white hover:text-amber-400 px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-widest transition duration-200 shadow-sm border border-[#334486]"
           >
             <Plus size={14} />
             Record Meeting
@@ -356,7 +356,7 @@ export function MomActionTracker({
               placeholder="Search tasks, owners, refs..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-950/20 focus:border-[#0055B3] outline-none placeholder-slate-400 transition"
+              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-950/20 focus:border-[#334486] outline-none placeholder-slate-400 transition"
             />
           </div>
         </div>
@@ -607,7 +607,7 @@ export function MomActionTracker({
 
       {/* Record / Create Minutes Dialog Overlay */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 z-[100] flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 z-[100] flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/80 w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh]">
             {creating ? (
               <div className="p-16 flex flex-col items-center justify-center text-center space-y-4">
@@ -654,7 +654,7 @@ export function MomActionTracker({
                         placeholder="e.g., Wardrobe Layout Review, Electrical Walkthrough"
                         value={createTitle}
                         onChange={(e) => setCreateTitle(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:ring-2 focus:ring-sky-950/20 focus:border-[#0055B3] outline-none rounded-xl text-sm text-slate-900 font-semibold transition"
+                        className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:ring-2 focus:ring-sky-950/20 focus:border-[#334486] outline-none rounded-xl text-sm text-slate-900 font-semibold transition"
                       />
                     </div>
                     <div>
@@ -663,7 +663,7 @@ export function MomActionTracker({
                         type="date"
                         value={createDate}
                         onChange={(e) => setCreateDate(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:ring-2 focus:ring-sky-950/20 focus:border-[#0055B3] outline-none rounded-xl text-sm text-slate-900 font-semibold transition"
+                        className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:ring-2 focus:ring-sky-950/20 focus:border-[#334486] outline-none rounded-xl text-sm text-slate-900 font-semibold transition"
                       />
                     </div>
                   </div>
@@ -675,7 +675,7 @@ export function MomActionTracker({
                       <select
                         value={createType}
                         onChange={(e) => setCreateType(e.target.value as any)}
-                        className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:ring-2 focus:ring-sky-950/20 focus:border-[#0055B3] outline-none rounded-xl text-sm text-slate-900 font-semibold transition"
+                        className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:ring-2 focus:ring-sky-950/20 focus:border-[#334486] outline-none rounded-xl text-sm text-slate-900 font-semibold transition"
                       >
                         <option value="client">Client Alignment</option>
                         <option value="internal">Internal Team Review</option>
@@ -689,7 +689,7 @@ export function MomActionTracker({
                         placeholder="e.g., Amit Sharma, Rajesh Gupta, Priya Malhotra"
                         value={createAttendees}
                         onChange={(e) => setCreateAttendees(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:ring-2 focus:ring-sky-950/20 focus:border-[#0055B3] outline-none rounded-xl text-sm text-slate-900 font-semibold transition"
+                        className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:ring-2 focus:ring-sky-950/20 focus:border-[#334486] outline-none rounded-xl text-sm text-slate-900 font-semibold transition"
                       />
                     </div>
                   </div>
@@ -708,7 +708,7 @@ export function MomActionTracker({
                       placeholder="Paste meeting transcripts, audio logs, voice notes, rough bullet points, or immediate decision highlights here. Gemini AI will automatically parse and structure this into clean Minutes of Meeting containing defined decisions and action plans with scope tracking."
                       value={createNotes}
                       onChange={(e) => setCreateNotes(e.target.value)}
-                      className="w-full h-44 px-4 py-3.5 bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:ring-2 focus:ring-sky-950/20 focus:border-[#0055B3] outline-none rounded-xl text-sm text-slate-900 leading-relaxed resize-none font-semibold transition"
+                      className="w-full h-44 px-4 py-3.5 bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:ring-2 focus:ring-sky-950/20 focus:border-[#334486] outline-none rounded-xl text-sm text-slate-900 leading-relaxed resize-none font-semibold transition"
                     />
                   </div>
                 </div>
@@ -724,7 +724,7 @@ export function MomActionTracker({
 
                   <button
                     onClick={() => handleCreateMoM(true)}
-                    className="flex-1 py-3 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white hover:text-amber-400 rounded-xl font-bold text-sm uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-sm"
+                    className="flex-1 py-3 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:text-amber-400 rounded-xl font-bold text-sm uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-sm"
                   >
                     <Sparkles size={14} className="text-amber-400" />
                     Structure with Gemini AI
@@ -748,7 +748,7 @@ export function MomActionTracker({
       )}
 
       {momToDelete && (
-        <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 z-[110] flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 z-[110] flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/80 w-full max-w-md p-6 space-y-4">
             <div className="flex items-center gap-3 text-red-600">
               <div className="p-2 bg-red-50 rounded-full">
@@ -801,7 +801,7 @@ function FilterButton({ active, onClick, children }: any) {
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border transition duration-200 ${active ? "bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white border-[#0055B3] shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:text-slate-900 hover:border-slate-300"}`}
+      className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border transition duration-200 ${active ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white border-[#334486] shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:text-slate-900 hover:border-slate-300"}`}
     >
       {children}
     </button>

@@ -1,5 +1,6 @@
 import React, { useMemo, useEffect } from 'react';
 import StudioSettingsConsole from './studio/StudioSettingsConsole';
+import Tabs from './ui/Tabs';
 import StudioSetupWizard from './StudioSetupWizard';
 import CommunicationTemplatesTab from './ops/CommunicationTemplatesTab';
 import { useOrg } from '../contexts/OrgContext';
@@ -68,32 +69,18 @@ const StudioSettingsShell: React.FC<StudioSettingsShellProps> = ({
       two empty columns on a wide screen while its own content -- a settings
       form beside a rail -- was the thing being squeezed.
     */
+    const settingsTabs = (
+        <Tabs
+            ariaLabel="Settings sections"
+            value={currentSubTab}
+            onChange={setActiveTab}
+            items={AVAILABLE_TABS.map(t => ({ id: t.id, label: t.label }))}
+        />
+    );
+
     return (
         <div className="w-full px-1 sm:px-2">
-            <div className="mb-6 border-b border-slate-200">
-                <nav className="-mb-px flex space-x-8 overflow-x-auto custom-scrollbar" aria-label="Tabs" role="tablist">
-                    {AVAILABLE_TABS.map((tab) => {
-                        const isActive = currentSubTab === tab.id;
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                role="tab"
-                                aria-selected={isActive}
-                                className={`
-                                    whitespace-nowrap py-4 px-1 border-b-2 font-semibold text-sm transition-colors
-                                    ${isActive
-                                        ? 'border-[#0066CC] text-[#0066CC]'
-                                        : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                                    }
-                                `}
-                            >
-                                {tab.label}
-                            </button>
-                        );
-                    })}
-                </nav>
-            </div>
+            
 
             <div className="bg-transparent mt-4">
                 {currentSubTab === 'setup-wizard' && (
@@ -101,6 +88,7 @@ const StudioSettingsShell: React.FC<StudioSettingsShellProps> = ({
                 )}
                 {currentSubTab === 'studio-settings' && (
                     <StudioSettingsConsole
+                        tabs={settingsTabs}
                         onDownloadBackup={onDownloadBackup}
                         onImportProject={onImportProject}
                         onClearProject={onClearProject}
@@ -111,6 +99,7 @@ const StudioSettingsShell: React.FC<StudioSettingsShellProps> = ({
                     <CommunicationTemplatesTab
                         settings={settings}
                         updateSettings={updateSettings}
+                        tabs={settingsTabs}
                     />
                 )}
             </div>

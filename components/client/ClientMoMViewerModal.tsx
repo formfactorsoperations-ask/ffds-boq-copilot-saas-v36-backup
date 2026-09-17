@@ -493,7 +493,7 @@ export const ClientMoMViewerModal: React.FC<ClientMoMViewerModalProps> = ({
                             </span>
                             <button
                                 onClick={onClose}
-                                className="px-5 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                className="px-5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
                             >
                                 Close
                             </button>

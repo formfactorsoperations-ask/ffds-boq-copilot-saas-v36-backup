@@ -394,7 +394,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-5">
           <div>
             <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <Activity className="w-5 h-5 text-[#0066CC]" />
+              <Activity className="w-5 h-5 text-[#3D52A0]" />
               Weekly Progress Reports
             </h3>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
@@ -428,7 +428,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
             {subView === 'reports' && (
               <button
                 onClick={handleInitiateReport}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-xs cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" /> Issue Week Report
               </button>
@@ -464,9 +464,9 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
               <button
                 onClick={handleCompileWithAi}
                 disabled={draftingWithAi}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-50/70 hover:bg-sky-100 text-[#0055B3] border border-sky-200/50 text-xs font-black uppercase tracking-wider rounded-xl transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-50/70 hover:bg-sky-100 text-[#334486] border border-sky-200/50 text-xs font-black uppercase tracking-wider rounded-xl transition-all disabled:opacity-50"
               >
-                <Wand2 className="w-4 h-4 text-[#0066CC] animate-pulse" />
+                <Wand2 className="w-4 h-4 text-[#3D52A0] animate-pulse" />
                 {draftingWithAi ? 'AI Compiling...' : 'AI Autocompile'}
               </button>
               <button
@@ -500,7 +500,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
                       type="number"
                       value={editingReport.weekNumber || ''}
                       onChange={e => setEditingReport({ ...editingReport, weekNumber: parseInt(e.target.value) || 1 })}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                     />
                   </div>
                   <div>
@@ -509,7 +509,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
                       type="date"
                       value={editingReport.weekOf || ''}
                       onChange={e => setEditingReport({ ...editingReport, weekOf: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                     />
                   </div>
                 </div>
@@ -519,7 +519,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
               <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
                 <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center justify-between">
                   <span>2. Executive Summary Narratives</span>
-                  {draftingWithAi && <span className="text-[10px] text-[#0066CC] animate-pulse font-bold uppercase tracking-widest">Compiling summary...</span>}
+                  {draftingWithAi && <span className="text-[10px] text-[#3D52A0] animate-pulse font-bold uppercase tracking-widest">Compiling summary...</span>}
                 </h4>
                 
                 <div className="space-y-4">
@@ -530,7 +530,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
                       onChange={e => setEditingReport({ ...editingReport, thisWeek: e.target.value })}
                       placeholder="Compile what has been accomplished on site this week... (Include any key metrics or trades worked)"
                       rows={5}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-[#0066CC] focus:outline-none resize-none leading-relaxed"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-[#3D52A0] focus:outline-none resize-none leading-relaxed"
                     />
                   </div>
                   
@@ -541,7 +541,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
                       onChange={e => setEditingReport({ ...editingReport, nextWeek: e.target.value })}
                       placeholder="Outline the upcoming milestone goals and schedules for next week..."
                       rows={4}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-[#0066CC] focus:outline-none resize-none leading-relaxed"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-[#3D52A0] focus:outline-none resize-none leading-relaxed"
                     />
                   </div>
                 </div>
@@ -553,7 +553,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
                   <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">3. Client Action Items & Asks</h4>
                   <button
                     onClick={handleAddAsk}
-                    className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-[#0066CC] hover:text-[#0055B3]"
+                    className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-[#3D52A0] hover:text-[#334486]"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Ask
                   </button>
@@ -735,7 +735,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
                     className={`p-4 bg-white rounded-2xl border transition-all cursor-pointer text-left space-y-2 ${
                       isSelected 
                         ? 'border-[#B5945B] ring-1 ring-[#B5945B]/30 shadow-md shadow-amber-500/5' 
-                        : 'border-slate-200 hover:border-[#0055B3]/20 hover:shadow-sm'
+                        : 'border-slate-200 hover:border-[#334486]/20 hover:shadow-sm'
                     }`}
                   >
                     <div className="flex justify-between items-center">
@@ -812,7 +812,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
 
                     <button
                       onClick={() => handleEditReportClick(selectedReport)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 hover:bg-[#0055B3] text-white text-[10px] font-black uppercase tracking-wider rounded-lg shadow-xs transition-all cursor-pointer"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 hover:bg-[#334486] text-white text-[10px] font-black uppercase tracking-wider rounded-lg shadow-xs transition-all cursor-pointer"
                     >
                       <Edit className="w-3.5 h-3.5" /> Edit Report
                     </button>
@@ -856,7 +856,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2 text-left">
                       <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest border-b border-slate-100 pb-1 flex items-center gap-1">
-                        <CheckSquare className="w-3.5 h-3.5 text-[#0066CC]" />
+                        <CheckSquare className="w-3.5 h-3.5 text-[#3D52A0]" />
                         Executive Briefing
                       </h4>
                       <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap font-sans">
@@ -891,7 +891,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
                                 <span className="text-[10px] font-extrabold text-[#B5945B] bg-amber-50 px-1.5 py-0.5 rounded">{info.progress}%</span>
                               </div>
                               <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                                <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 h-full rounded-full transition-all" style={{ width: `${info.progress}%` }} />
+                                <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 h-full rounded-full transition-all" style={{ width: `${info.progress}%` }} />
                               </div>
                               <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wide leading-none truncate">
                                 Stage: {info.stage}

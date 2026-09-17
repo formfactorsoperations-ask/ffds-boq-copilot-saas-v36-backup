@@ -44,7 +44,7 @@ const ClientOptions: React.FC<ClientOptionsProps> = ({ tiers, comparisonData, co
                                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{tier.name === "Essential Elegance" ? "Option A" : tier.name === "Comfort Upgrade" ? "Option B" : "Option C"}</div>
                                     <div className="mt-2 text-xl font-extrabold text-slate-900">{tier.name}</div>
                                 </div>
-                                {isRecommended && <div className="px-3 py-1 rounded-full bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-extrabold">Recommended</div>}
+                                {isRecommended && <div className="px-3 py-1 rounded-full bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-extrabold">Recommended</div>}
                             </div>
                             <p className="mt-2 text-sm text-slate-600">{details.desc}</p>
                             <div className={`mt-5 rounded-2xl p-4 ${isRecommended ? 'bg-slate-50 border border-slate-200' : 'bg-white border border-slate-200'}`}>

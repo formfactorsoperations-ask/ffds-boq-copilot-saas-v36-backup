@@ -145,7 +145,7 @@ const PortfolioMarginPanel: React.FC<Props> = ({ projects, onOpenProject, varian
 
       {loading ? (
         <div className="p-10 flex items-center justify-center">
-          <div className="w-5 h-5 border-2 border-[#0066CC] border-t-transparent rounded-full animate-spin" />
+          <div className="w-5 h-5 border-2 border-[#3D52A0] border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
         <>

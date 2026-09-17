@@ -19,32 +19,12 @@ export default defineConfig(({ mode }) => {
         */
       },
       build: {
-        minify: 'esbuild',
         sourcemap: false,
         outDir: 'dist',
         emptyOutDir: true,
         reportCompressedSize: false,
-        chunkSizeWarningLimit: 2000,
-        target: 'esnext',
-        rollupOptions: {
-          cache: false,
-          maxParallelFileOps: 1,
-          output: {
-            manualChunks(id) {
-              if (id.includes('node_modules')) {
-                if (id.includes('jspdf') || id.includes('html2pdf') || id.includes('html2canvas')) {
-                  return 'vendor-pdf';
-                }
-                if (id.includes('xlsx') || id.includes('exceljs')) {
-                  return 'vendor-sheets';
-                }
-                if (id.includes('firebase')) {
-                  return 'vendor-firebase';
-                }
-              }
-            }
-          }
-        }
+        chunkSizeWarningLimit: 5000,
+        target: 'esnext'
       },
       optimizeDeps: {
         include: [
@@ -81,7 +61,7 @@ export default defineConfig(({ mode }) => {
             name: 'FFDS Studio & Client Portal',
             short_name: 'FFDS Portal',
             description: 'Interior design studio operating system and live client approval portal.',
-            theme_color: '#0066CC',
+            theme_color: '#3D52A0',
             background_color: '#F8FAFC',
             display: 'standalone',
             start_url: '/',
@@ -108,8 +88,8 @@ export default defineConfig(({ mode }) => {
             ]
           },
           workbox: {
-            maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
-            globPatterns: ['**/*.{css,html,ico,png,svg,woff,woff2}'],
+            maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+            globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
             runtimeCaching: [
               {
                 urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

@@ -198,7 +198,7 @@ export default function QualityChecklistReportPage({ projectContext, onBack }: Q
                     <button
                         onClick={handleDownloadPdf}
                         disabled={isDownloading}
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] disabled:bg-sky-400 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md shadow-sky-600/15 cursor-pointer"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] disabled:bg-sky-400 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md shadow-sky-600/15 cursor-pointer"
                     >
                         <Download className="w-4 h-4" />
                         {isDownloading ? 'Generating PDF...' : 'Download PDF'}
@@ -285,7 +285,7 @@ export default function QualityChecklistReportPage({ projectContext, onBack }: Q
                                                                     isNA
                                                                         ? 'bg-slate-100 border-slate-300 text-slate-500 font-extrabold text-[8px]'
                                                                         : isChecked 
-                                                                            ? 'bg-[#0066CC] border-[#0066CC] text-white' 
+                                                                            ? 'bg-[#3D52A0] border-[#3D52A0] text-white' 
                                                                             : 'border-slate-300'
                                                                 }`}>
                                                                     {isChecked && !isNA && <Check className="w-2.5 h-2.5 stroke-[3]" />}
@@ -310,7 +310,7 @@ export default function QualityChecklistReportPage({ projectContext, onBack }: Q
                                                     {Array.isArray(room.customs) && room.customs.filter(Boolean).map((custom) => (
                                                         <div key={custom.id} className="flex items-start gap-2.5 text-xs">
                                                             <div className={`w-3.5 h-3.5 border rounded-sm shrink-0 mt-0.5 flex items-center justify-center ${
-                                                                custom.checked ? 'bg-[#0066CC] border-[#0066CC] text-white' : 'border-slate-300'
+                                                                custom.checked ? 'bg-[#3D52A0] border-[#3D52A0] text-white' : 'border-slate-300'
                                                             }`}>
                                                                 {custom.checked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                                                             </div>

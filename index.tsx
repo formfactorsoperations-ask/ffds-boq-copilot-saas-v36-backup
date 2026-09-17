@@ -151,7 +151,7 @@ class ErrorBoundary extends React.Component<Props, State> {
             padding: '28px',
             borderRadius: '16px',
             border: '1px solid #BAE6FD',
-            boxShadow: '0 4px 12px rgba(0, 102, 204, 0.06)'
+            boxShadow: '0 4px 12px rgba(61, 82, 160, 0.06)'
           }}>
             <h2 style={{ fontSize: '18px', fontWeight: 800, margin: '0 0 8px 0', color: '#0052A3' }}>
               {isImportError ? 'Session Updated' : 'Application Notice'}
@@ -168,14 +168,14 @@ class ErrorBoundary extends React.Component<Props, State> {
               }} 
               style={{ 
                 padding: '10px 20px', 
-                background: '#0066CC', 
+                background: '#3D52A0', 
                 color: '#ffffff', 
                 border: 'none', 
                 borderRadius: '8px', 
                 fontWeight: 700,
                 fontSize: '13px',
                 cursor: 'pointer',
-                boxShadow: '0 2px 4px rgba(0, 102, 204, 0.2)'
+                boxShadow: '0 2px 4px rgba(61, 82, 160, 0.2)'
               }}
             >
               Reload Application

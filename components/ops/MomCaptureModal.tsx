@@ -73,7 +73,7 @@ export function MomCaptureModal({ visit, projectId, studioId, projectContextName
   };
 
   return (
-    <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/60 z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh]">
          {loading ? (
            <div className="p-16 flex flex-col items-center justify-center text-center space-y-4">

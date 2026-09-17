@@ -9,7 +9,7 @@ const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY;
 const STUDIO_NAME = import.meta.env.VITE_STUDIO_NAME || 'Form Factors Design Studio';
 const STUDIO_PHONE = import.meta.env.VITE_STUDIO_PHONE || '+91 98765 43210';
 const STUDIO_LOGO_URL = import.meta.env.VITE_STUDIO_LOGO_URL || '';
-const BRAND_COLOR = import.meta.env.VITE_BRAND_COLOR || '#0066CC';
+const BRAND_COLOR = import.meta.env.VITE_BRAND_COLOR || '#3D52A0';
 const RESEND_SENDER_EMAIL = import.meta.env.VITE_EMAIL_FROM || import.meta.env.VITE_RESEND_SENDER_EMAIL || 'onboarding@resend.dev'; // Default to onboarding for testing
 
 const formatBodyToHtml = (body: string): string => {
@@ -411,8 +411,8 @@ export const sendAgreementSignoffRequest = async (
             `;
 
         const contentHtml = `
-            <div style="padding-bottom: 16px; border-bottom: 2px solid #0066CC; margin-bottom: 24px;">
-                <span style="font-size: 11px; font-weight: bold; color: #0066CC; text-transform: uppercase; letter-spacing: 0.1em; display: block; margin-bottom: 4px;">Verified Document Dispatch • 256-Bit TLS Encrypted</span>
+            <div style="padding-bottom: 16px; border-bottom: 2px solid #3D52A0; margin-bottom: 24px;">
+                <span style="font-size: 11px; font-weight: bold; color: #3D52A0; text-transform: uppercase; letter-spacing: 0.1em; display: block; margin-bottom: 4px;">Verified Document Dispatch • 256-Bit TLS Encrypted</span>
                 <h2 style="margin: 0; font-size: 20px; color: #0f172a; font-family: Georgia, serif;">${docTitle}</h2>
                 <p style="margin: 4px 0 0 0; font-size: 13px; color: #64748b;">Project Site: <strong style="color: #0f172a;">${projectContext.name || 'Interior Design Project'}</strong> ${projectContext.location ? `· ${projectContext.location}` : ''}</p>
             </div>
@@ -421,7 +421,7 @@ export const sendAgreementSignoffRequest = async (
 
             <!-- SECURITY VERIFICATION & ACCESS CODE BOX -->
             <div style="background-color: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 20px; margin: 24px 0;">
-                <div style="font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em; color: #0066CC; margin-bottom: 12px;">
+                <div style="font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em; color: #3D52A0; margin-bottom: 12px;">
                     🔒 Secure Access & Verification Credentials
                 </div>
 
@@ -445,13 +445,13 @@ export const sendAgreementSignoffRequest = async (
                 <!-- ZERO-CLICK DIRECT VERIFICATION INSTRUCTIONS -->
                 <div style="border-top: 1px dashed #cbd5e1; padding-top: 14px; font-size: 12px; color: #475569; line-height: 1.6;">
                     <strong style="color: #0f172a; display: block; margin-bottom: 4px;">🛡️ Anti-Phishing Direct Verification (No Link Required):</strong>
-                    If you prefer not to click links in emails, you can open your browser, visit the official studio portal directly, select <strong>"Verify Document by PIN"</strong>, and enter your Access PIN: <strong style="color: #0066CC; font-family: monospace;">${pinCode}</strong> and your email address.
+                    If you prefer not to click links in emails, you can open your browser, visit the official studio portal directly, select <strong>"Verify Document by PIN"</strong>, and enter your Access PIN: <strong style="color: #3D52A0; font-family: monospace;">${pinCode}</strong> and your email address.
                 </div>
             </div>
 
             <!-- DIRECT VERIFIED BUTTON -->
             <div style="margin: 28px 0; text-align: center;">
-                <a href="${signoffUrl}" style="background-color: #0066CC; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 2px 4px rgba(0, 102, 204, 0.2);">
+                <a href="${signoffUrl}" style="background-color: #3D52A0; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 2px 4px rgba(61, 82, 160, 0.2);">
                     Review & Sign Document (SSL Verified) →
                 </a>
                 <span style="display: block; font-size: 11px; color: #94a3b8; margin-top: 8px;">256-bit TLS Encrypted Session • IT Act 2000 Section 65B Compliant</span>
@@ -881,7 +881,7 @@ export const sendPortalAccessLink = async (
             ``,
             `Here is your private link to the ${projectName} project portal. It shows your approvals, drawings, site updates and payment schedule.`,
             ``,
-            `<a href="${link}" style="display:inline-block;padding:12px 22px;background:#0066CC;color:#ffffff;border-radius:10px;font-weight:700;text-decoration:none">Open your portal</a>`,
+            `<a href="${link}" style="display:inline-block;padding:12px 22px;background:#3D52A0;color:#ffffff;border-radius:10px;font-weight:700;text-decoration:none">Open your portal</a>`,
             ``,
             `This link works until ${expires}. Please don't forward it — anyone with the link can see your project.`,
             ``,

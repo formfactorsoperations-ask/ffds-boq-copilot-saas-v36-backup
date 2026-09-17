@@ -1490,7 +1490,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                 hand-edited options are the reason to hesitate.
             */}
             {regenOpen && (
-                <div className="fixed inset-0 z-[220] bg-[#0066CC]/90 backdrop-blur-md flex items-center justify-center p-5 no-print"
+                <div className="fixed inset-0 z-[220] bg-[#3D52A0]/90 backdrop-blur-md flex items-center justify-center p-5 no-print"
                     onClick={() => setRegenOpen(false)}>
                     <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 mb-2">

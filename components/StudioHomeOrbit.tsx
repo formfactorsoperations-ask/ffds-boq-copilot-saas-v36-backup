@@ -48,7 +48,7 @@ const STAGE_LABEL: Record<string, string> = {
 const initialsOf = (name: string) =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "—";
 
-const BRAND = "#0066CC";
+const BRAND = "#3D52A0";
 const INK = "#0A1B33";
 
 interface Hub {
@@ -170,7 +170,7 @@ export default function StudioHomeOrbit({
           <div className="absolute inset-0 bg-gradient-to-br from-[#F7FAFE] via-white to-[#FAF7F1]" />
           <div
             className="aurora-a absolute -top-48 right-[-6rem] w-[38rem] h-[38rem] rounded-full blur-3xl"
-            style={{ background: "radial-gradient(circle, rgba(0,102,204,.14), transparent 70%)" }}
+            style={{ background: "radial-gradient(circle, rgba(61, 82, 160,.14), transparent 70%)" }}
           />
         </div>
 
@@ -221,7 +221,7 @@ export default function StudioHomeOrbit({
                   onClick={reviewPriorities}
                   className="relative z-10 inline-flex items-center gap-2 rounded-[50px] px-6 py-3 text-[14px] font-semibold text-white transition-colors"
                   style={{ background: BRAND }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#0055B3")}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#334486")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = BRAND)}
                 >
                   Review priorities
@@ -332,8 +332,8 @@ export default function StudioHomeOrbit({
                   onClick={onCreateNew}
                   className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[168px] h-[168px] rounded-full flex flex-col items-center justify-center gap-1.5 text-white transition-transform hover:scale-[1.04] cursor-pointer"
                   style={{
-                    background: `linear-gradient(150deg, ${BRAND}, #0055B3)`,
-                    boxShadow: `0 26px 60px -18px ${BRAND}, 0 0 0 10px rgba(0,102,204,0.07)`,
+                    background: `linear-gradient(150deg, ${BRAND}, #334486)`,
+                    boxShadow: `0 26px 60px -18px ${BRAND}, 0 0 0 10px rgba(61, 82, 160,0.07)`,
                   }}
                 >
                   <Plus className="w-8 h-8" strokeWidth={2.2} />
@@ -373,10 +373,10 @@ export default function StudioHomeOrbit({
           </div>
 
           {brief.count > 0 && (
-            <div className="cc-z1 mt-4 flex items-center gap-3.5 rounded-2xl border border-[#0066CC]/15 bg-[#F2F7FD] px-4 py-3.5">
+            <div className="cc-z1 mt-4 flex items-center gap-3.5 rounded-2xl border border-[#3D52A0]/15 bg-[#F2F7FD] px-4 py-3.5">
               <span
                 className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center"
-                style={{ background: `linear-gradient(140deg, ${BRAND}, #0055B3)` }}
+                style={{ background: `linear-gradient(140deg, ${BRAND}, #334486)` }}
               >
                 <Sparkles className="w-4 h-4 text-white" />
               </span>
@@ -402,7 +402,7 @@ export default function StudioHomeOrbit({
                 onClick={() => toggleAll(visible)}
                 className="shrink-0 text-[13px] font-semibold transition-colors"
                 style={{ color: BRAND }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#0055B3")}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#334486")}
                 onMouseLeave={(e) => (e.currentTarget.style.color = BRAND)}
               >
                 {allOpen(visible) ? "Collapse all" : "Expand all"}
@@ -532,7 +532,7 @@ export default function StudioHomeOrbit({
                         {stage} &middot; {timeAgo(p.lastModified)}
                       </span>
                     </span>
-                    <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-[#0066CC] transition-colors" />
+                    <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-[#3D52A0] transition-colors" />
                   </button>
                 );
               })}

@@ -49,7 +49,7 @@ const Panel: React.FC<{ title: string; sub?: string; icon?: React.ReactNode; chi
     <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#B5945B]/30" />
     <div className="px-5 py-4 border-b border-slate-100 bg-[#FAF9F6]/40 flex items-center justify-between gap-3 flex-wrap">
       <div className="flex items-center gap-2.5">
-        {icon && <div className="w-8 h-8 rounded-lg bg-white border border-[#B5945B]/25 flex items-center justify-center text-[#0066CC]">{icon}</div>}
+        {icon && <div className="w-8 h-8 rounded-lg bg-white border border-[#B5945B]/25 flex items-center justify-center text-[#3D52A0]">{icon}</div>}
         <div>
           <h3 className="text-xs font-bold text-slate-700 uppercase tracking-widest">{title}</h3>
           {sub && <p className="text-[10px] text-slate-400 mt-0.5">{sub}</p>}
@@ -136,7 +136,7 @@ const ProjectReportsTab: React.FC<Props> = ({
   if (loading) {
     return (
       <div className="py-20 flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-[#0066CC] border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-[#3D52A0] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }

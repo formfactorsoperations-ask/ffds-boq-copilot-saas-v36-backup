@@ -67,7 +67,7 @@ const META: Record<string, PageMeta> = {
 
   // ---- Project: stage 5 ---------------------------------------------------
   'site-ops':             { subtitle: 'Site progress, trade packages and client updates' },
-  materials:              { subtitle: 'Material selections, financials and change requests' },
+  materials:              { subtitle: 'Material selections, cost variations and purchase orders' },
   'scope-additions':      { subtitle: 'Work added after the contract was signed' },
   snaglist:               { title: 'Snag List', subtitle: 'Open defects and rectification status' },
   checklist:              { title: 'Quality Checklist', subtitle: 'Site quality checks by area' },

@@ -79,7 +79,7 @@ export default function DecisionKpiStrip({ stats, covered, atRisk }: Props) {
                   initial={{ width: 0 }}
                   animate={{ width: `${approvalPct}%` }}
                   transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
-                  className="bg-[#0066CC] h-full rounded-full"
+                  className="bg-[#3D52A0] h-full rounded-full"
                 />
               </div>
               <span className="text-sm font-bold text-slate-900 tabular-nums">{approvalPct}%</span>

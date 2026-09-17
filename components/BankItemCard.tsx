@@ -156,7 +156,7 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
       layout
       className={`bg-white rounded-2xl p-5 border shadow-2xs hover:shadow-md transition-all group relative flex flex-col justify-between ${
         isSelected
-          ? 'border-[#0066CC] ring-2 ring-sky-100 bg-sky-50/20'
+          ? 'border-[#3D52A0] ring-2 ring-sky-100 bg-sky-50/20'
           : isHighlighted
           ? 'border-amber-400 ring-2 ring-amber-100 bg-amber-50/20'
           : 'border-slate-200/80 hover:border-sky-300'
@@ -171,7 +171,7 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
                 type="checkbox"
                 checked={isSelected || false}
                 onChange={() => onToggleSelect(item.id)}
-                className="rounded border-slate-300 text-[#0066CC] focus:ring-[#0066CC] cursor-pointer"
+                className="rounded border-slate-300 text-[#3D52A0] focus:ring-[#3D52A0] cursor-pointer"
               />
             )}
             <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-200/60">
@@ -193,7 +193,7 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
               <button
                 type="button"
                 onClick={() => onDuplicate(item)}
-                className="p-1 text-slate-400 hover:text-[#0066CC] hover:bg-sky-50 rounded transition-colors"
+                className="p-1 text-slate-400 hover:text-[#3D52A0] hover:bg-sky-50 rounded transition-colors"
                 title="Duplicate Item"
               >
                 <Copy className="w-3.5 h-3.5" />
@@ -222,7 +222,7 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
             <button
               type="button"
               onClick={() => onViewProjectUsage && onViewProjectUsage(item)}
-              className="inline-flex items-center gap-1 px-2 py-0.5 mt-1 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[#0066CC] rounded-full text-[10px] font-extrabold transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 py-0.5 mt-1 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[#3D52A0] rounded-full text-[10px] font-extrabold transition-colors cursor-pointer"
               title={`Used in ${projectCount} project(s). Click to view details.`}
             >
               <Building2 className="w-3 h-3" />
@@ -284,7 +284,7 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
               type="number"
               value={item.areaMultiplierCoefficient || 1}
               onChange={(v) => handleUpdate('areaMultiplierCoefficient', v)}
-              className="text-xs font-bold text-[#0066CC] bg-white font-mono"
+              className="text-xs font-bold text-[#3D52A0] bg-white font-mono"
             />
           </div>
         </div>

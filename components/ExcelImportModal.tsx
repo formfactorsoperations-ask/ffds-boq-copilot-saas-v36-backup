@@ -344,10 +344,10 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
         return (
             <div className={`p-3 rounded-xl border transition-all ${isMapped ? 'bg-sky-50 border-sky-200' : 'bg-white border-slate-200'}`}>
                 <div className="flex justify-between items-center mb-2">
-                    <label className={`text-xs font-bold uppercase tracking-wider ${isMapped ? 'text-[#0055B3]' : 'text-slate-500'}`}>
+                    <label className={`text-xs font-bold uppercase tracking-wider ${isMapped ? 'text-[#334486]' : 'text-slate-500'}`}>
                         {label} {required && <span className="text-red-500">*</span>}
                     </label>
-                    {isMapped && <CheckIcon className="w-3.5 h-3.5 text-[#0066CC]" />}
+                    {isMapped && <CheckIcon className="w-3.5 h-3.5 text-[#3D52A0]" />}
                 </div>
                 
                 <select 
@@ -367,7 +367,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                 </select>
                 
                 {isMapped && sampleValue && (
-                    <div className="mt-2 text-[10px] text-[#0066CC] font-medium truncate">
+                    <div className="mt-2 text-[10px] text-[#3D52A0] font-medium truncate">
                         Preview: <span className="text-sky-800">{sampleValue}</span>
                     </div>
                 )}
@@ -381,7 +381,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm">
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm">
                 <MotionDiv 
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -405,7 +405,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                                         
                                         return (
                                             <div key={s} className="flex items-center gap-2">
-                                                <span className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? 'text-[#0066CC]' : isPast ? 'text-emerald-600' : 'text-slate-300'}`}>
+                                                <span className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? 'text-[#3D52A0]' : isPast ? 'text-emerald-600' : 'text-slate-300'}`}>
                                                     {s}
                                                 </span>
                                                 {i < 3 && <span className="text-slate-200 text-[10px]">/</span>}
@@ -434,7 +434,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                 />
                                 <div className="p-6 bg-sky-50 rounded-full mb-6 group-hover:scale-110 transition-transform">
-                                    <UploadIcon className="w-10 h-10 text-[#0066CC]" />
+                                    <UploadIcon className="w-10 h-10 text-[#3D52A0]" />
                                 </div>
                                 <h4 className="text-xl font-bold text-slate-800 mb-2">Drop your Excel file here</h4>
                                 <p className="text-sm text-slate-500">Supports .xlsx, .xls, .csv</p>
@@ -450,15 +450,15 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                                         <button
                                             key={name}
                                             onClick={() => selectSheet(workbook, name)}
-                                            className="p-4 bg-white border border-slate-200 rounded-xl hover:border-[#0066CC] hover:shadow-md transition-all text-left flex items-center justify-between group"
+                                            className="p-4 bg-white border border-slate-200 rounded-xl hover:border-[#3D52A0] hover:shadow-md transition-all text-left flex items-center justify-between group"
                                         >
                                             <div className="flex items-center gap-3">
                                                 <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center text-green-700">
                                                     <GridIcon className="w-4 h-4" />
                                                 </div>
-                                                <span className="font-bold text-slate-700 group-hover:text-[#0055B3]">{name}</span>
+                                                <span className="font-bold text-slate-700 group-hover:text-[#334486]">{name}</span>
                                             </div>
-                                            <ArrowRightIcon className="w-4 h-4 text-slate-300 group-hover:text-[#0066CC]" />
+                                            <ArrowRightIcon className="w-4 h-4 text-slate-300 group-hover:text-[#3D52A0]" />
                                         </button>
                                     ))}
                                 </div>
@@ -597,7 +597,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                             {step === 'mapping' && (
                                 <button 
                                     onClick={handleProcess} 
-                                    className="px-8 py-2.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white font-bold text-sm rounded-xl hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 shadow-lg flex items-center gap-2 transition-all"
+                                    className="px-8 py-2.5 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white font-bold text-sm rounded-xl hover:bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 shadow-lg flex items-center gap-2 transition-all"
                                 >
                                     Verify Data <ArrowRightIcon className="w-4 h-4" />
                                 </button>
@@ -606,7 +606,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                             {step === 'review' && (
                                 <button 
                                     onClick={handleFinalImport} 
-                                    className="px-8 py-2.5 bg-[#0066CC] text-white font-bold text-sm rounded-xl hover:bg-[#0055B3] shadow-lg shadow-sky-200 flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
+                                    className="px-8 py-2.5 bg-[#3D52A0] text-white font-bold text-sm rounded-xl hover:bg-[#334486] shadow-lg shadow-sky-200 flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
                                 >
                                     <PlusIcon className="w-4 h-4" />
                                     Import {processedItems.length} Items

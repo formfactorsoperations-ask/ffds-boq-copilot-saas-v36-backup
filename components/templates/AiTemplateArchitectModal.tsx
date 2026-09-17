@@ -135,12 +135,12 @@ export const AiTemplateArchitectModal: React.FC<AiTemplateArchitectModalProps> =
                 onChange={(e) => setPromptText(e.target.value)}
                 placeholder="e.g. 3-BHK luxury apartment in Whitefield for high-income couple. Needs full modular kitchen with acrylic finish, floor to ceiling master wardrobe, fluted TV console, false ceiling in all dry areas, and smart electrical provisions..."
                 rows={3}
-                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] focus:border-transparent transition-all"
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0] focus:border-transparent transition-all"
               />
               <button
                 onClick={() => handleGenerate()}
                 disabled={isGenerating || !promptText.trim()}
-                className="absolute bottom-3 right-3 px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-md transition-all"
+                className="absolute bottom-3 right-3 px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-md transition-all"
               >
                 {isGenerating ? (
                   <>
@@ -168,10 +168,10 @@ export const AiTemplateArchitectModal: React.FC<AiTemplateArchitectModalProps> =
                       handleGenerate(preset.prompt);
                     }}
                     disabled={isGenerating}
-                    className="p-2.5 text-left border border-slate-200 rounded-xl bg-white hover:border-[#0066CC] hover:bg-sky-50/50 transition-all text-xs group"
+                    className="p-2.5 text-left border border-slate-200 rounded-xl bg-white hover:border-[#3D52A0] hover:bg-sky-50/50 transition-all text-xs group"
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-slate-800 group-hover:text-[#0066CC]">{preset.label}</span>
+                      <span className="font-bold text-slate-800 group-hover:text-[#3D52A0]">{preset.label}</span>
                       <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-medium">{preset.category}</span>
                     </div>
                     <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">{preset.prompt}</p>
@@ -204,7 +204,7 @@ export const AiTemplateArchitectModal: React.FC<AiTemplateArchitectModalProps> =
                   <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold">
                     Trade Coverage: {generatedResult.tradeCoverageScore}%
                   </span>
-                  <span className="px-3 py-1 bg-sky-50 text-[#0055B3] border border-sky-200 rounded-full text-xs font-bold">
+                  <span className="px-3 py-1 bg-sky-50 text-[#334486] border border-sky-200 rounded-full text-xs font-bold">
                     {Object.keys(generatedResult.rooms).length} Room Scopes
                   </span>
                 </div>
@@ -272,7 +272,7 @@ export const AiTemplateArchitectModal: React.FC<AiTemplateArchitectModalProps> =
                         type="checkbox"
                         checked={autoAddMissingItems}
                         onChange={(e) => setAutoAddMissingItems(e.target.checked)}
-                        className="rounded text-[#0066CC] focus:ring-sky-400"
+                        className="rounded text-[#3D52A0] focus:ring-sky-400"
                       />
                       Auto-create in Item Bank
                     </label>

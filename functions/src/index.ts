@@ -16,8 +16,7 @@ import * as logger from "firebase-functions/logger";
   functions that read across every tenant, and that is worth being able to see
   at a glance rather than buried in this file.
 */
-export { platformOverview, platformIntegritySweep } from "./platformAdmin";
-export { platformRepairDocuments } from "./platformRepair";
+export { platformRepairDocuments } from "./platformAdmin";
 import * as pako from "pako";
 import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";
 import { recordDocumentView, signIssue } from "../../services/documentIssueEngine";

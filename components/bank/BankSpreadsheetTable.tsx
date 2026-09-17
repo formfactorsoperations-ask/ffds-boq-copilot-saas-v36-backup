@@ -173,7 +173,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
 
   const renderSortIcon = (field: SortField) => {
     if (sortField !== field) return <ArrowUpDown className="w-3 h-3 text-slate-300 opacity-0 group-hover/col:opacity-100" />;
-    return sortAsc ? <ArrowUp className="w-3 h-3 text-[#0066CC]" /> : <ArrowDown className="w-3 h-3 text-[#0066CC]" />;
+    return sortAsc ? <ArrowUp className="w-3 h-3 text-[#3D52A0]" /> : <ArrowDown className="w-3 h-3 text-[#3D52A0]" />;
   };
 
   return (
@@ -189,7 +189,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                   type="checkbox"
                   checked={isAllSelected && items.length > 0}
                   onChange={onToggleSelectAll}
-                  className="rounded border-slate-300 text-[#0066CC] focus:ring-[#0066CC] cursor-pointer"
+                  className="rounded border-slate-300 text-[#3D52A0] focus:ring-[#3D52A0] cursor-pointer"
                   title="Select / Deselect all filtered items"
                 />
               </th>
@@ -343,7 +343,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => onToggleSelectItem(item.id)}
-                        className="rounded border-slate-300 text-[#0066CC] focus:ring-[#0066CC] cursor-pointer"
+                        className="rounded border-slate-300 text-[#3D52A0] focus:ring-[#3D52A0] cursor-pointer"
                       />
                     </td>
 
@@ -356,7 +356,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                             value={item.name || ''}
                             onChange={(e) => handleFieldChange(item, 'name', e.target.value)}
                             placeholder="Item Name (e.g. Wardrobe with Loft)"
-                            className="font-extrabold text-slate-900 bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-slate-200 focus:border-[#0066CC] rounded px-1.5 py-0.5 text-xs w-full outline-none transition-all"
+                            className="font-extrabold text-slate-900 bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-slate-200 focus:border-[#3D52A0] rounded px-1.5 py-0.5 text-xs w-full outline-none transition-all"
                           />
                           <button
                             type="button"
@@ -383,7 +383,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                         <button
                           type="button"
                           onClick={() => onViewProjectUsage && onViewProjectUsage(item)}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[#0066CC] rounded-full text-[10px] font-extrabold transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[#3D52A0] rounded-full text-[10px] font-extrabold transition-colors cursor-pointer"
                           title={`Used in ${projectCount} project(s). Click to view details.`}
                         >
                           <Building2 className="w-3 h-3" />
@@ -399,7 +399,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                       <select
                         value={item.cat || 'General'}
                         onChange={(e) => handleFieldChange(item, 'cat', e.target.value)}
-                        className="w-full bg-slate-50 hover:bg-white border border-slate-200 focus:border-[#0066CC] rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+                        className="w-full bg-slate-50 hover:bg-white border border-slate-200 focus:border-[#3D52A0] rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 outline-none cursor-pointer"
                       >
                         {categories.filter(c => c !== 'All').map(cat => (
                           <option key={cat} value={cat}>{cat}</option>
@@ -412,7 +412,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                       <select
                         value={item.unit || 'nos'}
                         onChange={(e) => handleFieldChange(item, 'unit', e.target.value)}
-                        className="bg-transparent hover:bg-white border border-transparent hover:border-slate-200 focus:border-[#0066CC] rounded px-1.5 py-1 text-xs text-center font-bold text-slate-600 outline-none cursor-pointer uppercase"
+                        className="bg-transparent hover:bg-white border border-transparent hover:border-slate-200 focus:border-[#3D52A0] rounded px-1.5 py-1 text-xs text-center font-bold text-slate-600 outline-none cursor-pointer uppercase"
                       >
                         {UOM_OPTIONS.map(opt => (
                           <option key={opt} value={opt}>{opt}</option>
@@ -427,7 +427,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                         min="0"
                         value={item.materials || 0}
                         onChange={(e) => handleFieldChange(item, 'materials', parseFloat(e.target.value) || 0)}
-                        className="w-full text-right font-mono text-xs text-slate-700 bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-slate-200 focus:border-[#0066CC] rounded px-1.5 py-1 outline-none transition-all"
+                        className="w-full text-right font-mono text-xs text-slate-700 bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-slate-200 focus:border-[#3D52A0] rounded px-1.5 py-1 outline-none transition-all"
                       />
                     </td>
 
@@ -438,7 +438,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                         min="0"
                         value={item.labor || 0}
                         onChange={(e) => handleFieldChange(item, 'labor', parseFloat(e.target.value) || 0)}
-                        className="w-full text-right font-mono text-xs text-slate-700 bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-slate-200 focus:border-[#0066CC] rounded px-1.5 py-1 outline-none transition-all"
+                        className="w-full text-right font-mono text-xs text-slate-700 bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-slate-200 focus:border-[#3D52A0] rounded px-1.5 py-1 outline-none transition-all"
                       />
                     </td>
 
@@ -463,7 +463,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                           min="0"
                           value={item.margin || 0}
                           onChange={(e) => handleFieldChange(item, 'margin', parseFloat(e.target.value) || 0)}
-                          className={`w-14 text-right font-mono text-xs font-bold rounded px-1 py-1 border border-transparent hover:border-slate-200 focus:border-[#0066CC] outline-none transition-all ${
+                          className={`w-14 text-right font-mono text-xs font-bold rounded px-1 py-1 border border-transparent hover:border-slate-200 focus:border-[#3D52A0] outline-none transition-all ${
                             (item.margin || 0) >= 20
                               ? 'text-emerald-700 bg-emerald-50/50'
                               : (item.margin || 0) >= 15
@@ -482,7 +482,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                         min="0"
                         value={Math.round(sellPrice)}
                         onChange={(e) => handleSellPriceChange(item, parseFloat(e.target.value) || 0)}
-                        className="w-full text-right font-mono text-xs font-black text-slate-900 bg-slate-50/60 hover:bg-white focus:bg-white border border-transparent hover:border-slate-300 focus:border-[#0066CC] rounded px-1.5 py-1 outline-none transition-all"
+                        className="w-full text-right font-mono text-xs font-black text-slate-900 bg-slate-50/60 hover:bg-white focus:bg-white border border-transparent hover:border-slate-300 focus:border-[#3D52A0] rounded px-1.5 py-1 outline-none transition-all"
                         title="Selling Price = Cost * (1 + Margin%). Editing auto-updates margin %."
                       />
                     </td>
@@ -495,7 +495,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                         min="0.1"
                         value={item.areaMultiplierCoefficient || 1}
                         onChange={(e) => handleFieldChange(item, 'areaMultiplierCoefficient', parseFloat(e.target.value) || 1)}
-                        className="w-14 text-center font-mono text-xs font-bold text-[#0066CC] bg-sky-50/50 hover:bg-white focus:bg-white border border-transparent hover:border-sky-200 focus:border-[#0066CC] rounded px-1 py-1 outline-none transition-all"
+                        className="w-14 text-center font-mono text-xs font-bold text-[#3D52A0] bg-sky-50/50 hover:bg-white focus:bg-white border border-transparent hover:border-sky-200 focus:border-[#3D52A0] rounded px-1 py-1 outline-none transition-all"
                         title="Area multiplier coefficient"
                       />
                     </td>
@@ -515,7 +515,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                         <button
                           type="button"
                           onClick={() => onDuplicateItem(item)}
-                          className="p-1 text-slate-400 hover:text-[#0066CC] hover:bg-sky-50 rounded transition-colors"
+                          className="p-1 text-slate-400 hover:text-[#3D52A0] hover:bg-sky-50 rounded transition-colors"
                           title="Duplicate Item"
                         >
                           <Copy className="w-3.5 h-3.5" />
@@ -546,7 +546,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                               value={item.specs || ''}
                               onChange={(e) => handleFieldChange(item, 'specs', e.target.value)}
                               placeholder="e.g. Commercial ply with 1mm laminate, Soft-close Hettich hinges..."
-                              className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0066CC] h-18 resize-none shadow-2xs"
+                              className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#3D52A0] h-18 resize-none shadow-2xs"
                             />
                           </div>
 

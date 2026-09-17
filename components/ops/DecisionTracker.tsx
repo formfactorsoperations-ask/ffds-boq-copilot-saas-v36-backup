@@ -555,7 +555,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
             case 'draft': return { dot: 'bg-slate-400', badge: 'Draft Saved', actionLabel: 'Notify client', action: () => handleNotifyClient((decision as any).id), type: 'notify' };
             case 'notified': return { dot: 'bg-amber-500', badge: 'Client notified', actionLabel: 'Attach Drawing', action: () => handleProvideDriveLink((decision as any).id), type: 'drawing' };
             case 'drawing_pending': return { dot: 'bg-amber-500', badge: 'Drawing Shared', actionLabel: 'Request signoff', action: () => handleSendSignoff((decision as any).id), type: 'signoff' };
-            case 'drawing_sent': return { dot: 'bg-[#0066CC]', badge: 'Awaiting signoff', actionLabel: isDrawingSentMoreThan5Days ? 'Send reminder' : '', action: () => handleSendReminder((decision as any).id), type: 'remind' };
+            case 'drawing_sent': return { dot: 'bg-[#3D52A0]', badge: 'Awaiting signoff', actionLabel: isDrawingSentMoreThan5Days ? 'Send reminder' : '', action: () => handleSendReminder((decision as any).id), type: 'remind' };
             case 'signed': return { dot: 'bg-emerald-500', badge: 'Signed ✓', actionLabel: '', action: null, type: 'none' };
             case 'disputed': return { dot: 'bg-red-500', badge: 'Query raised', actionLabel: 'Answer the query', action: () => startReply((decision as any).id), type: 'reply' };
             default: return { dot: 'bg-slate-400', badge: 'Saved ✓', actionLabel: '', action: null, type: 'none' };
@@ -760,7 +760,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
             {/* Form Trigger / Header */}
             <div className="flex flex-wrap gap-3 justify-between items-center bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/70">
                 <div className="flex items-center gap-3">
-                    <span className="p-2 bg-sky-50 text-[#0066CC] rounded-xl border border-sky-100"><CheckCircle className="w-5 h-5"/></span>
+                    <span className="p-2 bg-sky-50 text-[#3D52A0] rounded-xl border border-sky-100"><CheckCircle className="w-5 h-5"/></span>
                     <div>
                         <h3 className="font-extrabold text-slate-900 leading-tight">Decision Ledger</h3>
                         <p className="text-[11.5px] text-slate-400 font-medium mt-0.5">
@@ -770,7 +770,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                 </div>
                 <button
                     onClick={() => setIsFormOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-[#0066CC] text-white rounded-xl font-bold text-sm hover:bg-[#0055B3] transition"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#3D52A0] text-white rounded-xl font-bold text-sm hover:bg-[#334486] transition"
                 >
                     <Plus className="w-4 h-4" />
                     Log a Decision
@@ -831,7 +831,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                             </div>
 
                             <textarea
-                                className="w-full border border-slate-200 rounded-2xl p-3.5 text-sm focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] outline-none min-h-[110px] leading-relaxed"
+                                className="w-full border border-slate-200 rounded-2xl p-3.5 text-sm focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] outline-none min-h-[110px] leading-relaxed"
                                 placeholder="Move the living room TV point 6 inches right so it clears the laminate panel."
                                 value={decisionText}
                                 onChange={(e) => setDecisionText(e.target.value)}
@@ -847,7 +847,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                     </label>
                                     <input
                                         type="text"
-                                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none"
+                                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#3D52A0] outline-none"
                                         placeholder={roomName ? roomName + " decision" : "e.g. TV unit laminate"}
                                         value={title}
                                         onChange={(e) => setTitle(e.target.value)}
@@ -900,7 +900,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 mb-1.5">Room or area</label>
                                     <select
-                                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none bg-white"
+                                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#3D52A0] outline-none bg-white"
                                         value={roomName}
                                         onChange={(e) => setRoomName(e.target.value)}
                                     >
@@ -924,7 +924,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                 onClick={() => setDecisionNature(opt.id)}
                                                 className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition ${
                                                     decisionNature === opt.id
-                                                        ? 'bg-white text-[#0055B3] shadow-sm border border-sky-200'
+                                                        ? 'bg-white text-[#334486] shadow-sm border border-sky-200'
                                                         : 'text-slate-500 hover:text-slate-800'
                                                 }`}
                                             >
@@ -950,7 +950,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                             onClick={() => setCategory(cat)}
                                             className={`px-3 py-2 min-h-[38px] rounded-lg text-xs font-bold border transition ${
                                                 category === cat
-                                                    ? 'bg-sky-50 border-sky-200 text-[#0055B3]'
+                                                    ? 'bg-sky-50 border-sky-200 text-[#334486]'
                                                     : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                                             }`}
                                         >
@@ -966,7 +966,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                 </label>
                                 <input
                                     type="text"
-                                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none"
+                                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#3D52A0] outline-none"
                                     placeholder="Amit (client), site supervisor"
                                     value={presentees}
                                     onChange={(e) => setPresentees(e.target.value)}
@@ -999,7 +999,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                         }}
                                         className={`px-3 py-2 min-h-[38px] rounded-lg text-xs font-bold border transition text-left ${
                                             boqImpact === impact.id
-                                                ? 'bg-sky-50 border-sky-200 text-[#0055B3]'
+                                                ? 'bg-sky-50 border-sky-200 text-[#334486]'
                                                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                                         }`}
                                     >
@@ -1024,7 +1024,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    className="w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none font-bold"
+                                                    className="w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2.5 min-h-[44px] text-sm focus:border-[#3D52A0] outline-none font-bold"
                                                     placeholder="15000"
                                                     value={impactCostValue || ''}
                                                     onChange={(e) => setImpactCostValue(Number(e.target.value) || 0)}
@@ -1041,7 +1041,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                     <input
                                         type="number"
                                         min="0"
-                                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#0066CC] outline-none font-bold"
+                                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 min-h-[44px] text-sm focus:border-[#3D52A0] outline-none font-bold"
                                         placeholder="0"
                                         value={impactScheduleDays || ''}
                                         onChange={(e) => setImpactScheduleDays(Number(e.target.value) || 0)}
@@ -1071,7 +1071,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                 type="button"
                                 onClick={() => submitForm(true)}
                                 disabled={!decisionText.trim() || !roomName || !category || isSubmitting}
-                                className="px-6 py-3 min-h-[44px] rounded-xl font-bold text-sm bg-[#0066CC] text-white hover:bg-[#0055B3] disabled:opacity-50 transition flex items-center justify-center gap-2 w-full sm:w-auto"
+                                className="px-6 py-3 min-h-[44px] rounded-xl font-bold text-sm bg-[#3D52A0] text-white hover:bg-[#334486] disabled:opacity-50 transition flex items-center justify-center gap-2 w-full sm:w-auto"
                             >
                                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                                 Publish and share
@@ -1108,7 +1108,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                     onClick={() => setNatureFilter(opt.id)}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
                                         natureFilter === opt.id
-                                            ? 'bg-white text-[#0055B3] shadow-sm border border-sky-200'
+                                            ? 'bg-white text-[#334486] shadow-sm border border-sky-200'
                                             : 'text-slate-500 hover:text-slate-800'
                                     }`}
                                 >
@@ -1152,7 +1152,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                 whileHover={isExpanded ? undefined : { y: -2 }}
                                 className={`bg-white rounded-2xl border overflow-hidden transition-[border-color,box-shadow] duration-200 ${
                                     isExpanded
-                                        ? 'border-[#0066CC]/40 ring-1 ring-[#0066CC]/10 shadow-md'
+                                        ? 'border-[#3D52A0]/40 ring-1 ring-[#3D52A0]/10 shadow-md'
                                         : 'border-slate-200/90 shadow-2xs hover:border-slate-300 hover:shadow-md'
                                 }`}
                             >
@@ -1196,7 +1196,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                     </span>
                                                 )}
                                                 {decision.impactScheduleDays ? (
-                                                    <span className="inline-flex items-center text-[10px] bg-sky-50 text-[#0055B3] font-black px-1.5 py-0.5 rounded border border-sky-100">
+                                                    <span className="inline-flex items-center text-[10px] bg-sky-50 text-[#334486] font-black px-1.5 py-0.5 rounded border border-sky-100">
                                                         +{decision.impactScheduleDays}d delay
                                                     </span>
                                                 ) : null}
@@ -1242,7 +1242,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                         e.stopPropagation();
                                                         if (config.action) config.action();
                                                     }}
-                                                    className="px-2.5 py-1.5 min-h-[34px] bg-sky-50 text-[#0055B3] hover:bg-sky-100 rounded-lg text-xs font-extrabold transition flex items-center gap-1 whitespace-nowrap border border-sky-100 shadow-sm"
+                                                    className="px-2.5 py-1.5 min-h-[34px] bg-sky-50 text-[#334486] hover:bg-sky-100 rounded-lg text-xs font-extrabold transition flex items-center gap-1 whitespace-nowrap border border-sky-100 shadow-sm"
                                                 >
                                                     {isActionLoading === `${config.type}-${id}` && <Loader2 className="w-3 h-3 animate-spin"/>}
                                                     {config.actionLabel}
@@ -1297,7 +1297,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                     type="text"
                                                                     value={editTitle}
                                                                     onChange={(e) => setEditTitle(e.target.value)}
-                                                                    className="w-full text-sm bg-white border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-[#0066CC] font-bold"
+                                                                    className="w-full text-sm bg-white border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-[#3D52A0] font-bold"
                                                                 />
                                                             </div>
                                                             <div className="space-y-1">
@@ -1305,7 +1305,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                 <textarea
                                                                     value={editText}
                                                                     onChange={(e) => setEditText(e.target.value)}
-                                                                    className="w-full text-sm bg-white border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-[#0066CC] min-h-[100px]"
+                                                                    className="w-full text-sm bg-white border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-[#3D52A0] min-h-[100px]"
                                                                 />
                                                             </div>
                                                             <div className="grid grid-cols-2 gap-4">
@@ -1315,7 +1315,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                         type="number"
                                                                         value={editCost}
                                                                         onChange={(e) => setEditCost(Number(e.target.value) || 0)}
-                                                                        className="w-full text-sm bg-white border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-[#0066CC] font-semibold"
+                                                                        className="w-full text-sm bg-white border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-[#3D52A0] font-semibold"
                                                                     />
                                                                 </div>
                                                                 <div className="space-y-1">
@@ -1324,7 +1324,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                         type="number"
                                                                         value={editSchedule}
                                                                         onChange={(e) => setEditSchedule(Number(e.target.value) || 0)}
-                                                                        className="w-full text-sm bg-white border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-[#0066CC] font-semibold"
+                                                                        className="w-full text-sm bg-white border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-[#3D52A0] font-semibold"
                                                                     />
                                                                 </div>
                                                             </div>
@@ -1332,7 +1332,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                 <button
                                                                     onClick={() => submitEdit(id)}
                                                                     disabled={isActionLoading === `edit-${id}`}
-                                                                    className="bg-[#0066CC] text-white px-4 py-2 rounded-lg text-xs font-bold disabled:opacity-50 flex items-center gap-1"
+                                                                    className="bg-[#3D52A0] text-white px-4 py-2 rounded-lg text-xs font-bold disabled:opacity-50 flex items-center gap-1"
                                                                 >
                                                                     {isActionLoading === `edit-${id}` && <Loader2 className="w-3 h-3 animate-spin"/>}
                                                                     Save Changes
@@ -1402,14 +1402,14 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                         value={linkValue}
                                                                         onChange={(e) => setLinkValue(e.target.value)}
                                                                         placeholder="https://drive.google.com/..." 
-                                                                        className="w-full bg-white border border-slate-300 text-slate-800 text-sm rounded-lg px-3 focus:ring-1 focus:ring-[#0066CC] py-1.5"
+                                                                        className="w-full bg-white border border-slate-300 text-slate-800 text-sm rounded-lg px-3 focus:ring-1 focus:ring-[#3D52A0] py-1.5"
                                                                     />
                                                                 </div>
                                                                 <div className="flex gap-2 pt-1 border-t border-slate-200 mt-1 pb-1">
                                                                     <button
                                                                         onClick={() => submitDriveLink(id)}
                                                                         disabled={isActionLoading === `drawing-${id}` || (!linkValue.trim() && !drawingFile)}
-                                                                        className="bg-[#0066CC] text-white px-4 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 flex items-center justify-center min-w-[120px]"
+                                                                        className="bg-[#3D52A0] text-white px-4 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 flex items-center justify-center min-w-[120px]"
                                                                     >
                                                                         {isActionLoading === `drawing-${id}` ? <Loader2 className="w-4 h-4 animate-spin"/> : 'Upload & Save'}
                                                                     </button>
@@ -1445,7 +1445,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                         <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
                                                                             {thread.map((m: any, i: number) => (
                                                                                 <div key={i} className={`px-3 py-2 ${m.from === 'studio' ? 'bg-sky-50/60' : 'bg-rose-50'}`}>
-                                                                                    <p className={`text-[10px] uppercase font-black tracking-wider ${m.from === 'studio' ? 'text-[#0055B3]' : 'text-rose-700'}`}>
+                                                                                    <p className={`text-[10px] uppercase font-black tracking-wider ${m.from === 'studio' ? 'text-[#334486]' : 'text-rose-700'}`}>
                                                                                         {m.from === 'studio' ? 'You answered' : 'They asked'}
                                                                                     </p>
                                                                                     <p className={`text-xs font-medium mt-0.5 ${m.from === 'studio' ? 'text-slate-700' : 'text-rose-900 italic'}`}>
@@ -1463,13 +1463,13 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                     value={replyText}
                                                                     onChange={(e) => setReplyText(e.target.value)}
                                                                     placeholder="Answer the question. Attach a revised drawing only if the drawing itself has to change."
-                                                                    className="w-full bg-white border border-slate-300 text-slate-800 text-sm rounded-xl px-3 py-2 focus:ring-1 focus:ring-[#0066CC] outline-none"
+                                                                    className="w-full bg-white border border-slate-300 text-slate-800 text-sm rounded-xl px-3 py-2 focus:ring-1 focus:ring-[#3D52A0] outline-none"
                                                                 />
                                                                 <div className="flex flex-wrap gap-2 items-center">
                                                                     <button
                                                                         onClick={() => submitReply(id)}
                                                                         disabled={isActionLoading === `reply-${id}` || !replyText.trim()}
-                                                                        className="bg-[#0066CC] text-white px-4 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 flex items-center justify-center min-w-[130px]"
+                                                                        className="bg-[#3D52A0] text-white px-4 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 flex items-center justify-center min-w-[130px]"
                                                                     >
                                                                         {isActionLoading === `reply-${id}`
                                                                             ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -1510,12 +1510,12 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                                     value={manualSignoffText}
                                                                     onChange={(e) => setManualSignoffText(e.target.value)}
                                                                     placeholder={activeManualSignoffDecision.type === 'approved' ? "e.g. Approved on WhatsApp on Oct 14" : "Describe client concern..."} 
-                                                                    className="flex-1 bg-white border border-slate-300 text-slate-800 text-sm rounded-lg px-3 focus:ring-1 focus:ring-[#0066CC] py-1.5"
+                                                                    className="flex-1 bg-white border border-slate-300 text-slate-800 text-sm rounded-lg px-3 focus:ring-1 focus:ring-[#3D52A0] py-1.5"
                                                                 />
                                                                 <button
                                                                     onClick={() => submitManualSignoff(id, activeManualSignoffDecision.type)}
                                                                     disabled={isActionLoading === `manual-${activeManualSignoffDecision.type}-${id}` || (activeManualSignoffDecision.type === 'queried' && !manualSignoffText.trim())}
-                                                                    className="bg-[#0066CC] text-white px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
+                                                                    className="bg-[#3D52A0] text-white px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
                                                                 >
                                                                     {isActionLoading === `manual-${activeManualSignoffDecision.type}-${id}` ? <Loader2 className="w-4 h-4 animate-spin"/> : 'Save Signoff'}
                                                                 </button>
@@ -1620,16 +1620,16 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                                                     {decision.photoURL && (
                                                         <a href={decision.photoURL} target="_blank" rel="noreferrer" className="flex-1 sm:flex-none aspect-video sm:aspect-square rounded-xl overflow-hidden border border-slate-200 bg-white block group relative shadow-sm">
                                                             <img src={decision.photoURL} alt="Site Visit Snapshot" className="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
-                                                            <div className="absolute inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                                            <div className="absolute inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                                                                 <span className="text-white text-[10px] font-black uppercase tracking-wider">Inspect Photo</span>
                                                             </div>
                                                         </a>
                                                     )}
                                                     {decision.drawingURL && (
-                                                        <a href={decision.drawingURL} target="_blank" rel="noreferrer" className="flex-1 sm:flex-none aspect-video sm:aspect-square rounded-xl border border-slate-200 bg-white flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-[#0066CC] hover:border-sky-200 hover:bg-sky-50 transition p-3 text-center group relative shadow-sm">
-                                                            <FileText className="w-8 h-8 text-[#0066CC]" />
+                                                        <a href={decision.drawingURL} target="_blank" rel="noreferrer" className="flex-1 sm:flex-none aspect-video sm:aspect-square rounded-xl border border-slate-200 bg-white flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-[#3D52A0] hover:border-sky-200 hover:bg-sky-50 transition p-3 text-center group relative shadow-sm">
+                                                            <FileText className="w-8 h-8 text-[#3D52A0]" />
                                                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-600">Technical Revision Blueprint</span>
-                                                            <div className="absolute inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                                            <div className="absolute inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                                                                 <Download className="w-6 h-6 text-sky-400" />
                                                             </div>
                                                         </a>

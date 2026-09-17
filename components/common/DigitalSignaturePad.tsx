@@ -64,7 +64,7 @@ const SCRIPT_FONTS = [
 const INK_COLORS = [
   { id: 'slate', name: 'Midnight Slate', hex: '#0f172a', border: 'border-slate-900', bg: 'bg-slate-900' },
   { id: 'navy', name: 'Imperial Navy', hex: '#002b49', border: 'border-sky-950', bg: 'bg-[#002b49]' },
-  { id: 'blue', name: 'Royal Blue', hex: '#0066cc', border: 'border-sky-600', bg: 'bg-[#0066cc]' }
+  { id: 'blue', name: 'Royal Blue', hex: '#3D52A0', border: 'border-sky-600', bg: 'bg-[#3D52A0]' }
 ];
 
 export default function DigitalSignaturePad({
@@ -324,10 +324,10 @@ export default function DigitalSignaturePad({
       <div className="flex items-center justify-between pb-4 border-b border-slate-100">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="p-1.5 bg-sky-50 text-[#0066CC] rounded-lg">
+            <span className="p-1.5 bg-sky-50 text-[#3D52A0] rounded-lg">
               <ShieldCheck className="w-5 h-5" />
             </span>
-            <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#0066CC]">
+            <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#3D52A0]">
               Zero-Friction E-Sign Gateway • IT Act 2000 Compliant
             </span>
           </div>
@@ -363,7 +363,7 @@ export default function DigitalSignaturePad({
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="e.g. Mr. Rahul Sharma"
-            className="w-full text-xs font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] transition"
+            className="w-full text-xs font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0] transition"
           />
         </div>
         <div>
@@ -375,7 +375,7 @@ export default function DigitalSignaturePad({
             value={email}
             onChange={e => setEmail(e.target.value)}
             placeholder="e.g. rahul@example.com"
-            className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] transition"
+            className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0] transition"
           />
         </div>
       </div>
@@ -397,11 +397,11 @@ export default function DigitalSignaturePad({
             onClick={() => setMode('type')}
             className={`flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
               mode === 'type'
-                ? 'bg-white text-[#0066CC] shadow-xs border border-slate-200'
+                ? 'bg-white text-[#3D52A0] shadow-xs border border-slate-200'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-[#0066CC]" />
+            <Sparkles className="w-3.5 h-3.5 text-[#3D52A0]" />
             <span>⚡ Quick Adopt</span>
           </button>
           
@@ -410,11 +410,11 @@ export default function DigitalSignaturePad({
             onClick={() => setMode('draw')}
             className={`flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
               mode === 'draw'
-                ? 'bg-white text-[#0066CC] shadow-xs border border-slate-200'
+                ? 'bg-white text-[#3D52A0] shadow-xs border border-slate-200'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <PenTool className="w-3.5 h-3.5 text-[#0066CC]" />
+            <PenTool className="w-3.5 h-3.5 text-[#3D52A0]" />
             <span>✍️ Freehand Draw</span>
           </button>
 
@@ -423,11 +423,11 @@ export default function DigitalSignaturePad({
             onClick={() => setMode('upload')}
             className={`flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
               mode === 'upload'
-                ? 'bg-white text-[#0066CC] shadow-xs border border-slate-200'
+                ? 'bg-white text-[#3D52A0] shadow-xs border border-slate-200'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Upload className="w-3.5 h-3.5 text-[#0066CC]" />
+            <Upload className="w-3.5 h-3.5 text-[#3D52A0]" />
             <span>📤 Upload Stamp</span>
           </button>
         </div>
@@ -478,7 +478,7 @@ export default function DigitalSignaturePad({
                   onClick={() => setSelectedFont(font.id)}
                   className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
                     selectedFont === font.id
-                      ? 'border-[#0066CC] bg-sky-50/70 text-[#0066CC] font-bold shadow-xs'
+                      ? 'border-[#3D52A0] bg-sky-50/70 text-[#3D52A0] font-bold shadow-xs'
                       : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
                   }`}
                 >
@@ -555,7 +555,7 @@ export default function DigitalSignaturePad({
                   key={color.id}
                   type="button"
                   onClick={() => setInkColor(color.hex)}
-                  className={`w-5 h-5 rounded-full ${color.bg} transition ${inkColor === color.hex ? 'ring-2 ring-offset-1 ring-[#0066CC]' : 'opacity-70 hover:opacity-100'}`}
+                  className={`w-5 h-5 rounded-full ${color.bg} transition ${inkColor === color.hex ? 'ring-2 ring-offset-1 ring-[#3D52A0]' : 'opacity-70 hover:opacity-100'}`}
                   title={color.name}
                 />
               ))}
@@ -601,8 +601,8 @@ export default function DigitalSignaturePad({
               </button>
             </div>
           ) : (
-            <label className="border-2 border-dashed border-slate-300 hover:border-[#0066CC] rounded-2xl p-8 flex flex-col items-center justify-center text-center bg-slate-50 hover:bg-sky-50/40 transition cursor-pointer min-h-[160px]">
-              <Upload className="w-7 h-7 text-[#0066CC] mb-2" />
+            <label className="border-2 border-dashed border-slate-300 hover:border-[#3D52A0] rounded-2xl p-8 flex flex-col items-center justify-center text-center bg-slate-50 hover:bg-sky-50/40 transition cursor-pointer min-h-[160px]">
+              <Upload className="w-7 h-7 text-[#3D52A0] mb-2" />
               <span className="text-xs font-bold text-slate-800">Click or drag & drop scanned signature / official stamp</span>
               <span className="text-[10px] text-slate-400 mt-1">Supports PNG, JPG, JPEG up to 5MB (Transparent PNG recommended)</span>
               <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
@@ -617,7 +617,7 @@ export default function DigitalSignaturePad({
           type="checkbox"
           checked={legalAffirmation}
           onChange={e => setLegalAffirmation(e.target.checked)}
-          className="mt-0.5 w-4 h-4 text-[#0066CC] rounded focus:ring-[#0066CC] cursor-pointer shrink-0"
+          className="mt-0.5 w-4 h-4 text-[#3D52A0] rounded focus:ring-[#3D52A0] cursor-pointer shrink-0"
         />
         <div className="text-xs text-slate-600 leading-relaxed">
           <span className="text-slate-900 font-bold block mb-0.5 flex items-center gap-1.5">
@@ -631,7 +631,7 @@ export default function DigitalSignaturePad({
       {/* Real-time Tamper-Proof Audit Bar */}
       <div className="p-3 bg-slate-100/70 border border-slate-200/80 rounded-xl flex items-center justify-between text-[10px] text-slate-500 font-mono">
         <div className="flex items-center gap-1.5">
-          <Fingerprint className="w-3.5 h-3.5 text-[#0066CC]" />
+          <Fingerprint className="w-3.5 h-3.5 text-[#3D52A0]" />
           <span>CRYPTOGRAPHIC AUDIT SEAL:</span>
         </div>
         <span className="font-bold text-slate-700">{liveHash}</span>
@@ -660,7 +660,7 @@ export default function DigitalSignaturePad({
           type="button"
           onClick={handleSubmit}
           disabled={isSubmitting || !name.trim() || !legalAffirmation}
-          className="w-full flex-1 py-3.5 bg-[#0066CC] hover:bg-[#0055B3] disabled:opacity-50 text-white font-black text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+          className="w-full flex-1 py-3.5 bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-50 text-white font-black text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
         >
           {isSubmitting ? (
             <>

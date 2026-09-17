@@ -43,7 +43,7 @@ interface Props {
 
 const HubMarquee: React.FC<Props> = ({ onNavigate, onCreateNew, speed = 46 }) => {
   const tiles: HubTile[] = [
-    { label: "New project",  icon: Plus,          from: "#0066CC", to: "#4A9BE4", tint: "#EEF5FE", onClick: onCreateNew },
+    { label: "New project",  icon: Plus,          from: "#3D52A0", to: "#4A9BE4", tint: "#EEF5FE", onClick: onCreateNew },
     { label: "Projects",     icon: LayoutGrid,    from: "#1D4ED8", to: "#60A5FA", tint: "#EEF2FF", onClick: () => onNavigate("projects") },
     { label: "Clients",      icon: Users,         from: "#0E7C5A", to: "#3FAE87", tint: "#ECF7F2", onClick: () => onNavigate("clients") },
     { label: "Reports",      icon: BarChart3,     from: "#B5945B", to: "#D8C08A", tint: "#FAF6EE", onClick: () => onNavigate("reports") },

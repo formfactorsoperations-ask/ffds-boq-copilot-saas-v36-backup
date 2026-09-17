@@ -32,7 +32,7 @@ const ClientWhyUs: React.FC = () => {
     const { orgData } = useOrg();
 
     return (
-        <section className="py-20 px-6 md:px-20 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white print-section">
+        <section className="py-20 px-6 md:px-20 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white print-section">
             <div className="max-w-5xl mx-auto">
                 <div className="mb-12 md:text-center max-w-3xl mx-auto">
                     <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-3">The {orgData?.orgName ? orgData.orgName.split(' ')[0] : 'Studio'} Approach</p>

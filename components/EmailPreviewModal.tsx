@@ -45,7 +45,7 @@ export function EmailPreviewModal({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -173,9 +173,9 @@ export function EmailPreviewModal({
                     />
                   </div>
                 ) : (
-                  <div className="w-[360px] h-[600px] bg-[#0066CC]/90 backdrop-blur-md border border-white/20 p-3 rounded-[40px] shadow-2xl border-4 border-slate-800 relative flex flex-col shrink-0">
+                  <div className="w-[360px] h-[600px] bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 p-3 rounded-[40px] shadow-2xl border-4 border-slate-800 relative flex flex-col shrink-0">
                     {/* Phone speaker/camera details */}
-                    <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-b-2xl z-10 flex items-center justify-center">
+                    <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 rounded-b-2xl z-10 flex items-center justify-center">
                       <div className="w-12 h-1 bg-slate-800 rounded-full mb-1"></div>
                     </div>
                     
@@ -238,7 +238,7 @@ export function EmailPreviewModal({
                     disabled={isSending || !recipientEmail}
                     className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-2 ${
                       recipientEmail && !isSending
-                        ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#0055B3]'
+                        ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#334486]'
                         : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                     }`}
                   >

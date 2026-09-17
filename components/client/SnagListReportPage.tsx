@@ -112,7 +112,7 @@ export default function SnagListReportPage({ projectContext, onBack }: SnagListR
                     <button
                         onClick={handleDownloadPdf}
                         disabled={isDownloading}
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] disabled:bg-sky-400 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md shadow-sky-600/15"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] disabled:bg-sky-400 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md shadow-sky-600/15"
                     >
                         <Download className="w-4 h-4" />
                         {isDownloading ? 'Generating PDF...' : 'Download PDF'}

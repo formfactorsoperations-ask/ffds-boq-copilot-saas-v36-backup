@@ -147,7 +147,7 @@ const InternalComparisonTable: React.FC<InternalComparisonTableProps> = ({ tiers
                         type="checkbox" 
                         checked={showDiffOnly} 
                         onChange={e => setShowDiffOnly(e.target.checked)} 
-                        className="rounded text-[#0066CC] focus:ring-[#0066CC]"
+                        className="rounded text-[#3D52A0] focus:ring-[#3D52A0]"
                     />
                     <span className="text-xs font-bold text-slate-700">Show Differences Only</span>
                 </label>

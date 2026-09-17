@@ -155,7 +155,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
         <div className="p-6 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 bg-[#0066CC]/10 text-[#0066CC] rounded-full text-xs font-black uppercase tracking-wider">
+              <span className="px-2.5 py-0.5 bg-[#3D52A0]/10 text-[#3D52A0] rounded-full text-xs font-black uppercase tracking-wider">
                 Bulk Studio Action
               </span>
               <span className="text-xs font-bold text-slate-500">
@@ -180,7 +180,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
             onClick={() => setActiveTab('margin')}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 border-b-2 text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'margin'
-                ? 'border-[#0066CC] text-[#0066CC]'
+                ? 'border-[#3D52A0] text-[#3D52A0]'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -190,7 +190,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
             onClick={() => setActiveTab('cost')}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 border-b-2 text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'cost'
-                ? 'border-[#0066CC] text-[#0066CC]'
+                ? 'border-[#3D52A0] text-[#3D52A0]'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -200,7 +200,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
             onClick={() => setActiveTab('category')}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 border-b-2 text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'category'
-                ? 'border-[#0066CC] text-[#0066CC]'
+                ? 'border-[#3D52A0] text-[#3D52A0]'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -210,7 +210,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
             onClick={() => setActiveTab('uom')}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 border-b-2 text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'uom'
-                ? 'border-[#0066CC] text-[#0066CC]'
+                ? 'border-[#3D52A0] text-[#3D52A0]'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -239,7 +239,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                   onClick={() => setMarginMode('set')}
                   className={`p-3.5 rounded-2xl border text-left transition-all ${
                     marginMode === 'set'
-                      ? 'border-[#0066CC] bg-sky-50/50 ring-2 ring-sky-100'
+                      ? 'border-[#3D52A0] bg-sky-50/50 ring-2 ring-sky-100'
                       : 'border-slate-200 hover:bg-slate-50'
                   }`}
                 >
@@ -251,7 +251,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                   onClick={() => setMarginMode('adjust')}
                   className={`p-3.5 rounded-2xl border text-left transition-all ${
                     marginMode === 'adjust'
-                      ? 'border-[#0066CC] bg-sky-50/50 ring-2 ring-sky-100'
+                      ? 'border-[#3D52A0] bg-sky-50/50 ring-2 ring-sky-100'
                       : 'border-slate-200 hover:bg-slate-50'
                   }`}
                 >
@@ -273,7 +273,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                       max="100"
                       value={targetMargin}
                       onChange={(e) => setTargetMargin(parseFloat(e.target.value) || 0)}
-                      className="w-32 px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                      className="w-32 px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
                     />
                     <div className="flex items-center gap-1.5">
                       {[15, 20, 25, 30, 35].map((preset) => (
@@ -300,7 +300,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                       step="0.5"
                       value={marginDelta}
                       onChange={(e) => setMarginDelta(parseFloat(e.target.value) || 0)}
-                      className="w-32 px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                      className="w-32 px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
                     />
                     <div className="flex items-center gap-1.5">
                       {[-5, -2, 2, 5, 10].map((preset) => (
@@ -333,7 +333,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                     onClick={() => setCostTarget('all')}
                     className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
                       costTarget === 'all'
-                        ? 'border-[#0066CC] bg-sky-50/50 text-[#0066CC]'
+                        ? 'border-[#3D52A0] bg-sky-50/50 text-[#3D52A0]'
                         : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
                   >
@@ -344,7 +344,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                     onClick={() => setCostTarget('materials')}
                     className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
                       costTarget === 'materials'
-                        ? 'border-[#0066CC] bg-sky-50/50 text-[#0066CC]'
+                        ? 'border-[#3D52A0] bg-sky-50/50 text-[#3D52A0]'
                         : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
                   >
@@ -355,7 +355,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                     onClick={() => setCostTarget('labor')}
                     className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
                       costTarget === 'labor'
-                        ? 'border-[#0066CC] bg-sky-50/50 text-[#0066CC]'
+                        ? 'border-[#3D52A0] bg-sky-50/50 text-[#3D52A0]'
                         : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
                   >
@@ -374,7 +374,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                     step="0.5"
                     value={costPercentChange}
                     onChange={(e) => setCostPercentChange(parseFloat(e.target.value) || 0)}
-                    className="w-32 px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                    className="w-32 px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
                   />
                   <div className="flex items-center gap-1.5">
                     {[-10, -5, 5, 8, 10, 15].map((preset) => (
@@ -414,7 +414,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                       }}
                       className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
                         !isCustomCategory && targetCategory === cat
-                          ? 'bg-[#0066CC] border-[#0066CC] text-white shadow-2xs'
+                          ? 'bg-[#3D52A0] border-[#3D52A0] text-white shadow-2xs'
                           : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                       }`}
                     >
@@ -426,7 +426,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                     onClick={() => setIsCustomCategory(true)}
                     className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
                       isCustomCategory
-                        ? 'bg-[#0066CC] border-[#0066CC] text-white'
+                        ? 'bg-[#3D52A0] border-[#3D52A0] text-white'
                         : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
@@ -445,7 +445,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                     placeholder="e.g. Automation & Smart Home, Signage, Landscaping..."
                     value={customCategoryName}
                     onChange={(e) => setCustomCategoryName(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                    className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
                   />
                 </div>
               )}
@@ -466,7 +466,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                     onClick={() => setTargetUom(uom)}
                     className={`p-3 rounded-xl border text-center transition-all ${
                       targetUom === uom
-                        ? 'bg-[#0066CC] border-[#0066CC] text-white shadow-2xs font-extrabold'
+                        ? 'bg-[#3D52A0] border-[#3D52A0] text-white shadow-2xs font-extrabold'
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 font-bold'
                     }`}
                   >
@@ -523,7 +523,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                   Live Preview (First 3 items)
                 </span>
-                <span className="text-[10px] font-bold text-[#0066CC]">
+                <span className="text-[10px] font-bold text-[#3D52A0]">
                   {selectedItems.length} items will be updated
                 </span>
               </div>
@@ -569,7 +569,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
                           <div className="flex items-center gap-1.5">
                             <span className="text-slate-500">{item.cat}</span>
                             <ArrowRight className="w-3 h-3 text-slate-400" />
-                            <span className="font-bold text-[#0066CC]">{updated.cat}</span>
+                            <span className="font-bold text-[#3D52A0]">{updated.cat}</span>
                           </div>
                         )}
 
@@ -609,7 +609,7 @@ const BankBulkActionModal: React.FC<BankBulkActionModalProps> = ({
             className={`flex items-center gap-1.5 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider text-white shadow-sm transition-all cursor-pointer ${
               activeTab === 'bundle'
                 ? 'bg-emerald-600 hover:bg-emerald-700'
-                : 'bg-[#0066CC] hover:bg-[#0052A3]'
+                : 'bg-[#3D52A0] hover:bg-[#0052A3]'
             }`}
           >
             <Check className="w-4 h-4" />

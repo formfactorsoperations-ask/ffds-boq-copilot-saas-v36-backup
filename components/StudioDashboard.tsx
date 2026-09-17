@@ -528,25 +528,25 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
           <div className="flex bg-slate-100 p-1 rounded-xl shrink-0 w-full lg:w-auto overflow-x-auto gap-1">
               <button 
                   onClick={() => setViewMode('interactive')}
-                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'interactive' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'interactive' ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
               >
                   <Sparkles className="w-3.5 h-3.5" /> Focus Editor
               </button>
               <button 
                   onClick={() => setViewMode('excel')}
-                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'excel' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'excel' ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
               >
                   <ListIcon className="w-3.5 h-3.5" /> Excel
               </button>
               <button 
                   onClick={() => setViewMode('cards')}
-                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'cards' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'cards' ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
               >
                   <GridIcon className="w-3.5 h-3.5" /> Cards
               </button>
               <button
                   onClick={() => setViewMode('takeoff')}
-                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'takeoff' ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'takeoff' ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
               >
                   <ListIcon className="w-3.5 h-3.5" /> Plan Takeoff
               </button>
@@ -554,14 +554,14 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
           
           {/* Search Box */}
           <div className="relative group flex-1 w-full min-w-[200px]">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#0066CC] transition-colors" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#3D52A0] transition-colors" />
               <input 
                   ref={searchInputRef}
                   type="text" 
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search items by name, description, or category... (Cmd/Ctrl+F)"
-                  className="w-full pl-9 pr-9 py-1.5 bg-slate-50/70 border border-slate-200/80 rounded-xl focus:bg-white focus:outline-none focus:border-[#0066CC] focus:ring-2 focus:ring-[#0066CC]/10 transition-all text-xs font-medium text-slate-700"
+                  className="w-full pl-9 pr-9 py-1.5 bg-slate-50/70 border border-slate-200/80 rounded-xl focus:bg-white focus:outline-none focus:border-[#3D52A0] focus:ring-2 focus:ring-[#3D52A0]/10 transition-all text-xs font-medium text-slate-700"
               />
               {searchQuery && (
                   <button 
@@ -597,7 +597,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               <div className="relative">
                   <button
                       onClick={() => setIsGlobalMarkupOpen(!isGlobalMarkupOpen)}
-                      className={`p-1.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:text-[#0066CC] hover:border-sky-200 hover:shadow-sm transition-all ${isGlobalMarkupOpen ? 'ring-2 ring-sky-200 border-sky-300 text-[#0066CC]' : ''}`}
+                      className={`p-1.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:text-[#3D52A0] hover:border-sky-200 hover:shadow-sm transition-all ${isGlobalMarkupOpen ? 'ring-2 ring-sky-200 border-sky-300 text-[#3D52A0]' : ''}`}
                       title="Set Global Margin"
                   >
                       <CalculatorIcon className="w-4 h-4" />
@@ -609,11 +609,11 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                               type="number" 
                               value={globalMarkupValue}
                               onChange={e => setGlobalMarkupValue(Number(e.target.value))}
-                              className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 focus:outline-none focus:border-[#0066CC]" 
+                              className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 focus:outline-none focus:border-[#3D52A0]" 
                           />
                           <div className="flex justify-end gap-2 text-xs">
                               <button onClick={() => setIsGlobalMarkupOpen(false)} className="px-3 py-1.5 text-slate-500 hover:text-slate-700 font-medium">Cancel</button>
-                              <button onClick={handleApplyGlobalMarkup} className="px-3 py-1.5 bg-[#0066CC] text-white rounded-lg hover:bg-[#0055B3] font-bold shadow-sm">Apply All</button>
+                              <button onClick={handleApplyGlobalMarkup} className="px-3 py-1.5 bg-[#3D52A0] text-white rounded-lg hover:bg-[#334486] font-bold shadow-sm">Apply All</button>
                           </div>
                       </div>
                   )}
@@ -621,7 +621,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
 
               <button 
                   onClick={() => setIsImportModalOpen(true)}
-                  className="px-3 py-1.5 bg-sky-50 border border-sky-200 text-[#0055B3] font-bold rounded-xl hover:bg-sky-100 transition-all text-xs flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-sky-50 border border-sky-200 text-[#334486] font-bold rounded-xl hover:bg-sky-100 transition-all text-xs flex items-center gap-1.5"
                   title="Paste or upload items from Excel"
               >
                   <ListIcon className="w-3.5 h-3.5" />
@@ -930,7 +930,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                   className="fixed bottom-6 left-1/2 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl z-50 flex flex-col sm:flex-row items-center gap-4 sm:gap-6 border border-slate-800 backdrop-blur-md max-w-4xl w-[calc(100%-2rem)] sm:w-auto"
               >
                   <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 bg-[#0066CC] rounded-full flex items-center justify-center text-xs font-bold shadow-inner">
+                      <span className="w-6 h-6 bg-[#3D52A0] rounded-full flex items-center justify-center text-xs font-bold shadow-inner">
                           {selectedItemIds.size}
                       </span>
                       <span className="text-sm font-semibold text-slate-200">items selected</span>

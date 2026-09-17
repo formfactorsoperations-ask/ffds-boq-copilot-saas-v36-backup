@@ -112,7 +112,7 @@ export const AiTemplateAuditDrawer: React.FC<AiTemplateAuditDrawerProps> = ({
         <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
           {isAuditing && (
             <div className="py-16 flex flex-col items-center justify-center text-center space-y-4">
-              <div className="p-4 bg-sky-50 text-[#0066CC] rounded-full animate-spin">
+              <div className="p-4 bg-sky-50 text-[#3D52A0] rounded-full animate-spin">
                 <Loader2 className="w-8 h-8" />
               </div>
               <div>
@@ -171,7 +171,7 @@ export const AiTemplateAuditDrawer: React.FC<AiTemplateAuditDrawerProps> = ({
                   {auditResult.missingTrades.length > 0 && (
                     <button
                       onClick={handleApplyAllGaps}
-                      className="px-3 py-1 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                      className="px-3 py-1 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
                     >
                       <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                       Auto-Add All Missing
@@ -212,7 +212,7 @@ export const AiTemplateAuditDrawer: React.FC<AiTemplateAuditDrawerProps> = ({
                               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ml-3 ${
                                 isApplied
                                   ? 'bg-emerald-100 text-emerald-800 cursor-default'
-                                  : 'bg-sky-50 text-[#0066CC] hover:bg-[#0066CC] hover:text-white border border-sky-200'
+                                  : 'bg-sky-50 text-[#3D52A0] hover:bg-[#3D52A0] hover:text-white border border-sky-200'
                               }`}
                             >
                               {isApplied ? (
@@ -261,7 +261,7 @@ export const AiTemplateAuditDrawer: React.FC<AiTemplateAuditDrawerProps> = ({
                       <p className="text-slate-600 text-[11px] leading-relaxed">{auditResult.tierStrategyAdvice.essential}</p>
                     </div>
                     <div className="p-3 bg-white border border-slate-200 rounded-xl">
-                      <p className="font-bold text-[#0055B3] mb-1">2. Mid (Comfort)</p>
+                      <p className="font-bold text-[#334486] mb-1">2. Mid (Comfort)</p>
                       <p className="text-slate-600 text-[11px] leading-relaxed">{auditResult.tierStrategyAdvice.comfort}</p>
                     </div>
                     <div className="p-3 bg-white border border-slate-200 rounded-xl">
@@ -286,7 +286,7 @@ export const AiTemplateAuditDrawer: React.FC<AiTemplateAuditDrawerProps> = ({
           </button>
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg text-xs font-bold transition-all"
+            className="px-5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-xs font-bold transition-all"
           >
             Done
           </button>

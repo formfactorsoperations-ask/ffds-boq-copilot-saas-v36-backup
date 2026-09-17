@@ -150,7 +150,7 @@ const TermsDocketSheet: React.FC<TermsDocketSheetProps> = ({
                                     type="text"
                                     value={snapshotClientData?.date || ''}
                                     onChange={(e) => onUpdateIssuedDate(e.target.value)}
-                                    className="bg-stone-50 border border-stone-200 rounded px-1.5 py-0.5 text-xs text-stone-850 font-bold outline-none focus:ring-1 focus:ring-[#0066CC] w-full no-print"
+                                    className="bg-stone-50 border border-stone-200 rounded px-1.5 py-0.5 text-xs text-stone-850 font-bold outline-none focus:ring-1 focus:ring-[#3D52A0] w-full no-print"
                                     placeholder="DD/MM/YYYY"
                                 />
                                 <span className="print-only">{snapshotClientData?.date || ''}</span>

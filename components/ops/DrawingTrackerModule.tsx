@@ -1,10 +1,13 @@
 import { showSuccessWithNext } from '../SuccessWithNextToast';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import LockedState from '../LockedState';
 import { collection, onSnapshot, doc, updateDoc, setDoc, getDoc, getDocs, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../../services/firebaseClient';
 import { DrawingTrackerItem, ProjectContext, FullBoqItem, DrawingRevision, DrawingComment, DrawingRound } from '../../types';
 import { triggerDrawingSync } from '../../services/drawingSyncService';
+import {
+    summariseTurnaround, revisionEconomics, summariseRisk, turnaroundOf, dateRisk, plural, HOLD_LABEL,
+} from '../../lib/drawingIntel';
 import { 
     Clock, CheckCircle2, AlertCircle, RefreshCw, FileWarning, Plus, ChevronDown, ChevronUp, 
     Sparkles, Send, MessageSquare, History, User, FileText, Calendar, Layers, Search, ShieldCheck, 
@@ -251,6 +254,64 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
             setLoadingRevisions(prev => ({ ...prev, [drawingId]: false }));
         }
     };
+
+    /*
+      Revisions for every drawing, fetched once.
+
+      They live in a subcollection per drawing and were only ever read when
+      somebody expanded that drawing, which is fine for showing one history
+      and useless for asking what the rework across this project has cost.
+      One pass on load fills the same cache the expander uses, so opening a
+      drawing afterwards is instant too.
+    */
+    useEffect(() => {
+        if (!projectId || drawings.length === 0) return;
+        let alive = true;
+
+        (async () => {
+            const missing = drawings.filter(d => !revisions[d.id]);
+            if (missing.length === 0) return;
+
+            const pairs = await Promise.all(missing.map(async d => {
+                try {
+                    const ref = collection(db, `organizations/${orgId}/projects/${projectId}/drawingTracker/${d.id}/revisions`);
+                    const snap = await getDocs(ref);
+                    const list: DrawingRevision[] = snap.docs.map(doc => {
+                        const data = doc.data();
+                        const rNum = data.roundNumber || 0;
+                        return {
+                            id: doc.id,
+                            roundNumber: rNum,
+                            requestedAt: data.requestedAt || 0,
+                            requestDescription: data.requestDescription || '',
+                            cause: data.cause || 'CLIENT_REVISION',
+                            // Rounds 1-2 are inside the fee, so they can never be charged.
+                            chargeable: rNum <= 2 ? false : !!data.chargeable,
+                            roundAdvances: !!data.roundAdvances,
+                            chargeInvoiceId: data.chargeInvoiceId || null,
+                            classifiedBy: data.classifiedBy || 'system_ai',
+                            classificationConfidence: data.classificationConfidence || 1.0,
+                            classifiedAt: data.classifiedAt || Date.now(),
+                        } as DrawingRevision;
+                    });
+                    return [d.id, list] as const;
+                } catch (e) {
+                    console.error('Could not read revisions for', d.id, e);
+                    return [d.id, [] as DrawingRevision[]] as const;
+                }
+            }));
+
+            if (!alive) return;
+            setRevisions(prev => {
+                const next = { ...prev };
+                for (const [id, list] of pairs) if (!next[id]) next[id] = list;
+                return next;
+            });
+        })();
+
+        return () => { alive = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectId, orgId, drawings]);
 
     // Add Live Comment Thread to Drawing Tracker doc
     const handleAddComment = async (drawing: DrawingTrackerItem, text: string) => {
@@ -764,6 +825,65 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         };
     });
 
+    /*
+      The three questions the rail answers. Each is derived in lib/drawingIntel
+      so the definition of "late", "ours" and "overdue" lives in one place
+      rather than being re-decided inline in the markup.
+    */
+    const turnaround = useMemo(() => summariseTurnaround(drawings), [drawings]);
+    const econ = useMemo(() => revisionEconomics(revisions, drawings), [revisions, drawings]);
+    const risk = useMemo(() => summariseRisk(drawings), [drawings]);
+
+    /*
+      The rail leans a degree or two toward the pointer. Written straight to
+      CSS custom properties rather than through state, so moving the mouse
+      does not re-render a list of nineteen drawings sixty times a second.
+    */
+    const railRef = useRef<HTMLElement | null>(null);
+    const onRailPointer = (e: React.PointerEvent<HTMLElement>) => {
+        const el = railRef.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        el.style.setProperty('--tx', String(((e.clientX - r.left) / r.width - 0.5) * 2));
+        el.style.setProperty('--ty', String(((e.clientY - r.top) / r.height - 0.5) * 2));
+    };
+    const resetRailTilt = () => {
+        const el = railRef.current;
+        if (!el) return;
+        el.style.setProperty('--tx', '0');
+        el.style.setProperty('--ty', '0');
+    };
+
+    /*
+      A filter that leads nowhere is noise. Counting first lets the row hide
+      the states this project has nothing in, and say how much is in the rest.
+    */
+    const FILTERS: { key: string; label: string }[] = [
+        { key: 'All', label: 'All' },
+        { key: 'Action Required', label: 'Needs you' },
+        { key: 'Client Review', label: 'With client' },
+        { key: 'Not Started', label: 'Not started' },
+        { key: 'Approved', label: 'Approved' },
+        { key: 'GFC Issued', label: 'Released' },
+        { key: 'Missing', label: 'Missing' },
+    ];
+
+    const filterCounts = useMemo(() => {
+        const c: Record<string, number> = { All: drawings.length };
+        for (const f of FILTERS) if (f.key !== 'All') c[f.key] = 0;
+        for (const d of drawings) {
+            const st = statusOf(d);
+            if (st === 'Client Review' || st === 'Site Hold' || d.isGapFlagged) c['Action Required']++;
+            if (st === 'Not Started') c['Not Started']++;
+            if (st === 'Client Review') c['Client Review']++;
+            if (st === 'Approved') c['Approved']++;
+            if (st === 'GFC Issued') c['GFC Issued']++;
+            if (st === 'Missing' || d.isGapFlagged) c['Missing']++;
+        }
+        return c;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [drawings]);
+
     const stats = {
         total: drawings.length,
         approved: completedCount,
@@ -959,7 +1079,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
             case 'Approved':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-teal-50 text-teal-800 border border-teal-200 shadow-2xs"><CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />Approved</span>;
             case 'Client Review':
-                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-blue-50 text-blue-800 border border-blue-200 shadow-2xs"><User className="w-3.5 h-3.5 text-blue-600" />Client Review</span>;
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs"><User className="w-3.5 h-3.5 text-[#2E7D6B]" />Client Review</span>;
             case 'Site Hold':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs"><AlertCircle className="w-3.5 h-3.5 text-rose-700" />Rejected / Hold</span>;
             default:
@@ -982,7 +1102,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         <button 
                             type="button"
                             onClick={() => handleAdvanceRound(d, 1, 'issued')} 
-                            className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-[#0066CC] hover:bg-[#0055B3] text-white transition-all shadow-2xs cursor-pointer"
+                            className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-[#1F4D45] hover:bg-[#12332E] text-white transition-all shadow-2xs cursor-pointer"
                         >
                             Issue Round 1 Now
                         </button>
@@ -997,7 +1117,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                     const isLatest = r.roundNumber === (d.currentRound || 1);
                     const statusColor = 
                         r.status === 'approved' ? 'bg-emerald-500' :
-                        r.status === 'in_review' ? 'bg-blue-500' :
+                        r.status === 'in_review' ? 'bg-amber-500' :
                         r.status === 'issued' ? 'bg-amber-500' :
                         r.status === 'site_hold' ? 'bg-rose-500' : 'bg-slate-300';
 
@@ -1011,7 +1131,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                     <span className="font-extrabold text-xs text-slate-900">Round {r.roundNumber}</span>
                                     <span className={`px-2 py-0.5 text-[9px] font-black rounded uppercase tracking-wider ${
                                         r.status === 'approved' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
-                                        r.status === 'in_review' ? 'bg-blue-50 text-blue-800 border border-blue-200' :
+                                        r.status === 'in_review' ? 'bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC]' :
                                         r.status === 'issued' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
                                         r.status === 'site_hold' ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-slate-100 text-slate-500'
                                     }`}>
@@ -1028,7 +1148,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                         <span>By: {r.issuedBy || 'N/A'}</span>
                                     </div>
                                     {r.clientFeedbackSubmittedAt && (
-                                        <div className="text-[11px] text-[#0055B3] font-bold mt-1.5 flex items-center gap-1">
+                                        <div className="text-[11px] text-[#12332E] font-bold mt-1.5 flex items-center gap-1">
                                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                                             <span>Client feedback submitted: {formatDate(r.clientFeedbackSubmittedAt)}</span>
                                         </div>
@@ -1041,7 +1161,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                             <button 
                                                 type="button"
                                                 onClick={() => handleAdvanceRound(d, r.roundNumber, 'issued')} 
-                                                className="px-3 py-1.5 text-xs font-bold bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg transition-all shadow-2xs cursor-pointer"
+                                                className="px-3 py-1.5 text-xs font-bold bg-[#1F4D45] hover:bg-[#12332E] text-white rounded-lg transition-all shadow-2xs cursor-pointer"
                                             >
                                                 Issue Now
                                             </button>
@@ -1096,12 +1216,12 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         return (
             <div className="space-y-3">
                 <div className="flex items-center gap-1.5 text-slate-800">
-                    <History className="w-4 h-4 text-[#0066CC]" />
+                    <History className="w-4 h-4 text-[#1F4D45]" />
                     <h4 className="text-xs font-extrabold uppercase tracking-wider">Revision History Log</h4>
                 </div>
                 {isLoading ? (
                     <div className="py-4 text-center text-slate-400 text-xs flex items-center justify-center gap-1.5">
-                        <RefreshCw className="w-4 h-4 animate-spin text-[#0066CC]" />
+                        <RefreshCw className="w-4 h-4 animate-spin text-[#1F4D45]" />
                         <span>Fetching historical revision logs...</span>
                     </div>
                 ) : list.length === 0 ? (
@@ -1113,7 +1233,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 <div className="flex items-center justify-between">
                                     <span className={`px-2 py-0.5 text-[9px] font-black tracking-wider uppercase rounded ${
                                         rev.cause === 'CLIENT_REVISION' ? 'bg-rose-50 text-rose-700 border border-rose-100' :
-                                        rev.cause === 'FFDS_DESIGN_MISS' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                                        rev.cause === 'FFDS_DESIGN_MISS' ? 'bg-[#F1F7F5] text-[#1F4D45] border border-[#DCEBE6]' :
                                         'bg-amber-50 text-amber-700 border border-amber-100'
                                     }`}>
                                         {rev.cause.replace(/_/g, ' ')}
@@ -1145,7 +1265,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         return (
             <div className="space-y-3.5">
                 <div className="flex items-center gap-1.5 text-slate-800">
-                    <MessageSquare className="w-4 h-4 text-[#0066CC]" />
+                    <MessageSquare className="w-4 h-4 text-[#1F4D45]" />
                     <h4 className="text-xs font-extrabold uppercase tracking-wider">Notes & Studio Team Activity</h4>
                 </div>
                 
@@ -1157,7 +1277,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                             const initials = getInitials(comm.author);
                             return (
                                 <div key={comm.id || idx} className="flex gap-2.5 items-start">
-                                    <div className="w-7 h-7 rounded-full bg-[#0066CC] text-white flex items-center justify-center text-[10px] font-extrabold shrink-0 shadow-2xs">
+                                    <div className="w-7 h-7 rounded-full bg-[#1F4D45] text-white flex items-center justify-center text-[10px] font-extrabold shrink-0 shadow-2xs">
                                         {initials}
                                     </div>
                                     <div className="flex-1 bg-white border border-slate-200/90 p-3 rounded-xl text-xs shadow-2xs">
@@ -1181,7 +1301,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         handleAddComment(d, text);
                         setCommentText(prev => ({ ...prev, [d.id]: '' }));
                     }}
-                    className="flex items-center gap-2 border border-slate-200 rounded-xl bg-white p-1.5 pr-2 focus-within:ring-2 focus-within:ring-[#0066CC] shadow-2xs"
+                    className="flex items-center gap-2 border border-slate-200 rounded-xl bg-white p-1.5 pr-2 focus-within:ring-2 focus-within:ring-[#1F4D45] shadow-2xs"
                 >
                     <input 
                         type="text"
@@ -1193,7 +1313,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                     <button 
                         type="submit"
                         disabled={!(commentText[d.id] || '').trim()}
-                        className="p-1.5 bg-[#0066CC] hover:bg-[#0055B3] disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-lg transition-all shrink-0 cursor-pointer"
+                        className="p-1.5 bg-[#1F4D45] hover:bg-[#12332E] disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-lg transition-all shrink-0 cursor-pointer"
                     >
                         <Send className="w-3.5 h-3.5" />
                     </button>
@@ -1263,6 +1383,18 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         );
     };
 
+    /*
+      The column header. Rows only read as a table if something names the
+      columns; without it the aligned figures look like a coincidence.
+    */
+    const columnHeader = (
+        <div className="hidden lg:grid grid-cols-[1fr_74px_116px_154px_86px_112px] gap-x-3 px-4 py-2 bg-[#F1F7F5] border-b border-[#DCEBE6]">
+            {['Drawing', 'Rounds', 'Status', 'Whose move', 'Target', ''].map((h, i) => (
+                <span key={i} className="text-[10px] font-black uppercase tracking-wider text-[#2E7D6B]">{h}</span>
+            ))}
+        </div>
+    );
+
     // Single Drawing Card Item
     const renderDrawingCard = (d: DrawingTrackerItem) => {
         const isApproved = d.approvedAt !== null;
@@ -1275,253 +1407,245 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         const isOverdue = d.targetDate && !isApproved && new Date(d.targetDate).getTime() < Date.now();
 
         return (
-            <div 
-                key={d.id} 
-                className={`bg-white border rounded-2xl overflow-hidden transition-all duration-200 shadow-2xs ${
-                    isExpanded ? 'ring-2 ring-[#0066CC]/20 border-[#0066CC]/40' : 'border-slate-200/90 hover:border-slate-300'
-                } ${isIssue ? 'border-l-4 border-l-rose-500 bg-rose-50/10' : ''}`}
+            /*
+              One row, read left to right.
+
+              This was a card carrying twelve controls — three round pips, a
+              link button, a Pending/Approve/Reject group, a status badge, edit,
+              delete and a chevron — repeated nineteen times. Every one of them
+              competed for attention at rest, which is what made the list feel
+              like a control panel rather than a register.
+
+              Now the row states facts and nothing else. The controls that act
+              on a drawing appear on hover, or when the row is open; the status
+              actions moved into the open row entirely, since you are not going
+              to approve a drawing you have not looked at.
+            */
+            <div
+                key={d.id}
+                className={`group relative transition-colors ${
+                    isExpanded ? 'bg-[#F1F7F5]' : 'hover:bg-[#F7FAF9]'
+                } ${isIssue ? 'bg-rose-50/40' : ''}`}
             >
-                <div className="p-4 sm:p-5 flex flex-col gap-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div 
-                            onClick={() => handleToggleExpand(d.id)}
-                            className="flex-1 min-w-0 cursor-pointer select-none"
-                        >
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-extrabold text-slate-900 text-base">{d.name}</span>
-                                
-                                {(() => {
-                                    const rNum = d.currentRound || 1;
-                                    const isStale = rNum > 2;
-                                    return (
-                                        <span 
-                                            className={`px-2 py-0.5 text-[10px] font-extrabold rounded-md border inline-flex items-center gap-1 ${
-                                                isStale 
-                                                    ? 'bg-amber-50 text-amber-800 border-amber-200' 
-                                                    : 'bg-slate-100 text-slate-700 border-slate-200'
-                                            }`}
-                                            title={`Current Iteration: Round ${rNum}${isStale ? ' (Multiple Revisions / Stale)' : ''}`}
-                                        >
-                                            R{rNum}
-                                        </span>
-                                    );
-                                })()}
-                                
-                                {d.priority === 'high' && (
-                                    <span className="px-2 py-0.5 text-[9px] font-extrabold rounded-md bg-rose-50 text-rose-700 border border-rose-200">
-                                        High Priority
-                                    </span>
-                                )}
+                {isIssue && <span className="absolute left-0 inset-y-0 w-[3px] bg-rose-400" />}
 
-                                {d.targetDate && (
-                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-md border ${
-                                        isOverdue ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-slate-50 text-slate-600 border-slate-200'
-                                    }`}>
-                                        <Calendar className="w-3 h-3 text-slate-400" />
-                                        <span>Target: {d.targetDate}</span>
-                                        {isOverdue && <span className="text-rose-600 font-extrabold">Overdue</span>}
-                                    </span>
-                                )}
-                            </div>
+                <div className="grid grid-cols-[1fr_auto] lg:grid-cols-[1fr_74px_116px_154px_86px_112px] items-center gap-x-3 px-4 py-2.5">
 
-                            <div className="text-xs text-slate-500 font-medium mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span className="font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
-                                    Triggers: {d.boqTriggers.join(', ')}
+                    {/* what it is */}
+                    <button
+                        type="button"
+                        onClick={() => handleToggleExpand(d.id)}
+                        className="min-w-0 text-left cursor-pointer"
+                    >
+                        <span className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm font-semibold text-slate-800 truncate">{d.name}</span>
+                            {d.priority === 'high' && (
+                                <span className="shrink-0 px-1.5 py-px text-[9px] font-black uppercase tracking-wider rounded bg-rose-100 text-rose-700">
+                                    High
                                 </span>
-                                {d.companionOf && (() => {
-                                    const found = drawings.find(other => other.id === d.companionOf);
-                                    const displayCompanionName = found ? found.name : d.companionOf.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                                    return (
-                                        <span className="text-slate-600 font-bold flex items-center gap-1 bg-sky-50 text-[#0066CC] px-2 py-0.5 rounded-md border border-sky-100">
-                                            <CheckCircle2 className="w-3.5 h-3.5" /> Companion: {displayCompanionName}
-                                        </span>
-                                    );
-                                })()}
-                            </div>
-                        </div>
-
-                        {/* Round Indicators (R1, R2) */}
-                        <div className="flex items-center gap-1.5 shrink-0" onClick={() => handleToggleExpand(d.id)}>
-                            {[1, 2].map(r => {
-                                let state = 'future';
-                                const rData = d.rounds.find(rd => rd.roundNumber === r);
-                                if (rData && (rData.status === 'approved' || (d.currentRound > r && rData.status !== 'not_started'))) state = 'completed';
-                                else if (d.currentRound === r && rData && rData.status !== 'not_started' && !isApproved) state = 'active';
-
+                            )}
+                            {commentsCount > 0 && (
+                                <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                                    <MessageSquare className="w-3 h-3" />{commentsCount}
+                                </span>
+                            )}
+                        </span>
+                        <span className="block text-[11px] text-slate-400 truncate mt-0.5">
+                            {d.boqTriggers.join(', ')}
+                            {d.companionOf && (() => {
+                                // companionOf holds the partner's id; show its name.
+                                const mate = drawings.find(x => x.id === d.companionOf);
                                 return (
-                                    <div 
-                                        key={r} 
-                                        className={`w-6 h-6 rounded-full border flex items-center justify-center text-[10px] font-extrabold ${
-                                            state === 'completed' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 
-                                            state === 'active' ? 'bg-blue-50 border-blue-300 text-blue-800' : 
-                                            'bg-slate-50 border-slate-200 text-slate-400'
-                                        }`}
-                                    >
-                                        R{r}
-                                    </div>
+                                    <span className="text-slate-300">
+                                        {' '}· pairs with {mate ? mate.name : d.companionOf.replace(/_/g, ' ')}
+                                    </span>
                                 );
-                            })}
-                        </div>
+                            })()}
+                        </span>
+                    </button>
 
-                        {/* Status & Quick Actions Bar */}
-                        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
-                            {/* Cloud CAD / Drive Link */}
+                    {/* rounds */}
+                    <div className="hidden lg:flex items-center gap-1">
+                        {[1, 2].map(r => {
+                            const rData = d.rounds.find(rd => rd.roundNumber === r);
+                            let state = 'future';
+                            if (rData && (rData.status === 'approved' || (d.currentRound > r && rData.status !== 'not_started'))) state = 'completed';
+                            else if (d.currentRound === r && rData && rData.status !== 'not_started' && !isApproved) state = 'active';
+                            return (
+                                <span
+                                    key={r}
+                                    title={`Round ${r}`}
+                                    className={`w-5 h-5 rounded-full text-[9px] font-black flex items-center justify-center ${
+                                        state === 'completed' ? 'bg-emerald-100 text-emerald-800'
+                                        : state === 'active' ? 'bg-[#DCEBE6] text-[#12332E]'
+                                        : 'bg-slate-100 text-slate-300'
+                                    }`}
+                                >
+                                    {r}
+                                </span>
+                            );
+                        })}
+                        {d.currentRound > 2 && (
+                            <span className="text-[10px] font-black text-amber-700" title={`On round ${d.currentRound} — past the included rounds`}>
+                                +{d.currentRound - 2}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* status */}
+                    <div className="hidden lg:block min-w-0">{renderStatusBadge(status)}</div>
+
+                    {/* whose move */}
+                    <div className="hidden lg:block min-w-0">
+                        {(() => {
+                            const t = turnaroundOf(d);
+                            if (t.state === 'approved' || t.state === 'not_started') {
+                                return <span className="text-[11px] text-slate-300">—</span>;
+                            }
+                            const late = t.daysWithClient !== null && t.daysWithClient > 7;
+                            return (
+                                <span
+                                    className={`inline-flex items-center gap-1 text-[11px] font-semibold ${late ? 'text-amber-700' : 'text-[#2E7D6B]'}`}
+                                    title={t.state === 'with_client' ? 'Issued to the client and not yet answered' : 'Back with the studio'}
+                                >
+                                    <Clock className="w-3 h-3 opacity-60" />
+                                    {HOLD_LABEL[t.state]}
+                                    {t.state === 'with_client' && (
+                                        t.daysWithClient === null
+                                            ? <span className="text-slate-400">· undated</span>
+                                            : <span className="font-black">· {t.daysWithClient}d</span>
+                                    )}
+                                </span>
+                            );
+                        })()}
+                    </div>
+
+                    {/* target */}
+                    <div className="hidden lg:block">
+                        {d.targetDate ? (
+                            <span className={`text-[11px] font-semibold tabular-nums ${isOverdue ? 'text-rose-700' : 'text-slate-500'}`}>
+                                {d.targetDate.slice(5)}{isOverdue && ' !'}
+                            </span>
+                        ) : (
+                            <span className="text-[11px] text-slate-300">—</span>
+                        )}
+                    </div>
+
+                    {/* controls, quiet until wanted */}
+                    <div className="flex items-center justify-end gap-0.5">
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                             {d.driveUrl ? (
-                                <a 
-                                    href={d.driveUrl.startsWith('http') ? d.driveUrl : `https://${d.driveUrl}`} 
-                                    target="_blank" 
-                                    rel="noreferrer noopener"
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-[#0066CC] bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg transition-colors shadow-2xs"
-                                    title="Open attached CAD/PDF Blueprint"
+                                <a
+                                    href={d.driveUrl.startsWith('http') ? d.driveUrl : `https://${d.driveUrl}`}
+                                    target="_blank" rel="noreferrer noopener"
+                                    onClick={e => e.stopPropagation()}
+                                    title="Open the attached drawing"
+                                    className="p-1.5 text-[#2E7D6B] hover:bg-[#DCEBE6] rounded-lg transition-colors"
                                 >
                                     <ExternalLink className="w-3.5 h-3.5" />
-                                    <span>CAD/PDF</span>
                                 </a>
                             ) : (
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setEditingUrlDrawingId(d.id);
-                                        setUrlInputVal('');
-                                    }}
-                                    className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
-                                    title="Attach CAD / Google Drive / Figma Link"
+                                    title="Attach a CAD, Drive or Figma link"
+                                    onClick={e => { e.stopPropagation(); setEditingUrlDrawingId(d.id); setUrlInputVal(''); }}
+                                    className="p-1.5 text-slate-300 hover:text-[#1F4D45] hover:bg-[#F1F7F5] rounded-lg transition-colors"
                                 >
-                                    <LinkIcon className="w-3 h-3 text-slate-400" />
-                                    <span>+ Link</span>
+                                    <LinkIcon className="w-3.5 h-3.5" />
                                 </button>
                             )}
-
-                            {commentsCount > 0 && (
-                                <div 
-                                    onClick={() => handleToggleExpand(d.id)}
-                                    className="flex items-center gap-1 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full text-xs font-bold border border-slate-200/80 cursor-pointer"
-                                >
-                                    <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
-                                    <span>{commentsCount}</span>
-                                </div>
-                            )}
-
-                            {/* Quick Status Toggle */}
-                            {(() => {
-                                const currentQuickStatus = (isApproved || status === 'Approved' || status === 'GFC Issued')
-                                    ? 'approved'
-                                    : status === 'Site Hold'
-                                    ? 'rejected'
-                                    : 'pending';
-
-                                return (
-                                    <div 
-                                        className="flex items-center bg-slate-100/90 p-0.5 rounded-lg border border-slate-200/90 shadow-2xs"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <button
-                                            type="button"
-                                            title="Mark as Pending / Client Review"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleQuickStatusChange(d, 'pending');
-                                            }}
-                                            className={`px-2 py-1 text-[10px] font-extrabold rounded-md transition-all cursor-pointer ${
-                                                currentQuickStatus === 'pending'
-                                                    ? 'bg-[#0066CC] text-white shadow-2xs'
-                                                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/60'
-                                            }`}
-                                        >
-                                            Pending
-                                        </button>
-                                        <button
-                                            type="button"
-                                            title="Quick Approve Drawing"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleQuickStatusChange(d, 'approved');
-                                            }}
-                                            className={`px-2 py-1 text-[10px] font-extrabold rounded-md transition-all cursor-pointer ${
-                                                currentQuickStatus === 'approved'
-                                                    ? 'bg-teal-600 text-white shadow-2xs'
-                                                    : 'text-slate-500 hover:text-teal-700 hover:bg-slate-200/60'
-                                            }`}
-                                        >
-                                            Approve
-                                        </button>
-                                        <button
-                                            type="button"
-                                            title="Quick Reject / Site Hold"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleQuickStatusChange(d, 'rejected');
-                                            }}
-                                            className={`px-2 py-1 text-[10px] font-extrabold rounded-md transition-all cursor-pointer ${
-                                                currentQuickStatus === 'rejected'
-                                                    ? 'bg-rose-600 text-white shadow-2xs'
-                                                    : 'text-slate-500 hover:text-rose-700 hover:bg-slate-200/60'
-                                            }`}
-                                        >
-                                            Reject
-                                        </button>
-                                    </div>
-                                );
-                            })()}
-
-                            <div onClick={() => handleToggleExpand(d.id)} className="cursor-pointer">
-                                {renderStatusBadge(status)}
-                            </div>
-
-                            {/* Edit & Delete Action Buttons (Owner role) */}
                             {isOwner && (
-                                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                    <button 
-                                        type="button"
-                                        title="Edit Drawing Details"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleOpenEditDrawing(d);
-                                        }}
-                                        className="p-1.5 text-slate-400 hover:text-[#0066CC] hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                                <>
+                                    <button
+                                        type="button" title="Edit this drawing"
+                                        onClick={e => { e.stopPropagation(); handleOpenEditDrawing(d); }}
+                                        className="p-1.5 text-slate-300 hover:text-[#1F4D45] hover:bg-[#F1F7F5] rounded-lg transition-colors"
                                     >
-                                        <Edit3 className="w-4 h-4" />
+                                        <Edit3 className="w-3.5 h-3.5" />
                                     </button>
-                                    <button 
-                                        type="button"
-                                        title="Delete Drawing"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setDeletingDrawing(d);
-                                        }}
-                                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                    <button
+                                        type="button" title="Delete this drawing"
+                                        onClick={e => { e.stopPropagation(); setDeletingDrawing(d); }}
+                                        className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                                     >
-                                        <Trash2 className="w-4 h-4" />
+                                        <Trash2 className="w-3.5 h-3.5" />
                                     </button>
-                                </div>
+                                </>
                             )}
-
-                            <button 
-                                type="button"
-                                onClick={() => handleToggleExpand(d.id)}
-                                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg transition-colors cursor-pointer"
-                            >
-                                {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-700" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
-                            </button>
                         </div>
+                        <button
+                            type="button"
+                            onClick={() => handleToggleExpand(d.id)}
+                            aria-expanded={isExpanded}
+                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                            className="p-1 text-slate-300 hover:text-slate-600 rounded-lg transition-colors"
+                        >
+                            {isExpanded ? <ChevronUp className="w-4 h-4 text-[#1F4D45]" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
                     </div>
+                </div>
 
+                {/* The status actions live in the open row, not on every line. */}
+                {isExpanded && (
+                    <div className="px-4 pb-3 flex flex-wrap items-center gap-2" onClick={e => e.stopPropagation()}>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">Set status</span>
+                        {(() => {
+                            const current = (isApproved || status === 'Approved' || status === 'GFC Issued')
+                                ? 'approved' : status === 'Site Hold' ? 'rejected' : 'pending';
+                            const opts: [string, 'pending' | 'approved' | 'rejected', string][] = [
+                                ['Pending', 'pending', 'bg-[#1F4D45] text-white'],
+                                ['Approved', 'approved', 'bg-teal-600 text-white'],
+                                ['On hold', 'rejected', 'bg-rose-600 text-white'],
+                            ];
+                            return (
+                                <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200">
+                                    {opts.map(([label, key, active]) => (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            onClick={e => { e.stopPropagation(); handleQuickStatusChange(d, key); }}
+                                            className={`px-2.5 py-1 text-[10px] font-black rounded-md transition-all cursor-pointer ${
+                                                current === key ? active : 'text-slate-500 hover:bg-slate-100'
+                                            }`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            );
+                        })()}
+                        <button
+                            type="button"
+                            onClick={e => {
+                                e.stopPropagation();
+                                setEditingMetaDrawingId(editingMetaDrawingId === d.id ? null : d.id);
+                                setTargetDateInput(d.targetDate || '');
+                                setPriorityInput(d.priority || 'normal');
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
+                        >
+                            <Calendar className="w-3 h-3 text-slate-400" /> Date &amp; priority
+                        </button>
+                    </div>
+                )}
+
+                <div className="px-4">
                     {/* Quick CAD / Drive URL input popover */}
                     {editingUrlDrawingId === d.id && (
-                        <div className="p-3 bg-sky-50/70 border border-sky-200 rounded-xl flex items-center gap-2">
-                            <LinkIcon className="w-4 h-4 text-[#0066CC] shrink-0" />
+                        <div className="p-3 bg-[#F1F7F5]/70 border border-[#9EC9BC] rounded-xl flex items-center gap-2">
+                            <LinkIcon className="w-4 h-4 text-[#1F4D45] shrink-0" />
                             <input 
                                 type="text"
                                 placeholder="Paste Google Drive, AutoCAD, Figma, or Dropbox URL..."
                                 value={urlInputVal}
                                 onChange={e => setUrlInputVal(e.target.value)}
-                                className="flex-1 bg-white border border-sky-200 rounded-lg px-3 py-1 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                                className="flex-1 bg-white border border-[#9EC9BC] rounded-lg px-3 py-1 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1F4D45]"
                                 autoFocus
                             />
                             <button
                                 type="button"
                                 onClick={() => handleSaveDriveUrl(d.id, urlInputVal)}
-                                className="px-3 py-1 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-lg cursor-pointer transition-all"
+                                className="px-3 py-1 bg-[#1F4D45] hover:bg-[#12332E] text-white text-xs font-bold rounded-lg cursor-pointer transition-all"
                             >
                                 Save Link
                             </button>
@@ -1545,7 +1669,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                     type="date"
                                     value={targetDateInput}
                                     onChange={e => setTargetDateInput(e.target.value)}
-                                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1F4D45]"
                                 />
                             </div>
 
@@ -1554,7 +1678,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 <select
                                     value={priorityInput}
                                     onChange={e => setPriorityInput(e.target.value as any)}
-                                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1F4D45]"
                                 >
                                     <option value="normal">Normal</option>
                                     <option value="high">High Priority</option>
@@ -1566,7 +1690,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 <button
                                     type="button"
                                     onClick={() => handleSaveMetadata(d.id)}
-                                    className="px-3 py-1 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-lg cursor-pointer transition-all"
+                                    className="px-3 py-1 bg-[#1F4D45] hover:bg-[#12332E] text-white text-xs font-bold rounded-lg cursor-pointer transition-all"
                                 >
                                     Save
                                 </button>
@@ -1602,7 +1726,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                             <button
                                                 type="button"
                                                 onClick={() => handleOpenEditDrawing(d)}
-                                                className="text-[11px] font-bold text-[#0066CC] hover:underline flex items-center gap-1 cursor-pointer"
+                                                className="text-[11px] font-bold text-[#1F4D45] hover:underline flex items-center gap-1 cursor-pointer"
                                             >
                                                 <Edit3 className="w-3 h-3" />
                                                 <span>Edit Drawing</span>
@@ -1689,10 +1813,10 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                             <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs space-y-4 text-left">
                                                 <div className="flex items-center justify-between">
                                                     <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
-                                                        <Edit3 className="w-4 h-4 text-[#0066CC]" />
+                                                        <Edit3 className="w-4 h-4 text-[#1F4D45]" />
                                                         <span>Log Drawing Revision</span>
                                                     </h4>
-                                                    <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full ${d.currentRound >= 2 ? 'bg-rose-50 text-rose-700' : 'bg-blue-50 text-blue-700'}`}>
+                                                    <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full ${d.currentRound >= 2 ? 'bg-rose-50 text-rose-700' : 'bg-[#F1F7F5] text-[#1F4D45]'}`}>
                                                         Round {d.currentRound + 1} — {d.currentRound >= 2 ? 'Chargeable' : 'Included'}
                                                     </span>
                                                 </div>
@@ -1704,7 +1828,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                                             Revision Request / Change Description
                                                         </label>
                                                         <textarea
-                                                            className="w-full border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-[#0066CC] focus:outline-none font-medium text-slate-800"
+                                                            className="w-full border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-[#1F4D45] focus:outline-none font-medium text-slate-800"
                                                             rows={3}
                                                             placeholder="Describe the revision request, specific changes requested by client, or required adjustments..."
                                                             value={desc}
@@ -1739,12 +1863,12 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                                                     }}
                                                                     className={`p-3 rounded-xl border text-left transition-all ${
                                                                         defaultCause === opt.id 
-                                                                            ? 'border-[#0066CC] bg-sky-50/50 text-[#0066CC] ring-1 ring-[#0066CC]' 
+                                                                            ? 'border-[#1F4D45] bg-[#F1F7F5]/50 text-[#1F4D45] ring-1 ring-[#1F4D45]' 
                                                                             : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
                                                                     }`}
                                                                 >
                                                                     <div className="font-bold text-xs">{opt.label}</div>
-                                                                    <div className={`text-[10px] mt-1 font-medium leading-tight ${defaultCause === opt.id ? 'text-sky-700' : 'text-slate-400'}`}>
+                                                                    <div className={`text-[10px] mt-1 font-medium leading-tight ${defaultCause === opt.id ? 'text-[#1F4D45]' : 'text-slate-400'}`}>
                                                                         {opt.desc}
                                                                     </div>
                                                                 </button>
@@ -1757,7 +1881,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                                         <label className="flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200/80 px-3 py-2 rounded-xl text-slate-700">
                                                             <input
                                                                 type="checkbox"
-                                                                className="rounded text-[#0066CC] focus:ring-[#0066CC] w-4 h-4 cursor-pointer"
+                                                                className="rounded text-[#1F4D45] focus:ring-[#1F4D45] w-4 h-4 cursor-pointer"
                                                                 checked={defaultAdvances}
                                                                 onChange={e => setManualRevisionAdvances(prev => ({ ...prev, [d.id]: e.target.checked }))}
                                                             />
@@ -1767,7 +1891,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                                         <label className="flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200/80 px-3 py-2 rounded-xl text-slate-700">
                                                             <input
                                                                 type="checkbox"
-                                                                className="rounded text-[#0066CC] focus:ring-[#0066CC] w-4 h-4 cursor-pointer"
+                                                                className="rounded text-[#1F4D45] focus:ring-[#1F4D45] w-4 h-4 cursor-pointer"
                                                                 checked={defaultChargeable}
                                                                 onChange={e => setManualRevisionChargeable(prev => ({ ...prev, [d.id]: e.target.checked }))}
                                                             />
@@ -1793,7 +1917,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                                                 defaultChargeable,
                                                                 defaultAdvances
                                                             )}
-                                                            className="px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold text-xs rounded-xl transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+                                                            className="px-4 py-2 bg-[#1F4D45] hover:bg-[#12332E] text-white font-bold text-xs rounded-xl transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
                                                         >
                                                             <Check className="w-3.5 h-3.5" />
                                                             <span>Log Revision</span>
@@ -1814,237 +1938,138 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
     if (loading) return (
         <div className="p-12 text-center text-slate-500 font-medium flex items-center justify-center gap-2">
-            <RefreshCw className="w-5 h-5 animate-spin text-[#0066CC]" />
+            <RefreshCw className="w-5 h-5 animate-spin text-[#1F4D45]" />
             <span>Loading Drawing Pipeline...</span>
         </div>
     );
 
     return (
-        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-left">
+        <div className="dt w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5 text-left">
             
-            {/* Header Status & View Controls Combined Hero Banner */}
-            <div className={`p-4 sm:p-5 rounded-2xl border shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
-                !designGateActive 
-                    ? 'bg-amber-50/50 border-amber-200/80' 
-                    : 'bg-white border-slate-200/90'
-            }`}>
-                {/* Left Side: Gate Status & Guidance Text */}
-                <div className="flex items-start gap-3.5">
-                    <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${
-                        !designGateActive 
-                            ? 'bg-amber-100/80 text-amber-700' 
-                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
-                    }`}>
-                        {!designGateActive ? (
-                            <Sparkles className="w-5 h-5" />
-                        ) : (
-                            <ShieldCheck className="w-5 h-5" />
-                        )}
-                    </div>
-                    <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-extrabold text-slate-900 text-sm">
-                                {!designGateActive 
-                                    ? "Design Phase Active — Prepare & Approve Drawings" 
-                                    : "Design Complete Gate Locked — GFC Blueprint Registry"}
-                            </h4>
-                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                                !designGateActive 
-                                    ? 'bg-amber-100 text-amber-900 border-amber-300' 
-                                    : 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                            }`}>
-                                {!designGateActive ? "Stage 4 Active" : "GFC Locked"}
-                            </span>
-                        </div>
-                        <p className="text-xs text-slate-600 mt-1 leading-relaxed font-medium max-w-2xl">
-                            {!designGateActive 
-                                ? "Use the Drawing Tracker to issue layouts and obtain client sign-offs. Once key drawings are approved, activate the Design Complete Gate to lock the BOQ and release GFC drawings."
-                                : "All drawings are baseline locked. Revisions are versioned with change classification and client sign-off audit trail."}
-                        </p>
-                    </div>
-                </div>
+            {/*
+              A command deck, not a stack of banners.
 
-                {/* Right Side: Quick Export Controls & View Switcher */}
-                <div className="flex items-center gap-2.5 flex-wrap self-start lg:self-center shrink-0">
-                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200/90 shadow-2xs">
-                        <button
-                            type="button"
-                            onClick={handleExportCSV}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-all cursor-pointer"
-                            title="Export drawing status report as CSV"
-                        >
-                            <Download className="w-3.5 h-3.5 text-[#0066CC]" />
-                            <span>CSV</span>
-                        </button>
+              Six full-width bands used to sit between the page title and the
+              first drawing — gate status, a GFC prompt, five KPI cards, a gap
+              warning, scope chips, then the toolbar — which pushed the actual
+              work a full screen down and said several things twice. The
+              readouts move into the rail on the right, where they are visible
+              the whole time you work rather than scrolled past once.
+            */}
+            <div className="grid lg:grid-cols-[1fr_340px] gap-5 items-start">
 
-                        <button
-                            type="button"
-                            onClick={handleCopyWhatsAppDigest}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-all cursor-pointer"
-                            title="Copy formatted WhatsApp status update to clipboard"
-                        >
-                            <Share2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>WhatsApp</span>
-                        </button>
+                {/* ── the work ─────────────────────────────────────────── */}
+                <div className="min-w-0 space-y-4">
 
-                        <button
-                            type="button"
-                            onClick={() => setShowPrintModal(true)}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-all cursor-pointer"
-                            title="Print / PDF Blueprint Release Matrix with Sign-off"
-                        >
-                            <Printer className="w-3.5 h-3.5 text-slate-600" />
-                            <span>Print Matrix</span>
-                        </button>
-                    </div>
-
-                    {/* Owner / Designer Role Switcher */}
-                    <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200/90 shadow-2xs">
-                        <button 
-                            onClick={() => setUserRole('owner')} 
-                            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${userRole === 'owner' ? 'bg-[#0066CC] text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
-                        >
-                            Owner View
-                        </button>
-                        <button 
-                            onClick={() => setUserRole('designer')} 
-                            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${userRole === 'designer' ? 'bg-[#0066CC] text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
-                        >
-                            Designer View
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Batch GFC Release Notification Banner if any drawings are ready */}
-            {readyForGfcCount > 0 && isOwner && (
-                <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
-                    <div className="flex items-start gap-3">
-                        <Zap className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                        <div>
-                            <h4 className="font-extrabold text-emerald-950 text-sm">
-                                {readyForGfcCount} Approved Drawing{readyForGfcCount > 1 ? 's' : ''} Ready for GFC Release
-                            </h4>
-                            <p className="text-xs text-emerald-800 font-semibold mt-0.5">
-                                Client feedback has been approved. You can issue Good-For-Construction release tokens for site execution.
-                            </p>
+                    <div className="dt-board border rounded-2xl px-5 py-4 dt-frame" style={{ borderColor: 'var(--pine-line)' }}>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2.5">
+                                    <h2 className="text-lg font-black tracking-tight text-[#12332E]">Drawing register</h2>
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                                        designGateActive
+                                            ? 'bg-[#DCEBE6] text-[#1F4D45] border-[#9EC9BC]'
+                                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                                    }`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${designGateActive ? 'bg-[#2E7D6B]' : 'bg-amber-500 dt-pulse'}`} />
+                                        {designGateActive ? 'Baseline locked' : 'Gate not activated'}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-[#2E7D6B] font-semibold mt-0.5">
+                                    {stats.total} {stats.total === 1 ? 'drawing' : 'drawings'} tracked against the BOQ
+                                    {turnaround.withClient > 0 && <> · <b>{turnaround.withClient}</b> with the client</>}
+                                    {risk.overdue > 0 && <> · <b className="text-rose-700">{risk.overdue} overdue</b></>}
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                <button type="button" onClick={() => setUserRole('owner')}
+                                    className={`px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg transition-colors ${
+                                        isOwner ? 'bg-[#1F4D45] text-white' : 'text-[#2E7D6B] hover:bg-[#DCEBE6]'}`}>
+                                    Owner
+                                </button>
+                                <button type="button" onClick={() => setUserRole('designer')}
+                                    className={`px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg transition-colors ${
+                                        !isOwner ? 'bg-[#1F4D45] text-white' : 'text-[#2E7D6B] hover:bg-[#DCEBE6]'}`}>
+                                    Designer
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <button
-                        type="button"
-                        onClick={handleBatchIssueGfc}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
-                    >
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Issue All Approved GFCs</span>
-                    </button>
-                </div>
-            )}
 
-            {/* KPI Metrics Dashboard */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
-                {[
-                    { label: "Total Drawings", val: stats.total, color: "text-slate-900", desc: "Sync triggers active", icon: Layers },
-                    { label: "Approved", val: stats.approved, color: "text-emerald-700", desc: "Ready for GFC release", icon: CheckCircle2 },
-                    { label: "In Client Review", val: stats.inReview, color: "text-blue-700", desc: "Awaiting approval", icon: Clock },
-                    { label: "GFC Issued", val: stats.gfcIssued, color: "text-amber-700", desc: "Released to site", icon: ShieldCheck },
-                    { label: "Flagged Issues", val: stats.issues, color: "text-rose-700", desc: "Gaps blocking gates", icon: FileWarning }
-                ].map((kpi, idx) => (
-                    <div key={idx} className="bg-white border border-slate-200/90 p-4 rounded-2xl shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{kpi.label}</span>
-                            <kpi.icon className={`w-4 h-4 ${kpi.color} opacity-80`} />
-                        </div>
-                        <div className={`mt-2 ${kpi.color}`}>
-                            <AnimatedNumber value={kpi.val} />
-                        </div>
-                        <span className="text-[10px] text-slate-400 mt-1 font-medium">{kpi.desc}</span>
-                    </div>
-                ))}
-            </div>
+            {/*
+              Filters, search, then actions — in that order and on one line.
 
-            {/* Gap Warning Banner (Owner only) */}
-            {isOwner && issues.length > 0 && (
-                <div className="bg-rose-50/70 border border-rose-200/90 p-4 rounded-2xl shadow-2xs flex items-start gap-3.5">
-                    <FileWarning className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                    <div>
-                        <h4 className="font-bold text-rose-950 text-sm mb-0.5">{issues[0].name} Not Issued — Blocks Design Gate</h4>
-                        <p className="text-rose-800 text-xs font-semibold leading-relaxed">
-                            BOQ contains <strong>{issues.map(i => i.boqTriggers.join(', ')).join(' | ')}</strong>. Please issue before this gate can be activated.
-                        </p>
-                    </div>
-                </div>
-            )}
+              There were seven pills that wrapped onto a second row whatever the
+              width, and every one showed whether or not a single drawing was in
+              that state. They now carry counts and the empty ones stay out of
+              the way, so the row is short enough to read and tells you where
+              the work actually is before you click anything.
+            */}
+            <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 flex flex-col xl:flex-row xl:items-center gap-3">
 
-            {/* Scope Tracker Badge Track */}
-            <div className="flex flex-wrap items-center gap-2 p-2.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 shrink-0">
-                    Active BOQ Scopes:
-                </div>
-                {scopeChips.map((chip, i) => (
-                    <span key={i} className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-xl border ${
-                        chip.isHealthy ? 'bg-emerald-50 text-emerald-800 border-emerald-200/60' : 'bg-rose-50 text-rose-800 border-rose-200/60'
-                    }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${chip.isHealthy ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        <span>{chip.label}</span>
-                        <span className="text-[10px] opacity-70">({chip.count})</span>
-                    </span>
-                ))}
-            </div>
-
-            {/* Filter and Actions Toolbar */}
-            <div className="bg-white p-4 border border-slate-200/90 rounded-2xl shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                {/* Filter Pills */}
-                <div className="flex flex-wrap gap-1.5">
-                    {['All', 'Action Required', 'Not Started', 'Client Review', 'Approved', 'GFC Issued', 'Missing'].map((pill) => {
-                        const isActive = filter === pill;
+                <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 xl:overflow-visible">
+                    {FILTERS.map(({ key, label }) => {
+                        const n = filterCounts[key] ?? 0;
+                        const isActive = filter === key;
+                        if (n === 0 && !isActive && key !== 'All') return null;
                         return (
                             <button
-                                key={pill}
-                                onClick={() => setFilter(pill)}
-                                className={`px-3.5 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
-                                    isActive 
-                                        ? 'bg-[#0066CC] text-white border-[#0066CC] shadow-2xs' 
-                                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
+                                key={key}
+                                type="button"
+                                onClick={() => setFilter(key)}
+                                aria-pressed={isActive}
+                                className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                                    isActive
+                                        ? 'bg-[#1F4D45] text-white'
+                                        : 'text-slate-600 hover:bg-[#F1F7F5] hover:text-[#1F4D45]'
                                 }`}
                             >
-                                {pill}
+                                {label}
+                                <span className={`text-[11px] tabular-nums ${isActive ? 'text-white/70' : 'text-slate-400'}`}>{n}</span>
                             </button>
                         );
                     })}
                 </div>
-                
-                {/* View Mode Toggle, Search & Actions */}
-                <div className="flex flex-wrap items-center gap-3">
-                    {/* View Mode Toggle: Flat List vs Grouped by Scope */}
-                    <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+
+                <div className="relative flex-1 min-w-[180px] xl:max-w-sm">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                        type="text"
+                        placeholder="Search by name, trigger or link…"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-8 py-2 text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-[#9EC9BC] focus:ring-2 focus:ring-[#1F4D45]/15 transition-colors"
+                    />
+                    {searchQuery && (
                         <button
                             type="button"
-                            onClick={() => setViewMode('list')}
-                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === 'list' ? 'bg-white text-[#0066CC] shadow-2xs' : 'text-slate-500 hover:text-slate-800'}`}
-                            title="Flat List View"
+                            onClick={() => setSearchQuery('')}
+                            aria-label="Clear search"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
                         >
-                            <List className="w-4 h-4" />
+                            <X className="w-3.5 h-3.5" />
                         </button>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center bg-slate-100 p-0.5 rounded-lg">
                         <button
                             type="button"
                             onClick={() => setViewMode('grouped')}
-                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === 'grouped' ? 'bg-white text-[#0066CC] shadow-2xs' : 'text-slate-500 hover:text-slate-800'}`}
-                            title="Group by Scope / Trade"
+                            title="Group by room"
+                            className={`p-1.5 rounded-md transition-all cursor-pointer ${viewMode === 'grouped' ? 'bg-white text-[#1F4D45] shadow-2xs' : 'text-slate-400 hover:text-slate-700'}`}
                         >
-                            <LayoutGrid className="w-4 h-4" />
+                            <LayoutGrid className="w-3.5 h-3.5" />
                         </button>
-                    </div>
-
-                    <div className="relative flex-1 sm:w-56">
-                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <input 
-                            type="text"
-                            placeholder="Search drawings..."
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0066CC] font-medium"
-                        />
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('list')}
+                            title="One flat list"
+                            className={`p-1.5 rounded-md transition-all cursor-pointer ${viewMode === 'list' ? 'bg-white text-[#1F4D45] shadow-2xs' : 'text-slate-400 hover:text-slate-700'}`}
+                        >
+                            <List className="w-3.5 h-3.5" />
+                        </button>
                     </div>
 
                     {isOwner && (
@@ -2059,7 +2084,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                             </button>
                             <button 
                                 onClick={() => setShowAddDrawing(!showAddDrawing)}
-                                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
+                                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#1F4D45] hover:bg-[#12332E] text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
                             >
                                 <Plus className="w-3.5 h-3.5" /> 
                                 <span>Add Drawing</span>
@@ -2078,7 +2103,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                             <input 
                                                 type="text" 
                                                 placeholder="e.g. Partition Layout - Living Room" 
-                                                className="w-full text-xs border border-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-[#0066CC] focus:outline-none font-medium text-slate-800"
+                                                className="w-full text-xs border border-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-[#1F4D45] focus:outline-none font-medium text-slate-800"
                                                 value={newDrawingName}
                                                 onChange={e => setNewDrawingName(e.target.value)}
                                                 autoFocus
@@ -2089,7 +2114,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                             <input 
                                                 type="text" 
                                                 placeholder="e.g. Living Room, Master Bedroom, Kitchen" 
-                                                className="w-full text-xs border border-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-[#0066CC] focus:outline-none font-medium text-slate-800"
+                                                className="w-full text-xs border border-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-[#1F4D45] focus:outline-none font-medium text-slate-800"
                                                 value={newDrawingRoom}
                                                 onChange={e => setNewDrawingRoom(e.target.value)}
                                                 list="existing-rooms-list"
@@ -2105,7 +2130,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                             <input 
                                                 type="text" 
                                                 placeholder="Category Tag (e.g. Carpentry, Electrical, Civil)" 
-                                                className="w-full text-xs border border-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-[#0066CC] focus:outline-none font-medium text-slate-800"
+                                                className="w-full text-xs border border-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-[#1F4D45] focus:outline-none font-medium text-slate-800"
                                                 value={newDrawingTrigger}
                                                 onChange={e => setNewDrawingTrigger(e.target.value)}
                                             />
@@ -2113,7 +2138,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                     </div>
                                     <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                                         <button onClick={() => setShowAddDrawing(false)} className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg cursor-pointer">Cancel</button>
-                                        <button onClick={handleAddDrawing} className="px-4 py-1.5 text-xs font-bold text-white bg-[#0066CC] hover:bg-[#0055B3] rounded-lg cursor-pointer">Add Drawing</button>
+                                        <button onClick={handleAddDrawing} className="px-4 py-1.5 text-xs font-bold text-white bg-[#1F4D45] hover:bg-[#12332E] rounded-lg cursor-pointer">Add Drawing</button>
                                     </div>
                                 </div>
                             )}
@@ -2124,7 +2149,8 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
             {/* List of Drawings: Flat List View vs Grouped by Scope View */}
             {viewMode === 'list' ? (
-                <div className="space-y-3.5">
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100">
+                    {columnHeader}
                     {filteredDrawings.map(d => renderDrawingCard(d))}
 
                     {filteredDrawings.length === 0 && (
@@ -2149,27 +2175,29 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         const progressPct = Math.round((triggerApprovedCount / roomDrawings.length) * 100);
 
                         return (
-                            <div key={roomKey} className="space-y-3">
-                                <div className="flex items-center justify-between bg-slate-100/80 p-3 px-4 rounded-xl border border-slate-200/80">
-                                    <div className="flex items-center gap-2.5">
-                                        <span className="font-extrabold text-sm text-slate-900">
-                                            {roomKey}
-                                        </span>
-                                        <span className="bg-white border border-slate-200 text-slate-600 text-[11px] font-bold px-2 py-0.5 rounded-full shadow-2xs">
+                            <div key={roomKey} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                                <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-100">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold text-sm text-slate-800">{roomKey}</span>
+                                        <span className="text-[11px] font-semibold text-slate-400">
                                             {roomDrawings.length} drawing{roomDrawings.length > 1 ? 's' : ''}
                                         </span>
                                     </div>
 
-                                    <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
-                                        <span className="text-emerald-700 font-bold">{triggerGfcCount} GFC Released</span>
-                                        <div className="w-24 bg-slate-200 h-2 rounded-full overflow-hidden hidden sm:block">
-                                            <div className="bg-emerald-500 h-full rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+                                    <div className="flex items-center gap-2.5 shrink-0">
+                                        {triggerGfcCount > 0 && (
+                                            <span className="text-[11px] font-bold text-emerald-700">{triggerGfcCount} released</span>
+                                        )}
+                                        <div className="w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden hidden sm:block">
+                                            <div className="bg-[#3F9B84] h-full rounded-full transition-all" style={{ width: `${progressPct}%` }} />
                                         </div>
-                                        <span className="text-[11px] font-bold text-slate-500">{progressPct}%</span>
+                                        <span className="text-[11px] font-bold text-slate-400 tabular-nums">{progressPct}%</span>
                                     </div>
                                 </div>
 
-                                <div className="space-y-3 pl-2 sm:pl-4 border-l-2 border-slate-200">
+                                {columnHeader}
+
+                                <div className="divide-y divide-slate-100">
                                     {roomDrawings.map(d => renderDrawingCard(d))}
                                 </div>
                             </div>
@@ -2188,6 +2216,198 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                 </div>
             )}
 
+                </div>
+
+                {/* ── the readouts ─────────────────────────────────────── */}
+                <aside
+                    ref={railRef}
+                    onPointerMove={onRailPointer}
+                    onPointerLeave={resetRailTilt}
+                    className="dt-rail dt-tilt relative overflow-hidden rounded-2xl p-6 space-y-5 dt-frame"
+                    style={{ animationDelay: '.08s' }}
+                >
+                    <div className="dt-scanline" />
+
+                    {/*
+                      Actions first.
+
+                      They were at the foot of this panel, which put them below
+                      the fold; moving them into the toolbar only buried them
+                      among the filters. At the top of the rail they are the
+                      first thing the eye lands on, and they are labelled rather
+                      than left as three unexplained icons.
+                    */}
+                    <section className="dt-rise space-y-2">
+                        {readyForGfcCount > 0 && isOwner && (
+                            <button
+                                type="button"
+                                onClick={handleBatchIssueGfc}
+                                className="w-full px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                                <ShieldCheck className="w-4 h-4" />
+                                Issue {readyForGfcCount} approved {plural(readyForGfcCount, 'GFC')}
+                            </button>
+                        )}
+                        <div className="grid grid-cols-3 gap-1.5">
+                            <button type="button" onClick={handleExportCSV}
+                                className="inline-flex items-center justify-center gap-1.5 px-2 py-2 text-[11px] font-semibold text-[#1F4D45] bg-white border border-[#DCEBE6] hover:border-[#9EC9BC] hover:bg-[#F1F7F5] rounded-lg transition-colors cursor-pointer">
+                                <Download className="w-3.5 h-3.5" /> CSV
+                            </button>
+                            <button type="button" onClick={handleCopyWhatsAppDigest}
+                                className="inline-flex items-center justify-center gap-1.5 px-2 py-2 text-[11px] font-semibold text-[#1F4D45] bg-white border border-[#DCEBE6] hover:border-[#9EC9BC] hover:bg-[#F1F7F5] rounded-lg transition-colors cursor-pointer">
+                                <Share2 className="w-3.5 h-3.5" /> Digest
+                            </button>
+                            <button type="button" onClick={() => setShowPrintModal(true)}
+                                className="inline-flex items-center justify-center gap-1.5 px-2 py-2 text-[11px] font-semibold text-[#1F4D45] bg-white border border-[#DCEBE6] hover:border-[#9EC9BC] hover:bg-[#F1F7F5] rounded-lg transition-colors cursor-pointer">
+                                <Printer className="w-3.5 h-3.5" /> Matrix
+                            </button>
+                        </div>
+                    </section>
+
+                    {/* Gate */}
+                    <section className="dt-rise border-t border-[#E1EEE9] pt-5" style={{ animationDelay: '.5s' }}>
+                        <div className="flex items-baseline justify-between gap-2">
+                            <h3 className="text-[11px] font-semibold tracking-wide text-[#2E7D6B]">Design gate</h3>
+                            <span className="text-[10px] font-bold text-[#5C7F76] tabular-nums">{stats.approved}/{stats.total}</span>
+                        </div>
+                        <div className="mt-2.5 flex items-center gap-3">
+                            <svg width="58" height="58" viewBox="0 0 58 58" className="shrink-0 -rotate-90">
+                                <circle cx="29" cy="29" r="24" fill="none" stroke="#E4EFEB" strokeWidth="5" />
+                                <circle
+                                    cx="29" cy="29" r="24" fill="none" stroke="#2E7D6B" strokeWidth="5" strokeLinecap="round"
+                                    className="dt-arc"
+                                    style={{
+                                        ['--dash' as any]: '151',
+                                        ['--target' as any]: String(151 - 151 * (stats.total ? stats.approved / stats.total : 0)),
+                                        strokeDasharray: 151,
+                                        strokeDashoffset: 151 - 151 * (stats.total ? stats.approved / stats.total : 0),
+                                        animationDelay: '.6s',
+                                    }}
+                                />
+                            </svg>
+                            <div className="min-w-0">
+                                <div className="text-[26px] font-bold leading-none tabular-nums">
+                                    {Math.round(stats.total ? (stats.approved / stats.total) * 100 : 0)}%
+                                </div>
+                                <p className="text-[11px] text-[#5C7F76] leading-snug mt-1">
+                                    {issues.length > 0
+                                        ? <><b className="text-rose-700">{issues.length}</b> {issues.length === 1 ? 'gap blocks' : 'gaps block'} the gate</>
+                                        : stats.approved === stats.total && stats.total > 0
+                                            ? 'Every drawing approved'
+                                            : 'approved and signed off'}
+                                </p>
+                            </div>
+                        </div>
+                        {issues.length > 0 && (
+                            <p className="mt-2.5 text-[11px] text-rose-700 leading-snug">
+                                {issues.slice(0, 2).map(g => g.name).join(', ')}
+                                {issues.length > 2 && ` +${issues.length - 2} more`}
+                            </p>
+                        )}
+                    </section>
+
+                    {/* Client turnaround */}
+                    <section className="dt-rise border-t border-[#E1EEE9] pt-5" style={{ animationDelay: '.62s' }}>
+                        <h3 className="text-[11px] font-semibold tracking-wide text-[#2E7D6B]">With the client</h3>
+                        {turnaround.withClient === 0 ? (
+                            <p className="text-[11px] text-[#5C7F76] mt-2 leading-snug">
+                                Nothing is sitting with the client right now.
+                            </p>
+                        ) : (
+                            <>
+                                <div className="mt-2 flex items-baseline gap-2">
+                                    <span className="text-[22px] font-bold tabular-nums">{turnaround.withClient}</span>
+                                    <span className="text-[11px] text-[#5C7F76]">
+                                        {plural(turnaround.withClient, 'drawing')} awaiting feedback
+                                    </span>
+                                </div>
+                                {turnaround.worst && (
+                                    <p className={`text-[11px] mt-1.5 leading-snug ${turnaround.stale > 0 ? 'text-amber-700' : 'text-[#5C7F76]'}`}>
+                                        Longest: <b>{turnaround.worst.name}</b>,{' '}
+                                        {turnaround.worst.days === 0
+                                            ? 'issued today'
+                                            : `${turnaround.worst.days} ${plural(turnaround.worst.days, 'day')}`}
+                                    </p>
+                                )}
+                                {turnaround.withClientUndated > 0 && (
+                                    <p className="text-[11px] text-[#5C7F76] mt-1.5 leading-snug">
+                                        <b>{turnaround.withClientUndated}</b> of these {plural(turnaround.withClientUndated, 'has', 'have')} no
+                                        issue date recorded, so the clock cannot be read.
+                                    </p>
+                                )}
+                                {turnaround.stale > 0 && (
+                                    <p className="text-[11px] text-amber-700 mt-1 leading-snug">
+                                        <b>{turnaround.stale}</b> past {turnaround.staleAfterDays} days — worth a nudge.
+                                    </p>
+                                )}
+                            </>
+                        )}
+                        {turnaround.meanResponseDays !== null && (
+                            <p className="text-[11px] text-[#5C7F76] mt-2 leading-snug border-t border-[#E1EEE9] pt-2.5">
+                                This client answers in <b className="text-[#12332E]">{turnaround.meanResponseDays.toFixed(1)} days</b> on average.
+                            </p>
+                        )}
+                    </section>
+
+                    {/* Revision economics */}
+                    <section className="dt-rise border-t border-[#E1EEE9] pt-5" style={{ animationDelay: '.74s' }}>
+                        <h3 className="text-[11px] font-semibold tracking-wide text-[#2E7D6B]">Rework</h3>
+                        {econ.total === 0 ? (
+                            <p className="text-[11px] text-[#5C7F76] mt-2 leading-snug">
+                                No revisions logged yet. Rounds 1–{econ.freeRoundLimit} are included in the fee.
+                            </p>
+                        ) : (
+                            <>
+                                <div className="mt-2 flex h-2 rounded-full overflow-hidden bg-[#E4EFEB]">
+                                    {econ.client > 0 && <div style={{ width: `${(econ.client / econ.total) * 100}%`, background: '#3F9B84' }} title={`${econ.client} client-requested`} />}
+                                    {econ.ours > 0 && <div style={{ width: `${(econ.ours / econ.total) * 100}%`, background: '#E0857D' }} title={`${econ.ours} our miss`} />}
+                                    {econ.site > 0 && <div style={{ width: `${(econ.site / econ.total) * 100}%`, background: '#D9A441' }} title={`${econ.site} site condition`} />}
+                                </div>
+                                <p className="text-[11px] text-[#5C7F76] mt-2 leading-snug">
+                                    {([
+                                        [econ.client, 'client'],
+                                        [econ.ours, 'ours'],
+                                        [econ.site, 'site'],
+                                    ] as [number, string][]).filter(([n]) => n > 0).map(([n, l]) => `${n} ${l}`).join(' · ')}
+                                </p>
+                                <p className={`text-[11px] mt-1.5 leading-snug ${econ.ourShare > 0.3 ? 'text-rose-700' : 'text-[#5C7F76]'}`}>
+                                    <b className="text-[#12332E]">{Math.round(econ.ourShare * 100)}%</b> ours to absorb
+                                    {econ.unbilled > 0 && <>, <b className="text-amber-700">{econ.unbilled}</b> unbilled</>}
+                                </p>
+                            </>
+                        )}
+                    </section>
+
+                    {/* Dates */}
+                    <section className="dt-rise border-t border-[#E1EEE9] pt-5" style={{ animationDelay: '.86s' }}>
+                        <h3 className="text-[11px] font-semibold tracking-wide text-[#2E7D6B]">Dates</h3>
+                        {risk.queue.length === 0 ? (
+                            <p className="text-[11px] text-[#5C7F76] mt-2 leading-snug">
+                                {risk.noDate === stats.total && stats.total > 0
+                                    ? 'No target dates set on any drawing yet.'
+                                    : 'Nothing overdue or due this week.'}
+                            </p>
+                        ) : (
+                            <ul className="mt-2 space-y-1.5">
+                                {risk.queue.slice(0, 4).map(item => (
+                                    <li key={item.id} className="flex items-center gap-2">
+                                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.risk.state === 'overdue' ? 'bg-rose-500' : 'bg-amber-500'}`} />
+                                        <span className="text-[11px] flex-1 min-w-0 truncate text-slate-700">{item.name}</span>
+                                        <span className={`text-[10px] font-black tabular-nums shrink-0 ${item.risk.state === 'overdue' ? 'text-rose-700' : 'text-amber-700'}`}>
+                                            {item.risk.daysToTarget !== null && item.risk.daysToTarget < 0
+                                                ? `${Math.abs(item.risk.daysToTarget)}d late`
+                                                : `${item.risk.daysToTarget}d`}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+
+                    </section>
+                </aside>
+            </div>
+
+
             {/* Printable Blueprint Signoff Matrix Modal */}
             {showPrintModal && (
                 <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
@@ -2201,7 +2421,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 <button
                                     type="button"
                                     onClick={() => window.print()}
-                                    className="flex items-center gap-1.5 px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl shadow-2xs transition-all cursor-pointer"
+                                    className="flex items-center gap-1.5 px-4 py-2 bg-[#1F4D45] hover:bg-[#12332E] text-white text-xs font-bold rounded-xl shadow-2xs transition-all cursor-pointer"
                                 >
                                     <Printer className="w-3.5 h-3.5" />
                                     <span>Print / Save PDF</span>
@@ -2294,7 +2514,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                     <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 text-left animate-in fade-in zoom-in-95 duration-150">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                             <div className="flex items-center gap-2">
-                                <div className="p-2 bg-sky-50 text-[#0066CC] rounded-xl">
+                                <div className="p-2 bg-[#F1F7F5] text-[#1F4D45] rounded-xl">
                                     <Edit3 className="w-4 h-4" />
                                 </div>
                                 <div>
@@ -2322,7 +2542,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                     value={editForm.name}
                                     onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
                                     placeholder="e.g. Master Bedroom Wardrobe Elevation"
-                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] text-slate-900 font-bold"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1F4D45] text-slate-900 font-bold"
                                 />
                             </div>
 
@@ -2337,7 +2557,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                     onChange={e => setEditForm(prev => ({ ...prev, roomName: e.target.value }))}
                                     placeholder="e.g. Master Bedroom, Living Room, Kitchen"
                                     list="edit-modal-rooms-list"
-                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] text-slate-800"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1F4D45] text-slate-800"
                                 />
                                 <datalist id="edit-modal-rooms-list">
                                     {uniqueRooms.map(r => (
@@ -2353,7 +2573,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                                 onClick={() => setEditForm(prev => ({ ...prev, roomName: r }))}
                                                 className={`text-[10px] px-2 py-0.5 rounded-md font-semibold transition-all ${
                                                     editForm.roomName === r 
-                                                        ? 'bg-[#0066CC] text-white' 
+                                                        ? 'bg-[#1F4D45] text-white' 
                                                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                                 }`}
                                             >
@@ -2374,7 +2594,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                     value={editForm.boqTriggers}
                                     onChange={e => setEditForm(prev => ({ ...prev, boqTriggers: e.target.value }))}
                                     placeholder="e.g. Carpentry, Electrical, False Ceiling"
-                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] text-slate-800"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1F4D45] text-slate-800"
                                 />
                                 <div className="flex flex-wrap gap-1.5 mt-1.5">
                                     {['Carpentry', 'Electrical', 'Plumbing', 'False Ceiling', 'Civil', 'HVAC', 'Finishes'].map(tag => (
@@ -2405,7 +2625,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                     <select
                                         value={editForm.priority}
                                         onChange={e => setEditForm(prev => ({ ...prev, priority: e.target.value as any }))}
-                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] text-slate-800 font-semibold"
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1F4D45] text-slate-800 font-semibold"
                                     >
                                         <option value="normal">Normal</option>
                                         <option value="high">High Priority</option>
@@ -2420,7 +2640,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                         type="date"
                                         value={editForm.targetDate}
                                         onChange={e => setEditForm(prev => ({ ...prev, targetDate: e.target.value }))}
-                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] text-slate-800"
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1F4D45] text-slate-800"
                                     />
                                 </div>
                             </div>
@@ -2437,7 +2657,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                         value={editForm.driveUrl}
                                         onChange={e => setEditForm(prev => ({ ...prev, driveUrl: e.target.value }))}
                                         placeholder="https://drive.google.com/..."
-                                        className="w-full pl-8 pr-3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] text-slate-800"
+                                        className="w-full pl-8 pr-3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1F4D45] text-slate-800"
                                     />
                                 </div>
                             </div>
@@ -2448,7 +2668,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                     type="checkbox"
                                     checked={editForm.isMandatory}
                                     onChange={e => setEditForm(prev => ({ ...prev, isMandatory: e.target.checked }))}
-                                    className="w-4 h-4 text-[#0066CC] rounded focus:ring-[#0066CC] cursor-pointer"
+                                    className="w-4 h-4 text-[#1F4D45] rounded focus:ring-[#1F4D45] cursor-pointer"
                                 />
                                 <div>
                                     <div className="font-bold text-slate-900 text-xs">Mandatory Gate Item</div>
@@ -2483,7 +2703,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                     type="button"
                                     onClick={handleSaveDrawingEdit}
                                     disabled={!editForm.name.trim()}
-                                    className="px-5 py-2 text-xs font-bold text-white bg-[#0066CC] hover:bg-[#0055B3] rounded-xl transition-all shadow-2xs disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                                    className="px-5 py-2 text-xs font-bold text-white bg-[#1F4D45] hover:bg-[#12332E] rounded-xl transition-all shadow-2xs disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                                 >
                                     <Check className="w-3.5 h-3.5" />
                                     <span>Save Changes</span>
@@ -2612,7 +2832,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                         log.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                                         log.type === 'warning' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                                         log.type === 'error' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                                        'bg-blue-50 text-blue-700 border-blue-200'
+                                        'bg-[#F1F7F5] text-[#1F4D45] border-[#9EC9BC]'
                                     }`}>
                                         {log.type}
                                     </span>

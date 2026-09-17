@@ -48,7 +48,7 @@ const ClientRoomDetails: React.FC<ClientRoomDetailsProps> = ({ rooms, projectCon
                 className={`p-4 flex items-center justify-between cursor-pointer transition-colors ${isExpanded ? 'bg-sky-50/50' : 'hover:bg-white/40'}`}
               >
                   <div className="flex items-center gap-4">
-                      <div className={`p-2 rounded-lg transition-transform duration-300 ${isExpanded ? 'rotate-180 bg-sky-100 text-[#0066CC]' : 'text-slate-400'}`}>
+                      <div className={`p-2 rounded-lg transition-transform duration-300 ${isExpanded ? 'rotate-180 bg-sky-100 text-[#3D52A0]' : 'text-slate-400'}`}>
                           <ChevronDownIcon className="w-4 h-4" />
                       </div>
                       <div>
@@ -96,7 +96,7 @@ const ClientRoomDetails: React.FC<ClientRoomDetailsProps> = ({ rooms, projectCon
                                                     type="checkbox" 
                                                     checked={isSelected}
                                                     onChange={(e) => { e.stopPropagation(); onToggleOption(item.id); }}
-                                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-[#0066CC] focus:ring-[#0066CC] cursor-pointer"
+                                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-[#3D52A0] focus:ring-[#3D52A0] cursor-pointer"
                                                 />
                                             )}
                                             <div>

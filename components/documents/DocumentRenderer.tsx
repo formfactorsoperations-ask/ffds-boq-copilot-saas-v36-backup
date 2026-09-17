@@ -278,7 +278,7 @@ const ClauseQuestions: React.FC<{
         <div
           aria-hidden="true"
           style={{ top: hot.top - 6, height: hot.height + 12 }}
-          className="absolute left-0 right-0 z-10 pointer-events-none rounded-xl bg-sky-50/60 border-l-[3px] border-[#0066CC]/45 transition-all duration-150"
+          className="absolute left-0 right-0 z-10 pointer-events-none rounded-xl bg-sky-50/60 border-l-[3px] border-[#3D52A0]/45 transition-all duration-150"
         />
       )}
 
@@ -305,7 +305,7 @@ const ClauseQuestions: React.FC<{
               className={`portal-query-mark group absolute left-3 z-30 h-8 pl-2.5 pr-3 rounded-full
                           bg-white/85 backdrop-blur-md border shadow-lg shadow-sky-900/10
                           cursor-pointer flex items-center gap-1.5 transition-all duration-150
-                          focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0066CC]/40 ${
+                          focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/40 ${
                 answered
                   ? 'border-emerald-200 text-emerald-800 hover:bg-white'
                   : 'border-amber-200 text-amber-800 hover:bg-white'
@@ -371,10 +371,10 @@ const ClauseQuestions: React.FC<{
              be found by someone who does not know it is there. */
           className="portal-ask-pill group absolute right-3 z-30 h-9 pl-3 pr-3.5 rounded-full
                      bg-white/85 backdrop-blur-md border border-sky-200
-                     text-[#0055B3] shadow-lg shadow-sky-900/10 cursor-pointer
+                     text-[#334486] shadow-lg shadow-sky-900/10 cursor-pointer
                      flex items-center gap-1.5
                      hover:bg-white hover:border-sky-300 hover:shadow-sky-900/15
-                     focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0066CC]/40
+                     focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/40
                      transition-all duration-150 ease-out"
         >
           <MessageCircleQuestion className="w-4 h-4 shrink-0" />

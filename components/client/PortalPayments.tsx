@@ -104,7 +104,7 @@ export default function PortalPayments({
 
   const phases: { key: 'design' | 'execution'; label: string; phase: Phase; bar: string; text: string }[] = [
     { key: 'design', label: 'Design fee', phase: design, bar: 'bg-indigo-500', text: 'text-indigo-700' },
-    { key: 'execution', label: 'Execution contract', phase: execution, bar: 'bg-[#0066CC]', text: 'text-[#0055B3]' },
+    { key: 'execution', label: 'Execution contract', phase: execution, bar: 'bg-[#3D52A0]', text: 'text-[#334486]' },
   ];
 
   return (
@@ -291,7 +291,7 @@ export default function PortalPayments({
         </div>
         <button
           onClick={onContactStudio}
-          className="shrink-0 self-start sm:self-auto px-4 py-2.5 rounded-xl bg-[#0066CC] text-white text-xs font-bold hover:bg-[#0055B3] transition-colors cursor-pointer flex items-center gap-2"
+          className="shrink-0 self-start sm:self-auto px-4 py-2.5 rounded-xl bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486] transition-colors cursor-pointer flex items-center gap-2"
         >
           <MessageSquare className="w-3.5 h-3.5" />
           Message your studio

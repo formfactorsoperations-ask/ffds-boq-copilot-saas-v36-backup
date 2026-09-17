@@ -28,8 +28,8 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                 const el = document.getElementById(focus);
                 if (el) {
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    el.classList.add('ring-2', 'ring-[#0066CC]', 'ring-offset-2');
-                    setTimeout(() => el.classList.remove('ring-2', 'ring-[#0066CC]', 'ring-offset-2'), 3000);
+                    el.classList.add('ring-2', 'ring-[#3D52A0]', 'ring-offset-2');
+                    setTimeout(() => el.classList.remove('ring-2', 'ring-[#3D52A0]', 'ring-offset-2'), 3000);
                 }
             }, 500);
         }
@@ -477,7 +477,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                     <p className="text-slate-500 mt-2 max-w-lg mx-auto">
                         Generate the foundational framework docket. This sets the rules of engagement (warranties, snags, revisions) before any work begins. It relies on the Advance Payment Schedule for specific amounts.
                     </p>
-                    <button onClick={handleGenerate} disabled={isGenerating} className="mt-8 px-6 py-3 bg-[#0066CC] text-white font-bold rounded-xl shadow-sm hover:bg-[#0055B3] transition flex items-center justify-center mx-auto gap-2">
+                    <button onClick={handleGenerate} disabled={isGenerating} className="mt-8 px-6 py-3 bg-[#3D52A0] text-white font-bold rounded-xl shadow-sm hover:bg-[#334486] transition flex items-center justify-center mx-auto gap-2">
                         {isGenerating ? 'Generating...' : 'Generate Docket'}
                     </button>
                 </div>
@@ -514,7 +514,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
         if (block.type === 'callout') {
             const isHighlight = block.style === 'highlight';
             return (
-                <div key={idx} className={`${isHighlight ? 'highlight' : 'principle'} highlight-box ${isHighlight ? 'bg-amber-50 border-amber-500' : 'bg-slate-50 border-[#0066CC]'} border-l-4 py-3 pl-4 rounded-r-md my-4 shadow-sm`} style={{ pageBreakInside: 'avoid' }}>
+                <div key={idx} className={`${isHighlight ? 'highlight' : 'principle'} highlight-box ${isHighlight ? 'bg-amber-50 border-amber-500' : 'bg-slate-50 border-[#3D52A0]'} border-l-4 py-3 pl-4 rounded-r-md my-4 shadow-sm`} style={{ pageBreakInside: 'avoid' }}>
                     {block.label && <h3 className={`font-bold ${isHighlight ? 'text-amber-900' : 'text-slate-800'} text-[11px] tracking-wider mb-2 m-0 uppercase lab`}>{block.label}</h3>}
                     {processed.split('\n\n').map((p: string, pIdx: number) => (
                         <p key={pIdx} className={`m-0 ${pIdx === 0 && !isHighlight ? 'font-semibold text-slate-800' : 'text-slate-600 mt-2'}`}>{p}</p>
@@ -579,7 +579,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                     }}
                     className={`flex-1 sm:flex-initial px-6 py-2.5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
                         activeSubTab === 'view'
-                            ? 'bg-[#0066CC] text-white shadow-sm'
+                            ? 'bg-[#3D52A0] text-white shadow-sm'
                             : 'text-slate-600 hover:text-slate-800 hover:bg-slate-100/50'
                     }`}
                 >
@@ -601,7 +601,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                         latestDocket.status !== 'draft'
                             ? 'opacity-40 cursor-not-allowed text-slate-400'
                             : activeSubTab === 'edit'
-                            ? 'bg-[#0066CC] text-white shadow-sm'
+                            ? 'bg-[#3D52A0] text-white shadow-sm'
                             : 'text-slate-600 hover:text-slate-800 hover:bg-slate-100/50'
                     }`}
                 >
@@ -631,7 +631,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                     {getSignoffUrl(currentSignoff.token!)}
                                 </div>
                                 <div className="mt-3 flex items-center gap-2">
-                                    <a href={getSignoffUrl(currentSignoff.token!)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg text-[11px] font-bold tracking-tight inline-block cursor-pointer">
+                                    <a href={getSignoffUrl(currentSignoff.token!)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-[11px] font-bold tracking-tight inline-block cursor-pointer">
                                         Open Sign-Off Screen &rarr;
                                     </a>
                                 </div>
@@ -715,7 +715,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-100">
                             <div className="flex items-center gap-3">
                                 <div className="bg-sky-50 p-2.5 rounded-xl border border-sky-100/50">
-                                    <FileText className="w-5 h-5 text-[#0055B3]" />
+                                    <FileText className="w-5 h-5 text-[#334486]" />
                                 </div>
                                 <div>
                                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Document Stream & Version Ledger</h3>
@@ -764,7 +764,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                                 <tr key={doc.id || dIdx} className={`border-b border-slate-100 last:border-b-0 hover:bg-slate-50/30 transition-colors ${isSelected ? 'bg-sky-50/20' : ''}`}>
                                                     <td className="py-3.5 px-4">
                                                         <div className="flex items-center gap-3">
-                                                            <div className={`p-2 rounded-lg ${isAmendment ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-sky-50 text-[#0055B3] border border-sky-100'}`}>
+                                                            <div className={`p-2 rounded-lg ${isAmendment ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-sky-50 text-[#334486] border border-sky-100'}`}>
                                                                 <FileText className="w-4 h-4" />
                                                             </div>
                                                             <div>
@@ -790,7 +790,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                                                 <span className="font-semibold text-slate-700">{new Date(doc.generatedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
                                                             </div>
                                                             {doc.sentAt && (
-                                                                <div className="flex items-center gap-2 text-[#0066CC]">
+                                                                <div className="flex items-center gap-2 text-[#3D52A0]">
                                                                     <span className="text-[10px] font-bold text-sky-400 uppercase w-14">Sent:</span>
                                                                     <span className="font-semibold">{new Date(doc.sentAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
                                                                 </div>
@@ -812,7 +812,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                                     <td className="py-3.5 px-4 text-right">
                                                         <div className="flex items-center justify-end gap-2">
                                                             {isSelected ? (
-                                                                <span className="px-3 py-1.5 bg-[#0066CC] text-white text-[10px] font-extrabold rounded-lg uppercase tracking-wider shadow-sm">
+                                                                <span className="px-3 py-1.5 bg-[#3D52A0] text-white text-[10px] font-extrabold rounded-lg uppercase tracking-wider shadow-sm">
                                                                     Active Preview
                                                                 </span>
                                                             ) : (
@@ -822,7 +822,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                                                         setSelectedDocketId(doc.id || null);
                                                                         setIsAmending(false);
                                                                     }}
-                                                                    className="px-3 py-1.5 bg-white/60 backdrop-blur-md border border-slate-200 hover:border-[#0066CC] hover:text-[#0066CC] hover:bg-sky-50/50 text-slate-700 text-[10px] font-extrabold rounded-lg transition-all cursor-pointer shadow-sm uppercase tracking-wider"
+                                                                    className="px-3 py-1.5 bg-white/60 backdrop-blur-md border border-slate-200 hover:border-[#3D52A0] hover:text-[#3D52A0] hover:bg-sky-50/50 text-slate-700 text-[10px] font-extrabold rounded-lg transition-all cursor-pointer shadow-sm uppercase tracking-wider"
                                                                 >
                                                                     Load View
                                                                 </button>
@@ -882,12 +882,12 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                     )}
                                     
                                     {!showSendConfirm ? (
-                                        <button onClick={() => setShowSendConfirm(true)} disabled={isSending} className="px-4 py-2 bg-[#0066CC] border border-[#0066CC] text-white font-bold text-sm rounded-lg hover:bg-[#0055B3] transition flex items-center gap-2 shadow-sm">
+                                        <button onClick={() => setShowSendConfirm(true)} disabled={isSending} className="px-4 py-2 bg-[#3D52A0] border border-[#3D52A0] text-white font-bold text-sm rounded-lg hover:bg-[#334486] transition flex items-center gap-2 shadow-sm">
                                             <Send className="w-4 h-4" /> {isSending ? 'Sending...' : 'Send to Client'}
                                         </button>
                                     ) : (
                                         <div className="flex items-center gap-2">
-                                            <button onClick={sendEmailSignoff} className="px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold rounded text-sm transition shadow-sm">Confirm Send</button>
+                                            <button onClick={sendEmailSignoff} className="px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white font-bold rounded text-sm transition shadow-sm">Confirm Send</button>
                                             <button onClick={() => setShowSendConfirm(false)} className="px-4 py-2 bg-white/60 backdrop-blur-md border border-slate-200 text-slate-700 font-bold rounded text-sm hover:bg-slate-50 transition">Cancel</button>
                                         </div>
                                     )}
@@ -899,7 +899,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                 </button>
                             )}
                             {latestDocket.status !== 'draft' && (
-                                <button onClick={handleGenerateAmendment} disabled={isGenerating} className="px-4 py-2 bg-[#0066CC] border border-[#0066CC] text-white font-bold text-sm rounded-lg hover:bg-[#0055B3] transition flex items-center gap-2 shadow-sm cursor-pointer">
+                                <button onClick={handleGenerateAmendment} disabled={isGenerating} className="px-4 py-2 bg-[#3D52A0] border border-[#3D52A0] text-white font-bold text-sm rounded-lg hover:bg-[#334486] transition flex items-center gap-2 shadow-sm cursor-pointer">
                                     <Plus className="w-4 h-4" /> Create Amendment / Addendum
                                 </button>
                             )}
@@ -920,7 +920,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between glass-light border border-slate-200/80 p-3 rounded-2xl shadow-sm no-print mb-6 gap-3">
                     <div className="flex items-center gap-2 pl-1">
                         <div className="bg-sky-50 p-1.5 rounded-lg border border-sky-100/50">
-                            <Columns className="w-4 h-4 text-[#0055B3]" />
+                            <Columns className="w-4 h-4 text-[#334486]" />
                         </div>
                         <div>
                             <span className="text-xs font-black text-slate-900 uppercase tracking-wider block">Workspace Layout</span>
@@ -933,7 +933,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                             onClick={() => setEditLayoutMode('editor')}
                             className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 ${
                                 editLayoutMode === 'editor'
-                                    ? 'bg-[#0066CC] text-white shadow-sm'
+                                    ? 'bg-[#3D52A0] text-white shadow-sm'
                                     : 'text-slate-600 hover:text-slate-800'
                             }`}
                         >
@@ -945,7 +945,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                             onClick={() => setEditLayoutMode('split')}
                             className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 ${
                                 editLayoutMode === 'split'
-                                    ? 'bg-[#0066CC] text-white shadow-sm'
+                                    ? 'bg-[#3D52A0] text-white shadow-sm'
                                     : 'text-slate-600 hover:text-slate-800'
                             }`}
                         >
@@ -957,7 +957,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                             onClick={() => setEditLayoutMode('preview')}
                             className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 ${
                                 editLayoutMode === 'preview'
-                                    ? 'bg-[#0066CC] text-white shadow-sm'
+                                    ? 'bg-[#3D52A0] text-white shadow-sm'
                                     : 'text-slate-600 hover:text-slate-800'
                             }`}
                         >
@@ -1005,7 +1005,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                         type="text"
                                         value={editedTermsConfig.docketRefPrefix || ''}
                                         onChange={(e) => setEditedTermsConfig({ ...editedTermsConfig, docketRefPrefix: e.target.value })}
-                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#0066CC] font-medium"
+                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#3D52A0] font-medium"
                                     />
                                 </div>
                                 <div>
@@ -1014,7 +1014,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                         type="number"
                                         value={editedTermsConfig.gstRate || 18}
                                         onChange={(e) => setEditedTermsConfig({ ...editedTermsConfig, gstRate: Number(e.target.value) })}
-                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#0066CC] font-medium"
+                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#3D52A0] font-medium"
                                     />
                                 </div>
                                 <div>
@@ -1023,7 +1023,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                         type="number"
                                         value={editedTermsConfig.paymentOverdueGraceDays || 7}
                                         onChange={(e) => setEditedTermsConfig({ ...editedTermsConfig, paymentOverdueGraceDays: Number(e.target.value) })}
-                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#0066CC] font-medium"
+                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#3D52A0] font-medium"
                                     />
                                 </div>
                                 <div>
@@ -1032,7 +1032,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                         type="number"
                                         value={editedTermsConfig.resumeAfterPaymentDays || 2}
                                         onChange={(e) => setEditedTermsConfig({ ...editedTermsConfig, resumeAfterPaymentDays: Number(e.target.value) })}
-                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#0066CC] font-medium"
+                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#3D52A0] font-medium"
                                     />
                                 </div>
                                 <div>
@@ -1041,7 +1041,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                         type="number"
                                         value={editedTermsConfig.changeRequestResponseDays || 5}
                                         onChange={(e) => setEditedTermsConfig({ ...editedTermsConfig, changeRequestResponseDays: Number(e.target.value) })}
-                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#0066CC] font-medium"
+                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#3D52A0] font-medium"
                                     />
                                 </div>
                                 <div>
@@ -1050,7 +1050,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                         type="number"
                                         value={editedTermsConfig.disputeMediationDays || 30}
                                         onChange={(e) => setEditedTermsConfig({ ...editedTermsConfig, disputeMediationDays: Number(e.target.value) })}
-                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#0066CC] font-medium"
+                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#3D52A0] font-medium"
                                     />
                                 </div>
                             </div>
@@ -1060,7 +1060,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                     type="text"
                                     value={editedTermsConfig.disputeJurisdiction || ''}
                                     onChange={(e) => setEditedTermsConfig({ ...editedTermsConfig, disputeJurisdiction: e.target.value })}
-                                    className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#0066CC] font-medium"
+                                    className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#3D52A0] font-medium"
                                 />
                             </div>
                         </div>
@@ -1072,7 +1072,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                 value={editedTermsConfig.preamble || ''}
                                 onChange={(e) => setEditedTermsConfig({ ...editedTermsConfig, preamble: e.target.value })}
                                 rows={3}
-                                className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-[#0066CC] font-medium"
+                                className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-[#3D52A0] font-medium"
                                 placeholder="Governing preamble..."
                             />
                         </div>
@@ -1105,7 +1105,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                                         type="text"
                                                         value={sec.title}
                                                         onChange={(e) => updateSectionTitle(sIdx, e.target.value)}
-                                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs bg-white/60 backdrop-blur-md focus:ring-1 focus:ring-[#0066CC] font-semibold text-slate-900"
+                                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs bg-white/60 backdrop-blur-md focus:ring-1 focus:ring-[#3D52A0] font-semibold text-slate-900"
                                                     />
                                                 </div>
 
@@ -1132,7 +1132,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                                                         type="text"
                                                                         value={block.label || ''}
                                                                         onChange={(e) => updateBlockLabel(sIdx, bIdx, e.target.value)}
-                                                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#0066CC]"
+                                                                        className="w-full border border-slate-200 rounded-lg p-1.5 text-xs focus:ring-1 focus:ring-[#3D52A0]"
                                                                     />
                                                                 </div>
                                                             )}
@@ -1158,7 +1158,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                                                         value={block.text || ''}
                                                                         onChange={(e) => updateBlockText(sIdx, bIdx, e.target.value)}
                                                                         rows={4}
-                                                                        className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-[#0066CC] font-medium"
+                                                                        className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-[#3D52A0] font-medium"
                                                                     />
                                                                 </div>
                                                             ) : (
@@ -1173,7 +1173,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                                 <button
                                                     type="button"
                                                     onClick={() => addBlock(sIdx)}
-                                                    className="w-full py-2 bg-sky-50 hover:bg-sky-100 text-[#0055B3] font-bold rounded-lg text-xs transition border border-sky-100 cursor-pointer flex justify-center items-center gap-1.5"
+                                                    className="w-full py-2 bg-sky-50 hover:bg-sky-100 text-[#334486] font-bold rounded-lg text-xs transition border border-sky-100 cursor-pointer flex justify-center items-center gap-1.5"
                                                 >
                                                     <Plus className="w-3.5 h-3.5" /> Add Clause / Block
                                                 </button>
@@ -1302,7 +1302,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                                         type="text"
                                                         value={snapshotClientData?.date || ''}
                                                         onChange={(e) => handleUpdateIssuedDate(e.target.value)}
-                                                        className="bg-stone-50 border border-stone-200 rounded px-1.5 py-0.5 text-xs text-stone-850 font-bold outline-none focus:ring-1 focus:ring-[#0066CC] w-full no-print"
+                                                        className="bg-stone-50 border border-stone-200 rounded px-1.5 py-0.5 text-xs text-stone-850 font-bold outline-none focus:ring-1 focus:ring-[#3D52A0] w-full no-print"
                                                         placeholder="DD/MM/YYYY"
                                                     />
                                                     <span className="print-only">{snapshotClientData?.date || ''}</span>

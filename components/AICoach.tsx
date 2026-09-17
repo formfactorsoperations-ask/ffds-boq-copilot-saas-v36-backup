@@ -54,7 +54,7 @@ const AICoach: React.FC<AICoachProps> = ({ boq, aggregates }) => {
             <button
               onClick={handleGetInsights}
               disabled={!isAiAvailable() || !boq || boq.length === 0}
-              className="flex w-full items-center justify-center gap-2 px-6 py-3 bg-[#0066CC]/90 hover:bg-[#0055B3] text-white font-bold text-[11px] uppercase tracking-[0.2em] rounded-full backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all"
+              className="flex w-full items-center justify-center gap-2 px-6 py-3 bg-[#3D52A0]/90 hover:bg-[#334486] text-white font-bold text-[11px] uppercase tracking-[0.2em] rounded-full backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all"
             >
               Analyze Metrics
             </button>

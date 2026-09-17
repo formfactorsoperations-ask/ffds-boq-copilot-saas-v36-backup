@@ -130,7 +130,7 @@ const WeekAhead: React.FC<Props> = ({ projects, onOpenProject }) => {
                 }`}>
                   {relative(m.daysOut)}
                 </span>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-300 shrink-0 group-hover:text-[#0066CC] transition-colors" />
+                <ArrowRight className="w-3.5 h-3.5 text-slate-300 shrink-0 group-hover:text-[#3D52A0] transition-colors" />
               </button>
             );
           })}

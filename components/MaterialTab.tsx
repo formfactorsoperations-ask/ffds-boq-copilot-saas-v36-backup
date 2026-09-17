@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import ConsoleHeader from './ui/ConsoleHeader';
+import Tabs from './ui/Tabs';
+import { assess, summarise, BUCKET_LABEL, ORDER_BLOCKING, Bucket } from '../lib/sofReadiness';
 import { ProjectContext, ProposalTier, Item, MaterialSelection, MaterialSelectionStatus, PurchaseOrder, Vendor } from '../types';
 import Card from './shared/Card';
 import { PlusIcon, CheckIcon, ClockIcon, AlertCircleIcon, TrashIcon, PhotoIcon, EnvelopeIcon, XCircleIcon, SparklesIcon } from './Icons';
@@ -8,7 +11,9 @@ import { useOrg } from '../contexts/OrgContext';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import { db } from '../services/dbService';
 import RaisePOModal from './RaisePOModal';
-import OrdersCard from './OrdersCard';
+import OrdersCard, { stageOf, STAGE, POStage } from './OrdersCard';
+import RaiseChangeModal from './RaiseChangeModal';
+import { saveDecision, DecisionData } from '../services/decisionsService';
 import { 
     sendSelectionNotificationEmail, 
     sendConsolidatedPendingSelectionsEmail,
@@ -69,9 +74,15 @@ interface MaterialTabProps {
     activeTier?: ProposalTier;
     bank: Item[];
     projectId?: string;
+    /**
+     * The decision ledger, subscribed to once in App. A cost variation over the
+     * sign-off threshold becomes a decision in here, and the client's answer
+     * comes back the same way.
+     */
+    decisionLedger?: (DecisionData & { id: string })[];
 }
 
-const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectContext, activeTier, bank, projectId }) => {
+const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectContext, activeTier, bank, projectId, decisionLedger = [] }) => {
     const { orgData } = useOrg();
     const { settings: studioSettings } = useStudioSettings(orgData.tenantId || 'demo-tenant-01');
     const [selections, setSelections] = useState<MaterialSelection[]>(projectContext.materialSelections || []);
@@ -82,11 +93,49 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
     const itemNameRef = useRef<HTMLInputElement>(null);
     const [uploadingId, setUploadingId] = useState<string | null>(null);
     const [activeRoom, setActiveRoom] = useState<string>('All');
+    /*
+      "Waiting on the client" is the only count on this screen anyone acts on --
+      it is what holds procurement up -- so the tile showing it is a filter
+      rather than a decoration.
+    */
+    /*
+      Which readiness bucket the list is narrowed to, if any. Replaces the
+      single "pending only" toggle: the useful question is not one flag but
+      which of the five states an item is in.
+    */
+    const [bucketFilter, setBucketFilter] = useState<Bucket | null>(null);
+    const [showEmptyRooms, setShowEmptyRooms] = useState<boolean>(false);
+    const [toolsOpen, setToolsOpen] = useState<boolean>(false);
+
+    /*
+      One consolidated nudge rather than one message per item.
+
+      Lifted out of an inline handler when the action row was collapsed; the
+      body is unchanged, so the message the client receives is the same.
+    */
+    const handleRemindPending = () => {
+        setIsConsolidatedReminder(true);
+        setSharingSelection(null);
+        setEmailSendingStatus('idle');
+        setEmailError(null);
+
+        const lines: string[] = [];
+        lines.push(`Hi ${projectContext.clientName || 'Client'}, just a reminder — the following selections are awaiting your confirmation for *${projectContext.name || 'your project'}*:`);
+        lines.push('');
+        pendingSelections.forEach(item => {
+            lines.push(`▪ ${item.itemName}${item.brand ? ' — ' + item.brand : ''}${item.quotedPrice ? ' — ₹' + item.quotedPrice.toLocaleString('en-IN') : ''}: ${window.location.origin}/selection-confirm/${item.confirmationToken}`);
+        });
+        lines.push('');
+        lines.push('Please review and confirm at your earliest convenience.');
+        setShareMessage(lines.join('\n'));
+    };
     const [searchQuery, setSearchQuery] = useState<string>('');
     
     // Tab state for Selections vs Change Requests vs Orders
     const [mainTab, setMainTab] = useState<'selections' | 'change_requests' | 'orders'>('selections');
     const [crStatusFilter, setCrStatusFilter] = useState<'All' | 'Pending Sign-off' | 'Approved' | 'Absorbed' | 'Rejected'>('All');
+    const [showRaiseChange, setShowRaiseChange] = useState(false);
+    const [poStageFilter, setPoStageFilter] = useState<POStage | null>(null);
     
     // Checkbox selection & PO states
     const [selectedSelectionIds, setSelectedSelectionIds] = useState<string[]>([]);
@@ -341,6 +390,169 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
         setChangeReason("");
     };
 
+    /*
+      Carrying a cost variation to the client.
+
+      This used to be a console.log that said "STUB: Route SOF item … via
+      Decision Tracker". The flags were written, the screen reported the change
+      as awaiting sign-off, and nothing was ever sent — the client was never
+      asked, so it could never be answered.
+
+      A variation over the threshold now becomes a real decision in the ledger,
+      linked back to the selection that raised it. It is created as a draft, not
+      emailed: publishing to the client is the studio's call and it has its own
+      controls on the Decisions screen, so this puts the decision in front of
+      you rather than sending anything on your behalf.
+
+      Anything already flagged while the stub was in place is picked up too —
+      the effect looks at the flag, not at who set it.
+    */
+    const routingRef = useRef<Set<string>>(new Set());
+
+    useEffect(() => {
+        if (!projectId) return;
+
+        const unrouted = selections.filter(
+            s =>
+                s.itemType === 'change_request' &&
+                s.needsSignoffRouting &&
+                !s.signoffDecisionId &&
+                !routingRef.current.has(s.id),
+        );
+        if (unrouted.length === 0) return;
+
+        unrouted.forEach(cr => routingRef.current.add(cr.id));
+
+        (async () => {
+            const routed: Record<string, string> = {};
+            let failed = 0;
+
+            for (const cr of unrouted) {
+                try {
+                    const decisionId = await saveDecision(projectId, {
+                        title: cr.itemName || 'Cost variation',
+                        decisionText:
+                            (cr.changeReason || cr.notes || 'A cost variation was raised against this item.') +
+                            (cr.costDelta
+                                ? `\n\nCost impact: ${formatINR(cr.costDelta)}.`
+                                : ''),
+                        roomName: cr.roomId || 'Project-wide',
+                        category: 'Client Request',
+                        presentees: '',
+                        // The money moved, so the BOQ rate for this item changed.
+                        boqImpact: 'rate_change',
+                        impactCostValue: Number(cr.costDelta) || 0,
+                        impactScheduleDays: Number(cr.timelineDeltaDays) || 0,
+                        clientName: projectContext.clientName || 'Client',
+                        clientEmail: projectContext.clientEmail || '',
+                        projectName: projectContext.name || 'Project',
+                        studioId: orgData?.tenantId || 'demo-tenant-01',
+                        source: 'sof_variation',
+                        linkedSelectionId: cr.id,
+                    });
+                    routed[cr.id] = decisionId;
+                } catch (err) {
+                    console.error('Could not route variation for sign-off:', cr.id, err);
+                    failed += 1;
+                    // Leave the flag set so it is retried, and allow another attempt.
+                    routingRef.current.delete(cr.id);
+                }
+            }
+
+            if (Object.keys(routed).length > 0) {
+                const updated = selections.map(s =>
+                    routed[s.id]
+                        ? { ...s, signoffDecisionId: routed[s.id], needsSignoffRouting: false }
+                        : s,
+                );
+                setSelections(updated);
+                setProjectContext(prev => ({ ...prev, materialSelections: updated }));
+
+                const n = Object.keys(routed).length;
+                setFlash({
+                    tone: 'warn',
+                    text:
+                        n === 1
+                            ? 'Raised as a decision for the client. It is sitting in Decisions as a draft — send it from there when you are ready.'
+                            : `${n} variations raised as decisions for the client. They are sitting in Decisions as drafts.`,
+                });
+            }
+
+            if (failed > 0) {
+                setFlash({
+                    tone: 'warn',
+                    text: `${failed} ${failed === 1 ? 'variation' : 'variations'} could not be sent to Decisions. It will be retried.`,
+                });
+            }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selections, projectId]);
+
+    /*
+      The client's answer, coming back.
+
+      Routing one way is only half of it: if the client approves the change in
+      the portal, the schedule of finishes has to stop saying it is waiting.
+      The ledger is the source of truth for what the client said, so the
+      variation is reconciled against its linked decision.
+    */
+    useEffect(() => {
+        if (!decisionLedger || decisionLedger.length === 0) return;
+
+        const byId = new Map(decisionLedger.map(d => [d.id, d]));
+        let changed = false;
+
+        const updated = selections.map(sel => {
+            if (sel.itemType !== 'change_request' || !sel.signoffDecisionId) return sel;
+            const decision = byId.get(sel.signoffDecisionId);
+            if (!decision) return sel;
+
+            const answer = decision.signoff?.type;
+            // A query is a question, not a refusal — it stays pending until answered.
+            if (answer === 'approved' && sel.clientSignoffStatus !== 'approved') {
+                changed = true;
+                return { ...sel, clientSignoffStatus: 'approved' as const, boqAbsorbed: true };
+            }
+            return sel;
+        });
+
+        if (changed) {
+            setSelections(updated);
+            setProjectContext(prev => ({ ...prev, materialSelections: updated }));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [decisionLedger, selections]);
+
+    /**
+     * What the ledger says is happening to this variation, for the card.
+     * Returns null when the variation was never routed.
+     */
+    const signoffProgress = (sel: MaterialSelection) => {
+        if (!sel.signoffDecisionId) return null;
+        const decision = decisionLedger.find(d => d.id === sel.signoffDecisionId);
+        if (!decision) return null;
+        if (decision.signoff?.type === 'approved') return 'Client approved it';
+        if (decision.signoff?.type === 'queried') return 'Client asked a question';
+        if (decision.status === 'draft') return 'Draft in Decisions — not sent yet';
+        return 'Sent to the client';
+    };
+
+    /*
+      A variation raised by hand.
+
+      The threshold decision already happened in the composer, which showed the
+      verdict before saving, so there is nothing to alert about here — the
+      record arrives fully formed and the list reflects it.
+    */
+    const handleRaiseChange = (cr: MaterialSelection) => {
+        const updated = [...selections, cr];
+        setSelections(updated);
+        setProjectContext({ ...projectContext, materialSelections: updated });
+        setShowRaiseChange(false);
+        setMainTab('change_requests');
+        setCrStatusFilter('All');
+    };
+
     const handleDirectApprove = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
         setSelections(selections.map(s => {
@@ -485,6 +697,22 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
 
     const [shareMessage, setShareMessage] = useState<string | null>(null);
 
+    /*
+      One notice instead of a stack of dialogs.
+
+      Saving a selection that had gone over its allowance used to fire up to
+      three alert() boxes in a row — absorbed or routed, then the timeline
+      warning — each of which had to be dismissed before the next appeared.
+      They said useful things, so they are kept; they are said once, in place,
+      and they do not block the save.
+    */
+    const [flash, setFlash] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null);
+    useEffect(() => {
+        if (!flash) return;
+        const t = setTimeout(() => setFlash(null), 6000);
+        return () => clearTimeout(t);
+    }, [flash]);
+
     const handleSaveSelection = (sendNotification: boolean) => {
         if (!draftSelection) return;
         
@@ -492,7 +720,10 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
             const allowZero = studioSettings?.sofSettings?.allowZeroCostChanges !== false;
             const cost = draftSelection.costDelta || 0;
             if (!allowZero && cost === 0) {
-                alert('Project settings do not allow zero-cost change requests.');
+                setFlash({
+                    tone: 'warn',
+                    text: 'Studio settings do not allow a variation with no cost impact. Enter an amount, or record this as a note on the selection instead.',
+                });
                 return;
             }
         }
@@ -526,23 +757,31 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
             const threshold = studioSettings?.sofSettings?.changeRequestSignoffThreshold || 5000;
             const cost = finalSelectionToSave.costDelta || 0;
             
+            let note: string;
+            let tone: 'ok' | 'warn';
+
             if (cost > threshold) {
                 finalSelectionToSave.requiresClientSignoff = true;
                 finalSelectionToSave.clientSignoffStatus = 'pending';
                 finalSelectionToSave.boqAbsorbed = false;
+                // The effect above sees this flag and raises the decision.
                 finalSelectionToSave.needsSignoffRouting = true;
-                console.log(`STUB: Route SOF item ${finalSelectionToSave.id} for client sign-off via Decision Tracker`);
-                alert('⏳ Awaiting client sign-off before cost is absorbed');
+                note = `${formatINR(cost)} is over the ${formatINR(threshold)} threshold, so it is going to the client as a decision before it counts against the contract.`;
+                tone = 'warn';
             } else {
                 finalSelectionToSave.clientSignoffStatus = 'not_required';
                 finalSelectionToSave.boqAbsorbed = true;
-                alert('Change recorded and absorbed into project cost');
+                note = `${formatINR(cost)} absorbed into the BOQ — under the ${formatINR(threshold)} threshold, so the client is not asked.`;
+                tone = 'ok';
             }
 
             if (finalSelectionToSave.timelineDeltaDays && finalSelectionToSave.timelineDeltaDays > 0) {
                 finalSelectionToSave.timelineApplied = false;
-                alert(`⚠️ This change adds ${finalSelectionToSave.timelineDeltaDays} days. Review timeline to apply.`);
+                note += ` It also adds ${finalSelectionToSave.timelineDeltaDays} days, which the programme will not show until you apply it.`;
+                tone = 'warn';
             }
+
+            setFlash({ tone, text: note });
         }
         
         let newSelections;
@@ -767,6 +1006,8 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
         return { roomId, lockedCount, totalCount, pct };
     });
 
+    const emptyRooms = roomStats.filter(r => r.totalCount === 0);
+
     const allItemsLocked = selections.length > 0 && roomStats.every(r => r.totalCount > 0 && r.lockedCount === r.totalCount);
     const totalLockedItems = roomStats.reduce((acc, curr) => acc + curr.lockedCount, 0);
 
@@ -775,6 +1016,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
     const normalSelections = selections.filter(s => s.itemType !== 'change_request');
     const filteredSelectionsByRoom = activeRoom === 'All' ? normalSelections : normalSelections.filter(s => s.roomId === activeRoom);
     const filteredSelections = filteredSelectionsByRoom.filter(s => {
+        if (bucketFilter && assess(s, projectContext).bucket !== bucketFilter) return false;
         if (!searchQuery.trim()) return true;
         const q = searchQuery.toLowerCase();
         return (
@@ -797,6 +1039,95 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
         return true;
     });
 
+    const sofSummary = useMemo(
+        () => summarise(normalSelections, projectContext),
+        [normalSelections, projectContext],
+    );
+
+    /*
+      What each tab is actually asking.
+
+      The header summary used to describe selections whichever tab was open, so
+      on Purchase orders it reported finishes and on Change requests it reported
+      nothing about change requests. Each tab now answers its own question, from
+      its own records.
+    */
+    const crSummary = useMemo(() => {
+        const pending = changeRequests.filter(c => c.clientSignoffStatus === 'pending');
+        const approved = changeRequests.filter(c => c.clientSignoffStatus === 'approved');
+        const rejected = changeRequests.filter(c => c.clientSignoffStatus === 'rejected');
+        const absorbed = changeRequests.filter(c => c.boqAbsorbed === true);
+        // Only approved changes have actually moved the contract value.
+        const costImpact = approved.reduce((sum, c) => sum + (Number(c.costDelta) || 0), 0);
+        const daysImpact = approved.reduce((sum, c) => sum + (Number(c.timelineDeltaDays) || 0), 0);
+        // Money still hanging on the client, and money already taken on the chin.
+        const pendingCost = pending.reduce((sum, c) => sum + (Number(c.costDelta) || 0), 0);
+        const absorbedCost = absorbed.reduce((sum, c) => sum + (Number(c.costDelta) || 0), 0);
+        const pendingDays = changeRequests
+            .filter(c => c.timelineDeltaDays && !c.timelineApplied)
+            .reduce((sum, c) => sum + (Number(c.timelineDeltaDays) || 0), 0);
+        return {
+            total: changeRequests.length,
+            pending: pending.length,
+            approved: approved.length,
+            rejected: rejected.length,
+            absorbed: absorbed.length,
+            costImpact,
+            daysImpact,
+            pendingCost,
+            absorbedCost,
+            pendingDays,
+        };
+    }, [changeRequests]);
+
+    /*
+      Where each order has actually got to.
+
+      `status` is one field and an order is several things at once — issued,
+      delivered, billed, part paid. The stage is derived from the whole record
+      (see stageOf in OrdersCard) so the list can be filtered by the question
+      you are actually asking: what has not arrived, what I still owe for.
+    */
+    const poStages = useMemo(() => {
+        const counts: Record<string, number> = {};
+        const staged = projectPOs.map(po => {
+            const paid = (po.payments || []).reduce((a, x: any) => a + (Number(x.amount) || 0), 0);
+            const stage = stageOf(po, paid);
+            counts[stage] = (counts[stage] || 0) + 1;
+            return { po, paid, stage };
+        });
+        return { staged, counts };
+    }, [projectPOs]);
+
+    const visiblePOs = poStageFilter
+        ? poStages.staged.filter(x => x.stage === poStageFilter)
+        : poStages.staged;
+
+    const poSummary = useMemo(() => {
+        const committed = projectPOs.reduce((sum, po) => sum + (Number(po.total) || 0), 0);
+        const billed = projectPOs.reduce((sum, po) => sum + (Number(po.billAmount) || 0), 0);
+        const paid = projectPOs.reduce(
+            (sum, po) => sum + (po.payments || []).reduce((a, x: any) => a + (Number(x.amount) || 0), 0),
+            0,
+        );
+        const awaiting = projectPOs.filter(po => po.status === 'issued' && !po.receivedAt);
+        const today = new Date().setHours(0, 0, 0, 0);
+        const overdue = awaiting.filter(po => {
+            if (!po.expectedDelivery) return false;
+            const due = new Date(po.expectedDelivery).getTime();
+            return !isNaN(due) && due < today;
+        });
+        return {
+            total: projectPOs.length,
+            committed,
+            billed,
+            paid,
+            awaiting: awaiting.length,
+            overdue: overdue.length,
+            draft: projectPOs.filter(po => po.status === 'draft' || po.status === 'pending_approval').length,
+        };
+    }, [projectPOs]);
+
     const pendingSelections = normalSelections.filter(s => migrateSelectionStatus(s.status) === 'sent_for_approval');
     const itemsToSelect = normalSelections.filter(s => migrateSelectionStatus(s.status) === 'to_select');
 
@@ -811,7 +1142,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                         <span className="text-[10px] font-bold text-[#B89047] tracking-widest uppercase block mb-0.5">
                             {isNew ? 'Create New Selection' : 'Refining Specification'}
                         </span>
-                        <h3 className="font-serif text-slate-900 text-sm font-bold">
+                        <h3 className="text-slate-900 text-sm font-bold">
                             {isNew ? 'Smart Material Entry' : `Editing Selection: ${draftSelection.itemName || 'Unnamed Item'}`}
                         </h3>
                     </div>
@@ -849,7 +1180,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                         />
                         <button 
                             onClick={handleSmartParse}
-                            className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#0055B3] px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap active:scale-[0.98]"
+                            className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#334486] px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap active:scale-[0.98]"
                         >
                             <SparklesIcon className="w-3.5 h-3.5 text-amber-400" />
                             <span>Quick Fill</span>
@@ -1131,7 +1462,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                         </button>
                         <button 
                             onClick={() => handleSaveSelection(true)}
-                            className="flex-1 sm:flex-none bg-[#0066CC]/90 backdrop-blur-md border border-white/20 hover:bg-[#0055B3] text-white font-bold px-5 py-2.5 rounded-lg transition-all shadow-md text-xs flex items-center justify-center gap-1.5 active:scale-[0.99]"
+                            className="flex-1 sm:flex-none bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 hover:bg-[#334486] text-white font-bold px-5 py-2.5 rounded-lg transition-all shadow-md text-xs flex items-center justify-center gap-1.5 active:scale-[0.99]"
                         >
                             <CheckIcon className="w-3.5 h-3.5 text-amber-400" />
                             <span>Save & Notify Client</span>
@@ -1148,73 +1479,225 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                 {allRoomNames.map(room => <option key={room} value={room} />)}
             </datalist>
 
-            {/* Premium Sophisticated Header Row */}
-            <div className="flex flex-wrap items-center justify-end gap-2.5 w-full pb-4 border-b border-slate-100">
-                <button 
-                        onClick={handleExportTemplate}
-                        className="flex-1 lg:flex-none flex items-center justify-center gap-1.5 bg-white text-slate-700 border border-slate-200 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-colors"
-                        title="Download an Excel/CSV template for field agents to fill out"
-                    >
-                        Export Template
-                    </button>
-                    <button 
-                        onClick={() => csvInputRef.current?.click()}
-                        className="flex-1 lg:flex-none flex items-center justify-center gap-1.5 bg-white text-slate-700 border border-slate-200 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-colors"
-                        title="Import a filled Excel/CSV template from the field"
-                    >
-                        Import CSV
-                    </button>
-                    <input 
-                        type="file" 
-                        ref={csvInputRef} 
-                        className="hidden" 
-                        accept=".csv" 
-                        onChange={handleImportCSV} 
-                    />
-                    <button 
-                        onClick={() => setShowImportModal(true)}
-                        className="flex-1 lg:flex-none flex items-center justify-gray-700 gap-1.5 bg-amber-50 text-amber-800 border border-amber-200 px-3.5 py-2 rounded-lg text-xs font-bold hover:bg-amber-100/50 transition-colors"
-                    >
-                        <SparklesIcon className="w-4 h-4 text-[#B89047]" /> AI Paste
-                    </button>
-                    {pendingSelections.length > 0 && (
-                        <button 
-                            onClick={async () => {
-                                setIsConsolidatedReminder(true);
-                                setSharingSelection(null);
-                                setEmailSendingStatus('idle');
-                                setEmailError(null);
+            {/*
+              The schedule of finishes decides when procurement can start, so the
+              header reports exactly that: how many finishes are settled against
+              how many the scope needs. The action row moves inside it, because a
+              row of six buttons floating above a page is chrome, not a heading.
+            */}
+            <ConsoleHeader
+                title={
+                    mainTab === 'change_requests' ? 'Cost variations'
+                    : mainTab === 'orders' ? 'Purchase orders'
+                    : 'Schedule of finishes'
+                }
+                /*
+                  Who owns which number.
 
-                                const lines = [];
-                                lines.push(`Hi ${projectContext.clientName || 'Client'}, just a reminder — the following selections are awaiting your confirmation for *${projectContext.name || 'your project'}*:`);
-                                lines.push('');
-                                pendingSelections.forEach(item => {
-                                    lines.push(`▪ ${item.itemName}${item.brand ? ' — ' + item.brand : ''}${item.quotedPrice ? ' — ₹' + item.quotedPrice.toLocaleString('en-IN') : ''}: ${window.location.origin}/selection-confirm/${item.confirmationToken}`);
-                                });
-                                lines.push('');
-                                lines.push('Please review and confirm at your earliest convenience.');
-                                setShareMessage(lines.join('\n'));
-                            }}
-                            className="flex-1 lg:flex-none flex items-center justify-center gap-1.5 bg-rose-50 text-rose-700 border border-rose-100 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-rose-100 transition-colors"
-                            title="Send consolidated reminder"
-                        >
-                            <EnvelopeIcon className="w-4 h-4" /> Remind Pending
-                        </button>
-                    )}
-                    <button 
-                        onClick={() => setShowDocketPanel(true)}
-                        className="flex-grow lg:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 shadow-sm"
-                    >
-                        <EnvelopeIcon className="w-4 h-4 text-slate-400" />
-                        Docket ({pendingSelections.length})
-                    </button>
-                    <button 
-                        onClick={handleNewItem}
-                        className="flex-grow lg:flex-none flex items-center justify-center gap-1.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-[#0055B3] transition-all shadow-sm"
-                    >
-                        <PlusIcon className="w-4 h-4" /> Add Selection
-                    </button>
-            </div>
+                  Every figure on this screen now has exactly one home: the tab
+                  badge counts the records, this pill names the condition in
+                  words, the panel holds the money, and the filter row below
+                  holds the per-state counts. The pill used to lead with a
+                  figure the panel repeated a few hundred pixels later, which is
+                  what made the screen feel like it was saying everything twice.
+                */
+                state={
+                    mainTab === 'change_requests'
+                        ? (crSummary.total === 0 ? 'Contract unchanged'
+                            : crSummary.pending > 0 ? 'Awaiting client sign-off'
+                            : 'All settled')
+                    : mainTab === 'orders'
+                        ? (poSummary.total === 0 ? 'Nothing ordered yet'
+                            : poSummary.overdue > 0 ? 'Overdue on site'
+                            : poSummary.awaiting > 0 ? 'Awaiting delivery'
+                            : 'All received')
+                    : normalSelections.length === 0 ? 'Nothing selected yet'
+                    : sofSummary.atRisk > 0 ? 'At risk of missing the date'
+                    : sofSummary.blocked > 0 ? 'Blocked from ordering'
+                    : sofSummary.awaiting > 0 ? 'With the client'
+                    : sofSummary.ready > 0 ? 'Ready to order'
+                    : 'All confirmed'
+                }
+                tone={
+                    mainTab === 'change_requests'
+                        ? (crSummary.pending > 0 ? 'warn' : crSummary.total === 0 ? 'ok' : 'ok')
+                    : mainTab === 'orders'
+                        ? (poSummary.overdue > 0 ? 'bad' : poSummary.awaiting > 0 ? 'warn' : 'ok')
+                    : normalSelections.length === 0 ? 'warn'
+                    : sofSummary.atRisk > 0 || sofSummary.blocked > 0 ? 'bad'
+                    : sofSummary.awaiting > 0 || sofSummary.ready > 0 ? 'warn'
+                    : 'ok'
+                }
+                blurb={
+                    mainTab === 'change_requests'
+                        ? 'Variations raised after the BOQ was frozen, and what each one does to the contract.'
+                    : mainTab === 'orders'
+                        ? 'Purchase orders raised against these selections, and what has landed on site.'
+                    : 'Every material, finish and fitting this project is built from — and who still has to decide.'
+                }
+                tabs={
+                    <Tabs
+                        ariaLabel="Schedule of finishes sections"
+                        value={mainTab}
+                        onChange={(id) => setMainTab(id as any)}
+                        items={[
+                            { id: 'selections', label: 'Selections', count: normalSelections.length },
+                            { id: 'change_requests', label: 'Cost variations', count: changeRequests.length, tone: 'attention' },
+                            { id: 'orders', label: 'Purchase orders', count: projectPOs.length },
+                        ]}
+                    />
+                }
+                panel={
+                    /*
+                      One summary, and it answers for whichever tab is open.
+
+                      A percentage says how far along the schedule is. It does not
+                      say what to do next, which on the selections tab is always
+                      one of five things — so each band is a filter, and reading
+                      the answer and acting on it are the same click.
+                    */
+                    mainTab === 'change_requests' ? (
+                        /*
+                          Counts here, money below. The header answers "how many
+                          and in what state", the ledger on the tab answers "how
+                          much" — so neither repeats the other.
+                        */
+                        <div className="w-full md:w-[300px]">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                {crSummary.total === 0 ? 'Nothing to agree' : 'Where they stand'}
+                            </div>
+                            {crSummary.total === 0 ? (
+                                <p className="text-xs text-slate-500 mt-3 leading-snug">
+                                    Every selection is still costing what the BOQ said it would.
+                                </p>
+                            ) : (
+                                <div className="mt-3 space-y-1">
+                                    {([
+                                        ['Pending Sign-off', 'Awaiting sign-off', crSummary.pending, '#D9A441'],
+                                        ['Approved', 'Approved', crSummary.approved, '#3D52A0'],
+                                        ['Absorbed', 'Absorbed into the BOQ', crSummary.absorbed, '#8697C4'],
+                                        ['Rejected', 'Rejected', crSummary.rejected, '#C4574F'],
+                                    ] as [string, string, number, string][]).filter(([, , n]) => n > 0).map(([key, label, n, c]) => (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            onClick={() => setCrStatusFilter(crStatusFilter === key ? 'All' : key as any)}
+                                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
+                                                crStatusFilter === key ? 'bg-[#3D52A0] text-white' : 'hover:bg-slate-100'
+                                            }`}
+                                        >
+                                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: crStatusFilter === key ? '#fff' : c }} />
+                                            <span className="text-xs font-semibold flex-1">{label}</span>
+                                            <span className="text-xs font-black tabular-nums">{n}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : mainTab === 'orders' ? (
+                        <div className="w-full md:w-[300px]">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                Committed to vendors
+                            </div>
+                            {poSummary.total === 0 ? (
+                                <p className="text-xs text-slate-500 mt-3 leading-snug">
+                                    Nothing ordered yet. Tick items on the selections tab and raise a PO against them.
+                                </p>
+                            ) : (
+                                <>
+                                    <div className="mt-1 text-2xl font-black text-slate-800 tabular-nums">
+                                        {formatINR(poSummary.committed) || '₹0'}
+                                    </div>
+                                    {/*
+                                      Money in the header, stages on the tab. The
+                                      counts that used to sit here are now the
+                                      filter row below, where clicking them does
+                                      something.
+                                    */}
+                                    <div className="mt-3 space-y-1">
+                                        {([
+                                            ['Billed by vendors', formatINR(poSummary.billed) || '₹0'],
+                                            ['Paid out', formatINR(poSummary.paid) || '₹0'],
+                                            ['Still to pay', formatINR(Math.max(0, poSummary.committed - poSummary.paid)) || '₹0'],
+                                        ] as [string, string][]).map(([label, v]) => (
+                                            <div key={label} className="flex items-center gap-2 px-2 py-1.5">
+                                                <span className="text-xs font-semibold flex-1 text-slate-600">{label}</span>
+                                                <span className="text-xs font-black tabular-nums">{v}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {poSummary.overdue > 0 && (
+                                        <div className="mt-3 pt-3 border-t border-slate-200">
+                                            <p className="text-[11px] text-rose-800 leading-snug">
+                                                <b>{poSummary.overdue}</b> past the expected delivery date.
+                                            </p>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    ) : (
+                    <div className="w-full md:w-[300px]">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                            {normalSelections.length} finishes
+                        </div>
+                        <div className="flex h-2.5 rounded-full overflow-hidden mt-2 bg-slate-200">
+                            {([
+                                ['locked', sofSummary.locked, '#3D52A0'],
+                                ['ready', sofSummary.ready, '#7091E6'],
+                                ['awaiting', sofSummary.awaiting, '#D9A441'],
+                                ['blocked', sofSummary.blocked, '#C4574F'],
+                                ['not_started', sofSummary.notStarted, '#CBD5E1'],
+                            ] as [Bucket, number, string][]).map(([k, n, c]) => n > 0 && (
+                                <div
+                                    key={k}
+                                    title={`${n} ${BUCKET_LABEL[k].toLowerCase()}`}
+                                    style={{ width: `${(n / Math.max(1, normalSelections.length)) * 100}%`, background: c }}
+                                />
+                            ))}
+                        </div>
+
+                        <div className="mt-3 space-y-1">
+                            {([
+                                ['ready', sofSummary.ready, '#7091E6'],
+                                ['blocked', sofSummary.blocked, '#C4574F'],
+                                ['awaiting', sofSummary.awaiting, '#D9A441'],
+                                ['not_started', sofSummary.notStarted, '#CBD5E1'],
+                                ['locked', sofSummary.locked, '#3D52A0'],
+                            ] as [Bucket, number, string][]).filter(([, n]) => n > 0).map(([k, n, c]) => (
+                                <button
+                                    key={k}
+                                    type="button"
+                                    onClick={() => { setBucketFilter(bucketFilter === k ? null : k); setMainTab('selections'); }}
+                                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
+                                        bucketFilter === k ? 'bg-[#3D52A0] text-white' : 'hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: bucketFilter === k ? '#fff' : c }} />
+                                    <span className="text-xs font-semibold flex-1">{BUCKET_LABEL[k]}</span>
+                                    <span className="text-xs font-black tabular-nums">{n}</span>
+                                </button>
+                            ))}
+                        </div>
+
+                        {(sofSummary.atRisk > 0 || sofSummary.stale > 0) && (
+                            <div className="mt-3 pt-3 border-t border-slate-200 space-y-1.5">
+                                {sofSummary.atRisk > 0 && (
+                                    <p className="text-[11px] text-rose-800 leading-snug">
+                                        <b>{sofSummary.atRisk}</b> {sofSummary.atRisk === 1 ? "won't" : "won't"} make the site date at current lead times.
+                                    </p>
+                                )}
+                                {sofSummary.stale > 0 && (
+                                    <p className="text-[11px] text-amber-800 leading-snug">
+                                        <b>{sofSummary.stale}</b> {sofSummary.stale === 1 ? 'has' : 'have'} been with the client over a week.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    )
+                }
+            />
 
             <input 
                 type="file" 
@@ -1233,12 +1716,12 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
 
             {/* AI Import Modal */}
             {showImportModal && (
-                <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6">
+                <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6">
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-sky-50/50">
                             <div>
                                 <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                                    <SparklesIcon className="w-6 h-6 text-[#0066CC]" />
+                                    <SparklesIcon className="w-6 h-6 text-[#3D52A0]" />
                                     Import from Message
                                 </h3>
                                 <p className="text-sm text-slate-500 mt-1">Paste a WhatsApp message or email from the team. AI will extract the items.</p>
@@ -1252,7 +1735,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                 value={importText}
                                 onChange={(e) => setImportText(e.target.value)}
                                 placeholder="e.g. 'Hey, I'm at Royal Touche. For the Master Bedroom Wardrobe, let's go with 8765-SF. Also for the Living Room TV Unit, veneer model X looks good.'"
-                                className="w-full h-48 p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#0066CC] focus:border-[#0066CC] outline-none resize-none text-slate-700"
+                                className="w-full h-48 p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#3D52A0] focus:border-[#3D52A0] outline-none resize-none text-slate-700"
                             />
                         </div>
                         <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
@@ -1266,7 +1749,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                 onClick={handleImportText}
                                 disabled={isExtracting || !importText.trim()}
                                 className={`px-5 py-2.5 rounded-xl font-bold text-white flex items-center gap-2 transition-all shadow-sm ${
-                                    isExtracting || !importText.trim() ? 'bg-sky-400 cursor-not-allowed' : 'bg-[#0066CC] hover:bg-[#0055B3]'
+                                    isExtracting || !importText.trim() ? 'bg-sky-400 cursor-not-allowed' : 'bg-[#3D52A0] hover:bg-[#334486]'
                                 }`}
                             >
                                 {isExtracting ? (
@@ -1291,159 +1774,245 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                     <div className="w-16 h-16 bg-[#FCFBF9] border border-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
                         <CameraIcon className="w-8 h-8 text-slate-400" />
                     </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2 font-serif">Start your first selection</h3>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">Start your first selection</h3>
                     <p className="text-slate-500 max-w-sm mx-auto mb-8 text-xs">
                         Tap the + button to capture materials, samples, or finishes at the shop and sync them to your digital catalog.
                     </p>
                     <button 
                         onClick={handleNewItem}
-                        className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white px-8 py-3.5 rounded-xl text-xs font-bold hover:bg-[#0055B3] transition-all shadow-sm"
+                        className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white px-8 py-3.5 rounded-xl text-xs font-bold hover:bg-[#334486] transition-all shadow-sm"
                     >
                         Add first selection
                     </button>
                 </div>
             ) : (
                 <div className="space-y-6">
-                    {/* Sovereign Key Metrics Continuous Banner */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 bg-[#FCFBF9] border border-slate-200/60 rounded-xl divide-y md:divide-y-0 md:divide-x divide-slate-200/60 overflow-hidden shadow-sm">
-                        <div className="p-4 flex flex-col justify-center">
-                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Total Catalog Items</span>
-                            <span className="text-xl font-extrabold text-slate-900 mt-1">{normalSelections.length} <span className="text-xs font-semibold text-slate-400 font-sans">items</span></span>
-                        </div>
-                        <div className="p-4 flex flex-col justify-center">
-                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Confirmed & Locked</span>
-                            <span className="text-xl font-extrabold text-emerald-700 mt-1">{totalLockedItems} <span className="text-xs font-semibold text-slate-400 font-sans">approved</span></span>
-                        </div>
-                        <div className="p-4 flex flex-col justify-center">
-                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Pending Decision</span>
-                            <span className="text-xl font-extrabold text-amber-700 mt-1">{pendingSelections.length} <span className="text-xs font-semibold text-slate-400 font-sans">awaiting</span></span>
-                        </div>
-                        <div className="p-4 flex flex-col justify-center">
-                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Committed PO Volume</span>
-                            <span className="text-xl font-extrabold text-slate-900 mt-1">
-                                {formatINR(projectPOs.reduce((sum, po) => sum + po.total, 0)) || "₹0"}
-                            </span>
-                        </div>
+                    {/*
+                      The four stat cards used to sit here and said the same
+                      thing as the panel in the header: "3 finishes" against
+                      "in the schedule 3", "confirmed 1" against "confirmed &
+                      locked 1", "with the client 1" against "waiting on the
+                      client 1". Only the ordered total was unique, and that
+                      belongs with the purchase orders. One summary, in the
+                      header, following whichever tab is open.
+                    */}
+
+
+
+                    {mainTab === 'selections' && (<>
+                        {/*
+                          The toolbar is its own section, below the figures.
+
+                          In the header it competed with the title for the first
+                          thing you read, and the search sat a long way from the list
+                          it filters. Here the two things that act on the list sit
+                          directly above it: search on the left, because it narrows
+                          what you see, and the actions on the right.
+                        */}
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4 hud-panel-in flex flex-wrap items-center justify-between gap-3">
+                            <div className="relative grow basis-[260px] max-w-md">
+                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                                    </svg>
+                                </span>
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Search name, brand, room or finish code…"
+                                    className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        onClick={() => setSearchQuery('')}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-700"
+                                        aria-label="Clear search"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                    {/*
+                      Six buttons at four different weights was the clutter. One
+                      primary action stays in the open; the rest are ways of getting
+                      data in and out, which nobody hunts for mid-task, so they live
+                      behind one menu. "Remind pending" only exists when somebody is
+                      actually pending.
+                    */}
+                    <button
+                        onClick={handleNewItem}
+                        className="flex items-center justify-center gap-1.5 bg-[#3D52A0] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#334486] transition-colors shadow-sm"
+                    >
+                        <PlusIcon className="w-4 h-4" /> Add selection
+                    </button>
+
+                    {pendingSelections.length > 0 && (
+                        <button
+                            onClick={handleRemindPending}
+                            className="flex items-center justify-center gap-1.5 bg-amber-50 text-amber-900 border border-amber-200 px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-amber-100 transition-colors"
+                            title="Send one consolidated reminder for everything awaiting the client"
+                        >
+                            <EnvelopeIcon className="w-4 h-4" /> Remind {pendingSelections.length}
+                        </button>
+                    )}
+
+                    <div className="relative">
+                        <button
+                            onClick={() => setToolsOpen(v => !v)}
+                            aria-expanded={toolsOpen}
+                            className="flex items-center justify-center gap-1.5 bg-white text-slate-700 border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold hover:bg-slate-50 transition-colors"
+                        >
+                            Tools
+                            <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${toolsOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {toolsOpen && (
+                            <>
+                                {/* click-away, so the menu closes the way every other menu does */}
+                                <div className="fixed inset-0 z-30" onClick={() => setToolsOpen(false)} />
+                                <div className="absolute left-0 mt-2 w-60 rounded-2xl border border-slate-200 bg-white shadow-lg z-40 overflow-hidden hud-panel-in">
+                                    <button
+                                        onClick={() => { setToolsOpen(false); setShowDocketPanel(true); }}
+                                        className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center justify-between"
+                                    >
+                                        <span>Client docket</span>
+                                        <span className="text-[10px] font-black text-slate-400">{pendingSelections.length}</span>
+                                    </button>
+                                    <div className="h-px bg-slate-100" />
+                                    <button
+                                        onClick={() => { setToolsOpen(false); setShowImportModal(true); }}
+                                        className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                    >
+                                        Paste from a message
+                                    </button>
+                                    <button
+                                        onClick={() => { setToolsOpen(false); csvInputRef.current?.click(); }}
+                                        className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                    >
+                                        Import a filled CSV
+                                    </button>
+                                    <button
+                                        onClick={() => { setToolsOpen(false); handleExportTemplate(); }}
+                                        className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                    >
+                                        Download the CSV template
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
 
-                    {/* Main Tabs */}
-                    <div className="flex gap-6 border-b border-slate-200">
-                        <button 
-                            className={`pb-4 text-[12px] uppercase tracking-wider font-bold transition-colors ${mainTab === 'selections' ? 'text-slate-900 border-b-2 border-[#0055B3]' : 'text-slate-400 hover:text-slate-700'}`}
-                            onClick={() => setMainTab('selections')}
-                        >
-                            Observations & Selections
-                        </button>
-                        <button 
-                            className={`pb-4 text-[12px] uppercase tracking-wider font-bold transition-colors flex items-center gap-2 ${mainTab === 'change_requests' ? 'text-rose-700 border-b-2 border-rose-700' : 'text-slate-400 hover:text-slate-700'}`}
-                            onClick={() => setMainTab('change_requests')}
-                        >
-                            Change Requests
-                            {changeRequests.length > 0 && (
-                                <span className="bg-rose-50 text-rose-700 border border-rose-100 px-1.5 py-0.5 rounded text-[10px]">{changeRequests.length}</span>
-                            )}
-                        </button>
-                        <button 
-                            className={`pb-4 text-[12px] uppercase tracking-wider font-bold transition-colors flex items-center gap-2 ${mainTab === 'orders' ? 'text-slate-900 border-b-2 border-[#0055B3]' : 'text-slate-400 hover:text-slate-700'}`}
-                            onClick={() => setMainTab('orders')}
-                        >
-                            Orders (POs)
-                            {projectPOs.length > 0 && (
-                                <span className="bg-sky-50 text-[#0055B3] border border-sky-200 px-1.5 py-0.5 rounded text-[10px]">{projectPOs.length}</span>
-                            )}
-                        </button>
-                    </div>
+                    <input
+                        type="file"
+                        ref={csvInputRef}
+                        className="hidden"
+                        accept=".csv"
+                        onChange={handleImportCSV}
+                    />
+                            </div>
+                        </div>
+                    </>)}
 
                     {mainTab === 'selections' && (
                         <div className="space-y-6">
 
                             {/* Horizontal Rooms / Area Directory (Luxury architect chips) */}
-                            <div className="bg-white border border-slate-200/60 rounded-xl p-4 shadow-sm">
-                                <div className="flex items-center justify-between mb-3">
-                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Area Directory Filter</span>
-                                    <span className="text-[11px] font-semibold text-slate-500">
-                                        Active: <span className="text-slate-900 font-bold">{activeRoom === 'All' ? 'All Spaces' : activeRoom}</span>
-                                    </span>
+                            <div className="hud-well border rounded-2xl p-4 hud-panel-in">
+                                <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Rooms</span>
+                                    {emptyRooms.length > 0 && (
+                                        <button
+                                            onClick={() => setShowEmptyRooms(v => !v)}
+                                            className="text-[11px] font-semibold text-[#3D52A0] hover:underline"
+                                        >
+                                            {showEmptyRooms
+                                                ? 'Hide empty rooms'
+                                                : `${emptyRooms.length} empty room${emptyRooms.length === 1 ? '' : 's'} hidden`}
+                                        </button>
+                                    )}
                                 </div>
-                                
-                                <div className="flex gap-2 overflow-x-auto pb-1.5 custom-scrollbar scroll-smooth">
+
+                                {/*
+                                  Wraps rather than scrolls. A horizontal scroller
+                                  hid two thirds of the rooms behind a drag, and on
+                                  this project six of the nine had nothing in them --
+                                  so the empty ones fold away until asked for.
+                                */}
+                                <div className="flex flex-wrap gap-2">
                                     <button
                                         onClick={() => setActiveRoom('All')}
-                                        className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap border shrink-0 ${
-                                            activeRoom === 'All' 
-                                            ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white border-[#0055B3] shadow-sm' 
-                                            : 'bg-[#FCFBF9] text-slate-700 border-slate-200 hover:bg-slate-50'
+                                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors border ${
+                                            activeRoom === 'All'
+                                            ? 'bg-[#3D52A0] text-white border-[#3D52A0] shadow-sm'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                                         }`}
                                     >
-                                        <div className="flex items-center gap-2">
-                                            <span>All Areas</span>
-                                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${activeRoom === 'All' ? 'bg-sky-900 text-sky-100' : 'bg-slate-200/50 text-slate-600'}`}>
-                                                {normalSelections.length}
-                                            </span>
-                                        </div>
+                                        All rooms
+                                        <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded ${activeRoom === 'All' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                            {normalSelections.length}
+                                        </span>
                                     </button>
 
-                                    {roomStats.map(stat => {
+                                    {(showEmptyRooms ? roomStats : roomStats.filter(r => r.totalCount > 0)).map(stat => {
                                         const isSelected = activeRoom === stat.roomId;
+                                        const complete = stat.totalCount > 0 && stat.lockedCount === stat.totalCount;
                                         return (
                                             <button
                                                 key={stat.roomId}
                                                 onClick={() => setActiveRoom(isSelected ? 'All' : stat.roomId)}
-                                                className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap border shrink-0 ${
-                                                    isSelected 
-                                                    ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white border-[#0055B3] shadow-sm' 
-                                                    : 'bg-[#FCFBF9] text-slate-700 border-slate-200 hover:bg-slate-50'
+                                                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors border flex items-center gap-2 ${
+                                                    isSelected
+                                                    ? 'bg-[#3D52A0] text-white border-[#3D52A0] shadow-sm'
+                                                    : stat.totalCount === 0
+                                                        ? 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'
+                                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                                                 }`}
                                             >
-                                                <div className="flex items-center gap-2">
-                                                    <span>{stat.roomId}</span>
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${isSelected ? 'bg-sky-900 text-sky-100' : 'bg-slate-200/50 text-slate-600'}`}>
+                                                <span>{stat.roomId}</span>
+                                                {stat.totalCount > 0 && (
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
                                                         {stat.lockedCount}/{stat.totalCount}
                                                     </span>
-                                                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: stat.pct === 100 ? '#10B981' : stat.pct > 0 ? '#F59E0B' : '#94A3B8' }} />
-                                                </div>
+                                                )}
+                                                {complete && !isSelected && (
+                                                    <span className="text-[#3D52A0] text-[11px] leading-none">✓</span>
+                                                )}
                                             </button>
                                         );
                                     })}
                                 </div>
                             </div>
-                            {/* Unified Search and Action Bar */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200/60 p-4 rounded-xl shadow-sm">
-                                <div className="relative flex-1">
-                                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                                        </svg>
-                                    </span>
-                                    <input
-                                        type="text"
-                                        placeholder="Search by name, brand, category, room, or finish code..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="w-full bg-[#FCFBF9] text-xs font-semibold text-slate-900 placeholder-slate-400 pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-950 focus:border-[#0055B3] transition-all"
-                                    />
-                                    {searchQuery && (
-                                        <button 
-                                            onClick={() => setSearchQuery('')}
-                                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-900 transition-colors"
-                                        >
-                                            Clear
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-3 self-end sm:self-auto">
-                                    {selectedSelectionIds.length > 0 && (
+
+                            {/*
+                              The search box lives in the header now: a full-width
+                              field in its own card, above three items, was more
+                              chrome than content. What stays here is the count and
+                              the one action that only exists while rows are ticked.
+                            */}
+                            <div className="flex items-center justify-between gap-3 flex-wrap -mt-2">
+                                <span className="text-[11px] font-semibold text-slate-500">
+                                    Showing <span className="text-slate-900 font-bold">{filteredSelections.length}</span>
+                                    {filteredSelections.length === 1 ? ' item' : ' items'}
+                                    {(searchQuery || bucketFilter || activeRoom !== 'All') && (
                                         <button
-                                            onClick={handleCreatePOFromSelected}
-                                            className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white px-4 py-2.5 rounded-lg text-xs font-bold hover:bg-[#0055B3] transition-all shadow-sm flex items-center gap-2 animate-in fade-in zoom-in-95 duration-200"
+                                            onClick={() => { setSearchQuery(''); setBucketFilter(null); setActiveRoom('All'); }}
+                                            className="ml-2 text-[#3D52A0] font-bold hover:underline"
                                         >
-                                            Create PO ({selectedSelectionIds.length})
+                                            Clear filters
                                         </button>
                                     )}
-                                    <span className="text-[11px] font-semibold text-slate-500 bg-[#FCFBF9] border border-slate-200 px-3 py-2.5 rounded-lg">
-                                        Showing <span className="text-slate-900 font-bold">{filteredSelections.length}</span> items
-                                    </span>
-                                </div>
+                                </span>
+                                {selectedSelectionIds.length > 0 && (
+                                    <button
+                                        onClick={handleCreatePOFromSelected}
+                                        className="bg-[#3D52A0] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#334486] transition-colors shadow-sm hud-dock-in"
+                                    >
+                                        Create PO ({selectedSelectionIds.length})
+                                    </button>
+                                )}
                             </div>
 
                                 {filteredSelections.length === 0 ? (
@@ -1462,7 +2031,14 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-24 lg:pb-0">
-                                        {filteredSelections.map(selection => {
+                                        {filteredSelections.map((selection, idx) => {
+                                            /*
+                                              Worked out per item rather than per
+                                              screen: the gap that stops one finish
+                                              being ordered is the thing to show on
+                                              that finish, not in a summary.
+                                            */
+                                            const sofCheck = assess(selection, projectContext);
                                             if (false && draftSelection && draftSelection.id === selection.id) {
                                                 return (
                                                     <div key={selection.id} className="col-span-1 md:col-span-2 lg:col-span-3 animate-in zoom-in-95 duration-200">
@@ -1497,12 +2073,13 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                                 <div 
                                                     key={selection.id} 
                                                     onClick={() => handleEditItem(selection)} 
-                                                    className={`bg-white border rounded-xl overflow-hidden transition-all duration-200 cursor-pointer hover:shadow-md relative flex flex-col justify-between ${
+                                                    style={{ animationDelay: (Math.min(idx, 12) * 26) + 'ms' }}
+                                                    className={`bg-white border rounded-2xl overflow-hidden transition-all duration-200 cursor-pointer hover:shadow-md hover:-translate-y-0.5 relative flex flex-col justify-between hud-row-in ${
                                                         statusMigrated === 'change_requested' 
-                                                        ? 'border-rose-200 hover:border-rose-300 border-t-2 border-t-rose-500' 
+                                                        ? 'border-rose-200 hover:border-rose-300' 
                                                         : statusMigrated === 'at_shop' 
-                                                        ? 'border-amber-400/80 border-t-2 border-t-amber-500' 
-                                                        : 'border-slate-200 hover:border-slate-300 border-t-2 border-t-[#B89047]'
+                                                        ? 'border-amber-300' 
+                                                        : 'border-slate-200 hover:border-slate-300'
                                                     }`}
                                                 >
                                                     <div className="flex flex-col p-4 flex-grow justify-between gap-4 hover:bg-slate-50/20 transition-colors">
@@ -1531,7 +2108,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
 
                                                                 {/* Details */}
                                                                 <div className="min-w-0">
-                                                                    <div className="font-bold text-[14px] text-slate-900 truncate tracking-tight font-serif">
+                                                                    <div className="font-bold text-[14px] text-slate-900 truncate tracking-tight">
                                                                         {selection.itemName || 'Untitled Item'}
                                                                     </div>
                                                                     <div className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mt-0.5">
@@ -1545,14 +2122,48 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                                             </span>
                                                         </div>
 
+                                                        {(sofCheck.blockers.length > 0 || sofCheck.leadRisk || (sofCheck.staleDays || 0) >= 7) && (
+                                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                                {sofCheck.leadRisk && (
+                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                                                        sofCheck.leadRisk.level === 'late'
+                                                                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                                                            : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                                                    }`}>
+                                                                        {sofCheck.leadRisk.level === 'late' ? 'Order overdue' : 'Order by'} {sofCheck.leadRisk.orderBy.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                                                    </span>
+                                                                )}
+                                                                {(sofCheck.staleDays || 0) >= 7 && (
+                                                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                                                        No reply in {sofCheck.staleDays}d
+                                                                    </span>
+                                                                )}
+                                                                {sofCheck.blockers.map(bl => (
+                                                                    <span
+                                                                        key={bl.key}
+                                                                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                                                                            ORDER_BLOCKING.has(bl.key)
+                                                                                ? 'bg-rose-50/60 text-rose-700 border-rose-200'
+                                                                                : 'bg-slate-50 text-slate-500 border-slate-200'
+                                                                        }`}
+                                                                        title={ORDER_BLOCKING.has(bl.key)
+                                                                            ? 'A purchase order cannot be raised without this'
+                                                                            : 'Weakens the record, but does not block an order'}
+                                                                    >
+                                                                        {bl.label}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+
                                                         {/* Center Spec Details */}
                                                         <div className="flex gap-3 items-center mt-1 w-full">
                                                             {/* Thumbnail */}
-                                                            <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-[#FCFBF9] border border-slate-200/60 flex items-center justify-center shadow-sm">
+                                                            <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-slate-50 border border-slate-200 flex items-center justify-center relative">
                                                                 {selection.photos?.[0] ? (
-                                                                    <img src={selection.photos[0]} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+                                                                    <img src={selection.photos[0]} className="w-full h-full object-cover" alt={selection.itemName || "Sample"} referrerPolicy="no-referrer" />
                                                                 ) : (
-                                                                    <span className="text-lg">{getCategoryEmoji(selection.category)}</span>
+                                                                    <div className="flex flex-col items-center gap-1 text-slate-400"><span className="text-lg leading-none">{getCategoryEmoji(selection.category)}</span><span className="text-[8px] font-bold uppercase tracking-wider">No sample</span></div>
                                                                 )}
                                                             </div>
 
@@ -1638,115 +2249,244 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
 
                     {mainTab === 'change_requests' && (
                         <div className="space-y-6">
-                            {/* Dashboard Summary Bar */}
-                            <div className="bg-gradient-to-br from-rose-50 to-white p-6 rounded-3xl border border-rose-100 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div>
-                                    <div className="text-xs font-bold text-rose-500 uppercase tracking-widest mb-1">Pending Cost Impact</div>
-                                    <div className="text-2xl font-black text-rose-700">
-                                        {formatINR(changeRequests.filter(cr => cr.clientSignoffStatus === 'pending').reduce((sum, cr) => sum + (cr.costDelta || 0), 0))}
+                            {/*
+                              What the variations have done to the contract.
+
+                              The counts are in the header and each one filters
+                              this list, so this row carries only what the header
+                              does not: the money, and the days nobody has applied
+                              to the programme yet.
+                            */}
+                            {crSummary.total > 0 && (
+                                <div className="bg-white border border-slate-200 rounded-2xl p-5 grid grid-cols-1 sm:grid-cols-3 gap-5">
+                                    <div>
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Waiting on the client</div>
+                                        <div className="text-xl font-black text-slate-900 tabular-nums">
+                                            {formatINR(crSummary.pendingCost) || '₹0'}
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 mt-0.5">
+                                            {crSummary.pending === 0 ? 'nothing outstanding' : 'not in the contract value yet'}
+                                        </div>
+                                    </div>
+                                    <div className="sm:border-l sm:border-slate-100 sm:pl-5">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Absorbed by the studio</div>
+                                        <div className="text-xl font-black text-slate-900 tabular-nums">
+                                            {formatINR(crSummary.absorbedCost) || '₹0'}
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 mt-0.5">
+                                            under the {formatINR(studioSettings?.sofSettings?.changeRequestSignoffThreshold || 5000)} threshold
+                                        </div>
+                                    </div>
+                                    <div className="sm:border-l sm:border-slate-100 sm:pl-5">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Days not yet applied</div>
+                                        <div className={`text-xl font-black tabular-nums ${crSummary.pendingDays > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
+                                            {crSummary.pendingDays > 0 ? '+' : ''}{crSummary.pendingDays} days
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 mt-0.5">
+                                            {crSummary.pendingDays > 0 ? 'the programme still shows the old dates' : 'programme is current'}
+                                        </div>
                                     </div>
                                 </div>
-                                <div>
-                                    <div className="text-xs font-bold text-sky-500 uppercase tracking-widest mb-1">Absorbed Cost</div>
-                                    <div className="text-2xl font-black text-sky-700">
-                                        {formatINR(changeRequests.filter(cr => cr.boqAbsorbed).reduce((sum, cr) => sum + (cr.costDelta || 0), 0))}
-                                    </div>
+                            )}
+
+                            {/*
+                              How a variation gets here.
+
+                              Nearly all of them arrive on their own, which is why
+                              this tab never had an add button and never explained
+                              itself. Both are fixed: the routes are stated, and
+                              the one case they do not cover has a button.
+                            */}
+                            <div className="bg-[#EDE8F5]/60 border border-[#ADBBDA] rounded-2xl p-5 flex flex-col md:flex-row md:items-center gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="text-[11px] font-black uppercase tracking-wider text-[#3D52A0] mb-1.5">
+                                        How a cost variation gets raised
+                                    </h4>
+                                    <p className="text-xs text-slate-600 leading-relaxed">
+                                        Most appear on their own — when a quoted price comes in over the item's
+                                        allowance, or when a <b>locked</b> selection is reopened and a reason is
+                                        given. Anything over{' '}
+                                        <b>{formatINR(studioSettings?.sofSettings?.changeRequestSignoffThreshold || 5000)}</b>{' '}
+                                        goes to the client for sign-off; under that it is absorbed into the BOQ.
+                                        Something new the client asked for belongs in <b>Scope Additions</b>, not here.
+                                    </p>
                                 </div>
-                                <div>
-                                    <div className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-1">Pending Timeline Shifts</div>
-                                    <div className="text-2xl font-black text-amber-700">
-                                        +{changeRequests.filter(cr => cr.timelineDeltaDays && !cr.timelineApplied).reduce((sum, cr) => sum + (cr.timelineDeltaDays || 0), 0)} days
-                                    </div>
-                                </div>
+                                <button
+                                    onClick={() => setShowRaiseChange(true)}
+                                    className="shrink-0 bg-[#3D52A0] hover:bg-[#334486] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                                >
+                                    <PlusIcon className="w-3.5 h-3.5" /> Raise a variation
+                                </button>
                             </div>
-                            
-                            {/* Status Filters */}
-                            <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                                {['All', 'Pending Sign-off', 'Approved', 'Absorbed', 'Rejected'].map(status => (
+
+                            {crStatusFilter !== 'All' && (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-slate-500">
+                                        Showing {filteredChangeRequests.length} of {crSummary.total} — {crStatusFilter.toLowerCase()}
+                                    </span>
                                     <button
-                                        key={status}
-                                        onClick={() => setCrStatusFilter(status as any)}
-                                        className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${
-                                            crStatusFilter === status ? 'bg-sky-900 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                                        }`}
+                                        onClick={() => setCrStatusFilter('All')}
+                                        className="text-xs font-black uppercase tracking-wider text-[#3D52A0] hover:text-[#334486]"
                                     >
-                                        {status}
+                                        Show all
                                     </button>
-                                ))}
-                            </div>
+                                </div>
+                            )}
+
 
                             {/* CR List */}
                             <div className="space-y-3 pb-24 sm:pb-0">
-                                {filteredChangeRequests.length === 0 && (
-                                    <div className="text-center p-8 text-slate-500 italic bg-white border border-slate-200 rounded-2xl">
-                                        No change requests found.
+                                {/*
+                                  With no variations at all the panel has already
+                                  said so and the card above explains why, so an
+                                  empty box repeating it a third time is cut. This
+                                  only speaks when a filter is hiding things.
+                                */}
+                                {crSummary.total > 0 && filteredChangeRequests.length === 0 && (
+                                    <div className="text-center px-6 py-10 bg-white border border-slate-200 rounded-2xl">
+                                        <p className="text-sm font-bold text-slate-800">Nothing in that state</p>
+                                        <button
+                                            onClick={() => setCrStatusFilter('All')}
+                                            className="text-xs font-black uppercase tracking-wider text-[#3D52A0] hover:text-[#334486] mt-2"
+                                        >
+                                            Show every variation
+                                        </button>
                                     </div>
                                 )}
-                                {filteredChangeRequests.map(cr => (
-                                    <div key={cr.id} onClick={() => handleEditItem(cr)} className="bg-white border hover:shadow-md cursor-pointer border-slate-200 rounded-2xl p-4 transition-all">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <div>
-                                                <div className="font-bold text-slate-800">{cr.itemName || 'Untitled Change'}</div>
-                                                <div className="text-xs text-slate-500 mt-1">{cr.notes || 'No description provided'}</div>
-                                            </div>
-                                            <div className="text-right flex flex-col gap-1 items-end">
-                                                {cr.costDelta != null && (
-                                                    <span className={`font-black text-sm ${cr.costDelta < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                        {cr.costDelta >= 0 ? '+' : ''}{formatINR(cr.costDelta)}
+                                {filteredChangeRequests.map(cr => {
+                                    /*
+                                      One variation, read in the order it matters:
+                                      what moved, where, why — then what it costs
+                                      and whether anyone still has to agree to it.
+                                    */
+                                    const state = cr.clientSignoffStatus === 'pending'
+                                        ? { label: 'Awaiting sign-off', chip: 'bg-amber-50 text-amber-800 border-amber-200', dot: '#D9A441' }
+                                        : cr.clientSignoffStatus === 'approved'
+                                            ? { label: 'Approved', chip: 'bg-[#EDE8F5] text-[#3D52A0] border-[#ADBBDA]', dot: '#3D52A0' }
+                                            : cr.clientSignoffStatus === 'rejected'
+                                                ? { label: 'Rejected', chip: 'bg-rose-50 text-rose-800 border-rose-200', dot: '#C4574F' }
+                                                : cr.boqAbsorbed
+                                                    ? { label: 'Absorbed into the BOQ', chip: 'bg-slate-100 text-slate-600 border-slate-200', dot: '#8697C4' }
+                                                    : { label: 'Not routed', chip: 'bg-slate-100 text-slate-600 border-slate-200', dot: '#CBD5E1' };
+                                    const delta = Number(cr.costDelta) || 0;
+                                    const progress = signoffProgress(cr);
+                                    return (
+                                        <button
+                                            key={cr.id}
+                                            type="button"
+                                            onClick={() => handleEditItem(cr)}
+                                            className="w-full text-left bg-white border border-slate-200 rounded-2xl px-5 py-4 hover:shadow-md hover:border-[#ADBBDA] transition-all flex flex-col sm:flex-row sm:items-center gap-3"
+                                        >
+                                            <span className="w-1 self-stretch rounded-full hidden sm:block shrink-0" style={{ background: state.dot }} />
+
+                                            <span className="flex-1 min-w-0 block">
+                                                <span className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-sm font-black tracking-tight text-slate-900">
+                                                        {cr.itemName || 'Untitled variation'}
+                                                    </span>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${state.chip}`}>
+                                                        {state.label}
+                                                    </span>
+                                                </span>
+                                                <span className="block text-[11px] font-semibold text-slate-500 mt-0.5">
+                                                    {cr.roomId || 'Project-wide'}
+                                                    {cr.category && cr.category !== 'Change' ? ' · ' + cr.category : ''}
+                                                    {cr.changeRequestedAt
+                                                        ? ' · raised ' + new Date(cr.changeRequestedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                                                        : ''}
+                                                </span>
+                                                <span className="block text-xs text-slate-600 mt-1.5 leading-snug line-clamp-2">
+                                                    {cr.changeReason || cr.notes || 'No reason recorded.'}
+                                                </span>
+                                                {progress && (
+                                                    <span className="inline-flex items-center gap-1.5 mt-2 text-[11px] font-bold text-[#3D52A0]">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-[#7091E6]" />
+                                                        {progress}
                                                     </span>
                                                 )}
+                                                {cr.needsSignoffRouting && !cr.signoffDecisionId && (
+                                                    <span className="inline-flex items-center gap-1.5 mt-2 text-[11px] font-bold text-slate-400">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                                                        Raising the decision…
+                                                    </span>
+                                                )}
+                                            </span>
+
+                                            <span className="text-right shrink-0 block">
+                                                <span className={`block text-base font-black tabular-nums ${delta < 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                                                    {delta > 0 ? '+' : ''}{formatINR(delta) || '₹0'}
+                                                </span>
                                                 {cr.timelineDeltaDays ? (
-                                                    <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">+{cr.timelineDeltaDays} days</span>
-                                                ) : null}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100 flex-wrap">
-                                            {cr.clientSignoffStatus === 'pending' && <span className="bg-rose-50 text-rose-700 font-bold px-2 py-1 rounded text-xs leading-none">⏳ Pending Sign-off</span>}
-                                            {cr.clientSignoffStatus === 'approved' && <span className="bg-emerald-50 text-emerald-700 font-bold px-2 py-1 rounded text-xs leading-none">✅ Approved</span>}
-                                            {cr.clientSignoffStatus === 'rejected' && <span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded text-xs leading-none">❌ Rejected</span>}
-                                            {cr.boqAbsorbed && <span className="bg-sky-50 text-sky-700 border border-sky-200 font-bold px-2 py-1 rounded text-xs leading-none">💰 Cost Absorbed</span>}
-                                            {cr.timelineApplied && <span className="bg-purple-50 text-purple-700 border border-purple-200 font-bold px-2 py-1 rounded text-xs leading-none">📅 Timeline Adjusted</span>}
-                                        </div>
-                                    </div>
-                                ))}
+                                                    <span className={`block text-[11px] font-bold ${cr.timelineApplied ? 'text-slate-400' : 'text-amber-700'}`}>
+                                                        +{cr.timelineDeltaDays} days{cr.timelineApplied ? ' applied' : ' not applied'}
+                                                    </span>
+                                                ) : (
+                                                    <span className="block text-[11px] font-semibold text-slate-400">no time impact</span>
+                                                )}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
 
                     {mainTab === 'orders' && (
                         <div className="space-y-6">
-                            {/* Orders Overview Dashboard */}
-                            <div className="bg-gradient-to-br from-sky-50 to-white p-6 rounded-3xl border border-sky-100 shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-6">
-                                <div>
-                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">POs Raised</div>
-                                    <div className="text-2xl font-black text-slate-900">
-                                        {projectPOs.length} <span className="text-xs font-semibold text-slate-500">orders</span>
-                                    </div>
+                            {/*
+                              Every figure that used to sit here — orders raised,
+                              committed, paid — is in the header panel, so this row
+                              is the thing the tab had none of: a way to ask which
+                              orders need you. Each stage is derived from the whole
+                              record, not the status field alone.
+                            */}
+                            {projectPOs.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        onClick={() => setPoStageFilter(null)}
+                                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors border ${
+                                            poStageFilter === null
+                                                ? 'bg-[#3D52A0] text-white border-[#3D52A0]'
+                                                : 'bg-white text-slate-600 border-slate-200 hover:border-[#ADBBDA]'
+                                        }`}
+                                    >
+                                        All
+                                    </button>
+                                    {(['not_issued', 'overdue', 'awaiting_delivery', 'awaiting_bill', 'balance_due', 'settled', 'cancelled'] as POStage[])
+                                        .filter(k => (poStages.counts[k] || 0) > 0)
+                                        .map(k => (
+                                            <button
+                                                key={k}
+                                                onClick={() => setPoStageFilter(poStageFilter === k ? null : k)}
+                                                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors border flex items-center gap-2 ${
+                                                    poStageFilter === k
+                                                        ? 'bg-[#3D52A0] text-white border-[#3D52A0]'
+                                                        : 'bg-white text-slate-600 border-slate-200 hover:border-[#ADBBDA]'
+                                                }`}
+                                            >
+                                                <span
+                                                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                                                    style={{ background: poStageFilter === k ? '#fff' : STAGE[k].dot }}
+                                                />
+                                                {STAGE[k].label}
+                                                <span className="tabular-nums opacity-70">{poStages.counts[k]}</span>
+                                            </button>
+                                        ))}
                                 </div>
-                                <div>
-                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Committed</div>
-                                    <div className="text-2xl font-black text-slate-900">
-                                        ₹{projectPOs.reduce((sum, po) => sum + po.total, 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                                    </div>
-                                </div>
-                                <div className="flex flex-col justify-between">
-                                    <div>
-                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Paid</div>
-                                        <div className="text-2xl font-black text-emerald-600">
-                                            ₹{projectPOs.reduce((sum, po) => sum + (po.payments?.reduce((s, pay) => s + pay.amount, 0) || 0), 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            )}
 
                             <div className="flex items-center justify-between">
-                                <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Project Purchase Orders</h4>
+                                <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                                    {poStageFilter
+                                        ? `${STAGE[poStageFilter].label} · ${visiblePOs.length} of ${projectPOs.length}`
+                                        : 'Every order on this project'}
+                                </h4>
                                 <button
                                     onClick={() => {
                                         setPoTargetSelections([]);
                                         setShowRaisePO(true);
                                     }}
-                                    className="bg-[#0066CC] hover:bg-[#0055B3] text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-sky-100 flex items-center gap-1.5"
+                                    className="bg-[#3D52A0] hover:bg-[#334486] text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-sky-100 flex items-center gap-1.5"
                                 >
                                     <PlusIcon className="w-3.5 h-3.5" /> New Custom PO
                                 </button>
@@ -1765,13 +2505,24 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                     </p>
                                 </div>
                             ) : (
-                                <div className="space-y-4">
-                                    {projectPOs.map(po => {
-                                        const paidTotal = po.payments?.reduce((s, p) => s + p.amount, 0) || 0;
+                                <div className="space-y-3">
+                                    {visiblePOs.length === 0 && (
+                                        <div className="text-center px-6 py-10 bg-white border border-slate-200 rounded-2xl">
+                                            <p className="text-sm font-bold text-slate-800">Nothing at that stage</p>
+                                            <button
+                                                onClick={() => setPoStageFilter(null)}
+                                                className="text-xs font-black uppercase tracking-wider text-[#3D52A0] hover:text-[#334486] mt-2"
+                                            >
+                                                Show every order
+                                            </button>
+                                        </div>
+                                    )}
+                                    {visiblePOs.map(({ po, paid }) => {
+                                        const paidTotal = paid;
                                         return (
-                                            <OrdersCard 
-                                                key={po.id} 
-                                                po={po} 
+                                            <OrdersCard
+                                                key={po.id}
+                                                po={po}
                                                 paidTotal={paidTotal}
                                                 projectId={projectId!}
                                                 onUpdate={() => loadPOs()}
@@ -1787,7 +2538,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
 
             {/* Draft Docket Panel */}
             {showDocketPanel && (
-                <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm z-50 flex justify-end">
+                <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 backdrop-blur-sm z-50 flex justify-end">
                     <div className="bg-white w-full max-w-md h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
                         <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50/50">
                             <div>
@@ -1921,7 +2672,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                                     lines.push('Please review and confirm at your earliest convenience.');
                                                     setShareMessage(lines.join('\n'));
                                                 }}
-                                                className="w-full flex items-center justify-center gap-2 bg-[#0066CC] text-white py-3 rounded-xl font-bold shadow-sm hover:bg-[#0055B3] transition-colors"
+                                                className="w-full flex items-center justify-center gap-2 bg-[#3D52A0] text-white py-3 rounded-xl font-bold shadow-sm hover:bg-[#334486] transition-colors"
                                             >
                                                 Send consolidated reminder
                                             </button>
@@ -2520,7 +3271,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
             {/* Mobile FAB */}
             <button
                 onClick={handleNewItem}
-                className="sm:hidden fixed bottom-6 right-6 z-40 w-14 h-14 bg-[#0066CC] text-white rounded-full shadow-lg flex items-center justify-center hover:bg-[#0055B3] transition-all active:scale-95 border border-sky-400"
+                className="sm:hidden fixed bottom-6 right-6 z-40 w-14 h-14 bg-[#3D52A0] text-white rounded-full shadow-lg flex items-center justify-center hover:bg-[#334486] transition-all active:scale-95 border border-sky-400"
             >
                 <CameraIcon className="w-6 h-6 absolute opacity-50 -ml-2 -mt-2" />
                 <PlusIcon className="w-6 h-6 relative z-10" />
@@ -2529,7 +3280,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
             
             {/* Change Request Wall */}
             {changeRequestSelection && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm">
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 backdrop-blur-sm">
                     <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
                         <div className="p-6 text-center border-b border-slate-100">
                             <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -2608,7 +3359,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
             
             {/* Multi-Channel Client Notifier Modal */}
             {shareMessage && (
-                <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-4 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm shadow-2xl animate-in fade-in duration-200" onClick={() => setShareMessage(null)}>
+                <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-4 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 backdrop-blur-sm shadow-2xl animate-in fade-in duration-200" onClick={() => setShareMessage(null)}>
                     <div 
                         className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-lg overflow-hidden shadow-xl animate-in slide-in-from-bottom sm:slide-in-from-bottom-8 duration-300 transform flex flex-col max-h-[90vh]"
                         onClick={e => e.stopPropagation()}
@@ -2670,7 +3421,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                             disabled={!projectContext.clientEmail}
                                             className={`w-full py-3.5 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 ${
                                                 projectContext.clientEmail 
-                                                    ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#0055B3] hover:shadow-sky-100 active:scale-[0.99]' 
+                                                    ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#334486] hover:shadow-sky-100 active:scale-[0.99]' 
                                                     : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                             }`}
                                         >
@@ -2691,7 +3442,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
 
                                 {emailSendingStatus === 'sending' && (
                                     <div className="flex flex-col items-center justify-center py-6 space-y-3">
-                                        <div className="w-8 h-8 border-4 border-[#0055B3] border-t-amber-400 rounded-full animate-spin"></div>
+                                        <div className="w-8 h-8 border-4 border-[#334486] border-t-amber-400 rounded-full animate-spin"></div>
                                         <p className="text-xs font-bold text-slate-900">Delivering secure confirmation link to client...</p>
                                     </div>
                                 )}
@@ -2794,7 +3545,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
 
             {/* SELECTIONS PO ELEVATED FOOTER BAR */}
             {selectedSelectionIds.length > 0 && (
-                <div className="fixed bottom-0 left-0 right-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white py-4 px-6 shadow-2xl flex flex-col sm:flex-row items-center justify-between z-40 animate-in slide-in-from-bottom duration-300 gap-3 border-t border-sky-900">
+                <div className="fixed bottom-0 left-0 right-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white py-4 px-6 shadow-2xl flex flex-col sm:flex-row items-center justify-between z-40 animate-in slide-in-from-bottom duration-300 gap-3 border-t border-sky-900">
                     <div className="flex items-center gap-2">
                         <span className="text-xs font-black bg-sky-800 px-3 py-1 rounded-full text-sky-200">{selectedSelectionIds.length}</span>
                         <span className="text-xs font-bold text-sky-200 uppercase tracking-wider">selected items from shop visits</span>
@@ -2818,7 +3569,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                             setPoTargetSelections(selectedSel);
                                             setShowRaisePO(true);
                                         }}
-                                        className="bg-[#0066CC] hover:bg-[#0066CC] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-sky-900/30"
+                                        className="bg-[#3D52A0] hover:bg-[#3D52A0] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-sky-900/30"
                                     >
                                         Raise PO (Generic)
                                     </button>
@@ -2833,7 +3584,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                         setPoTargetSelections(forVendor);
                                         setShowRaisePO(true);
                                     }}
-                                    className="bg-[#0066CC] hover:bg-[#0066CC] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-sky-900/30"
+                                    className="bg-[#3D52A0] hover:bg-[#3D52A0] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-sky-900/30"
                                 >
                                     Raise PO — <span className="font-extrabold text-white">{vendor}</span>
                                 </button>
@@ -2844,6 +3595,40 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
             )}
 
             {/* Raise PO Modal */}
+            {/* The notice those dialogs used to be. */}
+            {flash && (
+                <div
+                    role="status"
+                    className={`fixed bottom-6 right-6 z-[60] max-w-sm rounded-2xl border px-4 py-3 shadow-xl hud-panel-in ${
+                        flash.tone === 'warn'
+                            ? 'bg-amber-50 border-amber-200 text-amber-900'
+                            : 'bg-white border-[#ADBBDA] text-slate-800'
+                    }`}
+                >
+                    <div className="flex items-start gap-3">
+                        <p className="text-xs font-semibold leading-snug flex-1">{flash.text}</p>
+                        <button
+                            onClick={() => setFlash(null)}
+                            aria-label="Dismiss"
+                            className="text-slate-400 hover:text-slate-700 shrink-0"
+                        >
+                            <XCircleIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {showRaiseChange && (
+                <RaiseChangeModal
+                    selections={normalSelections}
+                    rooms={allRoomNames}
+                    signoffThreshold={studioSettings?.sofSettings?.changeRequestSignoffThreshold || 5000}
+                    allowZeroCost={studioSettings?.sofSettings?.allowZeroCostChanges !== false}
+                    onClose={() => setShowRaiseChange(false)}
+                    onSave={handleRaiseChange}
+                />
+            )}
+
             {showRaisePO && projectId && (
                 <RaisePOModal
                     projectId={projectId}

@@ -171,7 +171,7 @@ export function buildDocumentCompleteness(
 /** Colours come from the shared report palette's semantics, as hex for pips. */
 export const DOC_STATUS_COLOUR: Record<DocStatus, string> = {
   complete:  '#0E7C5A',
-  issued:    '#0066CC',
+  issued:    '#3D52A0',
   attention: '#C77700',
   draft:     '#94A3B8',
   missing:   '#B4436A',

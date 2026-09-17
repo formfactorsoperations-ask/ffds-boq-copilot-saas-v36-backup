@@ -66,7 +66,7 @@ const STATE_CHIP: Record<DocumentState, { label: string; tone: string }> = {
   draft: { label: 'Not yet released', tone: 'bg-slate-100 text-slate-500' },
   issued: { label: 'Ready to read & sign', tone: 'bg-amber-500 text-white' },
   viewed: { label: 'In progress', tone: 'bg-amber-100 text-amber-900' },
-  queried: { label: 'Your question is with the studio', tone: 'bg-[#0066CC] text-white' },
+  queried: { label: 'Your question is with the studio', tone: 'bg-[#3D52A0] text-white' },
   amended: { label: 'Updated — please review', tone: 'bg-amber-500 text-white' },
   /* `label` is a fallback only. The live wording comes from
      documentStatusLabel(state, kind, 'client') so an acknowledgement is never
@@ -148,7 +148,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b border-slate-100 pb-5 mb-5">
           <div className="space-y-1.5">
             <h3 className="font-black text-slate-900 text-xl tracking-tight flex items-center gap-2.5">
-              <FileText className="w-5 h-5 text-[#0066CC]" />
+              <FileText className="w-5 h-5 text-[#3D52A0]" />
               Your Documents
             </h3>
             <p className="text-xs text-slate-500 max-w-xl leading-relaxed">
@@ -198,7 +198,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                               row.state === 'signed' || row.state === 'executed'
                                 ? 'bg-emerald-50 text-emerald-600'
                                 : row.readable
-                                  ? 'bg-[#0066CC]/10 text-[#0066CC]'
+                                  ? 'bg-[#3D52A0]/10 text-[#3D52A0]'
                                   : 'bg-slate-100 text-slate-400'
                             }`}
                           >
@@ -249,7 +249,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                             </p>
 
                             {row.openQueries.length > 0 && (
-                              <p className="text-[11px] text-[#0055B3] font-semibold mt-1 flex items-center gap-1.5">
+                              <p className="text-[11px] text-[#334486] font-semibold mt-1 flex items-center gap-1.5">
                                 <MessageCircleQuestion className="w-3 h-3" />
                                 {row.openQueries.length} question
                                 {row.openQueries.length === 1 ? '' : 's'} awaiting a reply
@@ -282,10 +282,10 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                               }
                               className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 transition-colors ${
                                 row.state === 'issued' || row.state === 'amended'
-                                  ? 'bg-[#0066CC] hover:bg-[#0055B3] text-white'
+                                  ? 'bg-[#3D52A0] hover:bg-[#334486] text-white'
                                   : row.state === 'signed' || row.state === 'executed'
                                     ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                                    : 'bg-[#0066CC] hover:bg-[#0055B3] text-white'
+                                    : 'bg-[#3D52A0] hover:bg-[#334486] text-white'
                               }`}
                             >
                               {row.state === 'signed' || row.state === 'executed' ? (
@@ -304,7 +304,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                           {onAskQuestion && row.kind && (
                             <button
                               onClick={() => onAskQuestion(row.kind!)}
-                              className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-slate-500 border border-slate-200 hover:border-sky-300 hover:text-[#0055B3] transition-colors cursor-pointer whitespace-nowrap"
+                              className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-slate-500 border border-slate-200 hover:border-sky-300 hover:text-[#334486] transition-colors cursor-pointer whitespace-nowrap"
                             >
                               Ask a question
                             </button>
@@ -338,9 +338,9 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                             return (
                               <div
                                 key={q.id}
-                                className="p-3 rounded-xl bg-[#0066CC]/6 border border-[#0066CC]/20"
+                                className="p-3 rounded-xl bg-[#3D52A0]/6 border border-[#3D52A0]/20"
                               >
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-[#0055B3] mb-1">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-[#334486] mb-1">
                                   Your studio answered — clause {q.clauseRef}
                                 </p>
                                 <p className="text-[11px] text-slate-600 italic mb-1.5">
@@ -402,7 +402,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                                 className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer shrink-0 ${
                                   a.clientSignature
                                     ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                                    : 'bg-[#0066CC] hover:bg-[#0055B3] text-white'
+                                    : 'bg-[#3D52A0] hover:bg-[#334486] text-white'
                                 }`}
                               >
                                 {a.clientSignature ? 'View' : 'Read & sign'}

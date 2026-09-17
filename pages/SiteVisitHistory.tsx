@@ -60,7 +60,7 @@ export default function SiteVisitHistory({
   }, [projectId, studioId]);
 
   return (
-    <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl flex flex-col max-h-[90vh]">
         
         <div className="p-5 border-b flex items-center justify-between bg-slate-50 rounded-t-xl">
@@ -72,7 +72,7 @@ export default function SiteVisitHistory({
            <div className="flex items-center gap-3">
               <div className="relative">
                  <select 
-                   className="appearance-none bg-[#0066CC] text-white font-bold text-sm px-4 py-2 pr-8 rounded-lg shadow-sm outline-none cursor-pointer hover:bg-[#0055B3] transition"
+                   className="appearance-none bg-[#3D52A0] text-white font-bold text-sm px-4 py-2 pr-8 rounded-lg shadow-sm outline-none cursor-pointer hover:bg-[#334486] transition"
                    value=""
                    onChange={(e) => {
                       const v = visits.find(v => v.id === e.target.value);
@@ -281,7 +281,7 @@ function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, 
                <div className="flex items-center justify-between mb-1.5">
                    <h4 className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1"><FileText size={12}/> Notes / Agenda</h4>
                    {(!mom) ? (
-                       <button onClick={onCaptureClick} className="text-[10px] uppercase font-bold text-[#0066CC] bg-sky-50 px-2.5 py-1 rounded-md hover:bg-sky-100 flex items-center gap-1">
+                       <button onClick={onCaptureClick} className="text-[10px] uppercase font-bold text-[#3D52A0] bg-sky-50 px-2.5 py-1 rounded-md hover:bg-sky-100 flex items-center gap-1">
                            <FileText size={12}/> Create MoM
                        </button>
                    ) : (
@@ -298,10 +298,10 @@ function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, 
                   <div className="flex justify-between items-center border-b border-sky-100 pb-2">
                      <div>
                          <p className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1">
-                           <CheckCircle2 size={14} className="text-[#0066CC]" />
+                           <CheckCircle2 size={14} className="text-[#3D52A0]" />
                            Minutes of Meeting Generated
                          </p>
-                         <p className="text-[10px] text-[#0066CC] mt-0.5">Ref: {mom.momRef} | Status: {mom.status}</p>
+                         <p className="text-[10px] text-[#3D52A0] mt-0.5">Ref: {mom.momRef} | Status: {mom.status}</p>
                      </div>
                   </div>
                   
@@ -391,7 +391,7 @@ function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, 
          </div>
       </div>
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 z-[110] flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 z-[110] flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/80 w-full max-w-md p-6 space-y-4 text-left">
             <div className="flex items-center gap-3 text-red-600">
               <div className="p-2 bg-red-50 rounded-full">

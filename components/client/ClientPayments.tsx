@@ -313,7 +313,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                             {m.percentage >= 10 && (
                                 <button 
                                     onClick={() => handleSplitMilestone(globalIdx)}
-                                    className="p-1 bg-sky-50 text-[#0066CC] rounded hover:bg-sky-100"
+                                    className="p-1 bg-sky-50 text-[#3D52A0] rounded hover:bg-sky-100"
                                     title="Split"
                                 >
                                     <ScissorsIcon className="w-3 h-3" />
@@ -361,7 +361,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                         )}
                         <button 
                             onClick={() => setIsEditing(!isEditing)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-sm border ${isEditing ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-sm border ${isEditing ? 'bg-[#3D52A0] text-white border-[#3D52A0]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
                         >
                             {isEditing ? <><CheckIcon className="w-4 h-4" /> Save Schedule</> : <><PencilIcon className="w-4 h-4" /> Customize Milestones</>}
                         </button>
@@ -423,7 +423,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                             <div className="p-2 bg-slate-50 border-t border-slate-100 flex justify-center">
                                 <button 
                                     onClick={() => handleAddMilestone('design')}
-                                    className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded shadow-sm hover:bg-slate-50 hover:text-[#0066CC] transition-all"
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded shadow-sm hover:bg-slate-50 hover:text-[#3D52A0] transition-all"
                                 >
                                     <PlusIcon className="w-3 h-3" /> Add Design Milestone
                                 </button>
@@ -470,7 +470,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                                 <div className="p-2 bg-slate-50 border-t border-slate-100 flex justify-center">
                                     <button 
                                         onClick={() => handleAddMilestone('execution')}
-                                        className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded shadow-sm hover:bg-slate-50 hover:text-[#0066CC] transition-all"
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded shadow-sm hover:bg-slate-50 hover:text-[#3D52A0] transition-all"
                                     >
                                         <PlusIcon className="w-3 h-3" /> Add Execution Milestone
                                     </button>

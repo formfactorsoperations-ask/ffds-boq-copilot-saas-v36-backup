@@ -566,7 +566,7 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
                 className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all border border-slate-200 flex items-center gap-1.5 cursor-pointer"
                 title="Scan all project BOQs for new vendor names"
               >
-                <RefreshCw className="w-3.5 h-3.5 text-[#0066CC]" />
+                <RefreshCw className="w-3.5 h-3.5 text-[#3D52A0]" />
                 <span className="hidden sm:inline">Sync from Projects</span>
               </button>
             )}
@@ -588,7 +588,7 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
               id="btn-add-vendor-main"
               type="button"
               onClick={openAddModal}
-              className="px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-semibold transition-colors shadow-xs flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-xl text-xs font-semibold transition-colors shadow-xs flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add Vendor</span>
@@ -600,7 +600,7 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
         {/* Metric 1: Total Directory */}
         <div 
           onClick={() => { setScopeFilter('all'); setSelectedCategory('all'); }}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'all' && selectedCategory === 'all' ? 'bg-[#0066CC]/5 border-[#0066CC]/40 ring-2 ring-[#0066CC]/15 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'all' && selectedCategory === 'all' ? 'bg-[#3D52A0]/5 border-[#3D52A0]/40 ring-2 ring-[#3D52A0]/15 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Directory</span>
@@ -636,7 +636,7 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
         {/* Metric 3: Labour Contractors */}
         <div 
           onClick={() => setScopeFilter('labour')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'labour' ? 'bg-[#0066CC]/5 border-[#0066CC]/40 ring-2 ring-[#0066CC]/15 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'labour' ? 'bg-[#3D52A0]/5 border-[#3D52A0]/40 ring-2 ring-[#3D52A0]/15 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Labour Contractors</span>
@@ -654,7 +654,7 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
         {/* Metric 4: Turnkey Subcontractors */}
         <div 
           onClick={() => setScopeFilter('turnkey')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'turnkey' ? 'bg-[#0066CC]/5 border-[#0066CC]/40 ring-2 ring-[#0066CC]/15 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'turnkey' ? 'bg-[#3D52A0]/5 border-[#3D52A0]/40 ring-2 ring-[#3D52A0]/15 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Turnkey Partners</span>
@@ -786,7 +786,7 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
             onClick={() => setSelectedCategory('all')}
             className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
               selectedCategory === 'all'
-                ? 'bg-[#0066CC] text-white'
+                ? 'bg-[#3D52A0] text-white'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -1773,7 +1773,7 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
                       setSelectedVendor(null);
                       openEditModal(v);
                     }}
-                    className="px-5 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                    className="px-5 py-2.5 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
                   >
                     <Edit3 className="w-4 h-4" />
                     <span>Edit Profile</span>

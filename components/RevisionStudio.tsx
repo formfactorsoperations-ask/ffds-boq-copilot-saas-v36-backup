@@ -853,7 +853,7 @@ export default function RevisionStudio({
           <span className="line-through text-slate-400 mr-2">
             {action.oldValue}
           </span>
-          <span className="text-[#0066CC] font-medium">
+          <span className="text-[#3D52A0] font-medium">
             ➔ {action.newValue}
           </span>
         </>
@@ -865,7 +865,7 @@ export default function RevisionStudio({
           <span className="line-through text-slate-400 mr-2">
             {formatINR(action.oldValue)}
           </span>
-          <span className="text-[#0066CC] font-medium">
+          <span className="text-[#3D52A0] font-medium">
             ➔ {formatINR(action.newValue)}
           </span>
         </>
@@ -877,7 +877,7 @@ export default function RevisionStudio({
           <div className="line-through text-slate-400">
             {action.oldValue.item} ({formatINR(action.oldValue.rate)})
           </div>
-          <div className="text-[#0066CC] font-medium">
+          <div className="text-[#3D52A0] font-medium">
             ➔ {action.newValue.item} ({formatINR(action.newValue.rate)})
           </div>
         </div>
@@ -941,7 +941,7 @@ export default function RevisionStudio({
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
             Active Baseline Version
           </div>
-          <div className="text-base font-bold text-[#0066CC] truncate">
+          <div className="text-base font-bold text-[#3D52A0] truncate">
             {currentSelectedTier?.name || "Contract Baseline"}
           </div>
           <div className="text-[11px] text-slate-500 mt-1">Approved contract specification</div>
@@ -993,7 +993,7 @@ export default function RevisionStudio({
     const actionTypes: { type: ActionType; label: string; icon: any; color: string }[] = [
       { type: "ADD", label: "+ Add Item", icon: PlusCircle, color: "hover:border-emerald-500 hover:text-emerald-700 hover:bg-emerald-50" },
       { type: "REVISE_QTY", label: "✎ Revise Qty", icon: Edit3, color: "hover:border-amber-500 hover:text-amber-700 hover:bg-amber-50" },
-      { type: "REVISE_RATE", label: "⚡ Revise Rate", icon: TrendingUp, color: "hover:border-[#0066CC] hover:text-[#0055B3] hover:bg-sky-50" },
+      { type: "REVISE_RATE", label: "⚡ Revise Rate", icon: TrendingUp, color: "hover:border-[#3D52A0] hover:text-[#334486] hover:bg-sky-50" },
       { type: "REPLACE", label: "⇄ Replace Item", icon: RefreshCw, color: "hover:border-blue-500 hover:text-blue-700 hover:bg-blue-50" },
       { type: "REMOVE", label: "⛔ Remove", icon: Trash2, color: "hover:border-rose-500 hover:text-rose-700 hover:bg-rose-50" },
       { type: "MARK_PENDING", label: "❓ Mark Pending", icon: HelpCircle, color: "hover:border-purple-500 hover:text-purple-700 hover:bg-purple-50" },
@@ -1009,11 +1009,11 @@ export default function RevisionStudio({
             <Card className="p-4 border border-slate-200/90 bg-white shadow-xs rounded-2xl space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-slate-800 text-xs font-bold">
-                  <History className="w-3.5 h-3.5 text-[#0066CC]" />
+                  <History className="w-3.5 h-3.5 text-[#3D52A0]" />
                   <span>Proposal / Version Target:</span>
                 </div>
                 {currentSelectedTier && (
-                  <span className="text-[11px] font-extrabold text-[#0055B3] bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">
+                  <span className="text-[11px] font-extrabold text-[#334486] bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">
                     {formatINR(currentSelectedTier.executionValue)}
                   </span>
                 )}
@@ -1023,7 +1023,7 @@ export default function RevisionStudio({
                 <select
                   value={selectedTierId || ""}
                   onChange={(e) => setSelectedTierId(e.target.value)}
-                  className="w-full appearance-none bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-slate-900 font-bold text-xs pl-3 pr-8 py-2 rounded-xl focus:ring-2 focus:ring-[#0066CC] transition-all cursor-pointer"
+                  className="w-full appearance-none bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-slate-900 font-bold text-xs pl-3 pr-8 py-2 rounded-xl focus:ring-2 focus:ring-[#3D52A0] transition-all cursor-pointer"
                 >
                   {availableVersions.map((ver) => (
                     <option key={ver.id} value={ver.id}>
@@ -1039,7 +1039,7 @@ export default function RevisionStudio({
                   currentSelectedTier.id !== projectContext?.approvedTierId ? (
                     <button
                       onClick={() => handleSetAsActiveBaseline(currentSelectedTier.id)}
-                      className="flex-1 py-1.5 px-2 text-[11px] font-bold text-white bg-[#0066CC] hover:bg-[#0055B3] rounded-lg shadow-2xs transition-all flex items-center justify-center gap-1"
+                      className="flex-1 py-1.5 px-2 text-[11px] font-bold text-white bg-[#3D52A0] hover:bg-[#334486] rounded-lg shadow-2xs transition-all flex items-center justify-center gap-1"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Set Active Baseline</span>
@@ -1090,7 +1090,7 @@ export default function RevisionStudio({
                         }
                         className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all border text-left flex items-center gap-1.5 ${
                           isSelected
-                            ? "bg-[#0066CC] border-[#0066CC] text-white shadow-xs"
+                            ? "bg-[#3D52A0] border-[#3D52A0] text-white shadow-xs"
                             : `bg-slate-50/80 border-slate-200 text-slate-700 ${act.color}`
                         }`}
                       >
@@ -1108,7 +1108,7 @@ export default function RevisionStudio({
                     Select Target BOQ Item
                   </label>
                   <select
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-medium bg-slate-50/50 focus:ring-2 focus:ring-[#0066CC]"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-medium bg-slate-50/50 focus:ring-2 focus:ring-[#3D52A0]"
                     value={manualForm.targetItemId}
                     onChange={(e) =>
                       setManualForm({
@@ -1137,7 +1137,7 @@ export default function RevisionStudio({
                     </label>
                     <input
                       type="text"
-                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3D52A0]"
                       placeholder="e.g. Living Room, Master Bedroom"
                       value={manualForm.newSection}
                       onChange={(e) =>
@@ -1154,7 +1154,7 @@ export default function RevisionStudio({
                     </label>
                     <input
                       type="text"
-                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3D52A0]"
                       placeholder="e.g. Cove lighting with Philips LED strip"
                       value={manualForm.newItemName}
                       onChange={(e) =>
@@ -1172,7 +1172,7 @@ export default function RevisionStudio({
                       </label>
                       <input
                         type="text"
-                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3D52A0]"
                         placeholder="sqft / RFT"
                         value={manualForm.newUnit}
                         onChange={(e) =>
@@ -1189,7 +1189,7 @@ export default function RevisionStudio({
                       </label>
                       <input
                         type="number"
-                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3D52A0]"
                         value={manualForm.newQty}
                         onChange={(e) =>
                           setManualForm({
@@ -1205,7 +1205,7 @@ export default function RevisionStudio({
                       </label>
                       <input
                         type="number"
-                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3D52A0]"
                         value={manualForm.newRate}
                         onChange={(e) =>
                           setManualForm({
@@ -1226,7 +1226,7 @@ export default function RevisionStudio({
                   </label>
                   <input
                     type="number"
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3D52A0]"
                     value={manualForm.newQty}
                     onChange={(e) =>
                       setManualForm({
@@ -1245,7 +1245,7 @@ export default function RevisionStudio({
                   </label>
                   <input
                     type="number"
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3D52A0]"
                     value={manualForm.newRate}
                     onChange={(e) =>
                       setManualForm({
@@ -1265,7 +1265,7 @@ export default function RevisionStudio({
                     </label>
                     <input
                       type="text"
-                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3D52A0]"
                       placeholder="e.g. Veneer Paneling instead of Laminate"
                       value={manualForm.newItemName}
                       onChange={(e) =>
@@ -1283,7 +1283,7 @@ export default function RevisionStudio({
                       </label>
                       <input
                         type="number"
-                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3D52A0]"
                         value={manualForm.newQty}
                         onChange={(e) =>
                           setManualForm({
@@ -1299,7 +1299,7 @@ export default function RevisionStudio({
                       </label>
                       <input
                         type="number"
-                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                        className="w-full p-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3D52A0]"
                         value={manualForm.newRate}
                         onChange={(e) =>
                           setManualForm({
@@ -1342,7 +1342,7 @@ export default function RevisionStudio({
                       Inclusions (One per line)
                     </label>
                     <textarea
-                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs h-16 resize-none focus:ring-2 focus:ring-[#0066CC]"
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs h-16 resize-none focus:ring-2 focus:ring-[#3D52A0]"
                       placeholder="Premium hardware&#10;Soft-close hinges"
                       value={manualForm.inclusions}
                       onChange={(e) =>
@@ -1358,7 +1358,7 @@ export default function RevisionStudio({
                       Exclusions (One per line)
                     </label>
                     <textarea
-                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs h-16 resize-none focus:ring-2 focus:ring-[#0066CC]"
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs h-16 resize-none focus:ring-2 focus:ring-[#3D52A0]"
                       placeholder="Civil modifications&#10;Electrical wiring"
                       value={manualForm.exclusions}
                       onChange={(e) =>
@@ -1378,7 +1378,7 @@ export default function RevisionStudio({
                 </label>
                 <input
                   type="text"
-                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0066CC]"
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3D52A0]"
                   placeholder="e.g. Agreed in site meeting on 12th Oct"
                   value={manualForm.note}
                   onChange={(e) =>
@@ -1388,7 +1388,7 @@ export default function RevisionStudio({
               </div>
 
               <button
-                className="w-full py-3 bg-[#0066CC] text-white rounded-xl font-bold text-xs hover:bg-[#0055B3] transition-all shadow-sm flex items-center justify-center gap-2"
+                className="w-full py-3 bg-[#3D52A0] text-white rounded-xl font-bold text-xs hover:bg-[#334486] transition-all shadow-sm flex items-center justify-center gap-2"
                 onClick={handleApplyManualAction}
               >
                 <PlusCircle className="w-4 h-4" />
@@ -1570,7 +1570,7 @@ export default function RevisionStudio({
         <div className="p-4 sm:p-5 border-b border-slate-200/80 bg-slate-50/80 flex justify-between items-center flex-wrap gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <History className="w-4 h-4 text-[#0066CC]" />
+              <History className="w-4 h-4 text-[#3D52A0]" />
               <h3 className="font-bold text-slate-900 text-sm">
                 Structured Audit & Change Log
               </h3>
@@ -1628,7 +1628,7 @@ export default function RevisionStudio({
                       {formatChangeDetail(action)}
                     </td>
                     <td className="px-4 py-3 text-slate-500 font-medium">
-                      <span className="px-2 py-0.5 bg-sky-50 text-[#0055B3] rounded-md text-[10px] font-bold">
+                      <span className="px-2 py-0.5 bg-sky-50 text-[#334486] rounded-md text-[10px] font-bold">
                         {action.reasonCategory || "Uncategorized"}
                       </span>
                     </td>
@@ -1663,7 +1663,7 @@ export default function RevisionStudio({
       <Card className="p-0 overflow-hidden border border-slate-200/80 shadow-sm rounded-2xl bg-white">
         <div className="p-4 sm:p-5 border-b border-slate-200/80 bg-slate-50/80">
           <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-[#0066CC]" />
+            <Layers className="w-4 h-4 text-[#3D52A0]" />
             <h3 className="font-bold text-slate-900 text-sm">
               Generated Scope Annexures
             </h3>
@@ -3267,7 +3267,7 @@ export default function RevisionStudio({
             <div className="hidden md:block h-4 w-px bg-slate-200"></div>
             <button
               onClick={() => setShowDetailedClientView(!showDetailedClientView)}
-              className="text-[#0066CC] hover:text-[#0055B3] font-bold underline transition-colors flex items-center gap-1"
+              className="text-[#3D52A0] hover:text-[#334486] font-bold underline transition-colors flex items-center gap-1"
             >
               <Eye className="w-3.5 h-3.5" />
               <span>
@@ -3287,7 +3287,7 @@ export default function RevisionStudio({
             </button>
             <button
               onClick={() => exportToExcel("client")}
-              className="px-3.5 py-2 bg-[#0066CC] text-white rounded-xl text-xs font-bold shadow-2xs hover:bg-[#0055B3] transition-all flex items-center gap-1.5"
+              className="px-3.5 py-2 bg-[#3D52A0] text-white rounded-xl text-xs font-bold shadow-2xs hover:bg-[#334486] transition-all flex items-center gap-1.5"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
               <span>Export Excel</span>
@@ -3619,7 +3619,7 @@ export default function RevisionStudio({
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-[#0066CC]" />
+              <FileText className="w-5 h-5 text-[#3D52A0]" />
               <h2 className="text-lg font-bold text-slate-900">
                 Detailed Specifications & Material Inclusions
               </h2>
@@ -3775,7 +3775,7 @@ export default function RevisionStudio({
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <Share2 className="w-5 h-5 text-[#0066CC]" />
+              <Share2 className="w-5 h-5 text-[#3D52A0]" />
               <h3 className="text-lg font-bold text-slate-900">
                 Client Communication & Commercial Pack
               </h3>
@@ -3797,7 +3797,7 @@ export default function RevisionStudio({
                   onChange={(e) =>
                     setDesignFeePercentage(Number(e.target.value))
                   }
-                  className="w-16 p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 text-center focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                  className="w-16 p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 text-center focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
                 />
               </div>
             )}
@@ -3825,7 +3825,7 @@ export default function RevisionStudio({
                 type="number"
                 value={initiationFee}
                 onChange={(e) => setInitiationFee(Number(e.target.value))}
-                className="w-24 p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 text-center focus:ring-2 focus:ring-[#0066CC] focus:outline-none"
+                className="w-24 p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 text-center focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
               />
             </div>
           </div>
@@ -3835,7 +3835,7 @@ export default function RevisionStudio({
         <Card className="p-5 border border-slate-200/80 bg-white shadow-sm rounded-2xl">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#0066CC]" />
+              <Sparkles className="w-4 h-4 text-[#3D52A0]" />
               <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
                 Client Executive Summary & Copy Generator
               </h4>
@@ -3847,7 +3847,7 @@ export default function RevisionStudio({
               <select
                 value={summaryTone}
                 onChange={(e) => setSummaryTone(e.target.value)}
-                className="p-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:ring-2 focus:ring-[#0066CC] bg-slate-50 focus:outline-none"
+                className="p-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:ring-2 focus:ring-[#3D52A0] bg-slate-50 focus:outline-none"
               >
                 <option value="Partnership">Partnership Tone</option>
                 <option value="Neutral">Neutral Tone</option>
@@ -3859,7 +3859,7 @@ export default function RevisionStudio({
           <textarea
             value={customSummary || defaultSummary}
             onChange={(e) => setCustomSummary(e.target.value)}
-            className="w-full h-24 p-3 border border-slate-200/80 rounded-xl text-xs text-slate-700 leading-relaxed focus:ring-2 focus:ring-[#0066CC] focus:outline-none mb-3 bg-slate-50/50"
+            className="w-full h-24 p-3 border border-slate-200/80 rounded-xl text-xs text-slate-700 leading-relaxed focus:ring-2 focus:ring-[#3D52A0] focus:outline-none mb-3 bg-slate-50/50"
             placeholder="Enter custom executive summary for the client..."
           />
           <div className="flex justify-end">
@@ -3890,7 +3890,7 @@ export default function RevisionStudio({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <Card className="p-6 border border-slate-800 bg-slate-900 text-white shadow-md rounded-2xl relative overflow-hidden">
             <div className="flex items-center gap-2 mb-4 text-slate-300">
-              <Layers className="w-4 h-4 text-[#0066CC]" />
+              <Layers className="w-4 h-4 text-[#3D52A0]" />
               <h4 className="font-bold uppercase tracking-wider text-xs">
                 BOQ Execution Value Impact
               </h4>
@@ -3954,7 +3954,7 @@ export default function RevisionStudio({
             </div>
           </Card>
 
-          <Card className="p-6 border border-sky-900 bg-gradient-to-br from-[#004D99] to-[#0066CC] text-white shadow-md rounded-2xl relative overflow-hidden">
+          <Card className="p-6 border border-sky-900 bg-gradient-to-br from-[#004D99] to-[#3D52A0] text-white shadow-md rounded-2xl relative overflow-hidden">
             <div className="flex items-center gap-2 mb-4 text-sky-200">
               <TrendingUp className="w-4 h-4 text-amber-300" />
               <h4 className="font-bold uppercase tracking-wider text-xs">
@@ -4054,11 +4054,11 @@ export default function RevisionStudio({
         {/* Export Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <Card
-            className="p-5 border border-slate-200/80 bg-white shadow-2xs hover:border-[#0066CC] hover:shadow-md transition-all group cursor-pointer rounded-2xl flex items-center justify-between"
+            className="p-5 border border-slate-200/80 bg-white shadow-2xs hover:border-[#3D52A0] hover:shadow-md transition-all group cursor-pointer rounded-2xl flex items-center justify-between"
             onClick={exportToPDF}
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-sky-50 text-[#0066CC] flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-sky-50 text-[#3D52A0] flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform">
                 <Download className="w-5 h-5" />
               </div>
               <div>
@@ -4070,7 +4070,7 @@ export default function RevisionStudio({
                 </p>
               </div>
             </div>
-            <ArrowRight className="w-4 h-4 text-[#0066CC] group-hover:translate-x-1 transition-transform" />
+            <ArrowRight className="w-4 h-4 text-[#3D52A0] group-hover:translate-x-1 transition-transform" />
           </Card>
 
           <Card
@@ -4260,7 +4260,7 @@ export default function RevisionStudio({
                   "Successfully synced revised values to Payment Calculator and created a new scope Annexure version.",
                 );
               }}
-              className="px-6 py-3 bg-[#0066CC] text-white font-bold rounded-xl shadow-md hover:bg-[#0055B3] transition-all flex items-center gap-2 text-xs"
+              className="px-6 py-3 bg-[#3D52A0] text-white font-bold rounded-xl shadow-md hover:bg-[#334486] transition-all flex items-center gap-2 text-xs"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Approve Revision & Sync to Payment Calculator</span>
@@ -4585,7 +4585,7 @@ export default function RevisionStudio({
                       }
                       navigator.clipboard.writeText(emailBody);
                     }}
-                    className="text-xs text-[#0066CC] hover:text-[#0055B3] font-medium"
+                    className="text-xs text-[#3D52A0] hover:text-[#334486] font-medium"
                   >
                     Copy Email
                   </button>
@@ -4710,13 +4710,13 @@ export default function RevisionStudio({
                   onClick={() => setActiveTab(tab.id)}
                   className={`w-full px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
                     isActive
-                      ? "bg-white text-[#0055B3] shadow-xs border border-slate-200/90"
+                      ? "bg-white text-[#334486] shadow-xs border border-slate-200/90"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
                   }`}
                 >
                   <Icon
                     className={`w-4 h-4 ${
-                      isActive ? "text-[#0066CC]" : "text-slate-400"
+                      isActive ? "text-[#3D52A0]" : "text-slate-400"
                     }`}
                   />
                   <span>{tab.label}</span>
@@ -4800,7 +4800,7 @@ export default function RevisionStudio({
             initial={{ opacity: 0, y: -50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -50 }}
-            className="fixed top-6 right-6 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-xl shadow-xl font-medium text-sm z-[100] flex items-center gap-3"
+            className="fixed top-6 right-6 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-xl shadow-xl font-medium text-sm z-[100] flex items-center gap-3"
           >
             <span>✨</span>
             {toastMessage}

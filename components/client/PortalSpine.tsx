@@ -62,7 +62,7 @@ export default function PortalSpine({ phases, currentStage, filter }: Props) {
           own 2px width — so the line runs dead through the node centres. */}
       <div className="absolute left-[75px] sm:left-[95px] top-6 bottom-6 w-0.5 bg-slate-100 rounded-full" aria-hidden="true">
         <div
-          className="w-0.5 rounded-full bg-gradient-to-b from-[#0066CC] to-sky-200 transition-[height] duration-[1200ms] ease-out"
+          className="w-0.5 rounded-full bg-gradient-to-b from-[#3D52A0] to-sky-200 transition-[height] duration-[1200ms] ease-out"
           style={{ height: `${fill}%` }}
         />
       </div>
@@ -96,13 +96,13 @@ export default function PortalSpine({ phases, currentStage, filter }: Props) {
             <div className="relative flex justify-center">
               <span
                 className={`relative z-10 mt-[18px] w-3 h-3 rounded-full border-2 bg-white shrink-0 transition-colors ${
-                  now ? 'border-[#0066CC] ring-4 ring-sky-50'
-                      : done ? 'border-[#0066CC] bg-[#0066CC]'
+                  now ? 'border-[#3D52A0] ring-4 ring-sky-50'
+                      : done ? 'border-[#3D52A0] bg-[#3D52A0]'
                       : 'border-slate-200'
                 }`}
               >
                 {now && (
-                  <span className="absolute -inset-1.5 rounded-full border-2 border-[#0066CC] portal-ping" aria-hidden="true" />
+                  <span className="absolute -inset-1.5 rounded-full border-2 border-[#3D52A0] portal-ping" aria-hidden="true" />
                 )}
               </span>
             </div>
@@ -159,7 +159,7 @@ export default function PortalSpine({ phases, currentStage, filter }: Props) {
                           <li key={m.id} className="relative flex items-baseline gap-2.5">
                             <span
                               className={`absolute -left-[21px] top-1.5 w-1.5 h-1.5 rotate-45 ${
-                                m.done ? 'bg-[#0066CC]' : 'bg-slate-300'
+                                m.done ? 'bg-[#3D52A0]' : 'bg-slate-300'
                               }`}
                               aria-hidden="true"
                             />
@@ -191,7 +191,7 @@ export default function PortalSpine({ phases, currentStage, filter }: Props) {
                         className={`flex items-center gap-3 px-3.5 py-3 rounded-xl border bg-white transition-all duration-200 hover:translate-x-1 ${
                           a.needsClient
                             ? 'border-amber-200 bg-amber-50/70 hover:shadow-[0_2px_10px_rgba(180,83,9,.08)]'
-                            : 'border-slate-200 hover:border-sky-200 hover:shadow-[0_2px_10px_rgba(0,102,204,.06)]'
+                            : 'border-slate-200 hover:border-sky-200 hover:shadow-[0_2px_10px_rgba(61, 82, 160,.06)]'
                         }`}
                       >
                         <span
@@ -213,7 +213,7 @@ export default function PortalSpine({ phases, currentStage, filter }: Props) {
                           {a.secondaryAction && (
                             <button
                               onClick={a.secondaryAction.run}
-                              className="px-2.5 py-1 rounded-lg border border-slate-200 text-[11px] font-bold text-slate-600 hover:border-sky-300 hover:text-[#0055B3] transition-colors cursor-pointer"
+                              className="px-2.5 py-1 rounded-lg border border-slate-200 text-[11px] font-bold text-slate-600 hover:border-sky-300 hover:text-[#334486] transition-colors cursor-pointer"
                             >
                               {a.secondaryAction.label}
                             </button>
@@ -223,8 +223,8 @@ export default function PortalSpine({ phases, currentStage, filter }: Props) {
                               onClick={a.action.run}
                               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
                                 a.needsClient
-                                  ? 'bg-[#0066CC] text-white hover:bg-[#0055B3]'
-                                  : 'border border-slate-200 text-slate-600 hover:border-sky-300 hover:text-[#0055B3]'
+                                  ? 'bg-[#3D52A0] text-white hover:bg-[#334486]'
+                                  : 'border border-slate-200 text-slate-600 hover:border-sky-300 hover:text-[#334486]'
                               }`}
                             >
                               {a.action.label}

@@ -18,6 +18,7 @@ import TemplateEditorTab from './TemplateEditorTab';
 import BankTab from './BankTab';
 import VendorsManager from './VendorsManager';
 import ConsoleHeader from './ui/ConsoleHeader';
+import Tabs from './ui/Tabs';
 import { Layers, Boxes, Store } from 'lucide-react';
 
 type TabId = 'templates' | 'bank' | 'vendors';
@@ -91,6 +92,15 @@ export default function TemplatesAndBankTab({
     return { total: configs.length, filled, pct: configs.length ? Math.round((filled / configs.length) * 100) : 0 };
   }, [templates]);
 
+  const libraryTabs = (
+    <Tabs
+      ariaLabel="Studio library sections"
+      value={tab}
+      onChange={(id) => setTab(id as TabId)}
+      items={TABS.map((t) => ({ id: t.id, label: t.label, icon: t.icon }))}
+    />
+  );
+
   const header = () => {
     if (tab === 'bank') {
       const tone = bankStats.pct === 100 ? 'ok' : bankStats.pct >= 60 ? 'warn' : 'bad';
@@ -100,7 +110,8 @@ export default function TemplatesAndBankTab({
           state={isDraftBankMode ? 'Draft sandbox' : 'Live bank'}
           tone={isDraftBankMode ? 'warn' : tone}
           blurb="Every rate the studio prices from. What is here decides what a BOQ can say."
-          gauge={{
+          tabs={libraryTabs}
+        gauge={{
             pct: bankStats.pct,
             label: 'Rates set',
             sub: `${bankStats.priced} of ${bankStats.total} items carry a cost`,
@@ -131,7 +142,7 @@ export default function TemplatesAndBankTab({
                       setIsDraftBankMode(false);
                     }
                   }}
-                  className="px-4 py-2 rounded-xl bg-[#0066CC] text-white text-xs font-bold hover:bg-[#0055B3]"
+                  className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486]"
                 >
                   Publish draft to live
                 </button>
@@ -158,6 +169,7 @@ export default function TemplatesAndBankTab({
       return (
         <ConsoleHeader
           title="Standard templates"
+          tabs={libraryTabs}
           state={templateStats.total === 0 ? 'Empty' : `${templateStats.total} typologies`}
           tone={templateStats.total === 0 ? 'warn' : templateStats.pct === 100 ? 'ok' : 'warn'}
           blurb="Ready-made scopes a new project starts from, so a proposal does not begin at nothing."
@@ -174,6 +186,7 @@ export default function TemplatesAndBankTab({
     return (
       <ConsoleHeader
         title="Vendor directory"
+        tabs={libraryTabs}
         state={vendorStats.total === 0 ? 'Empty' : `${vendorStats.active} active`}
         tone={vendorStats.total === 0 ? 'warn' : reachPct === 100 ? 'ok' : 'warn'}
         blurb="Material suppliers, trade contractors and turnkey partners the studio buys from."
@@ -191,35 +204,7 @@ export default function TemplatesAndBankTab({
       <div className="flex-1 overflow-y-auto px-1 sm:px-2 pb-8">
         {header()}
 
-        {/* Tabs, in the studio's blue — the rail treatment settings uses. */}
-        <nav className="flex flex-wrap gap-2 mb-6" role="tablist">
-          {TABS.map((t, i) => {
-            const Icon = t.icon;
-            const isActive = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                id={`tab-btn-${t.id}`}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-colors hud-row-in ${
-                  isActive
-                    ? 'bg-[#0066CC] text-white shadow-sm hud-rail-active'
-                    : 'text-slate-700 bg-white border border-slate-200 hover:bg-slate-50'
-                }`}
-                style={{ animationDelay: `${i * 40}ms` }}
-              >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                <span>{t.label}</span>
-                {isActive && isPending && (
-                  <span className="text-[10px] font-semibold opacity-80">loading…</span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
+
 
         {/* Keyed on the tab so switching re-runs the entrance rather than cutting. */}
         <div key={deferredTab} className={`hud-swap ${isPending ? 'opacity-60 transition-opacity' : ''}`}>

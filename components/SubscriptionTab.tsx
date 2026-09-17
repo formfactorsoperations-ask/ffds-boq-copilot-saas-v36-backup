@@ -87,7 +87,7 @@ export default function SubscriptionTab() {
                         <li className="flex items-center gap-2"><span>✓</span> Unlimited Team Members</li>
                         <li className="flex items-center gap-2"><span>✓</span> Dedicated Account Manager</li>
                     </ul>
-                    <button className="w-full py-3 mt-6 rounded-xl font-bold bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#0055B3] transition-colors">
+                    <button className="w-full py-3 mt-6 rounded-xl font-bold bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#334486] transition-colors">
                         Contact Sales
                     </button>
                 </div>

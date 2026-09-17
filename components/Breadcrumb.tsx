@@ -32,7 +32,7 @@ const Breadcrumb: React.FC<BreadcrumbProps> = ({ projectName, projectId, current
         <div className="h-9 flex items-center px-8 border-b border-slate-200 bg-transparent text-[13px]">
             <button 
                 onClick={() => setActiveTab('projects')}
-                className="text-slate-500 hover:text-[#0066CC] font-medium transition-colors cursor-pointer"
+                className="text-slate-500 hover:text-[#3D52A0] font-medium transition-colors cursor-pointer"
             >
                 All Projects
             </button>
@@ -43,7 +43,7 @@ const Breadcrumb: React.FC<BreadcrumbProps> = ({ projectName, projectId, current
             
             <button 
                 onClick={() => setActiveTab('dashboard')}
-                className="text-slate-500 hover:text-[#0066CC] font-medium transition-colors cursor-pointer truncate max-w-[200px]"
+                className="text-slate-500 hover:text-[#3D52A0] font-medium transition-colors cursor-pointer truncate max-w-[200px]"
             >
                 {projectName || 'Unnamed Project'}
             </button>

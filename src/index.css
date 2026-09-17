@@ -267,8 +267,8 @@ body {
 /* The energy rail along the bottom edge of a bar. */
 .hud-rail {
   background: linear-gradient(90deg,
-    transparent 0%, rgba(0,102,204,.30) 18%, rgba(34,211,238,.85) 32%,
-    rgba(0,102,204,.30) 46%, transparent 64%, transparent 100%);
+    transparent 0%, rgba(61, 82, 160,.30) 18%, rgba(112,145,230,.85) 32%,
+    rgba(61, 82, 160,.30) 46%, transparent 64%, transparent 100%);
   background-size: 200% 100%;
   animation: hud-rail 9s linear infinite;
 }
@@ -277,7 +277,7 @@ body {
 .hud-reticle {
   box-shadow:
     0 0 0 1px rgba(34,211,238,.55),
-    0 6px 16px rgba(0,102,204,.34),
+    0 6px 16px rgba(61, 82, 160,.34),
     0 0 22px rgba(34,211,238,.28);
 }
 .hud-reticle::before,
@@ -380,17 +380,17 @@ body {
 .hud-frame::before,
 .hud-frame::after {
   content: ""; position: absolute; width: 10px; height: 10px;
-  border-color: rgba(0,102,204,.45); pointer-events: none;
+  border-color: rgba(61, 82, 160,.45); pointer-events: none;
 }
 .hud-frame::before { top:6px; left:6px;  border-top:1.5px solid; border-left:1.5px solid;  border-top-left-radius:4px; }
 .hud-frame::after  { bottom:6px; right:6px; border-bottom:1.5px solid; border-right:1.5px solid; border-bottom-right-radius:4px; }
 /* On dark instrument panels the brackets pick up the cyan instead. */
-.hud-frame-dark::before, .hud-frame-dark::after { border-color: rgba(103,232,249,.55); }
+.hud-frame-dark::before, .hud-frame-dark::after { border-color: rgba(112,145,230,.55); }
 
 /* Faint instrument grid behind a bar track. */
 .hud-grid {
   background-image: repeating-linear-gradient(90deg,
-    rgba(0,102,204,.10) 0 1px, transparent 1px 25%);
+    rgba(61, 82, 160,.10) 0 1px, transparent 1px 25%);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -432,7 +432,7 @@ body {
   border-radius: inherit;
   padding: 2px;
   background: conic-gradient(from var(--lpo-angle),
-    #0066CC, #B5945B, #0066CC, #0A1B33, #0066CC);
+    #3D52A0, #B5945B, #3D52A0, #0A1B33, #3D52A0);
   /* Mask-composite leaves only the padding ring painted, which is how you get
      a gradient *border* rather than a gradient card behind the button. */
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -480,9 +480,9 @@ body {
   border-radius: 50%;
   padding: 1px;
   background: linear-gradient(180deg,
-    rgba(0, 102, 204, 0) 0%,
-    rgba(0, 102, 204, 0.9) 43%,
-    rgba(0, 102, 204, 0) 100%);
+    rgba(61, 82, 160, 0) 0%,
+    rgba(61, 82, 160, 0.9) 43%,
+    rgba(61, 82, 160, 0) 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
           mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
@@ -501,7 +501,7 @@ body {
    original footage directly would fight the blue already in it and land on a
    muddy in-between; stripping the chroma first means the hue we get is ours. */
 .lpo-video { filter: grayscale(1) contrast(1.18) brightness(1.04); }
-.lpo-duo-blue { mix-blend-mode: multiply; background: #0066CC; opacity: 0.55; }
+.lpo-duo-blue { mix-blend-mode: multiply; background: #3D52A0; opacity: 0.55; }
 .lpo-duo-gold {
   mix-blend-mode: screen;
   background: linear-gradient(120deg, rgba(181, 148, 91, 0.55) 0%, transparent 62%);
@@ -912,7 +912,7 @@ body {
    beat of a tint and no movement: a figure that slides or scales is harder to
    read at the exact moment someone is checking it. */
 @keyframes boq-flash {
-  0%   { background-color: rgba(0, 102, 204, 0.16); }
+  0%   { background-color: rgba(61, 82, 160, 0.16); }
   100% { background-color: transparent; }
 }
 .boq-flash { animation: boq-flash 620ms ease-out; }
@@ -946,12 +946,12 @@ body {
   transition: background-color 120ms ease, box-shadow 120ms ease;
 }
 .ff-ed:hover {
-  background-color: rgba(0, 102, 204, 0.05);
-  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.10);
+  background-color: rgba(61, 82, 160, 0.05);
+  box-shadow: 0 0 0 2px rgba(61, 82, 160, 0.10);
 }
 .ff-ed:focus {
   background-color: #fff;
-  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.55);
+  box-shadow: 0 0 0 2px rgba(61, 82, 160, 0.55);
 }
 /* An empty run would otherwise collapse to zero width and be unclickable. */
 .ff-ed:empty::before {
@@ -1091,7 +1091,7 @@ body {
   transition: opacity 120ms ease, color 120ms ease;
 }
 .ff-ed-seed:hover .ff-ed-seed-btn { opacity: 1; }
-.ff-ed-seed-btn:hover { color: #0055B3; border-color: rgba(0, 102, 204, 0.4); }
+.ff-ed-seed-btn:hover { color: #334486; border-color: rgba(61, 82, 160, 0.4); }
 @media print { .ff-ed-seed-btn { display: none !important; } }
 @media (prefers-reduced-motion: reduce) { .ff-ed-seed-btn { transition: none; } }
 
@@ -1157,8 +1157,8 @@ body {
 /* Faint grid, so the surface reads as an instrument panel rather than paper. */
 .hud-grid {
   background-image:
-    linear-gradient(rgba(0, 102, 204, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 102, 204, 0.055) 1px, transparent 1px);
+    linear-gradient(rgba(61, 82, 160, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61, 82, 160, 0.055) 1px, transparent 1px);
   background-size: 34px 34px;
 }
 
@@ -1186,7 +1186,7 @@ body {
     /* specular highlight, upper left, where the light lands */
     radial-gradient(120% 80% at 12% -10%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 55%),
     /* a breath of the brand blue, so the white is chosen rather than default */
-    radial-gradient(90% 60% at 88% 0%, rgba(0, 102, 204, 0.055) 0%, rgba(0, 102, 204, 0) 60%),
+    radial-gradient(90% 60% at 88% 0%, rgba(61, 82, 160, 0.055) 0%, rgba(61, 82, 160, 0) 60%),
     linear-gradient(180deg, #ffffff 0%, #fbfcfe 45%, #f6f8fb 100%);
   border-color: rgba(226, 232, 240, 0.9);
   box-shadow:
@@ -1275,7 +1275,7 @@ body {
   left: 0; right: 0; top: 0;
   height: 14px;
   pointer-events: none;
-  background: linear-gradient(180deg, transparent, rgba(0, 102, 204, 0.30), transparent);
+  background: linear-gradient(180deg, transparent, rgba(61, 82, 160, 0.30), transparent);
   animation: hud-scan 1.9s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
@@ -1345,10 +1345,10 @@ body {
   long enough to find, short enough not to nag while it is being typed into.
 */
 @keyframes hud-locate {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 102, 204, 0); }
-  25%      { box-shadow: 0 0 0 5px rgba(0, 102, 204, 0.20); }
-  50%      { box-shadow: 0 0 0 0 rgba(0, 102, 204, 0); }
-  75%      { box-shadow: 0 0 0 5px rgba(0, 102, 204, 0.20); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(61, 82, 160, 0); }
+  25%      { box-shadow: 0 0 0 5px rgba(61, 82, 160, 0.20); }
+  50%      { box-shadow: 0 0 0 0 rgba(61, 82, 160, 0); }
+  75%      { box-shadow: 0 0 0 5px rgba(61, 82, 160, 0.20); }
 }
 .hud-locate { animation: hud-locate 1500ms ease-in-out; border-radius: 0.75rem; }
 
@@ -1367,10 +1367,189 @@ body {
 */
 @keyframes hud-tick {
   0%   { transform: translateY(0); }
-  40%  { transform: translateY(-2px); color: #0066CC; }
+  40%  { transform: translateY(-2px); color: #3D52A0; }
   100% { transform: translateY(0); }
 }
 .hud-tick { animation: hud-tick 320ms ease-out; display: inline-block; }
+
+/* ==================================================================== */
+/* Liquid glass tabs.                                                   */
+/*                                                                      */
+/* Glass only reads as glass when there is something behind it to bend, */
+/* so the control expects to sit on a surface with some colour in it --  */
+/* the console header's wash is what it refracts. On a flat white panel */
+/* it degrades to a tinted capsule, which is correct but unremarkable.  */
+/*                                                                      */
+/* Four things run at once: the track drifts, the rim lenses, the       */
+/* specular follows the pointer, and the pane deforms as it travels.    */
+/* All four stop under prefers-reduced-motion; the capsule stays.       */
+/* ==================================================================== */
+
+.lgt-scene { perspective: 1100px; }
+
+.lgt {
+  --mx: 50%; --my: 50%;
+  --rx: 0deg; --ry: 0deg;
+  position: relative;
+  display: inline-flex;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 999px;
+  isolation: isolate;
+  overflow: hidden;
+  max-width: 100%;
+  flex-wrap: wrap;
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform .5s cubic-bezier(.32, .72, 0, 1);
+  background:
+    linear-gradient(118deg,
+      rgba(255,255,255,.52) 0%,
+      rgba(173,187,218,.34) 26%,
+      rgba(255,255,255,.46) 48%,
+      rgba(237,232,245,.40) 72%,
+      rgba(255,255,255,.50) 100%);
+  background-size: 220% 100%;
+  animation: lgt-drift 18s ease-in-out infinite alternate;
+  backdrop-filter: blur(18px) saturate(195%) brightness(1.06);
+  -webkit-backdrop-filter: blur(18px) saturate(195%) brightness(1.06);
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,.8),
+    inset 0 -1px 1px rgba(15,22,32,.10),
+    0 10px 26px -14px rgba(15,22,32,.45);
+}
+
+@keyframes lgt-drift {
+  from { background-position: 0% 50%; }
+  to   { background-position: 100% 50%; }
+}
+
+/* A second, slower layer, so the surface never quite settles. */
+.lgt-caustic {
+  position: absolute; inset: -40%; z-index: 0; pointer-events: none; opacity: .5;
+  background:
+    radial-gradient(40% 60% at 30% 50%, rgba(255,255,255,.55), rgba(255,255,255,0) 70%),
+    radial-gradient(36% 56% at 72% 46%, rgba(134,151,196,.34), rgba(134,151,196,0) 72%);
+  animation: lgt-caustic 26s ease-in-out infinite alternate;
+}
+@keyframes lgt-caustic {
+  from { transform: translate3d(-6%, -2%, 0) scale(1); }
+  to   { transform: translate3d(7%, 3%, 0) scale(1.12); }
+}
+
+/* The rim. Bright where the light lands, dark where it does not -- this
+   is what makes an edge read as thick rather than drawn. */
+.lgt::before {
+  content: '';
+  position: absolute; inset: 0; border-radius: inherit; padding: 1px; z-index: 3;
+  background: linear-gradient(150deg, rgba(255,255,255,.95), rgba(255,255,255,.15) 38%, rgba(15,22,32,.18));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* The specular, following the pointer. A fixed shine reads as paint. */
+.lgt::after {
+  content: '';
+  position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 3;
+  background: radial-gradient(180px 90px at var(--mx) var(--my), rgba(255,255,255,.5), rgba(255,255,255,0) 68%);
+  opacity: 0;
+  transition: opacity .45s cubic-bezier(.32, .72, 0, 1);
+}
+.lgt:hover::after { opacity: 1; }
+
+/* The crest that washes across in the direction of travel. */
+.lgt-wake {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 46%;
+  z-index: 1; pointer-events: none; opacity: 0;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,.42) 42%,
+    rgba(237,232,245,.42) 58%,
+    rgba(255,255,255,0) 100%);
+  filter: blur(3px);
+}
+
+/* The travelling pane, tinted in the studio blue. */
+.lgt-pane {
+  position: absolute; top: 5px; bottom: 5px; left: 0;
+  border-radius: 999px; z-index: 2;
+  transform: translateX(0) translateZ(14px);
+  background: linear-gradient(180deg, rgba(76,101,181,.95), rgba(61,82,160,.90));
+  backdrop-filter: blur(6px) saturate(150%);
+  -webkit-backdrop-filter: blur(6px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.62),
+    inset 0 -2px 3px rgba(24,33,74,.42),
+    0 8px 18px -8px rgba(38,52,110,.55),
+    0 1px 2px rgba(15,22,32,.16);
+}
+.lgt-pane::after {
+  content: '';
+  position: absolute; inset: 1px 10px auto 10px; height: 1px; border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.9), transparent);
+}
+
+/* A ring struck at the point of contact. */
+.lgt-ripple {
+  position: absolute; z-index: 2; border-radius: 50%; pointer-events: none;
+  border: 1.5px solid rgba(255,255,255,.8);
+  background: radial-gradient(circle, rgba(255,255,255,.34), rgba(255,255,255,0) 62%);
+  transform: translate(-50%, -50%) scale(0);
+  opacity: .85;
+}
+
+.lgt-tab {
+  position: relative; z-index: 4;
+  font: inherit; font-weight: 700; cursor: pointer;
+  border: 0; background: none; border-radius: 999px;
+  color: rgba(22,32,44,.62); white-space: nowrap;
+  transform: translateZ(26px);
+  display: inline-flex; align-items: center; gap: 7px;
+  transition: color .34s cubic-bezier(.32,.72,0,1), transform .3s cubic-bezier(.32,.72,0,1);
+}
+.lgt-tab[aria-selected="true"] { color: #fff; }
+.lgt-tab:active { transform: translateZ(14px) scale(.97); }
+.lgt-tab:focus-visible { outline: 2px solid #3D52A0; outline-offset: 3px; }
+
+.lgt-md { font-size: 12.5px; padding: 9px 17px; }
+.lgt-sm { font-size: 11.5px; padding: 7px 13px; }
+
+.lgt-count {
+  padding: 1px 6px; border-radius: 7px; font-size: 10px; font-weight: 800; line-height: 1.45;
+  background: rgba(22,32,44,.10);
+}
+.lgt-tab[aria-selected="true"] .lgt-count { background: rgba(255,255,255,.24); color: #fff; }
+.lgt-count-attention { background: rgba(180,121,15,.16); color: #7A520B; }
+
+/* The dark palette keeps the same light direction. */
+.dark .lgt {
+  background:
+    linear-gradient(118deg,
+      rgba(255,255,255,.16) 0%,
+      rgba(112,145,230,.22) 26%,
+      rgba(255,255,255,.12) 48%,
+      rgba(134,151,196,.20) 72%,
+      rgba(255,255,255,.15) 100%);
+  background-size: 220% 100%;
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,.26),
+    inset 0 -1px 1px rgba(0,0,0,.45),
+    0 14px 30px -16px rgba(0,0,0,.75);
+}
+.dark .lgt::before {
+  background: linear-gradient(150deg, rgba(255,255,255,.55), rgba(255,255,255,.06) 40%, rgba(0,0,0,.4));
+}
+.dark .lgt-tab { color: rgba(255,255,255,.62); }
+.dark .lgt-caustic { opacity: .35; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lgt { animation: none !important; transform: none !important; }
+  .lgt-caustic, .lgt-wake, .lgt-ripple { display: none !important; }
+  .lgt::after { display: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .hud-scanning::after,
@@ -1385,4 +1564,257 @@ body {
   .hud-tick,
   .hud-rule { animation: none !important; }
   .hud-scanning::after { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   DRAWING TRACKER — blueprint pine
+   ──────────────────────────────────────────────────────────────────────
+   This screen is the design stage, and it is deliberately the one green
+   surface in an app that is otherwise Metallic Chic indigo.
+
+   The greens are split on purpose. Emerald already means "approved" in
+   375 places across this codebase, so it stays reserved for status and
+   never paints chrome. The pine below owns the chrome only — rail,
+   header, HUD lines, the drafting grid — which lets the page read green
+   without green losing its meaning inside the page.
+   ══════════════════════════════════════════════════════════════════════ */
+.dt {
+  --pine-900: #12332E;
+  --pine-800: #1F4D45;
+  --pine-700: #2E7D6B;
+  --pine-600: #3F9B84;
+  --pine-300: #9EC9BC;
+  --pine-100: #DCEBE6;
+  --pine-050: #F1F7F5;
+  --pine-line: rgba(47, 125, 107, .22);
+  --pine-glow: rgba(63, 155, 132, .35);
+}
+
+/* A flat pine wash. This was a squared drafting grid, which read as
+   graph paper behind the text rather than as a surface — the lines
+   competed with the type instead of sitting under it. */
+.dt-board {
+  background-color: var(--pine-050);
+  background-image: linear-gradient(180deg, #F5FAF8, var(--pine-050));
+}
+
+/* Light, not dark.
+
+   Two dark-panel revisions still read as a command console rather than a
+   summary — a slab of near-black beside a white table is simply loud, and
+   softening the gradient could not fix that. It is now a pine-tinted card
+   on white: the same figures, the same green identity, none of the weight.
+   The actions that used to end this panel moved up into the toolbar, so
+   nothing here has to be scrolled to. */
+.dt-rail {
+  background: linear-gradient(180deg, #FBFDFC, var(--pine-050));
+  color: #1B3A34;
+  border: 1px solid #DCEBE6;
+  box-shadow: 0 1px 2px rgba(18, 51, 46, .04);
+}
+
+/* ── boot sequence ────────────────────────────────────────────────────
+   Runs once on mount, in order: the frame draws itself, a sweep crosses
+   it, then the readouts rise. Everything is `backwards` so the first
+   painted frame already shows the start state rather than a flash. */
+@keyframes dt-frame {
+  from { clip-path: inset(0 100% 0 0); opacity: .2; }
+  to   { clip-path: inset(0 0 0 0);    opacity: 1; }
+}
+@keyframes dt-scan {
+  0%   { transform: translateY(-110%); opacity: 0; }
+  12%  { opacity: .9; }
+  88%  { opacity: .9; }
+  100% { transform: translateY(110%);  opacity: 0; }
+}
+@keyframes dt-rise {
+  from { opacity: 0; transform: translateY(9px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes dt-corner {
+  from { opacity: 0; transform: scale(.55); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes dt-arc {
+  from { stroke-dashoffset: var(--dash, 300); }
+  to   { stroke-dashoffset: var(--target, 0); }
+}
+@keyframes dt-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .45; }
+}
+
+.dt-frame  { animation: dt-frame .55s cubic-bezier(.22,1,.36,1) backwards; }
+.dt-rise   { animation: dt-rise .5s cubic-bezier(.22,1,.36,1) backwards; }
+.dt-corner { animation: dt-corner .4s cubic-bezier(.34,1.56,.64,1) backwards; }
+.dt-arc    { animation: dt-arc 1.05s cubic-bezier(.22,1,.36,1) backwards; }
+.dt-pulse  { animation: dt-pulse 2s ease-in-out infinite; }
+
+/* One pass down the rail as the page boots. */
+.dt-scanline {
+  position: absolute; inset-inline: 0; height: 38%;
+  background: linear-gradient(180deg, transparent, rgba(63,155,132,.13), transparent);
+  animation: dt-scan 1.5s cubic-bezier(.4,0,.2,1) .15s 1 both;
+  pointer-events: none;
+}
+
+/* Reticle corners on the rail cards — the HUD frame, drawn not decorated. */
+.dt-reticle { position: relative; }
+.dt-reticle::before,
+.dt-reticle::after {
+  content: ''; position: absolute; width: 9px; height: 9px;
+  border-color: var(--pine-600); pointer-events: none;
+}
+.dt-reticle::before {
+  top: -1px; left: -1px;
+  border-top: 1.5px solid; border-left: 1.5px solid; border-top-left-radius: 4px;
+}
+.dt-reticle::after {
+  bottom: -1px; right: -1px;
+  border-bottom: 1.5px solid; border-right: 1.5px solid; border-bottom-right-radius: 4px;
+}
+
+/* The rail tilts a degree or two toward the pointer. Subtle on purpose —
+   it should register as depth, not as a toy. */
+.dt-tilt {
+  transform: perspective(900px)
+             rotateX(calc(var(--ty, 0) * -1.6deg))
+             rotateY(calc(var(--tx, 0) * 1.6deg));
+  transition: transform .18s cubic-bezier(.22,1,.36,1);
+  transform-style: preserve-3d;
+}
+
+/* A row that just changed state flashes its left edge once. */
+@keyframes dt-ripple {
+  from { box-shadow: inset 3px 0 0 var(--pine-600); background-color: var(--pine-100); }
+  to   { box-shadow: inset 3px 0 0 transparent;     background-color: transparent; }
+}
+.dt-ripple { animation: dt-ripple 1.1s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-frame, .dt-rise, .dt-corner, .dt-arc, .dt-pulse, .dt-ripple { animation: none !important; }
+  .dt-scanline { display: none; }
+  .dt-tilt { transform: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MONEY — Metallic Chic
+   ──────────────────────────────────────────────────────────────────────
+   The money screen was the last warm-grey island in the app: 428 stone
+   references and 75 hardcoded font overrides, sitting beside screens that
+   had all moved to the indigo system. These tokens are the same Metallic
+   Chic values used everywhere else, named locally so the conversion is
+   one scope rather than 428 scattered literals.
+   ══════════════════════════════════════════════════════════════════════ */
+.mny {
+  --ink-900: #12182F;
+  --ink-700: #2B3358;
+  --ink-500: #5A628A;
+  --ink-300: #8E96B8;
+  --line:    #E2E5F0;
+  --line-2:  #CBD1E4;
+  --wash:    #F6F7FB;
+  --tint:    #EDE8F5;
+  --accent:  #3D52A0;
+  --accent-2:#7091E6;
+  --accent-3:#ADBBDA;
+}
+
+/* ── boot ─────────────────────────────────────────────────────────────
+   The same grammar as the platform and drawing consoles, in indigo: the
+   frame draws, a sweep crosses it, the readouts rise in sequence. Runs
+   once on mount and never again — this is a screen people work in. */
+@keyframes mny-frame {
+  from { clip-path: inset(0 0 100% 0); opacity: .25; }
+  to   { clip-path: inset(0 0 0 0);    opacity: 1; }
+}
+@keyframes mny-sweep {
+  0%   { transform: translateX(-120%); opacity: 0; }
+  14%  { opacity: .85; }
+  86%  { opacity: .85; }
+  100% { transform: translateX(120%);  opacity: 0; }
+}
+@keyframes mny-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes mny-bar {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes mny-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .5; }
+}
+
+.mny-frame { animation: mny-frame .5s cubic-bezier(.22,1,.36,1) backwards; }
+.mny-rise  { animation: mny-rise .46s cubic-bezier(.22,1,.36,1) backwards; }
+.mny-bar   { transform-origin: left center; animation: mny-bar .8s cubic-bezier(.22,1,.36,1) backwards; }
+.mny-pulse { animation: mny-pulse 2.1s ease-in-out infinite; }
+
+/* One pass of light across the summary as the screen boots. */
+.mny-sweep {
+  position: absolute; inset-block: 0; width: 42%;
+  background: linear-gradient(90deg, transparent, rgba(112,145,230,.20), transparent);
+  animation: mny-sweep 1.4s cubic-bezier(.4,0,.2,1) .1s 1 both;
+  pointer-events: none;
+}
+
+/* A figure that matters gets a hairline under it, drawn on arrival. */
+.mny-underline {
+  position: relative;
+}
+.mny-underline::after {
+  content: ''; position: absolute; left: 0; bottom: -3px; height: 2px; width: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  border-radius: 2px;
+  transform-origin: left center;
+  animation: mny-bar .7s cubic-bezier(.22,1,.36,1) .35s backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mny-frame, .mny-rise, .mny-bar, .mny-pulse { animation: none !important; }
+  .mny-sweep { display: none; }
+  .mny-underline::after { animation: none; }
+}
+
+/* ── money: living motion ─────────────────────────────────────────────
+   The boot sequence finished in 1.4s and then the screen sat perfectly
+   still, which reads as "no animation at all" to anyone who arrives a
+   moment late. These are the few that keep going, all slow enough to
+   ignore while working. */
+@keyframes mny-ring {
+  from { stroke-dashoffset: var(--ring-len, 360); }
+  to   { stroke-dashoffset: var(--ring-off, 0); }
+}
+@keyframes mny-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+@keyframes mny-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+
+.mny-ring { animation: mny-ring 1.1s cubic-bezier(.22,1,.36,1) .25s backwards; }
+
+/* A slow highlight travelling the collected bar — the one thing on the
+   page that is still moving once everything has settled. */
+.mny-progress { position: relative; overflow: hidden; }
+.mny-progress::after {
+  content: ''; position: absolute; inset-block: 0; width: 28%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+  animation: mny-shimmer 3.2s ease-in-out 1.6s infinite;
+}
+
+.mny-float { animation: mny-float 4s ease-in-out infinite; }
+
+/* Panels lift very slightly when they are a way into a section. */
+.mny-card { transition: transform .18s cubic-bezier(.22,1,.36,1), border-color .18s, box-shadow .18s; }
+.mny-card:hover { transform: translateY(-2px); border-color: #ADBBDA; box-shadow: 0 10px 24px -18px rgba(18,24,47,.45); }
+
+@media (prefers-reduced-motion: reduce) {
+  .mny-ring, .mny-float { animation: none !important; }
+  .mny-progress::after { display: none; }
+  .mny-card:hover { transform: none; }
 }

@@ -124,12 +124,12 @@ export default function ClientLoginScreen({
 
   const field =
     'w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 min-h-[50px] text-[15px] font-medium text-slate-900 ' +
-    'placeholder:text-slate-400 placeholder:font-normal focus:bg-white focus:border-[#0066CC] focus:ring-4 focus:ring-[#0066CC]/10 ' +
+    'placeholder:text-slate-400 placeholder:font-normal focus:bg-white focus:border-[#3D52A0] focus:ring-4 focus:ring-[#3D52A0]/10 ' +
     'outline-none transition-[background-color,border-color,box-shadow] duration-200 disabled:opacity-60';
 
   const primaryButton =
-    'w-full bg-[#0066CC] hover:bg-[#0055B3] active:bg-[#00459e] text-white py-4 rounded-2xl font-bold text-[15px] ' +
-    'shadow-lg shadow-[#0066CC]/25 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer';
+    'w-full bg-[#3D52A0] hover:bg-[#334486] active:bg-[#00459e] text-white py-4 rounded-2xl font-bold text-[15px] ' +
+    'shadow-lg shadow-[#3D52A0]/25 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer';
 
   const banner = (tone: 'amber' | 'rose', text: string) => (
     <MotionDiv
@@ -168,7 +168,7 @@ export default function ClientLoginScreen({
     />
   ) : (
     <span className="inline-flex items-center gap-4">
-      <span className="w-20 h-20 rounded-3xl grid place-items-center font-black text-3xl bg-[#0066CC] text-white shadow-sm">
+      <span className="w-20 h-20 rounded-3xl grid place-items-center font-black text-3xl bg-[#3D52A0] text-white shadow-sm">
         {studioName.trim().charAt(0).toUpperCase()}
       </span>
       <span className="text-[22px] font-extrabold tracking-tight text-slate-900 leading-tight">
@@ -272,7 +272,7 @@ export default function ClientLoginScreen({
             shapes — which is what keeps them from competing with the type. */}
         <MotionDiv
           aria-hidden="true"
-          className="absolute -top-24 -left-16 w-[26rem] h-[26rem] rounded-full bg-[#0066CC]/25 blur-[100px]"
+          className="absolute -top-24 -left-16 w-[26rem] h-[26rem] rounded-full bg-[#3D52A0]/25 blur-[100px]"
           animate={{ x: [0, 40, 0], y: [0, 30, 0] }}
           transition={{ duration: 18, ease: 'easeInOut', repeat: Infinity }}
         />
@@ -405,7 +405,7 @@ export default function ClientLoginScreen({
                     longer. "Your studio" reads as the same studio, because it
                     is the one the client is looking at. */}
                 <MotionDiv variants={rise} className="mb-8">
-                  <p className="text-[13px] font-black tracking-[0.2em] uppercase text-[#0066CC] mb-3">
+                  <p className="text-[13px] font-black tracking-[0.2em] uppercase text-[#3D52A0] mb-3">
                     Client Portal
                   </p>
                   <h1 className="text-[32px] font-black text-slate-900 tracking-tight leading-none">
@@ -500,7 +500,7 @@ export default function ClientLoginScreen({
                 className="space-y-5"
               >
                 <MotionDiv variants={rise} className="mb-8">
-                  <p className="text-[11px] font-black tracking-[0.18em] uppercase text-[#0066CC] mb-2.5">
+                  <p className="text-[11px] font-black tracking-[0.18em] uppercase text-[#3D52A0] mb-2.5">
                     One last thing
                   </p>
                   <h1 className="text-[32px] font-black text-slate-900 tracking-tight leading-none">

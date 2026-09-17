@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Tabs from './ui/Tabs';
 import { ProjectContext, FullBoqItem } from "../types";
 import ClientUpdatesManager from "./ops/ClientUpdatesManager";
 import WeeklyPulseManager from "./ops/WeeklyPulseManager";
@@ -176,68 +177,24 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
 
   return (
     <div className="space-y-6 w-full animate-in fade-in duration-300">
-      {/* Clean Milky White & Sky Blue Navigation Bar */}
-      <div className="flex flex-wrap items-center bg-slate-50/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs w-full print:hidden gap-1.5">
-        <button
-          onClick={() => setActiveModule("workspace")}
-          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer ${
-            activeModule === "workspace"
-              ? "bg-[#0066CC] text-white shadow-sm font-bold"
-              : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
-          }`}
-        >
-          <LayoutDashboard className="w-4 h-4" />
-          Site Control Room
-        </button>
-
-        <button
-          onClick={() => setActiveModule("vault")}
-          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer ${
-            activeModule === "vault"
-              ? "bg-[#0066CC] text-white shadow-sm font-bold"
-              : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
-          }`}
-        >
-          <Image className="w-4 h-4 text-amber-400" />
-          3D Renders & Drawings
-        </button>
-
-        <button
-          onClick={() => setActiveModule("logs")}
-          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer ${
-            activeModule === "logs"
-              ? "bg-[#0066CC] text-white shadow-sm font-bold"
-              : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
-          }`}
-        >
-          <MessageSquare className="w-4 h-4 text-sky-400" />
-          MOMs, Decisions & Feed
-        </button>
-
-        <button
-          onClick={() => setActiveModule("quality")}
-          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer ${
-            activeModule === "quality"
-              ? "bg-[#0066CC] text-white shadow-sm font-bold"
-              : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
-          }`}
-        >
-          <ClipboardList className="w-4 h-4 text-emerald-400" />
-          Quality & Snag List
-        </button>
-
-        <button
-          onClick={() => setActiveModule("procurement")}
-          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer ${
-            activeModule === "procurement"
-              ? "bg-[#0066CC] text-white shadow-sm font-bold"
-              : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
-          }`}
-        >
-          <IndianRupee className="w-4 h-4 text-rose-400" />
-          Procurement
-        </button>
-      </div>
+      {/*
+        Icons keep their meaning; the five different icon tints did not -- amber,
+        sky, emerald and rose on four adjacent tabs read as four unrelated
+        sections rather than one control.
+      */}
+      <Tabs
+        ariaLabel="Execution sections"
+        value={activeModule}
+        onChange={(id) => setActiveModule(id as any)}
+        className="w-full print:hidden"
+        items={[
+          { id: 'workspace', label: 'Site Control Room', icon: LayoutDashboard },
+          { id: 'vault', label: '3D Renders & Drawings', icon: Image },
+          { id: 'logs', label: 'MOMs, Decisions & Feed', icon: MessageSquare },
+          { id: 'quality', label: 'Quality & Snag List', icon: ClipboardList },
+          { id: 'procurement', label: 'Procurement', icon: IndianRupee },
+        ]}
+      />
 
       {/* Active Workspace Viewport */}
       <div className="animate-in fade-in duration-400">
@@ -287,7 +244,7 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
                     : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
                 }`}
               >
-                <Camera className="w-4 h-4 text-[#0066CC]" />
+                <Camera className="w-4 h-4 text-[#3D52A0]" />
                 Daily Site Feed
               </button>
 

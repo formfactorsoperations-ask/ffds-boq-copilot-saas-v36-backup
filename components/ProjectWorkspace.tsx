@@ -18,7 +18,7 @@ const WORKSPACE_STATUS_MAP: Record<
 > = {
   lead: { label: "New Lead", color: "text-blue-700", bg: "bg-blue-50 hover:bg-blue-100", border: "border-blue-200" },
   draft: { label: "Drafting", color: "text-slate-700", bg: "bg-slate-100 hover:bg-slate-200", border: "border-slate-200" },
-  proposal_sent: { label: "Proposal Sent", color: "text-[#0066CC]", bg: "bg-sky-50 hover:bg-sky-100", border: "border-sky-200" },
+  proposal_sent: { label: "Proposal Sent", color: "text-[#3D52A0]", bg: "bg-sky-50 hover:bg-sky-100", border: "border-sky-200" },
   negotiation: { label: "Negotiation", color: "text-amber-700", bg: "bg-amber-50 hover:bg-amber-100", border: "border-amber-200" },
   won: { label: "Won", color: "text-emerald-700", bg: "bg-emerald-50 hover:bg-emerald-100", border: "border-emerald-200" },
   execution: { label: "In Execution", color: "text-purple-700", bg: "bg-purple-50 hover:bg-purple-100", border: "border-purple-200" },
@@ -220,7 +220,7 @@ export function ProjectWorkspace({
           }}
           className={`w-full text-left px-2.5 py-1 rounded-xl text-[13px] transition-all duration-200 flex items-center justify-between group outline-none ${
             isActive 
-              ? 'bg-[#0066CC]/[0.06] text-slate-900 font-bold border border-[#0066CC]/15 shadow-sm' 
+              ? 'bg-[#3D52A0]/[0.06] text-slate-900 font-bold border border-[#3D52A0]/15 shadow-sm' 
               : isLockedStage 
                 ? 'text-slate-400 hover:bg-slate-50/50' 
                 : 'text-slate-600 hover:bg-slate-50/40 hover:text-slate-900'
@@ -228,13 +228,13 @@ export function ProjectWorkspace({
         >
           <div className="flex items-center gap-2 min-w-0">
             {isHub && IconComponent ? (
-              <IconComponent className={`w-3.5 h-3.5 shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'text-[#0066CC]' : 'text-slate-400 group-hover:text-slate-600'}`} />
+              <IconComponent className={`w-3.5 h-3.5 shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'text-[#3D52A0]' : 'text-slate-400 group-hover:text-slate-600'}`} />
             ) : (
               associatedSteps.length > 0 && (
                 allDone ? (
                   <span className="text-emerald-500 shrink-0 text-xs font-bold leading-none" title="Task Done">✓</span>
                 ) : hasActive ? (
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#0066CC] shrink-0 animate-pulse" title="Pulsing Active" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#3D52A0] shrink-0 animate-pulse" title="Pulsing Active" />
                 ) : (
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" title="Idle" />
                 )
@@ -254,7 +254,7 @@ export function ProjectWorkspace({
           <div className="px-2.5 mt-0.5 mb-1">
             <div className="w-full bg-slate-100 h-[3px] rounded-full overflow-hidden border border-slate-200/10">
               <div 
-                className={`h-full transition-all duration-500 ${(projectContext?.journeySummary?.pct ?? journey.overall.pct) === 100 ? 'bg-emerald-500' : 'bg-[#0066CC]'}`}
+                className={`h-full transition-all duration-500 ${(projectContext?.journeySummary?.pct ?? journey.overall.pct) === 100 ? 'bg-emerald-500' : 'bg-[#3D52A0]'}`}
                 style={{ width: `${projectContext?.journeySummary?.pct ?? journey.overall.pct}%` }}
               />
             </div>
@@ -316,7 +316,7 @@ export function ProjectWorkspace({
               }}
               className={`flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs sm:text-[13px] font-bold transition-all shrink-0 ${
                 selectedStage === 0 || ALWAYS_ON_BAND.some(i => i.route === activeTab) || activeTab === 'dashboard'
-                  ? 'bg-[#0066CC]/90 text-white shadow-md shadow-sky-600/20 backdrop-blur-md border border-white/20'
+                  ? 'bg-[#3D52A0]/90 text-white shadow-md shadow-sky-600/20 backdrop-blur-md border border-white/20'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
@@ -382,7 +382,7 @@ export function ProjectWorkspace({
 
             <button 
               onClick={() => setIsFloatingWidgetOpen(!isFloatingWidgetOpen)}
-              className="flex items-center gap-2 bg-[#0066CC] hover:bg-[#0055B3] text-white pl-2 pr-3 py-1.5 rounded-lg transition-all cursor-pointer text-xs font-semibold shadow-md shadow-sky-600/25 overflow-hidden min-w-[200px]"
+              className="flex items-center gap-2 bg-[#3D52A0] hover:bg-[#334486] text-white pl-2 pr-3 py-1.5 rounded-lg transition-all cursor-pointer text-xs font-semibold shadow-md shadow-sky-600/25 overflow-hidden min-w-[200px]"
             >
               <div className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-black shrink-0 text-white shadow-inner">
                 {Math.round(projectContext.journeySummary?.pct ?? journey.overall.pct ?? 0)}%
@@ -429,7 +429,7 @@ export function ProjectWorkspace({
                     >
                       {isSelectedStage && (
                           <div
-                              className="hud-reticle absolute inset-0 bg-gradient-to-b from-[#1a7fd4] to-[#0055B3] rounded-lg -z-10 transition-all duration-300"
+                              className="hud-reticle absolute inset-0 bg-gradient-to-b from-[#4C65B5] to-[#334486] rounded-lg -z-10 transition-all duration-300"
                           />
                       )}
                       <span className={`relative w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-colors duration-300 ${
@@ -478,12 +478,12 @@ export function ProjectWorkspace({
                                 }}
                                 className={`text-left px-3 py-2 text-[13px] font-medium rounded-lg transition-colors flex justify-between items-center group/item ${
                                   isActiveItem
-                                    ? 'bg-sky-50 text-[#0055B3]'
-                                    : 'text-slate-600 hover:bg-slate-50 hover:text-[#0066CC]'
+                                    ? 'bg-sky-50 text-[#334486]'
+                                    : 'text-slate-600 hover:bg-slate-50 hover:text-[#3D52A0]'
                                 }`}
                               >
                                 {item.label}
-                                {isActiveItem && <div className="w-1.5 h-1.5 rounded-full bg-[#0066CC] shrink-0" />}
+                                {isActiveItem && <div className="w-1.5 h-1.5 rounded-full bg-[#3D52A0] shrink-0" />}
                               </button>
                             )
                           })}
@@ -514,7 +514,7 @@ export function ProjectWorkspace({
                   onClick={() => setActiveTab(item.route)}
                   className={`relative px-3.5 py-1.5 rounded-full text-xs sm:text-[13px] font-semibold transition-all duration-200 flex items-center gap-1.5 cursor-pointer border ${
                     isActive
-                      ? 'hud-reticle bg-gradient-to-b from-[#1a7fd4] to-[#0055B3] text-white border-transparent'
+                      ? 'hud-reticle bg-gradient-to-b from-[#4C65B5] to-[#334486] text-white border-transparent'
                       : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800 border-slate-200'
                   }`}
                   title={item.label}
@@ -582,11 +582,11 @@ export function ProjectWorkspace({
                   onClick={() => { setSelectedStage(0); setActiveTab('dashboard'); }}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center relative transition-all duration-200 group outline-none ${
                     activeTab === 'dashboard' 
-                      ? 'bg-[#0066CC]/[0.06] text-slate-900 border border-[#0066CC]/15 shadow-sm' 
+                      ? 'bg-[#3D52A0]/[0.06] text-slate-900 border border-[#3D52A0]/15 shadow-sm' 
                       : 'text-slate-500 hover:bg-slate-100/40 hover:text-slate-900'
                   }`}
                 >
-                  <LayoutGrid className={`w-5 h-5 shrink-0 ${activeTab === 'dashboard' ? 'text-[#0066CC]' : 'text-slate-400'}`} />
+                  <LayoutGrid className={`w-5 h-5 shrink-0 ${activeTab === 'dashboard' ? 'text-[#3D52A0]' : 'text-slate-400'}`} />
                   
                   {/* Tooltip */}
                   <div className="absolute left-14 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none bg-slate-900 text-white text-xs font-semibold px-2.5 py-1.5 rounded shadow-md z-50 whitespace-nowrap font-['Plus_Jakarta_Sans']">
@@ -613,13 +613,13 @@ export function ProjectWorkspace({
                         onClick={() => setActiveTab(item.route)}
                         className={`w-10 h-10 rounded-xl flex items-center justify-center relative transition-all duration-200 group outline-none ${
                           isActive 
-                            ? 'bg-[#0066CC]/[0.06] text-slate-900 border border-[#0066CC]/15 shadow-sm' 
+                            ? 'bg-[#3D52A0]/[0.06] text-slate-900 border border-[#3D52A0]/15 shadow-sm' 
                             : 'text-slate-500 hover:bg-slate-100/40 hover:text-slate-900'
                         }`}
                       >
-                        {Icon && <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#0066CC]' : 'text-slate-400 group-hover:text-slate-600'}`} />}
+                        {Icon && <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#3D52A0]' : 'text-slate-400 group-hover:text-slate-600'}`} />}
                         {badgeText && (
-                          <span className="absolute -top-1 -right-1 bg-[#0066CC] text-white text-[8px] font-extrabold px-1 py-0.5 rounded-full scale-90 leading-none shadow-sm border border-white">
+                          <span className="absolute -top-1 -right-1 bg-[#3D52A0] text-white text-[8px] font-extrabold px-1 py-0.5 rounded-full scale-90 leading-none shadow-sm border border-white">
                             {badgeText}
                           </span>
                         )}
@@ -660,7 +660,7 @@ export function ProjectWorkspace({
                         isCompleted 
                           ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm' 
                           : isActive 
-                            ? 'border-[#0066CC] bg-white text-[#0066CC] shadow-sm' 
+                            ? 'border-[#3D52A0] bg-white text-[#3D52A0] shadow-sm' 
                             : isLocked
                               ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
                               : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
@@ -682,7 +682,7 @@ export function ProjectWorkspace({
                               key={subItem.route} 
                               className={`text-[10px] pl-1 font-medium flex items-center gap-1.5 ${isSubActive ? 'text-sky-400 font-bold' : 'text-slate-300'}`}
                             >
-                              <div className={`w-1 h-1 rounded-full ${isSubActive ? 'bg-[#0066CC]' : 'bg-slate-500'}`} />
+                              <div className={`w-1 h-1 rounded-full ${isSubActive ? 'bg-[#3D52A0]' : 'bg-slate-500'}`} />
                               <span>{subItem.label}</span>
                             </div>
                           );
@@ -697,25 +697,25 @@ export function ProjectWorkspace({
             /* FULL EXPANDED PROJECT RAIL */
             <>
               {/* Top fixed Dashboard Button & Project Hub (Permanently anchored & beautifully integrated) */}
-              <div className="p-2.5 pb-2 shrink-0 border-b border-[#0066CC]/10 flex flex-col gap-2 bg-white/40">
+              <div className="p-2.5 pb-2 shrink-0 border-b border-[#3D52A0]/10 flex flex-col gap-2 bg-white/40">
                 {/* Dashboard */}
                 <button
                   onClick={() => { setSelectedStage(0); setActiveTab('dashboard'); }}
                   className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[13px] font-semibold transition-colors flex items-center gap-2 ${
                     activeTab === 'dashboard' 
-                      ? 'bg-[#0066CC]/[0.06] text-slate-900 font-bold border border-[#0066CC]/15 shadow-sm' 
+                      ? 'bg-[#3D52A0]/[0.06] text-slate-900 font-bold border border-[#3D52A0]/15 shadow-sm' 
                       : 'text-slate-700 hover:bg-slate-100/40 hover:text-slate-900'
                   }`}
                 >
-                  <LayoutGrid className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'dashboard' ? 'text-[#0066CC]' : 'text-slate-400'}`} />
+                  <LayoutGrid className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'dashboard' ? 'text-[#3D52A0]' : 'text-slate-400'}`} />
                   <span>Dashboard</span>
                 </button>
 
                 {/* PROJECT HUB - Always On Card */}
-                <div className="bg-sky-50/20 border border-[#0066CC]/10 rounded-2xl p-2 shadow-sm relative overflow-hidden">
+                <div className="bg-sky-50/20 border border-[#3D52A0]/10 rounded-2xl p-2 shadow-sm relative overflow-hidden">
                   <div className="flex items-center justify-between mb-1.5 px-0.5">
                     <span className="text-[10px] font-extrabold text-slate-900/60 uppercase tracking-widest font-mono">Project Hub</span>
-                    <span className="text-[8px] font-extrabold text-[#0066CC] uppercase tracking-widest font-mono">Always on</span>
+                    <span className="text-[8px] font-extrabold text-[#3D52A0] uppercase tracking-widest font-mono">Always on</span>
                   </div>
                   <div className="space-y-0.5">
                     {ALWAYS_ON_BAND.map(item => renderNavItem(item, false, true))}
@@ -749,7 +749,7 @@ export function ProjectWorkspace({
                               isCompleted 
                                 ? 'bg-emerald-500' 
                                 : isActive 
-                                  ? 'bg-[#0066CC]' 
+                                  ? 'bg-[#3D52A0]' 
                                   : 'bg-slate-200'
                             }`} />
                           )}
@@ -761,7 +761,7 @@ export function ProjectWorkspace({
                                 <Check className="w-4 h-4 stroke-[3]" />
                               </div>
                             ) : isActive ? (
-                              <div className="w-7 h-7 rounded-full border-2 border-[#0066CC] bg-white text-[#0066CC] font-bold text-xs flex items-center justify-center shadow-sm">
+                              <div className="w-7 h-7 rounded-full border-2 border-[#3D52A0] bg-white text-[#3D52A0] font-bold text-xs flex items-center justify-center shadow-sm">
                                 {stageConfig.stage}
                               </div>
                             ) : (
@@ -808,7 +808,7 @@ export function ProjectWorkspace({
                                       Unlocks when the Design Complete Gate is activated →{" "}
                                       <button 
                                         onClick={() => setActiveTab("design-gate")}
-                                        className="text-[#0066CC] font-bold hover:underline inline-block"
+                                        className="text-[#3D52A0] font-bold hover:underline inline-block"
                                       >
                                         Go to Design Gate
                                       </button>
@@ -868,13 +868,13 @@ export function ProjectWorkspace({
               {/* Phase title & overall progress */}
               <h3 className="text-sm font-bold text-slate-900 font-['Plus_Jakarta_Sans'] mb-2 flex justify-between items-center pr-6">
                 <span>{activePhaseProgress.done} of {activePhaseProgress.total} steps</span>
-                <span className="text-[11px] bg-sky-50 text-[#0066CC] px-2.5 py-0.5 rounded-full font-bold">{journey.overall.pct}% overall</span>
+                <span className="text-[11px] bg-sky-50 text-[#3D52A0] px-2.5 py-0.5 rounded-full font-bold">{journey.overall.pct}% overall</span>
               </h3>
 
               {/* Phase Progress Bar */}
               <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-4 border border-slate-200/20">
                 <div
-                  className="bg-[#0066CC] h-full transition-all duration-500 rounded-full"
+                  className="bg-[#3D52A0] h-full transition-all duration-500 rounded-full"
                   style={{ width: `${activePhaseProgress.pct}%` }}
                 ></div>
               </div>
@@ -883,7 +883,7 @@ export function ProjectWorkspace({
               {needsSetup ? (
                 <div className="p-3 bg-sky-50/70 border border-sky-100 rounded-xl mb-3">
                   <div className="flex items-start gap-2">
-                    <Compass className="w-4 h-4 text-[#0066CC] shrink-0 mt-0.5" />
+                    <Compass className="w-4 h-4 text-[#3D52A0] shrink-0 mt-0.5" />
                     <div className="min-w-0">
                       <p className="text-[11.5px] font-bold text-slate-900 leading-snug mb-1">
                         Set the brief before the journey can track anything
@@ -905,7 +905,7 @@ export function ProjectWorkspace({
                   <button
                     onClick={() => { setSelectedStage(1); setActiveTab('leadiq'); setIsFloatingWidgetOpen(false); }}
                     className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg
-                               bg-[#0066CC] hover:bg-[#0055B3] text-white text-[11.5px] font-bold
+                               bg-[#3D52A0] hover:bg-[#334486] text-white text-[11.5px] font-bold
                                transition-colors cursor-pointer"
                   >
                     Capture brief &amp; site
@@ -939,7 +939,7 @@ export function ProjectWorkspace({
                   </>
                 ) : (
                   <>
-                    <Compass className="w-5 h-5 text-[#0066CC] shrink-0 mt-0.5" />
+                    <Compass className="w-5 h-5 text-[#3D52A0] shrink-0 mt-0.5" />
                     <div>
                       <h4 className="text-xs font-bold text-slate-900 leading-snug mb-0.5">
                         Next: {journey.nextStep?.title || 'Complete steps'}
@@ -952,8 +952,8 @@ export function ProjectWorkspace({
                       {nextStepTab && (
                         <button
                           onClick={() => { setActiveTab(nextStepTab); setIsFloatingWidgetOpen(false); }}
-                          className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#0066CC]
-                                     hover:text-[#0055B3] hover:gap-1.5 transition-all cursor-pointer"
+                          className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#3D52A0]
+                                     hover:text-[#334486] hover:gap-1.5 transition-all cursor-pointer"
                         >
                           Take me there
                           <ChevronRight className="w-3 h-3" />
@@ -972,10 +972,10 @@ export function ProjectWorkspace({
                     className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-slate-600 bg-slate-50 hover:bg-slate-100/80 transition-colors border-b border-slate-200/50 cursor-pointer select-none"
                   >
                     <span className="flex items-center gap-1.5 font-['Plus_Jakarta_Sans'] text-slate-900 font-bold">
-                      <Activity className="w-3.5 h-3.5 text-[#0066CC]" />
+                      <Activity className="w-3.5 h-3.5 text-[#3D52A0]" />
                       Operational Checklist
                     </span>
-                    <span className="text-[10px] text-[#0066CC] bg-sky-50 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                    <span className="text-[10px] text-[#3D52A0] bg-sky-50 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
                       {activePhaseProgress.done}/{activePhaseProgress.total} 
                       {isChecklistExpanded ? (
                         <ChevronUp className="w-3 h-3" />
@@ -1026,8 +1026,8 @@ export function ProjectWorkspace({
                                       : isStepLocked
                                       ? 'border-slate-200 text-slate-400 bg-slate-50 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600'
                                       : isStepActive
-                                      ? 'border-[#0066CC] text-[#0066CC] bg-sky-50 hover:bg-sky-100 hover:border-[#0066CC]'
-                                      : 'border-slate-300 hover:border-[#0066CC] hover:bg-slate-50'
+                                      ? 'border-[#3D52A0] text-[#3D52A0] bg-sky-50 hover:bg-sky-100 hover:border-[#3D52A0]'
+                                      : 'border-slate-300 hover:border-[#3D52A0] hover:bg-slate-50'
                                   }`}
                                   title={
                                     isStepDone 
@@ -1042,7 +1042,7 @@ export function ProjectWorkspace({
                                   ) : isStepLocked ? (
                                     <Lock className="w-2.5 h-2.5 text-slate-400 group-hover/chk:text-amber-600" />
                                   ) : (
-                                    <div className="w-1.5 h-1.5 rounded-full bg-[#0066CC] group-hover/chk:scale-125 transition-transform" />
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#3D52A0] group-hover/chk:scale-125 transition-transform" />
                                   )}
                                 </button>
                                 <div className="min-w-0 flex-1">
@@ -1057,7 +1057,7 @@ export function ProjectWorkspace({
                                     
                                     {/* Indicators/Badges */}
                                     {step.isAutoDerived ? (
-                                      <span className="text-[8px] font-bold uppercase tracking-wider text-[#0066CC] bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100/50 inline-flex items-center gap-0.5">
+                                      <span className="text-[8px] font-bold uppercase tracking-wider text-[#3D52A0] bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100/50 inline-flex items-center gap-0.5">
                                         <Settings className="w-2 h-2" /> Auto
                                       </span>
                                     ) : (
@@ -1104,7 +1104,7 @@ export function ProjectWorkspace({
                                     setActiveTab(step.linkedTab!);
                                     setIsFloatingWidgetOpen(false);
                                   }}
-                                  className="text-[10px] font-bold text-[#0066CC] hover:text-[#0055B3] hover:bg-sky-50 px-1.5 py-1 rounded shrink-0 transition-colors"
+                                  className="text-[10px] font-bold text-[#3D52A0] hover:text-[#334486] hover:bg-sky-50 px-1.5 py-1 rounded shrink-0 transition-colors"
                                   title={`Go to ${step.linkedFeature || 'Feature'}`}
                                 >
                                   Go →
@@ -1142,7 +1142,7 @@ export function ProjectWorkspace({
                             console.error("Failed to sign off current step:", err);
                           }
                         }}
-                        className="w-full py-2.5 px-4 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1.5 cursor-pointer text-center"
+                        className="w-full py-2.5 px-4 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1.5 cursor-pointer text-center"
                       >
                         <Check className="w-3.5 h-3.5" />
                         <span>Sign Off "{journey.nextStep.title}"</span>
@@ -1156,7 +1156,7 @@ export function ProjectWorkspace({
                           setActiveTab(journey.nextStep!.linkedTab!);
                           setIsFloatingWidgetOpen(false);
                         }}
-                        className="w-full py-2.5 px-4 bg-sky-50 hover:bg-sky-100 text-[#0055B3] border border-sky-100/60 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center"
+                        className="w-full py-2.5 px-4 bg-sky-50 hover:bg-sky-100 text-[#334486] border border-sky-100/60 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center"
                       >
                         <span>Open {journey.nextStep.linkedFeature || 'Feature'} →</span>
                       </button>

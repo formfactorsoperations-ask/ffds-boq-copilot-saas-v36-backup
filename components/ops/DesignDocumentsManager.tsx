@@ -212,7 +212,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
             case '3d_render':
                 return { label: '3D Render', bg: 'bg-amber-500 text-slate-950 font-black' };
             case 'gfc_drawing':
-                return { label: 'GFC Drawing', bg: 'bg-[#0066CC] text-white font-black' };
+                return { label: 'GFC Drawing', bg: 'bg-[#3D52A0] text-white font-black' };
             case 'layout':
                 return { label: '2D Layout', bg: 'bg-indigo-600 text-white font-black' };
             case 'moodboard':
@@ -257,7 +257,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
 
                     <button 
                         onClick={() => setIsAdding(!isAdding)}
-                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl shadow-2xs transition-all cursor-pointer shrink-0"
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold rounded-xl shadow-2xs transition-all cursor-pointer shrink-0"
                     >
                         {isAdding ? 'Cancel Add' : <><Plus className="w-4 h-4" /> Add 3D Render / Drawing</>}
                     </button>
@@ -267,7 +267,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
                     {[
                         { id: '3d_render', label: '3D Renders', count: renderCount, icon: ImageIcon, activeBg: 'bg-amber-50 border-amber-300 text-amber-900', dot: 'bg-amber-500' },
-                        { id: 'gfc_drawing', label: 'GFC Drawings', count: gfcCount, icon: Layers, activeBg: 'bg-blue-50 border-blue-300 text-blue-900', dot: 'bg-[#0066CC]' },
+                        { id: 'gfc_drawing', label: 'GFC Drawings', count: gfcCount, icon: Layers, activeBg: 'bg-blue-50 border-blue-300 text-blue-900', dot: 'bg-[#3D52A0]' },
                         { id: 'layout', label: '2D Layouts', count: layoutCount, icon: FileText, activeBg: 'bg-indigo-50 border-indigo-300 text-indigo-900', dot: 'bg-indigo-500' },
                         { id: 'moodboard', label: 'Moodboards', count: moodboardCount, icon: Sparkles, activeBg: 'bg-emerald-50 border-emerald-300 text-emerald-900', dot: 'bg-emerald-500' }
                     ].map(card => {
@@ -279,7 +279,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                 onClick={() => setSelectedTypeFilter(isSelected ? 'all' : card.id)}
                                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                                     isSelected 
-                                        ? `${card.activeBg} ring-2 ring-[#0066CC]/20 shadow-2xs` 
+                                        ? `${card.activeBg} ring-2 ring-[#3D52A0]/20 shadow-2xs` 
                                         : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-100/80 text-slate-700'
                                 }`}
                             >
@@ -311,7 +311,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
             <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-200 text-[#0066CC] flex items-center justify-center shrink-0">
+                        <div className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-200 text-[#3D52A0] flex items-center justify-center shrink-0">
                             <Camera className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
@@ -349,7 +349,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                             <button
                                 type="button"
                                 onClick={openPhotoEditor}
-                                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#0066CC] hover:bg-[#0055B3] text-white shadow-2xs transition-colors cursor-pointer whitespace-nowrap"
+                                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#3D52A0] hover:bg-[#334486] text-white shadow-2xs transition-colors cursor-pointer whitespace-nowrap"
                             >
                                 {sitePhotos ? 'Change link' : 'Link Drive album'}
                             </button>
@@ -375,7 +375,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                         value={photoDraft.url}
                                         onChange={e => setPhotoDraft({ ...photoDraft, url: e.target.value })}
                                         placeholder="https://drive.google.com/drive/folders/..."
-                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-[#0066CC] outline-none"
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-[#3D52A0] outline-none"
                                     />
                                     <p className="text-[10.5px] text-slate-400 mt-1 leading-relaxed">
                                         Set the folder to &ldquo;Anyone with the link can view&rdquo; in Drive, or the client lands on a request-access screen.
@@ -390,7 +390,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                         value={photoDraft.label}
                                         onChange={e => setPhotoDraft({ ...photoDraft, label: e.target.value })}
                                         placeholder="Weekly site progress"
-                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-[#0066CC] outline-none"
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-[#3D52A0] outline-none"
                                     />
                                 </div>
                             </div>
@@ -399,7 +399,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                 <button
                                     type="button"
                                     onClick={saveSitePhotos}
-                                    className="px-4 py-2 rounded-xl text-xs font-bold bg-[#0066CC] hover:bg-[#0055B3] text-white shadow-2xs transition-colors cursor-pointer"
+                                    className="px-4 py-2 rounded-xl text-xs font-bold bg-[#3D52A0] hover:bg-[#334486] text-white shadow-2xs transition-colors cursor-pointer"
                                 >
                                     Save link
                                 </button>
@@ -432,7 +432,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="bg-white p-5 rounded-2xl border-2 border-[#0066CC]/30 shadow-md space-y-4 overflow-hidden"
+                        className="bg-white p-5 rounded-2xl border-2 border-[#3D52A0]/30 shadow-md space-y-4 overflow-hidden"
                     >
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                             <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
@@ -450,7 +450,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                 <select
                                     value={newDoc.docType}
                                     onChange={e => setNewDoc({ ...newDoc, docType: e.target.value as any })}
-                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-[#0066CC] outline-none"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-[#3D52A0] outline-none"
                                 >
                                     <option value="3d_render">🎨 3D Render / Visual Perspective</option>
                                     <option value="gfc_drawing">📐 GFC Working Drawing / Detail Sheet</option>
@@ -466,7 +466,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                 <select
                                     value={newDoc.roomName}
                                     onChange={e => setNewDoc({ ...newDoc, roomName: e.target.value })}
-                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-[#0066CC] outline-none"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-[#3D52A0] outline-none"
                                 >
                                     {availableRooms.map(room => (
                                         <option key={room} value={room}>{room}</option>
@@ -483,7 +483,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                     value={newDoc.title}
                                     onChange={e => setNewDoc({ ...newDoc, title: e.target.value })}
                                     placeholder="e.g. Master Bedroom 3D View 1, Crockery Unit Detail"
-                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-[#0066CC] outline-none"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-[#3D52A0] outline-none"
                                 />
                             </div>
 
@@ -496,7 +496,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                     value={newDoc.url}
                                     onChange={e => setNewDoc({ ...newDoc, url: e.target.value })}
                                     placeholder="https://drive.google.com/... or direct image link"
-                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-[#0066CC] outline-none"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-[#3D52A0] outline-none"
                                 />
                             </div>
 
@@ -509,7 +509,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                     value={newDoc.thumbnailUrl}
                                     onChange={e => setNewDoc({ ...newDoc, thumbnailUrl: e.target.value })}
                                     placeholder="https://... (Direct image preview URL)"
-                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-[#0066CC] outline-none"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-[#3D52A0] outline-none"
                                 />
                             </div>
                         </div>
@@ -525,7 +525,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                             <button 
                                 type="button"
                                 onClick={handleSave}
-                                className="flex items-center gap-2 px-5 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl transition-colors shadow-2xs cursor-pointer"
+                                className="flex items-center gap-2 px-5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold rounded-xl transition-colors shadow-2xs cursor-pointer"
                             >
                                 <Plus className="w-4 h-4" /> Save & Sync to Client
                             </button>
@@ -544,7 +544,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                         placeholder="Search deliverables by title, room, or link..."
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
-                        className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                        className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
                     />
                     {searchQuery && (
                         <button 
@@ -599,7 +599,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                         <button
                             type="button"
                             onClick={() => setViewMode('grid')}
-                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === 'grid' ? 'bg-white text-[#0066CC] shadow-2xs' : 'text-slate-400 hover:text-slate-700'}`}
+                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === 'grid' ? 'bg-white text-[#3D52A0] shadow-2xs' : 'text-slate-400 hover:text-slate-700'}`}
                             title="Grid View"
                         >
                             <LayoutGrid className="w-4 h-4" />
@@ -607,7 +607,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                         <button
                             type="button"
                             onClick={() => setViewMode('list')}
-                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === 'list' ? 'bg-white text-[#0066CC] shadow-2xs' : 'text-slate-400 hover:text-slate-700'}`}
+                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === 'list' ? 'bg-white text-[#3D52A0] shadow-2xs' : 'text-slate-400 hover:text-slate-700'}`}
                             title="Compact List View"
                         >
                             <List className="w-4 h-4" />
@@ -693,7 +693,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                                         className="p-2 bg-white text-slate-900 rounded-lg shadow-md hover:bg-slate-100 transition-colors cursor-pointer"
                                                         title="Copy Share Link"
                                                     >
-                                                        <Copy className="w-4 h-4 text-[#0066CC]" />
+                                                        <Copy className="w-4 h-4 text-[#3D52A0]" />
                                                     </button>
                                                 </div>
                                             </div>
@@ -714,7 +714,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                                         href={doc.url} 
                                                         target="_blank" 
                                                         rel="noopener noreferrer" 
-                                                        className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0066CC] hover:underline"
+                                                        className="inline-flex items-center gap-1 text-[11px] font-bold text-[#3D52A0] hover:underline"
                                                     >
                                                         <span>Open Link</span>
                                                         <ArrowUpRight className="w-3 h-3" />
@@ -724,7 +724,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                                         <button 
                                                             type="button"
                                                             onClick={(e) => handleCopyLink(doc.url, doc.title, e)}
-                                                            className="p-1 text-slate-400 hover:text-[#0066CC] rounded transition-colors cursor-pointer"
+                                                            className="p-1 text-slate-400 hover:text-[#3D52A0] rounded transition-colors cursor-pointer"
                                                             title="Copy Link"
                                                         >
                                                             <Share2 className="w-3.5 h-3.5" />
@@ -795,7 +795,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                         <button
                                             type="button"
                                             onClick={(e) => handleCopyLink(doc.url, doc.title, e)}
-                                            className="p-1.5 text-[#0066CC] hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                                            className="p-1.5 text-[#3D52A0] hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
                                             title="Copy Share Link"
                                         >
                                             <Copy className="w-3.5 h-3.5" />
@@ -862,7 +862,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                         onClick={(e) => handleCopyLink(activeLightboxDoc.url, activeLightboxDoc.title, e)}
                                         className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
                                     >
-                                        <Share2 className="w-3.5 h-3.5 text-[#0066CC]" />
+                                        <Share2 className="w-3.5 h-3.5 text-[#3D52A0]" />
                                         <span>Share Link</span>
                                     </button>
 
@@ -870,7 +870,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                         href={activeLightboxDoc.url} 
                                         target="_blank" 
                                         rel="noopener noreferrer" 
-                                        className="px-3 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                                        className="px-3 py-1.5 bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
                                     >
                                         <span>Open Original</span>
                                         <ExternalLink className="w-3.5 h-3.5" />
@@ -903,7 +903,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                             href={activeLightboxDoc.url}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold text-xs rounded-xl shadow-md transition-all"
+                                            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#3D52A0] hover:bg-[#334486] text-white font-bold text-xs rounded-xl shadow-md transition-all"
                                         >
                                             <ExternalLink className="w-4 h-4" />
                                             <span>Open Document in New Tab</span>

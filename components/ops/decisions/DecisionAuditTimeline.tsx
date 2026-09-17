@@ -55,12 +55,12 @@ export default function DecisionAuditTimeline({
         {decision.notifiedAt && (
             <div className="flex gap-3 text-xs items-start">
                 <div className="w-6 h-6 rounded-full bg-sky-100 flex items-center justify-center shrink-0 border-2 border-white shadow-sm z-10">
-                    <Mail className="w-3.5 h-3.5 text-[#0055B3]" />
+                    <Mail className="w-3.5 h-3.5 text-[#334486]" />
                 </div>
                 <div>
                     <p className="font-bold text-slate-700">Client Notified via System Portal</p>
                     <p className="text-[10px] text-slate-400 mt-0.5">
-                        Dispatched on {formatDate(decision.notifiedAt)} · Status: <span className="font-bold text-[#0066CC]">{decision.emailStatus || 'Sent'}</span>
+                        Dispatched on {formatDate(decision.notifiedAt)} · Status: <span className="font-bold text-[#3D52A0]">{decision.emailStatus || 'Sent'}</span>
                     </p>
                 </div>
             </div>
@@ -102,10 +102,10 @@ export default function DecisionAuditTimeline({
                then silence, as though nobody ever replied. */
             <div className="flex gap-3 text-xs items-start">
                 <div className="w-6 h-6 rounded-full bg-sky-100 flex items-center justify-center shrink-0 border-2 border-white shadow-sm z-10">
-                    <Mail className="w-3.5 h-3.5 text-[#0055B3]" />
+                    <Mail className="w-3.5 h-3.5 text-[#334486]" />
                 </div>
                 <div className="bg-sky-50 p-2.5 rounded-lg border border-sky-100 flex-1">
-                    <p className="font-bold text-[#0055B3]">You answered the query</p>
+                    <p className="font-bold text-[#334486]">You answered the query</p>
                     <p className="text-sm font-medium text-slate-700 mt-1">{decision.studioReply}</p>
                     <p className="text-[10px] text-slate-500 mt-1">
                         Sent back for sign-off on {formatDate(decision.studioRepliedAt)}

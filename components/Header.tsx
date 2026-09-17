@@ -55,7 +55,7 @@ const TABS = [
 
 const TAB_THEMES: Record<string, { iconColor: string; bgLight: string; borderColor: string; activeGradient: string }> = {
   'home': { iconColor: 'text-sky-600', bgLight: 'bg-sky-50', borderColor: 'border-sky-100', activeGradient: 'from-sky-500 to-sky-600' },
-  'projects': { iconColor: 'text-[#0066CC]', bgLight: 'bg-sky-50', borderColor: 'border-sky-100', activeGradient: 'from-sky-500 to-[#0066CC]' },
+  'projects': { iconColor: 'text-[#3D52A0]', bgLight: 'bg-sky-50', borderColor: 'border-sky-100', activeGradient: 'from-sky-500 to-[#3D52A0]' },
   'clients': { iconColor: 'text-blue-500', bgLight: 'bg-blue-50', borderColor: 'border-blue-100', activeGradient: 'from-blue-500 to-blue-600' },
   'reports': { iconColor: 'text-cyan-600', bgLight: 'bg-cyan-50', borderColor: 'border-cyan-100', activeGradient: 'from-cyan-500 to-cyan-600' },
   'studio-settings': { iconColor: 'text-slate-600', bgLight: 'bg-slate-100', borderColor: 'border-slate-200', activeGradient: 'from-slate-500 to-slate-600' },
@@ -289,13 +289,13 @@ const Sidebar: React.FC<SidebarProps> = ({
         aria-current={isActive ? 'page' : undefined}
         title={tab.label}
         className={`hud-rise group relative z-10 flex items-center gap-2 rounded-lg whitespace-nowrap cursor-pointer
-                    transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50
+                    transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-[#7091E6]/60
                     ${quiet ? 'px-2.5 py-1.5 text-[12.5px]' : 'px-3 py-1.5 text-[13px]'}
                     ${isActive
                       ? 'text-white font-bold'
                       : quiet
-                        ? 'text-slate-400 hover:text-[#0055B3] font-semibold'
-                        : 'text-slate-500 hover:text-[#0055B3] font-bold'}`}
+                        ? 'text-slate-400 hover:text-[#334486] font-semibold'
+                        : 'text-slate-500 hover:text-[#334486] font-bold'}`}
       >
         {/* Hover bracket — the reticle's ghost, before you commit. */}
         {!isActive && (
@@ -305,7 +305,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                            transition-colors duration-200" />
         )}
         <Icon className={`relative w-4 h-4 shrink-0 transition-transform duration-200 ease-out
-                          ${isActive ? 'scale-110 drop-shadow-[0_0_5px_rgba(103,232,249,.85)]'
+                          ${isActive ? 'scale-110 drop-shadow-[0_0_5px_rgba(112,145,230,.85)]'
                                      : 'group-hover:-translate-y-0.5 group-hover:scale-110'}`} />
         <span className={`relative tracking-tight ${quiet ? 'hidden xl:inline' : 'hidden sm:inline'}`}>
           {tab.label}
@@ -347,7 +347,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <span
               key={echo.key}
               aria-hidden="true"
-              className="hud-echo absolute top-1 bottom-1 rounded-lg bg-[#0066CC]/45 pointer-events-none"
+              className="hud-echo absolute top-1 bottom-1 rounded-lg bg-[#3D52A0]/45 pointer-events-none"
               style={{ transform: `translateX(${echo.left}px)`, width: `${echo.width}px` }}
             />
           )}
@@ -356,7 +356,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <span
               aria-hidden="true"
               className="nav-pill hud-reticle absolute top-1 bottom-1 rounded-lg
-                         bg-gradient-to-b from-[#1a7fd4] to-[#0055B3] pointer-events-none overflow-hidden"
+                         bg-gradient-to-b from-[#4C65B5] to-[#334486] pointer-events-none overflow-hidden"
               style={{
                 transform: `translateX(${pill.left}px) scaleX(${stretch})`,
                 transformOrigin: `${origin} center`,
@@ -416,11 +416,11 @@ const Sidebar: React.FC<SidebarProps> = ({
             aria-haspopup="menu"
             title={`${userName} (${currentRole})`}
             className="group flex items-center gap-2 pl-1 pr-1.5 py-1 rounded-xl hover:bg-sky-50/80
-                       transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50"
+                       transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7091E6]/60"
           >
-            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#0a6fd0] to-[#0044A0] text-white
+            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#4C65B5] to-[#3D52A0] text-white
                              flex items-center justify-center font-black text-[13px] shrink-0
-                             ring-1 ring-cyan-300/40 shadow-[0_2px_10px_rgba(0,102,204,.30)]
+                             ring-1 ring-[#7091E6]/45 shadow-[0_2px_10px_rgba(61, 82, 160,.30)]
                              transition-transform duration-200 group-hover:scale-105">
               {userInitial}
             </span>
@@ -441,14 +441,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <span aria-hidden="true" className="hud-rail absolute top-0 left-0 right-0 h-px" />
 
                 <div className="px-3.5 py-3 border-b border-slate-100 flex items-center gap-3">
-                  <span className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#0a6fd0] to-[#0044A0] text-white
+                  <span className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#4C65B5] to-[#3D52A0] text-white
                                    flex items-center justify-center font-black text-base shrink-0
-                                   ring-1 ring-cyan-300/40 shadow-[0_2px_12px_rgba(0,102,204,.30)]">
+                                   ring-1 ring-[#7091E6]/45 shadow-[0_2px_12px_rgba(61, 82, 160,.30)]">
                     {userInitial}
                   </span>
                   <div className="min-w-0">
                     <p className="text-[13px] font-extrabold text-slate-900 truncate leading-tight">{userName}</p>
-                    <p className="text-[9.5px] font-mono font-bold text-[#0066CC] uppercase tracking-[0.14em] mt-0.5">
+                    <p className="text-[9.5px] font-mono font-bold text-[#3D52A0] uppercase tracking-[0.14em] mt-0.5">
                       {currentRole}
                     </p>
                   </div>
@@ -458,7 +458,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   role="menuitem"
                   onClick={() => { setUserMenu(false); setIsConfigOpen(true); }}
                   className="group w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] font-semibold
-                             text-slate-600 hover:bg-sky-50 hover:text-[#0055B3] transition-colors cursor-pointer"
+                             text-slate-600 hover:bg-sky-50 hover:text-[#334486] transition-colors cursor-pointer"
                 >
                   {isCloud
                     ? <Cloud className="w-4 h-4 opacity-70 transition-transform group-hover:scale-110" />

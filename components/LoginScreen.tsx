@@ -158,7 +158,7 @@ export default function LoginScreen({ onLoginOps }: LoginScreenProps) {
     /*
         Shared field and button styling.
 
-        The old screen dressed a solid primary button in `bg-[#0066CC]/90`,
+        The old screen dressed a solid primary button in `bg-[#3D52A0]/90`,
         `backdrop-blur-md` and `border-white/20` — three treatments meant for
         glass sitting on top of an opaque fill, which only washed the colour out
         against white. Buttons are solid here, and depth comes from a shadow in
@@ -166,12 +166,12 @@ export default function LoginScreen({ onLoginOps }: LoginScreenProps) {
     */
     const fieldClass =
         'w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-[15px] font-medium text-slate-900 ' +
-        'placeholder:text-slate-400 placeholder:font-normal focus:bg-white focus:border-[#0066CC] focus:ring-4 focus:ring-[#0066CC]/10 ' +
+        'placeholder:text-slate-400 placeholder:font-normal focus:bg-white focus:border-[#3D52A0] focus:ring-4 focus:ring-[#3D52A0]/10 ' +
         'outline-none transition-[background-color,border-color,box-shadow] duration-200';
 
     const primaryClass =
-        'w-full py-4 bg-[#0066CC] hover:bg-[#0055B3] active:bg-[#00459e] text-white rounded-2xl font-bold text-[15px] ' +
-        'shadow-lg shadow-[#0066CC]/25 hover:shadow-[#0066CC]/35 transition-all flex items-center justify-center gap-2 ' +
+        'w-full py-4 bg-[#3D52A0] hover:bg-[#334486] active:bg-[#00459e] text-white rounded-2xl font-bold text-[15px] ' +
+        'shadow-lg shadow-[#3D52A0]/25 hover:shadow-[#3D52A0]/35 transition-all flex items-center justify-center gap-2 ' +
         'disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none';
 
     /*
@@ -219,7 +219,7 @@ export default function LoginScreen({ onLoginOps }: LoginScreenProps) {
                     with the headline. */}
                 <motion.div
                     aria-hidden="true"
-                    className="absolute -top-24 -left-16 w-[26rem] h-[26rem] rounded-full bg-[#0066CC]/25 blur-[100px]"
+                    className="absolute -top-24 -left-16 w-[26rem] h-[26rem] rounded-full bg-[#3D52A0]/25 blur-[100px]"
                     animate={{ x: [0, 40, 0], y: [0, 30, 0] }}
                     transition={{ duration: 18, ease: 'easeInOut', repeat: Infinity }}
                 />
@@ -298,7 +298,7 @@ export default function LoginScreen({ onLoginOps }: LoginScreenProps) {
             {/* Right: the form, and nothing competing with it. */}
             <div className="w-full lg:w-[54%] xl:w-1/2 flex items-center justify-center p-6 sm:p-10 bg-white relative">
                 <div className="absolute top-7 right-7 lg:hidden">
-                    <div className="w-11 h-11 bg-[#0066CC] rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-lg shadow-[#0066CC]/25">
+                    <div className="w-11 h-11 bg-[#3D52A0] rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-lg shadow-[#3D52A0]/25">
                         FF
                     </div>
                 </div>
@@ -311,7 +311,7 @@ export default function LoginScreen({ onLoginOps }: LoginScreenProps) {
                     className="w-full max-w-[400px] space-y-5"
                 >
                     <motion.div variants={rise} className="mb-8">
-                        <p className="text-[11px] font-black tracking-[0.18em] uppercase text-[#0066CC] mb-2.5">
+                        <p className="text-[11px] font-black tracking-[0.18em] uppercase text-[#3D52A0] mb-2.5">
                             Studio
                         </p>
                         <h2 className="text-[34px] font-black text-slate-900 tracking-tight leading-none">

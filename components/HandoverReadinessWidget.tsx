@@ -49,7 +49,7 @@ export const HandoverReadinessWidget = ({
   return (
     <div className="bg-white border border-slate-200/50 rounded-[24px] p-8 shadow-sm transition-all hover:shadow-md relative overflow-hidden flex flex-col justify-between h-full min-h-[360px]">
       {/* Accent Line: Gold if fully ready, Indigo/Amber if pending */}
-      <div className={`absolute top-0 left-0 right-0 h-[2px] ${isReady ? 'bg-[#B5945B]' : 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20/20'}`} />
+      <div className={`absolute top-0 left-0 right-0 h-[2px] ${isReady ? 'bg-[#B5945B]' : 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/20'}`} />
 
       <div className="space-y-5">
         <div className="flex items-center justify-between">
@@ -87,7 +87,7 @@ export const HandoverReadinessWidget = ({
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
             <div 
-              className={`h-full rounded-full transition-all duration-500 ${isReady ? 'bg-[#B5945B]' : 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20'}`} 
+              className={`h-full rounded-full transition-all duration-500 ${isReady ? 'bg-[#B5945B]' : 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20'}`} 
               style={{ width: `${(satisfiedCount / 4) * 100}%` }} 
             />
           </div>

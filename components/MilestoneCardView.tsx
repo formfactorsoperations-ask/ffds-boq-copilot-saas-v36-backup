@@ -81,7 +81,7 @@ export const MilestoneCardView: React.FC<MilestoneCardViewProps> = ({
                     <div key={m.id} className="relative bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 hover:shadow-xs transition-shadow flex flex-col md:flex-row md:items-center justify-between gap-4 font-['Plus_Jakarta_Sans']">
                         {/* Left Side: Indicator & Title/Desc */}
                         <div className="flex items-start gap-4 flex-1">
-                            <div className={`w-1.5 h-10 mt-0.5 ${isExecution ? 'bg-[#D4AF37]' : 'bg-[#0066CC]'} rounded-full shrink-0`} />
+                            <div className={`w-1.5 h-10 mt-0.5 ${isExecution ? 'bg-[#D4AF37]' : 'bg-[#3D52A0]'} rounded-full shrink-0`} />
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                     <span className="font-extrabold text-stone-900 text-xs sm:text-sm">{m.name}</span>
@@ -99,7 +99,7 @@ export const MilestoneCardView: React.FC<MilestoneCardViewProps> = ({
                                     {m.trigger || m.description || (isExecution ? 'Procurement & site progress' : 'Design deliverables & approvals')}
                                 </p>
                                 {m.unlocks && (
-                                    <div className="text-[10px] text-[#0055B3] bg-sky-50/50 border border-sky-100/30 px-2 py-0.5 rounded-md inline-block">
+                                    <div className="text-[10px] text-[#334486] bg-sky-50/50 border border-sky-100/30 px-2 py-0.5 rounded-md inline-block">
                                         <span className="font-extrabold">Unlocks:</span> {m.unlocks}
                                     </div>
                                 )}
@@ -163,7 +163,7 @@ export const MilestoneCardView: React.FC<MilestoneCardViewProps> = ({
                                 {!m.status || m.status === 'pending' ? (
                                     <button 
                                         onClick={() => handleInvoiceAction(mainIndex, 'generate_invoice', effectiveTaxableBaseForLocking)}
-                                        className={`px-3.5 py-2 ${isExecution ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 hover:bg-slate-900' : 'bg-[#0066CC] hover:bg-[#0055B3]'} text-white text-xs font-extrabold rounded-xl shadow-xs transition-colors`}
+                                        className={`px-3.5 py-2 ${isExecution ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 hover:bg-slate-900' : 'bg-[#3D52A0] hover:bg-[#334486]'} text-white text-xs font-extrabold rounded-xl shadow-xs transition-colors`}
                                     >
                                         Raise
                                     </button>

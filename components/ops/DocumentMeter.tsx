@@ -51,7 +51,7 @@ const TRACK_ALERT = '#F8E7EE';
 /* Light stop -> full stop, so the sweep has depth rather than reading flat. */
 const TONE: Record<'good' | 'brand' | 'critical', [string, string]> = {
   good:     ['#3FAE87', '#0E7C5A'],
-  brand:    ['#4A9BE4', '#0066CC'],
+  brand:    ['#4A9BE4', '#3D52A0'],
   critical: ['#D2708F', '#B4436A'],
 };
 

@@ -22,7 +22,7 @@ import { calculateProjectFinancials } from "../../lib/financialsUtils";
 const PIPELINE = ["lead", "draft", "proposal_sent", "negotiation"];
 const PHASES: { key: string; x: number; label: string; colour: string }[] = [
   { key: "pipeline",  x: 0.13, label: "Pipeline",  colour: "#E0A030" },
-  { key: "won",       x: 0.42, label: "Won",       colour: "#0066CC" },
+  { key: "won",       x: 0.42, label: "Won",       colour: "#3D52A0" },
   { key: "execution", x: 0.68, label: "On site",   colour: "#3B82F6" },
   { key: "delivered", x: 0.92, label: "Delivered", colour: "#0E7C5A" },
 ];

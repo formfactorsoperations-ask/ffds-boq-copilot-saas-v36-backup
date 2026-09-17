@@ -105,7 +105,7 @@ export default function ClientDecisionCard({ decision, nature, busy, onApprove, 
               initial={{ opacity: 0, scale: 0.94 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.25, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-              className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-sky-50 text-[#0055B3] border border-sky-200"
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-sky-50 text-[#334486] border border-sky-200"
             >
               {decision.impactSchedule} added to the programme
             </MotionSpan>
@@ -131,7 +131,7 @@ export default function ClientDecisionCard({ decision, nature, busy, onApprove, 
               <div className="flex items-baseline justify-between gap-2">
                 <p
                   className={`text-[10px] uppercase font-black tracking-wider ${
-                    m.from === 'studio' ? 'text-[#0055B3]' : 'text-slate-400'
+                    m.from === 'studio' ? 'text-[#334486]' : 'text-slate-400'
                   }`}
                 >
                   {m.from === 'studio' ? 'We answered' : 'You asked'}
@@ -169,7 +169,7 @@ export default function ClientDecisionCard({ decision, nature, busy, onApprove, 
               href={decision.drawingUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="block px-3.5 py-2 text-[11px] font-bold text-[#0055B3] hover:bg-slate-50 border-t border-slate-100 transition"
+              className="block px-3.5 py-2 text-[11px] font-bold text-[#334486] hover:bg-slate-50 border-t border-slate-100 transition"
             >
               Open full size
             </a>
@@ -179,7 +179,7 @@ export default function ClientDecisionCard({ decision, nature, busy, onApprove, 
             href={decision.drawingUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex w-fit items-center gap-2 px-3.5 py-2 rounded-lg border border-slate-200 bg-white text-xs font-bold text-[#0055B3] hover:bg-slate-50 transition"
+            className="inline-flex w-fit items-center gap-2 px-3.5 py-2 rounded-lg border border-slate-200 bg-white text-xs font-bold text-[#334486] hover:bg-slate-50 transition"
           >
             Open the drawing
           </a>
@@ -195,7 +195,7 @@ export default function ClientDecisionCard({ decision, nature, busy, onApprove, 
           whileTap={{ scale: 0.97 }}
           onClick={onApprove}
           disabled={busy}
-          className="px-4 py-2 rounded-lg text-xs font-bold bg-[#0066CC] text-white hover:bg-[#0055B3] disabled:opacity-50 transition-colors"
+          className="px-4 py-2 rounded-lg text-xs font-bold bg-[#3D52A0] text-white hover:bg-[#334486] disabled:opacity-50 transition-colors"
         >
           Approve
         </MotionButton>
@@ -225,7 +225,7 @@ export default function ClientDecisionCard({ decision, nature, busy, onApprove, 
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="What would you like changed, or what isn't clear?"
-              className="w-full border border-slate-200 rounded-xl p-3 text-sm focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] outline-none"
+              className="w-full border border-slate-200 rounded-xl p-3 text-sm focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] outline-none"
             />
             <div className="flex items-center gap-2">
               <button

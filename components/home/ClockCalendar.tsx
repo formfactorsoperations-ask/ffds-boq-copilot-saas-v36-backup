@@ -187,7 +187,7 @@ export default function ClockCalendar({ projects }: ClockCalendarProps) {
                 style={{
                   width: 2, height: 54,
                   marginLeft: -1,
-                  background: "#0066CC",
+                  background: "#3D52A0",
                   transform: `rotate(${time.getSeconds() * 6}deg)`,
                 }}
               />
@@ -196,7 +196,7 @@ export default function ClockCalendar({ projects }: ClockCalendarProps) {
                 style={{
                   width: 9, height: 9, left: "50%", top: "50%",
                   marginLeft: -4.5, marginTop: -4.5,
-                  background: "#0066CC",
+                  background: "#3D52A0",
                   boxShadow: "0 2px 5px rgba(10,27,51,.35)",
                 }}
               />

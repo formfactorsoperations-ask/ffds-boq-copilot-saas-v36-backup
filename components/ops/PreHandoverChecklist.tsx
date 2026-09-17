@@ -506,13 +506,13 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
             <div className="bg-[#FAF9F6] border border-[#EBEAE5] p-6 rounded-[24px] shadow-sm print:hidden">
                 <div className="flex flex-col lg:flex-row items-stretch justify-between gap-6">
                     <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-[#0055B3] shadow-sm shrink-0">
+                        <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-[#334486] shadow-sm shrink-0">
                             <FileCheck2 className="w-6 h-6 stroke-[2]" />
                         </div>
                         <div>
                             <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-[#0066CC]">Quality Standard Hub</span>
-                                <span className="bg-sky-50 text-[#0066CC] border border-sky-100 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">Studio Standard</span>
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-[#3D52A0]">Quality Standard Hub</span>
+                                <span className="bg-sky-50 text-[#3D52A0] border border-sky-100 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">Studio Standard</span>
                             </div>
                             <h3 className="text-base sm:text-lg font-bold text-slate-900 mt-1 tracking-tight">Quality & Handover Checklist</h3>
                             <p className="text-slate-500 text-xs mt-0.5 max-w-xl font-normal">
@@ -603,7 +603,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                         </div>
                         <button
                             onClick={handleAddElectricalPoint}
-                            className="bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold px-3 py-1.5 rounded-lg uppercase tracking-wider transition-colors flex items-center gap-1.5 shadow-sm"
+                            className="bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold px-3 py-1.5 rounded-lg uppercase tracking-wider transition-colors flex items-center gap-1.5 shadow-sm"
                         >
                             <Plus className="w-3.5 h-3.5" /> Add Point Node
                         </button>
@@ -721,7 +721,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                     <button 
                                         key={item}
                                         onClick={() => handleAddSpecificElectricalPoint(item)} 
-                                        className="text-[11px] bg-white border border-[#EBEAE5] px-2.5 py-1 rounded-lg text-slate-600 hover:border-sky-300 hover:bg-sky-50/50 hover:text-[#0055B3] transition-all shadow-sm font-semibold"
+                                        className="text-[11px] bg-white border border-[#EBEAE5] px-2.5 py-1 rounded-lg text-slate-600 hover:border-sky-300 hover:bg-sky-50/50 hover:text-[#334486] transition-all shadow-sm font-semibold"
                                     >
                                         + {item}
                                     </button>
@@ -751,13 +751,13 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                         onClick={() => setActiveRoomId(room.id)}
                                         className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between cursor-pointer group ${
                                             isActive 
-                                                ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 border-[#0055B3] text-white shadow-md shadow-sky-950/10' 
+                                                ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 border-[#334486] text-white shadow-md shadow-sky-950/10' 
                                                 : 'bg-white border-[#EBEAE5] hover:border-slate-300 text-slate-800'
                                         }`}
                                     >
                                         <div className="space-y-1.5 min-w-0 flex-1 pr-3">
                                             <div className="flex items-center gap-2">
-                                                <h5 className={`font-bold text-sm truncate ${isActive ? 'text-white' : 'text-slate-900 group-hover:text-[#0055B3]'}`}>
+                                                <h5 className={`font-bold text-sm truncate ${isActive ? 'text-white' : 'text-slate-900 group-hover:text-[#334486]'}`}>
                                                     {room.name}
                                                 </h5>
                                                 {room.pct === 100 && (
@@ -832,7 +832,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                         {/* 1. Paint & Woodwork Finishes */}
                                         <div className="space-y-3">
                                             <div className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b border-slate-100 pb-1 flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-full"></span>
+                                                <span className="w-1.5 h-1.5 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 rounded-full"></span>
                                                 Core Standard Checks
                                             </div>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -902,7 +902,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                         {/* 2. Custom Site Checks */}
                                         <div className="space-y-3 pt-2">
                                             <div className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b border-slate-100 pb-1 flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-full"></span>
+                                                <span className="w-1.5 h-1.5 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 rounded-full"></span>
                                                 Room-Specific Custom Audits
                                             </div>
 
@@ -952,11 +952,11 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                                     value={newCustomCheck}
                                                     onChange={(e) => setNewCustomCheck(e.target.value)}
                                                     placeholder="Add custom check (e.g. Veneer polish grooves)..."
-                                                    className="flex-1 bg-[#FAF9F6] border border-[#EBEAE5] rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#0066CC] focus:bg-white focus:border-[#0066CC] font-medium"
+                                                    className="flex-1 bg-[#FAF9F6] border border-[#EBEAE5] rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#3D52A0] focus:bg-white focus:border-[#3D52A0] font-medium"
                                                 />
                                                 <button 
                                                     type="submit"
-                                                    className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 hover:bg-[#0055B3] text-white text-xs font-bold px-4 py-2 rounded-xl uppercase tracking-wider shrink-0 transition-colors cursor-pointer flex items-center gap-1"
+                                                    className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 hover:bg-[#334486] text-white text-xs font-bold px-4 py-2 rounded-xl uppercase tracking-wider shrink-0 transition-colors cursor-pointer flex items-center gap-1"
                                                 >
                                                     <Plus className="w-3.5 h-3.5" /> Append
                                                 </button>
@@ -966,7 +966,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                         {/* 3. Electrical Audit counts */}
                                         <div className="space-y-3 pt-2">
                                             <div className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b border-slate-100 pb-1 flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-full"></span>
+                                                <span className="w-1.5 h-1.5 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 rounded-full"></span>
                                                 Electrical Point Audit
                                             </div>
 
@@ -1016,7 +1016,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                         {/* 4. Supervisor Audit notes */}
                                         <div className="space-y-3 pt-2">
                                             <div className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b border-slate-100 pb-1 flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-full"></span>
+                                                <span className="w-1.5 h-1.5 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 rounded-full"></span>
                                                 Site Supervisor Remarks
                                             </div>
 
@@ -1025,7 +1025,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                                 value={activeRoomNotes}
                                                 onChange={(e) => handleUpdateRoomNote(activeRoomSummary.id, e.target.value)}
                                                 placeholder={`Add specialized quality remarks for ${activeRoomSummary.name} (e.g., Slight dampness check near skirting, alignment needs 1mm adjustment)...`}
-                                                className="w-full bg-[#FAF9F6] border border-[#EBEAE5] rounded-[18px] p-4 text-xs focus:ring-1 focus:ring-[#0066CC] focus:bg-white focus:border-[#0066CC] font-medium placeholder-slate-400 leading-relaxed"
+                                                className="w-full bg-[#FAF9F6] border border-[#EBEAE5] rounded-[18px] p-4 text-xs focus:ring-1 focus:ring-[#3D52A0] focus:bg-white focus:border-[#3D52A0] font-medium placeholder-slate-400 leading-relaxed"
                                             />
                                         </div>
 

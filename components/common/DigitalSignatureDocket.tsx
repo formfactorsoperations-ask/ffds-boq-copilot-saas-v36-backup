@@ -50,13 +50,13 @@ export default function DigitalSignatureDocketView({
   return (
     <div className={`bg-white border border-slate-300/80 rounded-2xl p-6 sm:p-8 shadow-xs break-inside-avoid relative overflow-hidden text-left ${className}`}>
       {/* Subtle Gold Hairline Brand Accent (Per Design System Guidelines) */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-[#0066CC]" />
+      <div className="absolute top-0 left-0 right-0 h-1 bg-[#3D52A0]" />
 
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-slate-100 text-slate-800 rounded-xl border border-slate-200 shrink-0">
-            <ShieldCheck className="w-6 h-6 text-[#0066CC]" />
+            <ShieldCheck className="w-6 h-6 text-[#3D52A0]" />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -135,7 +135,7 @@ export default function DigitalSignatureDocketView({
           {/* Tamper-Proof Audit Hash */}
           <div className="p-3 bg-slate-50/60 border border-slate-200 rounded-xl space-y-1">
             <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              <Fingerprint className="w-3.5 h-3.5 text-[#0066CC]" />
+              <Fingerprint className="w-3.5 h-3.5 text-[#3D52A0]" />
               <span>Tamper-Proof Audit Hash (SHA-256)</span>
             </div>
             <p className="font-mono text-[10px] text-slate-600 break-all select-all">

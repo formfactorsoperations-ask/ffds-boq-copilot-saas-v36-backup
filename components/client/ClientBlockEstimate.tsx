@@ -39,7 +39,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                     </div>
                     {mode === 'advisory' && (
                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-sky-50 border border-sky-100 rounded-xl text-xs font-bold text-sky-800 self-start">
-                            <span className="w-2 h-2 rounded-full bg-[#0066CC] animate-pulse"></span>
+                            <span className="w-2 h-2 rounded-full bg-[#3D52A0] animate-pulse"></span>
                             Viewing: {activeTier.name}
                         </div>
                     )}
@@ -83,7 +83,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                     )}
                                 </div>
 
-                                <div className="p-2 rounded-full bg-white text-slate-400 group-hover:text-slate-600 transition-all group-open:rotate-180 group-open:bg-sky-100 group-open:text-[#0066CC]">
+                                <div className="p-2 rounded-full bg-white text-slate-400 group-hover:text-slate-600 transition-all group-open:rotate-180 group-open:bg-sky-100 group-open:text-[#3D52A0]">
                                     <ChevronDownIcon className="w-4 h-4" />
                                 </div>
                             </summary>

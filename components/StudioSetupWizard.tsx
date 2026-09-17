@@ -92,7 +92,7 @@ export default function StudioSetupWizard({ onComplete }: { onComplete?: () => v
                 <div className="flex items-center justify-between relative">
                     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-200 rounded-full z-0"></div>
                     <div 
-                        className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-full z-0 transition-all duration-500"
+                        className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 rounded-full z-0 transition-all duration-500"
                         style={{ width: `${((step - 1) / 3) * 100}%` }}
                     ></div>
                     
@@ -100,7 +100,7 @@ export default function StudioSetupWizard({ onComplete }: { onComplete?: () => v
                         <div 
                             key={num}
                             className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-colors ${
-                                step >= num ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white' : 'bg-slate-200 text-slate-500'
+                                step >= num ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white' : 'bg-slate-200 text-slate-500'
                             }`}
                         >
                             {num}
@@ -275,10 +275,10 @@ export default function StudioSetupWizard({ onComplete }: { onComplete?: () => v
                             </div>
 
                             <div className="grid grid-cols-1 gap-6 mt-8 max-w-xl">
-                                <label className="relative p-6 bg-white border-2 border-[#0055B3] rounded-2xl cursor-pointer hover:bg-slate-50 transition-colors flex items-start gap-4">
+                                <label className="relative p-6 bg-white border-2 border-[#334486] rounded-2xl cursor-pointer hover:bg-slate-50 transition-colors flex items-start gap-4">
                                     <div className="flex-shrink-0 mt-1">
-                                        <div className="w-5 h-5 rounded-full border-4 border-[#0055B3] flex items-center justify-center">
-                                            <div className="w-2 h-2 rounded-full bg-[#0066CC]/90 backdrop-blur-md border border-white/20"></div>
+                                        <div className="w-5 h-5 rounded-full border-4 border-[#334486] flex items-center justify-center">
+                                            <div className="w-2 h-2 rounded-full bg-[#3D52A0]/90 backdrop-blur-md border border-white/20"></div>
                                         </div>
                                     </div>
                                     <div>
@@ -317,7 +317,7 @@ export default function StudioSetupWizard({ onComplete }: { onComplete?: () => v
                         <button 
                             onClick={handleNext}
                             disabled={step === 1 && !isStep1Valid}
-                            className={`px-8 py-3 rounded-xl font-bold text-sm shadow-md transition-all flex items-center gap-2 ${step === 1 && !isStep1Valid ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-[#0066CC]/90 text-white backdrop-blur-md border border-white/20 hover:bg-[#0055B3] hover:scale-[1.02] active:scale-[0.98]'}`}
+                            className={`px-8 py-3 rounded-xl font-bold text-sm shadow-md transition-all flex items-center gap-2 ${step === 1 && !isStep1Valid ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-[#3D52A0]/90 text-white backdrop-blur-md border border-white/20 hover:bg-[#334486] hover:scale-[1.02] active:scale-[0.98]'}`}
                         >
                             Continue →
                         </button>

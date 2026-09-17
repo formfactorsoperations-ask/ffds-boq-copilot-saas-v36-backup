@@ -60,7 +60,7 @@ export const FloatingDockMobile = ({
                 className={cn(
                   "flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all relative w-full text-left",
                   item.isActive
-                    ? "bg-sky-50 text-[#0055B3] font-bold border border-sky-200"
+                    ? "bg-sky-50 text-[#334486] font-bold border border-sky-200"
                     : "bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                 )}
               >
@@ -68,7 +68,7 @@ export const FloatingDockMobile = ({
                   className={cn(
                     "flex h-8 w-8 items-center justify-center rounded-lg shrink-0",
                     item.isActive
-                      ? "bg-[#0055B3] text-white"
+                      ? "bg-[#334486] text-white"
                       : "bg-slate-100 text-slate-600 border border-slate-200"
                   )}
                 >
@@ -198,7 +198,7 @@ function IconContainer({
           "relative flex aspect-square items-center justify-center rounded-lg transition-all duration-200 cursor-pointer border transform group-hover:scale-110",
           alwaysShowLabels ? "w-[30px] h-[30px]" : "w-[32px] h-[32px]",
           isActive
-            ? "bg-[#0055B3] text-white border-[#004494] shadow-sm ring-2 ring-sky-400/30"
+            ? "bg-[#334486] text-white border-[#004494] shadow-sm ring-2 ring-sky-400/30"
             : "bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 border-slate-200/90 hover:border-slate-300 shadow-2xs"
         )}
       >
@@ -224,7 +224,7 @@ function IconContainer({
                 : badgeTone === "warn"
                 ? "bg-amber-500 text-white border-white"
                 : isActive
-                ? "bg-white text-[#0055B3] border-sky-100"
+                ? "bg-white text-[#334486] border-sky-100"
                 : "bg-slate-700 text-white border-white"
             )}
           >
@@ -248,7 +248,7 @@ function IconContainer({
           className={cn(
             "text-[10px] font-semibold tracking-tight mt-1 text-center transition-colors leading-none truncate max-w-[70px]",
             isActive
-              ? "text-[#0055B3] font-bold"
+              ? "text-[#334486] font-bold"
               : "text-slate-600 group-hover:text-slate-900"
           )}
         >

@@ -598,7 +598,7 @@ export default function StudioReports({ projects, onNavigate, onOpenProject }: S
               onClick={() => setSubTab('live')}
               className={`px-4 py-2 text-xs font-bold rounded-lg transition-all leading-none cursor-pointer flex items-center gap-1.5 ${
                 subTab === 'live'
-                  ? 'bg-[#0066CC] text-white shadow-xs'
+                  ? 'bg-[#3D52A0] text-white shadow-xs'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
@@ -609,7 +609,7 @@ export default function StudioReports({ projects, onNavigate, onOpenProject }: S
               onClick={() => setSubTab('memory')}
               className={`px-4 py-2 text-xs font-bold rounded-lg transition-all leading-none flex items-center gap-1.5 cursor-pointer ${
                 subTab === 'memory'
-                  ? 'bg-[#0066CC] text-white shadow-xs'
+                  ? 'bg-[#3D52A0] text-white shadow-xs'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
@@ -997,7 +997,7 @@ export default function StudioReports({ projects, onNavigate, onOpenProject }: S
                           onClick={() => setSignalCategory(tagItem.key as any)}
                           className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
                             isActive
-                              ? 'bg-[#0066CC] text-white shadow-xs'
+                              ? 'bg-[#3D52A0] text-white shadow-xs'
                               : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/70'
                           }`}
                         >
@@ -1326,7 +1326,7 @@ export default function StudioReports({ projects, onNavigate, onOpenProject }: S
                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">
                   Subcontractor Share
                 </span>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-sky-50 border border-sky-100 text-[#0066CC]">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-sky-50 border border-sky-100 text-[#3D52A0]">
                   <Layers className="w-4 h-4" />
                 </div>
               </div>

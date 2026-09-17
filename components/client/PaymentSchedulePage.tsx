@@ -437,7 +437,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                             <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded ${
                                 canonicalDone ? 'bg-emerald-100 text-emerald-700'
                                 : canonicalState === 'queried' && hasIssue ? 'bg-violet-100 text-violet-700'
-                                : canonicalSent ? 'bg-sky-100 text-[#0055B3]'
+                                : canonicalSent ? 'bg-sky-100 text-[#334486]'
                                 : latestSchedule.status === 'draft' ? 'bg-amber-100 text-amber-700'
                                 : 'bg-emerald-100 text-emerald-700'
                             }`}>
@@ -466,7 +466,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                                     Regenerate
                                 </button>
                             )}
-                            <button onClick={handleSend} className="px-4 py-2 bg-[#0066CC] border border-[#0066CC] text-white font-bold text-sm rounded-lg hover:bg-[#0055B3] transition flex items-center gap-2 shadow-sm">
+                            <button onClick={handleSend} className="px-4 py-2 bg-[#3D52A0] border border-[#3D52A0] text-white font-bold text-sm rounded-lg hover:bg-[#334486] transition flex items-center gap-2 shadow-sm">
                                 <Send className="w-4 h-4" /> Mark as Sent
                             </button>
                         </>

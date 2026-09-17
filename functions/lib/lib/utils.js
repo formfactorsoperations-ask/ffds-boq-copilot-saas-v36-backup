@@ -1,6 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getClientViewItems = exports.calculateSchedule = exports.generateDeterministicSchedule = exports.fileToBase64 = exports.timeAgo = exports.escapeHtml = exports.id = exports.calculateGrossMargin = exports.calculateSellPrice = exports.formatClientValue = exports.generateId = exports.formatINR = exports.formatCurrency = void 0;
+exports.getClientViewItems = exports.calculateSchedule = exports.generateDeterministicSchedule = exports.fileToBase64 = exports.timeAgo = exports.escapeHtml = exports.id = exports.markupToMargin = exports.calculateGrossMargin = exports.calculateMarkupPct = exports.calculateCostFromSell = exports.calculateSellPrice = exports.formatCompactINR = exports.formatClientValue = exports.generateId = exports.formatINR = exports.formatCurrency = exports.cn = void 0;
+function cn(...classes) {
+    return classes.filter(Boolean).join(" ");
+}
+exports.cn = cn;
 const formatCurrency = (n) => {
     return "₹ " + (Number(n) || 0).toLocaleString('en-IN', {
         minimumFractionDigits: 0,
@@ -30,24 +34,78 @@ const formatClientValue = (val) => {
     return `₹ ${rounded.toLocaleString('en-IN')}`;
 };
 exports.formatClientValue = formatClientValue;
-// SWITCHED TO GROSS MARGIN FORMULA
-// Previous: Cost * (1 + Margin/100) -> Markup
-// New: Cost / (1 - Margin/100) -> Gross Margin
+/**
+ * Short but exact — lakh/crore for readability, no ₹5,000 rounding.
+ * Use this for anything the studio reads about itself. `formatClientValue`
+ * deliberately blurs figures for client-facing documents, which makes it wrong
+ * for internal analysis: it turns ₹31,967 into "₹30,000".
+ */
+const formatCompactINR = (val) => {
+    if (!val || !isFinite(val))
+        return '₹0';
+    const abs = Math.abs(val);
+    const sign = val < 0 ? '-' : '';
+    if (abs >= 1e7)
+        return `${sign}₹${(abs / 1e7).toFixed(2)}Cr`;
+    if (abs >= 1e5)
+        return `${sign}₹${(abs / 1e5).toFixed(2)}L`;
+    return `${sign}₹${Math.round(abs).toLocaleString('en-IN')}`;
+};
+exports.formatCompactINR = formatCompactINR;
+// Markup-on-Cost Formula (Standard Markup)
+// Selling Price = Cost * (1 + Margin / 100)
 const calculateSellPrice = (materials, labor, margin) => {
     const cost = (Number(materials) || 0) + (Number(labor) || 0);
     const marginPercent = (Number(margin) || 0);
-    // Safety check to prevent division by zero or negative prices if margin is >= 100
-    if (marginPercent >= 100)
-        return cost * 2; // Fallback
-    return cost / (1 - (marginPercent / 100));
+    return cost * (1 + marginPercent / 100);
 };
 exports.calculateSellPrice = calculateSellPrice;
+/**
+ * MARKUP vs MARGIN -- they are not the same number and this app needs both.
+ *
+ *   markup = profit / COST     28% markup on 100 cost -> sells for 128
+ *   margin = profit / SELL     that same job has a 21.9% margin
+ *
+ * `calculateSellPrice` above prices on MARKUP, so the `margin` field on a BOQ
+ * line is really a markup percentage -- that is the pricing model and it stays.
+ *
+ * What went wrong is that this function returned markup while being named
+ * `calculateGrossMargin`, and its callers printed it as "Gross Margin" and
+ * benchmarked it against margin-style targets. A job priced at 28% markup
+ * displayed "28% gross margin" while the Reports tab, correctly computing
+ * profit / revenue, called the same job 21.9%.
+ *
+ * So: `calculateMarkupPct` is the inverse of `calculateSellPrice` and is the
+ * right function when you are talking about what was ADDED to cost.
+ * `calculateGrossMargin` now returns a true margin and is the right function
+ * whenever the number sits next to revenue.
+ */
+/**
+ * The exact inverse of `calculateSellPrice`: recover cost from a known selling
+ * rate. Use this wherever only `selectedRate` survives and the cost has to be
+ * backed out — writing `sell * (1 - margin/100)` there silently applies the
+ * margin model to a markup-priced number and understates the cost.
+ */
+const calculateCostFromSell = (sell, margin) => {
+    const marginPercent = (Number(margin) || 0);
+    return (Number(sell) || 0) / (1 + marginPercent / 100);
+};
+exports.calculateCostFromSell = calculateCostFromSell;
+const calculateMarkupPct = (sell, cost) => {
+    if (cost === 0)
+        return 0;
+    return ((sell - cost) / cost) * 100;
+};
+exports.calculateMarkupPct = calculateMarkupPct;
 const calculateGrossMargin = (sell, cost) => {
     if (sell === 0)
         return 0;
     return ((sell - cost) / sell) * 100;
 };
 exports.calculateGrossMargin = calculateGrossMargin;
+/** 28 markup -> 21.9 margin. Used to restate markup-era benchmarks. */
+const markupToMargin = (markupPct) => (markupPct / (100 + markupPct)) * 100;
+exports.markupToMargin = markupToMargin;
 // Keep a session-local counter to ensure uniqueness even in rapid succession
 let idCounter = 0;
 const id = () => {

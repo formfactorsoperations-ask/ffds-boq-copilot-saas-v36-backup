@@ -635,7 +635,7 @@ const BankTab: React.FC<BankTabProps> = ({
 
             <button
               onClick={handleAddItem}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[#0066CC] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-2 bg-[#3D52A0] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Add Item
@@ -684,7 +684,7 @@ const BankTab: React.FC<BankTabProps> = ({
               onClick={() => setViewMode('spreadsheet')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'spreadsheet'
-                  ? 'bg-white text-[#0066CC] shadow-xs border border-slate-200/60'
+                  ? 'bg-white text-[#3D52A0] shadow-xs border border-slate-200/60'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -696,7 +696,7 @@ const BankTab: React.FC<BankTabProps> = ({
               onClick={() => setViewMode('grouped')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'grouped'
-                  ? 'bg-white text-[#0066CC] shadow-xs border border-slate-200/60'
+                  ? 'bg-white text-[#3D52A0] shadow-xs border border-slate-200/60'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -708,7 +708,7 @@ const BankTab: React.FC<BankTabProps> = ({
               onClick={() => setViewMode('grid')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'grid'
-                  ? 'bg-white text-[#0066CC] shadow-xs border border-slate-200/60'
+                  ? 'bg-white text-[#3D52A0] shadow-xs border border-slate-200/60'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -720,7 +720,7 @@ const BankTab: React.FC<BankTabProps> = ({
               onClick={() => setViewMode('bundles')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'bundles'
-                  ? 'bg-white text-[#0066CC] shadow-xs border border-slate-200/60'
+                  ? 'bg-white text-[#3D52A0] shadow-xs border border-slate-200/60'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -737,7 +737,7 @@ const BankTab: React.FC<BankTabProps> = ({
                 onClick={() => setHealthFilter('all')}
                 className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors ${
                   healthFilter === 'all'
-                    ? 'bg-[#0066CC] text-white'
+                    ? 'bg-[#3D52A0] text-white'
                     : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
               >
@@ -783,8 +783,8 @@ const BankTab: React.FC<BankTabProps> = ({
                 onClick={() => setHealthFilter('multiplier')}
                 className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors ${
                   healthFilter === 'multiplier'
-                    ? 'bg-[#0066CC] text-white'
-                    : 'bg-sky-50 border border-sky-200 text-[#0066CC] hover:bg-sky-100'
+                    ? 'bg-[#3D52A0] text-white'
+                    : 'bg-sky-50 border border-sky-200 text-[#3D52A0] hover:bg-sky-100'
                 }`}
               >
                 Custom Area Coeff
@@ -806,7 +806,7 @@ const BankTab: React.FC<BankTabProps> = ({
                 placeholder="Search by name, specs, internal execution notes, or category..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0066CC] focus:bg-white transition-all"
+                className="w-full pl-10 pr-4 py-2 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3D52A0] focus:bg-white transition-all"
               />
               {searchTerm && (
                 <button
@@ -828,7 +828,7 @@ const BankTab: React.FC<BankTabProps> = ({
                 <select
                   value={selectedProjectId}
                   onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="px-3 py-2 bg-slate-50 hover:bg-white border border-slate-200 focus:border-[#0066CC] rounded-xl text-xs font-bold text-slate-800 outline-none cursor-pointer max-w-xs truncate"
+                  className="px-3 py-2 bg-slate-50 hover:bg-white border border-slate-200 focus:border-[#3D52A0] rounded-xl text-xs font-bold text-slate-800 outline-none cursor-pointer max-w-xs truncate"
                 >
                   <option value="All">All Studio Projects</option>
                   {projects.map((proj) => (
@@ -853,7 +853,7 @@ const BankTab: React.FC<BankTabProps> = ({
                 </button>
                 <button
                   onClick={() => openBulkModalWithTab('margin')}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0066CC] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#3D52A0] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
                 >
                   <Percent className="w-3.5 h-3.5" />
                   Bulk Edit ({selectedItemIds.size})
@@ -879,7 +879,7 @@ const BankTab: React.FC<BankTabProps> = ({
                   onClick={() => setSelectedCategory(cat)}
                   className={`px-3 py-1.5 rounded-xl font-bold transition-all shrink-0 cursor-pointer ${
                     selectedCategory === cat
-                      ? 'bg-[#0066CC] text-white shadow-2xs'
+                      ? 'bg-[#3D52A0] text-white shadow-2xs'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                   }`}
                 >
@@ -962,7 +962,7 @@ const BankTab: React.FC<BankTabProps> = ({
           <button
             type="button"
             onClick={() => setVisibleCount((n) => n + PAGE)}
-            className="px-4 py-2 rounded-xl bg-[#0066CC] text-white text-xs font-bold hover:bg-[#0055B3]"
+            className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486]"
           >
             Show {Math.min(PAGE, hiddenCount)} more
           </button>
@@ -984,7 +984,7 @@ const BankTab: React.FC<BankTabProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
               <div>
                 <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
-                  <PackageCheck className="w-5 h-5 text-[#0066CC]" />
+                  <PackageCheck className="w-5 h-5 text-[#3D52A0]" />
                   Custom Room Bundles & Scope Kits
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -995,7 +995,7 @@ const BankTab: React.FC<BankTabProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setIsCreatingBundle(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-[#0066CC] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#3D52A0] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   Create Bundle
@@ -1030,14 +1030,14 @@ const BankTab: React.FC<BankTabProps> = ({
                       placeholder="Bundle Name (e.g. Master Bedroom Luxury Kit)"
                       value={newBundleName}
                       onChange={(e) => setNewBundleName(e.target.value)}
-                      className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                      className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
                     />
                     <input
                       type="text"
                       placeholder="Description (Optional summary of items)"
                       value={newBundleDesc}
                       onChange={(e) => setNewBundleDesc(e.target.value)}
-                      className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                      className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
                     />
                   </div>
 
@@ -1076,7 +1076,7 @@ const BankTab: React.FC<BankTabProps> = ({
                                 });
                               }}
                               className={`p-2.5 text-xs flex items-center justify-between cursor-pointer transition-colors ${
-                                isPicked ? 'bg-sky-50 text-[#0066CC] font-bold' : 'hover:bg-slate-50 text-slate-700'
+                                isPicked ? 'bg-sky-50 text-[#3D52A0] font-bold' : 'hover:bg-slate-50 text-slate-700'
                               }`}
                             >
                               <div className="flex items-center gap-2">
@@ -1084,7 +1084,7 @@ const BankTab: React.FC<BankTabProps> = ({
                                   type="checkbox"
                                   checked={isPicked}
                                   onChange={() => {}}
-                                  className="rounded text-[#0066CC]"
+                                  className="rounded text-[#3D52A0]"
                                 />
                                 <span>{item.name}</span>
                               </div>
@@ -1108,7 +1108,7 @@ const BankTab: React.FC<BankTabProps> = ({
                     <button
                       type="button"
                       onClick={handleCreateBundle}
-                      className="px-5 py-2 bg-[#0066CC] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm cursor-pointer"
+                      className="px-5 py-2 bg-[#3D52A0] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm cursor-pointer"
                     >
                       Save Room Kit
                     </button>
@@ -1162,7 +1162,7 @@ const BankTab: React.FC<BankTabProps> = ({
                               </button>
                               <button
                                 onClick={() => handleSaveEditBundle(bundle.id)}
-                                className="px-3 py-1 bg-[#0066CC] text-white rounded-lg text-xs font-bold"
+                                className="px-3 py-1 bg-[#3D52A0] text-white rounded-lg text-xs font-bold"
                               >
                                 Save
                               </button>
@@ -1231,7 +1231,7 @@ const BankTab: React.FC<BankTabProps> = ({
                       {isAddingItemToBundleId === bundle.id ? (
                         <div className="space-y-2 p-2 bg-sky-50 rounded-xl border border-sky-200">
                           <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-bold uppercase text-[#0066CC]">
+                            <span className="text-[10px] font-bold uppercase text-[#3D52A0]">
                               Add Item to {bundle.name}
                             </span>
                             <button
@@ -1263,7 +1263,7 @@ const BankTab: React.FC<BankTabProps> = ({
                                   className="p-1.5 text-[11px] hover:bg-sky-50 cursor-pointer flex justify-between"
                                 >
                                   <span>{item.name}</span>
-                                  <Plus className="w-3 h-3 text-[#0066CC]" />
+                                  <Plus className="w-3 h-3 text-[#3D52A0]" />
                                 </div>
                               ))}
                           </div>
@@ -1296,7 +1296,7 @@ const BankTab: React.FC<BankTabProps> = ({
           >
             {/* Selection info */}
             <div className="flex items-center gap-3">
-              <span className="w-7 h-7 bg-[#0066CC] rounded-full flex items-center justify-center text-xs font-black">
+              <span className="w-7 h-7 bg-[#3D52A0] rounded-full flex items-center justify-center text-xs font-black">
                 {selectedItemIds.size}
               </span>
               <div>

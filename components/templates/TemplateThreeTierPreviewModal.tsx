@@ -102,7 +102,7 @@ export const TemplateThreeTierPreviewModal: React.FC<TemplateThreeTierPreviewMod
                   type="number"
                   value={carpetArea}
                   onChange={(e) => setCarpetArea(Math.max(200, Number(e.target.value)))}
-                  className="w-24 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 text-right focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                  className="w-24 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 text-right focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
                 />
                 <span className="text-xs font-semibold text-slate-500">sq ft</span>
               </div>
@@ -122,7 +122,7 @@ export const TemplateThreeTierPreviewModal: React.FC<TemplateThreeTierPreviewMod
                   onClick={() => setCarpetArea(preset.val)}
                   className={`px-2 py-1 rounded text-[11px] font-bold transition-all ${
                     carpetArea === preset.val
-                      ? 'bg-[#0066CC] text-white shadow-xs'
+                      ? 'bg-[#3D52A0] text-white shadow-xs'
                       : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
                   }`}
                 >
@@ -142,7 +142,7 @@ export const TemplateThreeTierPreviewModal: React.FC<TemplateThreeTierPreviewMod
                   step="0.5"
                   value={ceilingHeight}
                   onChange={(e) => setCeilingHeight(Math.max(7, Number(e.target.value)))}
-                  className="w-16 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 text-right focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                  className="w-16 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 text-right focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
                 />
                 <span className="text-xs font-semibold text-slate-500">ft</span>
               </div>
@@ -157,7 +157,7 @@ export const TemplateThreeTierPreviewModal: React.FC<TemplateThreeTierPreviewMod
                 <select
                   value={selectedRoomFilter}
                   onChange={(e) => setSelectedRoomFilter(e.target.value)}
-                  className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0066CC]"
+                  className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
                 >
                   <option value="all">All Rooms ({allRooms.length})</option>
                   {allRooms.map(r => (
@@ -240,7 +240,7 @@ export const TemplateThreeTierPreviewModal: React.FC<TemplateThreeTierPreviewMod
                 <div
                   key={tier.name}
                   className={`border rounded-2xl overflow-hidden flex flex-col bg-white shadow-sm transition-all ${
-                    idx === 1 ? 'ring-2 ring-[#0066CC] shadow-md' : 'border-slate-200'
+                    idx === 1 ? 'ring-2 ring-[#3D52A0] shadow-md' : 'border-slate-200'
                   }`}
                 >
                   {/* Card Header */}
@@ -254,7 +254,7 @@ export const TemplateThreeTierPreviewModal: React.FC<TemplateThreeTierPreviewMod
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <div className={`p-1.5 rounded-lg ${
-                          idx === 0 ? 'bg-emerald-600 text-white' : idx === 1 ? 'bg-[#0066CC] text-white' : 'bg-purple-600 text-white'
+                          idx === 0 ? 'bg-emerald-600 text-white' : idx === 1 ? 'bg-[#3D52A0] text-white' : 'bg-purple-600 text-white'
                         }`}>
                           <IconComp className="w-4 h-4" />
                         </div>
@@ -304,7 +304,7 @@ export const TemplateThreeTierPreviewModal: React.FC<TemplateThreeTierPreviewMod
                           <div key={roomName} className="space-y-1.5">
                             <div className="flex justify-between items-center bg-slate-100/80 px-2 py-1 rounded text-[11px] font-bold text-slate-700">
                               <span>{roomName} ({items.length})</span>
-                              <span className="text-[#0066CC]">{formatINR(roomTotal)}</span>
+                              <span className="text-[#3D52A0]">{formatINR(roomTotal)}</span>
                             </div>
                             <div className="space-y-1 pl-1">
                               {items.map((boqItem, itemIdx) => {
@@ -379,7 +379,7 @@ export const TemplateThreeTierPreviewModal: React.FC<TemplateThreeTierPreviewMod
           </p>
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg text-xs font-bold transition-all"
+            className="px-6 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-xs font-bold transition-all"
           >
             Close Simulation
           </button>

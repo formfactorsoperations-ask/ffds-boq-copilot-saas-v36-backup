@@ -1992,7 +1992,7 @@ export default function App() {
                                     if(cta) {
                                         cta.textContent = 'Showing Room-wise Scope Below ↓';
                                         cta.classList.remove('text-slate-400', 'group-hover:text-slate-600');
-                                        cta.classList.add('text-[#0066CC]');
+                                        cta.classList.add('text-[#3D52A0]');
                                     }
                                 } else {
                                     // Set Inactive Styling
@@ -2009,7 +2009,7 @@ export default function App() {
                                     if(cta) {
                                         cta.textContent = 'Click to View Detailed Scope';
                                         cta.classList.add('text-slate-400', 'group-hover:text-slate-600');
-                                        cta.classList.remove('text-[#0066CC]');
+                                        cta.classList.remove('text-[#3D52A0]');
                                     }
                                 }
                             });
@@ -2268,14 +2268,14 @@ export default function App() {
             <motion.div 
               animate={{ rotate: -360 }}
               transition={{ duration: 25, ease: "linear", repeat: Infinity }}
-              className="absolute w-32 h-32 rounded-full border border-dashed border-[#0066CC]/15" 
+              className="absolute w-32 h-32 rounded-full border border-dashed border-[#3D52A0]/15" 
             />
             
             {/* Outer Segmented Ring with Gaps */}
             <motion.div 
               animate={{ rotate: 360 }}
               transition={{ duration: 10, ease: "linear", repeat: Infinity }}
-              className="absolute w-28 h-28 rounded-full border-2 border-[#0066CC]/20 border-t-transparent border-b-transparent" 
+              className="absolute w-28 h-28 rounded-full border-2 border-[#3D52A0]/20 border-t-transparent border-b-transparent" 
             />
             
             {/* Golden/Brass Outer Containment Ring - matching the gold theme palette */}
@@ -2294,7 +2294,7 @@ export default function App() {
               {[...Array(8)].map((_, i) => (
                 <div
                   key={i}
-                  className="absolute w-2.5 h-5 bg-[#0066CC]/15 rounded-[1px] border border-sky-400/20"
+                  className="absolute w-2.5 h-5 bg-[#3D52A0]/15 rounded-[1px] border border-sky-400/20"
                   style={{
                     transform: `rotate(${i * 45}deg) translateY(-26px)`,
                     boxShadow: '0 0 6px rgba(99,102,241,0.1)'
@@ -2307,7 +2307,7 @@ export default function App() {
             <motion.div 
               animate={{ rotate: 360 }}
               transition={{ duration: 1.2, ease: "linear", repeat: Infinity }}
-              className="absolute w-14 h-14 rounded-full border border-[#0066CC] border-l-transparent border-r-transparent shadow-[0_0_12px_rgba(99,102,241,0.2)]" 
+              className="absolute w-14 h-14 rounded-full border border-[#3D52A0] border-l-transparent border-r-transparent shadow-[0_0_12px_rgba(99,102,241,0.2)]" 
             />
 
             {/* Main Core: Highly Concentrated Glow Core */}
@@ -2320,7 +2320,7 @@ export default function App() {
               <motion.div 
                 animate={{ scale: [0.9, 1.1, 0.9] }}
                 transition={{ duration: 1.5, ease: "easeInOut", repeat: Infinity }}
-                className="w-4 h-4 rounded-full bg-[#0066CC]/20 border border-sky-400" 
+                className="w-4 h-4 rounded-full bg-[#3D52A0]/20 border border-sky-400" 
               />
             </div>
 
@@ -2514,7 +2514,7 @@ export default function App() {
           </div>
 
           <div
-            className={`fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/50 z-[70] md:hidden transition-opacity ${isMobileMenuOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+            className={`fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/50 z-[70] md:hidden transition-opacity ${isMobileMenuOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
             onClick={() => setIsMobileMenuOpen(false)}
           />
 
@@ -2725,7 +2725,7 @@ export default function App() {
                                 );
                               }
                             }}
-                            className="px-4 py-2 bg-[#0066CC] text-white rounded-lg text-sm font-bold hover:bg-[#0055B3] shadow-sm transition-colors"
+                            className="px-4 py-2 bg-[#3D52A0] text-white rounded-lg text-sm font-bold hover:bg-[#334486] shadow-sm transition-colors"
                           >
                             Publish Draft to Live
                           </button>
@@ -2742,7 +2742,7 @@ export default function App() {
                                 setIsDraftBankMode(true);
                               }
                             }}
-                            className="px-4 py-2 bg-[#0066CC]/90 text-white rounded-lg text-sm font-bold hover:bg-[#0055B3] backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 transition-all"
+                            className="px-4 py-2 bg-[#3D52A0]/90 text-white rounded-lg text-sm font-bold hover:bg-[#334486] backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 transition-all"
                           >
                             Sync Draft from Live
                           </button>
@@ -2976,6 +2976,7 @@ export default function App() {
                           activeTier={activeCalculatedTier}
                           tiers={tiersWithCalculatedSummaries}
                           allProjects={projectLibrary} // NEW: Passing full library for global calculation
+                          projectId={activeInternalId!}
                           bank={bank}
                           fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
                           setBoq={setBoqForActiveTier}
@@ -2989,6 +2990,7 @@ export default function App() {
                           activeTier={activeCalculatedTier || undefined}
                           bank={bank}
                           projectId={activeInternalId!}
+                          decisionLedger={decisionLedger}
                         />
                       )}
 
@@ -3397,7 +3399,7 @@ export default function App() {
                                 );
                               }
                             }}
-                            className="px-4 py-2 bg-[#0066CC] text-white rounded-lg text-sm font-bold hover:bg-[#0055B3] shadow-sm transition-colors"
+                            className="px-4 py-2 bg-[#3D52A0] text-white rounded-lg text-sm font-bold hover:bg-[#334486] shadow-sm transition-colors"
                           >
                             Publish Draft to Live
                           </button>
@@ -3414,7 +3416,7 @@ export default function App() {
                                 setIsDraftBankMode(true);
                               }
                             }}
-                            className="px-4 py-2 bg-[#0066CC]/90 text-white rounded-lg text-sm font-bold hover:bg-[#0055B3] backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 transition-all"
+                            className="px-4 py-2 bg-[#3D52A0]/90 text-white rounded-lg text-sm font-bold hover:bg-[#334486] backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 transition-all"
                           >
                             Sync Draft from Live
                           </button>
@@ -3651,6 +3653,7 @@ export default function App() {
                           activeTier={activeCalculatedTier}
                           tiers={tiersWithCalculatedSummaries}
                           allProjects={projectLibrary} // NEW: Passing full library for global calculation
+                          projectId={activeInternalId!}
                           bank={bank}
                           fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
                           setBoq={setBoqForActiveTier}
@@ -3664,6 +3667,7 @@ export default function App() {
                           activeTier={activeCalculatedTier || undefined}
                           bank={bank}
                           projectId={activeInternalId!}
+                          decisionLedger={decisionLedger}
                         />
                       )}
 

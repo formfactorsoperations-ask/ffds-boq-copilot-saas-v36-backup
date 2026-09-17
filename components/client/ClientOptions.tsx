@@ -81,7 +81,7 @@ const ClientOptions: React.FC<ClientOptionsProps> = ({ tiers, comparisonData, co
                                     <div className="mt-2 text-xl font-extrabold text-slate-900">{tier.name}</div>
                                 </div>
                                 {/* Recommended Badge - Hide if Active to avoid clutter/overlap with viewing badge if needed, but keeping logic distinct */}
-                                <div className={`rec-badge px-3 py-1 rounded-full bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-extrabold ${isRecommended && !isActive ? '' : 'hidden'}`}>Recommended</div>
+                                <div className={`rec-badge px-3 py-1 rounded-full bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-extrabold ${isRecommended && !isActive ? '' : 'hidden'}`}>Recommended</div>
                             </div>
                             <p className="mt-2 text-sm text-slate-600">{details.desc}</p>
                             <div className={`mt-5 rounded-2xl p-4 transition-colors price-container ${isActive ? 'bg-slate-50 border border-slate-200' : 'bg-white border border-slate-200'}`}>
@@ -92,7 +92,7 @@ const ClientOptions: React.FC<ClientOptionsProps> = ({ tiers, comparisonData, co
                                 {details.features.map((f, i) => <li key={i}>{f}</li>)}
                             </ul>
                             
-                            <div className={`cta-text mt-auto pt-4 border-t border-slate-100 text-center text-xs font-bold transition-colors ${isActive ? 'text-[#0066CC]' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                            <div className={`cta-text mt-auto pt-4 border-t border-slate-100 text-center text-xs font-bold transition-colors ${isActive ? 'text-[#3D52A0]' : 'text-slate-400 group-hover:text-slate-600'}`}>
                                 {isActive ? 'Showing Room-wise Scope Below ↓' : 'Click to View Detailed Scope'}
                             </div>
                         </div>
@@ -104,7 +104,7 @@ const ClientOptions: React.FC<ClientOptionsProps> = ({ tiers, comparisonData, co
                 <button 
                     id="view-specs-trigger"
                     onClick={handleScrollToSpecs}
-                    className="inline-flex items-center gap-2 text-xs font-bold text-[#0066CC] hover:text-[#0055B3] transition-colors bg-sky-50 hover:bg-sky-100 px-4 py-2 rounded-full cursor-pointer"
+                    className="inline-flex items-center gap-2 text-xs font-bold text-[#3D52A0] hover:text-[#334486] transition-colors bg-sky-50 hover:bg-sky-100 px-4 py-2 rounded-full cursor-pointer"
                 >
                     <span>View detailed material specification comparison</span>
                     <ArrowRightIcon className="w-3 h-3" />

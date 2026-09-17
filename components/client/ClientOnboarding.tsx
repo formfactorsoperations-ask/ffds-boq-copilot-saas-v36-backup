@@ -316,7 +316,7 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
             <div className="absolute top-2 right-4 md:right-8 no-print flex gap-2 z-50">
                 <button 
                     onClick={() => setIsEditing(!isEditing)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-sm border ${isEditing ? 'bg-[#0066CC] text-white border-[#0066CC]' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-sm border ${isEditing ? 'bg-[#3D52A0] text-white border-[#3D52A0]' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
                 >
                     <PencilIcon className="w-3.5 h-3.5" /> {isEditing ? 'Done Editing' : 'Edit Document'}
                 </button>
@@ -325,7 +325,7 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
             <div className="max-w-5xl mx-auto bg-white shadow-2xl rounded-2xl overflow-hidden print:shadow-none print:w-full print:max-w-none">
                 
                 {/* 1. HEADER SECTION */}
-                <header className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white p-10 md:p-14">
+                <header className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white p-10 md:p-14">
                     <div className="border-b border-slate-700 pb-8 mb-8">
                         <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">Project Initiation – Onboarding Kit</h1>
                         <p className="text-slate-400 text-lg">{settings?.companyName || orgData.orgName || 'The Studio'}</p>
@@ -382,7 +382,7 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
                             {(settings?.designProcess?.steps && settings.designProcess.steps.length > 0) ? (
                                 settings.designProcess.steps.map((step: any, index: number) => (
                                     <div key={index} className="flex flex-col items-center flex-1 bg-white px-2">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold mb-3 ${index === 0 ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'bg-slate-200 text-slate-600'}`}>
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold mb-3 ${index === 0 ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'bg-slate-200 text-slate-600'}`}>
                                             {step.stepNumber}
                                         </div>
                                         <p className="font-semibold text-sm text-center">{step.title}</p>
@@ -407,7 +407,7 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
                                 settings.onboardingProcess.steps.map((step: any, idx: number) => (
                                     <div key={idx} className="bg-slate-50 p-6 rounded-xl border border-slate-100 flex flex-col h-full relative">
                                         <div className="flex justify-between items-start mb-2">
-                                            <div className="w-8 h-8 rounded bg-sky-100 text-[#0066CC] flex items-center justify-center text-xs font-bold shrink-0">
+                                            <div className="w-8 h-8 rounded bg-sky-100 text-[#3D52A0] flex items-center justify-center text-xs font-bold shrink-0">
                                                 {step.stepNumber || idx + 1}
                                             </div>
                                             {step.ownerRole && (
@@ -474,7 +474,7 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
                                         )}
                                         {settings?.phone && (
                                             <li className="flex items-start gap-3">
-                                                <div className={`mt-0.5 w-5 h-5 rounded-full bg-[#0066CC] flex items-center justify-center shrink-0 text-white`}>
+                                                <div className={`mt-0.5 w-5 h-5 rounded-full bg-[#3D52A0] flex items-center justify-center shrink-0 text-white`}>
                                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
                                                 </div>
                                                 <div>
@@ -514,7 +514,7 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
                                         {settings.onboardingProcess.kickoffChecklist.map((item: string, idx: number) => (
                                             <li key={idx} className="flex items-start gap-3">
                                                 <div className="mt-1 w-4 h-4 rounded border border-sky-300 bg-white shadow-sm shrink-0 flex items-center justify-center cursor-pointer hover:bg-sky-50 hover:border-sky-400 focus-within:ring-2 focus-within:ring-sky-300 focus-within:bg-sky-50 focus-within:border-sky-400">
-                                                    <input type="checkbox" className="appearance-none w-full h-full cursor-pointer checked:bg-[#0066CC] checked:border-transparent transition-colors" />
+                                                    <input type="checkbox" className="appearance-none w-full h-full cursor-pointer checked:bg-[#3D52A0] checked:border-transparent transition-colors" />
                                                 </div>
                                                 <span className="text-sm font-medium text-slate-700 leading-snug">{item}</span>
                                             </li>
@@ -523,7 +523,7 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
                                 ) : (
                                     <div className="flex flex-col items-center justify-center text-center text-slate-500 text-sm">
                                         <p className="mb-2">Checklist not configured.</p>
-                                        <a href="/studio-settings" className="text-[#0066CC] hover:text-[#0055B3] font-medium">
+                                        <a href="/studio-settings" className="text-[#3D52A0] hover:text-[#334486] font-medium">
                                             Setup in Studio Settings &rarr;
                                         </a>
                                     </div>
@@ -537,11 +537,11 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
                     {/* 8. PAYMENT TABLES & BOOKING BOQ */}
                     <section className="print-break-inside-avoid">
                         <div className="mb-6 flex items-center gap-2">
-                            <span className="w-6 h-0.5 bg-[#0066CC]/90 backdrop-blur-md border border-white/20"></span>
+                            <span className="w-6 h-0.5 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20"></span>
                             <EditableText isEditing={isEditing} value={content.paymentTermsTitle || "Payment Schedule & Booking BOQ"} onChange={v => handleUpdateContent('paymentTermsTitle', v)} className="text-sm font-black text-slate-900 uppercase tracking-wider" />
                         </div>
                         
-                        <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white rounded-xl p-6 mb-8 flex justify-between items-center shadow-lg print:border-2 print:border-[#0055B3] print:text-slate-900 print:bg-white">
+                        <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white rounded-xl p-6 mb-8 flex justify-between items-center shadow-lg print:border-2 print:border-[#334486] print:text-slate-900 print:bg-white">
                             <div>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 print:text-slate-500">Booking BOQ Value</p>
                                 <p className="text-3xl font-black">{formatCurrency(grossProjectValue)}</p>
@@ -647,8 +647,8 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
 
                     {/* 9. GST & PAYMENT STRUCTURE */}
                     <section className="print-break-inside-avoid">
-                        <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-2xl p-8 md:p-10 text-white shadow-lg relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-[#0066CC] rounded-full mix-blend-multiply filter blur-3xl opacity-20 transform translate-x-1/2 -translate-y-1/2"></div>
+                        <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 rounded-2xl p-8 md:p-10 text-white shadow-lg relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-[#3D52A0] rounded-full mix-blend-multiply filter blur-3xl opacity-20 transform translate-x-1/2 -translate-y-1/2"></div>
                             
                             <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
                                 <svg className="w-6 h-6 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
@@ -711,7 +711,7 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
                                 isEditing={isEditing} 
                                 items={content.ffdsExpectations || []} 
                                 onChange={v => handleUpdateContent('ffdsExpectations', v)} 
-                                icon={<svg className="w-5 h-5 text-[#0066CC] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>}
+                                icon={<svg className="w-5 h-5 text-[#3D52A0] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>}
                             />
                         </section>
                     </div>
@@ -752,7 +752,7 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
                                 </div>
                             </div>
 
-                            <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white rounded-xl p-6 shadow-sm flex flex-col justify-center relative group/qr">
+                            <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white rounded-xl p-6 shadow-sm flex flex-col justify-center relative group/qr">
                                 <h4 className="text-xs font-bold text-sky-400 uppercase tracking-wider mb-4">Bank Details</h4>
                                 <div className="space-y-3 text-sm mb-6">
                                     <div>
@@ -799,7 +799,7 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
                 </div>
 
                 {/* 13. FOOTER */}
-                <footer className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-slate-400 p-10 md:p-14 text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-6">
+                <footer className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-slate-400 p-10 md:p-14 text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-6">
                     <div>
                         <h2 className="text-xl font-bold text-white tracking-tight mb-1">
                             {settings?.companyName || orgData.orgName || 'Studio Name'}

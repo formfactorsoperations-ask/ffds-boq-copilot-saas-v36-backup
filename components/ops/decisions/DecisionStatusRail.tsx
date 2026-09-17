@@ -46,7 +46,7 @@ export default function DecisionStatusRail({
     ? { fill: 'bg-rose-500', ring: 'bg-rose-100', text: 'text-rose-700' }
     : done
       ? { fill: 'bg-emerald-500', ring: 'bg-emerald-100', text: 'text-emerald-700' }
-      : { fill: 'bg-[#0066CC]', ring: 'bg-sky-100', text: 'text-[#0055B3]' };
+      : { fill: 'bg-[#3D52A0]', ring: 'bg-sky-100', text: 'text-[#334486]' };
 
   return (
     <div className={`flex items-center ${compact ? 'gap-1' : 'gap-1.5'}`} aria-label={`Step ${reached} of 4`}>

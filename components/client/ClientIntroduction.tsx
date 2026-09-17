@@ -116,7 +116,7 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
             default:
                 return (
                     <div className="relative w-full min-h-[600px] h-screen print:h-[28.5cm] flex flex-col md:flex-row bg-white overflow-hidden print:page-break-after-always border-b border-slate-200">
-                        <div className="w-full md:w-1/2 h-1/2 md:h-full relative bg-[#0066CC]/90 backdrop-blur-md border border-white/20">
+                        <div className="w-full md:w-1/2 h-1/2 md:h-full relative bg-[#3D52A0]/90 backdrop-blur-md border border-white/20">
                             <img src={coverImage} alt="Interior Design Theme" className="w-full h-full object-cover opacity-90" onError={() => setImgError(true)} />
                         </div>
                         <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col justify-between p-8 md:p-12 lg:p-20">
@@ -190,7 +190,7 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
                                 </p>
                                 {/* Mobile Jump Button */}
                                 <div className="md:hidden mt-4 mb-8">
-                                    <a href="#decision-lock" className="flex items-center gap-2 text-[#0055B3] font-bold text-sm bg-sky-50 border border-sky-100 px-4 py-3 rounded-xl justify-between shadow-sm active:bg-sky-100">
+                                    <a href="#decision-lock" className="flex items-center gap-2 text-[#334486] font-bold text-sm bg-sky-50 border border-sky-100 px-4 py-3 rounded-xl justify-between shadow-sm active:bg-sky-100">
                                         <span>Already reviewed? Jump to Next Steps</span>
                                         <ArrowRightIcon className="w-4 h-4" />
                                     </a>
@@ -276,7 +276,7 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
                             <div className="mt-8 no-print">
                                 <button 
                                     onClick={handleExploreClick}
-                                    className="w-full inline-flex items-center justify-center px-4 py-4 rounded-xl bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white font-bold text-sm hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 hover:scale-[1.02] transition-all shadow-lg"
+                                    className="w-full inline-flex items-center justify-center px-4 py-4 rounded-xl bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white font-bold text-sm hover:bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 hover:scale-[1.02] transition-all shadow-lg"
                                 >
                                     Explore Proposal Details
                                 </button>

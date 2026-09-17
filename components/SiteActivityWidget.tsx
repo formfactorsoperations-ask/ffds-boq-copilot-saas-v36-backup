@@ -108,7 +108,7 @@ export const SiteActivityWidget = ({
         </div>
         <button 
           onClick={onOpenHistory} 
-          className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-extrabold text-[#0066CC] flex items-center gap-1 uppercase tracking-wider transition"
+          className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-extrabold text-[#3D52A0] flex items-center gap-1 uppercase tracking-wider transition"
         >
           <span>All Logs</span>
           <ChevronRight size={12}/>
@@ -273,7 +273,7 @@ export const SiteActivityWidget = ({
                               href={visit.googleMeetUrl} 
                               target="_blank" 
                               rel="noreferrer" 
-                              className="inline-flex items-center gap-1.5 text-[10px] font-extrabold text-[#0066CC] bg-sky-50/50 hover:bg-sky-100 hover:text-[#0055B3] px-3 py-1.5 rounded-lg border border-sky-100/40 transition-all cursor-pointer shadow-sm"
+                              className="inline-flex items-center gap-1.5 text-[10px] font-extrabold text-[#3D52A0] bg-sky-50/50 hover:bg-sky-100 hover:text-[#334486] px-3 py-1.5 rounded-lg border border-sky-100/40 transition-all cursor-pointer shadow-sm"
                             >
                               <Video size={12} />
                               <span>Join Google Meet</span>

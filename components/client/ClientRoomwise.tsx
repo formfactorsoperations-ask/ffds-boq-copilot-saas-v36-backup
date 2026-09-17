@@ -79,7 +79,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                 </div>
 
                                 {/* Grand Total Card */}
-                                <div className="mb-8 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white rounded-2xl p-6 shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
+                                <div className="mb-8 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white rounded-2xl p-6 shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Project Value ({tier.name})</p>
                                         <h3 className="text-3xl font-extrabold tracking-tight">{formatCurrency(grandTotal)}</h3>
@@ -178,7 +178,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                             </h2>
                                         </div>
                                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-sky-50 border border-sky-100 rounded-xl text-xs font-bold text-sky-800 self-start">
-                                            <span className="w-2 h-2 rounded-full bg-[#0066CC] animate-pulse"></span>
+                                            <span className="w-2 h-2 rounded-full bg-[#3D52A0] animate-pulse"></span>
                                             Viewing: {tier.name}
                                         </div>
                                     </div>
@@ -210,7 +210,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                                         </p>
                                                     </div>
 
-                                                    <div className="p-2 rounded-full bg-white text-slate-400 group-hover:text-slate-600 transition-all group-open:rotate-180 group-open:bg-sky-100 group-open:text-[#0066CC]">
+                                                    <div className="p-2 rounded-full bg-white text-slate-400 group-hover:text-slate-600 transition-all group-open:rotate-180 group-open:bg-sky-100 group-open:text-[#3D52A0]">
                                                         <ChevronDownIcon className="w-4 h-4" />
                                                     </div>
                                                 </summary>

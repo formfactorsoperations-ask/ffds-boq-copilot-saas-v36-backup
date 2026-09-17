@@ -149,7 +149,7 @@ const ContentEditorModal: React.FC<{
     const sectionData = (localContent as any)[activeSection];
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md backdrop-blur-sm p-4">
             <MotionDiv 
                 initial={{ opacity: 0, scale: 0.95 }} 
                 animate={{ opacity: 1, scale: 1 }} 
@@ -168,7 +168,7 @@ const ContentEditorModal: React.FC<{
                                 <button
                                     key={section.id}
                                     onClick={() => setActiveSection(section.id)}
-                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${activeSection === section.id ? 'bg-sky-100 text-[#0055B3]' : 'text-slate-500 hover:bg-slate-100'}`}
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${activeSection === section.id ? 'bg-sky-100 text-[#334486]' : 'text-slate-500 hover:bg-slate-100'}`}
                                 >
                                     {section.label}
                                 </button>
@@ -194,7 +194,7 @@ const ContentEditorModal: React.FC<{
 
                 <div className="p-4 border-t bg-slate-50 flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg">Cancel</button>
-                    <button onClick={() => onSave(localContent)} className="px-6 py-2 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white font-bold rounded-lg hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 shadow-lg">Save Changes</button>
+                    <button onClick={() => onSave(localContent)} className="px-6 py-2 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white font-bold rounded-lg hover:bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 shadow-lg">Save Changes</button>
                 </div>
             </MotionDiv>
         </div>,
@@ -707,7 +707,7 @@ const MODEL_SWITCHER = [
                             <button
                                 key={m.id}
                                 onClick={() => setActiveMode(m.id as ProposalType)}
-                                className={`${UI_STYLES.button.xs} rounded-md transition-all ${activeMode === m.id ? 'bg-[#0066CC] text-white shadow-sm' : 'text-slate-500 hover:text-[#0055B3] hover:bg-sky-50'}`}
+                                className={`${UI_STYLES.button.xs} rounded-md transition-all ${activeMode === m.id ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-500 hover:text-[#334486] hover:bg-sky-50'}`}
                             >
                                 {m.icon}
                                 {m.label}
@@ -728,8 +728,8 @@ const MODEL_SWITCHER = [
                                     title={`Export as A4 ${o}`}
                                     className={`px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-md transition-all ${
                                         exportOrientation === o
-                                            ? 'bg-[#0066CC] text-white shadow-sm'
-                                            : 'text-slate-500 hover:text-[#0055B3] hover:bg-sky-50'
+                                            ? 'bg-[#3D52A0] text-white shadow-sm'
+                                            : 'text-slate-500 hover:text-[#334486] hover:bg-sky-50'
                                     }`}
                                 >{o}</button>
                             ))}
@@ -749,7 +749,7 @@ const MODEL_SWITCHER = [
                              type="button"
                              onClick={handleDownloadPdf}
                              disabled={isBuildingPdf}
-                             className="flex items-center gap-2 px-4 py-2 bg-[#0066CC] text-white font-bold text-sm rounded-lg shadow-sm hover:bg-[#0055B3] transition-all disabled:opacity-60 disabled:cursor-wait"
+                             className="flex items-center gap-2 px-4 py-2 bg-[#3D52A0] text-white font-bold text-sm rounded-lg shadow-sm hover:bg-[#334486] transition-all disabled:opacity-60 disabled:cursor-wait"
                          >
                              <Download className="w-4 h-4" /> {isBuildingPdf ? 'Building PDF…' : 'Download PDF'}
                          </button>
@@ -757,7 +757,7 @@ const MODEL_SWITCHER = [
                          <button 
                              type="button"
                              onClick={handlePrint}
-                             className="flex items-center gap-2 px-4 py-2 bg-white text-[#0055B3] font-bold text-sm rounded-lg border border-sky-200 shadow-sm hover:bg-sky-50 hover:border-sky-300 transition-all"
+                             className="flex items-center gap-2 px-4 py-2 bg-white text-[#334486] font-bold text-sm rounded-lg border border-sky-200 shadow-sm hover:bg-sky-50 hover:border-sky-300 transition-all"
                          >
                              <PrintIcon className="w-4 h-4"/> Save PDF
                          </button>
@@ -769,25 +769,25 @@ const MODEL_SWITCHER = [
                      <div className="flex bg-white rounded-lg p-1 border border-slate-300 shadow-sm flex-wrap gap-1">
                         <button 
                             onClick={() => setProposalLevel('LEVEL_1')}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_1' ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_1' ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
                         >
                             Level 1: Concept
                         </button>
                         <button 
                             onClick={() => setProposalLevel('LEVEL_1_5')}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_1_5' ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_1_5' ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
                         >
                             Level 1.5: Interim Update
                         </button>
                         <button 
                             onClick={() => setProposalLevel('LEVEL_2')}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_2' ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_2' ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
                         >
                             Level 2: Planning
                         </button>
                         <button 
                             onClick={() => setProposalLevel('LEVEL_3')}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_3' ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_3' ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
                         >
                             Level 3: Execution
                         </button>
@@ -801,7 +801,7 @@ const MODEL_SWITCHER = [
                                          type="checkbox" 
                                          checked={showScopePricing} 
                                          onChange={toggleShowScopePricing}
-                                         className="rounded border-slate-300 text-[#0066CC] focus:ring-[#0066CC] w-3.5 h-3.5"
+                                         className="rounded border-slate-300 text-[#3D52A0] focus:ring-[#3D52A0] w-3.5 h-3.5"
                                      />
                                      <span>Show Scope Pricing & Total</span>
                                  </label>
@@ -810,13 +810,13 @@ const MODEL_SWITCHER = [
                                  <div className="flex bg-white rounded-lg p-1 border border-slate-300 shadow-sm gap-1 self-stretch md:self-auto">
                                  <button
                                  onClick={() => setProposalFormat('classic')}
-                                 className={`flex-1 md:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalFormat === 'classic' ? 'bg-[#0066CC] text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                                 className={`flex-1 md:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalFormat === 'classic' ? 'bg-[#3D52A0] text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
                              >
                                  Classic Digital
                              </button>
                              <button
                                  onClick={() => setProposalFormat('booklet')}
-                                 className={`flex-1 md:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalFormat === 'booklet' ? 'bg-[#0066CC] text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                                 className={`flex-1 md:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalFormat === 'booklet' ? 'bg-[#3D52A0] text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
                              >
                                  Luxe Booklet (New Format)
                              </button>

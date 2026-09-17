@@ -299,7 +299,7 @@ export function MomReviewModal({
     mom.status === "acknowledged";
 
   return (
-    <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 z-[100] flex items-center justify-center p-0 sm:p-4 backdrop-blur-xs font-sans">
+    <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 z-[100] flex items-center justify-center p-0 sm:p-4 backdrop-blur-xs font-sans">
       <div className="bg-white sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-h-[92vh] max-w-3xl flex flex-col overflow-hidden border border-slate-200/80">
         
         {/* Header */}
@@ -744,7 +744,7 @@ export function MomReviewModal({
             <button
               onClick={handleFinalise}
               disabled={saving}
-              className="flex-1 py-3 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white hover:text-amber-400 rounded-xl font-bold text-sm uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-sm"
+              className="flex-1 py-3 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:text-amber-400 rounded-xl font-bold text-sm uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-sm"
             >
               <CheckCircle2 size={14} />
               Finalise Document
@@ -927,7 +927,7 @@ export function MomReviewModal({
                                   </span>
                                 )}
                                 {a.flags?.drawing && (
-                                  <span className="ml-2 inline-block text-[9px] text-[#0055B3] font-bold uppercase tracking-wider">
+                                  <span className="ml-2 inline-block text-[9px] text-[#334486] font-bold uppercase tracking-wider">
                                     [Drawing Keyed]
                                   </span>
                                 )}

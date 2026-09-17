@@ -610,7 +610,7 @@ export default function RoomProgressTracker({ projectContext, setProjectContext,
       <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/60">
         <div>
           <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2 uppercase tracking-wide">
-            <Building className="w-4 h-4 text-[#0066CC]" />
+            <Building className="w-4 h-4 text-[#3D52A0]" />
             Room Progress Sync (Client Portal)
           </h4>
           <p className="text-[11px] text-slate-500 mt-0.5">
@@ -619,7 +619,7 @@ export default function RoomProgressTracker({ projectContext, setProjectContext,
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-50 border border-sky-200/60 text-[#0066CC] font-bold text-xs">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-50 border border-sky-200/60 text-[#3D52A0] font-bold text-xs">
             <span className="text-[10px] uppercase tracking-wider text-sky-700">Site Avg:</span>
             <span>{avgProgress}%</span>
           </div>
@@ -627,7 +627,7 @@ export default function RoomProgressTracker({ projectContext, setProjectContext,
           <button
             type="button"
             onClick={handleAutoDeriveAll}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-[#0066CC] hover:border-sky-300 font-bold text-xs shadow-2xs hover:shadow-xs transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-[#3D52A0] hover:border-sky-300 font-bold text-xs shadow-2xs hover:shadow-xs transition-all cursor-pointer"
             title="Automatically compute all room stages and percentages from item statuses, active trades, quality checks, and snags"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-500" />
@@ -680,7 +680,7 @@ export default function RoomProgressTracker({ projectContext, setProjectContext,
                           onClick={() => toggleRoomExpand(roomKey)}
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 transition-all cursor-pointer ${
                             isExpanded 
-                              ? 'bg-[#0066CC] text-white' 
+                              ? 'bg-[#3D52A0] text-white' 
                               : completedItemCount > 0 
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60 hover:bg-emerald-100' 
                                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -709,7 +709,7 @@ export default function RoomProgressTracker({ projectContext, setProjectContext,
                     <select
                       value={state.stage}
                       onChange={(e) => handleStageChange(room, idx, e.target.value)}
-                      className="text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-[#0066CC] focus:ring-1 focus:ring-[#0066CC] w-full transition-colors cursor-pointer"
+                      className="text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] w-full transition-colors cursor-pointer"
                     >
                       {STAGES.map(s => (
                         <option key={s} value={s}>{s}</option>
@@ -731,7 +731,7 @@ export default function RoomProgressTracker({ projectContext, setProjectContext,
                       step="5"
                       value={state.progress}
                       onChange={(e) => handleProgressChange(room, idx, parseInt(e.target.value, 10))}
-                      className="w-full accent-[#0066CC] h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                      className="w-full accent-[#3D52A0] h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
                     />
                     <div className="flex justify-between text-[9px] text-slate-400 font-mono">
                       <span>0%</span>
@@ -747,7 +747,7 @@ export default function RoomProgressTracker({ projectContext, setProjectContext,
                       state.progress === 100 
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
                         : state.progress > 0 
-                          ? 'bg-sky-50 text-[#0066CC] border-sky-200' 
+                          ? 'bg-sky-50 text-[#3D52A0] border-sky-200' 
                           : 'bg-slate-100 text-slate-500 border-slate-200'
                     }`}>
                       {state.progress}%
@@ -758,7 +758,7 @@ export default function RoomProgressTracker({ projectContext, setProjectContext,
 
               {/* Expandable Individual Items Checklist */}
               {isExpanded && roomItems.length > 0 && (
-                <div className="mt-3.5 pl-2 sm:pl-4 border-l-2 border-[#0066CC]/30 bg-slate-50/50 rounded-r-xl p-3.5 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="mt-3.5 pl-2 sm:pl-4 border-l-2 border-[#3D52A0]/30 bg-slate-50/50 rounded-r-xl p-3.5 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200/60">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-slate-800">

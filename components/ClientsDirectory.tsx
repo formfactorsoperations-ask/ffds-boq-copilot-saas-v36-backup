@@ -782,7 +782,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                       setCopiedPassword(false);
                     }
                   }}
-                  className="px-5 py-2 rounded-xl text-xs font-extrabold text-white bg-[#0066CC] hover:bg-[#0055B3] transition"
+                  className="px-5 py-2 rounded-xl text-xs font-extrabold text-white bg-[#3D52A0] hover:bg-[#334486] transition"
                 >
                   {copiedPassword ? "Copied" : "Copy both"}
                 </button>
@@ -1245,7 +1245,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                               onClick={(e) => handleIssueClientLogin(client.projects[0], client.name, false, e)}
                               disabled={issuingLoginFor === client.projects[0].id}
                               title="Create or reset this client's portal login"
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-[#0055B3] hover:bg-sky-50 border border-slate-200/70 transition-colors cursor-pointer disabled:opacity-50"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-[#334486] hover:bg-sky-50 border border-slate-200/70 transition-colors cursor-pointer disabled:opacity-50"
                             >
                               <KeyRound className="w-3.5 h-3.5" />
                             </button>

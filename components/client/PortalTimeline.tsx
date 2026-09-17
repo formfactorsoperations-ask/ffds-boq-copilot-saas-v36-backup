@@ -322,7 +322,7 @@ export default function PortalTimeline({
   return (
     <div className="space-y-3">
       <div className="flex gap-4 flex-wrap text-[11px] font-semibold text-slate-500">
-        <span className="inline-flex items-center gap-1.5"><span className="w-4 h-1.5 rounded bg-[#0066CC] inline-block" />Studio work</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-4 h-1.5 rounded bg-[#3D52A0] inline-block" />Studio work</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />Your decisions</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rotate-45 bg-violet-500 inline-block" />Your payments</span>
         {keyDates.length > 0 && (
@@ -436,13 +436,13 @@ export default function PortalTimeline({
                           : s.status === 'pending'
                             ? 'bg-sky-100 border border-sky-200'
                             : s.status === 'completed'
-                              ? 'bg-[#0066CC]/45'
-                              : 'bg-[#0066CC]'
+                              ? 'bg-[#3D52A0]/45'
+                              : 'bg-[#3D52A0]'
                       } ${dim(`st-${s.stageNumber}`)}`}
                     >
                       {inside && (
                         <span className={`text-[10px] font-bold truncate ${
-                          s.status === 'pending' ? 'text-[#0055B3]' : 'text-white'
+                          s.status === 'pending' ? 'text-[#334486]' : 'text-white'
                         }`}>
                           {s.name}
                         </span>
@@ -466,7 +466,7 @@ export default function PortalTimeline({
                     <span
                       style={{
                         left: `${left}%`,
-                        color: s.runningLate ? '#d97706' : s.hasSchedule ? '#0066CC' : '#cbd5e1',
+                        color: s.runningLate ? '#d97706' : s.hasSchedule ? '#3D52A0' : '#cbd5e1',
                         /* Offset per stage so the column breathes instead of
                            pulsing in unison. */
                         ['--ff-delay' as string]: `-${(i * 430) % 5200}ms`,
@@ -589,7 +589,7 @@ export default function PortalTimeline({
                         className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1.5
                                     rounded-full pl-1.5 pr-2.5 py-1 text-[10px] font-bold whitespace-nowrap
                                     border transition-all cursor-pointer hover:shadow-md hover:-translate-y-[calc(50%+1px)] ${
-                          open ? 'ring-2 ring-offset-1 ring-[#0066CC] ' : ''
+                          open ? 'ring-2 ring-offset-1 ring-[#3D52A0] ' : ''
                         }${
                           allDone
                             ? 'bg-emerald-50 border-emerald-200 text-emerald-800'

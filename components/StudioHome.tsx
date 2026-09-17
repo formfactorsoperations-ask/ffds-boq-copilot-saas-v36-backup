@@ -231,7 +231,7 @@ export default function StudioHome({
                 unreachable -- the plate is never an empty black box. */}
             <div className="absolute inset-0 bg-gradient-to-br from-[#F7F8FA] via-white to-[#EFEDE7]" />
             <div className="aurora-a absolute -top-40 right-[-8rem] w-[42rem] h-[42rem] rounded-full blur-3xl"
-                 style={{ background: "radial-gradient(circle, rgba(0,102,204,.20), transparent 70%)" }} />
+                 style={{ background: "radial-gradient(circle, rgba(61, 82, 160,.20), transparent 70%)" }} />
             <div className="aurora-b absolute -bottom-56 right-1/4 w-[38rem] h-[38rem] rounded-full blur-3xl"
                  style={{ background: "radial-gradient(circle, rgba(181,148,91,.20), transparent 68%)" }} />
             <video
@@ -287,7 +287,7 @@ export default function StudioHome({
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={focusOnAttention}
-                className="mt-7 md:mt-9 inline-flex items-center gap-2 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-full px-6 py-3 text-[13px] font-semibold cursor-pointer transition-colors shadow-[0_8px_24px_-6px_rgba(0,102,204,0.5)]"
+                className="mt-7 md:mt-9 inline-flex items-center gap-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-full px-6 py-3 text-[13px] font-semibold cursor-pointer transition-colors shadow-[0_8px_24px_-6px_rgba(61, 82, 160,0.5)]"
               >
                 {data.attentionCount > 0 ? "Show me what needs me" : "Review today's focus"}
                 <ArrowRight className="w-4 h-4" />
@@ -584,7 +584,7 @@ export default function StudioHome({
                           </div>
 
                           {/* The action itself, not hidden behind a chevron. */}
-                          <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-[#0066CC] group-hover:text-[#0055B3] whitespace-nowrap">
+                          <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-[#3D52A0] group-hover:text-[#334486] whitespace-nowrap">
                             {action.ctaLabel || "Open"}
                             <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                           </span>

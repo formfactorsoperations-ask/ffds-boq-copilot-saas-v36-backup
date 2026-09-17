@@ -26,7 +26,7 @@ export default function ProjectHistory({
   return (
     <div className="max-w-3xl mx-auto my-6 space-y-4">
       <div className="flex items-start gap-3.5">
-        <div className="w-12 h-12 rounded-2xl grid place-items-center text-white shrink-0 shadow-lg bg-gradient-to-br from-sky-500 to-[#0055B3] shadow-sky-600/25">
+        <div className="w-12 h-12 rounded-2xl grid place-items-center text-white shrink-0 shadow-lg bg-gradient-to-br from-sky-500 to-[#334486] shadow-sky-600/25">
           <History className="w-6 h-6" />
         </div>
         <div className="min-w-0">
@@ -38,7 +38,7 @@ export default function ProjectHistory({
       <div className="flex items-center gap-1.5">
         {(['timeline', 'data'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider transition-colors ${tab === t ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+            className={`px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider transition-colors ${tab === t ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
             {t === 'timeline' ? 'Timeline' : 'Data trail'}
           </button>
         ))}
@@ -217,7 +217,7 @@ function DataTrail({ projectContext, activeInternalId }: { projectContext: Proje
         <p className="text-xs text-slate-400 mb-3">Reads the project back from the {dbConnected ? 'database' : 'browser store'} and compares it to what's loaded in the app right now — confirms your latest change actually landed.</p>
         <div className="flex items-center gap-2 mb-3">
           <button onClick={runCheck} disabled={checking}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl disabled:opacity-50">
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold rounded-xl disabled:opacity-50">
             {checking ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />} Check now
           </button>
           <button onClick={exportJson} className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl">
@@ -254,7 +254,7 @@ function DataTrail({ projectContext, activeInternalId }: { projectContext: Proje
           <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400"><Database className="w-3.5 h-3.5" /> Database activity</span>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 cursor-pointer">
-              <input type="checkbox" checked={scopeToProject} onChange={e => setScopeToProject(e.target.checked)} className="accent-[#0066CC]" /> This project only
+              <input type="checkbox" checked={scopeToProject} onChange={e => setScopeToProject(e.target.checked)} className="accent-[#3D52A0]" /> This project only
             </label>
             <button onClick={clearIoLog} className="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase tracking-wider">Clear</button>
           </div>

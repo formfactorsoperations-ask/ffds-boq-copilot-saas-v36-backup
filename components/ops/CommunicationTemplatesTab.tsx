@@ -72,7 +72,7 @@ const COMMON_DYNAMIC_TAGS = [
   { tag: 'roomName', label: 'Room Name', desc: 'Room or scope zone' }
 ];
 
-export default function CommunicationTemplatesTab({ settings, updateSettings, onSaved }: any) {
+export default function CommunicationTemplatesTab({ settings, updateSettings, onSaved, tabs }: any) {
     const { orgData } = useOrg();
     const studioName = settings?.companyName || settings?.studioName || orgData?.name || 'Form Factors Design Studio';
     const studioPhone = settings?.phone || settings?.studioPhone || '+91 98765 43210';
@@ -309,6 +309,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                 state={customisedCount === 0 ? 'All standard' : `${customisedCount} tailored`}
                 tone={customisedCount === 0 ? 'warn' : 'ok'}
                 blurb="Email and WhatsApp wording sent to clients at each step of a project."
+                tabs={tabs}
                 search={{
                     value: search,
                     onChange: setSearch,
@@ -324,7 +325,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                         <select
                             value={filterCategory}
                             onChange={(e) => setFilterCategory(e.target.value)}
-                            className="border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-[#0066CC]/30 outline-none cursor-pointer"
+                            className="border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-[#3D52A0]/30 outline-none cursor-pointer"
                         >
                             {categories.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
@@ -356,7 +357,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                         <button 
                             type="button"
                             onClick={() => { setSearch(''); setFilterCategory('All'); }} 
-                            className="mt-2 text-xs text-[#0066CC] font-bold underline cursor-pointer"
+                            className="mt-2 text-xs text-[#3D52A0] font-bold underline cursor-pointer"
                         >
                             Clear Filters & Show All
                         </button>
@@ -373,7 +374,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                                         <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
                                             template.phase === 'execution' 
                                                 ? 'bg-amber-50 text-amber-800 border-amber-200' 
-                                                : 'bg-sky-50 text-[#0055B3] border-sky-200'
+                                                : 'bg-sky-50 text-[#334486] border-sky-200'
                                         }`}>
                                             {template.phase || 'design'} phase
                                         </span>
@@ -414,7 +415,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                                         className={`text-xs font-bold px-3 py-1.5 border rounded-xl flex items-center gap-1.5 transition cursor-pointer ${
                                             previewKey === template.key 
                                                 ? 'bg-slate-900 text-white border-slate-900' 
-                                                : 'bg-white border-slate-200 text-slate-700 hover:text-[#0066CC] hover:border-sky-200'
+                                                : 'bg-white border-slate-200 text-slate-700 hover:text-[#3D52A0] hover:border-sky-200'
                                         }`}
                                     >
                                         <Eye className="w-3.5 h-3.5" /> Preview
@@ -425,8 +426,8 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                                         onClick={() => handleEdit(template)}
                                         className={`text-xs font-bold px-3.5 py-1.5 border rounded-xl flex items-center gap-1.5 transition cursor-pointer ${
                                             editingKey === template.key 
-                                                ? 'bg-[#0066CC] text-white border-[#0066CC]' 
-                                                : 'bg-[#0066CC] text-white hover:bg-[#0055B3] border-[#0066CC]'
+                                                ? 'bg-[#3D52A0] text-white border-[#3D52A0]' 
+                                                : 'bg-[#3D52A0] text-white hover:bg-[#334486] border-[#3D52A0]'
                                         }`}
                                     >
                                         <Edit2 className="w-3.5 h-3.5" /> Configure
@@ -442,7 +443,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                                     <div className="bg-sky-50/70 p-4 rounded-2xl border border-sky-100 space-y-2">
                                         <div className="flex items-center justify-between">
                                             <span className="text-xs font-black text-sky-950 flex items-center gap-1.5">
-                                                <Tag className="w-3.5 h-3.5 text-[#0066CC]" /> Click Tag to Insert at Cursor:
+                                                <Tag className="w-3.5 h-3.5 text-[#3D52A0]" /> Click Tag to Insert at Cursor:
                                             </span>
                                             <span className="text-[10px] text-sky-700 font-medium">
                                                 Active Target: <strong className="uppercase font-bold">{activeField}</strong>
@@ -455,7 +456,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                                                     key={item.tag}
                                                     type="button"
                                                     onClick={() => handleInsertTag(item.tag)}
-                                                    className="px-2.5 py-1 bg-white hover:bg-sky-100 hover:border-sky-300 border border-sky-200 rounded-lg text-xs font-mono font-bold text-[#0055B3] shadow-2xs transition cursor-pointer flex items-center gap-1"
+                                                    className="px-2.5 py-1 bg-white hover:bg-sky-100 hover:border-sky-300 border border-sky-200 rounded-lg text-xs font-mono font-bold text-[#334486] shadow-2xs transition cursor-pointer flex items-center gap-1"
                                                     title={item.desc}
                                                 >
                                                     <span>{`{${item.tag}}`}</span>
@@ -479,7 +480,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                                                     onFocus={() => setActiveField('subject')}
                                                     value={editForm.email?.subject || ''} 
                                                     onChange={e => setEditForm({ ...editForm, email: { ...(editForm.email || {}), subject: e.target.value } })}
-                                                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none transition" 
+                                                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none transition" 
                                                 />
                                             </div>
 
@@ -493,7 +494,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                                                     value={editForm.email?.body || ''} 
                                                     onChange={e => setEditForm({ ...editForm, email: { ...(editForm.email || {}), body: e.target.value } })}
                                                     rows={8}
-                                                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none transition leading-relaxed" 
+                                                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none transition leading-relaxed" 
                                                 />
                                             </div>
 
@@ -507,7 +508,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                                                     value={editForm.whatsapp?.body || ''} 
                                                     onChange={e => setEditForm({ ...editForm, whatsapp: { ...(editForm.whatsapp || {}), body: e.target.value } })}
                                                     rows={4}
-                                                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none transition leading-relaxed" 
+                                                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none transition leading-relaxed" 
                                                 />
                                             </div>
                                         </div>
@@ -516,7 +517,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                                         <div className="space-y-4">
                                             <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3 text-xs">
                                                 <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
-                                                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#0066CC] flex items-center gap-1.5">
+                                                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#3D52A0] flex items-center gap-1.5">
                                                         <Mail className="w-3.5 h-3.5" /> Live Email Client Preview
                                                     </span>
                                                     <span className="text-[10px] font-mono text-slate-400">256-Bit TLS Seal</span>
@@ -537,7 +538,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
 
                                                         {/* Anti-phishing seal mockup */}
                                                         <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] text-slate-500 font-mono">
-                                                            <div className="font-bold text-[#0066CC] mb-0.5">🔒 OFFICIAL VERIFICATION SEAL</div>
+                                                            <div className="font-bold text-[#3D52A0] mb-0.5">🔒 OFFICIAL VERIFICATION SEAL</div>
                                                             <div>PIN: {sampleVariables.pinCode} · HASH: {sampleVariables.docketHash.slice(0, 20)}...</div>
                                                         </div>
                                                     </div>
@@ -582,7 +583,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                                                 type="button"
                                                 onClick={handleSave} 
                                                 disabled={isSaving} 
-                                                className="px-6 py-2.5 text-xs font-bold text-white bg-[#0066CC] rounded-xl hover:bg-[#0055B3] transition-all flex items-center gap-2 shadow-xs cursor-pointer"
+                                                className="px-6 py-2.5 text-xs font-bold text-white bg-[#3D52A0] rounded-xl hover:bg-[#334486] transition-all flex items-center gap-2 shadow-xs cursor-pointer"
                                             >
                                                 <Save className="w-3.5 h-3.5" /> Save Global Script
                                             </button>
@@ -596,7 +597,7 @@ export default function CommunicationTemplatesTab({ settings, updateSettings, on
                                 <div className="p-5 border-t border-slate-200 bg-slate-50/80 grid grid-cols-1 md:grid-cols-2 gap-5">
                                     <div className="space-y-1.5">
                                         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                            <div className="w-2 h-2 rounded-full bg-[#0066CC]"></div> Resolved Email Preview
+                                            <div className="w-2 h-2 rounded-full bg-[#3D52A0]"></div> Resolved Email Preview
                                         </h4>
                                         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-2 text-xs">
                                             <div>

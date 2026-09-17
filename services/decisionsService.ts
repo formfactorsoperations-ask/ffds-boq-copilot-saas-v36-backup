@@ -70,6 +70,19 @@ export interface DecisionData {
      * record. Append-only; nothing here is ever replaced.
      */
     discussion?: DecisionMessage[];
+    /**
+     * Where this decision came from, when it was not typed on the Decisions
+     * screen. Cost variations on the schedule of finishes raise one of these
+     * automatically once they cross the studio's sign-off threshold.
+     */
+    source?: 'sof_variation';
+    /**
+     * The MaterialSelection this decision was raised for. It is what carries
+     * the client's answer back to the schedule of finishes -- without it the
+     * variation would sit as "awaiting sign-off" forever, whatever the client
+     * actually said here.
+     */
+    linkedSelectionId?: string;
 }
 
 /**
@@ -130,6 +143,15 @@ export async function saveDecision(projectId: string, decisionData: Partial<Deci
     */
     if (decisionData.decisionNature) {
         payload.decisionNature = decisionData.decisionNature;
+    }
+
+    // Same reasoning as decisionNature: write the key only when there is one,
+    // so "absent" keeps meaning "not raised from a selection".
+    if (decisionData.source) {
+        payload.source = decisionData.source;
+    }
+    if (decisionData.linkedSelectionId) {
+        payload.linkedSelectionId = decisionData.linkedSelectionId;
     }
 
     await setDoc(newDecisionRef, payload);

@@ -41,7 +41,7 @@ const PageTitleBlock: React.FC<Props> = ({ route }) => {
           {meta.title}
         </FlipText>
         {badge && (
-          <span className="ml-2.5 align-middle inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-50 text-[#0066CC] border border-sky-100">
+          <span className="ml-2.5 align-middle inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-50 text-[#3D52A0] border border-sky-100">
             {badge}
           </span>
         )}

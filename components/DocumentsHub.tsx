@@ -475,7 +475,7 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
       case 'signed':
         return 'bg-emerald-50/80 text-emerald-800 border border-emerald-200/50';
       case 'sent':
-        return 'bg-sky-50/80 text-[#0055B3] border border-sky-200/50';
+        return 'bg-sky-50/80 text-[#334486] border border-sky-200/50';
       case 'draft':
         return 'bg-amber-50/80 text-amber-800 border border-amber-200/50';
       case 'locked':
@@ -503,7 +503,7 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
       >
         <div className="min-w-0">
           <h1 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-[#0066CC]" />
+            <FileText className="w-4 h-4 text-[#3D52A0]" />
             Client documents
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
@@ -519,7 +519,7 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[12px] font-medium text-slate-800
-                       placeholder-slate-400 outline-none focus:bg-white focus:border-[#0066CC] transition-colors"
+                       placeholder-slate-400 outline-none focus:bg-white focus:border-[#3D52A0] transition-colors"
           />
         </div>
       </motion.div>
@@ -592,7 +592,7 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
                               ? 'bg-red-50 text-red-500 border border-red-100' 
                               : !doc.isAvailable 
                                 ? 'bg-slate-100 text-slate-400 border border-slate-200' 
-                                : 'bg-sky-50/50 text-[#0066CC] border border-sky-100/30'
+                                : 'bg-sky-50/50 text-[#3D52A0] border border-sky-100/30'
                           }`}>
                             {doc.isGateLocked ? <Lock className="w-5 h-5" /> : <Icon className="w-5 h-5 stroke-[2]" />}
                           </div>
@@ -604,7 +604,7 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
                                 Phase 0{doc.minStage}
                               </span>
                               {doc.signable && (
-                                <span className="bg-sky-50 text-[#0055B3] text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-sky-100">
+                                <span className="bg-sky-50 text-[#334486] text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-sky-100">
                                   E-Sign
                                 </span>
                               )}
@@ -639,7 +639,7 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
                             <>
                               <button 
                                 onClick={() => onNavigate(doc.id)}
-                                className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100/80 text-[#0055B3] text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+                                className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100/80 text-[#334486] text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer whitespace-nowrap"
                               >
                                 Open Document
                               </button>
@@ -677,7 +677,7 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
                                           onNavigate(doc.id);
                                           setActiveMenuId(null);
                                         }}
-                                        className="w-full px-3.5 py-2 text-xs text-[#0055B3] hover:bg-sky-50 transition-colors flex items-center gap-2 cursor-pointer font-bold"
+                                        className="w-full px-3.5 py-2 text-xs text-[#334486] hover:bg-sky-50 transition-colors flex items-center gap-2 cursor-pointer font-bold"
                                       >
                                         <Send className="w-3.5 h-3.5" />
                                         Send for signature

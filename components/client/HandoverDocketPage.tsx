@@ -206,7 +206,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                                     {getSignoffUrl(currentSignoff.token!)}
                                 </div>
                                 <div className="mt-3 flex items-center gap-2">
-                                    <a href={getSignoffUrl(currentSignoff.token!)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-[#0066CC] hover:bg-[#0055B3] text-white rounded-lg text-[11px] font-bold tracking-tight inline-block cursor-pointer">
+                                    <a href={getSignoffUrl(currentSignoff.token!)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-[11px] font-bold tracking-tight inline-block cursor-pointer">
                                         Open Sign-Off Screen &rarr;
                                     </a>
                                 </div>
@@ -318,7 +318,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                     </button>
                     <button
                         onClick={handleDownloadPdf}
-                        className="flex items-center gap-2 px-4 py-2 bg-[#0066CC] text-white text-sm font-medium rounded-lg hover:bg-[#0055B3] transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-[#3D52A0] text-white text-sm font-medium rounded-lg hover:bg-[#334486] transition-colors"
                     >
                         <Download className="w-4 h-4" />
                         Download PDF

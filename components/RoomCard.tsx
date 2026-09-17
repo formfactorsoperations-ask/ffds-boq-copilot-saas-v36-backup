@@ -131,7 +131,7 @@ const RoomCard: React.FC<RoomCardProps> = ({
                                 setIsBulkActionsOpen(!isBulkActionsOpen);
                                 setIsMarkupOpen(false);
                             }}
-                            className="px-3 py-2 bg-sky-50 hover:bg-sky-100 text-[#0055B3] font-bold rounded-xl shadow-sm border border-sky-100 hover:border-sky-200 transition-all text-xs flex items-center gap-1 whitespace-nowrap">
+                            className="px-3 py-2 bg-sky-50 hover:bg-sky-100 text-[#334486] font-bold rounded-xl shadow-sm border border-sky-100 hover:border-sky-200 transition-all text-xs flex items-center gap-1 whitespace-nowrap">
                             ⚡ Bulk Actions
                         </button>
                         
@@ -142,11 +142,11 @@ const RoomCard: React.FC<RoomCardProps> = ({
                                    type="number" 
                                    value={markupValue}
                                    onChange={e => setMarkupValue(Number(e.target.value))}
-                                   className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 focus:outline-none focus:border-[#0066CC]" 
+                                   className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 focus:outline-none focus:border-[#3D52A0]" 
                                 />
                                 <div className="flex justify-end gap-2 text-xs">
                                     <button onClick={() => setIsMarkupOpen(false)} className="px-3 py-1.5 text-slate-500 hover:text-slate-700 font-medium">Cancel</button>
-                                    <button onClick={handleApplyMarkup} className="px-3 py-1.5 bg-[#0066CC] text-white rounded-lg hover:bg-[#0055B3] font-bold shadow-sm">Apply</button>
+                                    <button onClick={handleApplyMarkup} className="px-3 py-1.5 bg-[#3D52A0] text-white rounded-lg hover:bg-[#334486] font-bold shadow-sm">Apply</button>
                                 </div>
                             </div>
                         )}
@@ -164,7 +164,7 @@ const RoomCard: React.FC<RoomCardProps> = ({
                                                type="number" 
                                                value={bulkMarkupValue}
                                                onChange={e => setBulkMarkupValue(Number(e.target.value))}
-                                               className="w-20 border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:border-[#0066CC]" 
+                                               className="w-20 border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:border-[#3D52A0]" 
                                             />
                                             <button 
                                                onClick={() => {
@@ -174,7 +174,7 @@ const RoomCard: React.FC<RoomCardProps> = ({
                                                        setIsBulkActionsOpen(false);
                                                    }
                                                }}
-                                               className="flex-grow px-3 py-1 bg-[#0066CC] text-white font-bold rounded-lg hover:bg-[#0055B3] shadow-sm"
+                                               className="flex-grow px-3 py-1 bg-[#3D52A0] text-white font-bold rounded-lg hover:bg-[#334486] shadow-sm"
                                             >
                                                Apply Margin
                                             </button>
@@ -190,14 +190,14 @@ const RoomCard: React.FC<RoomCardProps> = ({
                                                placeholder="Find text (e.g. Commercial)"
                                                value={bulkSearchWord}
                                                onChange={e => setBulkSearchWord(e.target.value)}
-                                               className="w-full border border-slate-300 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#0066CC]" 
+                                               className="w-full border border-slate-300 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#3D52A0]" 
                                             />
                                             <input 
                                                type="text" 
                                                placeholder="Replace with (e.g. Marine Grade)"
                                                value={bulkReplaceWord}
                                                onChange={e => setBulkReplaceWord(e.target.value)}
-                                               className="w-full border border-slate-300 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#0066CC]" 
+                                               className="w-full border border-slate-300 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#3D52A0]" 
                                             />
                                             <div className="flex justify-between items-center gap-2">
                                                 <button 
@@ -205,7 +205,7 @@ const RoomCard: React.FC<RoomCardProps> = ({
                                                        setBulkSearchWord("Commercial");
                                                        setBulkReplaceWord("Marine Grade");
                                                    }}
-                                                   className="text-[10px] text-[#0066CC] hover:underline font-semibold"
+                                                   className="text-[10px] text-[#3D52A0] hover:underline font-semibold"
                                                 >
                                                    Quick Plywood Upgrade
                                                 </button>
@@ -232,7 +232,7 @@ const RoomCard: React.FC<RoomCardProps> = ({
                                                            setIsBulkActionsOpen(false);
                                                        }
                                                    }}
-                                                   className="px-3 py-1.5 bg-[#0066CC] text-white font-bold rounded-lg hover:bg-[#0055B3] shadow-sm"
+                                                   className="px-3 py-1.5 bg-[#3D52A0] text-white font-bold rounded-lg hover:bg-[#334486] shadow-sm"
                                                 >
                                                    Swap Specs
                                                 </button>
@@ -249,7 +249,7 @@ const RoomCard: React.FC<RoomCardProps> = ({
                                                    onSaveAsBundle(items.map(i => i.bankId), `${room.name} Set`);
                                                    setIsBulkActionsOpen(false);
                                                }}
-                                               className="w-full px-3 py-2 border-2 border-sky-100 hover:border-[#0066CC] text-[#0055B3] hover:bg-sky-50/20 font-bold rounded-xl transition-all"
+                                               className="w-full px-3 py-2 border-2 border-sky-100 hover:border-[#3D52A0] text-[#334486] hover:bg-sky-50/20 font-bold rounded-xl transition-all"
                                             >
                                                📦 Save Set ({items.length} items)
                                             </button>
@@ -264,7 +264,7 @@ const RoomCard: React.FC<RoomCardProps> = ({
                 {room.name !== 'Unassigned' && (
                     <button 
                         onClick={() => onAddItem(room)}
-                        className="flex items-center gap-2 px-4 py-2 bg-[#0066CC]/90 text-white font-bold rounded-xl shadow-lg shadow-sky-600/20 hover:bg-[#0055B3] hover:scale-105 transition-all text-xs backdrop-blur-sm whitespace-nowrap">
+                        className="flex items-center gap-2 px-4 py-2 bg-[#3D52A0]/90 text-white font-bold rounded-xl shadow-lg shadow-sky-600/20 hover:bg-[#334486] hover:scale-105 transition-all text-xs backdrop-blur-sm whitespace-nowrap">
                         <AddToCartIcon className="w-3.5 h-3.5"/> Add Item
                     </button>
                 )}
@@ -301,7 +301,7 @@ const RoomCard: React.FC<RoomCardProps> = ({
             <div className="py-8 text-center border-2 border-dashed border-white/40 rounded-2xl bg-white/10">
                 <p className="text-slate-500 font-medium mb-3 text-sm">This room is empty.</p>
                  {room.name !== 'Unassigned' && (
-                    <button onClick={() => onAddItem(room)} className="text-[#0066CC] text-xs font-bold hover:text-[#0055B3] hover:bg-sky-50/50 px-3 py-1.5 rounded-lg transition-colors">
+                    <button onClick={() => onAddItem(room)} className="text-[#3D52A0] text-xs font-bold hover:text-[#334486] hover:bg-sky-50/50 px-3 py-1.5 rounded-lg transition-colors">
                         + Add items
                     </button>
                  )}

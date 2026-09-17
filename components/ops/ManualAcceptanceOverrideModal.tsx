@@ -168,7 +168,7 @@ export default function ManualAcceptanceOverrideModal({
                 value={signatoryName}
                 onChange={e => setSignatoryName(e.target.value)}
                 placeholder="e.g. Prasad Kulkarni"
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] font-bold text-slate-900"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0] font-bold text-slate-900"
               />
             </div>
             <div>
@@ -179,7 +179,7 @@ export default function ManualAcceptanceOverrideModal({
                 type="date"
                 value={approvalDate}
                 onChange={e => setApprovalDate(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] font-medium text-slate-800"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0] font-medium text-slate-800"
               />
             </div>
           </div>
@@ -192,7 +192,7 @@ export default function ManualAcceptanceOverrideModal({
             <select
               value={medium}
               onChange={e => setMedium(e.target.value as any)}
-              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] font-semibold text-slate-800 cursor-pointer"
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0] font-semibold text-slate-800 cursor-pointer"
             >
               <option value="paper_wet_ink">Physical Hardcopy (Wet-Ink Signature on Paper)</option>
               <option value="email_confirmation">Verified Email Written Confirmation</option>
@@ -215,7 +215,7 @@ export default function ManualAcceptanceOverrideModal({
               value={attachmentUrl}
               onChange={e => setAttachmentUrl(e.target.value)}
               placeholder="https://drive.google.com/file/d/..."
-              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] text-slate-800"
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0] text-slate-800"
             />
           </div>
 
@@ -229,7 +229,7 @@ export default function ManualAcceptanceOverrideModal({
               value={overrideReason}
               onChange={e => setOverrideReason(e.target.value)}
               placeholder="e.g. Client signed paper agreement on site during technical kick-off."
-              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0066CC] text-slate-800 font-medium"
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0] text-slate-800 font-medium"
             />
           </div>
 
@@ -250,7 +250,7 @@ export default function ManualAcceptanceOverrideModal({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-bold text-white bg-[#0066CC] hover:bg-[#0055B3] rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer"
+              className="px-5 py-2 text-xs font-bold text-white bg-[#3D52A0] hover:bg-[#334486] rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer"
             >
               <Check className="w-3.5 h-3.5 text-emerald-400" />
               <span>Record & Seal Acceptance</span>

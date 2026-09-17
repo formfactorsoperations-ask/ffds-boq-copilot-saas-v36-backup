@@ -71,7 +71,7 @@ const DocumentThumbnail: React.FC<DocumentThumbnailProps> = ({
       )}
 
       {onOpen && (
-        <span className="absolute inset-x-0 bottom-0 py-2 text-center text-[11px] font-bold text-[#0066CC] opacity-0 group-hover:opacity-100 transition-opacity">
+        <span className="absolute inset-x-0 bottom-0 py-2 text-center text-[11px] font-bold text-[#3D52A0] opacity-0 group-hover:opacity-100 transition-opacity">
           Open full document
         </span>
       )}

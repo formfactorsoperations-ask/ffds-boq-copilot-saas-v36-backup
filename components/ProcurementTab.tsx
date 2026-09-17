@@ -73,7 +73,7 @@ export default function ProcurementTab({ projectContext, setProjectContext, boq,
 
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Budget envelopes</span>
-        <button onClick={load} className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-[#0066CC] uppercase tracking-wider">
+        <button onClick={load} className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-[#3D52A0] uppercase tracking-wider">
           <RefreshCw className="w-3.5 h-3.5" /> Refresh
         </button>
       </div>
@@ -175,7 +175,7 @@ function EnvelopeCard({
         <div className="inline-flex gap-0.5 p-0.5 rounded-lg bg-slate-100">
           {(['split', 'turnkey'] as ProcurementMode[]).map(m => (
             <button key={m} onClick={() => onMode(m)}
-              className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-md transition-colors ${env.mode === m ? 'bg-white text-[#0055B3] shadow-sm' : 'text-slate-400'}`}>
+              className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-md transition-colors ${env.mode === m ? 'bg-white text-[#334486] shadow-sm' : 'text-slate-400'}`}>
               {m}
             </button>
           ))}
@@ -183,7 +183,7 @@ function EnvelopeCard({
 
         <button
           onClick={onRaisePO}
-          className="bg-[#0066CC] hover:bg-[#0066CC] text-white px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-1 shrink-0"
+          className="bg-[#3D52A0] hover:bg-[#3D52A0] text-white px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-1 shrink-0"
         >
           <Plus className="w-3 h-3" /> Raise PO
         </button>
@@ -208,7 +208,7 @@ function EnvelopeCard({
         <div className="border-t border-slate-100 pt-3">
           <button
             onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-[#0066CC] transition-colors"
+            className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-[#3D52A0] transition-colors"
           >
             {expanded ? 'Hide Purchase Orders' : `View Purchase Orders (${matchingPOs.length})`}
           </button>
@@ -230,7 +230,7 @@ function EnvelopeCard({
                       
                       <div className="flex items-center gap-2">
                         <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full ${
-                          po.status === 'issued' ? 'bg-sky-50 text-[#0066CC] border border-sky-100' :
+                          po.status === 'issued' ? 'bg-sky-50 text-[#3D52A0] border border-sky-100' :
                           po.status === 'closed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
                           po.status === 'received' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
                           po.status === 'pending_approval' ? 'bg-amber-50 text-amber-600 border border-amber-100' :

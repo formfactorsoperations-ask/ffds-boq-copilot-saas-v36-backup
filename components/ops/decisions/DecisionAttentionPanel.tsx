@@ -27,9 +27,9 @@ const TONES = {
     button: 'bg-amber-600 hover:bg-amber-700 text-white',
   },
   todo: {
-    dot: 'bg-[#0066CC]',
-    chip: 'text-[#0055B3] bg-sky-50 border-sky-200',
-    button: 'bg-[#0066CC] hover:bg-[#0055B3] text-white',
+    dot: 'bg-[#3D52A0]',
+    chip: 'text-[#334486] bg-sky-50 border-sky-200',
+    button: 'bg-[#3D52A0] hover:bg-[#334486] text-white',
   },
 } as const;
 

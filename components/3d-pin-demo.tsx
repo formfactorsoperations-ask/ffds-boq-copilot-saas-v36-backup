@@ -18,7 +18,7 @@ export default function AnimatedPinDemo() {
               Execution Phase • 650 SQFT • Milestone E2 Structure & First-Fix
             </span>
           </div>
-          <div className="flex flex-1 w-full rounded-xl mt-4 bg-gradient-to-br from-sky-500 via-[#0055B3] to-slate-900 p-4 flex flex-col justify-end text-white">
+          <div className="flex flex-1 w-full rounded-xl mt-4 bg-gradient-to-br from-sky-500 via-[#334486] to-slate-900 p-4 flex flex-col justify-end text-white">
             <span className="text-xs uppercase font-bold tracking-wider text-sky-200">BOQ Scope</span>
             <span className="text-lg font-bold">₹18,50,000</span>
           </div>

@@ -72,7 +72,7 @@ export const Gauge: React.FC<{ pct: number; label: string; sub?: string; tone?: 
     const r = 46;
     const circumference = 2 * Math.PI * r;
     const dash = (clamped / 100) * circumference;
-    const colour = tone === 'bad' ? '#e11d48' : tone === 'warn' ? '#d97706' : '#0066CC';
+    const colour = tone === 'bad' ? '#e11d48' : tone === 'warn' ? '#d97706' : '#3D52A0';
     return (
       <div className="flex items-center gap-4">
         <svg width="112" height="112" viewBox="0 0 112 112" className="shrink-0 -rotate-90">

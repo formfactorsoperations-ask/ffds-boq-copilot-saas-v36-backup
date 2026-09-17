@@ -185,7 +185,7 @@ export function CashFlowForecastDashboard() {
                     <div className="pt-4 border-t border-slate-100 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => handleSendReminder(item)}
-                        className="inline-flex items-center gap-2 text-[10px] font-bold tracking-[0.2em] uppercase bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white px-5 py-2.5 rounded-full hover:bg-[#0055B3] transition-colors"
+                        className="inline-flex items-center gap-2 text-[10px] font-bold tracking-[0.2em] uppercase bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white px-5 py-2.5 rounded-full hover:bg-[#334486] transition-colors"
                       >
                         <Bell className="w-3 h-3" /> Escalation Nudge
                       </button>
@@ -201,7 +201,7 @@ export function CashFlowForecastDashboard() {
             <div>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-1.5 h-8 bg-[#0066CC]/90 backdrop-blur-md border border-white/20 rounded-full"></div>
+                  <div className="w-1.5 h-8 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 rounded-full"></div>
                   <div>
                     <h3 className="text-lg font-bold tracking-tight text-slate-900">
                       Upcoming Execution Gates
@@ -376,7 +376,7 @@ export function CashFlowSummaryWidget({
   return (
     <div
       onClick={onNavigate}
-      className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20/90 backdrop-blur-xl border border-sky-800/50 p-8 rounded-[2rem] shadow-2xl shadow-sky-600/30 shadow-xl flex flex-col justify-between group hover:-translate-y-1 transition-transform cursor-pointer h-full relative overflow-hidden"
+      className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/90 backdrop-blur-xl border border-sky-800/50 p-8 rounded-[2rem] shadow-2xl shadow-sky-600/30 shadow-xl flex flex-col justify-between group hover:-translate-y-1 transition-transform cursor-pointer h-full relative overflow-hidden"
     >
       <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none text-white">
         <TrendingUpIcon className="w-24 h-24" />

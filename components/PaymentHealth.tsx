@@ -143,7 +143,7 @@ export function PaymentHealthWidget({ health, contractValue, revisedContractValu
             </div>
 
             {cv > 0 && health.healthStatus !== 'unconfigured' && (
-                <div className="mt-6 pt-4 border-t border-[#0055B3]/5">
+                <div className="mt-6 pt-4 border-t border-[#334486]/5">
                     {/* Visual Segment Bar */}
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Billed vs Collected</span>

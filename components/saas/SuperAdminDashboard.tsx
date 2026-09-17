@@ -35,7 +35,7 @@ export default function SuperAdminDashboard() {
                     <p className="text-3xl font-bold text-slate-900 mt-2">$24,500</p>
                     <div className="mt-2 text-sm text-emerald-600 font-medium">+4% this month</div>
                 </div>
-                <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-lg shadow-sky-600/30 text-white">
+                <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-lg shadow-sky-600/30 text-white">
                     <p className="text-sm font-bold text-slate-400 uppercase">Est. ARR</p>
                     <p className="text-3xl font-bold tracking-tight mt-2">$294,000</p>
                 </div>
@@ -44,12 +44,12 @@ export default function SuperAdminDashboard() {
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-sky-100 text-[#0066CC] rounded-lg">
+                        <div className="p-2 bg-sky-100 text-[#3D52A0] rounded-lg">
                             <BuildingOfficeIcon className="w-5 h-5" />
                         </div>
                         <h2 className="font-bold text-slate-800">Tenant Studios</h2>
                     </div>
-                    <button className="px-4 py-2 bg-sky-50 text-[#0066CC] font-bold text-sm rounded-lg hover:bg-sky-100 transition-colors">
+                    <button className="px-4 py-2 bg-sky-50 text-[#3D52A0] font-bold text-sm rounded-lg hover:bg-sky-100 transition-colors">
                         + Provision New Tenant
                     </button>
                 </div>
@@ -107,7 +107,7 @@ export default function SuperAdminDashboard() {
             </div>
             
             <div className="bg-sky-50 border border-sky-100 rounded-xl p-6 flex items-start gap-4">
-                <div className="bg-sky-100 text-[#0066CC] p-2 rounded-lg shrink-0">
+                <div className="bg-sky-100 text-[#3D52A0] p-2 rounded-lg shrink-0">
                     <span className="text-xl">ℹ️</span>
                 </div>
                 <div>

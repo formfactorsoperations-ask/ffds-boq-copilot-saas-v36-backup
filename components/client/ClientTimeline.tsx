@@ -84,7 +84,7 @@ const ClientTimeline: React.FC<ClientTimelineProps> = ({
                             key={index} 
                             className={`rounded-2xl border p-5 flex flex-col h-full transition-all hover:shadow-md relative group ${
                                 isLast
-                                    ? 'bg-[#0066CC]/90 backdrop-blur-md border border-white/20 border-[#0055B3] text-white' 
+                                    ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 border-[#334486] text-white' 
                                     : 'bg-white border-slate-200 text-slate-900'
                             }`}
                         >

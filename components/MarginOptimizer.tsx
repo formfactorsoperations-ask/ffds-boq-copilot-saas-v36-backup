@@ -47,7 +47,7 @@ const MarginOptimizer: React.FC<MarginOptimizerProps> = ({ boq, setBoq, aiStrate
   return (
     <div className="bg-[#FDFDFB] p-6 rounded-xl border border-slate-200/80 shadow-sm">
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 bg-[#FDFDFB] border border-slate-200/80 text-[#0066CC] rounded-full shadow-sm">
+        <div className="p-2 bg-[#FDFDFB] border border-slate-200/80 text-[#3D52A0] rounded-full shadow-sm">
           <SparklesIcon className="w-5 h-5" />
         </div>
         <div>
@@ -106,7 +106,7 @@ const MarginOptimizer: React.FC<MarginOptimizerProps> = ({ boq, setBoq, aiStrate
                       <div className="flex items-center gap-2 shrink-0 bg-slate-100 px-2 py-1 rounded">
                           <span className="text-slate-500 font-mono text-sm">{s.currentMargin.toFixed(1)}%</span>
                           <span className="text-slate-400">→</span>
-                          <span className="text-[#0066CC] font-bold font-mono text-sm">{s.newMargin.toFixed(1)}%</span>
+                          <span className="text-[#3D52A0] font-bold font-mono text-sm">{s.newMargin.toFixed(1)}%</span>
                       </div>
                   </div>
                   <p className="text-sm text-slate-500 italic leading-relaxed pt-2 border-t border-slate-100/50">"{s.rationale}"</p>

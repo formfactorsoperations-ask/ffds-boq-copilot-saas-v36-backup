@@ -74,7 +74,7 @@ export default function SelectionConfirmPage({ token }: SelectionConfirmPageProp
     if (!isLoaded) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0066CC]"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3D52A0]"></div>
             </div>
         );
     }
@@ -97,7 +97,7 @@ export default function SelectionConfirmPage({ token }: SelectionConfirmPageProp
                     {project?.logoImage ? (
                         <img src={project.logoImage} alt="Logo" className="h-8" />
                     ) : (
-                        <div className="w-8 h-8 rounded-lg bg-[#0066CC] flex items-center justify-center text-white font-black">
+                        <div className="w-8 h-8 rounded-lg bg-[#3D52A0] flex items-center justify-center text-white font-black">
                             {project?.orgName ? project.orgName.charAt(0) : 'F'}
                         </div>
                     )}
@@ -212,7 +212,7 @@ export default function SelectionConfirmPage({ token }: SelectionConfirmPageProp
                                     <button 
                                         onClick={handleChangeRequest}
                                         disabled={!changeReason.trim()}
-                                        className="flex-1 bg-sky-900 text-white font-bold py-3.5 rounded-xl hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 transition-colors shadow-sm disabled:opacity-50"
+                                        className="flex-1 bg-sky-900 text-white font-bold py-3.5 rounded-xl hover:bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 transition-colors shadow-sm disabled:opacity-50"
                                     >
                                         Send Request
                                     </button>

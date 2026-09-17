@@ -46,7 +46,7 @@ const when = (ms: number) =>
   ms ? new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
 const ROLE: Record<string, { label: string; tone: string }> = {
-  'approved':             { label: 'You approved this',  tone: 'bg-[#0066CC] text-white' },
+  'approved':             { label: 'You approved this',  tone: 'bg-[#3D52A0] text-white' },
   'current':              { label: 'Current scope',      tone: 'bg-emerald-600 text-white' },
   'approved-and-current': { label: 'Approved & current', tone: 'bg-emerald-600 text-white' },
   'earlier':              { label: 'Earlier version',    tone: 'bg-slate-200 text-slate-600' },
@@ -132,7 +132,7 @@ export default function BoqVersionCompare({
         onClick={() => toggle(v.id)}
         aria-pressed={on}
         className={`relative text-left rounded-2xl border-2 px-3.5 py-3 min-w-[190px] transition-all cursor-pointer ${
-          on ? 'border-[#0066CC] bg-white shadow-sm' : 'border-transparent bg-white/70 hover:bg-white'
+          on ? 'border-[#3D52A0] bg-white shadow-sm' : 'border-transparent bg-white/70 hover:bg-white'
         }`}
       >
         <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider rounded-full px-2 py-0.5 ${role.tone}`}>
@@ -145,7 +145,7 @@ export default function BoqVersionCompare({
         </span>
         <span className="block text-sm font-extrabold text-slate-900 tabular-nums mt-1">{formatINR(v.total)}</span>
         {on && (
-          <span className="absolute top-2 right-2 w-4 h-4 rounded-full bg-[#0066CC] text-white grid place-items-center">
+          <span className="absolute top-2 right-2 w-4 h-4 rounded-full bg-[#3D52A0] text-white grid place-items-center">
             <Check className="w-2.5 h-2.5" strokeWidth={3} />
           </span>
         )}
@@ -179,7 +179,7 @@ export default function BoqVersionCompare({
     >
       <span
         className={`text-[9px] font-black uppercase tracking-wider shrink-0 w-8 ${
-          tone === 'was' ? 'text-slate-400' : 'text-[#0066CC]'
+          tone === 'was' ? 'text-slate-400' : 'text-[#3D52A0]'
         }`}
       >
         {label}
@@ -285,7 +285,7 @@ export default function BoqVersionCompare({
                 {l.reasons.map((r, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-white text-[#0055B3] border border-sky-200"
+                    className="inline-flex items-center text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-white text-[#334486] border border-sky-200"
                   >
                     {r.reason}
                   </span>
@@ -463,7 +463,7 @@ export default function BoqVersionCompare({
                   </p>
                   <button
                     onClick={() => setShowUnchanged(s => !s)}
-                    className="text-[11px] font-bold text-[#0066CC] hover:underline cursor-pointer"
+                    className="text-[11px] font-bold text-[#3D52A0] hover:underline cursor-pointer"
                   >
                     {showUnchanged ? 'Hide unchanged items' : 'Show unchanged items'}
                   </button>

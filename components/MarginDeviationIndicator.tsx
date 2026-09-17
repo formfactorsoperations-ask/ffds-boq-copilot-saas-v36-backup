@@ -21,8 +21,8 @@ export const MarginDeviationIndicator: React.FC<MarginDeviationIndicatorProps> =
       statusColor = "text-amber-700 bg-amber-50 border-amber-200 animate-pulse";
     } else {
       // Over-margined
-      barColor = "bg-[#0066CC]";
-      statusColor = "text-[#0055B3] bg-sky-50 border-sky-200";
+      barColor = "bg-[#3D52A0]";
+      statusColor = "text-[#334486] bg-sky-50 border-sky-200";
     }
   }
 

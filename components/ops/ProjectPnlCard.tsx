@@ -114,7 +114,7 @@ const ProjectPnlCard: React.FC<Props> = ({
   if (loading) {
     return shell(
       <div className="flex-1 flex items-center justify-center">
-        <div className="w-5 h-5 border-2 border-[#0066CC] border-t-transparent rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-[#3D52A0] border-t-transparent rounded-full animate-spin" />
       </div>,
     );
   }
@@ -178,7 +178,7 @@ const ProjectPnlCard: React.FC<Props> = ({
             {onOpenProcurement && (
               <button
                 onClick={onOpenProcurement}
-                className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#0066CC] hover:bg-[#0055B3] text-white text-[11.5px] font-bold transition-colors cursor-pointer"
+                className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#3D52A0] hover:bg-[#334486] text-white text-[11.5px] font-bold transition-colors cursor-pointer"
               >
                 Add purchase orders
               </button>
@@ -197,7 +197,7 @@ const ProjectPnlCard: React.FC<Props> = ({
       <div className="mt-3 flex items-center gap-2.5">
         <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
           <div
-            className="h-full rounded-full bg-[#0066CC] transition-all duration-500"
+            className="h-full rounded-full bg-[#3D52A0] transition-all duration-500"
             style={{ width: `${Math.min(100, pnl.coveragePct)}%` }}
           />
         </div>
@@ -241,7 +241,7 @@ const ProjectPnlCard: React.FC<Props> = ({
       <button
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
-        className="mt-3 flex items-center justify-center gap-1.5 text-[11.5px] font-bold text-[#0066CC] hover:text-[#0055B3] cursor-pointer transition-colors"
+        className="mt-3 flex items-center justify-center gap-1.5 text-[11.5px] font-bold text-[#3D52A0] hover:text-[#334486] cursor-pointer transition-colors"
       >
         {open ? 'Hide the rest' : 'Design fee, cash and rooms'}
         <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
@@ -300,7 +300,7 @@ const ProjectPnlCard: React.FC<Props> = ({
               {onOpenProcurement && (
                 <button
                   onClick={onOpenProcurement}
-                  className="mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#0066CC] hover:bg-[#0055B3] text-white text-[11.5px] font-bold transition-colors cursor-pointer"
+                  className="mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#3D52A0] hover:bg-[#334486] text-white text-[11.5px] font-bold transition-colors cursor-pointer"
                 >
                   Open procurement
                 </button>

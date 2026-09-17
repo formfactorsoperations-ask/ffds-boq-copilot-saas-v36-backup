@@ -68,7 +68,7 @@ const STATE_LABEL: Record<DocumentState, { label: string; tone: string }> = {
   draft: { label: 'Not sent', tone: 'bg-slate-100 text-slate-500' },
   issued: { label: 'Sent — not opened', tone: 'bg-amber-100 text-amber-900' },
   viewed: { label: 'Opened — not signed', tone: 'bg-amber-500 text-white' },
-  queried: { label: 'Client has a question', tone: 'bg-[#0066CC] text-white' },
+  queried: { label: 'Client has a question', tone: 'bg-[#3D52A0] text-white' },
   amended: { label: 'Re-issued — awaiting re-read', tone: 'bg-amber-500 text-white' },
   signed: { label: 'Signed', tone: 'bg-emerald-100 text-emerald-800' },
   executed: { label: 'Fully executed', tone: 'bg-emerald-600 text-white' }
@@ -148,7 +148,7 @@ const DocumentReleasePanel: React.FC<DocumentReleasePanelProps> = ({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <Send className="w-4 h-4 text-[#0066CC]" />
+            <Send className="w-4 h-4 text-[#3D52A0]" />
             Documents to the client
           </h3>
           <p className="text-[11px] text-slate-500 mt-0.5">
@@ -194,7 +194,7 @@ const DocumentReleasePanel: React.FC<DocumentReleasePanelProps> = ({
                         : 'Review only'}
                   </span>
                   {row.openQueries.length > 0 && (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#0066CC] text-white flex items-center gap-1">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#3D52A0] text-white flex items-center gap-1">
                       <MessageCircleQuestion className="w-3 h-3" />
                       {row.openQueries.length}
                     </span>
@@ -218,7 +218,7 @@ const DocumentReleasePanel: React.FC<DocumentReleasePanelProps> = ({
 
                     {row.lastViewed ? (
                       <span className="text-slate-600 flex items-center gap-1">
-                        <Eye className="w-3 h-3 text-[#0066CC]" />
+                        <Eye className="w-3 h-3 text-[#3D52A0]" />
                         opened {ago(row.lastViewed)}
                       </span>
                     ) : (
@@ -334,7 +334,7 @@ const DocumentReleasePanel: React.FC<DocumentReleasePanelProps> = ({
                       setReleaseNote('');
                     }}
                     disabled={!row.readiness.ready}
-                    className="px-4 py-2 rounded-xl text-xs font-bold cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5 bg-[#0066CC] hover:bg-[#0055B3] disabled:bg-slate-200 disabled:text-slate-400 text-white"
+                    className="px-4 py-2 rounded-xl text-xs font-bold cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5 bg-[#3D52A0] hover:bg-[#334486] disabled:bg-slate-200 disabled:text-slate-400 text-white"
                   >
                     <Send className="w-3.5 h-3.5" />
                     {sent ? 'Re-issue' : 'Release to client'}
@@ -436,7 +436,7 @@ const DocumentReleasePanel: React.FC<DocumentReleasePanelProps> = ({
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Send className="w-4 h-4 text-[#0066CC]" />
+                <Send className="w-4 h-4 text-[#3D52A0]" />
                 Release {confirmDef.title}
               </h3>
               <button
@@ -463,12 +463,12 @@ const DocumentReleasePanel: React.FC<DocumentReleasePanelProps> = ({
               </p>
 
               {confirmDef.packWith && confirmDef.packWith.length > 0 && (
-                <label className="flex items-start gap-3 p-3 rounded-xl bg-[#0066CC]/8 border border-[#0066CC]/20 cursor-pointer">
+                <label className="flex items-start gap-3 p-3 rounded-xl bg-[#3D52A0]/8 border border-[#3D52A0]/20 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={asPack}
                     onChange={e => setAsPack(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 accent-[#0066CC] shrink-0"
+                    className="mt-0.5 w-4 h-4 accent-[#3D52A0] shrink-0"
                   />
                   <span>
                     <span className="block text-xs font-bold text-slate-900 flex items-center gap-1.5">
@@ -508,7 +508,7 @@ const DocumentReleasePanel: React.FC<DocumentReleasePanelProps> = ({
                   onChange={e => setReleaseNote(e.target.value)}
                   rows={3}
                   placeholder="e.g. Clause 4.2 reflects what we agreed on the call — everything else is our standard docket."
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-[#0066CC] resize-none"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-[#3D52A0] resize-none"
                 />
               </div>
             </div>
@@ -522,7 +522,7 @@ const DocumentReleasePanel: React.FC<DocumentReleasePanelProps> = ({
               </button>
               <button
                 onClick={() => doRelease(confirming)}
-                className="px-4 py-2 bg-[#0066CC] hover:bg-[#0055B3] text-white text-xs font-bold rounded-xl cursor-pointer flex items-center gap-1.5"
+                className="px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold rounded-xl cursor-pointer flex items-center gap-1.5"
               >
                 <Check className="w-3.5 h-3.5" />
                 Release

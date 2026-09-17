@@ -27,7 +27,7 @@ function applyPersonalizationSettings(font: string, theme: string, compact: bool
     localStorage.setItem('ffds_global_theme', theme);
     localStorage.setItem('ffds_compact_mode', compact ? 'true' : 'false');
 
-    document.body.classList.remove('font-jakarta', 'font-[#0066CC]', 'theme-milky-white', 'theme-dark-blue', 'theme-light-blue', 'theme-light-orange', 'layout-compact');
+    document.body.classList.remove('font-jakarta', 'font-[#3D52A0]', 'theme-milky-white', 'theme-dark-blue', 'theme-light-blue', 'theme-light-orange', 'layout-compact');
 
     if (theme === 'dark-blue') {
         document.documentElement.classList.add('dark');
@@ -129,7 +129,7 @@ export default function StudioSettingsTab({
         credentials: (orgData.credentials || []).join(', '),
         designFeePercentage: orgData.designFeePercentage || 10,
         defaultGstRate: orgData.defaultGstRate || 18,
-        themeColor: orgData.themeColor || '#0066CC',
+        themeColor: orgData.themeColor || '#3D52A0',
         procurementLeadTimeWeeks: orgData.procurementLeadTimeWeeks || 4,
         forceMajeureText: orgData.defaultContractWordings?.forceMajeureText || '',
         revisionsText: orgData.defaultContractWordings?.revisionsText || '',
@@ -257,8 +257,8 @@ export default function StudioSettingsTab({
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                     <div>
                         <div className="flex items-center gap-2.5 mb-2">
-                            <span className="px-3 py-1 bg-sky-50 text-[#0066CC] border border-sky-200 text-xs font-black uppercase tracking-widest rounded-full flex items-center gap-1.5">
-                                <Sparkles className="w-3.5 h-3.5 text-[#0066CC]" /> Multi-Tenant Operations Hub
+                            <span className="px-3 py-1 bg-sky-50 text-[#3D52A0] border border-sky-200 text-xs font-black uppercase tracking-widest rounded-full flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-[#3D52A0]" /> Multi-Tenant Operations Hub
                             </span>
                             <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-full flex items-center gap-1">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Active Studio: {orgData.orgName || 'FFDS Studio'}
@@ -285,7 +285,7 @@ export default function StudioSettingsTab({
                         </button>
                         <button
                             onClick={() => setShowPreviewMobile(!showPreviewMobile)}
-                            className="xl:hidden px-4 py-2 bg-[#0066CC] text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-sm"
+                            className="xl:hidden px-4 py-2 bg-[#3D52A0] text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-sm"
                         >
                             <FileText className="w-4 h-4"/> {showPreviewMobile ? 'Hide Live Proposal' : 'Live Document Preview'}
                         </button>
@@ -306,7 +306,7 @@ export default function StudioSettingsTab({
                             className="w-full px-6 py-5 flex items-center justify-between bg-gradient-to-r from-slate-50/80 to-white hover:bg-slate-100/60 transition-colors text-left"
                         >
                             <div className="flex items-center gap-4">
-                                <div className="w-11 h-11 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-[#0066CC] shrink-0">
+                                <div className="w-11 h-11 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-[#3D52A0] shrink-0">
                                     <Palette className="w-5 h-5" />
                                 </div>
                                 <div>
@@ -339,12 +339,12 @@ export default function StudioSettingsTab({
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                                <Type className="w-3.5 h-3.5 text-[#0066CC]" /> App Typography Font
+                                                <Type className="w-3.5 h-3.5 text-[#3D52A0]" /> App Typography Font
                                             </label>
                                             <select
                                                 value={selectedFont}
                                                 onChange={(e) => setSelectedFont(e.target.value)}
-                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 text-sm font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none cursor-pointer"
+                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 text-sm font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none cursor-pointer"
                                             >
                                                 <option value="jakarta">Plus Jakarta Sans (Modern Clean)</option>
                                                 <option value="opensans">Open Sans (Readable Crisp)</option>
@@ -356,12 +356,12 @@ export default function StudioSettingsTab({
 
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                                <Palette className="w-3.5 h-3.5 text-[#0066CC]" /> Studio Interface Palette
+                                                <Palette className="w-3.5 h-3.5 text-[#3D52A0]" /> Studio Interface Palette
                                             </label>
                                             <select
                                                 value={selectedTheme}
                                                 onChange={(e) => setSelectedTheme(e.target.value)}
-                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 text-sm font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none cursor-pointer"
+                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 text-sm font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none cursor-pointer"
                                             >
                                                 <option value="milky-white">Milky White ✦ (Signature FFDS)</option>
                                                 <option value="dark-blue">Luxury Dark Blue 🌌 (High Contrast)</option>
@@ -381,7 +381,7 @@ export default function StudioSettingsTab({
                                             </div>
                                             <button
                                                 onClick={() => setIsCompact(!isCompact)}
-                                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ml-auto ${isCompact ? 'bg-[#0066CC]' : 'bg-slate-300'}`}
+                                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ml-auto ${isCompact ? 'bg-[#3D52A0]' : 'bg-slate-300'}`}
                                             >
                                                 <span
                                                     className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isCompact ? 'translate-x-5' : 'translate-x-0'}`}
@@ -391,7 +391,7 @@ export default function StudioSettingsTab({
 
                                         <button
                                             onClick={handleSavePersonalization}
-                                            className="px-6 py-3 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 shrink-0"
+                                            className="px-6 py-3 bg-[#3D52A0] hover:bg-[#334486] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 shrink-0"
                                         >
                                             <Save className="w-4 h-4" /> Apply Personalization
                                         </button>
@@ -408,7 +408,7 @@ export default function StudioSettingsTab({
                             className="w-full px-6 py-5 flex items-center justify-between bg-gradient-to-r from-slate-50/80 to-white hover:bg-slate-100/60 transition-colors text-left"
                         >
                             <div className="flex items-center gap-4">
-                                <div className="w-11 h-11 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#0066CC] shrink-0">
+                                <div className="w-11 h-11 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#3D52A0] shrink-0">
                                     <Building2 className="w-5 h-5" />
                                 </div>
                                 <div>
@@ -437,11 +437,11 @@ export default function StudioSettingsTab({
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Studio Operating Name</label>
-                                            <input type="text" name="orgName" value={brandingData.orgName} onChange={handleBrandingChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none text-sm font-bold text-slate-800" />
+                                            <input type="text" name="orgName" value={brandingData.orgName} onChange={handleBrandingChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none text-sm font-bold text-slate-800" />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Legal Registered Entity Name</label>
-                                            <input type="text" name="legalName" value={brandingData.legalName} onChange={handleBrandingChange} placeholder="e.g. Form Factors Design Studio Pvt Ltd" className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none text-sm text-slate-800" />
+                                            <input type="text" name="legalName" value={brandingData.legalName} onChange={handleBrandingChange} placeholder="e.g. Form Factors Design Studio Pvt Ltd" className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none text-sm text-slate-800" />
                                         </div>
 
                                         <div className="md:col-span-2">
@@ -450,7 +450,7 @@ export default function StudioSettingsTab({
                                                 <input type="color" name="themeColor" value={brandingData.themeColor} onChange={handleBrandingChange} className="w-12 h-12 rounded-xl cursor-pointer border-2 border-slate-200 p-1" />
                                                 <span className="text-slate-700 font-mono font-bold bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">{brandingData.themeColor}</span>
                                                 <div className="flex gap-2 ml-auto">
-                                                    {['#0066CC', '#059669', '#7C3AED', '#D97706', '#111827'].map(c => (
+                                                    {['#3D52A0', '#059669', '#7C3AED', '#D97706', '#111827'].map(c => (
                                                         <button key={c} type="button" onClick={() => setBrandingData(prev => ({ ...prev, themeColor: c }))} className="w-7 h-7 rounded-full border border-white shadow-sm transition-transform hover:scale-110" style={{ backgroundColor: c }} />
                                                     ))}
                                                 </div>
@@ -492,7 +492,7 @@ export default function StudioSettingsTab({
                                                                 reader.readAsDataURL(file);
                                                             }
                                                         }} 
-                                                        className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-sky-50 file:text-[#0055B3] hover:file:bg-sky-100 transition-all cursor-pointer" 
+                                                        className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-sky-50 file:text-[#334486] hover:file:bg-sky-100 transition-all cursor-pointer" 
                                                     />
                                                     <p className="text-[11px] text-slate-400 mt-2">Embedded on client onboarding dockets, proposals, invoices, and PDF reports.</p>
                                                 </div>
@@ -504,27 +504,27 @@ export default function StudioSettingsTab({
                                     <div className="pt-4 border-t border-slate-100">
                                         <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-4">Official Contact & Address</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Official Email</label><input type="email" name="contactEmail" value={brandingData.contactEmail} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Phone / WhatsApp</label><input type="text" name="contactPhone" value={brandingData.contactPhone} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">City & State</label><input type="text" name="cityState" value={brandingData.cityState} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">GSTIN Number</label><input type="text" name="gstin" value={brandingData.gstin} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-mono focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Official Email</label><input type="email" name="contactEmail" value={brandingData.contactEmail} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Phone / WhatsApp</label><input type="text" name="contactPhone" value={brandingData.contactPhone} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">City & State</label><input type="text" name="cityState" value={brandingData.cityState} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">GSTIN Number</label><input type="text" name="gstin" value={brandingData.gstin} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-mono focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
                                             {/* Everything below is what the client portal footer prints. */}
                                             <div className="md:col-span-2">
                                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">About the studio</label>
-                                                <textarea name="about" value={brandingData.about} onChange={handleBrandingChange} rows={3} placeholder="e.g. Form Factors Design Studio is a Mumbai interior practice working on turnkey residential fit-outs..." className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none resize-none" />
+                                                <textarea name="about" value={brandingData.about} onChange={handleBrandingChange} rows={3} placeholder="e.g. Form Factors Design Studio is a Mumbai interior practice working on turnkey residential fit-outs..." className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none resize-none" />
                                                 <p className="text-[11px] text-slate-400 mt-1">The paragraph a client reads in the portal footer. Distinct from the strapline above.</p>
                                             </div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Working Hours</label><input type="text" name="businessHours" value={brandingData.businessHours} onChange={handleBrandingChange} placeholder="Mon-Sat, 10am-7pm" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Site Visit Pattern</label><input type="text" name="siteVisitPolicy" value={brandingData.siteVisitPolicy} onChange={handleBrandingChange} placeholder="Visits every Tue & Fri" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Escalation Path</label><input type="text" name="escalationPolicy" value={brandingData.escalationPolicy} onChange={handleBrandingChange} placeholder="Ops director, 48h" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Project Manager Response Time</label><input type="text" name="pmResponseTime" value={brandingData.pmResponseTime} onChange={handleBrandingChange} placeholder="replies within one working day" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Working Hours</label><input type="text" name="businessHours" value={brandingData.businessHours} onChange={handleBrandingChange} placeholder="Mon-Sat, 10am-7pm" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Site Visit Pattern</label><input type="text" name="siteVisitPolicy" value={brandingData.siteVisitPolicy} onChange={handleBrandingChange} placeholder="Visits every Tue & Fri" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Escalation Path</label><input type="text" name="escalationPolicy" value={brandingData.escalationPolicy} onChange={handleBrandingChange} placeholder="Ops director, 48h" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Project Manager Response Time</label><input type="text" name="pmResponseTime" value={brandingData.pmResponseTime} onChange={handleBrandingChange} placeholder="replies within one working day" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
                                             <div className="md:col-span-2">
                                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Credentials</label>
-                                                <input type="text" name="credentials" value={brandingData.credentials} onChange={handleBrandingChange} placeholder="GST registered, 7 years, 40+ homes delivered, 1-year warranty" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" />
+                                                <input type="text" name="credentials" value={brandingData.credentials} onChange={handleBrandingChange} placeholder="GST registered, 7 years, 40+ homes delivered, 1-year warranty" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" />
                                                 <p className="text-[11px] text-slate-400 mt-1">Comma separated. Shown as chips in the portal footer — claims a client can hold you to, so keep them true.</p>
                                             </div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Website</label><input type="text" name="website" value={brandingData.website} onChange={handleBrandingChange} placeholder="www.formfactors.in" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Instagram</label><input type="text" name="instagramUrl" value={brandingData.instagramUrl} onChange={handleBrandingChange} placeholder="instagram.com/yourstudio" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Website</label><input type="text" name="website" value={brandingData.website} onChange={handleBrandingChange} placeholder="www.formfactors.in" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Instagram</label><input type="text" name="instagramUrl" value={brandingData.instagramUrl} onChange={handleBrandingChange} placeholder="instagram.com/yourstudio" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
                                             <div className="md:col-span-2">
                                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Instagram QR Code</label>
                                                 <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -549,13 +549,13 @@ export default function StudioSettingsTab({
                                                                 reader.onloadend = () => setBrandingData(prev => ({ ...prev, instagramQr: reader.result as string }));
                                                                 reader.readAsDataURL(file);
                                                             }}
-                                                            className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-[#0066CC] hover:file:bg-blue-100 cursor-pointer"
+                                                            className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-[#3D52A0] hover:file:bg-blue-100 cursor-pointer"
                                                         />
                                                         <p className="text-[11px] text-slate-400 mt-1.5">Appears in the client portal footer so clients can follow the studio.</p>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="md:col-span-2"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Registered Office Address</label><textarea name="officeAddress" value={brandingData.officeAddress} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none h-16 resize-none" /></div>
+                                            <div className="md:col-span-2"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Registered Office Address</label><textarea name="officeAddress" value={brandingData.officeAddress} onChange={handleBrandingChange} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none h-16 resize-none" /></div>
                                         </div>
                                     </div>
 
@@ -563,13 +563,13 @@ export default function StudioSettingsTab({
                                     <div className="pt-4 border-t border-slate-100">
                                         <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-4">Authorized Contract Signatory</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Principal Name</label><input type="text" name="signatoryName" value={brandingData.signatoryName} onChange={handleBrandingChange} placeholder="e.g. Rishabh Shetty" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-bold focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Title / Designation</label><input type="text" name="signatoryTitle" value={brandingData.signatoryTitle} onChange={handleBrandingChange} placeholder="e.g. Principal Architect & Partner" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Principal Name</label><input type="text" name="signatoryName" value={brandingData.signatoryName} onChange={handleBrandingChange} placeholder="e.g. Rishabh Shetty" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-bold focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Title / Designation</label><input type="text" name="signatoryTitle" value={brandingData.signatoryTitle} onChange={handleBrandingChange} placeholder="e.g. Principal Architect & Partner" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
                                         </div>
                                     </div>
 
                                     <div className="pt-4 flex justify-end">
-                                        <button onClick={handleSaveBranding} className="px-6 py-3 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-2">
+                                        <button onClick={handleSaveBranding} className="px-6 py-3 bg-[#3D52A0] hover:bg-[#334486] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-2">
                                             <Save className="w-4 h-4" /> Save Profile Changes
                                         </button>
                                     </div>
@@ -618,7 +618,7 @@ export default function StudioSettingsTab({
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Default GST Tax Rate (%)</label>
-                                            <input type="number" name="defaultGstRate" value={brandingData.defaultGstRate} onChange={handleBrandingChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 text-sm font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" />
+                                            <input type="number" name="defaultGstRate" value={brandingData.defaultGstRate} onChange={handleBrandingChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 text-sm font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Service SAC Code (Design)</label>
@@ -636,12 +636,12 @@ export default function StudioSettingsTab({
                                             <Building2 className="w-4 h-4 text-emerald-600" /> Primary Operating Bank Account Details
                                         </h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Account Holder Name</label><input type="text" name="accountName" value={bankData.accountName} onChange={handleBankChange} placeholder="Form Factors Design Studio" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-bold focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Bank Name</label><input type="text" name="bankName" value={bankData.bankName} onChange={handleBankChange} placeholder="HDFC Bank / ICICI Bank" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-bold focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Account Number</label><input type="text" name="accountNumber" value={bankData.accountNumber} onChange={handleBankChange} placeholder="50200012345678" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-mono focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">IFSC Code</label><input type="text" name="ifscCode" value={bankData.ifscCode} onChange={handleBankChange} placeholder="HDFC0001234" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-mono focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">UPI VPA Handle ID</label><input type="text" name="upiId" value={bankData.upiId} onChange={handleBankChange} placeholder="ffds@hdfcbank" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-mono focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
-                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">UPI Payment QR Image URL</label><input type="text" name="qrCodeImage" value={bankData.qrCodeImage} onChange={handleBankChange} placeholder="https://..." className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#0066CC] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Account Holder Name</label><input type="text" name="accountName" value={bankData.accountName} onChange={handleBankChange} placeholder="Form Factors Design Studio" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-bold focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Bank Name</label><input type="text" name="bankName" value={bankData.bankName} onChange={handleBankChange} placeholder="HDFC Bank / ICICI Bank" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-bold focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Account Number</label><input type="text" name="accountNumber" value={bankData.accountNumber} onChange={handleBankChange} placeholder="50200012345678" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-mono focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">IFSC Code</label><input type="text" name="ifscCode" value={bankData.ifscCode} onChange={handleBankChange} placeholder="HDFC0001234" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-mono focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">UPI VPA Handle ID</label><input type="text" name="upiId" value={bankData.upiId} onChange={handleBankChange} placeholder="ffds@hdfcbank" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm font-mono focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">UPI Payment QR Image URL</label><input type="text" name="qrCodeImage" value={bankData.qrCodeImage} onChange={handleBankChange} placeholder="https://..." className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none" /></div>
                                         </div>
                                     </div>
 
@@ -672,7 +672,7 @@ export default function StudioSettingsTab({
                                     </div>
 
                                     <div className="pt-2 flex justify-end">
-                                        <button onClick={handleSaveBankDetails} className="px-6 py-3 bg-[#0066CC] hover:bg-[#0055B3] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-2">
+                                        <button onClick={handleSaveBankDetails} className="px-6 py-3 bg-[#3D52A0] hover:bg-[#334486] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-2">
                                             <Save className="w-4 h-4" /> Save Financial Details
                                         </button>
                                     </div>
@@ -793,7 +793,7 @@ export default function StudioSettingsTab({
                                     {/* Google Calendar */}
                                     <div className="flex items-center justify-between p-5 bg-slate-50 border border-slate-200 rounded-2xl">
                                         <div className="flex items-center gap-3">
-                                            <Calendar className="w-6 h-6 text-[#0066CC]" />
+                                            <Calendar className="w-6 h-6 text-[#3D52A0]" />
                                             <div>
                                                 <h4 className="text-sm font-bold text-slate-800">Google Calendar Integration</h4>
                                                 <p className="text-xs text-slate-500">Sync site visit schedules and client design presentation milestones</p>
@@ -806,7 +806,7 @@ export default function StudioSettingsTab({
                                             }}
                                             className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-800 font-bold border border-slate-300 rounded-xl text-xs flex items-center gap-2"
                                         >
-                                            <Globe className="w-3.5 h-3.5 text-[#0066CC]" />
+                                            <Globe className="w-3.5 h-3.5 text-[#3D52A0]" />
                                             {isGoogleCalendarConnected() ? 'Connected ✓' : 'Connect Calendar'}
                                         </button>
                                     </div>
@@ -814,14 +814,14 @@ export default function StudioSettingsTab({
                                     {/* Data Portability */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="p-5 bg-sky-50/50 border border-sky-100 rounded-2xl space-y-2">
-                                            <h4 className="text-xs font-black uppercase text-[#0055B3]">Backup Project Data</h4>
+                                            <h4 className="text-xs font-black uppercase text-[#334486]">Backup Project Data</h4>
                                             <p className="text-xs text-slate-500">Download offline JSON backup file containing all BOQ line items and settings.</p>
                                             <button
                                                 onClick={() => {
                                                     if (onDownloadBackup) onDownloadBackup();
                                                     addAuditLog('JSON Backup Downloaded');
                                                 }}
-                                                className="px-4 py-2 bg-[#0066CC] text-white font-bold text-xs rounded-xl hover:bg-[#0055B3] transition-all"
+                                                className="px-4 py-2 bg-[#3D52A0] text-white font-bold text-xs rounded-xl hover:bg-[#334486] transition-all"
                                             >
                                                 Save Offline JSON
                                             </button>
@@ -841,7 +841,7 @@ export default function StudioSettingsTab({
                                     <div className="pt-4 border-t border-slate-100">
                                         <div className="flex items-center justify-between mb-4">
                                             <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                                                <History className="w-4 h-4 text-[#0066CC]" /> Studio Settings Timeline & Audit Trail
+                                                <History className="w-4 h-4 text-[#3D52A0]" /> Studio Settings Timeline & Audit Trail
                                             </h4>
                                             <span className="text-[10px] font-mono text-slate-400">Security Verified</span>
                                         </div>
@@ -850,7 +850,7 @@ export default function StudioSettingsTab({
                                             {auditLogs.map(log => (
                                                 <div key={log.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-xs">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-2 h-2 rounded-full bg-[#0066CC]" />
+                                                        <div className="w-2 h-2 rounded-full bg-[#3D52A0]" />
                                                         <div>
                                                             <span className="font-bold text-slate-800 block">{log.action}</span>
                                                             <span className="text-[10px] text-slate-500">{log.user}</span>
@@ -858,7 +858,7 @@ export default function StudioSettingsTab({
                                                     </div>
                                                     <div className="text-right">
                                                         <span className="text-[10px] font-mono font-bold text-slate-400 block">{log.timestamp}</span>
-                                                        <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-sky-100 text-[#0055B3] font-bold">
+                                                        <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-sky-100 text-[#334486] font-bold">
                                                             {log.badge}
                                                         </span>
                                                     </div>
@@ -884,7 +884,7 @@ export default function StudioSettingsTab({
                                                                 window.location.reload();
                                                             }
                                                         }}
-                                                        className="px-4 py-2 bg-[#0066CC] hover:bg-sky-500 text-white font-bold text-xs rounded-xl transition-all"
+                                                        className="px-4 py-2 bg-[#3D52A0] hover:bg-sky-500 text-white font-bold text-xs rounded-xl transition-all"
                                                     >
                                                         Switch Tenant
                                                     </button>
@@ -953,7 +953,7 @@ function StudioPreviewPanel({
                     <button 
                         key={m}
                         onClick={() => setPreviewMode(m)}
-                        className={`whitespace-nowrap px-4 py-2 text-xs font-bold rounded-xl transition-all ${previewMode === m ? 'bg-[#0066CC] text-white shadow-xs' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}
+                        className={`whitespace-nowrap px-4 py-2 text-xs font-bold rounded-xl transition-all ${previewMode === m ? 'bg-[#3D52A0] text-white shadow-xs' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}
                     >
                         {m}
                     </button>
@@ -1009,7 +1009,7 @@ function StudioPreviewPanel({
                                 ) : (
                                     process.steps.map((st: any, i: number) => (
                                         <div key={i} className="flex gap-3 items-start bg-white p-3.5 rounded-2xl shadow-2xs border border-slate-200">
-                                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0" style={{ backgroundColor: branding?.themeColor || '#0066CC' }}>
+                                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0" style={{ backgroundColor: branding?.themeColor || '#3D52A0' }}>
                                                 {st.stepNumber || i + 1}
                                             </div>
                                             <div>
@@ -1053,7 +1053,7 @@ function StudioPreviewPanel({
                                                     <div className="font-bold text-slate-800 text-xs">{val(m.label, 'Milestone')}</div>
                                                     <div className="text-[10px] text-slate-500">{val(m.trigger, 'Trigger')}</div>
                                                 </div>
-                                                <div className="text-base font-black text-[#0066CC]">
+                                                <div className="text-base font-black text-[#3D52A0]">
                                                     {m.percent ?? 0}%
                                                 </div>
                                             </div>

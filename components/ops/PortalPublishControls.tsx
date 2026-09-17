@@ -251,8 +251,8 @@ export default function PortalPublishControls({ projectContext, setProjectContex
       title={projectId ? undefined : 'Save the project first'}
       className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
         everSent === false || behind
-          ? 'bg-[#0066CC] text-white hover:bg-[#0055B3] border border-[#0066CC]'
-          : 'border border-slate-200 text-slate-700 hover:border-sky-300 hover:text-[#0055B3]'
+          ? 'bg-[#3D52A0] text-white hover:bg-[#334486] border border-[#3D52A0]'
+          : 'border border-slate-200 text-slate-700 hover:border-sky-300 hover:text-[#334486]'
       }`}
     >
       {releasing
@@ -338,8 +338,8 @@ export default function PortalPublishControls({ projectContext, setProjectContex
               disabled={totals.draft === 0}
               className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                 totals.draft > 0
-                  ? 'bg-[#0066CC] text-white hover:bg-[#0055B3] border border-[#0066CC]'
-                  : 'border border-slate-200 text-slate-700 hover:border-sky-300 hover:text-[#0055B3]'
+                  ? 'bg-[#3D52A0] text-white hover:bg-[#334486] border border-[#3D52A0]'
+                  : 'border border-slate-200 text-slate-700 hover:border-sky-300 hover:text-[#334486]'
               }`}
             >
               Publish everything up to today
@@ -351,7 +351,7 @@ export default function PortalPublishControls({ projectContext, setProjectContex
               </span>
               <button
                 onClick={runBulkPublish}
-                className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#0066CC] text-white hover:bg-[#0055B3] cursor-pointer"
+                className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#3D52A0] text-white hover:bg-[#334486] cursor-pointer"
               >
                 Publish
               </button>
@@ -376,7 +376,7 @@ export default function PortalPublishControls({ projectContext, setProjectContex
       {sendError && <div className="px-5 pb-3 -mt-1">{errorNote}</div>}
 
       {confirmBulk && (
-        <div className="px-5 py-2.5 bg-sky-50/70 border-b border-sky-100 text-[11px] text-[#0055B3] font-medium">
+        <div className="px-5 py-2.5 bg-sky-50/70 border-b border-sky-100 text-[11px] text-[#334486] font-medium">
           Anything you previously marked internal stays hidden — this only publishes drafts dated up to today.
         </div>
       )}
@@ -437,7 +437,7 @@ export default function PortalPublishControls({ projectContext, setProjectContex
                     <div className="flex gap-1 shrink-0">
                       <button
                         onClick={() => setItemState(g.key, i, visible ? 'draft' : 'published')}
-                        className="px-2.5 py-1 rounded-md text-[10px] font-bold border border-slate-200 text-slate-600 hover:border-sky-300 hover:text-[#0055B3] transition-colors cursor-pointer"
+                        className="px-2.5 py-1 rounded-md text-[10px] font-bold border border-slate-200 text-slate-600 hover:border-sky-300 hover:text-[#334486] transition-colors cursor-pointer"
                       >
                         {visible ? 'Unpublish' : 'Publish'}
                       </button>

@@ -28,7 +28,7 @@ export const FFDSLogo: React.FC<{ className?: string, mode?: 'full' | 'icon', cu
   // Fallback: Elegant Text
   if (mode === 'icon') {
       return (
-        <div className={`w-10 h-10 bg-gradient-to-br from-[#0066CC] to-slate-900 text-white flex items-center justify-center font-extrabold text-xl rounded-xl shadow-lg ${className}`}>
+        <div className={`w-10 h-10 bg-gradient-to-br from-[#3D52A0] to-slate-900 text-white flex items-center justify-center font-extrabold text-xl rounded-xl shadow-lg ${className}`}>
             {initial}
         </div>
       )
@@ -37,7 +37,7 @@ export const FFDSLogo: React.FC<{ className?: string, mode?: 'full' | 'icon', cu
   return (
     <div className={`flex flex-col justify-center ${className}`}>
         <h1 className="font-extrabold text-2xl tracking-tight text-slate-900 leading-none">{mainName}</h1>
-        <p className="text-[10px] font-bold tracking-[0.3em] text-[#0066CC] uppercase mt-1">{subName}</p>
+        <p className="text-[10px] font-bold tracking-[0.3em] text-[#3D52A0] uppercase mt-1">{subName}</p>
     </div>
   );
 };

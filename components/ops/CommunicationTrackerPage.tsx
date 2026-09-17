@@ -266,7 +266,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="min-w-0">
                         <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                            <Send className="w-4 h-4 text-[#0066CC]" />
+                            <Send className="w-4 h-4 text-[#3D52A0]" />
                             Communication tracker
                         </h2>
                         <p className="text-xs text-slate-500 font-medium mt-0.5">
@@ -284,7 +284,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                 <div className="mt-4 h-1.5 rounded-full bg-slate-100 overflow-hidden">
                     <div
                         className={`h-full rounded-full transition-all duration-500 ${
-                            healthScore >= 90 ? 'bg-emerald-500' : healthScore >= 60 ? 'bg-amber-400' : 'bg-[#0066CC]'
+                            healthScore >= 90 ? 'bg-emerald-500' : healthScore >= 60 ? 'bg-amber-400' : 'bg-[#3D52A0]'
                         }`}
                         style={{ width: `${Math.max(0, Math.min(100, healthScore))}%` }}
                     />
@@ -319,7 +319,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                     >
                                         {ph.label}
                                         <span className={`text-[10px] font-extrabold tabular-nums rounded-full px-1.5 leading-[18px] ${
-                                            on ? 'bg-sky-50 text-[#0055B3]' : 'bg-slate-100 text-slate-500'
+                                            on ? 'bg-sky-50 text-[#334486]' : 'bg-slate-100 text-slate-500'
                                         }`}>{done}/{req}</span>
                                     </button>
                                 );
@@ -333,7 +333,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                 onChange={e => setQuery(e.target.value)}
                                 placeholder="Search communications…"
                                 className="w-full pl-8.5 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white
-                                           text-[12px] font-medium outline-none focus:border-[#0066CC] transition-colors"
+                                           text-[12px] font-medium outline-none focus:border-[#3D52A0] transition-colors"
                                 style={{ paddingLeft: '2.1rem' }}
                             />
                         </div>
@@ -348,7 +348,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                     onClick={() => setStatusFilter(f.id)}
                                     aria-pressed={on}
                                     className={`px-2.5 py-1 rounded-full text-[11px] font-bold cursor-pointer border transition-colors ${
-                                        on ? 'bg-sky-50 text-[#0055B3] border-sky-200'
+                                        on ? 'bg-sky-50 text-[#334486] border-sky-200'
                                            : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900'
                                     } ${f.id === 'attention' && f.n > 0 && !on ? 'text-amber-700' : ''}`}
                                 >
@@ -364,12 +364,12 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                     there as chrome. */}
                 {selected.size > 0 && (
                     <div className="px-5 py-2.5 bg-sky-50 border-b border-sky-100 flex items-center gap-3 flex-wrap">
-                        <p className="text-[12px] font-bold text-[#0055B3]">
+                        <p className="text-[12px] font-bold text-[#334486]">
                             {selected.size} selected
                         </p>
                         <button
                             onClick={handleBulkNA}
-                            className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-[#0066CC] hover:bg-[#0055B3] cursor-pointer transition-colors"
+                            className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-[#3D52A0] hover:bg-[#334486] cursor-pointer transition-colors"
                         >
                             Mark not applicable
                         </button>
@@ -389,7 +389,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                     <div className="px-5 py-2 border-b border-slate-100 flex items-center gap-2">
                         <button
                             onClick={() => setSelected(allPendingSelected ? new Set() : new Set(selectablePending.map(i => i.template.key)))}
-                            className="text-[11px] font-bold text-slate-500 hover:text-[#0055B3] cursor-pointer transition-colors"
+                            className="text-[11px] font-bold text-slate-500 hover:text-[#334486] cursor-pointer transition-colors"
                         >
                             {allPendingSelected ? 'Deselect all' : `Select all ${selectablePending.length} pending`}
                         </button>
@@ -431,7 +431,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                     checked={isSel}
                                                     onChange={() => toggleSelected(item.template.key)}
                                                     aria-label={`Select ${item.template.title}`}
-                                                    className="w-4 h-4 shrink-0 rounded border-slate-300 accent-[#0066CC] cursor-pointer"
+                                                    className="w-4 h-4 shrink-0 rounded border-slate-300 accent-[#3D52A0] cursor-pointer"
                                                 />
                                             ) : (
                                                 <span className={`w-4 h-4 rounded shrink-0 grid place-items-center border ${
@@ -489,7 +489,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                         title="Copy the email text"
                                                         className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-1 ${
                                                             copied ? 'text-emerald-700 bg-emerald-50'
-                                                                   : 'text-slate-500 hover:text-[#0055B3] hover:bg-sky-50'
+                                                                   : 'text-slate-500 hover:text-[#334486] hover:bg-sky-50'
                                                         }`}
                                                     >
                                                         {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -504,7 +504,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                             className={`px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer border transition-colors ${
                                                                 attention
                                                                     ? 'bg-amber-500 border-amber-500 text-white hover:bg-amber-600'
-                                                                    : 'bg-sky-50 border-sky-200 text-[#0055B3] hover:bg-[#0066CC] hover:border-[#0066CC] hover:text-white'
+                                                                    : 'bg-sky-50 border-sky-200 text-[#334486] hover:bg-[#3D52A0] hover:border-[#3D52A0] hover:text-white'
                                                             }`}
                                                         >
                                                             Mark sent
@@ -521,7 +521,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                 {st === 'sent' && (
                                                     <button
                                                         onClick={() => openModal(item)}
-                                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-600 border border-slate-200 hover:border-sky-300 hover:text-[#0055B3] cursor-pointer transition-colors"
+                                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-600 border border-slate-200 hover:border-sky-300 hover:text-[#334486] cursor-pointer transition-colors"
                                                     >
                                                         Edit log
                                                     </button>
@@ -529,7 +529,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                 {st === 'not_applicable' && (
                                                     <button
                                                         onClick={() => handleRevertNA(item)}
-                                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-600 border border-slate-200 hover:border-sky-300 hover:text-[#0055B3] cursor-pointer transition-colors"
+                                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-600 border border-slate-200 hover:border-sky-300 hover:text-[#334486] cursor-pointer transition-colors"
                                                     >
                                                         Undo N/A
                                                     </button>
@@ -545,7 +545,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
             </div>
 
             {selectedItem && (
-                <div className="fixed inset-0 bg-[#0066CC]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
                         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 flex-shrink-0">
                             <h3 className="font-semibold text-gray-900">
@@ -565,7 +565,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                 <button
                                                     key={mode}
                                                     onClick={() => setPreviewMode(mode)}
-                                                    className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-colors ${previewMode === mode ? 'bg-white text-[#0066CC] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                                    className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-colors ${previewMode === mode ? 'bg-white text-[#3D52A0] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                                 >
                                                     {mode}
                                                 </button>
@@ -583,7 +583,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                 />
                                                 <button 
                                                     onClick={() => handleCopy(resolveTemplate(selectedItem.template.email?.subject || '', getVariables()), 'email_subject')}
-                                                    className="absolute top-3 right-3 text-gray-400 hover:text-[#0066CC] p-1.5 rounded-md hover:bg-white border border-transparent hover:border-gray-200 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1 text-xs font-medium"
+                                                    className="absolute top-3 right-3 text-gray-400 hover:text-[#3D52A0] p-1.5 rounded-md hover:bg-white border border-transparent hover:border-gray-200 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1 text-xs font-medium"
                                                 >
                                                     {copySuccess === 'email_subject' ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />} {copySuccess === 'email_subject' ? 'Copied!' : 'Copy'}
                                                 </button>
@@ -596,7 +596,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                 />
                                                 <button 
                                                     onClick={() => handleCopy(resolveTemplate(selectedItem.template.email?.body || '', getVariables()), 'email_body')}
-                                                    className="absolute top-3 right-3 text-gray-400 hover:text-[#0066CC] p-1.5 rounded-md hover:bg-white border border-transparent hover:border-gray-200 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1 text-xs font-medium"
+                                                    className="absolute top-3 right-3 text-gray-400 hover:text-[#3D52A0] p-1.5 rounded-md hover:bg-white border border-transparent hover:border-gray-200 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1 text-xs font-medium"
                                                 >
                                                     {copySuccess === 'email_body' ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />} {copySuccess === 'email_body' ? 'Copied!' : 'Copy'}
                                                 </button>
@@ -638,7 +638,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                             {['email', 'whatsapp', 'both'].map(method => (
                                                 <label key={method} className="cursor-pointer">
                                                     <input type="radio" name="sentVia" value={method} className="peer sr-only" required defaultChecked={selectedItem.log.sentVia === method} />
-                                                    <div className="px-4 py-1.5 text-sm font-medium text-gray-500 rounded-md peer-checked:bg-white peer-checked:text-[#0066CC] peer-checked:shadow-sm capitalize">
+                                                    <div className="px-4 py-1.5 text-sm font-medium text-gray-500 rounded-md peer-checked:bg-white peer-checked:text-[#3D52A0] peer-checked:shadow-sm capitalize">
                                                         {method}
                                                     </div>
                                                 </label>
@@ -654,7 +654,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                 name="sentAt"
                                                 required 
                                                 defaultValue={selectedItem.log.sentAt ? format(selectedItem.log.sentAt.toDate ? selectedItem.log.sentAt.toDate() : new Date(selectedItem.log.sentAt), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')}
-                                                className="w-full px-3 py-2 bg-gray-50 rounded-lg border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#0066CC] text-sm" 
+                                                className="w-full px-3 py-2 bg-gray-50 rounded-lg border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] text-sm" 
                                             />
                                         </div>
                                         <div>
@@ -676,7 +676,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                                 name="invoiceRef"
                                                 defaultValue={selectedItem.log.invoiceRef || ''}
                                                 placeholder="e.g. INV-2023-014"
-                                                className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066CC] text-sm" 
+                                                className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#3D52A0] text-sm" 
                                             />
                                         </div>
                                     )}
@@ -688,7 +688,7 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                             defaultValue={selectedItem.log.notes}
                                             rows={3}
                                             placeholder="Add any specific context or links..."
-                                            className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#0066CC] text-sm resize-none" 
+                                            className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#3D52A0] text-sm resize-none" 
                                         />
                                     </div>
                                 </form>
@@ -706,11 +706,11 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
                                     Cancel
                                 </button>
                                 {modalStep === 1 ? (
-                                    <button onClick={() => setModalStep(2)} className="px-5 py-2 text-sm font-medium text-white bg-[#0066CC] rounded-lg hover:bg-[#0055B3] shadow-sm flex items-center gap-2">
+                                    <button onClick={() => setModalStep(2)} className="px-5 py-2 text-sm font-medium text-white bg-[#3D52A0] rounded-lg hover:bg-[#334486] shadow-sm flex items-center gap-2">
                                         Continue to Log <Send className="w-3.5 h-3.5" />
                                     </button>
                                 ) : (
-                                    <button type="submit" form="mark-sent-form" className="px-5 py-2 text-sm font-medium text-white bg-[#0066CC] rounded-lg hover:bg-[#0055B3] shadow-sm flex items-center gap-2">
+                                    <button type="submit" form="mark-sent-form" className="px-5 py-2 text-sm font-medium text-white bg-[#3D52A0] rounded-lg hover:bg-[#334486] shadow-sm flex items-center gap-2">
                                         <CheckCircle className="w-4 h-4" />
                                         {selectedItem.log.status === 'sent' ? 'Update Log' : 'Log as Sent'}
                                     </button>

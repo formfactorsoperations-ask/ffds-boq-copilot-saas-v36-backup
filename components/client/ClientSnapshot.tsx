@@ -202,7 +202,7 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ level, investmentMin, i
                             </div>
 
                             {/* Final Total Footer */}
-                            <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 p-6 text-white flex justify-between items-end rounded-b-[20px]">
+                            <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 p-6 text-white flex justify-between items-end rounded-b-[20px]">
                                 <div>
                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Project Cost</p>
                                     <p className="text-xs text-slate-500">Inclusive of Taxes & Fees</p>
@@ -353,7 +353,7 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ level, investmentMin, i
 
             {/* NEW: Execution Intelligence Layer (Impactful for Print) */}
             <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 break-inside-avoid">
-                <div className="rounded-2xl border-2 border-[#0055B3] p-5 bg-white">
+                <div className="rounded-2xl border-2 border-[#334486] p-5 bg-white">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Critical Milestone</div>
                     <div className="text-sm font-black text-slate-900 uppercase">SOF Freeze</div>
                     <p className="mt-1 text-[10px] text-slate-500 leading-relaxed">

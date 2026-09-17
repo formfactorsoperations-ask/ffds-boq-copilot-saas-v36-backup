@@ -257,7 +257,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                                contentEditable={!!setProjectContext} 
                                                suppressContentEditableWarning
                                                onBlur={(e) => handleOverride(row.category, 'material', e.currentTarget.innerText)}
-                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-[#0066CC]' : ''}`}
+                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-[#3D52A0]' : ''}`}
                                             >{overrides[row.category]?.['material'] ?? row.material}</div>
                                         </td>
                                         <td className="py-4 px-6 text-slate-500 leading-relaxed align-top text-xs">
@@ -265,7 +265,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                                contentEditable={!!setProjectContext} 
                                                suppressContentEditableWarning
                                                onBlur={(e) => handleOverride(row.category, 'notes', e.currentTarget.innerText)}
-                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-[#0066CC]' : ''}`}
+                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-[#3D52A0]' : ''}`}
                                             >{overrides[row.category]?.['notes'] ?? row.notes}</div>
                                         </td>
                                     </>
@@ -276,7 +276,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                                contentEditable={!!setProjectContext} 
                                                suppressContentEditableWarning
                                                onBlur={(e) => handleOverride(row.category, tier.name, e.currentTarget.innerText)}
-                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-[#0066CC]' : ''}`}
+                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-[#3D52A0]' : ''}`}
                                             >{overrides[row.category]?.[tier.name] ?? row[tier.name]}</div>
                                         </td>
                                     ))
@@ -301,7 +301,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                            contentEditable={!!setProjectContext} 
                                            suppressContentEditableWarning
                                            onBlur={(e) => handleOverride(row.category, 'material', e.currentTarget.innerText)}
-                                           className={`text-sm font-bold text-slate-800 whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-200 p-1 rounded outline-none focus:ring-2 focus:ring-[#0066CC]' : ''}`}
+                                           className={`text-sm font-bold text-slate-800 whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-200 p-1 rounded outline-none focus:ring-2 focus:ring-[#3D52A0]' : ''}`}
                                         >{overrides[row.category]?.['material'] ?? row.material}</div>
                                     </div>
                                     <div>
@@ -310,7 +310,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                            contentEditable={!!setProjectContext} 
                                            suppressContentEditableWarning
                                            onBlur={(e) => handleOverride(row.category, 'notes', e.currentTarget.innerText)}
-                                           className={`text-sm text-slate-600 whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-200 p-1 rounded outline-none focus:ring-2 focus:ring-[#0066CC]' : ''}`}
+                                           className={`text-sm text-slate-600 whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-200 p-1 rounded outline-none focus:ring-2 focus:ring-[#3D52A0]' : ''}`}
                                         >{overrides[row.category]?.['notes'] ?? row.notes}</div>
                                     </div>
                                 </>
@@ -322,7 +322,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                            contentEditable={!!setProjectContext} 
                                            suppressContentEditableWarning
                                            onBlur={(e) => handleOverride(row.category, tier.name, e.currentTarget.innerText)}
-                                           className={`text-sm text-slate-800 font-medium bg-white p-2 rounded-lg border border-slate-100 shadow-sm whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 outline-none focus:ring-2 focus:ring-[#0066CC]' : ''}`}
+                                           className={`text-sm text-slate-800 font-medium bg-white p-2 rounded-lg border border-slate-100 shadow-sm whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 outline-none focus:ring-2 focus:ring-[#3D52A0]' : ''}`}
                                         >{overrides[row.category]?.[tier.name] ?? row[tier.name]}</div>
                                     </div>
                                 ))

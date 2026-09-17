@@ -21,7 +21,7 @@ const Card: React.FC<CardProps> = ({ children, className = '', title, titleIcon,
       {title && (
         <CardItem translateZ={20} className="flex items-center gap-3 mb-6 w-full">
           {titleIcon && (
-            <div className="p-2 bg-sky-50 rounded-xl text-[#0066CC] border border-sky-100 shadow-sm">
+            <div className="p-2 bg-sky-50 rounded-xl text-[#3D52A0] border border-sky-100 shadow-sm">
               {titleIcon}
             </div>
           )}
@@ -59,7 +59,7 @@ const Card: React.FC<CardProps> = ({ children, className = '', title, titleIcon,
         {title && (
             <div className="flex items-center gap-3 mb-6">
                 {titleIcon && (
-                    <div className="p-2 bg-sky-50 rounded-xl text-[#0066CC] border border-sky-100 shadow-sm">
+                    <div className="p-2 bg-sky-50 rounded-xl text-[#3D52A0] border border-sky-100 shadow-sm">
                         {titleIcon}
                     </div>
                 )}

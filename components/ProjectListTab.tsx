@@ -55,7 +55,7 @@ const STATUS_CONFIG: Record<
   },
   proposal_sent: {
     label: "Proposal Sent",
-    color: "text-[#0066CC]",
+    color: "text-[#3D52A0]",
     bg: "bg-sky-50/50 backdrop-blur-sm",
     border: "border-sky-200/50",
     icon: Send,
@@ -133,7 +133,7 @@ const ProjectSparkles = () => {
             borderRadius: "50%",
             zIndex: 0,
           }}
-          className="inline-block bg-[#0066CC]/60"
+          className="inline-block bg-[#3D52A0]/60"
         ></motion.span>
       ))}
     </div>
@@ -341,7 +341,7 @@ function TodayPanel({ projects, currentUserRole, onOpenProject }: { projects: Fu
                                                 e.stopPropagation();
                                                 onOpenProject(project);
                                             }}
-                                            className={`shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${isBlocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-100 text-slate-600 hover:bg-[#0066CC]/90 backdrop-blur-md border border-white/20 hover:text-white'}`}
+                                            className={`shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${isBlocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-100 text-slate-600 hover:bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 hover:text-white'}`}
                                             disabled={isBlocked}
                                         >
                                             {action.ctaLabel}
@@ -469,7 +469,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
             }}
             className="grid grid-cols-1 md:grid-cols-3 gap-6 px-4"
           >
-            <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white p-8 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between hover:-translate-y-1 transition-transform">
+            <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white p-8 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between hover:-translate-y-1 transition-transform">
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">
                   Blockers & Risks
@@ -555,7 +555,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     Est Margin
                   </p>
-                  <p className="text-lg font-medium text-[#0055B3] mt-1">
+                  <p className="text-lg font-medium text-[#334486] mt-1">
                     {pipelineStats.avgMargin.toFixed(1)}%
                   </p>
                 </div>
@@ -633,7 +633,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
             </div>
 
             {/* Ops Feature 2: Vendor Performance Intelligence */}
-            <div className="bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white p-8 rounded-[2rem] shadow-xl relative overflow-hidden h-full">
+            <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white p-8 rounded-[2rem] shadow-xl relative overflow-hidden h-full">
               <h3 className="text-xl font-light tracking-tight text-white leading-none mb-1">
                 Contractor Health
               </h3>
@@ -759,37 +759,37 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                 </span>
                 <button
                   onClick={() => setStatusFilter("all")}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "all" ? "bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "all" ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
                 >
                   All
                 </button>
                 <button
                   onClick={() => setStatusFilter("draft")}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "draft" ? "bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "draft" ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
                 >
                   Pipeline
                 </button>
                 <button
                   onClick={() => setStatusFilter("proposal_sent")}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "proposal_sent" ? "bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "proposal_sent" ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
                 >
                   Proposals
                 </button>
                 <button
                   onClick={() => setStatusFilter("won")}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "won" ? "bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "won" ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
                 >
                   Execution
                 </button>
                 <button
                   onClick={() => setStatusFilter("completed")}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "completed" ? "bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "completed" ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
                 >
                   Completed
                 </button>
                 <button
                   onClick={() => setStatusFilter("lost")}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "lost" ? "bg-[#0066CC]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "lost" ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
                 >
                   Lost
                 </button>
@@ -945,7 +945,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                       const pendingCRs = project.materials?.filter(m => m.itemType === 'change_request' && m.status === 'pending_approval')?.length || 0;
                       if (pendingCRs > 0) {
                         conditions.push({
-                          dot: "bg-[#0066CC]",
+                          dot: "bg-[#3D52A0]",
                           text: `${pendingCRs} Change Request${pendingCRs > 1 ? 's' : ''} Pending`,
                         });
                       }                      // 5. Payment Pending
@@ -981,7 +981,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                         )?.length || 0;
                       if (pendingSofItems > 0) {
                         conditions.push({
-                          dot: "bg-[#0066CC]",
+                          dot: "bg-[#3D52A0]",
                           text: `${pendingSofItems} SOF item${pendingSofItems > 1 ? "s" : ""} pending`,
                         });
                       }
@@ -1026,8 +1026,8 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                           className="h-full w-full bg-white border transition-all duration-300 relative group/card flex flex-col cursor-pointer overflow-hidden rounded-2xl"
                           onClick={() => onOpenProject(project)}
                           style={{
-                            borderColor: isActive ? '#0066CC' : 'rgb(226, 232, 240)',
-                            boxShadow: isActive ? '0 4px 20px -2px rgba(0, 102, 204, 0.15), 0 0 0 1px #0066CC' : '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)',
+                            borderColor: isActive ? '#3D52A0' : 'rgb(226, 232, 240)',
+                            boxShadow: isActive ? '0 4px 20px -2px rgba(61, 82, 160, 0.15), 0 0 0 1px #3D52A0' : '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)',
                           }}
                         >
                           {/* Animated Glowing Gradient Hover Effect */}
@@ -1105,7 +1105,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                         }
 
                                         const barColor = metrics.status === 'completed' ? 'bg-emerald-500' : 
-                                          metrics.status === 'execution' ? 'bg-[#0066CC]' : 
+                                          metrics.status === 'execution' ? 'bg-[#3D52A0]' : 
                                           metrics.status === 'work_paused' ? 'bg-rose-500' : 
                                           metrics.status === 'won' ? 'bg-emerald-400' : 
                                           metrics.status === 'negotiation' ? 'bg-amber-400' : 
@@ -1162,7 +1162,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                   <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em]">
                                     Client:
                                   </p>
-                                  <div className="w-5 h-5 rounded-full bg-sky-50 border border-sky-100 flex items-center justify-center text-[9px] font-bold text-[#0066CC] shrink-0">
+                                  <div className="w-5 h-5 rounded-full bg-sky-50 border border-sky-100 flex items-center justify-center text-[9px] font-bold text-[#3D52A0] shrink-0">
                                     {(project.context?.clientName || "U")
                                       .charAt(0)
                                       .toUpperCase()}
@@ -1293,7 +1293,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                           {/* Footer actions */}
                           <CardItem translateZ={25} className="w-full">
                             <div className="border-t border-slate-100 bg-slate-50/80 px-5 py-3 flex items-center justify-between opacity-0 group-hover/card:opacity-100 transition-opacity duration-200">
-                              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#0066CC] flex items-center gap-1.5 group-hover/card:text-[#0055B3] transition-colors">
+                              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#3D52A0] flex items-center gap-1.5 group-hover/card:text-[#334486] transition-colors">
                                 Open Project{" "}
                                 <svg
                                   width="12"
@@ -1313,10 +1313,10 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                     e.stopPropagation();
                                     setStatusModalProject(project);
                                   }}
-                                  className="px-2 py-1 flex items-center gap-1 bg-white border border-slate-200 text-slate-600 hover:text-[#0066CC] hover:border-sky-200 rounded text-[11px] font-bold transition-colors shadow-sm cursor-pointer"
+                                  className="px-2 py-1 flex items-center gap-1 bg-white border border-slate-200 text-slate-600 hover:text-[#3D52A0] hover:border-sky-200 rounded text-[11px] font-bold transition-colors shadow-sm cursor-pointer"
                                   title="Change Status & Phase"
                                 >
-                                  <SlidersHorizontal className="w-3 h-3 text-[#0066CC]" />
+                                  <SlidersHorizontal className="w-3 h-3 text-[#3D52A0]" />
                                   <span>Status</span>
                                 </button>
                                 <button
@@ -1324,7 +1324,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                     e.stopPropagation();
                                     onDuplicateProject(project);
                                   }}
-                                  className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-slate-500 hover:text-[#0066CC] rounded hover:border-sky-200 transition-colors shadow-sm cursor-pointer"
+                                  className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-slate-500 hover:text-[#3D52A0] rounded hover:border-sky-200 transition-colors shadow-sm cursor-pointer"
                                   title="Clone as template — copies rooms and priced scope, not the client, payments or sign-offs"
                                 >
                                   <svg
@@ -1456,7 +1456,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
       {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {projectToDelete && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0066CC]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-md p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-md p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

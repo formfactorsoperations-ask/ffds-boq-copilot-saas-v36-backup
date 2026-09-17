@@ -152,7 +152,7 @@ const BoomerangVideoBg: React.FC<Props> = ({ src, fallbackClassName, className =
         <div className={fallbackClassName ?? "absolute inset-0"}>
           <div className="absolute inset-0 bg-gradient-to-br from-[#F4F3F3] via-white to-[#EFEDE7]" />
           <div className="aurora-a absolute -top-40 -left-24 w-[46rem] h-[46rem] rounded-full blur-3xl"
-               style={{ background: "radial-gradient(circle, rgba(0,102,204,.16), transparent 70%)" }} />
+               style={{ background: "radial-gradient(circle, rgba(61, 82, 160,.16), transparent 70%)" }} />
           <div className="aurora-b absolute -bottom-56 left-1/3 w-[42rem] h-[42rem] rounded-full blur-3xl"
                style={{ background: "radial-gradient(circle, rgba(181,148,91,.18), transparent 68%)" }} />
         </div>
