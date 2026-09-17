@@ -2400,7 +2400,19 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         let invoicedUnpaid = 0;
         milestones.forEach((m) => {
             if (m.status === 'invoiced') {
-                let rowBaseOriginal = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : (m.type === 'execution' ? originalNetExecution : originalNetDesign) * (m.percentage / 100);
+                /*
+                  The base locked at invoice time, not the live one.
+
+                  This was the only place that priced an invoiced milestone off
+                  the current taxable base while every other site here — the
+                  milestone row, totalPaid, the collections panel — used the
+                  base captured when the invoice went out. So the pipeline
+                  reported a different figure for the same invoice than the row
+                  right above it, and the difference grew every time the
+                  contract value moved after billing.
+                */
+                const trackBase = m.lockedTaxableBase || (m.type === 'execution' ? originalNetExecution : originalNetDesign);
+                let rowBaseOriginal = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : trackBase * (m.percentage / 100);
                 rowBaseOriginal = Math.round(rowBaseOriginal);
                 let rowBillable = Math.round(m.type === 'execution' ? rowBaseOriginal * (billablePercent / 100) : rowBaseOriginal);
                 const applicableGstRate = m.type === 'execution' ? (executionGstEnabled ? gstRate : 0) : gstRate;
@@ -2412,8 +2424,22 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 if (m.id === firstDesignMilestoneId && initiationFee > 0) {
                     rowInvoiceTotal = Math.max(0, rowInvoiceTotal - initiationFee);
                 }
-                
-                invoicedUnpaid += rowInvoiceTotal;
+
+                /*
+                  The cash side counts too.
+
+                  Gross project value includes the cash component and totalPaid
+                  adds it back when a milestone settles, so leaving it out here
+                  pushed the cash half of an invoiced execution milestone into
+                  Pending Release — reported as not yet asked for when it had
+                  already been billed. Design milestones have no cash side, so
+                  this is zero for them.
+                */
+                const rowCash = m.type === 'execution'
+                    ? Math.round(rowBaseOriginal * ((100 - billablePercent) / 100))
+                    : 0;
+
+                invoicedUnpaid += rowInvoiceTotal + rowCash;
             }
         });
         return invoicedUnpaid;
