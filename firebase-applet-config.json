@@ -3,7 +3,10 @@
   "appId": "1:391441480156:web:42150e815f2e712eea3719",
   "apiKey": "AIzaSyDa6EV5_wt6z2Y0RnpnB5Yj_6ZxQxf9CYc",
   "authDomain": "saas-copilot.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-saasmodelffdsboq-9800c635-a7c0-46c3-9699-b68c84d16d33",
   "storageBucket": "saas-copilot.firebasestorage.app",
   "messagingSenderId": "391441480156",
-  "measurementId": ""
+  "measurementId": "",
+  "oAuthClientId": "391441480156-c014abatfsile7eri48vf9baqee3sn1o.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }

@@ -329,8 +329,19 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
               {spaceRooms.length} Rooms registered
             </span>
           </div>
-          <div className="text-xs text-slate-500 font-normal">
-            BOQ Total: <strong className="font-mono text-slate-900 text-sm font-bold tabular-nums">{formatCurrency(projectStats.grandTotal)}</strong>
+          <div className="flex items-center gap-3">
+            <a
+              href="/boq-evolution-blueprint.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-200 flex items-center gap-1.5 transition-all shadow-2xs"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              BOQ Evolution Blueprint Mockup
+            </a>
+            <div className="text-xs text-slate-500 font-normal">
+              BOQ Total: <strong className="font-mono text-slate-900 text-sm font-bold tabular-nums">{formatCurrency(projectStats.grandTotal)}</strong>
+            </div>
           </div>
         </div>
 

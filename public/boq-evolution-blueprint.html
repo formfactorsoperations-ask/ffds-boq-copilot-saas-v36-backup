@@ -1,0 +1,3024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFDS Studio OS — Holistic BOQ Creation, AI Engines & Complex Scenarios Blueprint</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-serif { font-family: 'Playfair Display', serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .shadow-card { box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04); }
+    .shadow-card-hover:hover { box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04); }
+    .tab-active { background-color: #4f46e5; color: #ffffff; box-shadow: 0 2px 6px 0 rgba(79, 70, 229, 0.35); }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .btn-primary { background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); }
+    .badge-diff { animation: pulseSlow 2s infinite ease-in-out; }
+    @keyframes pulseSlow { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen p-3 sm:p-6 lg:p-8">
+
+  <!-- Interactive Toast Notification -->
+  <div id="toast-notify" class="fixed top-5 right-5 z-50 transform translate-y-[-160%] transition-transform duration-300 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-semibold max-w-md border border-slate-700">
+    <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400 shrink-0"></i>
+    <span id="toast-message" class="leading-relaxed">Action simulated successfully</span>
+  </div>
+
+  <div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- TOP CONTROL & NAVIGATION BAR -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-7 shadow-card space-y-5">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+        <div>
+          <div class="flex items-center gap-2 mb-2 flex-wrap">
+            <span class="px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-extrabold uppercase tracking-wider">
+              AI Engine & Complex Business Scenarios Blueprint
+            </span>
+            <span class="px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-700 text-[11px] font-bold flex items-center gap-1">
+              <i data-lucide="cpu" class="w-3 h-3"></i> 4 Proprietary Algorithms + Gemini
+            </span>
+            <span class="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-bold flex items-center gap-1">
+              <i data-lucide="wrench" class="w-3 h-3"></i> Civil Renovation & Jodi Flats
+            </span>
+          </div>
+          <h1 class="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 tracking-tight">
+            Holistic BOQ Creation & Multi-Tier AI Architecture
+          </h1>
+          <p class="text-xs sm:text-sm text-slate-500 mt-1.5 max-w-3xl leading-relaxed">
+            Deconstructing end-to-end template generation across single vs 3-tier options, resolving complex real-world edge cases (<strong>Full Civil / Bathroom Renovation</strong> and <strong>2×1BHK Jodi Combinations</strong>), and introducing our proprietary algorithmic intelligence.
+          </p>
+        </div>
+
+        <!-- Global Quick Actions -->
+        <div class="flex items-center gap-3 shrink-0 flex-wrap">
+          <a href="/" class="px-3.5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Back to Studio OS
+          </a>
+          <button onclick="switchTab('simulator')" class="px-4 py-2 text-xs font-bold text-white btn-primary rounded-xl shadow-xs hover:opacity-95 transition-all flex items-center gap-2 cursor-pointer">
+            <i data-lucide="play-circle" class="w-4 h-4"></i> Open Live Interactive Sandbox
+          </button>
+        </div>
+      </div>
+
+      <!-- MAIN NAVIGATION TABS -->
+      <div class="pt-3 border-t border-slate-100 flex flex-wrap gap-2">
+        <button id="nav-btn-workflow" onclick="switchTab('workflow')" class="tab-active px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer">
+          <i data-lucide="git-merge" class="w-3.5 h-3.5"></i> 1. Current vs Proposed Workflow
+        </button>
+        <button id="nav-btn-complex" onclick="switchTab('complex')" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-all flex items-center gap-2 cursor-pointer">
+          <i data-lucide="layers-3" class="w-3.5 h-3.5 text-amber-600"></i> 2. Complex Cases: Civil & Jodi
+        </button>
+        <button id="nav-btn-ai" onclick="switchTab('ai')" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-all flex items-center gap-2 cursor-pointer">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-purple-600"></i> 3. 4 Algorithmic Engines
+        </button>
+        <button id="nav-btn-studiobrain" onclick="switchTab('studiobrain')" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-all flex items-center gap-2 cursor-pointer">
+          <i data-lucide="brain-circuit" class="w-3.5 h-3.5 text-indigo-600"></i> 4. Studio Brain & Data Migration
+        </button>
+        <button id="nav-btn-editorux" onclick="switchTab('editorux')" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-all flex items-center gap-2 cursor-pointer">
+          <i data-lucide="layout-grid" class="w-3.5 h-3.5 text-blue-600"></i> 5. BOQ Editor UX & Excel Workflows
+        </button>
+        <button id="nav-btn-simulator" onclick="switchTab('simulator')" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-all flex items-center gap-2 cursor-pointer">
+          <i data-lucide="play-circle" class="w-3.5 h-3.5 text-indigo-600"></i> 6. Interactive Sandbox
+        </button>
+        <button id="nav-btn-historical" onclick="switchTab('historical')" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-all flex items-center gap-2 cursor-pointer">
+          <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i> 7. Empirical Data & Impact Zones
+        </button>
+      </div>
+    </div>
+
+    <!-- TAB 1: CURRENT VS PROPOSED WORKFLOW -->
+    <div id="tab-section-workflow" class="space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-6">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Template-Driven Lifecycle</span>
+          <h2 class="font-serif text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+            Single BOQ vs 3-Tier Proposal: Current Bottlenecks vs Unified Scope Spine
+          </h2>
+          <p class="text-xs text-slate-500 mt-1 max-w-3xl">
+            In our current app, the Project Setup Wizard allows choosing between a <strong>Single Turnkey BOQ</strong> (Comfort Upgrade) or <strong>3 Distinct Tiers</strong> (Essential, Comfort, Complete Harmony). While initial creation is instant, post-creation updating creates severe manual friction. Here is the architectural comparison.
+          </p>
+        </div>
+
+        <!-- 5-Stage Comparative Breakdown -->
+        <div class="space-y-4">
+          
+          <!-- Stage 1 -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 rounded-xl border border-slate-200 bg-slate-50/50">
+            <div class="lg:col-span-3 flex items-start gap-3">
+              <span class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 font-mono font-bold text-xs flex items-center justify-center shrink-0">1</span>
+              <div>
+                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Template & Item Bank</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">How typologies & items are declared.</p>
+              </div>
+            </div>
+            <div class="lg:col-span-4 p-3 rounded-lg bg-rose-50/60 border border-rose-200/60 space-y-1.5">
+              <span class="text-[10px] font-bold text-rose-800 uppercase tracking-wider">Current Implementation</span>
+              <p class="text-xs text-slate-700 leading-relaxed">
+                Flat arrays of item IDs mapped to room strings (<code class="font-mono text-[10px] bg-white px-1 py-0.5 rounded">living: ['gen-001']</code>). Tiers use rough mathematical multipliers (<code class="font-mono text-[10px]">materialMod: 0.88 vs 1.35</code>).
+              </p>
+              <div class="text-[10px] text-rose-700 font-semibold">❌ Flaw: Artificial multipliers hide actual subcontractor line items.</div>
+            </div>
+            <div class="lg:col-span-5 p-3 rounded-lg bg-emerald-50/60 border border-emerald-200/60 space-y-1.5">
+              <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">New Proposed Architecture</span>
+              <p class="text-xs text-slate-700 leading-relaxed">
+                <strong>Parametric Smart Assemblies:</strong> Every bank item natively carries 3 concrete subcontractor trade specs (e.g. Commercial Ply vs Marine BWP vs HDHMR; 0.8mm vs 1.0mm Merino vs PU Paint; Standard vs Soft-Close vs Blum).
+              </p>
+              <div class="text-[10px] text-emerald-700 font-bold">✓ Benefit: Grounded in real subcontractor line items with zero artificial multipliers.</div>
+            </div>
+          </div>
+
+          <!-- Stage 2 -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 rounded-xl border border-slate-200 bg-slate-50/50">
+            <div class="lg:col-span-3 flex items-start gap-3">
+              <span class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 font-mono font-bold text-xs flex items-center justify-center shrink-0">2</span>
+              <div>
+                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Initial Generation</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">Wizard selection: Single vs 3-Tier Mode.</p>
+              </div>
+            </div>
+            <div class="lg:col-span-4 p-3 rounded-lg bg-rose-50/60 border border-rose-200/60 space-y-1.5">
+              <span class="text-[10px] font-bold text-rose-800 uppercase tracking-wider">Current Implementation</span>
+              <p class="text-xs text-slate-700 leading-relaxed">
+                Wizard stamps out 3 completely detached <code class="font-mono text-[10px]">BoqItem[]</code> arrays. The moment generation finishes, all 3 tiers sever connection to each other and to the template.
+              </p>
+              <div class="text-[10px] text-rose-700 font-semibold">❌ Flaw: An isolated snapshot with no lasting spatial link.</div>
+            </div>
+            <div class="lg:col-span-5 p-3 rounded-lg bg-emerald-50/60 border border-emerald-200/60 space-y-1.5">
+              <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">New Proposed Architecture</span>
+              <p class="text-xs text-slate-700 leading-relaxed">
+                <strong>The Unified Scope Spine:</strong> Rooms and line items exist on one master spatial backbone. Quantities bind to physical room dimensions. Switching between Single and 3-Tier mode is a non-destructive view toggle!
+              </p>
+              <div class="text-[10px] text-emerald-700 font-bold">✓ Benefit: Convert between Single and 3 Tiers at any time with zero loss of data.</div>
+            </div>
+          </div>
+
+          <!-- Stage 3 -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 rounded-xl border border-slate-200 bg-slate-50/50">
+            <div class="lg:col-span-3 flex items-start gap-3">
+              <span class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 font-mono font-bold text-xs flex items-center justify-center shrink-0">3</span>
+              <div>
+                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Post-Creation Editing</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">Designer customizes room items or dimensions.</p>
+              </div>
+            </div>
+            <div class="lg:col-span-4 p-3 rounded-lg bg-rose-50/60 border border-rose-200/60 space-y-1.5">
+              <span class="text-[10px] font-bold text-rose-800 uppercase tracking-wider">Current Implementation</span>
+              <p class="text-xs text-slate-700 leading-relaxed">
+                Designer edits Active Tier (e.g. Master Wardrobe from 45 to 63 sft). Tiers 1 and 3 remain at 45 sft. When presenting to the client, comparing tiers compares completely different scopes.
+              </p>
+              <div class="text-[10px] text-rose-700 font-semibold">❌ Flaw: 3x manual data entry or painful desync.</div>
+            </div>
+            <div class="lg:col-span-5 p-3 rounded-lg bg-emerald-50/60 border border-emerald-200/60 space-y-1.5">
+              <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">New Proposed Architecture</span>
+              <p class="text-xs text-slate-700 leading-relaxed">
+                <strong>Bi-Directional Spatial Propagation:</strong> Changing wardrobe quantity to 63 sft updates the spatial quantity across all 3 tiers automatically. Finish specifications and hardware remain tier-specific.
+              </p>
+              <div class="text-[10px] text-emerald-700 font-bold">✓ Benefit: Edit once. All 3 proposal tiers remain mathematically synchronized.</div>
+            </div>
+          </div>
+
+          <!-- Stage 4 -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 rounded-xl border border-slate-200 bg-slate-50/50">
+            <div class="lg:col-span-3 flex items-start gap-3">
+              <span class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 font-mono font-bold text-xs flex items-center justify-center shrink-0">4</span>
+              <div>
+                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Budget Revisions ("What-If")</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">Client demands: "Drop budget by ₹3.5 Lakhs".</p>
+              </div>
+            </div>
+            <div class="lg:col-span-4 p-3 rounded-lg bg-rose-50/60 border border-rose-200/60 space-y-1.5">
+              <span class="text-[10px] font-bold text-rose-800 uppercase tracking-wider">Current Implementation</span>
+              <p class="text-xs text-slate-700 leading-relaxed">
+                Manual guesswork. Designers either slash trade margins across items (risking zero-margin execution) or manually open 35 items across 3 tiers.
+              </p>
+              <div class="text-[10px] text-rose-700 font-semibold">❌ Flaw: Takes 90–120 minutes per revision round. High margin erosion.</div>
+            </div>
+            <div class="lg:col-span-5 p-3 rounded-lg bg-emerald-50/60 border border-emerald-200/60 space-y-1.5">
+              <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">New Proposed Architecture</span>
+              <p class="text-xs text-slate-700 leading-relaxed">
+                <strong>Inverse Budget Clamper (Algorithm 4):</strong> Drag the budget slider. The engine computes 3 clean trade-off paths: Finish Swaps, Scope Deferral, or Volume Margin Tuning, re-aligning all 3 tiers in 30 seconds.
+              </p>
+              <div class="text-[10px] text-emerald-700 font-bold">✓ Benefit: Client revisions handled live on call without sacrificing studio gross margins.</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: COMPLEX CASES: CIVIL RENOVATION & JODI FLATS -->
+    <div id="tab-section-complex" class="space-y-6 hidden">
+      
+      <!-- Top Overview of the 2 Real-World Edge Cases -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-6">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-amber-600">The Hard Edge Cases</span>
+          <h2 class="font-serif text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+            How to Tier Complex Scenarios: Full Civil Renovations & Jodi Flats
+          </h2>
+          <p class="text-xs text-slate-500 mt-1 max-w-3xl">
+            Contractors often say <em>"In civil works there is nothing premium—sand and cement are commodities"</em>. But in residential design, <strong>engineering methodologies, joint chemistries, tile formats, and sub-surface preparation completely alter cost, durability, and warranty</strong>. Here is the rigorous tier differentiation logic.
+          </p>
+        </div>
+
+        <!-- SECTION A: FULL CIVIL & BATHROOM RENOVATION -->
+        <div class="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-xs space-y-4 p-5 sm:p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                <i data-lucide="wrench" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="font-bold text-slate-900 text-sm sm:text-base">Scenario A: Full Home Civil & Wet Works Renovation</h3>
+                <span class="text-[11px] text-slate-500">Includes complete floor replacement, slab leveling, and 2 complete bathroom overhauls.</span>
+              </div>
+            </div>
+            <span class="text-[10px] font-mono px-2.5 py-1 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200">
+              The "Civil Has No Premium" Myth — Solved
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            
+            <!-- Tier 1 Civil -->
+            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 uppercase text-[11px]">Tier 1: Essential (Value Civil)</span>
+                <span class="font-mono text-[11px] font-bold text-slate-600">~₹185/sft Floor</span>
+              </div>
+              <p class="text-[11px] text-slate-600 leading-relaxed">
+                <strong>Method: Tile-over-Tile</strong> using polymer-modified adhesive (saves demolition & debris carting costs).
+              </p>
+              <div class="space-y-1.5 font-mono text-[10.5px] text-slate-600 border-t border-slate-200 pt-2">
+                <div>• <strong>Tile:</strong> 600×1200mm Vitrified GVT (₹65/sft)</div>
+                <div>• <strong>Joints:</strong> Standard cementitious grout (1mm)</div>
+                <div>• <strong>Waterproofing:</strong> 2-coat Polymer Cementitious Slurry (Dr. Fixit 2K, 3-yr warranty)</div>
+                <div>• <strong>Plumbing:</strong> Exposed Single-Lever Wall Mixer with floor CPVC lines (₹35k/bath)</div>
+                <div>• <strong>Sanitary:</strong> Floor-mounted EWC with external cistern</div>
+              </div>
+              <div class="text-[10px] text-slate-500 font-semibold">Total Bathroom: ₹85,000–1,10,000 / bath</div>
+            </div>
+
+            <!-- Tier 2 Civil -->
+            <div class="p-4 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-indigo-900 uppercase text-[11px]">Tier 2: Comfort (Standard Modern)</span>
+                <span class="font-mono text-[11px] font-bold text-indigo-700">~₹340/sft Floor</span>
+              </div>
+              <p class="text-[11px] text-slate-700 leading-relaxed">
+                <strong>Method: Full Slab Chipping</strong> down to RCC + 25mm screed bed + full debris transport to municipal dumpsite.
+              </p>
+              <div class="space-y-1.5 font-mono text-[10.5px] text-indigo-900 border-t border-indigo-200/60 pt-2">
+                <div>• <strong>Tile:</strong> 800×1600mm or 1200×1800mm Large Format GVT (₹140/sft)</div>
+                <div>• <strong>Joints:</strong> 2-part Epoxy Resin Grout (stain-proof)</div>
+                <div>• <strong>Waterproofing:</strong> Brick Bat Coba (BBC) + PU perimeter fillets + 48-hr flood test</div>
+                <div>• <strong>Plumbing:</strong> Concealed Divertors (Grohe/Kohler) chased into brick walls (₹75k/bath)</div>
+                <div>• <strong>Sanitary:</strong> Wall-hung EWC with Geberit concealed tank</div>
+              </div>
+              <div class="text-[10px] text-indigo-700 font-bold">Total Bathroom: ₹1,85,000–2,45,000 / bath</div>
+            </div>
+
+            <!-- Tier 3 Civil -->
+            <div class="p-4 rounded-xl border border-purple-200 bg-purple-50/40 space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-purple-900 uppercase text-[11px]">Tier 3: Luxury (Architectural Stone)</span>
+                <span class="font-mono text-[11px] font-bold text-purple-700">~₹850–1,250/sft</span>
+              </div>
+              <p class="text-[11px] text-slate-700 leading-relaxed">
+                <strong>Method: Acoustic Underlayment</strong> + Crack-isolation membrane + laser self-leveling compound.
+              </p>
+              <div class="space-y-1.5 font-mono text-[10.5px] text-purple-900 border-t border-purple-200/60 pt-2">
+                <div>• <strong>Floor:</strong> Imported Italian Marble (Dyna/Statuario) with 8-stage diamond disc mirror polish</div>
+                <div>• <strong>Joints:</strong> Color-matched polyester resin seamless jointing</div>
+                <div>• <strong>Waterproofing:</strong> 3-tier Hybrid: Crystallization primer + Liquid PU membrane + Fiber mesh</div>
+                <div>• <strong>Plumbing:</strong> 3-way Thermostatic mixer + rain shower + acoustic lagging</div>
+                <div>• <strong>Sanitary:</strong> Toto Rimless smart bidet toilet + 10mm fluted glass enclosure</div>
+              </div>
+              <div class="text-[10px] text-purple-700 font-bold">Total Bathroom: ₹3,60,000–5,20,000 / bath</div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- SECTION B: 2 X 1BHK JODI FLAT COMBINATION -->
+        <div class="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-xs space-y-4 p-5 sm:p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                <i data-lucide="merge" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="font-bold text-slate-900 text-sm sm:text-base">Scenario B: 2 × 1BHK Jodi (Flat Combination)</h3>
+                <span class="text-[11px] text-slate-500">Combining two adjacent apartments into a unified 1,100 sq ft home.</span>
+              </div>
+            </div>
+            <span class="text-[10px] font-mono px-2.5 py-1 rounded bg-indigo-50 text-indigo-800 font-bold border border-indigo-200">
+              Structural, MEP & Spatial Consolidation Logic
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            
+            <!-- Tier 1 Jodi -->
+            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 uppercase text-[11px]">Tier 1: Functional Connection</span>
+                <span class="font-mono text-[11px] font-bold text-slate-600">+₹1,40,000 Jodi Delta</span>
+              </div>
+              <p class="text-[11px] text-slate-600 leading-relaxed">
+                <strong>Structural:</strong> 8ft × 7ft door aperture cutout between living rooms with mild steel architrave lintel framing.
+              </p>
+              <div class="space-y-1.5 font-mono text-[10.5px] text-slate-600 border-t border-slate-200 pt-2">
+                <div>• <strong>Second Kitchen:</strong> Convert to Utility / Store room; plumbing capped above slab</div>
+                <div>• <strong>Floor Height Delta:</strong> 15mm bevelled hardwood threshold transition strip</div>
+                <div>• <strong>Electrical:</strong> Retain 2 separate distribution boards (run independently)</div>
+                <div>• <strong>Second Entrance:</strong> Door locked and masked internally with panelling</div>
+              </div>
+              <div class="text-[10px] text-slate-500 font-semibold">Fastest execution; zero society structural approvals needed.</div>
+            </div>
+
+            <!-- Tier 2 Jodi -->
+            <div class="p-4 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-indigo-900 uppercase text-[11px]">Tier 2: Unified Architectural Flow</span>
+                <span class="font-mono text-[11px] font-bold text-indigo-700">+₹3,40,000 Jodi Delta</span>
+              </div>
+              <p class="text-[11px] text-slate-700 leading-relaxed">
+                <strong>Structural:</strong> Full non-structural wall removal. Center ceiling beam drop concealed with continuous false ceiling.
+              </p>
+              <div class="space-y-1.5 font-mono text-[10.5px] text-indigo-900 border-t border-indigo-200/60 pt-2">
+                <div>• <strong>Second Kitchen:</strong> Converted to dedicated <strong>Study / Home Office</strong>; drainage capped below screed with hydro-test seal</div>
+                <div>• <strong>Floor Height Delta:</strong> Laser self-leveling screed across both flats for seamless 0mm floor transition</div>
+                <div>• <strong>Electrical:</strong> Sub-panel integrated into Flat A with phase balancing & inverter tie-in</div>
+                <div>• <strong>Second Entrance:</strong> Converted to discreet service/delivery entry with digital lock</div>
+              </div>
+              <div class="text-[10px] text-indigo-700 font-bold">Recommended standard for high-end residential apartments.</div>
+            </div>
+
+            <!-- Tier 3 Jodi -->
+            <div class="p-4 rounded-xl border border-purple-200 bg-purple-50/40 space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-purple-900 uppercase text-[11px]">Tier 3: Master Suite Spatial Re-Zoning</span>
+                <span class="font-mono text-[11px] font-bold text-purple-700">+₹6,80,000 Jodi Delta</span>
+              </div>
+              <p class="text-[11px] text-slate-700 leading-relaxed">
+                <strong>Structural:</strong> Public/Private zoning: Flat A becomes Grand Living & Show Kitchen; Flat B becomes Master Suite with Walk-in Closet.
+              </p>
+              <div class="space-y-1.5 font-mono text-[10.5px] text-purple-900 border-t border-purple-200/60 pt-2">
+                <div>• <strong>Second Kitchen:</strong> Converted into <strong>Luxury Walk-in Dressing Suite</strong> with jewelry island and vanity</div>
+                <div>• <strong>Beams & Portals:</strong> Clad in fluted marble / Italian veneer with concealed cove lighting</div>
+                <div>• <strong>Electrical:</strong> Single consolidated 3-phase meter with smart home automation DB and centralized VRV AC routing</div>
+                <div>• <strong>Second Entrance:</strong> Permanently sealed from exterior; internal side clad as continuous acoustic art wall</div>
+              </div>
+              <div class="text-[10px] text-purple-700 font-bold">Transforms two modest flats into an ultra-luxury penthouse layout.</div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- TAB 3: AI & ALGORITHMIC ENGINES -->
+    <div id="tab-section-ai" class="space-y-6 hidden">
+      
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-6">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-purple-600">The Intelligence Layer</span>
+          <h2 class="font-serif text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+            4 Proprietary Algorithms That Make FFDS Studio OS Truly Stand Out
+          </h2>
+          <p class="text-xs text-slate-500 mt-1 max-w-3xl">
+            Generic estimation tools rely on dumb static spreadsheets. Our platform embeds 4 deterministic mathematical engines backed by server-side Gemini 2.5 AI telemetry to make BOQ creation predictive, resilient, and impossible to underquote.
+          </p>
+        </div>
+
+        <!-- 4 Algorithmic Engines Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          
+          <!-- Engine 1 -->
+          <div class="p-5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 text-[10px] font-mono font-bold">ALGORITHM 1</span>
+              <span class="text-[11px] text-slate-500 font-medium">Mathematical Invariance</span>
+            </div>
+            <h3 class="font-bold text-slate-900 text-base">Split-Spine Decoupling Engine (Civil vs Spec Overlay)</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              Solves the civil tier differentiation challenge. Formally decouples the project cost into an <strong>Invariant Civil Base</strong> and an <strong>Engineering Specification Differential</strong>:
+            </p>
+            <div class="p-3 bg-slate-900 rounded-lg text-white font-mono text-[11px] space-y-1">
+              <div class="text-indigo-400 font-bold">Total Cost (Tier k) =</div>
+              <div class="pl-3">C_invariant(Demo, Screed, Debris)</div>
+              <div class="pl-3">+ ∑ [ Qty_i × ΔSpec_i,k(Chemistry, Tile, Sanitary) ]</div>
+              <div class="pl-3">+ Margin_k(LaborRisk)</div>
+            </div>
+            <p class="text-[11px] text-slate-600">
+              The engine ensures that structural labor is never artificially inflated while material specifications scale realistically.
+            </p>
+          </div>
+
+          <!-- Engine 2 -->
+          <div class="p-5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-mono font-bold">ALGORITHM 2</span>
+              <span class="text-[11px] text-slate-500 font-medium">Graph Topology</span>
+            </div>
+            <h3 class="font-bold text-slate-900 text-base">Jodi Topology & MEP Consolidation Resolver</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              When a flat combination is selected, this algorithm constructs an apartment spatial graph:
+            </p>
+            <ul class="text-[11px] text-slate-600 space-y-1 font-mono">
+              <li>1. Identifies redundant wet cores (2 Kitchens detected → triggers conversion wizard)</li>
+              <li>2. Calculates inter-flat boundary length & beam load limits</li>
+              <li>3. Generates mandatory decommissioning tasks (100mm trap capping, gas line isolation)</li>
+              <li>4. Injects floor height delta compensation (15mm screed adjustment)</li>
+            </ul>
+            <div class="text-[10px] text-amber-700 font-bold">Prevents ₹1.8L in forgotten MEP re-routing costs on flat combinations.</div>
+          </div>
+
+          <!-- Engine 3 -->
+          <div class="p-5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-mono font-bold">ALGORITHM 3</span>
+              <span class="text-[11px] text-slate-500 font-medium">Server-Side Gemini 2.5</span>
+            </div>
+            <h3 class="font-bold text-slate-900 text-base">AI Scope Sentinel & Subcontractor Reality Grounding</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              Trained on our 7 completed studio projects (from <code class="font-mono text-[10px]">lib/studioSeed.ts</code>). Proactively audits the BOQ during creation and post-creation edits:
+            </p>
+            <div class="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-900 space-y-1">
+              <div class="font-bold flex items-center gap-1 text-rose-700">
+                <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i> Sentinel Warning (Pattern ZP7 Detected):
+              </div>
+              <p class="text-[11px]">
+                "Bathroom overhaul selected without Brick Bat Coba waterproofing or municipal debris haulage. On project ZP7 (Prestige Harmony), this caused margin collapse from 32% to 8.1%."
+              </p>
+            </div>
+          </div>
+
+          <!-- Engine 4 -->
+          <div class="p-5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="px-2 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-mono font-bold">ALGORITHM 4</span>
+              <span class="text-[11px] text-slate-500 font-medium">Linear Optimization</span>
+            </div>
+            <h3 class="font-bold text-slate-900 text-base">Multi-Objective Inverse Budget Clamper</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              When a client says <em>"My budget cap is ₹21 Lakhs instead of ₹25 Lakhs"</em>, the clamper runs a multi-objective optimization:
+            </p>
+            <div class="p-3 bg-slate-900 rounded-lg text-white font-mono text-[11px] space-y-1">
+              <div>minimize: AestheticCompromise(FinishSwaps, ScopeCuts)</div>
+              <div>subject to:</div>
+              <div class="pl-3">• GrandTotal ≤ TargetBudget</div>
+              <div class="pl-3">• StudioGrossMargin ≥ 30.0%</div>
+              <div class="pl-3">• Zero deletion of structural/waterproofing lines</div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- TAB 4: STUDIO BRAIN ARCHITECTURE & DATA MIGRATION OPTIONS -->
+    <div id="tab-section-studiobrain" class="space-y-6 hidden">
+      
+      <!-- Executive Introduction Banner -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Architectural Shift: From Generic Market Tiers to Studio-Specific Brain</span>
+            <h2 class="font-serif text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+              The Parametric Studio Brain & Non-Destructive Data Migration
+            </h2>
+          </div>
+          <span class="text-xs font-mono px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+            Engine v2 Architecture
+          </span>
+        </div>
+        <p class="text-xs text-slate-600 leading-relaxed max-w-4xl">
+          <strong>The Problem with Generic Market Bifurcations:</strong> A luxury studio in South Bombay executing veneer and Italian marble with a 35% target margin operates on completely different rules than an urban turnkey studio doing factory-press modular apartments at 22% margin, or a civil specialist retrofitting 30-year-old buildings. <em>Hardcoding tier specifications or linear multipliers into SaaS software fails because every studio has its own unique vendor rate books, trade margin policies, and execution standards.</em>
+        </p>
+        <p class="text-xs text-slate-600 leading-relaxed max-w-4xl">
+          <strong>The Data Impact Imperative:</strong> Form Factors currently has <strong>live client projects, signed contracts with cryptographic SHA-256 hashes, approved financial milestones, and purchase order bundles</strong>. Any change to the BOQ generation logic MUST guarantee <strong>zero corruption, zero price drift, and zero hash invalidation</strong> on existing projects.
+        </p>
+      </div>
+
+      <!-- SECTION 1: HOW THE STUDIO BRAIN ALGORITHM WORKS -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-6">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Algorithmic Engine Deep Dive</span>
+          <h3 class="font-serif text-xl font-bold text-slate-900 mt-1">
+            The 3 Pillars of the Studio Brain Algorithm
+          </h3>
+          <p class="text-xs text-slate-500 mt-1">
+            Instead of hardcoding "Good / Better / Best", the Studio Brain calculates tier options by evaluating a 3-layer parametric graph.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          
+          <!-- Pillar 1 -->
+          <div class="p-5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
+              <i data-lucide="dna" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-slate-900 text-sm">1. Studio DNA Tensor (&Theta;<sub>studio</sub>)</h4>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              Every studio defines its operational profile in Studio Settings (or auto-inferred by AI from past projects):
+            </p>
+            <ul class="text-[11px] text-slate-600 space-y-1.5 list-disc pl-4 font-mono">
+              <li><strong>Labor Delivery:</strong> In-house team vs Turnkey Subcon vs PMC fee</li>
+              <li><strong>Target Margin Matrix:</strong> Joinery 32%, Civil 22%, Electrical 25%, Soft Furnishing 18%</li>
+              <li><strong>Quality Baseline:</strong> Studio's strict non-negotiable minimum specs</li>
+              <li><strong>Vendor Benchmark:</strong> Negotiated rates for key trades (e.g. Sunil Carpenter &dollar;380/sft)</li>
+            </ul>
+          </div>
+
+          <!-- Pillar 2 -->
+          <div class="p-5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
+            <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">
+              <i data-lucide="git-branch" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-slate-900 text-sm">2. Studio Specification Ladder Graph</h4>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              Tiers are not arbitrary texts; they are directed traversals along the studio's trade assembly ladder:
+            </p>
+            <ul class="text-[11px] text-slate-600 space-y-1.5 list-disc pl-4 font-mono">
+              <li><strong>Joinery Core:</strong> Comm-Ply &rarr; Marine BWP &rarr; HDHMR</li>
+              <li><strong>Shutter Surface:</strong> 0.8mm &rarr; 1.0mm Merino &rarr; Acrylic &rarr; Fluted PU</li>
+              <li><strong>Hardware:</strong> Standard &rarr; Ebco Soft &rarr; Hafele &rarr; Blum Legrabox</li>
+              <li><strong>Civil Screed:</strong> Chipping &rarr; 25mm screed &rarr; Micro-concrete leveling</li>
+            </ul>
+          </div>
+
+          <!-- Pillar 3 -->
+          <div class="p-5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
+            <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm">
+              <i data-lucide="history" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-slate-900 text-sm">3. Bayesian Telemetry Calibrator</h4>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              Learns from the studio's historical projects (<code class="text-[10px] font-mono bg-white px-1 py-0.5 rounded">lib/studioSeed.ts</code>, Zoho Books ZP1&ndash;ZP7):
+            </p>
+            <ul class="text-[11px] text-slate-600 space-y-1.5 list-disc pl-4 font-mono">
+              <li>Calculates trade-specific slippage variance (&sigma;<sup>2</sup>)</li>
+              <li>Detects unquoted line risk (e.g. ZP7 Harmony bathroom waterproofing disaster)</li>
+              <li>Auto-applies risk buffers to the proposal so the studio protects its 31.6% blended gross margin</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- INTERACTIVE STUDIO BRAIN PROFILES SIMULATOR -->
+      <div class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 text-white rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <span class="px-2.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 text-[10px] font-mono font-bold uppercase tracking-wider border border-indigo-400/30">
+              Live Studio Brain Inversion Test
+            </span>
+            <h3 class="font-serif text-xl sm:text-2xl font-bold mt-1 text-white">
+              Studio Archetype Simulator: Watch How the Brain Adapts
+            </h3>
+            <p class="text-xs text-slate-300 mt-1 max-w-2xl">
+              Switch between 3 completely different studio operating models below. Notice how the Studio Brain calculates entirely different tier specifications, trade margins, and proposal totals for the <em>exact same 2-BHK apartment</em>!
+            </p>
+          </div>
+
+          <!-- Profile Buttons -->
+          <div class="flex bg-slate-800/80 p-1.5 rounded-xl border border-slate-700 gap-1 flex-wrap">
+            <button id="brain-profile-btn-bespoke" onclick="switchStudioBrainProfile('bespoke')" class="px-3 py-2 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs cursor-pointer flex items-center gap-1.5">
+              <i data-lucide="crown" class="w-3.5 h-3.5"></i> Studio A: Bespoke Luxury (Form Factors)
+            </button>
+            <button id="brain-profile-btn-metro" onclick="switchStudioBrainProfile('metro')" class="px-3 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white cursor-pointer flex items-center gap-1.5">
+              <i data-lucide="building" class="w-3.5 h-3.5"></i> Studio B: Urban Fast-Track Turnkey
+            </button>
+            <button id="brain-profile-btn-civil" onclick="switchStudioBrainProfile('civil')" class="px-3 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white cursor-pointer flex items-center gap-1.5">
+              <i data-lucide="hard-hat" class="w-3.5 h-3.5"></i> Studio C: Heritage & Civil Specialist
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic Studio Summary Bar -->
+        <div id="brain-profile-summary" class="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-800/60 p-4 rounded-xl border border-slate-700/60 text-xs">
+          <div>
+            <span class="text-slate-400 text-[10px] uppercase font-bold">Studio Execution Model</span>
+            <div id="brain-stat-model" class="font-bold text-indigo-300 text-sm mt-0.5">High Custom Joinery &bull; Subcon 60%</div>
+          </div>
+          <div>
+            <span class="text-slate-400 text-[10px] uppercase font-bold">Studio Target Gross Margin</span>
+            <div id="brain-stat-margin" class="font-bold text-emerald-400 text-sm mt-0.5">32.0% Blended Target</div>
+          </div>
+          <div>
+            <span class="text-slate-400 text-[10px] uppercase font-bold">Civil Execution Policy</span>
+            <div id="brain-stat-civil" class="font-bold text-amber-300 text-sm mt-0.5">Cost-Plus Subcontract / Pass-through</div>
+          </div>
+          <div>
+            <span class="text-slate-400 text-[10px] uppercase font-bold">Hardware & Finishes Standard</span>
+            <div id="brain-stat-hardware" class="font-bold text-purple-300 text-sm mt-0.5">Hafele &bull; Blum Legrabox &bull; PU</div>
+          </div>
+        </div>
+
+        <!-- Generated 3 Tiers for this Studio -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          
+          <!-- Brain Tier 1 -->
+          <div class="bg-slate-800/80 rounded-xl p-4 border border-slate-700 space-y-3">
+            <div class="flex items-center justify-between">
+              <span id="brain-t1-title" class="font-bold text-slate-200 uppercase tracking-wider text-[11px]">Tier 1: Essential</span>
+              <span id="brain-t1-total" class="font-mono font-bold text-slate-200 text-sm">&dollar;19,40,000</span>
+            </div>
+            <div class="space-y-2 text-[11px] text-slate-300">
+              <div class="p-2 rounded bg-slate-900/60 border border-slate-800">
+                <span class="text-[10px] uppercase font-bold text-indigo-400 block">Carpentry & Joinery</span>
+                <span id="brain-t1-carpentry">1.0mm Merino Laminate + Greenply BWP Marine Ply + Hafele Standard hinges</span>
+              </div>
+              <div class="p-2 rounded bg-slate-900/60 border border-slate-800">
+                <span class="text-[10px] uppercase font-bold text-amber-400 block">Civil & Wet Works</span>
+                <span id="brain-t1-civil">Tile-over-tile using polymer adhesive (Zero hacking) + Dr. Fixit 2K slurry</span>
+              </div>
+              <div class="flex justify-between pt-1 text-[10px] text-slate-400 font-mono">
+                <span>Studio GM: <strong id="brain-t1-gm" class="text-emerald-400">28.5%</strong></span>
+                <span>Subcon Share: <strong id="brain-t1-subcon" class="text-slate-300">58%</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Brain Tier 2 -->
+          <div class="bg-slate-800/80 rounded-xl p-4 border border-indigo-500/50 space-y-3 relative overflow-hidden">
+            <div class="absolute top-0 right-0 px-2 py-0.5 bg-indigo-600 text-[9px] font-bold text-white uppercase rounded-bl">Studio Default</div>
+            <div class="flex items-center justify-between">
+              <span id="brain-t2-title" class="font-bold text-indigo-200 uppercase tracking-wider text-[11px]">Tier 2: Comfort (Signature)</span>
+              <span id="brain-t2-total" class="font-mono font-bold text-emerald-400 text-sm">&dollar;25,80,000</span>
+            </div>
+            <div class="space-y-2 text-[11px] text-slate-300">
+              <div class="p-2 rounded bg-slate-900/60 border border-slate-800">
+                <span class="text-[10px] uppercase font-bold text-indigo-400 block">Carpentry & Joinery</span>
+                <span id="brain-t2-carpentry">Anti-fingerprint Satin PU Paint + Century Club Prime + Blum Tandembox</span>
+              </div>
+              <div class="p-2 rounded bg-slate-900/60 border border-slate-800">
+                <span class="text-[10px] uppercase font-bold text-amber-400 block">Civil & Wet Works</span>
+                <span id="brain-t2-civil">Full slab chipping, 800x1600 GVT + Brick Bat Coba + Grohe concealed divertors</span>
+              </div>
+              <div class="flex justify-between pt-1 text-[10px] text-slate-400 font-mono">
+                <span>Studio GM: <strong id="brain-t2-gm" class="text-emerald-400">32.4%</strong></span>
+                <span>Subcon Share: <strong id="brain-t2-subcon" class="text-slate-300">62%</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Brain Tier 3 -->
+          <div class="bg-slate-800/80 rounded-xl p-4 border border-purple-500/50 space-y-3">
+            <div class="flex items-center justify-between">
+              <span id="brain-t3-title" class="font-bold text-purple-200 uppercase tracking-wider text-[11px]">Tier 3: Luxury Harmony</span>
+              <span id="brain-t3-total" class="font-mono font-bold text-purple-300 text-sm">&dollar;34,50,000</span>
+            </div>
+            <div class="space-y-2 text-[11px] text-slate-300">
+              <div class="p-2 rounded bg-slate-900/60 border border-slate-800">
+                <span class="text-[10px] uppercase font-bold text-indigo-400 block">Carpentry & Joinery</span>
+                <span id="brain-t3-carpentry">Fluted Smoked Oak Veneer with polycoat + Blum Legrabox + Profile brass lighting</span>
+              </div>
+              <div class="p-2 rounded bg-slate-900/60 border border-slate-800">
+                <span class="text-[10px] uppercase font-bold text-amber-400 block">Civil & Wet Works</span>
+                <span id="brain-t3-civil">Italian Statuario marble with 8-stage diamond polish + Toto Smart Bidet suites</span>
+              </div>
+              <div class="flex justify-between pt-1 text-[10px] text-slate-400 font-mono">
+                <span>Studio GM: <strong id="brain-t3-gm" class="text-emerald-400">35.0%</strong></span>
+                <span>Subcon Share: <strong id="brain-t3-subcon" class="text-slate-300">65%</strong></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- SECTION 2: DATA IMPACT ZONE ANALYSIS -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-6">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-rose-600">Zero Data Loss Guarantee</span>
+          <h3 class="font-serif text-xl font-bold text-slate-900 mt-1">
+            Studio Data Impact Zone & Safeguard Matrix
+          </h3>
+          <p class="text-xs text-slate-500 mt-1">
+            How existing studio databases, active client projects, contracts, and financial records are protected against corruption or breaking changes.
+          </p>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 bg-slate-50 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                <th class="p-3">Data Entity & Location</th>
+                <th class="p-3">Role in Current App</th>
+                <th class="p-3">Risk If Naively Altered</th>
+                <th class="p-3">Architectural Safeguard</th>
+                <th class="p-3 text-center">Safety Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+              
+              <!-- Entity 1 -->
+              <tr>
+                <td class="p-3 font-mono font-bold text-indigo-950">
+                  FullProjectData.tiers<br/>
+                  <span class="text-[10px] font-normal text-slate-500">ProposalTier[] in types.ts</span>
+                </td>
+                <td class="p-3 text-slate-600">
+                  Stores quoted prices, quantities, and line item arrays for active proposals.
+                </td>
+                <td class="p-3 text-rose-700 font-semibold">
+                  Altering generation logic on active projects alters client quotes and margins.
+                </td>
+                <td class="p-3 text-emerald-800">
+                  <strong>Version Lock:</strong> Existing projects maintain their static <code class="font-mono text-[10px]">ProposalTier[]</code> array untouched.
+                </td>
+                <td class="p-3 text-center">
+                  <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">100% SECURE</span>
+                </td>
+              </tr>
+
+              <!-- Entity 2 -->
+              <tr>
+                <td class="p-3 font-mono font-bold text-indigo-950">
+                  canonical.boq & approvedTierId<br/>
+                  <span class="text-[10px] font-normal text-slate-500">Stage 4 & 5 Execution</span>
+                </td>
+                <td class="p-3 text-slate-600">
+                  The client-accepted commercial baseline for on-site execution.
+                </td>
+                <td class="p-3 text-rose-700 font-semibold">
+                  Severe contractual breach if agreed prices or quantities drift during build.
+                </td>
+                <td class="p-3 text-emerald-800">
+                  <strong>Hard Immutability:</strong> Approved BOQs are frozen. The Studio Brain is strictly an authoring engine, never an execution modifier.
+                </td>
+                <td class="p-3 text-center">
+                  <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">100% IMMUTABLE</span>
+                </td>
+              </tr>
+
+              <!-- Entity 3 -->
+              <tr>
+                <td class="p-3 font-mono font-bold text-indigo-950">
+                  documents.issues<br/>
+                  <span class="text-[10px] font-normal text-slate-500">DocumentIssue.contentHash</span>
+                </td>
+                <td class="p-3 text-slate-600">
+                  Cryptographic SHA-256 docket hash verifying digital signatures and client contract validity.
+                </td>
+                <td class="p-3 text-rose-700 font-semibold">
+                  Any mutation of line item names or costs invalidates the digital signature hash!
+                </td>
+                <td class="p-3 text-emerald-800">
+                  <strong>Cryptographic Isolation:</strong> Signed issue dockets are stored as frozen content-addressed blobs that cannot be regenerated.
+                </td>
+                <td class="p-3 text-center">
+                  <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">ZERO HASH DRIFT</span>
+                </td>
+              </tr>
+
+              <!-- Entity 4 -->
+              <tr>
+                <td class="p-3 font-mono font-bold text-indigo-950">
+                  materialSelections & executionBundles<br/>
+                  <span class="text-[10px] font-normal text-slate-500">affectedBoqItemId & itemIds</span>
+                </td>
+                <td class="p-3 text-slate-600">
+                  Links finishes to BOQ lines and clusters line items into subcontractor POs.
+                </td>
+                <td class="p-3 text-rose-700 font-semibold">
+                  Regenerating BOQ item IDs severs relationships to client-approved materials.
+                </td>
+                <td class="p-3 text-emerald-800">
+                  <strong>Deterministic ID Preservation:</strong> Item bank IDs (<code class="font-mono text-[10px]">gen-XXX</code>) and spine UUIDs remain stable forever.
+                </td>
+                <td class="p-3 text-center">
+                  <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">REFERENTIALLY SAFE</span>
+                </td>
+              </tr>
+
+              <!-- Entity 5 -->
+              <tr>
+                <td class="p-3 font-mono font-bold text-indigo-950">
+                  financials.paymentSnapshots<br/>
+                  <span class="text-[10px] font-normal text-slate-500">Invoiced Commercials</span>
+                </td>
+                <td class="p-3 text-slate-600">
+                  Client invoice amounts, payment receipts, and GST ledgers.
+                </td>
+                <td class="p-3 text-rose-700 font-semibold">
+                  Tax and accounting mismatch if financial totals do not tie to historical invoices.
+                </td>
+                <td class="p-3 text-emerald-800">
+                  <strong>Ledger Isolation:</strong> Financial milestones are locked snapshots that never recalculate retroactively.
+                </td>
+                <td class="p-3 text-center">
+                  <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">TAX COMPLIANT</span>
+                </td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SECTION 3: 3 STRATEGIC IMPLEMENTATION OPTIONS -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-6">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Strategic Decision Matrix</span>
+          <h3 class="font-serif text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+            How Do We Proceed? The 3 Concrete Engineering Options
+          </h3>
+          <p class="text-xs text-slate-500 mt-1 max-w-3xl">
+            To transition our software to the Studio Brain without disrupting ongoing client work, here are the 3 architectural pathways.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- OPTION 1: RECOMMENDED -->
+          <div class="p-5 rounded-xl border-2 border-indigo-600 bg-indigo-50/30 space-y-4 flex flex-col justify-between relative">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="px-2.5 py-0.5 rounded bg-indigo-600 text-white font-mono font-bold text-[10px] uppercase">Option 1 (Recommended)</span>
+                <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">Zero Risk</span>
+              </div>
+              <h4 class="font-bold text-slate-900 text-base">Non-Destructive Dual-Engine Architecture</h4>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                Utilizes the existing <code class="font-mono text-[10px] bg-white px-1 py-0.5 rounded">architecture: 'legacy' | 'canonical'</code> discriminator already in <code class="font-mono text-[10px]">types.ts</code> (line 1636).
+              </p>
+              <div class="p-3 bg-white rounded-lg border border-indigo-100 text-[11px] text-slate-700 space-y-1.5">
+                <div class="font-bold text-indigo-900">How it works:</div>
+                <p>&bull; All existing active projects remain locked to <strong>Engine v1</strong> (Legacy Array Mode). Their data is 100% isolated and never touched.</p>
+                <p>&bull; New projects (or existing drafts where the designer explicitly clicks "Upgrade to Studio Brain") run on <strong>Engine v2</strong> (Unified Scope Spine + Studio Brain).</p>
+                <p>&bull; Studio defines its trade policies in Studio Settings. AI auto-populates defaults from past Zoho records.</p>
+              </div>
+            </div>
+            <div class="space-y-2 pt-2 border-t border-indigo-200/60">
+              <div class="text-[11px] flex justify-between text-slate-600">
+                <span>Data Integrity:</span> <strong class="text-emerald-700">100% Safe (Zero Drift)</strong>
+              </div>
+              <div class="text-[11px] flex justify-between text-slate-600">
+                <span>Migration Scripts:</span> <strong class="text-indigo-700">None Required</strong>
+              </div>
+              <div class="text-[11px] flex justify-between text-slate-600">
+                <span>Time to Ship:</span> <strong class="text-slate-800">Fast & Phased</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- OPTION 2 -->
+          <div class="p-5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-4 flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="px-2.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono font-bold text-[10px] uppercase">Option 2</span>
+                <span class="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Low Risk</span>
+              </div>
+              <h4 class="font-bold text-slate-900 text-base">Schema-Compatible Shadow Spine (Decorator)</h4>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                Retains the exact current schema (<code class="font-mono text-[10px]">ProposalTier[]</code> with detached <code class="font-mono text-[10px]">BoqItem[]</code>), but adds non-breaking metadata tags.
+              </p>
+              <div class="p-3 bg-white rounded-lg border border-slate-200 text-[11px] text-slate-700 space-y-1.5">
+                <div class="font-bold text-slate-900">How it works:</div>
+                <p>&bull; Injects optional <code class="font-mono text-[10px]">spineKey?: string</code> and <code class="font-mono text-[10px]">assemblyRef?: string</code> into <code class="font-mono text-[10px]">BoqItem</code>.</p>
+                <p>&bull; The Studio Brain acts as an <strong>in-memory orchestrator</strong>: when a designer edits an item in Tier 2, the Brain updates Tiers 1 and 3 in memory before saving the standard array back to Firestore.</p>
+                <p>&bull; All downstream modules (PDF, Material Selection, Bundles) continue reading standard arrays.</p>
+              </div>
+            </div>
+            <div class="space-y-2 pt-2 border-t border-slate-200">
+              <div class="text-[11px] flex justify-between text-slate-600">
+                <span>Data Integrity:</span> <strong class="text-emerald-700">Safe (Backward-Compatible)</strong>
+              </div>
+              <div class="text-[11px] flex justify-between text-slate-600">
+                <span>Redundancy:</span> <strong class="text-amber-700">Array Duplication Persists</strong>
+              </div>
+              <div class="text-[11px] flex justify-between text-slate-600">
+                <span>Time to Ship:</span> <strong class="text-slate-800">Moderate</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- OPTION 3 -->
+          <div class="p-5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-4 flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="px-2.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono font-bold text-[10px] uppercase">Option 3</span>
+                <span class="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded">High Effort</span>
+              </div>
+              <h4 class="font-bold text-slate-900 text-base">Full Canonical Database Rewrite & Projection</h4>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                Completely replaces <code class="font-mono text-[10px]">ProposalTier[]</code> in Firestore with a single <code class="font-mono text-[10px]">ScopeSpine</code> database collection.
+              </p>
+              <div class="p-3 bg-white rounded-lg border border-slate-200 text-[11px] text-slate-700 space-y-1.5">
+                <div class="font-bold text-slate-900">How it works:</div>
+                <p>&bull; Requires running an offline database migration script across all past Firestore projects.</p>
+                <p>&bull; For backward compatibility with legacy views, an <strong>In-Memory Projection Adapter</strong> synthesizes virtual <code class="font-mono text-[10px]">tiers: ProposalTier[]</code> on-the-fly.</p>
+                <p>&bull; High architectural purity, but introduces risk of discrepancy on older projects if migration scripts miss custom manual overrides.</p>
+              </div>
+            </div>
+            <div class="space-y-2 pt-2 border-t border-slate-200">
+              <div class="text-[11px] flex justify-between text-slate-600">
+                <span>Data Integrity:</span> <strong class="text-rose-700">Migration Script Risk</strong>
+              </div>
+              <div class="text-[11px] flex justify-between text-slate-600">
+                <span>Database Purity:</span> <strong class="text-emerald-700">100% Normalized</strong>
+              </div>
+              <div class="text-[11px] flex justify-between text-slate-600">
+                <span>Time to Ship:</span> <strong class="text-rose-700">Heavy Engineering</strong>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 5: BOQ EDITOR UX & EXCEL IMPORT WORKFLOWS -->
+    <div id="tab-section-editorux" class="space-y-6 hidden">
+      
+      <!-- Executive Introduction Banner -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600">Deliberation & UX Architecture</span>
+            <h2 class="font-serif text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+              Intuitive BOQ Editing & Excel Import-to-Final Workflows
+            </h2>
+          </div>
+          <span class="text-xs font-mono px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 font-bold border border-blue-200">
+            UI/UX Paradigm Options
+          </span>
+        </div>
+        <p class="text-xs text-slate-600 leading-relaxed max-w-4xl">
+          <strong>The Core Challenge:</strong> In interior design studios, speed and tactile ergonomics are non-negotiable. Estimators and senior designers do not want to click through nested modals to change a wardrobe dimension from 60 sq ft to 75 sq ft. At the same time, many studios have existing vendor Excel sheets that they want to import and immediately lock as their <strong>Final Execution BOQ</strong>.
+        </p>
+        <p class="text-xs text-slate-600 leading-relaxed max-w-4xl">
+          Below, we resolve both questions: <strong>(1)</strong> How Excel Import seamlessly converts into a Final BOQ (or scaffolds 3 tiers on demand), and <strong>(2)</strong> Three concrete, ultra-intuitive editing paradigms with smart features.
+        </p>
+      </div>
+
+      <!-- SECTION 1: HOW EXCEL IMPORT & "MAKE FINAL" WORKS IN OPTION 1 -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-6">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Workflow Traceability</span>
+          <h3 class="font-serif text-xl font-bold text-slate-900 mt-1">
+            The Excel Import & "Make Final" Lifecycle
+          </h3>
+          <p class="text-xs text-slate-500 mt-1">
+            How external spreadsheets enter the system and cleanly transition into legally binding, locked execution baselines.
+          </p>
+        </div>
+
+        <!-- 3 Flow Pathways Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          
+          <!-- Path A: Direct Import to Final -->
+          <div class="p-5 rounded-xl border-2 border-emerald-500 bg-emerald-50/20 space-y-3 flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded bg-emerald-600 text-white font-mono text-[10px] font-bold uppercase">Path A (Familiar)</span>
+                <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">Single-Click Final</span>
+              </div>
+              <h4 class="font-bold text-slate-900 text-sm">Direct Import to Final Execution BOQ</h4>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                For projects where the client has already negotiated and agreed on an external Excel estimate:
+              </p>
+              <ol class="text-[11px] text-slate-600 space-y-1.5 list-decimal pl-4">
+                <li>Designer uploads <code class="font-mono text-[10px] bg-white px-1 py-0.5 rounded">.xlsx</code> via current Auto-Mapper.</li>
+                <li>System creates tier flagged as <code class="font-mono text-[10px] text-emerald-700">Imported Baseline</code>.</li>
+                <li>Designer clicks <strong>"Approve as Final Execution BOQ"</strong>.</li>
+                <li>System locks <code class="font-mono text-[10px]">approvedTierId</code>, generates SHA-256 hash, and routes straight to Stage 4 & 5 (PO Bundles, Material Board, and Invoicing) with zero multi-tier overhead!</li>
+              </ol>
+            </div>
+            <div class="p-2.5 rounded bg-white border border-emerald-200 text-[11px] text-emerald-800 font-medium">
+              &check; Exactly matches today's favorite workflow: zero extra steps or friction.
+            </div>
+          </div>
+
+          <!-- Path B: AI Multi-Tier Scaffolding -->
+          <div class="p-5 rounded-xl border border-indigo-200 bg-indigo-50/20 space-y-3 flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded bg-indigo-600 text-white font-mono text-[10px] font-bold uppercase">Path B (Smart)</span>
+                <span class="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">1-Click Scaffolding</span>
+              </div>
+              <h4 class="font-bold text-slate-900 text-sm">Import & Synthesize 3-Tier Proposal</h4>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                When you have a single Excel quote, but want to present the client with a tiered choice:
+              </p>
+              <ol class="text-[11px] text-slate-600 space-y-1.5 list-decimal pl-4">
+                <li>Upload the single-tier Excel (becomes the <strong>Comfort</strong> baseline).</li>
+                <li>Click <strong>"Studio Brain: Synthesize 3 Tiers"</strong>.</li>
+                <li>The AI inspects each item and uses Studio DNA ladder to generate:
+                  <br/>&bull; <em>Essential:</em> Value-engineered finishes (-18% cost).
+                  <br/>&bull; <em>Luxury:</em> Fluted oak / PU / Blum upgrades (+35% cost).
+                </li>
+                <li>Quantities remain linked on the unified spine so adjusting one room synchronizes all three!</li>
+              </ol>
+            </div>
+            <div class="p-2.5 rounded bg-white border border-indigo-200 text-[11px] text-indigo-800 font-medium">
+              &check; Turns an ordinary Excel quote into a consultative multi-tier client pitch deck in 5 seconds.
+            </div>
+          </div>
+
+          <!-- Path C: Multi-Sheet Excel Import -->
+          <div class="p-5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3 flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded bg-slate-700 text-white font-mono text-[10px] font-bold uppercase">Path C (Advanced)</span>
+                <span class="text-[10px] font-bold text-slate-600 bg-slate-200 px-2 py-0.5 rounded">3-Sheet Mapping</span>
+              </div>
+              <h4 class="font-bold text-slate-900 text-sm">Multi-Sheet Excel Workbook Import</h4>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                For studios that already maintain 3 separate sheets in their estimation workbook:
+              </p>
+              <ol class="text-[11px] text-slate-600 space-y-1.5 list-decimal pl-4">
+                <li>Upload workbook containing tabs: <code class="font-mono text-[10px]">Tier 1 - Silver</code>, <code class="font-mono text-[10px]">Tier 2 - Gold</code>, <code class="font-mono text-[10px]">Tier 3 - Platinum</code>.</li>
+                <li>The Auto-Mapper identifies shared item names and binds them to a single Unified Spine row.</li>
+                <li>Any unique items in Tier 3 (e.g. Italian Marble) are tagged as "Luxury Only".</li>
+                <li>Result is a fully populated 3-tier proposal ready for client presentation or final approval.</li>
+              </ol>
+            </div>
+            <div class="p-2.5 rounded bg-white border border-slate-200 text-[11px] text-slate-700 font-medium">
+              &check; Native support for existing studio spreadsheet templates.
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- SECTION 2: 3 CONCRETE EDITING PARADIGMS (INTERACTIVE COMPARISON) -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-6">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Interactive Design Deliberation</span>
+            <h3 class="font-serif text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+              Choose Your Editing Paradigm: 3 Ergonomic Options
+            </h3>
+            <p class="text-xs text-slate-500 mt-1 max-w-2xl">
+              Switch between the 3 UI/UX paradigms below. Test the live interactive prototype on screen to feel the speed, clarity, and intuition of each editing model.
+            </p>
+          </div>
+
+          <!-- Paradigm Selector Tabs -->
+          <div class="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200 gap-1 flex-wrap">
+            <button id="paradigm-btn-optionA" onclick="switchEditorParadigm('optionA')" class="px-3 py-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 cursor-pointer flex items-center gap-1.5">
+              <i data-lucide="table-2" class="w-3.5 h-3.5"></i> Option A: Synchronized Matrix Spreadsheet
+            </button>
+            <button id="paradigm-btn-optionB" onclick="switchEditorParadigm('optionB')" class="px-3 py-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 cursor-pointer flex items-center gap-1.5">
+              <i data-lucide="gallery-vertical-end" class="w-3.5 h-3.5"></i> Option B: Spatial Deck & Focus Studio
+            </button>
+            <button id="paradigm-btn-optionC" onclick="switchEditorParadigm('optionC')" class="px-3 py-2 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs cursor-pointer flex items-center gap-1.5">
+              <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i> Option C: Dual-Mode Fluid Workbench (Recommended)
+            </button>
+          </div>
+        </div>
+
+        <!-- PARADIGM EXPLANATION CARDS -->
+        <div id="paradigm-detail-box" class="p-4 rounded-xl border border-slate-200 bg-slate-50/60 text-xs text-slate-700">
+          <!-- Dynamically populated by JS -->
+        </div>
+
+        <!-- INTERACTIVE LIVE WORKBENCH MOCKUP (TEST ACTUAL EDITING) -->
+        <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+          
+          <!-- Mockup Toolbar -->
+          <div class="p-4 bg-slate-900 text-white flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div class="flex items-center gap-3 flex-wrap">
+              <span class="px-2.5 py-1 rounded bg-indigo-500/20 text-indigo-300 font-mono text-[10px] font-bold uppercase border border-indigo-400/30 flex items-center gap-1">
+                <i data-lucide="sparkles" class="w-3 h-3 text-indigo-400"></i> Live UI Mockup
+              </span>
+              <span id="mockup-paradigm-title" class="font-bold text-sm text-slate-100">
+                Option C: Dual-Mode Fluid Workbench
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 flex-wrap text-xs">
+              <!-- Mode Toggle (for Option C) -->
+              <div id="optionC-mode-switch" class="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+                <button id="ux-mode-grid-btn" onclick="setWorkbenchMode('grid')" class="px-2.5 py-1 rounded text-[11px] font-bold bg-indigo-600 text-white">
+                  ⚡ Fast Grid Mode
+                </button>
+                <button id="ux-mode-deep-btn" onclick="setWorkbenchMode('deep')" class="px-2.5 py-1 rounded text-[11px] font-bold text-slate-400 hover:text-white">
+                  📐 Deep Studio Mode
+                </button>
+              </div>
+
+              <!-- Action Buttons -->
+              <button onclick="simulateExcelImportModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-[11px] border border-slate-700 flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-400"></i> Import Excel BOQ
+              </button>
+              <button onclick="makeActiveTierFinal()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] shadow-xs flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Make Active Tier Final
+              </button>
+            </div>
+          </div>
+
+          <!-- Active Tier & Filter Strip -->
+          <div class="p-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-slate-500 text-[11px] font-bold uppercase">Focus Scope:</span>
+              <button id="filter-all-btn" onclick="filterWorkbenchRoom('all')" class="px-2.5 py-1 rounded-lg bg-white border border-indigo-400 text-indigo-700 font-bold shadow-xs">
+                All Rooms (28 items)
+              </button>
+              <button id="filter-bed-btn" onclick="filterWorkbenchRoom('master_bed')" class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 font-medium">
+                Master Bedroom (8)
+              </button>
+              <button id="filter-kitchen-btn" onclick="filterWorkbenchRoom('kitchen')" class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 font-medium">
+                Modular Kitchen (6)
+              </button>
+              <button id="filter-civil-btn" onclick="filterWorkbenchRoom('civil')" class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 font-medium">
+                Civil & Wet Works (5)
+              </button>
+            </div>
+
+            <!-- Live Commercial Health Indicator -->
+            <div class="flex items-center gap-3">
+              <div class="text-[11px] text-slate-600">
+                Active Tier Total: <strong id="workbench-tier-total" class="font-mono text-slate-900 text-sm font-bold">₹25,80,000</strong>
+              </div>
+              <div class="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-mono font-bold text-[11px] border border-emerald-200">
+                <i data-lucide="shield-check" class="w-3 h-3"></i>
+                <span id="workbench-tier-margin">GM 32.4% (Protected)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- DYNAMIC WORKBENCH CONTENT CONTAINER -->
+          <div id="workbench-container" class="p-4 sm:p-6 overflow-x-auto min-h-[380px]">
+            <!-- Injected via JavaScript based on chosen paradigm -->
+          </div>
+
+          <!-- Bottom Smart Bar & Hotkeys -->
+          <div class="p-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-500">
+            <div class="flex items-center gap-4 flex-wrap">
+              <span class="flex items-center gap-1 text-slate-700 font-medium">
+                <kbd class="px-1.5 py-0.5 rounded bg-white border border-slate-300 font-mono text-[10px]">Tab</kbd> / <kbd class="px-1.5 py-0.5 rounded bg-white border border-slate-300 font-mono text-[10px]">Enter</kbd> Next cell
+              </span>
+              <span class="flex items-center gap-1 text-slate-700 font-medium">
+                <kbd class="px-1.5 py-0.5 rounded bg-white border border-slate-300 font-mono text-[10px]">&uarr;</kbd> <kbd class="px-1.5 py-0.5 rounded bg-white border border-slate-300 font-mono text-[10px]">&darr;</kbd> Navigate rows
+              </span>
+              <span class="flex items-center gap-1 text-indigo-700 font-medium">
+                <i data-lucide="sparkles" class="w-3 h-3"></i> Auto-recalculates grand total & margins live
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400">Unified Scope Spine:</span>
+              <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-mono font-bold text-[10px]">Invariant Quantities Active</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- SECTION 3: 4 REVOLUTIONARY SMART FEATURES TO ACCELERATE EDITING -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-6">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Smart Productivity Boosters</span>
+          <h3 class="font-serif text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+            4 Smart Features That Make Editing 5x Faster
+          </h3>
+          <p class="text-xs text-slate-500 mt-1 max-w-3xl">
+            Beyond standard spreadsheet cell inputs, these automated tools prevent manual math errors and repetitive keystrokes.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          
+          <!-- Feature 1 -->
+          <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+            <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+              <i data-lucide="ruler" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-slate-900 text-sm">1. Smart Room Takeoff Assist</h4>
+            <p class="text-slate-600 leading-relaxed text-[11px]">
+              Instead of manually calculating sq ft, click the dimension helper: type <strong>15 &times; 12 &times; 10</strong>.
+            </p>
+            <div class="p-2 bg-white rounded border border-slate-200 text-[10px] font-mono text-slate-700 space-y-1">
+              <div>&bull; Flooring: <strong>180 sq ft</strong></div>
+              <div>&bull; Wall Paint: <strong>540 sq ft</strong> (minus openings)</div>
+              <div>&bull; Skirting: <strong>54 rft</strong></div>
+            </div>
+          </div>
+
+          <!-- Feature 2 -->
+          <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+            <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+              <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-slate-900 text-sm">2. 1-Click Spec Upgrader</h4>
+            <p class="text-slate-600 leading-relaxed text-[11px]">
+              Click any line item's finish tag to jump tiers without re-typing.
+            </p>
+            <div class="p-2 bg-white rounded border border-slate-200 text-[10px] font-mono text-slate-700 space-y-1">
+              <div class="text-slate-500">1.0mm Merino Laminate</div>
+              <div class="text-indigo-600 font-bold">&rarr; [Swap to Anti-Fingerprint PU]</div>
+              <div class="text-purple-600 font-bold">&rarr; [Swap to Fluted Veneer]</div>
+            </div>
+          </div>
+
+          <!-- Feature 3 -->
+          <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+            <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+              <i data-lucide="shield-alert" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-slate-900 text-sm">3. Real-Time Margin Shield</h4>
+            <p class="text-slate-600 leading-relaxed text-[11px]">
+              If an estimator types a discounted sell price, the cell instantly alerts:
+            </p>
+            <div class="p-2 bg-white rounded border border-slate-200 text-[10px] font-mono text-slate-700 space-y-1">
+              <div class="text-emerald-600 font-bold">&check; &gt;30% GM: Green (Safe)</div>
+              <div class="text-amber-600 font-bold">&#9888; 25-29% GM: Amber (Low Buffer)</div>
+              <div class="text-rose-600 font-bold">&#10008; &lt;25% GM: Red (Approval Needed)</div>
+            </div>
+          </div>
+
+          <!-- Feature 4 -->
+          <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+            <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+              <i data-lucide="ghost" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-slate-900 text-sm">4. Ghost Item Sentinel</h4>
+            <p class="text-slate-600 leading-relaxed text-[11px]">
+              Detects required companion lines that were accidentally omitted.
+            </p>
+            <div class="p-2 bg-white rounded border border-slate-200 text-[10px] font-mono text-slate-700 space-y-1">
+              <div class="text-slate-800">Added: Italian Marble Flooring</div>
+              <div class="text-rose-600 font-bold">&#9888; Missing: 8-Stage Diamond Polish</div>
+              <div class="text-indigo-600 underline cursor-pointer" onclick="showToast('Sentinel: Added Diamond Polish & Base Mortar!')">[Click to Auto-Insert]</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 6: INTERACTIVE SANDBOX (TEST REAL SCENARIOS) -->
+    <div id="tab-section-simulator" class="space-y-6 hidden">
+      
+      <!-- Top Sandbox Mode Bar -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-extrabold uppercase tracking-wider">
+                Live Prototype Simulator
+              </span>
+              <span class="text-xs text-slate-500">Test Standard, Full Civil Renovation & Jodi Flat Scenarios</span>
+            </div>
+            <h2 class="font-serif text-xl sm:text-2xl font-bold text-slate-900">
+              Multi-Tier Scope Matrix & Scenario Engine
+            </h2>
+          </div>
+
+          <!-- Architecture Mode Toggle: Current vs Proposed -->
+          <div class="flex items-center gap-3 flex-wrap">
+            <div class="text-xs font-bold text-slate-500">Architecture Mode:</div>
+            <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-bold">
+              <button id="mode-btn-current" onclick="setArchitectureMode('current')" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 cursor-pointer">
+                Current App (Detached Tiers)
+              </button>
+              <button id="mode-btn-proposed" onclick="setArchitectureMode('proposed')" class="px-3 py-1.5 rounded-lg bg-white shadow-xs text-indigo-700 cursor-pointer">
+                Proposed (Unified Scope Spine)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Typology & Creation Controls -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 border-t border-slate-100 text-xs">
+          
+          <div class="space-y-1">
+            <label class="font-bold text-slate-600">1. Select Project Scenario Archetype:</label>
+            <select id="sim-scenario-select" onchange="onScenarioChange(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-medium">
+              <option value="standard_2bhk">Standard 2-BHK Turnkey (914 sq ft)</option>
+              <option value="civil_reno" selected>Full Civil Renovation (Floor + 2 Baths)</option>
+              <option value="jodi_flat">2 × 1-BHK Jodi Flat Combination (1,100 sq ft)</option>
+            </select>
+          </div>
+
+          <div class="space-y-1">
+            <label class="font-bold text-slate-600">2. Proposal Generation Mode:</label>
+            <select id="sim-mode-select" onchange="onProposalModeChange(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-medium">
+              <option value="tiered" selected>3 Distinct Types of BOQs (Essential / Comfort / Luxe)</option>
+              <option value="single">Single BOQ Type (Standard Turnkey)</option>
+            </select>
+          </div>
+
+          <div class="space-y-1">
+            <label class="font-bold text-slate-600">3. Active View Mode:</label>
+            <div class="flex bg-slate-100 p-1 rounded-lg text-xs font-bold">
+              <button id="view-btn-matrix" onclick="setGridDisplay('matrix')" class="w-1/2 py-1.5 rounded text-center bg-white shadow-2xs text-indigo-700 cursor-pointer">Matrix (All 3)</button>
+              <button id="view-btn-focused" onclick="setGridDisplay('focused')" class="w-1/2 py-1.5 rounded text-center text-slate-600 hover:text-slate-900 cursor-pointer">Single Tier</button>
+            </div>
+          </div>
+
+          <div class="flex items-end">
+            <button onclick="runAiScopeAudit()" class="w-full py-2 px-3 rounded-lg bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 font-bold flex items-center justify-center gap-1.5 cursor-pointer">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Run AI Scope Audit
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- STATUS & BEHAVIOR NOTIFICATION BANNER -->
+      <div id="mode-explanation-banner" class="p-4 rounded-xl border border-indigo-200 bg-indigo-50/70 text-xs flex items-start justify-between gap-4">
+        <div class="flex items-start gap-3">
+          <i data-lucide="info" class="w-5 h-5 text-indigo-600 shrink-0 mt-0.5"></i>
+          <div>
+            <span id="banner-title" class="font-bold text-indigo-950">Active: Full Civil Renovation Scenario in Unified Scope Spine</span>
+            <p id="banner-desc" class="text-indigo-800/90 mt-0.5 leading-relaxed">
+              Examine how flooring and bathrooms carry concrete engineering specifications across the 3 tiers (Tile-over-Tile vs Screed Chipping vs Diamond Polished Italian Marble; 2K Slurry vs Brick Bat Coba vs Hybrid PU).
+            </p>
+          </div>
+        </div>
+        <span class="text-[10px] font-mono px-2 py-1 rounded bg-indigo-200/50 text-indigo-900 font-bold shrink-0">Bi-Directional Sync ON</span>
+      </div>
+
+      <!-- INVERSE BUDGET TARGET CLAMP (POST-CREATION COPILOT) -->
+      <div class="bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 text-white rounded-2xl p-5 sm:p-6 shadow-xl space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2 py-0.5 rounded bg-indigo-500/30 border border-indigo-400/40 text-indigo-200 text-[10px] font-extrabold uppercase tracking-wider">
+                Multi-Tier Inverse Solver
+              </span>
+              <span class="text-xs text-indigo-200/80">Solves client budget compression across proposal options</span>
+            </div>
+            <h3 class="text-lg sm:text-xl font-bold tracking-tight">
+              Post-Creation Budget Target Clamp & Copilot
+            </h3>
+          </div>
+
+          <div class="flex items-center gap-4 flex-wrap">
+            <div class="text-right">
+              <div class="text-[10px] uppercase font-bold text-slate-400">Tier 1 (Essential)</div>
+              <div id="sim-t1-total" class="font-mono text-sm font-bold text-slate-200">₹18,45,000</div>
+            </div>
+            <div class="text-right">
+              <div class="text-[10px] uppercase font-bold text-indigo-300">Tier 2 (Comfort Mid)</div>
+              <div id="sim-t2-total" class="font-mono text-base font-bold text-emerald-400">₹24,82,500</div>
+            </div>
+            <div class="text-right">
+              <div class="text-[10px] uppercase font-bold text-purple-300">Tier 3 (Complete Luxe)</div>
+              <div id="sim-t3-total" class="font-mono text-sm font-bold text-purple-300">₹32,90,000</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Target Slider Control -->
+        <div class="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/10 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <i data-lucide="sliders" class="w-4 h-4 text-indigo-400"></i> Set Client Target Budget for Tier 2:
+            </span>
+            <div class="flex items-center gap-2">
+              <input id="sim-budget-slider" type="range" min="1500000" max="3500000" step="50000" value="2150000" oninput="onSimSliderChange(this.value)" class="w-48 sm:w-64 accent-indigo-400 cursor-pointer" />
+              <span id="sim-target-display" class="font-mono font-bold text-amber-300 text-sm w-28 text-right">₹21,50,000</span>
+            </div>
+          </div>
+
+          <!-- Tradeoff Options Generated by Algo -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-white/10">
+            
+            <div class="bg-white/5 hover:bg-white/10 p-3 rounded-lg border border-white/10 transition-all cursor-pointer" onclick="applySimTradeoff('finishes')">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[11px] font-bold text-indigo-300 flex items-center gap-1">
+                  <i data-lucide="layers" class="w-3.5 h-3.5"></i> Path A: Finish Tier Swaps
+                </span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">-₹1,85,000</span>
+              </div>
+              <p class="text-[11px] text-slate-300">
+                Borrow Tier 1 finish specs (Tile-over-tile / 0.8mm laminate) for secondary rooms while keeping Tier 2 hardware.
+              </p>
+              <button class="mt-2 text-[10px] font-bold text-indigo-200 hover:text-white flex items-center gap-1">
+                Apply Finish Adjustments →
+              </button>
+            </div>
+
+            <div class="bg-white/5 hover:bg-white/10 p-3 rounded-lg border border-white/10 transition-all cursor-pointer" onclick="applySimTradeoff('scope')">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[11px] font-bold text-indigo-300 flex items-center gap-1">
+                  <i data-lucide="scissors" class="w-3.5 h-3.5"></i> Path B: Scope Deferral
+                </span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">-₹1,45,000</span>
+              </div>
+              <p class="text-[11px] text-slate-300">
+                Move Wall Panelling & Balcony Decking to "Phase 2 Optional Scope" across all 3 tiers.
+              </p>
+              <button class="mt-2 text-[10px] font-bold text-indigo-200 hover:text-white flex items-center gap-1">
+                Apply Scope Cuts →
+              </button>
+            </div>
+
+            <div class="bg-white/5 hover:bg-white/10 p-3 rounded-lg border border-white/10 transition-all cursor-pointer" onclick="applySimTradeoff('margin')">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[11px] font-bold text-indigo-300 flex items-center gap-1">
+                  <i data-lucide="percent" class="w-3.5 h-3.5"></i> Path C: Margin Tuning
+                </span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">-₹1,20,000</span>
+              </div>
+              <p class="text-[11px] text-slate-300">
+                Calibrate modular kitchen & tile trade margin from 24% to 18% with subcontractor volume pass-through.
+              </p>
+              <button class="mt-2 text-[10px] font-bold text-indigo-200 hover:text-white flex items-center gap-1">
+                Apply Margin Calibration →
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Natural Language Prompt Commands -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+          <div class="flex items-center gap-2 flex-grow max-w-2xl">
+            <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400 shrink-0"></i>
+            <input id="sim-prompt-input" type="text" placeholder="Type prompt: e.g. 'Upgrade bathrooms to Grohe concealed in Tier 2', 'Add BBC waterproofing'..." class="w-full bg-white/10 border border-white/20 rounded-xl px-3.5 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-400" onkeydown="if(event.key==='Enter') executeSimPrompt()" />
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button onclick="executeSimPrompt()" class="px-3.5 py-1.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold transition-all cursor-pointer">
+              Run Command
+            </button>
+            <button onclick="applySimPreset('Upgrade to BBC Waterproofing')" class="text-[10px] px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-slate-300 cursor-pointer">
+              + BBC Waterproofing
+            </button>
+            <button onclick="applySimPreset('Add Loft Storage to All Wardrobes')" class="text-[10px] px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-slate-300 cursor-pointer">
+              + Add Lofts
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAIN MULTI-TIER MATRIX / SPREADSHEET TABLE -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
+        
+        <!-- Filter and Quick Action Toolbar -->
+        <div class="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs font-bold text-slate-700">Filter by Scope Room:</span>
+            <div id="sim-room-tabs" class="flex gap-1.5 overflow-x-auto">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button onclick="openAssemblyModal()" class="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> + Add Smart Assembly
+            </button>
+            <button onclick="showToast('Exported 3-Tier Multi-Option Comparison Matrix to Excel!')" class="px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-600"></i> Export Excel
+            </button>
+          </div>
+        </div>
+
+        <!-- The Matrix Table (Showing side-by-side or single tier) -->
+        <div class="overflow-x-auto max-h-[560px] custom-scrollbar">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead id="sim-table-head" class="sticky top-0 bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[10px] shadow-xs z-10">
+              <!-- Dynamically populated depending on Matrix vs Focused view -->
+            </thead>
+            <tbody id="sim-table-body" class="divide-y divide-slate-100 font-medium text-slate-700">
+              <!-- Dynamically populated rows -->
+            </tbody>
+            <tfoot class="sticky bottom-0 bg-slate-900 text-white font-bold text-xs shadow-md z-10">
+              <tr id="sim-table-foot">
+                <!-- Dynamically populated totals -->
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- TAB 5: EMPIRICAL DATA & IMPACT ZONES -->
+    <div id="tab-section-historical" class="space-y-6 hidden">
+      
+      <!-- Key Statistics from lib/studioSeed.ts -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Billed Revenue</div>
+          <div class="font-mono text-xl sm:text-2xl font-bold text-slate-900 mt-1">₹81,73,712</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">Across 7 completed client jobs</div>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Actual Costs</div>
+          <div class="font-mono text-xl sm:text-2xl font-bold text-slate-900 mt-1">₹55,89,214</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">Vendor transactions reconciled</div>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Blended Margin Realised</div>
+          <div class="font-mono text-xl sm:text-2xl font-bold text-emerald-600 mt-1">31.6%</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">High: 45.5% (Kalwa) • Low: 8.1% (Harmony)</div>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cost Structure Mix</div>
+          <div class="font-mono text-xl sm:text-2xl font-bold text-indigo-600 mt-1">59.5% Subcon</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">22.7% Mat • 15.8% Labour • 2.0% Other</div>
+        </div>
+      </div>
+
+      <!-- Real Projects Table from studioSeed.ts -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-card space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Empirical Baseline</span>
+            <h3 class="text-lg font-bold text-slate-900">Form Factors Completed Projects (Zoho Books Reconciled)</h3>
+          </div>
+          <span class="text-xs text-slate-500 font-medium">Data source: <code class="font-mono text-slate-700 font-bold">lib/studioSeed.ts</code></span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 bg-slate-50 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                <th class="p-3">ID</th>
+                <th class="p-3">Project & Client</th>
+                <th class="p-3 text-right">Quoted Revenue</th>
+                <th class="p-3 text-right">Actual Cost</th>
+                <th class="p-3 text-right">Realised Margin</th>
+                <th class="p-3">Pattern & Root-Cause Insight</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+              <tr>
+                <td class="p-3 font-mono font-bold text-slate-500">ZP1</td>
+                <td class="p-3 font-bold text-slate-900">Prestige Gardens Siesta — Mr. Achyut Pai</td>
+                <td class="p-3 text-right font-mono font-bold">₹21,12,292</td>
+                <td class="p-3 text-right font-mono">₹14,28,262</td>
+                <td class="p-3 text-right font-mono font-bold text-emerald-600">32.4%</td>
+                <td class="p-3 text-slate-500">Standard 3BHK turnkey carpentry + ceiling. High predictability.</td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono font-bold text-slate-500">ZP2</td>
+                <td class="p-3 font-bold text-slate-900">Office Furniture - Renovation — Mr. Shailesh Patil</td>
+                <td class="p-3 text-right font-mono font-bold">₹16,63,831</td>
+                <td class="p-3 text-right font-mono">₹12,30,935</td>
+                <td class="p-3 text-right font-mono font-bold text-emerald-600">26.0%</td>
+                <td class="p-3 text-slate-500">Modular workstations + electrical. Moderate margin dilution on cabling.</td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono font-bold text-slate-500">ZP3</td>
+                <td class="p-3 font-bold text-slate-900">Mrs. Swati — Runwal Eirene 2BHK Renovation</td>
+                <td class="p-3 text-right font-mono font-bold">₹12,99,558</td>
+                <td class="p-3 text-right font-mono">₹8,61,520</td>
+                <td class="p-3 text-right font-mono font-bold text-emerald-600">33.7%</td>
+                <td class="p-3 text-slate-500">Standard 2BHK joinery package. Clean execution with Sunil Carpenter.</td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono font-bold text-slate-500">ZP4</td>
+                <td class="p-3 font-bold text-slate-900">Hiranandani One — Ashwini & Sameer 2BHK</td>
+                <td class="p-3 text-right font-mono font-bold">₹11,16,940</td>
+                <td class="p-3 text-right font-mono">₹6,61,406</td>
+                <td class="p-3 text-right font-mono font-bold text-emerald-600">40.8%</td>
+                <td class="p-3 text-slate-500">High efficiency; locked scope upfront with zero mid-job revisions.</td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono font-bold text-slate-500">ZP5</td>
+                <td class="p-3 font-bold text-slate-900">Lake Pleasant Powai — Mrs. Apurvee</td>
+                <td class="p-3 text-right font-mono font-bold">₹8,30,121</td>
+                <td class="p-3 text-right font-mono">₹6,33,005</td>
+                <td class="p-3 text-right font-mono font-bold text-amber-600">23.7%</td>
+                <td class="p-3 text-slate-500">Minor scope drift in bathroom plumbing and tiling wastage.</td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono font-bold text-slate-500">ZP6</td>
+                <td class="p-3 font-bold text-slate-900">1BHK Full Home Interiors — Kalwa</td>
+                <td class="p-3 text-right font-mono font-bold">₹7,57,976</td>
+                <td class="p-3 text-right font-mono">₹4,13,060</td>
+                <td class="p-3 text-right font-mono font-bold text-emerald-600">45.5%</td>
+                <td class="p-3 text-slate-500">Compact template package with high factory-made modular ratio.</td>
+              </tr>
+              <tr class="bg-rose-50/40">
+                <td class="p-3 font-mono font-bold text-rose-700">ZP7</td>
+                <td class="p-3 font-bold text-rose-900">2BHK Renovation — Prestige Gardens Harmony</td>
+                <td class="p-3 text-right font-mono font-bold">₹3,92,993</td>
+                <td class="p-3 text-right font-mono">₹3,61,026</td>
+                <td class="p-3 text-right font-mono font-bold text-rose-600">8.1%</td>
+                <td class="p-3 text-rose-800 font-semibold">
+                  <strong>CRITICAL LESSON:</strong> Severe margin erosion due to unquoted civil BBC waterproofing and pipe demolition surprises.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // System & Prototype Simulation State
+    const state = {
+      activeTab: 'workflow',
+      architectureMode: 'proposed', // 'current' | 'proposed'
+      proposalMode: 'tiered',       // 'tiered' | 'single'
+      gridDisplay: 'matrix',        // 'matrix' | 'focused'
+      scenario: 'civil_reno',       // 'standard_2bhk' | 'civil_reno' | 'jodi_flat'
+      activeRoomFilter: 'all',
+      carpetArea: 914,
+
+      // Predefined scenario libraries
+      scenarioData: {
+        civil_reno: {
+          title: "Full Civil Renovation (Flooring + 2 Bathrooms Civil)",
+          desc: "Demonstrates rigorous 3-tier engineering differentiation in civil & wet works.",
+          rooms: [
+            { id: 'living', name: 'Living & Dining Hall' },
+            { id: 'master_bath', name: 'Master Ensuite Bathroom' },
+            { id: 'common_bath', name: 'Common Guest Bathroom' },
+            { id: 'kitchen', name: 'Kitchen Wet Area' }
+          ],
+          items: [
+            {
+              id: 'c-1',
+              roomId: 'living',
+              category: 'Civil & Flooring',
+              name: 'Entire Apartment Floor Replacement & Sub-Floor Prep',
+              unit: 'sft',
+              qty: 750,
+              t1: { spec: 'Tile-over-tile using polymer adhesive (No hacking, saves debris)', matRate: 110, labRate: 45, margin: 22, enabled: true },
+              t2: { spec: 'Full slab chipping to RCC, 25mm screed bed, 800x1600 GVT + Epoxy Grout', matRate: 210, labRate: 75, margin: 26, enabled: true },
+              t3: { spec: 'Acoustic underlay, Dyna Italian Marble with 8-stage diamond polish', matRate: 650, labRate: 180, margin: 30, enabled: true }
+            },
+            {
+              id: 'c-2',
+              roomId: 'master_bath',
+              category: 'Waterproofing',
+              name: 'Sub-Surface Waterproofing with Flood Ponding Test',
+              unit: 'sft',
+              qty: 180,
+              t1: { spec: '2-coat polymer cementitious slurry (Dr. Fixit 2K, 3-yr warranty)', matRate: 32, labRate: 20, margin: 25, enabled: true },
+              t2: { spec: 'Brick Bat Coba (BBC) + elastomeric PU corner fillets + 48hr flood test', matRate: 65, labRate: 35, margin: 28, enabled: true },
+              t3: { spec: '3-Tier Hybrid: Crystallization primer + Liquid PU membrane + Fiber mesh', matRate: 125, labRate: 55, margin: 30, enabled: true }
+            },
+            {
+              id: 'c-3',
+              roomId: 'master_bath',
+              category: 'Plumbing & Drainage',
+              name: 'Concealed CPVC Water Supply & Suspended Drain Stacks',
+              unit: 'ls',
+              qty: 1,
+              t1: { spec: 'Exposed single-lever wall mixer, surface CPVC lines, standard PVC drain', matRate: 24000, labRate: 14000, margin: 22, enabled: true },
+              t2: { spec: 'Chased Grohe concealed divertor body, suspended acoustic PVC drain stack', matRate: 48000, labRate: 24000, margin: 26, enabled: true },
+              t3: { spec: 'Kohler 3-way thermostatic mixer + ceiling rain shower + pressure pump manifold', matRate: 115000, labRate: 45000, margin: 30, enabled: true }
+            },
+            {
+              id: 'c-4',
+              roomId: 'master_bath',
+              category: 'Sanitaryware',
+              name: 'Sanitary Fixtures, Enclosure & Vanity Suite',
+              unit: 'ls',
+              qty: 1,
+              t1: { spec: 'Floor-mounted EWC, external cistern, standard SS drain grating', matRate: 18000, labRate: 7000, margin: 20, enabled: true },
+              t2: { spec: 'Wall-hung EWC with Geberit concealed tank, linear tile-insert channel drain', matRate: 46000, labRate: 15000, margin: 25, enabled: true },
+              t3: { spec: 'Toto Rimless Smart Bidet toilet + 10mm fluted glass enclosure with PVD gold hardware', matRate: 135000, labRate: 28000, margin: 30, enabled: true }
+            },
+            {
+              id: 'c-5',
+              roomId: 'common_bath',
+              category: 'Sanitaryware',
+              name: 'Common Bathroom Overhaul Suite (Wet & Dry Zoning)',
+              unit: 'ls',
+              qty: 1,
+              t1: { spec: 'Ceramic tiles up to 7ft lintel, standard Jaguar fittings, cement grout', matRate: 35000, labRate: 16000, margin: 22, enabled: true },
+              t2: { spec: 'Full-height 600x1200 porcelain tiles, Grohe fittings, vanity with mirror cabinet', matRate: 68000, labRate: 26000, margin: 26, enabled: true },
+              t3: { spec: 'Seamless porcelain slabs, Hansgrohe matte black fixtures, frameless glass partition', matRate: 145000, labRate: 42000, margin: 30, enabled: true }
+            }
+          ]
+        },
+
+        jodi_flat: {
+          title: "2 × 1-BHK Jodi Flat Combination (1,100 sq ft)",
+          desc: "Resolves structural wall punching, second kitchen repurposing, and dual-meter MEP consolidation.",
+          rooms: [
+            { id: 'living', name: 'Combined Grand Living Hall' },
+            { id: 'repurposed_kitchen', name: 'Kitchen B (Repurposed Room)' },
+            { id: 'main_kitchen', name: 'Main Kitchen Suite (Flat A)' },
+            { id: 'master_bed', name: 'Master Suite (Flat B)' }
+          ],
+          items: [
+            {
+              id: 'j-1',
+              roomId: 'living',
+              category: 'Structural Civil',
+              name: 'Inter-Flat Partition Wall Punching & Portal Framing',
+              unit: 'ls',
+              qty: 1,
+              t1: { spec: '8ft x 7ft doorway aperture cutout with mild steel lintel framing', matRate: 28000, labRate: 18000, margin: 22, enabled: true },
+              t2: { spec: 'Full non-structural wall demolition + flush false ceiling concealing center beam', matRate: 58000, labRate: 38000, margin: 26, enabled: true },
+              t3: { spec: 'Architectural portal clad in Italian marble veneer with concealed perimeter LED wash', matRate: 145000, labRate: 65000, margin: 30, enabled: true }
+            },
+            {
+              id: 'j-2',
+              roomId: 'repurposed_kitchen',
+              category: 'Adaptive Civil & MEP',
+              name: 'Second Kitchen Decommissioning & Repurposing',
+              unit: 'ls',
+              qty: 1,
+              t1: { spec: 'Convert to Utility / Laundry Store; plumbing capped above slab, vinyl floor', matRate: 25000, labRate: 15000, margin: 22, enabled: true },
+              t2: { spec: 'Convert to Dedicated Study/Office; plumbing stubbed below screed with hydro-test cap', matRate: 62000, labRate: 28000, margin: 26, enabled: true },
+              t3: { spec: 'Convert to Master Ensuite Walk-in Dressing Room with vanity & jewelry island', matRate: 185000, labRate: 55000, margin: 30, enabled: true }
+            },
+            {
+              id: 'j-3',
+              roomId: 'living',
+              category: 'Floor Alignment',
+              name: 'Floor Height Discrepancy Leveling (15mm Delta Compensation)',
+              unit: 'sft',
+              qty: 620,
+              t1: { spec: '15mm bevelled hardwood threshold transition strip across aperture', matRate: 25, labRate: 15, margin: 25, enabled: true },
+              t2: { spec: 'Self-leveling polymer screed across both flats for seamless 0mm transition', matRate: 75, labRate: 35, margin: 28, enabled: true },
+              t3: { spec: 'Laser-levelled continuous Italian marble slab installation without threshold breaks', matRate: 480, labRate: 140, margin: 30, enabled: true }
+            },
+            {
+              id: 'j-4',
+              roomId: 'living',
+              category: 'Electrical MEP',
+              name: 'Dual Electric Meter Consolidation & Phase Balancing',
+              unit: 'ls',
+              qty: 1,
+              t1: { spec: 'Retain 2 separate distribution boards (Flat A and Flat B run independently)', matRate: 15000, labRate: 12000, margin: 22, enabled: true },
+              t2: { spec: 'Sub-panel integrated into Flat A main board with balanced load distribution', matRate: 42000, labRate: 22000, margin: 26, enabled: true },
+              t3: { spec: 'Single 3-phase high-draw meter, smart automated DB, central VRV AC conduit routing', matRate: 125000, labRate: 45000, margin: 30, enabled: true }
+            }
+          ]
+        },
+
+        standard_2bhk: {
+          title: "Standard 2-BHK Turnkey (914 sq ft)",
+          desc: "Full home joinery, false ceiling, painting, and modular kitchen suite.",
+          rooms: [
+            { id: 'living', name: 'Living & Dining Room' },
+            { id: 'master_bed', name: 'Master Bedroom' },
+            { id: 'kitchen', name: 'Modular Kitchen' }
+          ],
+          items: [
+            {
+              id: 's-1',
+              roomId: 'master_bed',
+              category: 'Carpentry',
+              name: 'Full-Height Sliding Wardrobe with Overhead Lofts',
+              unit: 'sft',
+              qty: 63,
+              t1: { spec: 'Commercial ply, 0.8mm off-white laminate, standard SS channels', matRate: 950, labRate: 450, margin: 24, enabled: true },
+              t2: { spec: 'BWP marine ply, 1.0mm Merino matte laminate, Hafele soft-close sliding', matRate: 1250, labRate: 520, margin: 28, enabled: true },
+              t3: { spec: 'HDHMR, PU lacquer paint finish, tinted fluted glass, Blum fittings', matRate: 1950, labRate: 650, margin: 30, enabled: true }
+            },
+            {
+              id: 's-2',
+              roomId: 'kitchen',
+              category: 'Modular',
+              name: 'Modular Kitchen Base & Wall Tandem Units',
+              unit: 'rft',
+              qty: 24,
+              t1: { spec: 'Commercial ply carcass, standard wire baskets, 0.8mm laminate', matRate: 2800, labRate: 1100, margin: 22, enabled: true },
+              t2: { spec: 'BWP marine ply, Hettich InnoTech soft-close drawers, 1.0mm laminate', matRate: 3600, labRate: 1350, margin: 25, enabled: true },
+              t3: { spec: 'HDHMR acrylic shutters, Blum Legrabox + pull-out pantry tall unit', matRate: 5200, labRate: 1750, margin: 28, enabled: true }
+            },
+            {
+              id: 's-3',
+              roomId: 'living',
+              category: 'False Ceiling',
+              name: 'Gypsum False Ceiling with Cove Lighting Channels',
+              unit: 'sft',
+              qty: 290,
+              t1: { spec: '12-inch perimeter border drop only, Saint-Gobain gypsum', matRate: 65, labRate: 55, margin: 25, enabled: true },
+              t2: { spec: 'Full ceiling cove drop with magnetic track light recessed channels', matRate: 85, labRate: 65, margin: 28, enabled: true },
+              t3: { spec: 'Multi-tiered acoustic ceiling, wooden acoustic baffle accents', matRate: 135, labRate: 95, margin: 30, enabled: true }
+            }
+          ]
+        }
+      },
+
+      rooms: [],
+      items: []
+    };
+
+    // Load active scenario data
+    function loadScenario(scenarioKey) {
+      state.scenario = scenarioKey;
+      const data = state.scenarioData[scenarioKey];
+      state.rooms = JSON.parse(JSON.stringify(data.rooms));
+      state.items = JSON.parse(JSON.stringify(data.items));
+      state.activeRoomFilter = 'all';
+
+      const bannerTitle = document.getElementById('banner-title');
+      const bannerDesc = document.getElementById('banner-desc');
+      if (bannerTitle && bannerDesc) {
+        bannerTitle.innerText = `Active Scenario: ${data.title}`;
+        bannerDesc.innerText = data.desc;
+      }
+    }
+
+    // Tab Navigation
+    function switchTab(tabId) {
+      state.activeTab = tabId;
+      const tabIds = ['workflow', 'complex', 'ai', 'studiobrain', 'editorux', 'simulator', 'historical'];
+      tabIds.forEach(id => {
+        const sec = document.getElementById('tab-section-' + id);
+        const btn = document.getElementById('nav-btn-' + id);
+        if (sec) sec.classList.toggle('hidden', id !== tabId);
+        if (btn) {
+          btn.classList.toggle('tab-active', id === tabId);
+          btn.classList.toggle('text-slate-600', id !== tabId);
+          btn.classList.toggle('bg-slate-100', id !== tabId);
+        }
+      });
+      if (tabId === 'simulator') {
+        renderSimulator();
+      }
+      if (tabId === 'editorux') {
+        renderWorkbench();
+      }
+      lucide.createIcons();
+    }
+
+    // Studio Brain Archetype Profiles & Switcher
+    const studioBrainProfiles = {
+      bespoke: {
+        model: "High Custom Joinery • Subcon 60%",
+        margin: "32.0% Blended Target",
+        civil: "Cost-Plus Subcontract / Pass-through",
+        hardware: "Hafele • Blum Legrabox • PU",
+        t1: {
+          title: "Tier 1: Essential",
+          total: "₹19,40,000",
+          carpentry: "1.0mm Merino Laminate + Greenply BWP Marine Ply + Hafele Standard hinges",
+          civil: "Tile-over-tile using polymer adhesive (Zero hacking) + Dr. Fixit 2K slurry",
+          gm: "28.5%",
+          subcon: "58%"
+        },
+        t2: {
+          title: "Tier 2: Comfort (Signature)",
+          total: "₹25,80,000",
+          carpentry: "Anti-fingerprint Satin PU Paint + Century Club Prime + Blum Tandembox",
+          civil: "Full slab chipping, 800x1600 GVT + Brick Bat Coba + Grohe concealed divertors",
+          gm: "32.4%",
+          subcon: "62%"
+        },
+        t3: {
+          title: "Tier 3: Luxury Harmony",
+          total: "₹34,50,000",
+          carpentry: "Fluted Smoked Oak Veneer with polycoat + Blum Legrabox + Profile brass lighting",
+          civil: "Italian Statuario marble with 8-stage diamond polish + Toto Smart Bidet suites",
+          gm: "35.0%",
+          subcon: "65%"
+        }
+      },
+      metro: {
+        model: "Modular Factory Joinery • In-house 80%",
+        margin: "22.0% Volume Turnkey Target",
+        civil: "Tile-over-tile only (Zero structural civil)",
+        hardware: "Ebco Soft-Close • 1.0mm Acrylic",
+        t1: {
+          title: "Tier 1: Standard Turnkey",
+          total: "₹13,20,000",
+          carpentry: "0.8mm Commercial Laminate + MR Commercial Ply + Standard hardware",
+          civil: "Ceramic floor tile overlay + Asian Paints Tractor Emulsion",
+          gm: "18.5%",
+          subcon: "25%"
+        },
+        t2: {
+          title: "Tier 2: Modern Plus",
+          total: "₹16,80,000",
+          carpentry: "1.0mm High-Gloss Laminate + Green Gold Marine Ply + Ebco Soft-close channels",
+          civil: "600x1200 Glazed Vitrified Tiles overlay + Asian Paints Royale Luxury Emulsion",
+          gm: "22.0%",
+          subcon: "30%"
+        },
+        t3: {
+          title: "Tier 3: Executive Modular",
+          total: "₹21,50,000",
+          carpentry: "2.0mm High-Gloss Acrylic shutters + HDHMR carcass + Hettich InnoTech drawers",
+          civil: "Quartz kitchen countertop + full tile-insert bathroom refresh",
+          gm: "24.5%",
+          subcon: "35%"
+        }
+      },
+      civil: {
+        model: "Deep Structural & MEP • In-house Masonry",
+        margin: "38.0% Heavy Civil Target",
+        civil: "Full RCC retrofitting & concealed MEP manifolds",
+        hardware: "Soundproof drainage • Geberit • PEX plumbing",
+        t1: {
+          title: "Tier 1: Core Civil Overhaul",
+          total: "₹24,50,000",
+          carpentry: "Basic modular cabinetry package + factory laminate",
+          civil: "Complete floor chipping to RCC, 30mm screed, concealed CPVC & SWR pipe replacement",
+          gm: "34.0%",
+          subcon: "40%"
+        },
+        t2: {
+          title: "Tier 2: Engineering Plus",
+          total: "₹32,90,000",
+          carpentry: "Custom PU joinery + Century Marine Ply + soft-close hinges",
+          civil: "Brick Bat Coba + 3-layer elastomeric waterproofing + 800x1600 GVT + Grohe concealed mixers",
+          gm: "38.5%",
+          subcon: "45%"
+        },
+        t3: {
+          title: "Tier 3: Heritage Architectural",
+          total: "₹46,80,000",
+          carpentry: "Bespoke solid wood & veneer architectural panelling + Blum Legrabox",
+          civil: "Carbon-fiber beam retrofitting + acoustic drainage stacks + bookmatched Italian marble + VRV HVAC",
+          gm: "42.0%",
+          subcon: "50%"
+        }
+      }
+    };
+
+    function switchStudioBrainProfile(profileKey) {
+      const p = studioBrainProfiles[profileKey];
+      if (!p) return;
+
+      ['bespoke', 'metro', 'civil'].forEach(k => {
+        const btn = document.getElementById('brain-profile-btn-' + k);
+        if (btn) {
+          const isAct = k === profileKey;
+          btn.className = isAct 
+            ? "px-3 py-2 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs cursor-pointer flex items-center gap-1.5"
+            : "px-3 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white cursor-pointer flex items-center gap-1.5";
+        }
+      });
+
+      document.getElementById('brain-stat-model').innerText = p.model;
+      document.getElementById('brain-stat-margin').innerText = p.margin;
+      document.getElementById('brain-stat-civil').innerText = p.civil;
+      document.getElementById('brain-stat-hardware').innerText = p.hardware;
+
+      ['t1', 't2', 't3'].forEach(tierKey => {
+        const data = p[tierKey];
+        document.getElementById(`brain-${tierKey}-title`).innerText = data.title;
+        document.getElementById(`brain-${tierKey}-total`).innerText = data.total;
+        document.getElementById(`brain-${tierKey}-carpentry`).innerText = data.carpentry;
+        document.getElementById(`brain-${tierKey}-civil`).innerText = data.civil;
+        document.getElementById(`brain-${tierKey}-gm`).innerText = data.gm;
+        document.getElementById(`brain-${tierKey}-subcon`).innerText = data.subcon;
+      });
+
+      showToast(`Studio Brain re-calibrated rules for: ${profileKey === 'bespoke' ? 'Form Factors (Bespoke Luxury)' : profileKey === 'metro' ? 'Studio Metro (Turnkey Modular)' : 'Heritage & Civil Specialist'}`);
+      lucide.createIcons();
+    }
+
+    // Architecture Toggle (Current vs Proposed)
+    function setArchitectureMode(mode) {
+      state.architectureMode = mode;
+      document.getElementById('mode-btn-current').classList.toggle('bg-white', mode === 'current');
+      document.getElementById('mode-btn-current').classList.toggle('shadow-xs', mode === 'current');
+      document.getElementById('mode-btn-current').classList.toggle('text-indigo-700', mode === 'current');
+
+      document.getElementById('mode-btn-proposed').classList.toggle('bg-white', mode === 'proposed');
+      document.getElementById('mode-btn-proposed').classList.toggle('shadow-xs', mode === 'proposed');
+      document.getElementById('mode-btn-proposed').classList.toggle('text-indigo-700', mode === 'proposed');
+
+      const banner = document.getElementById('mode-explanation-banner');
+      if (mode === 'current') {
+        banner.className = "p-4 rounded-xl border border-amber-200 bg-amber-50/80 text-xs flex items-start justify-between gap-4";
+        banner.innerHTML = `
+          <div class="flex items-start gap-3">
+            <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 shrink-0 mt-0.5"></i>
+            <div>
+              <span class="font-bold text-amber-950">Active: Current App Mode (Detached Tiers)</span>
+              <p class="text-amber-800/90 mt-0.5 leading-relaxed">
+                Notice: Editing item quantities in this mode updates ONLY the active tier. Tiers 1 and 3 stay stale and de-synchronized!
+              </p>
+            </div>
+          </div>
+          <span class="text-[10px] font-mono px-2 py-1 rounded bg-amber-200/60 text-amber-900 font-bold shrink-0">Sync OFF</span>
+        `;
+      } else {
+        banner.className = "p-4 rounded-xl border border-indigo-200 bg-indigo-50/70 text-xs flex items-start justify-between gap-4";
+        banner.innerHTML = `
+          <div class="flex items-start gap-3">
+            <i data-lucide="info" class="w-5 h-5 text-indigo-600 shrink-0 mt-0.5"></i>
+            <div>
+              <span class="font-bold text-indigo-950">Active: Unified Scope Spine (Proposed Mode)</span>
+              <p class="text-indigo-800/90 mt-0.5 leading-relaxed">
+                Modifying an item's quantity or dimensions propagates across all 3 tiers automatically, while each tier preserves its own distinct engineering specification and trade margin.
+              </p>
+            </div>
+          </div>
+          <span class="text-[10px] font-mono px-2 py-1 rounded bg-indigo-200/50 text-indigo-900 font-bold shrink-0">Bi-Directional Sync ON</span>
+        `;
+      }
+      lucide.createIcons();
+      showToast(`Switched to ${mode === 'current' ? 'Current App Behavior' : 'Proposed Unified Scope Spine'}`);
+      renderSimulator();
+    }
+
+    function onScenarioChange(val) {
+      loadScenario(val);
+      showToast(`Switched scenario to: ${state.scenarioData[val].title}`);
+      renderSimulator();
+    }
+
+    function onProposalModeChange(val) {
+      state.proposalMode = val;
+      showToast(val === 'single' ? 'Switched to Single BOQ Proposal' : 'Switched to 3 Distinct Proposal Tiers');
+      renderSimulator();
+    }
+
+    function setGridDisplay(val) {
+      state.gridDisplay = val;
+      document.getElementById('view-btn-matrix').classList.toggle('bg-white', val === 'matrix');
+      document.getElementById('view-btn-matrix').classList.toggle('shadow-2xs', val === 'matrix');
+      document.getElementById('view-btn-matrix').classList.toggle('text-indigo-700', val === 'matrix');
+
+      document.getElementById('view-btn-focused').classList.toggle('bg-white', val === 'focused');
+      document.getElementById('view-btn-focused').classList.toggle('shadow-2xs', val === 'focused');
+      document.getElementById('view-btn-focused').classList.toggle('text-indigo-700', val === 'focused');
+      renderSimulator();
+    }
+
+    function setRoomFilter(roomId) {
+      state.activeRoomFilter = roomId;
+      renderSimulator();
+    }
+
+    // Calculations & Rendering
+    function fmtINR(val) {
+      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
+    }
+
+    function calcSell(qty, matRate, labRate, marginPct) {
+      const cost = (matRate + labRate) * qty;
+      const margin = marginPct / 100;
+      if (margin >= 1) return cost * 1.5;
+      return cost / (1 - margin);
+    }
+
+    function renderSimulator() {
+      // 1. Render Room Tabs
+      const roomTabsContainer = document.getElementById('sim-room-tabs');
+      if (roomTabsContainer) {
+        roomTabsContainer.innerHTML = `
+          <button onclick="setRoomFilter('all')" class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${state.activeRoomFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}">
+            All Items (${state.items.length})
+          </button>
+        ` + state.rooms.map(r => {
+          const count = state.items.filter(i => i.roomId === r.id).length;
+          const isActive = state.activeRoomFilter === r.id;
+          return `
+            <button onclick="setRoomFilter('${r.id}')" class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${isActive ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}">
+              ${r.name} (${count})
+            </button>
+          `;
+        }).join('');
+      }
+
+      // Filter items
+      const filteredItems = state.activeRoomFilter === 'all' 
+        ? state.items 
+        : state.items.filter(i => i.roomId === state.activeRoomFilter);
+
+      // Compute totals
+      let t1Total = 0, t2Total = 0, t3Total = 0;
+      state.items.forEach(item => {
+        t1Total += calcSell(item.qty, item.t1.matRate, item.t1.labRate, item.t1.margin);
+        t2Total += calcSell(item.qty, item.t2.matRate, item.t2.labRate, item.t2.margin);
+        t3Total += calcSell(item.qty, item.t3.matRate, item.t3.labRate, item.t3.margin);
+      });
+
+      // Update header cards
+      const elT1 = document.getElementById('sim-t1-total');
+      const elT2 = document.getElementById('sim-t2-total');
+      const elT3 = document.getElementById('sim-t3-total');
+      if (elT1) elT1.innerText = fmtINR(t1Total);
+      if (elT2) elT2.innerText = fmtINR(t2Total);
+      if (elT3) elT3.innerText = fmtINR(t3Total);
+
+      // 2. Render Table Header
+      const head = document.getElementById('sim-table-head');
+      const foot = document.getElementById('sim-table-foot');
+      const body = document.getElementById('sim-table-body');
+
+      const isMatrix = state.gridDisplay === 'matrix' && state.proposalMode === 'tiered';
+
+      if (isMatrix) {
+        head.innerHTML = `
+          <tr>
+            <th class="p-3 w-10 text-center">#</th>
+            <th class="p-3 w-28">Room</th>
+            <th class="p-3 w-56">Line Item & Category</th>
+            <th class="p-3 w-20 text-center">Unit</th>
+            <th class="p-3 w-24 text-right">Qty</th>
+            <th class="p-3 w-40 text-right bg-slate-50 border-x border-slate-200">
+              <span class="text-slate-500 font-bold block text-[9px]">TIER 1 (ESSENTIAL)</span>
+              <span>Sell Quote</span>
+            </th>
+            <th class="p-3 w-44 text-right bg-indigo-50/50 border-r border-indigo-200 text-indigo-950">
+              <span class="text-indigo-600 font-bold block text-[9px]">TIER 2 (COMFORT MID)</span>
+              <span>Sell Quote</span>
+            </th>
+            <th class="p-3 w-40 text-right bg-purple-50/50 text-purple-950">
+              <span class="text-purple-600 font-bold block text-[9px]">TIER 3 (LUXURY)</span>
+              <span>Sell Quote</span>
+            </th>
+          </tr>
+        `;
+      } else {
+        head.innerHTML = `
+          <tr>
+            <th class="p-3 w-10 text-center">#</th>
+            <th class="p-3 w-28">Room</th>
+            <th class="p-3">Line Item Specification</th>
+            <th class="p-3 w-20 text-center">Unit</th>
+            <th class="p-3 w-24 text-right">Qty</th>
+            <th class="p-3 w-28 text-right">Mat Rate</th>
+            <th class="p-3 w-28 text-right">Lab Rate</th>
+            <th class="p-3 w-24 text-right">Margin %</th>
+            <th class="p-3 w-36 text-right">Sell Total (₹)</th>
+          </tr>
+        `;
+      }
+
+      // 3. Render Rows
+      body.innerHTML = filteredItems.map((item, idx) => {
+        const room = state.rooms.find(r => r.id === item.roomId) || { name: item.roomId };
+        const sell1 = calcSell(item.qty, item.t1.matRate, item.t1.labRate, item.t1.margin);
+        const sell2 = calcSell(item.qty, item.t2.matRate, item.t2.labRate, item.t2.margin);
+        const sell3 = calcSell(item.qty, item.t3.matRate, item.t3.labRate, item.t3.margin);
+
+        if (isMatrix) {
+          return `
+            <tr class="hover:bg-slate-50/80 transition-colors">
+              <td class="p-3 text-center font-mono text-slate-400 text-[11px]">${idx + 1}</td>
+              <td class="p-3 font-semibold text-slate-800 text-[11px]">${room.name}</td>
+              <td class="p-3">
+                <div class="font-bold text-slate-900">${item.name}</div>
+                <div class="text-[10px] text-slate-500 font-mono mt-0.5">${item.category}</div>
+              </td>
+              <td class="p-3 text-center font-mono font-bold text-slate-500">${item.unit}</td>
+              <td class="p-3 text-right">
+                <input type="number" value="${item.qty}" min="1" onchange="onItemQtyChange('${item.id}', this.value)" class="w-16 text-right font-mono font-bold bg-white border border-slate-300 rounded px-1.5 py-1 text-slate-900 focus:outline-none focus:border-indigo-500" />
+                <div class="text-[9px] text-indigo-600 font-semibold mt-0.5 ${state.architectureMode === 'proposed' ? 'block' : 'hidden'}">Synced to 3 Tiers</div>
+                <div class="text-[9px] text-amber-600 font-semibold mt-0.5 ${state.architectureMode === 'current' ? 'block' : 'hidden'}">T2 Only! (Desynced)</div>
+              </td>
+              <td class="p-3 text-right bg-slate-50/70 border-x border-slate-200">
+                <div class="font-mono font-bold text-slate-800">${fmtINR(sell1)}</div>
+                <div class="text-[10px] text-slate-500 truncate max-w-[140px]" title="${item.t1.spec}">${item.t1.spec}</div>
+              </td>
+              <td class="p-3 text-right bg-indigo-50/30 border-r border-indigo-200">
+                <div class="font-mono font-bold text-indigo-950">${fmtINR(sell2)}</div>
+                <div class="text-[10px] text-indigo-700 truncate max-w-[150px]" title="${item.t2.spec}">${item.t2.spec}</div>
+              </td>
+              <td class="p-3 text-right bg-purple-50/30">
+                <div class="font-mono font-bold text-purple-950">${fmtINR(sell3)}</div>
+                <div class="text-[10px] text-purple-700 truncate max-w-[140px]" title="${item.t3.spec}">${item.t3.spec}</div>
+              </td>
+            </tr>
+          `;
+        } else {
+          // Focused view
+          const activeTierData = item.t2;
+          return `
+            <tr class="hover:bg-slate-50/80 transition-colors">
+              <td class="p-3 text-center font-mono text-slate-400 text-[11px]">${idx + 1}</td>
+              <td class="p-3 font-semibold text-slate-800 text-[11px]">${room.name}</td>
+              <td class="p-3">
+                <div class="font-bold text-slate-900">${item.name}</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">${activeTierData.spec}</div>
+              </td>
+              <td class="p-3 text-center font-mono font-bold text-slate-500">${item.unit}</td>
+              <td class="p-3 text-right">
+                <input type="number" value="${item.qty}" min="1" onchange="onItemQtyChange('${item.id}', this.value)" class="w-16 text-right font-mono font-bold bg-white border border-slate-300 rounded px-1.5 py-1 text-slate-900 focus:outline-none focus:border-indigo-500" />
+              </td>
+              <td class="p-3 text-right font-mono text-slate-700">₹${activeTierData.matRate}</td>
+              <td class="p-3 text-right font-mono text-slate-700">₹${activeTierData.labRate}</td>
+              <td class="p-3 text-right font-mono text-slate-700">${activeTierData.margin}%</td>
+              <td class="p-3 text-right font-mono font-bold text-slate-900">${fmtINR(sell2)}</td>
+            </tr>
+          `;
+        }
+      }).join('');
+
+      // 4. Render Footer
+      if (isMatrix) {
+        foot.innerHTML = `
+          <tr>
+            <td colspan="5" class="p-3.5 text-slate-300">
+              <span>Items in Scope: <strong>${state.items.length}</strong></span>
+              <span class="mx-3 text-slate-600">|</span>
+              <span class="text-emerald-400">All 3 Tiers Synchronized against Scope Spine</span>
+            </td>
+            <td class="p-3.5 text-right font-mono font-bold text-slate-200 border-x border-slate-800">${fmtINR(t1Total)}</td>
+            <td class="p-3.5 text-right font-mono font-bold text-emerald-400 border-r border-slate-800">${fmtINR(t2Total)}</td>
+            <td class="p-3.5 text-right font-mono font-bold text-purple-300">${fmtINR(t3Total)}</td>
+          </tr>
+        `;
+      } else {
+        foot.innerHTML = `
+          <tr>
+            <td colspan="4" class="p-3.5 text-slate-300">Items in Scope: <strong>${state.items.length}</strong></td>
+            <td colspan="4" class="p-3.5 text-right text-slate-300 font-bold uppercase tracking-wider text-[10px]">Tier 2 Quote Total:</td>
+            <td class="p-3.5 text-right font-mono text-base font-bold text-emerald-400">${fmtINR(t2Total)}</td>
+          </tr>
+        `;
+      }
+    }
+
+    function onItemQtyChange(itemId, newQty) {
+      const item = state.items.find(i => i.id === itemId);
+      if (!item) return;
+      const parsed = parseFloat(newQty) || 1;
+      item.qty = parsed;
+
+      if (state.architectureMode === 'proposed') {
+        showToast(`Quantity updated to ${parsed} ${item.unit} — propagated across Tier 1, 2 & 3!`);
+      } else {
+        showToast(`Quantity updated to ${parsed} ${item.unit} in Tier 2 only. (Warning: Tier 1 & 3 are now de-synchronized!)`);
+      }
+      renderSimulator();
+    }
+
+    function onSimSliderChange(val) {
+      document.getElementById('sim-target-display').innerText = fmtINR(val);
+    }
+
+    function applySimTradeoff(type) {
+      if (type === 'finishes') {
+        const f = state.items.find(i => i.id === 'c-1' || i.id === 's-1');
+        if (f) {
+          f.t2.matRate = Math.round(f.t2.matRate * 0.85);
+          f.t2.spec += ' (Adjusted for Client Budget Target)';
+        }
+        showToast('Applied Path A: Finish specifications tuned to meet client budget!');
+      } else if (type === 'scope') {
+        const b = state.items.find(i => i.id === 'c-5' || i.id === 's-3');
+        if (b) {
+          b.qty = Math.round(b.qty * 0.6);
+        }
+        showToast('Applied Path B: Deferred optional decorative items to Phase 2!');
+      } else if (type === 'margin') {
+        state.items.forEach(i => {
+          if (i.t2.margin > 22) i.t2.margin -= 4;
+        });
+        showToast('Applied Path C: Calibrated trade margins by 4% with vendor volume pass-through!');
+      }
+      renderSimulator();
+    }
+
+    function executeSimPrompt() {
+      const input = document.getElementById('sim-prompt-input');
+      const val = input.value.trim();
+      if (!val) return;
+      applySimPreset(val);
+      input.value = '';
+    }
+
+    function applySimPreset(command) {
+      if (command.includes('Waterproofing')) {
+        const wp = state.items.find(i => i.id === 'c-2');
+        if (wp) {
+          wp.t1.spec = 'Upgraded to Brick Bat Coba + PU corner fillets';
+          wp.t1.matRate = 60;
+          showToast('Copilot: Injected Brick Bat Coba waterproofing into baseline tier!');
+        }
+      } else if (command.includes('Loft')) {
+        const w = state.items.find(i => i.id === 's-1');
+        if (w) {
+          w.qty = 85;
+          showToast('Copilot: Added 22 sft of overhead loft storage across all proposal tiers!');
+        }
+      } else {
+        showToast(`Copilot executed: "${command}"`);
+      }
+      renderSimulator();
+    }
+
+    function openAssemblyModal() {
+      const newAssembly = {
+        id: 'new-' + (state.items.length + 1),
+        roomId: state.rooms[0].id,
+        category: 'Electrical & Automation',
+        name: 'Smart WiFi Touch Switches & Dimmable Scene Controllers',
+        unit: 'nos',
+        qty: 12,
+        t1: { spec: 'Standard modular Anchor Roma switches', matRate: 450, labRate: 150, margin: 24, enabled: true },
+        t2: { spec: 'Schneider AvatarOn Smart WiFi capacitive touch switches', matRate: 1450, labRate: 250, margin: 28, enabled: true },
+        t3: { spec: 'Lutron Caseta wireless scene controllers + magnetic keypad', matRate: 3800, labRate: 450, margin: 30, enabled: true }
+      };
+      state.items.push(newAssembly);
+      showToast('Inserted Smart Assembly across all 3 proposal tiers!');
+      renderSimulator();
+    }
+
+    function runAiScopeAudit() {
+      if (state.scenario === 'civil_reno') {
+        showToast('AI Scope Sentinel: Verified 2 Bathrooms. Brick Bat Coba & CPVC pressure test active. Zero margin leakage detected!');
+      } else if (state.scenario === 'jodi_flat') {
+        showToast('AI Scope Sentinel: Jodi Flat detected. Verified 100mm drain blanking seal and 15mm floor level compensation active!');
+      } else {
+        showToast('AI Scope Sentinel: All 28 standard line items verified against historical studio telemetry.');
+      }
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast-notify');
+      const toastMsg = document.getElementById('toast-message');
+      toastMsg.innerText = msg;
+      toast.classList.remove('translate-y-[-160%]');
+      setTimeout(() => {
+        toast.classList.add('translate-y-[-160%]');
+      }, 3800);
+    }
+
+    // ==========================================
+    // TAB 5: BOQ EDITOR UX & WORKBENCH ENGINE
+    // ==========================================
+    const workbenchState = {
+      paradigm: 'optionC', // 'optionA' | 'optionB' | 'optionC'
+      mode: 'grid', // 'grid' | 'deep' (for Option C)
+      activeRoom: 'all',
+      isFinal: false,
+      selectedItemId: 'wb-1',
+      items: [
+        {
+          id: 'wb-1',
+          room: 'master_bed',
+          roomName: 'Master Bedroom',
+          category: 'Carpentry & Joinery',
+          name: 'Full Height 3-Door Wardrobe with Internal Dresser',
+          unit: 'sqft',
+          qty: 75,
+          t1: { spec: '1.0mm Commercial Laminate + MR Ply + Standard Hardware', rate: 1450, cost: 1050, margin: 27.6 },
+          t2: { spec: '1.0mm Merino Matte Laminate + Century BWP Marine Ply + Hafele Soft-Close', rate: 1850, cost: 1250, margin: 32.4 },
+          t3: { spec: 'Fluted Smoked Oak Veneer with Polycoat + Century Club Prime + Blum Legrabox', rate: 2650, cost: 1720, margin: 35.1 }
+        },
+        {
+          id: 'wb-2',
+          room: 'kitchen',
+          roomName: 'Modular Kitchen',
+          category: 'Carpentry & Joinery',
+          name: 'Modular Base & Overhead Cabinets with Tandem Drawers',
+          unit: 'sqft',
+          qty: 90,
+          t1: { spec: '0.8mm Gloss Laminate + HDHMR + Ebco Regular Channels', rate: 1650, cost: 1220, margin: 26.0 },
+          t2: { spec: 'Anti-fingerprint Satin PU Paint + Century BWP Marine + Blum Tandembox', rate: 2250, cost: 1510, margin: 32.9 },
+          t3: { spec: 'Ceramic / Glass Shutter Profile + BWP Ply + Blum Servo-Drive Electric Touch', rate: 3400, cost: 2180, margin: 35.8 }
+        },
+        {
+          id: 'wb-3',
+          room: 'civil',
+          roomName: 'Civil & Wet Works',
+          category: 'Civil & Masonry',
+          name: 'Bathroom Floor & Dado Tiling with Epoxy Grouting',
+          unit: 'sqft',
+          qty: 180,
+          t1: { spec: 'Tile-over-tile using polymer adhesive (Zero hacking) + standard grout', rate: 220, cost: 160, margin: 27.2 },
+          t2: { spec: 'Chipping to RCC + 800x1600 GVT slab tiles + Laticrete Epoxy Grouting', rate: 380, cost: 255, margin: 32.8 },
+          t3: { spec: 'Italian Statuario Marble bookmatched with 8-stage diamond hone polish', rate: 780, cost: 490, margin: 37.1 }
+        },
+        {
+          id: 'wb-4',
+          room: 'all',
+          roomName: 'All Spaces',
+          category: 'False Ceiling',
+          name: 'Gypsum Board False Ceiling with Perimeter Cove Lighting',
+          unit: 'sqft',
+          qty: 450,
+          t1: { spec: 'Saint-Gobain Gypboard with perimeter border cove only', rate: 125, cost: 92, margin: 26.4 },
+          t2: { spec: 'Full ceiling drop with magnetic aluminum architectural profile tracks', rate: 165, cost: 112, margin: 32.1 },
+          t3: { spec: 'Acoustic micro-perforated Gypsum panels with seamless flush magnetic trims', rate: 245, cost: 158, margin: 35.5 }
+        },
+        {
+          id: 'wb-5',
+          room: 'all',
+          roomName: 'All Spaces',
+          category: 'Painting & Finishing',
+          name: 'Surface Preparation & Luxury Emulsion Painting',
+          unit: 'sqft',
+          qty: 850,
+          t1: { spec: '2 coats Birla White Putty + Asian Paints Tractor Emulsion', rate: 35, cost: 26, margin: 25.7 },
+          t2: { spec: 'Asian Paints Royale Luxury Emulsion with 2 coats acrylic primer & sanding', rate: 58, cost: 39, margin: 32.7 },
+          t3: { spec: 'Asian Paints Royale Aspira Teflon-coated washable finish with PU seal', rate: 88, cost: 56, margin: 36.3 }
+        }
+      ]
+    };
+
+    function switchEditorParadigm(paradigmKey) {
+      workbenchState.paradigm = paradigmKey;
+      ['optionA', 'optionB', 'optionC'].forEach(k => {
+        const btn = document.getElementById('paradigm-btn-' + k);
+        if (btn) {
+          const isAct = k === paradigmKey;
+          btn.className = isAct
+            ? "px-3 py-2 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs cursor-pointer flex items-center gap-1.5"
+            : "px-3 py-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 cursor-pointer flex items-center gap-1.5";
+        }
+      });
+
+      const titleEl = document.getElementById('mockup-paradigm-title');
+      const box = document.getElementById('paradigm-detail-box');
+      const optCSwitch = document.getElementById('optionC-mode-switch');
+      if (optCSwitch) optCSwitch.classList.toggle('hidden', paradigmKey !== 'optionC');
+
+      if (paradigmKey === 'optionA') {
+        titleEl.innerText = "Option A: Synchronized Matrix Spreadsheet";
+        box.innerHTML = `
+          <div class="flex items-start gap-3">
+            <i data-lucide="table-2" class="w-5 h-5 text-indigo-600 shrink-0 mt-0.5"></i>
+            <div>
+              <span class="font-bold text-slate-900 text-sm">Option A Architecture: Single Invariant Row with Multi-Tier Columns</span>
+              <p class="mt-1 leading-relaxed text-slate-600">
+                Modeled after Google Sheets & Excel, but built on the Unified Scope Spine. Each item has one shared Quantity cell on the left. On the right, all 3 tiers (Essential, Comfort, Luxury) sit side-by-side. Estimators can edit rates and quantities via fast Tab/Enter keyboard strokes without opening a single modal.
+              </p>
+              <div class="mt-2 flex gap-4 text-[11px] text-slate-500 font-medium">
+                <span class="text-emerald-700 font-bold">&check; Pros: Highest visibility, zero modal lag, fastest keyboard entry.</span>
+                <span class="text-slate-500">&bull; Best For: Senior estimators doing high-volume pricing.</span>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (paradigmKey === 'optionB') {
+        titleEl.innerText = "Option B: Spatial Deck & Focus Studio";
+        box.innerHTML = `
+          <div class="flex items-start gap-3">
+            <i data-lucide="gallery-vertical-end" class="w-5 h-5 text-indigo-600 shrink-0 mt-0.5"></i>
+            <div>
+              <span class="font-bold text-slate-900 text-sm">Option B Architecture: Room-by-Room Card Deck + Tier Spectrum Drawer</span>
+              <p class="mt-1 leading-relaxed text-slate-600">
+                Evolves our current Interactive BOQ editor into a tactile design studio. The left column shows space cards with instant stepper controls (+ / - / direct input). Clicking any card slides out the <strong>Tier Spectrum Inspector</strong> showing how that exact component transforms across Essential, Comfort, and Luxury tiers with 1-click upgrade buttons.
+              </p>
+              <div class="mt-2 flex gap-4 text-[11px] text-slate-500 font-medium">
+                <span class="text-emerald-700 font-bold">&check; Pros: Highly visual, touch/iPad friendly, zero risk of formula breakage.</span>
+                <span class="text-slate-500">&bull; Best For: Client walkthroughs and design presentations.</span>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        titleEl.innerText = "Option C: Dual-Mode Fluid Workbench (Recommended)";
+        box.innerHTML = `
+          <div class="flex items-start gap-3">
+            <i data-lucide="sliders-horizontal" class="w-5 h-5 text-indigo-600 shrink-0 mt-0.5"></i>
+            <div>
+              <span class="font-bold text-slate-900 text-sm">Option C Architecture: Dual-Mode Fluid Workbench [Recommended]</span>
+              <p class="mt-1 leading-relaxed text-slate-600">
+                The best of both worlds. Estimators toggle between <strong>⚡ Fast Grid Mode</strong> (inline cell typing, lightning recalculation, column sorting) and <strong>📐 Deep Studio Mode</strong> (expandable assembly formula showing Substrate + Shutter + Hardware + Labor + Margin). Includes 4 smart features: Smart Room Takeoff, 1-Click Spec Upgrader, Margin Shield, and Ghost Item Sentinel.
+              </p>
+              <div class="mt-2 flex gap-4 text-[11px] text-slate-500 font-medium">
+                <span class="text-indigo-700 font-bold">&check; Pros: Instant speed when drafting; surgical depth when tailoring custom joinery.</span>
+                <span class="text-emerald-700 font-bold">&bull; 1-Click Excel to Final or 3-Tier Synthesis built right in.</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      renderWorkbench();
+      lucide.createIcons();
+    }
+
+    function setWorkbenchMode(mode) {
+      workbenchState.mode = mode;
+      document.getElementById('ux-mode-grid-btn').className = mode === 'grid'
+        ? "px-2.5 py-1 rounded text-[11px] font-bold bg-indigo-600 text-white"
+        : "px-2.5 py-1 rounded text-[11px] font-bold text-slate-400 hover:text-white";
+      document.getElementById('ux-mode-deep-btn').className = mode === 'deep'
+        ? "px-2.5 py-1 rounded text-[11px] font-bold bg-indigo-600 text-white"
+        : "px-2.5 py-1 rounded text-[11px] font-bold text-slate-400 hover:text-white";
+      
+      showToast(`Switched Workbench to: ${mode === 'grid' ? '⚡ Fast Grid Mode' : '📐 Deep Studio Mode'}`);
+      renderWorkbench();
+    }
+
+    function filterWorkbenchRoom(roomKey) {
+      workbenchState.activeRoom = roomKey;
+      ['all', 'master_bed', 'kitchen', 'civil'].forEach(k => {
+        const btn = document.getElementById(`filter-${k}-btn`);
+        if (btn) {
+          const isAct = k === roomKey;
+          btn.className = isAct
+            ? "px-2.5 py-1 rounded-lg bg-white border border-indigo-400 text-indigo-700 font-bold shadow-xs"
+            : "px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 font-medium";
+        }
+      });
+      renderWorkbench();
+    }
+
+    function updateWorkbenchQty(itemId, val) {
+      const num = parseFloat(val) || 0;
+      const item = workbenchState.items.find(i => i.id === itemId);
+      if (item) {
+        item.qty = num;
+        renderWorkbench();
+        showToast(`Updated quantity for "${item.name}" to ${num} ${item.unit}. Synchronized across all tiers!`);
+      }
+    }
+
+    function updateWorkbenchRate(itemId, tierKey, val) {
+      const num = parseFloat(val) || 0;
+      const item = workbenchState.items.find(i => i.id === itemId);
+      if (item && item[tierKey]) {
+        item[tierKey].rate = num;
+        if (item[tierKey].cost > 0) {
+          item[tierKey].margin = Math.round(((num - item[tierKey].cost) / num) * 1000) / 10;
+        }
+        renderWorkbench();
+        showToast(`Updated ${tierKey.toUpperCase()} rate to ₹${num.toLocaleString('en-IN')}`);
+      }
+    }
+
+    function upgradeWorkbenchSpec(itemId, tierKey) {
+      const item = workbenchState.items.find(i => i.id === itemId);
+      if (!item) return;
+
+      if (tierKey === 't2') {
+        item.t2.spec = "Upgraded to 1.5mm Acrylic High-Gloss + Hafele Premium Soft-Close";
+        item.t2.rate = Math.round(item.t2.rate * 1.15);
+        item.t2.cost = Math.round(item.t2.cost * 1.12);
+        item.t2.margin = 34.2;
+        showToast(`Upgraded Comfort tier spec on "${item.name}"!`);
+      } else {
+        item.t3.spec = "Upgraded to Italian Statuario Marble / Fluted Smoked Oak";
+        item.t3.rate = Math.round(item.t3.rate * 1.25);
+        item.t3.margin = 38.0;
+        showToast(`Elevated Luxury tier spec on "${item.name}"!`);
+      }
+      renderWorkbench();
+    }
+
+    function openDimensionTakeoff(itemId) {
+      const item = workbenchState.items.find(i => i.id === itemId);
+      if (!item) return;
+      const length = prompt(`Smart Takeoff for "${item.name}":\nEnter Room Length in feet (e.g. 14):`, "14");
+      if (!length) return;
+      const width = prompt(`Enter Room Width in feet (e.g. 12):`, "12");
+      if (!width) return;
+      const l = parseFloat(length) || 0;
+      const w = parseFloat(width) || 0;
+      const computedSqft = l * w;
+      if (computedSqft > 0) {
+        item.qty = computedSqft;
+        renderWorkbench();
+        showToast(`Smart Takeoff: Applied ${l}' × ${w}' = ${computedSqft} sq ft directly to "${item.name}"!`);
+      }
+    }
+
+    function simulateExcelImportModal() {
+      const choice = confirm(
+        "Excel BOQ Importer Simulator:\n\n" +
+        "Click OK for: 'Path A: Import as Final Execution BOQ' (Direct single BOQ)\n" +
+        "Click CANCEL for: 'Path B: Import & Synthesize 3-Tier Proposal' (AI Scaffolding)"
+      );
+
+      if (choice) {
+        workbenchState.isFinal = true;
+        showToast("Excel Importer: Imported 28 items and locked as Final Execution BOQ! (SHA-256 Hash Generated)");
+      } else {
+        workbenchState.isFinal = false;
+        showToast("Studio Brain: Synthesized 3-Tier Proposal from Excel baseline! Essential (-18%) & Luxury (+35%) active.");
+      }
+      renderWorkbench();
+    }
+
+    function makeActiveTierFinal() {
+      workbenchState.isFinal = true;
+      showToast("Audit Trail: Active Tier locked as Final Approved BOQ (Contract Baseline). Milestones & PO Bundles generated!");
+      renderWorkbench();
+    }
+
+    function renderWorkbench() {
+      const container = document.getElementById('workbench-container');
+      if (!container) return;
+
+      const p = workbenchState.paradigm;
+      const items = workbenchState.items.filter(i => {
+        if (workbenchState.activeRoom === 'all') return true;
+        return i.room === workbenchState.activeRoom;
+      });
+
+      // Calculate totals for active tier (T2 Comfort)
+      let activeTotal = 0;
+      let activeCost = 0;
+      workbenchState.items.forEach(i => {
+        activeTotal += i.qty * i.t2.rate;
+        activeCost += i.qty * i.t2.cost;
+      });
+      const activeMargin = activeTotal > 0 ? Math.round(((activeTotal - activeCost) / activeTotal) * 1000) / 10 : 0;
+
+      const totalEl = document.getElementById('workbench-tier-total');
+      const marginEl = document.getElementById('workbench-tier-margin');
+      if (totalEl) totalEl.innerText = `₹${activeTotal.toLocaleString('en-IN')}`;
+      if (marginEl) {
+        marginEl.innerText = `GM ${activeMargin}% (${activeMargin >= 30 ? 'Protected' : 'Warning'})`;
+        marginEl.parentElement.className = activeMargin >= 30
+          ? "flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-mono font-bold text-[11px] border border-emerald-200"
+          : "flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-mono font-bold text-[11px] border border-amber-200";
+      }
+
+      if (workbenchState.isFinal) {
+        container.innerHTML = `
+          <div class="mb-4 p-3 rounded-xl border border-emerald-300 bg-emerald-50 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2 text-emerald-900 font-bold">
+              <i data-lucide="lock" class="w-4 h-4 text-emerald-600"></i>
+              <span>This BOQ is APPROVED & FINALIZED. Line items are locked for procurement (Stage 4).</span>
+            </div>
+            <button onclick="workbenchState.isFinal = false; renderWorkbench(); showToast('Unlocked BOQ for drafting');" class="px-2.5 py-1 bg-white border border-emerald-300 text-emerald-800 rounded font-bold text-[10px] hover:bg-emerald-100 cursor-pointer">
+              Unlock for Revisions
+            </button>
+          </div>
+        `;
+      } else {
+        container.innerHTML = '';
+      }
+
+      // ===================================
+      // OPTION A: SYNCHRONIZED MATRIX
+      // ===================================
+      if (p === 'optionA') {
+        let html = `
+          <div class="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px]">
+                  <th class="p-3 w-8">#</th>
+                  <th class="p-3 w-48">Room & Component</th>
+                  <th class="p-3 w-28 text-center bg-indigo-50/70 border-x border-indigo-100 text-indigo-900">
+                    Spine Qty (All Tiers)
+                  </th>
+                  <th class="p-3 text-slate-700">Tier 1: Essential</th>
+                  <th class="p-3 bg-indigo-50/50 text-indigo-900 border-x border-indigo-200">Tier 2: Comfort (Active)</th>
+                  <th class="p-3 text-purple-900">Tier 3: Luxury Harmony</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200">
+        `;
+
+        items.forEach((item, idx) => {
+          html += `
+            <tr class="hover:bg-slate-50/80 transition-colors">
+              <td class="p-3 font-mono text-slate-400 text-[10px]">${idx + 1}</td>
+              <td class="p-3">
+                <span class="text-[9px] uppercase font-bold text-slate-400 block">${item.roomName}</span>
+                <span class="font-bold text-slate-900">${item.name}</span>
+                <button onclick="openDimensionTakeoff('${item.id}')" class="text-[10px] text-blue-600 hover:underline flex items-center gap-1 mt-0.5 cursor-pointer">
+                  <i data-lucide="ruler" class="w-3 h-3"></i> Smart Takeoff (L × W)
+                </button>
+              </td>
+              <td class="p-3 text-center bg-indigo-50/30 border-x border-indigo-100">
+                <div class="flex items-center justify-center gap-1">
+                  <input type="number" step="any" value="${item.qty}" 
+                    onchange="updateWorkbenchQty('${item.id}', this.value)"
+                    class="w-16 p-1 text-center font-mono font-bold bg-white border border-indigo-300 rounded text-slate-900 focus:ring-1 focus:ring-indigo-500 outline-none text-xs" />
+                  <span class="text-[10px] font-bold text-slate-500 uppercase">${item.unit}</span>
+                </div>
+              </td>
+              <!-- TIER 1 -->
+              <td class="p-3">
+                <div class="text-[11px] text-slate-600 line-clamp-1 mb-1">${item.t1.spec}</div>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1">
+                    <span class="text-slate-400 font-mono text-[10px]">₹</span>
+                    <input type="number" value="${item.t1.rate}" 
+                      onchange="updateWorkbenchRate('${item.id}', 't1', this.value)"
+                      class="w-16 p-0.5 font-mono text-slate-800 border-b border-transparent hover:border-slate-300 focus:border-indigo-600 text-xs outline-none" />
+                  </div>
+                  <span class="font-mono font-bold text-slate-800">₹${(item.qty * item.t1.rate).toLocaleString('en-IN')}</span>
+                </div>
+              </td>
+              <!-- TIER 2 (COMFORT) -->
+              <td class="p-3 bg-indigo-50/30 border-x border-indigo-200">
+                <div class="text-[11px] font-bold text-indigo-950 line-clamp-1 mb-1">${item.t2.spec}</div>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1">
+                    <span class="text-indigo-400 font-mono text-[10px]">₹</span>
+                    <input type="number" value="${item.t2.rate}" 
+                      onchange="updateWorkbenchRate('${item.id}', 't2', this.value)"
+                      class="w-16 p-0.5 font-mono font-bold text-indigo-900 border-b border-transparent hover:border-indigo-400 focus:border-indigo-600 text-xs outline-none" />
+                    <span class="text-[9px] font-bold text-emerald-600 px-1 py-0.5 rounded bg-emerald-50 border border-emerald-200 font-mono">${item.t2.margin}%</span>
+                  </div>
+                  <span class="font-mono font-black text-indigo-950 text-xs">₹${(item.qty * item.t2.rate).toLocaleString('en-IN')}</span>
+                </div>
+              </td>
+              <!-- TIER 3 -->
+              <td class="p-3">
+                <div class="text-[11px] text-purple-950 line-clamp-1 mb-1">${item.t3.spec}</div>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1">
+                    <span class="text-purple-400 font-mono text-[10px]">₹</span>
+                    <input type="number" value="${item.t3.rate}" 
+                      onchange="updateWorkbenchRate('${item.id}', 't3', this.value)"
+                      class="w-16 p-0.5 font-mono text-purple-900 border-b border-transparent hover:border-purple-300 focus:border-purple-600 text-xs outline-none" />
+                  </div>
+                  <span class="font-mono font-bold text-purple-950">₹${(item.qty * item.t3.rate).toLocaleString('en-IN')}</span>
+                </div>
+              </td>
+            </tr>
+          `;
+        });
+
+        html += `
+              </tbody>
+            </table>
+          </div>
+        `;
+        container.innerHTML += html;
+      }
+
+      // ===================================
+      // OPTION B: SPATIAL DECK & FOCUS STUDIO
+      // ===================================
+      else if (p === 'optionB') {
+        const selectedItem = workbenchState.items.find(i => i.id === workbenchState.selectedItemId) || workbenchState.items[0];
+
+        let html = `
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <!-- Left 7 cols: Space Cards Deck -->
+            <div class="lg:col-span-7 space-y-3">
+              <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Select Component to Inspect:</div>
+        `;
+
+        items.forEach(item => {
+          const isSel = item.id === selectedItem.id;
+          html += `
+            <div onclick="workbenchState.selectedItemId = '${item.id}'; renderWorkbench();"
+              class="p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                isSel
+                  ? 'bg-indigo-50/80 border-indigo-300 shadow-xs ring-1 ring-indigo-400/20'
+                  : 'bg-white border-slate-200 hover:border-slate-300'
+              }">
+              <div class="min-w-0 flex-grow">
+                <span class="text-[9px] uppercase font-bold text-slate-400">${item.roomName} &bull; ${item.category}</span>
+                <h4 class="text-xs font-bold text-slate-900 truncate">${item.name}</h4>
+                <p class="text-[11px] text-slate-500 truncate mt-0.5">${item.t2.spec}</p>
+                <div class="mt-1 flex items-center gap-2 text-[10px] font-mono text-slate-500">
+                  <span>Unit Rate: <strong class="text-slate-800">₹${item.t2.rate}/${item.unit}</strong></span>
+                  <span>&bull;</span>
+                  <span>Margin: <strong class="text-emerald-700">${item.t2.margin}%</strong></span>
+                </div>
+              </div>
+
+              <!-- Quantity Stepper -->
+              <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 p-1 rounded-lg shrink-0" onclick="event.stopPropagation();">
+                <button onclick="updateWorkbenchQty('${item.id}', ${item.qty - 1})" class="w-6 h-6 rounded bg-white hover:bg-slate-100 text-slate-700 font-bold flex items-center justify-center border border-slate-200">-</button>
+                <input type="number" value="${item.qty}" onchange="updateWorkbenchQty('${item.id}', this.value)" class="w-12 text-center font-mono font-bold text-xs bg-transparent outline-none" />
+                <button onclick="updateWorkbenchQty('${item.id}', ${item.qty + 1})" class="w-6 h-6 rounded bg-white hover:bg-slate-100 text-slate-700 font-bold flex items-center justify-center border border-slate-200">+</button>
+              </div>
+
+              <div class="text-right font-mono font-bold text-slate-900 text-xs shrink-0 w-24">
+                ₹${(item.qty * item.t2.rate).toLocaleString('en-IN')}
+              </div>
+            </div>
+          `;
+        });
+
+        html += `
+            </div>
+
+            <!-- Right 5 cols: Multi-Tier Spectrum Drawer -->
+            <div class="lg:col-span-5 bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
+              <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div>
+                  <span class="text-[9px] uppercase tracking-wider font-extrabold text-indigo-600">Tier Spectrum Inspector</span>
+                  <h3 class="text-xs font-bold text-slate-900 truncate max-w-[240px]">${selectedItem.name}</h3>
+                </div>
+                <button onclick="openDimensionTakeoff('${selectedItem.id}')" class="px-2 py-1 rounded bg-white border border-slate-300 text-slate-700 font-bold text-[10px] flex items-center gap-1">
+                  <i data-lucide="ruler" class="w-3 h-3 text-blue-600"></i> Auto Takeoff
+                </button>
+              </div>
+
+              <!-- 3 Tier Compare Cards -->
+              <div class="space-y-2.5">
+                <!-- Tier 1 -->
+                <div class="p-3 bg-white rounded-lg border border-slate-200 text-xs space-y-1">
+                  <div class="flex justify-between items-center">
+                    <span class="font-bold text-slate-700 text-[11px]">Tier 1: Essential</span>
+                    <span class="font-mono font-bold text-slate-900">₹${(selectedItem.qty * selectedItem.t1.rate).toLocaleString('en-IN')}</span>
+                  </div>
+                  <p class="text-[11px] text-slate-500">${selectedItem.t1.spec}</p>
+                </div>
+
+                <!-- Tier 2 (Active) -->
+                <div class="p-3 bg-indigo-50/70 rounded-lg border border-indigo-200 text-xs space-y-1 ring-1 ring-indigo-400/30">
+                  <div class="flex justify-between items-center">
+                    <span class="font-bold text-indigo-950 text-[11px] flex items-center gap-1">
+                      Tier 2: Comfort (Active) <span class="text-[9px] bg-indigo-600 text-white px-1.5 py-0.2 rounded">Target</span>
+                    </span>
+                    <span class="font-mono font-bold text-indigo-950">₹${(selectedItem.qty * selectedItem.t2.rate).toLocaleString('en-IN')}</span>
+                  </div>
+                  <p class="text-[11px] text-indigo-900 font-medium">${selectedItem.t2.spec}</p>
+                  <div class="pt-1 flex items-center justify-between text-[10px]">
+                    <span class="text-indigo-700 font-mono">Rate: ₹${selectedItem.t2.rate}/${selectedItem.unit}</span>
+                    <button onclick="upgradeWorkbenchSpec('${selectedItem.id}', 't2')" class="text-indigo-600 font-bold hover:underline">
+                      &uarr; Swap to High-Gloss PU
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Tier 3 -->
+                <div class="p-3 bg-white rounded-lg border border-purple-200 text-xs space-y-1">
+                  <div class="flex justify-between items-center">
+                    <span class="font-bold text-purple-950 text-[11px]">Tier 3: Luxury Harmony</span>
+                    <span class="font-mono font-bold text-purple-950">₹${(selectedItem.qty * selectedItem.t3.rate).toLocaleString('en-IN')}</span>
+                  </div>
+                  <p class="text-[11px] text-slate-500">${selectedItem.t3.spec}</p>
+                  <div class="pt-1 text-right">
+                    <button onclick="upgradeWorkbenchSpec('${selectedItem.id}', 't3')" class="text-purple-600 font-bold text-[10px] hover:underline">
+                      &uarr; Elevate to Statuario / Fluted Oak
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-blue-800 flex items-start gap-2">
+                <i data-lucide="sparkles" class="w-4 h-4 text-blue-600 shrink-0 mt-0.5"></i>
+                <p>Studio Brain: Shifting this item from Comfort to Luxury adds ₹${((selectedItem.t3.rate - selectedItem.t2.rate) * selectedItem.qty).toLocaleString('en-IN')} to contract revenue and lifts blended margin by +0.4%.</p>
+              </div>
+            </div>
+          </div>
+        `;
+        container.innerHTML += html;
+      }
+
+      // ==========================================================
+      // OPTION C: DUAL-MODE FLUID WORKBENCH (GRID vs DEEP STUDIO)
+      // ==========================================================
+      else {
+        if (workbenchState.mode === 'grid') {
+          // FAST GRID VIEW
+          let html = `
+            <div class="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px]">
+                    <th class="p-3 w-8">#</th>
+                    <th class="p-3 w-48">Room & Item Name</th>
+                    <th class="p-3 w-28 text-center bg-indigo-50/50">Spine Qty</th>
+                    <th class="p-3">Specification Detail (Comfort Baseline)</th>
+                    <th class="p-3 w-24 text-right">Sell Rate</th>
+                    <th class="p-3 w-20 text-center">GM %</th>
+                    <th class="p-3 w-28 text-right">Line Total</th>
+                    <th class="p-3 w-24 text-center">Smart Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+          `;
+
+          items.forEach((item, idx) => {
+            html += `
+              <tr class="hover:bg-slate-50/90 transition-colors">
+                <td class="p-3 font-mono text-slate-400 text-[10px]">${idx + 1}</td>
+                <td class="p-3">
+                  <span class="text-[9px] uppercase font-bold text-slate-400 block">${item.roomName}</span>
+                  <span class="font-bold text-slate-900">${item.name}</span>
+                </td>
+                <td class="p-3 text-center bg-indigo-50/30">
+                  <div class="flex items-center justify-center gap-1">
+                    <input type="number" step="any" value="${item.qty}"
+                      onchange="updateWorkbenchQty('${item.id}', this.value)"
+                      class="w-16 p-1 text-center font-mono font-bold bg-white border border-slate-300 rounded text-slate-900 focus:border-indigo-600 outline-none text-xs" />
+                    <span class="text-[10px] font-bold text-slate-500 uppercase">${item.unit}</span>
+                  </div>
+                </td>
+                <td class="p-3">
+                  <input type="text" value="${item.t2.spec}" 
+                    onchange="workbenchState.items.find(i=>i.id==='${item.id}').t2.spec = this.value; showToast('Saved specification edit!');"
+                    class="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-600 outline-none text-slate-700 text-xs py-0.5" />
+                </td>
+                <td class="p-3 text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <span class="text-slate-400 font-mono text-[10px]">₹</span>
+                    <input type="number" value="${item.t2.rate}" 
+                      onchange="updateWorkbenchRate('${item.id}', 't2', this.value)"
+                      class="w-16 p-1 text-right font-mono font-bold bg-white border border-slate-200 rounded text-slate-900 focus:border-indigo-600 outline-none text-xs" />
+                  </div>
+                </td>
+                <td class="p-3 text-center">
+                  <span class="px-2 py-0.5 rounded font-mono font-bold text-[10px] ${
+                    item.t2.margin >= 30 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                  }">
+                    ${item.t2.margin}%
+                  </span>
+                </td>
+                <td class="p-3 text-right font-mono font-bold text-slate-900">
+                  ₹${(item.qty * item.t2.rate).toLocaleString('en-IN')}
+                </td>
+                <td class="p-3 text-center">
+                  <div class="flex items-center justify-center gap-1.5">
+                    <button onclick="openDimensionTakeoff('${item.id}')" title="Smart Takeoff" class="p-1 rounded hover:bg-slate-200 text-slate-600 cursor-pointer">
+                      <i data-lucide="ruler" class="w-3.5 h-3.5 text-blue-600"></i>
+                    </button>
+                    <button onclick="upgradeWorkbenchSpec('${item.id}', 't2')" title="1-Click Spec Upgrade" class="p-1 rounded hover:bg-slate-200 text-slate-600 cursor-pointer">
+                      <i data-lucide="arrow-up-right" class="w-3.5 h-3.5 text-indigo-600"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          });
+
+          html += `
+                </tbody>
+              </table>
+            </div>
+          `;
+          container.innerHTML += html;
+        } else {
+          // DEEP STUDIO VIEW (ASSEMBLY BREAKDOWN)
+          let html = `
+            <div class="space-y-4">
+              <div class="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl text-xs text-indigo-900 flex items-center justify-between">
+                <span><strong>Deep Assembly Mode:</strong> Inspecting unit rates decomposed into Materials, Labor, Hardware, and Studio Margin.</span>
+                <span class="font-mono text-[10px] text-indigo-700">Parametric Formula Active</span>
+              </div>
+          `;
+
+          items.forEach(item => {
+            const matCost = Math.round(item.t2.cost * 0.65);
+            const labCost = Math.round(item.t2.cost * 0.35);
+            const marginAmt = item.t2.rate - item.t2.cost;
+
+            html += `
+              <div class="p-4 rounded-xl border border-slate-200 bg-white shadow-xs space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                  <div>
+                    <span class="text-[9px] uppercase font-bold text-slate-400">${item.roomName} &bull; ${item.category}</span>
+                    <h4 class="text-sm font-bold text-slate-900">${item.name}</h4>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="text-xs font-mono">Qty: <strong>${item.qty} ${item.unit}</strong></span>
+                    <span class="text-xs font-mono font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded">
+                      Total: ₹${(item.qty * item.t2.rate).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Assembly Formula Pills -->
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
+                  <div class="p-2 rounded bg-slate-50 border border-slate-200">
+                    <span class="text-[9px] uppercase text-slate-400 font-bold block">Materials Substrate</span>
+                    <span class="font-mono font-bold text-slate-800">₹${matCost}/${item.unit}</span>
+                  </div>
+                  <div class="p-2 rounded bg-slate-50 border border-slate-200">
+                    <span class="text-[9px] uppercase text-slate-400 font-bold block">Trade Labor</span>
+                    <span class="font-mono font-bold text-slate-800">₹${labCost}/${item.unit}</span>
+                  </div>
+                  <div class="p-2 rounded bg-slate-50 border border-slate-200">
+                    <span class="text-[9px] uppercase text-slate-400 font-bold block">Prime Cost</span>
+                    <span class="font-mono font-bold text-slate-800">₹${item.t2.cost}/${item.unit}</span>
+                  </div>
+                  <div class="p-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-900">
+                    <span class="text-[9px] uppercase text-emerald-600 font-bold block">Studio Margin (${item.t2.margin}%)</span>
+                    <span class="font-mono font-bold text-emerald-700">+₹${marginAmt}/${item.unit}</span>
+                  </div>
+                  <div class="p-2 rounded bg-indigo-50 border border-indigo-200 text-indigo-950">
+                    <span class="text-[9px] uppercase text-indigo-600 font-bold block">Final Client Sell Rate</span>
+                    <span class="font-mono font-extrabold text-indigo-900 text-sm">₹${item.t2.rate}/${item.unit}</span>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between text-xs pt-1">
+                  <div class="text-[11px] text-slate-500 font-medium">
+                    Specification: <span class="text-slate-800 font-bold">${item.t2.spec}</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button onclick="upgradeWorkbenchSpec('${item.id}', 't2')" class="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px]">
+                      &uarr; Upgrade Spec
+                    </button>
+                    <button onclick="openDimensionTakeoff('${item.id}')" class="px-2.5 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px]">
+                      Takeoff Calculator
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `;
+          });
+
+          html += `</div>`;
+          container.innerHTML += html;
+        }
+      }
+
+      lucide.createIcons();
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadScenario('civil_reno');
+      lucide.createIcons();
+      renderSimulator();
+      switchEditorParadigm('optionC');
+    });
+  </script>
+</body>
+</html>
