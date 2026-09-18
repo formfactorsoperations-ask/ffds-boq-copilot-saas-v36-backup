@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { doc, collection, onSnapshot, setDoc, updateDoc, writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from './firebaseClient';
 import { JOURNEY_STEPS, PHASES, STAGE_LABELS, JourneyStepDef } from '../constants/journeyConstants';
@@ -317,8 +317,19 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
         const isDone = evaluateAutoStep(step);
         if (isDone) {
           step.status = 'done';
-          step.completedAt = step.completedAt || new Date();
-          step.completedByName = step.completedByName || 'System Auto-close';
+          /*
+            `new Date()` here was a lie told every render.
+
+            `steps` is rebuilt above with completedAt: null, so the old
+            `step.completedAt || new Date()` could only ever be now — the
+            screen showed a self-validating step as cleared at whatever moment
+            the memo last ran. The real first sighting is persisted by the
+            effect below; until one exists the honest answer is nothing.
+          */
+          const rec = manualSteps[step.id];
+          const seen = rec?.firstDoneObserved ? rec.firstDoneAt : null;
+          step.completedAt = seen?.toDate ? seen.toDate() : (seen instanceof Date ? seen : null);
+          step.completedByName = step.completedByName || 'Completed automatically';
         } else {
           if (!activeSetInPhase[step.phase]) {
             step.status = 'active';
@@ -328,10 +339,12 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
           }
         }
       } else if (isPastPhase && step.statusSource === 'manual') {
-        // In a past stage that has already been cleared, mark manual historical milestones done
+        // In a past stage that has already been cleared, mark manual historical
+        // milestones done. No date is invented — this is inferred from the
+        // stage having moved on, and nobody recorded when it happened.
         step.status = 'done';
-        step.completedAt = step.completedAt || new Date();
-        step.completedByName = step.completedByName || 'Stage Completion';
+        step.completedAt = null;
+        step.completedByName = step.completedByName || 'Cleared with the stage';
       } else {
         if (!activeSetInPhase[step.phase]) {
           step.status = 'active';
@@ -344,6 +357,47 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
 
     return steps;
   }, [evaluateAutoStep, manualSteps, projectContext]);
+
+  /*
+    Stamp a self-validating step the first time it is seen done.
+
+    Written under firstDoneAt only, with no status field, so the auto
+    rule remains the authority: a record here must never turn a step
+    into a manual done that then ignores its own prerequisites.
+
+    Steps already done before this shipped get stamped on first load,
+    which records when the app noticed rather than when the work
+    happened. That is why the field is not called completedAt and why
+    phase timing below ignores anything stamped in the same pass.
+  */
+  /* Steps this session has watched sitting open, so a later done is real. */
+  const seenOpenRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    computedSteps.forEach((s) => { if (s.status !== 'done') seenOpenRef.current.add(s.id); });
+  }, [computedSteps]);
+
+  useEffect(() => {
+    if (loading || !projectId || !db) return;
+    const unstamped = computedSteps.filter(
+      (s) => s.status === 'done' && s.isAutoDerived && !manualSteps[s.id]?.firstDoneAt,
+    );
+    if (unstamped.length === 0) return;
+    unstamped.forEach((s) => {
+      setDoc(
+        doc(db, `projects/${projectId}/journeySteps/${s.id}`),
+        {
+          firstDoneAt: Timestamp.now(),
+          // True only when this session watched the step turn from open to
+          // done. A step already done when the app first looked is a backfill:
+          // the stamp records when we noticed, which is not when it happened,
+          // so nothing downstream is allowed to treat it as a completion time.
+          firstDoneObserved: seenOpenRef.current.has(s.id),
+        },
+        { merge: true },
+      ).catch((err) => console.warn('Could not stamp journey step:', s.id, err?.code || err));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computedSteps, manualSteps, loading, projectId]);
 
   // Phase Progress calculation
   const phaseProgress = useMemo(() => {

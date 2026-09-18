@@ -1800,7 +1800,19 @@ export interface CommunicationLogItem {
 
 export interface ManualJourneyStep {
     stepId: string;
-    status: 'done' | 'pending';
+    /* Absent on a record written purely to timestamp an auto-completion. */
+    status?: 'done' | 'pending';
+    /**
+     * When the engine first observed a self-validating step as done.
+     *
+     * Not the same claim as `completedAt`: it is the first time the app
+     * noticed, which for anything completed before this field existed is
+     * simply unknown. Stored separately so the auto rule stays the authority
+     * on status — a record carrying only this must not make a step stick.
+     */
+    firstDoneAt?: any | null;
+    /** True only if the app watched this step turn from open to done. */
+    firstDoneObserved?: boolean;
     completedAt: any | null; // Timestamp
     completedBy: string | null;
     completedByName: string | null;

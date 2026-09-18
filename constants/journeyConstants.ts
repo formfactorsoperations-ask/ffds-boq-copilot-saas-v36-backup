@@ -34,19 +34,13 @@ export interface JourneyStepDef {
 export const JOURNEY_STEPS: JourneyStepDef[] = [
   // PHASE 1 — ACQUISITION
   {
-    id: "terms_docket_acknowledged", n: 1, phase: 0, title: "Terms Docket Acknowledged",
-    description: "Client has viewed and acknowledged the Terms of Engagement Docket.",
-    illustration: "terms_docket_acknowledged", statusSource: "auto",
-    autoRule: 'termsDocket.status === "acknowledged"', linkedFeature: "Studio → Terms Docket", linkedTab: "terms-docket", prerequisiteIds: []
-  },
-  {
-    id: "discovery_scheduled", n: 2, phase: 0, title: "Discovery Scheduled",
+    id: "discovery_scheduled", n: 1, phase: 0, title: "Discovery Scheduled",
     description: "Initial site visit or office meeting scheduled with the client.",
     illustration: "discovery_scheduled", statusSource: "manual",
-    autoRule: null, linkedFeature: "Dashboard", linkedTab: "dashboard", prerequisiteIds: ["terms_docket_acknowledged"]
+    autoRule: null, linkedFeature: "Dashboard", linkedTab: "dashboard", prerequisiteIds: []
   },
   {
-    id: "discovery_completed", n: 3, phase: 0, title: "Discovery Completed",
+    id: "discovery_completed", n: 2, phase: 0, title: "Discovery Completed",
     description: "Initial meeting concluded. Ready to begin design ideation.",
     illustration: "discovery_completed", statusSource: "manual",
     autoRule: null, linkedFeature: "Brief & Site", linkedTab: "leadiq", prerequisiteIds: ["discovery_scheduled"]
@@ -54,55 +48,72 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
 
   // PHASE 2 — DESIGN
   {
-    id: "brief_frozen", n: 4, phase: 1, title: "Brief Frozen",
+    id: "brief_frozen", n: 3, phase: 1, title: "Brief Frozen",
     description: "Client requirements, theme, and scope of work frozen.",
     illustration: "brief_frozen", statusSource: "auto",
     autoRule: "project.briefFrozenAt exists", linkedFeature: "Brief & Site", linkedTab: "leadiq", prerequisiteIds: ["discovery_completed"]
   },
   {
-    id: "space_planning_presented", n: 5, phase: 1, title: "Space Planning Presented",
+    id: "space_planning_presented", n: 4, phase: 1, title: "Space Planning Presented",
     description: "2D layouts and structural changes presented to client.",
     illustration: "space_planning_presented", statusSource: "auto",
     autoRule: 'communicationLog["space_planning_review"].status === "sent"', linkedFeature: "Communication → Space Plan", linkedTab: "comms-tracker", prerequisiteIds: ["brief_frozen"]
   },
   {
-    id: "space_planning_approved", n: 6, phase: 1, title: "Space Planning Approved",
+    id: "space_planning_approved", n: 5, phase: 1, title: "Space Planning Approved",
     description: "Client has signed off on the 2D layout.",
     illustration: "space_planning_approved", statusSource: "manual",
     autoRule: null, linkedFeature: "Drawing Tracker", linkedTab: "drawing-tracker", prerequisiteIds: ["space_planning_presented"]
   },
   {
-    id: "visuals_3d_developed", n: 7, phase: 1, title: "3D Visuals Developed",
+    id: "visuals_3d_developed", n: 6, phase: 1, title: "3D Visuals Developed",
     description: "Renders or visual concept boards prepared internally.",
     illustration: "visuals_3d_developed", statusSource: "manual",
     autoRule: null, linkedFeature: "Revision Studio", linkedTab: "revision-studio", prerequisiteIds: ["space_planning_approved"]
   },
   {
-    id: "visuals_3d_shared", n: 8, phase: 1, title: "3D Visuals Shared",
+    id: "visuals_3d_shared", n: 7, phase: 1, title: "3D Visuals Shared",
     description: "Renders shared with client for review.",
     illustration: "visuals_3d_shared", statusSource: "auto",
     autoRule: 'communicationLog["3d_visuals_review"].status === "sent"', linkedFeature: "Communication → 3D Visuals", linkedTab: "comms-tracker", prerequisiteIds: ["visuals_3d_developed"]
   },
   {
-    id: "revisions_incorporated", n: 9, phase: 1, title: "Revisions Incorporated",
+    id: "revisions_incorporated", n: 8, phase: 1, title: "Revisions Incorporated",
     description: "Feedback integrated. Tracked via revisions list or comms log.",
     illustration: "revisions_incorporated", statusSource: "auto",
     autoRule: 'revisions collection has ≥1 doc OR communicationLog["revision_acknowledged"].status === "sent"', linkedFeature: "Revision Studio", linkedTab: "revision-studio", prerequisiteIds: ["visuals_3d_shared"]
   },
   {
-    id: "design_approved", n: 10, phase: 1, title: "Design Approved",
+    id: "design_approved", n: 9, phase: 1, title: "Design Approved",
     description: "Final client sign-off on 3D visuals and spatial design.",
     illustration: "design_approved", statusSource: "auto",
     autoRule: "project.designApprovedAt exists", linkedFeature: "Design Gate", linkedTab: "design-gate", prerequisiteIds: ["revisions_incorporated"]
   },
   {
-    id: "boq_shared", n: 11, phase: 1, title: "BOQ Shared",
+    id: "boq_shared", n: 10, phase: 1, title: "BOQ Shared",
     description: "Final formal costing document shared with client.",
     illustration: "boq_shared", statusSource: "auto",
     autoRule: 'communicationLog["design_approval_boq"].status === "sent" AND project.boqTotalValue > 0', linkedFeature: "Communication → BOQ", linkedTab: "comms-tracker", prerequisiteIds: ["design_approved"]
   },
 
   // PHASE 3 — CONTRACTING
+  /*
+    The docket used to open this list, with discovery_scheduled waiting on
+    it — the studio could not schedule a site visit until the client had
+    acknowledged terms. FFDS quotes first and signs on acceptance, so it
+    moves to contracting.
+
+    Deliberately left without a prerequisite. Chaining it behind boq_shared
+    reads well but the prerequisite check runs before the auto-rule and
+    short-circuits to "locked", so a docket already acknowledged would show
+    locked on any project that had not yet shared a BOQ.
+  */
+  {
+    id: "terms_docket_acknowledged", n: 11, phase: 2, title: "Terms Docket Acknowledged",
+    description: "Client has viewed and acknowledged the Terms of Engagement Docket.",
+    illustration: "terms_docket_acknowledged", statusSource: "auto",
+    autoRule: 'termsDocket.status === "acknowledged"', linkedFeature: "Studio → Terms Docket", linkedTab: "terms-docket", prerequisiteIds: []
+  },
   {
     id: "payment_schedule_sent", n: 12, phase: 2, title: "Payment Schedule Sent",
     description: "Schedule of advances generated and issued to client.",

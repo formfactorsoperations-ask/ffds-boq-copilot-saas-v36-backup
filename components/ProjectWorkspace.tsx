@@ -64,14 +64,22 @@ export function ProjectWorkspace({
   const lifecycle = projectContext.lifecycle || { stage: 1, subState: 'pending', gates: {} };
   const currentStage = lifecycle.stage;
 
+  /*
+    Scoping, pricing and the proposal are how the work is won, so they open the
+    moment a project exists.
+
+    They used to wait on currentStage >= 2, which is only reached when a design
+    or proposal document is signed off. The one screen that could produce that
+    signature sat inside the locked stage 3, so the only way in was the manual
+    advance — which marks the proposalAccepted gate done in order to unlock the
+    screens where the proposal is written. Unlocking honestly beats recording
+    an acceptance that has not happened.
+
+    Stage 4 onward still waits for the client's yes.
+  */
   const isStageLocked = (stageNum: number) => {
-    // Stage 1 (Initial Consultation) is never locked
-    if (stageNum === 1) return false;
-    // Stages 2, 3, and 4 are unlocked once Stage 1 is complete (currentStage >= 2)
-    if (stageNum === 2 || stageNum === 3 || stageNum === 4) {
-      return currentStage < 2;
-    }
-    // Stage 5 and 6 require reaching their respective stages
+    if (stageNum <= 3) return false;
+    if (stageNum === 4) return currentStage < 2;
     return currentStage < stageNum;
   };
   
@@ -819,7 +827,7 @@ export function ProjectWorkspace({
                                     </>
                                   ) : (
                                     <>
-                                      Unlocks when the Initial Consultation is complete.
+                                      Unlocks when the client accepts the proposal or signs the Terms Docket.
                                     </>
                                   )}
                                 </div>

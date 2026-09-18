@@ -72,24 +72,23 @@ export const NAV_CONFIG: NavStage[] = [
     stage: 1,
     label: STAGE_LABELS[1],
     items: [
-      { label: "Brief & Site", route: "leadiq" },
-      { 
-        label: "Terms Docket", 
-        route: "terms-docket",
-        statusBadge: (ctx) => {
-          if (ctx.designAgreementSignoff?.status === 'signed') return "Signed ✓";
-          if (ctx.designAgreementSignoff?.status === 'sent') return "Sent ✉";
-          return null;
-        }
-      }
+      /* The Terms Docket moved to stage 3. It is the design agreement, and
+         FFDS quotes before it signs: leaving it here made the whole
+         commercial phase wait on a signature that normally follows the
+         proposal. Stage 1 is discovery, and discovery alone. */
+      { label: "Brief & Site", route: "leadiq" }
     ]
   },
   {
     stage: 2,
     label: STAGE_LABELS[2],
     items: [
-      { label: "BOQ Editor", route: "boq-editor" },
+      /* Tiers first, because a BOQ belongs to a tier: its lines live at
+         projects/{id}/tierBoq/{tierId}, the editor bails with "Please select a
+         proposal tier" when none is active, and creating one here already
+         hands off to the editor. The rail used to list the dead end first. */
       { label: "Pricing & Tiers", route: "ops", money: true },
+      { label: "BOQ Editor", route: "boq-editor" },
       { label: "Health Check & Audit", route: "analytics", money: true }
     ]
   },
@@ -103,6 +102,15 @@ export const NAV_CONFIG: NavStage[] = [
          It sat in stage 4 behind a contract-and-design-agreement lock, which
          put the welcome pack after the two documents it is meant to prepare
          the client for. It now opens as soon as the proposal is accepted. */
+      { 
+        label: "Terms Docket", 
+        route: "terms-docket",
+        statusBadge: (ctx) => {
+          if (ctx.designAgreementSignoff?.status === 'signed') return "Signed ✓";
+          if (ctx.designAgreementSignoff?.status === 'sent') return "Sent ✉";
+          return null;
+        }
+      },
       { label: "Onboarding Kit", route: "onboarding" }
     ]
   },

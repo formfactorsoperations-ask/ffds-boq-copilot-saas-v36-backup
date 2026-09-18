@@ -157,7 +157,6 @@ const DEFAULT_LEAD_PROFILE: LeadProfile = {
 
 export default function App() {
   // Global State
-  console.log("App.tsx is rendering...");
   const { orgData, currentUserAuth, currentRole, teamMembers } = useOrg();
   const [activeTab, setActiveTab] = useState("home");
   const [showWizardOverride, setShowWizardOverride] = useState(false);
@@ -181,7 +180,7 @@ export default function App() {
     is parsed inside init(), so the effect below retracts it as soon as we know.
   */
   const [showLanding, setShowLanding] = useState(
-    () => !localStorage.getItem("ffds_seen_landing"),
+    () => new URLSearchParams(window.location.search).has("landing"),
   );
   useEffect(() => {
     if (!showLanding) localStorage.setItem("ffds_seen_landing", "1");
@@ -707,7 +706,11 @@ export default function App() {
     if (!authResolved || !isDataLoaded) return;
 
     if (!authProfile) {
-      setAppMode("login");
+      if (portalProjectId) {
+        setAppMode("login");
+      } else {
+        setAppMode("ops");
+      }
       return;
     }
 
@@ -754,12 +757,16 @@ export default function App() {
     return () => { cancelled = true; };
   }, [authResolved, authProfile, isDataLoaded]);
 
+  const lastLoadedTenantRef = useRef<string | null>(null);
   // Re-fetch all data when tenantId changes (multi-tenant isolation safety)
   useEffect(() => {
     if (!orgData?.tenantId) return;
     
     // Skip if data is not loaded yet (since init() will load it anyway)
     if (!isDataLoaded) return;
+
+    if (lastLoadedTenantRef.current === orgData?.tenantId) return;
+    lastLoadedTenantRef.current = orgData?.tenantId;
 
     async function reloadTenantData() {
       console.log(`Tenant changed to ${orgData?.tenantId} - reloading library...`);
@@ -2391,12 +2398,14 @@ export default function App() {
 
   if (appMode === "login") {
     return (
-      <LoginScreen
-        onLoginOps={() => {
-          localStorage.setItem("ffds_app_mode", "ops");
-          setAppMode("ops");
-        }}
-      />
+      <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+        <LoginScreen
+          onLoginOps={() => {
+            localStorage.setItem("ffds_app_mode", "ops");
+            setAppMode("ops");
+          }}
+        />
+      </Suspense>
     );
   }
 
@@ -2484,7 +2493,6 @@ export default function App() {
     );
   }
 
-  console.log("App render returned JSX!");
   return (
     <PageHeaderProvider route={activeTab}>
       <div className={`min-h-screen overflow-x-hidden relative ${isProjectTab && hasProjectData ? "md:h-screen md:overflow-hidden" : ""}`}>

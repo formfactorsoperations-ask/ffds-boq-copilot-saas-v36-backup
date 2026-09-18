@@ -1627,7 +1627,18 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             <th className="p-4 w-32 text-center">% / Amt</th>
                             <th className="p-4 text-right min-w-[150px] bg-[#F6F7FB]/30 text-[#12182F] font-black">Invoice Amount</th>
                             {isExecution && billablePercent < 100 && (
-                                <th className="p-4 text-right min-w-[120px] bg-amber-50/10 text-amber-900 font-black">Cash</th>
+                                <>
+                                    <th className="p-4 text-right min-w-[120px] bg-amber-50/10 text-amber-900 font-black">Cash</th>
+                                    {/*
+                                      Invoice and cash sat side by side with no total, so
+                                      this was the one view that never said what the client
+                                      owes on a milestone — the Simple card, Collections and
+                                      the realization pipeline all do. Shown only when there
+                                      is a split; without one it would repeat the invoice
+                                      column exactly.
+                                    */}
+                                    <th className="p-4 text-right min-w-[130px] bg-[#F6F7FB]/60 text-[#12182F] font-black">Total Owed</th>
+                                </>
                             )}
                             <th className="p-4 text-center w-28">Status</th>
                             <th className="p-4 text-right w-32">Action</th>
@@ -1885,9 +1896,15 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                     </td>
 
                                     {isExecution && billablePercent < 100 && (
-                                        <td className="p-4 text-right tabular-nums text-amber-900 bg-amber-50/5 border-l border-[#EDEFF7] font-bold align-top text-sm">
-                                            {formatCurrency(rowCash)}
-                                        </td>
+                                        <>
+                                            <td className="p-4 text-right tabular-nums text-amber-900 bg-amber-50/5 border-l border-[#EDEFF7] font-bold align-top text-sm">
+                                                {formatCurrency(rowCash)}
+                                            </td>
+                                            <td className="p-4 text-right tabular-nums text-[#12182F] bg-[#F6F7FB]/40 border-l border-[#EDEFF7] align-top">
+                                                <div className="font-black text-sm">{formatCurrency(rowInvoiceTotal + rowCash)}</div>
+                                                <div className="text-[9px] text-[#6F779E] font-sans font-medium mt-0.5">invoice + cash</div>
+                                            </td>
+                                        </>
                                     )}
 
                                     <td className="p-4 text-center align-top">
@@ -2078,8 +2095,22 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                 ? 'bg-[#EDE8F5]/50 text-[#2A3A73] border-[#ADBBDA]' 
                                 : 'bg-[#F6F7FB] text-[#5A628A] border-[#E2E5F0]/50';
 
-                        // Total item amount shown (net balance payable to match Advanced view)
-                        const finalItemAmountToShow = rowInvoiceTotal;
+                        /*
+                          What the client owes on this milestone, cash side included.
+
+                          This showed the tax-invoice total alone, so a part-cash
+                          execution milestone read lower here than the same milestone
+                          did in Collections and in the realization pipeline, both of
+                          which count the cash portion as money owed. The Inv | Cash
+                          line directly beneath already breaks this figure into its
+                          two parts, and the Advanced table still lists them in
+                          separate columns, so nothing about the invoice itself is
+                          restated — only the total is now present.
+
+                          Zero for design milestones and for fully billable execution,
+                          so this changes nothing outside a genuine cash split.
+                        */
+                        const finalItemAmountToShow = rowInvoiceTotal + rowCash;
 
                         const isNextUp = i === firstPendingIndex;
 
@@ -3333,11 +3364,33 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
             {/* COLLAPSIBLE FINANCIAL CONTROLS & RATIOS */}
             <div className="bg-white rounded-3xl border border-[#E2E5F0] shadow-sm overflow-hidden">
+                {/*
+                  Collapsed by default, which is right for advanced settings —
+                  but the only thing saying so is the chevron, and flex was
+                  shrinking it from 16px to 6px, and the divider from 1px to 0,
+                  in a narrow column. The header then read as a promise of
+                  controls with nothing underneath. The cluster now wraps
+                  instead of compressing, and the parts that carry meaning
+                  refuse to shrink.
+
+                  It is also a div doing a button's job, so it gets the role,
+                  the focus ring and the keyboard handling to match.
+                */}
                 <div 
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={showFinancialControls}
                     onClick={() => setShowFinancialControls(!showFinancialControls)}
-                    className="p-5 bg-[#F6F7FB]/60 flex justify-between items-center cursor-pointer hover:bg-[#F6F7FB] transition-colors border-b border-[#EDEFF7]"
+                    onKeyDown={e => {
+                        if (e.target !== e.currentTarget) return;   // let the inner buttons be
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setShowFinancialControls(v => !v);
+                        }
+                    }}
+                    className="p-5 bg-[#F6F7FB]/60 flex flex-wrap justify-between items-center gap-y-3 gap-x-3 cursor-pointer hover:bg-[#F6F7FB] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#3D52A0] transition-colors border-b border-[#EDEFF7]"
                 >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap justify-end">
                         <div className="p-2 bg-[#E2E5F0]/60 text-[#3A416B] rounded-xl">
                             <CalculatorIcon className="w-5 h-5" />
                         </div>
@@ -3369,11 +3422,13 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         >
                             {isResetting ? 'Confirm Reset' : 'Reset All'}
                         </button>
-                        <div className="h-4 w-px bg-[#E2E5F0]" />
-                        <span className="text-xs font-bold text-[#334486] bg-[#EDE8F5] px-2 py-1 rounded">
+                        <div className="h-4 w-px bg-[#E2E5F0] shrink-0" />
+                        <span className="text-xs font-bold text-[#334486] bg-[#EDE8F5] px-2 py-1 rounded whitespace-nowrap">
                             {billablePercent}% GST / {100 - billablePercent}% Cash
                         </span>
-                        {showFinancialControls ? <ChevronUpIcon className="w-4 h-4 text-[#8E96B8]" /> : <ChevronDownIcon className="w-4 h-4 text-[#8E96B8]" />}
+                        {showFinancialControls
+                            ? <ChevronUpIcon className="w-4 h-4 shrink-0 text-[#8E96B8]" />
+                            : <ChevronDownIcon className="w-4 h-4 shrink-0 text-[#8E96B8]" />}
                     </div>
                 </div>
 

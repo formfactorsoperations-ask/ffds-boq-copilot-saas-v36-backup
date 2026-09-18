@@ -31,16 +31,8 @@ for (const [k, v] of Object.entries(fileEnv)) {
 
 async function startServer() {
   const app = express();
-  /*
-    3000 is the default, not a requirement.
-
-    The port was a literal, so a second instance — a reviewer's, a test run,
-    anything started while the studio's own dev server is up — died on
-    EADDRINUSE with nowhere to go. Nothing here needs 3000 specifically: the
-    client calls /api/* relative to whatever origin served it, and the sign-off
-    links fall back to window.location.origin.
-  */
-  const PORT = Number(process.env.PORT) || 3000;
+  // Environment PORT must strictly bind to 3000 for the platform reverse proxy
+  const PORT = 3000;
 
   process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
@@ -557,7 +549,6 @@ Do NOT invent rooms. Do NOT merge rooms. Return JSON array only.`;
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: { server },
       },
       appType: "spa",
     });
