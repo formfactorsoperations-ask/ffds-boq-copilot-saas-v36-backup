@@ -5,7 +5,7 @@ import Card from "./shared/Card";
 import { BuildingOfficeIcon, PlusIcon, NewFileIcon, DeleteIcon } from "./Icons";
 import { formatClientValue, timeAgo, formatCurrency } from "../lib/utils";
 import { getSingleProjectValue } from "../lib/financialsUtils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Info, PlayCircle, PauseCircle, CheckCircle, FileText, Send, MessageSquare, Briefcase, Zap, Trophy, LayoutDashboard, SlidersHorizontal, XCircle, Pin } from "lucide-react";
 import { ProjectPaymentBadge } from "./PaymentHealth";
 import DocumentMeter from "./ops/DocumentMeter";
@@ -22,7 +22,7 @@ import { useOrg } from "../contexts/OrgContext";
 import { useMomActions } from "../hooks/useMomActions";
 import { getNextActions, NextAction } from "../services/nextActionEngine";
 import { buildDocumentCompleteness, DocumentCompleteness } from "../lib/documentCompleteness";
-import { Lock, ArrowRight, CheckSquare, ChevronDown, ChevronUp } from "lucide-react";
+import { Lock, ArrowRight, CheckSquare, ChevronDown, ChevronUp, Flag, History } from "lucide-react";
 import ProjectStatusTransitionModal from "./ProjectStatusTransitionModal";
 import { CardContainer, CardBody, CardItem } from "./ui/3d-card";
 
@@ -264,6 +264,9 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   onStatusChange,
 }) => {
   const { orgData } = useOrg();
+  /* Hooked once here, never inside the card map -- the number of hook calls
+     per render has to be constant. Everything below reads it from the closure. */
+  const reduceMotion = useReducedMotion();
   const siteSupervisors =
     orgData?.team?.filter((m) => m.role === "Site Supervisor") || [];
   const [viewMode, setViewMode] = useState<"grid" | "compare">("grid");
@@ -1048,16 +1051,17 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
           {/* 3. PROJECT GRID */}
           {viewMode === "grid" && (
             /*
-              items-start, so a card ends where its content ends.
+              Equal heights, deliberately.
 
-              A grid stretches every item to its row's tallest by default, and
-              on this book that meant 356px cards padded out to sit beside
-              484px ones -- eight cards carrying between 40 and 128px of white
-              above the money, with nothing true to put in it. Letting them
-              keep their own height removes the space rather than filling it.
-              The trade is a ragged bottom edge across each row.
+              These cards were briefly allowed to keep their own height, because
+              the slack the grid gave them was landing as a void above the money
+              with nothing true to put in it. The band above now has a Recent
+              slot that is always present and grows, so the slack falls inside a
+              labelled section instead. With somewhere honest for it to go, a
+              uniform row reads as one system rather than as eight cards padded
+              out -- so stretch is back on.
             */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <AnimatePresence>
                 {filteredProjects.map((project, index) => {
                   const metrics = getProjectMetrics(project);
@@ -1104,8 +1108,14 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                   const statusStyle =
                     STATUS_CONFIG[metrics.status] || STATUS_CONFIG["draft"];
 
-                  // CALCULATE PENDING ITEM INDICATORS
-                  const getIndicators = () => {
+                  /* Returns the conditions, not the markup.
+
+                     It used to render its own block and return null when there
+                     was nothing to say, which is half of why the middle of the
+                     card moved around: one card had this section, the next did
+                     not, and everything below it shifted. The band renders the
+                     chips now, in a row that is always present. */
+                  const getConditions = () => {
                     const conditions = [];
 
                     if (metrics.status !== "lost" && metrics.status !== "completed") {
@@ -1197,30 +1207,12 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                       }
                     }
 
-                    if (conditions.length === 0) return null;
-
-                    return (
-                      <div className="mt-3 flex flex-col gap-1.5 mb-1">
-                        {conditions.slice(0, 2).map((c: any, i) => (
-                          <div
-                            key={i}
-                            className={`flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider ${c.isAlert ? 'text-rose-600 font-bold' : 'text-slate-600'}`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${c.dot}`}
-                            ></span>
-                            <span className="truncate">{c.text}</span>
-                          </div>
-                        ))}
-                        {conditions.length > 2 && (
-                          <div className="flex items-center gap-2 mt-0.5 text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                            <span>+{conditions.length - 2} more action{conditions.length - 2 > 1 ? 's' : ''}</span>
-                          </div>
-                        )}
-                      </div>
-                    );
+                    return conditions;
                   };
+
+                  const conditions = getConditions();
+                  const nextMove =
+                    DORMANT.includes(metrics.status) ? null : intel.get(project.id)?.action || null;
 
                   return (
                     <motion.div
@@ -1373,25 +1365,19 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
 
                           {/* Card Content (Name, Client, Metrics, Financial Summary) */}
                           <div className="p-5 flex-grow flex flex-col relative z-20">
-                            {/* The name block gets a surface of its own.
+                            {/* Plain type under a hairline, not a second panel.
 
-                                The card had exactly one bordered thing on it --
-                                the documents panel at the bottom -- so the top
-                                half read as loose text on white. This bookends
-                                it: the same rounded, tinted, inset-highlit
-                                treatment, kept lighter so the documents panel
-                                is still the heavier of the two, with a hairline
-                                between the name and the client so each has an
-                                edge of its own. */}
+                                This was briefly given the same rounded, tinted,
+                                inset-highlit treatment as the documents block,
+                                to bookend it. Two identical surfaces on one card
+                                is worse than none: border, fill and radius each
+                                say "separate object", and spending them twice
+                                flattens the hierarchy instead of building it.
+                                The documents panel keeps the tint because its
+                                colour carries state; the name is the loudest
+                                thing on the card on type alone. */}
                             <CardItem translateZ={Z_LEAD} className="w-full mb-4">
-                              <div
-                                className="rounded-2xl border border-[#E4E8F3] px-3.5 py-3"
-                                style={{
-                                  background:
-                                    'linear-gradient(135deg, #FFFFFF 0%, #F3F5FC 100%)',
-                                  boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.9)',
-                                }}
-                              >
+                              <div className="pb-3 border-b border-slate-100">
                                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mb-0.5">
                                   Project Name
                                 </p>
@@ -1401,7 +1387,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                 >
                                   {project.context?.name || "Unnamed Project"}
                                 </h3>
-                                <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-[#E4E8F3]">
+                                <div className="flex items-center gap-2 mt-2">
                                   <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em]">
                                     Client:
                                   </p>
@@ -1431,120 +1417,192 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                               </div>
                             </CardItem>
 
-                            {/* What this project is waiting for.
+                            {/*
+                              THE MIDDLE BAND: three slots, always all three.
 
-                                Straight off the same nextActionEngine that fed
-                                the old "Today's focus" banner. Putting it on
-                                the card puts it next to the project it is
-                                about, which is where you were going to have to
-                                look anyway. */}
-                            {(() => {
-                              const move = intel.get(project.id)?.action;
-                              if (!move || DORMANT.includes(metrics.status)) return null;
-                              const skin =
-                                move.priority === 'blocker'
-                                  ? 'bg-rose-50 border-rose-100 text-rose-700'
-                                  : move.priority === 'due'
-                                    ? 'bg-amber-50 border-amber-100 text-amber-800'
-                                    : 'bg-slate-50 border-slate-200 text-slate-600';
-                              return (
-                                <CardItem translateZ={Z_DETAIL} className="w-full mb-3">
-                                  <div
-                                    className={`flex items-start gap-2 px-2.5 py-2 rounded-xl border ${skin}`}
-                                    title={move.why}
-                                  >
-                                    {move.blockedBy ? (
-                                      <Lock className="w-3 h-3 shrink-0 mt-[2px]" />
-                                    ) : (
-                                      <ArrowRight className="w-3 h-3 shrink-0 mt-[2px]" />
-                                    )}
-                                    <span className="text-[11px] font-semibold leading-snug">
-                                      {move.title}
-                                      {move.blockedBy && (
-                                        <span className="block font-medium opacity-70 mt-0.5">
-                                          Waiting on {move.blockedBy}
-                                        </span>
-                                      )}
+                              This was four independent blocks -- a next-move
+                              chip, a payment badge row, an indicator list and a
+                              recent line -- each rendering only when it had
+                              something to say. Across a grid that produced a
+                              different middle on every card: one showed a chip
+                              then two dots, its neighbour showed a single green
+                              pill and then nothing, the third showed a chip, a
+                              dot and an activity line. Nothing lined up, so
+                              nothing could be compared at a glance.
+
+                              Now every card answers the same three questions in
+                              the same order, in the same place, with a labelled
+                              gutter so the eye can run straight down a column:
+                              what is next, what is flagged, what happened last.
+                              Each has an explicit empty state -- saying "nothing
+                              waiting" is information; showing nothing is not.
+                            */}
+                            <CardItem translateZ={Z_SURFACE} className="w-full grow flex flex-col">
+                              <div className="mt-3 flex flex-col gap-2.5 h-full">
+
+                                {/* NEXT ------------------------------------
+
+                                    min-h of two lines, and the text clamped to
+                                    two. Without it a long title or a "waiting
+                                    on" sub-line wrapped and pushed the money row
+                                    20px down on that card alone, so the figures
+                                    no longer sat on one line across the row --
+                                    the last thing left that broke the scan. */}
+                                <div className="flex items-start gap-2.5 min-h-[30px]">
+                                  <span className="w-[52px] shrink-0 pt-[3px] flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-[0.1em] text-slate-400">
+                                    <Zap className="w-2.5 h-2.5 shrink-0" strokeWidth={2.6} />
+                                    Next
+                                  </span>
+                                  {nextMove ? (
+                                    (() => {
+                                      const urgent =
+                                        nextMove.priority === 'blocker' || nextMove.priority === 'due';
+                                      const skin =
+                                        nextMove.priority === 'blocker'
+                                          ? 'bg-rose-50 text-rose-700'
+                                          : nextMove.priority === 'due'
+                                            ? 'bg-amber-50 text-amber-800'
+                                            : 'bg-[#F4F6FC] text-[#3D52A0]';
+                                      return (
+                                        <motion.span
+                                          title={nextMove.why}
+                                          /* Only the ones that actually want you
+                                             wave. A banner that flutters on every
+                                             card is wallpaper; one that flutters
+                                             on the four that are blocked is a
+                                             signal. Rotation is a transform, so
+                                             it costs the row no height and the
+                                             alignment holds. */
+                                          animate={
+                                            urgent && !reduceMotion
+                                              ? { rotate: [-0.7, 0.7, -0.5, 0.6, -0.7], y: [0, -0.6, 0, -0.6, 0] }
+                                              : undefined
+                                          }
+                                          transition={{ repeat: Infinity, duration: 5, ease: 'easeInOut' }}
+                                          className={`flex-1 min-w-0 inline-flex items-start gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold leading-snug origin-left ${skin}`}
+                                        >
+                                          {nextMove.blockedBy && (
+                                            <Lock className="w-2.5 h-2.5 shrink-0 mt-[3px]" strokeWidth={2.6} />
+                                          )}
+                                          <span className="min-w-0 line-clamp-1">
+                                            {nextMove.title}
+                                            {nextMove.blockedBy && (
+                                              <span className="font-medium opacity-70">
+                                                {' '}· waiting on {nextMove.blockedBy}
+                                              </span>
+                                            )}
+                                          </span>
+                                        </motion.span>
+                                      );
+                                    })()
+                                  ) : (
+                                    <span className="flex-1 px-2 py-1 text-[11px] font-medium text-slate-400">
+                                      Nothing waiting
                                     </span>
-                                  </div>
-                                </CardItem>
-                              );
-                            })()}
+                                  )}
+                                </div>
 
-                            {/* Action Indicators */}
-                            {metrics.status !== "lost" && (
-                              <CardItem translateZ={Z_SURFACE} className="w-full">
-                                <div className="flex items-center gap-2 mb-4 flex-wrap">
-                                  {project.context?.commsSummary &&
-                                    project.context.commsSummary.pendingCount > 0 && (
-                                      <span className="flex items-center gap-1 px-2 py-1 rounded bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-wider">
-                                        <span className="text-xs">📬</span>{" "}
-                                        {project.context.commsSummary.pendingCount}{" "}
-                                        Comm
+                                {/* FLAGS ----------------------------------- */}
+                                <div className="flex items-start gap-2.5 min-h-[22px]">
+                                  <span className="w-[52px] shrink-0 pt-[3px] flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-[0.1em] text-slate-400">
+                                    <Flag className="w-2.5 h-2.5 shrink-0" strokeWidth={2.6} />
+                                    Flags
+                                  </span>
+                                  {/* One line, never two.
+
+                                      This wrapped when a card had a badge plus
+                                      two conditions, and the wrap pushed Recent
+                                      13px down on that card alone -- the last
+                                      row that would not line up across the grid.
+                                      One condition plus a count says the same
+                                      thing in the space available. */}
+                                  <div className="flex-1 min-w-0 px-2 h-[22px] overflow-hidden flex flex-nowrap items-center gap-x-3">
+                                    {metrics.status !== 'lost' && (
+                                      <div className="scale-90 origin-left shrink-0">
+                                        <ProjectPaymentBadge projectId={project.id} size="sm" />
+                                      </div>
+                                    )}
+                                    {(project.context?.commsSummary?.pendingCount || 0) > 0 && (
+                                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                                        {project.context!.commsSummary!.pendingCount} comms
                                       </span>
                                     )}
-                                  <div className="scale-90 origin-left -ml-1">
-                                    <ProjectPaymentBadge
-                                      projectId={project.id}
-                                      size="sm"
-                                    />
+                                    {conditions.slice(0, 1).map((c: any, i: number) => (
+                                      <span
+                                        key={i}
+                                        className={`flex items-center gap-1.5 min-w-0 text-[10px] font-semibold uppercase tracking-wider ${
+                                          c.isAlert ? 'text-rose-600 font-bold' : 'text-slate-600'
+                                        }`}
+                                      >
+                                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} />
+                                        <span className="truncate">{c.text}</span>
+                                      </span>
+                                    ))}
+                                    {conditions.length > 1 && (
+                                      <span
+                                        className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-slate-400"
+                                        title={conditions.slice(1).map((c: any) => c.text).join(' · ')}
+                                      >
+                                        +{conditions.length - 1} more
+                                      </span>
+                                    )}
+                                    {metrics.status === 'lost' && conditions.length === 0 && (
+                                      <span className="text-[11px] font-medium text-slate-400">None</span>
+                                    )}
                                   </div>
                                 </div>
-                              </CardItem>
-                            )}
 
-                            <CardItem translateZ={Z_SURFACE} className="w-full">
-                              {getIndicators()}
-                            </CardItem>
+                                {/* RECENT ---------------------------------- */}
+                                <div className="flex items-start gap-2.5 grow">
+                                  <span className="w-[52px] shrink-0 pt-[3px] flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-[0.1em] text-slate-400">
+                                    <History className="w-2.5 h-2.5 shrink-0" strokeWidth={2.6} />
+                                    Recent
+                                  </span>
+                                  {/* Fixed height, not just clamped to two rows.
 
-                            {/* Recent activity, placed to absorb the row stretch.
+                                      The row grows to eat the slack, but its
+                                      CONTENT has to be a constant or a card
+                                      with two logged events pushes the money
+                                      down past a card with one -- which is what
+                                      was left of the misalignment on the
+                                      shorter rows.
 
-                                grow on this block is what fills the gap: it
-                                takes the free space before the money does, so a
-                                card with history ends in a quiet list rather
-                                than a void.
-
-                                Only when there is history, though. Seven of
-                                eight projects on this book log no activity at
-                                all -- the events come from execution updates,
-                                contract sign-off, material confirmations and
-                                resolved blockers, and a project that has not
-                                started has none of them. Rendering the section
-                                regardless added 60px of "Nothing logged yet" to
-                                every card and made the stretch worse, not
-                                better. So the void stays on those cards, and
-                                the money keeps its mt-auto. */}
-                            {recentAct.length > 0 && (
-                            <CardItem translateZ={Z_SURFACE} className="w-full grow">
-                              <div className="mt-3 pt-3 border-t border-slate-100 h-full">
-                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mb-1.5">
-                                  Recent
-                                </p>
-                                {(
-                                  <ul className="space-y-1">
-                                    {recentAct.map((ev, i) => (
-                                      <li
-                                        key={`${ev.time}-${i}`}
-                                        className="flex justify-between items-baseline gap-3 text-[10px]"
-                                      >
+                                      One event now rather than two: the sticker
+                                      needs room to sit askew without the
+                                      overflow clipping its corner, and two
+                                      stickers stacked read as clutter. */}
+                                  <div className="flex-1 min-w-0 px-2 h-[26px] overflow-hidden flex items-center">
+                                    {recentAct.length === 0 ? (
+                                      <span className="text-[11px] font-medium text-slate-400">
+                                        No activity logged
+                                      </span>
+                                    ) : (
+                                      <div className="flex w-full justify-between items-center gap-2 text-[10px]">
                                         <span className="truncate text-slate-600 font-medium">
-                                          {ev.text}
+                                          {recentAct[0].text}
                                         </span>
-                                        <span className="shrink-0 text-slate-400 font-bold uppercase tracking-wider tabular-nums">
-                                          {timeAgo(ev.time)}
+                                        {/* A stuck-on label: rotated, bordered,
+                                            with a hairline of white under it so
+                                            it sits on the card rather than in
+                                            it. Rotation is a transform, so the
+                                            row keeps its measured height. */}
+                                        <span
+                                          className="shrink-0 -rotate-3 px-1.5 py-[2px] rounded-[5px] bg-[#EDE8F5] border border-[#D5CEE8] text-[8.5px] font-bold uppercase tracking-wider text-[#3A416B] tabular-nums"
+                                          style={{ boxShadow: '0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 4px -2px rgba(18, 24, 47, 0.25)' }}
+                                        >
+                                          {timeAgo(recentAct[0].time)}
                                         </span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </CardItem>
-                            )}
 
                             {/* Financial Summary */}
                             <CardItem
                               translateZ={Z_LEAD}
-                              className={`w-full pt-4 border-t border-slate-100 ${recentAct.length > 0 ? '' : 'mt-auto'}`}
+                              className="w-full pt-4 border-t border-slate-100"
                             >
                               <div className="w-full">
                                 {project.tiers && project.tiers.length > 0 ? (
@@ -1603,7 +1661,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                               {formatClientValue(valueOf(project))}
                                             </p>
                                           ) : (
-                                            <p className="text-sm font-semibold text-slate-400 leading-none">
+                                            <p className="text-sm font-semibold text-slate-400 leading-none h-[18px] flex items-end">
                                               Not priced yet
                                             </p>
                                           )}
@@ -1622,7 +1680,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                           {formatClientValue(valueOf(project))}
                                         </p>
                                       ) : (
-                                        <p className="text-sm font-semibold text-slate-400 leading-none">
+                                        <p className="text-sm font-semibold text-slate-400 leading-none h-[18px] flex items-end">
                                           Not priced yet
                                         </p>
                                       )}
@@ -1658,7 +1716,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                               beneath it. That strip of nothing at the foot of
                               every card was this, not spacing. */}
                           <CardItem translateZ={0} className="w-full">
-                            <div className="border-t border-slate-100 bg-slate-50/80 px-5 py-3 flex items-center justify-between opacity-0 group-hover/card:opacity-100 transition-opacity duration-200">
+                            <div className="border-t border-slate-100 bg-slate-50/80 px-5 py-3 flex items-center justify-between">
                               <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#3D52A0] flex items-center gap-1.5 group-hover/card:text-[#334486] transition-colors">
                                 Open Project{" "}
                                 <svg
@@ -1673,7 +1731,16 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                 </svg>
                               </span>
 
-                              <div className="flex items-center gap-1.5">
+                              {/* The three controls still wait for hover, but
+                                  pointer-events go with the opacity.
+
+                                  They were previously invisible AND live: the
+                                  whole bar sat at opacity-0 while every button
+                                  on it stayed clickable, so Delete was armed
+                                  inside what looked like blank card. Now the
+                                  bar is visible, that would have been three
+                                  invisible hit targets sitting in plain sight. */}
+                              <div className="flex items-center gap-1.5 opacity-0 pointer-events-none group-hover/card:opacity-100 group-hover/card:pointer-events-auto transition-opacity duration-200">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

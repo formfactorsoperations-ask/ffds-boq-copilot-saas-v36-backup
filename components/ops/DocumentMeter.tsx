@@ -262,14 +262,23 @@ const DocumentMeter: React.FC<Props> = ({ projectContext, report, variant = 'car
         </div>
       </div>
 
-      {headline && (
+      {/* Always rendered, even when there is nothing to say.
+
+          It used to appear only when a document was outstanding, which made the
+          panel two different heights -- and because it sits below the money on
+          the project card, the figures on a row of cards no longer lined up.
+          A line that reads "nothing outstanding" is information; a line that
+          disappears is a layout shift. */}
+      {variant === 'card' || headline ? (
         <p className={`mt-2 text-[9.5px] leading-tight flex items-start gap-1 ${
-          unsignedContract ? 'text-rose-700 font-bold' : 'text-slate-700 font-semibold'
+          unsignedContract ? 'text-rose-700 font-bold' : headline ? 'text-slate-700 font-semibold' : 'text-slate-400 font-medium'
         }`}>
           {unsignedContract && <AlertTriangle className="w-2.5 h-2.5 shrink-0 mt-[1px]" />}
-          <span className="truncate">{headline}</span>
+          <span className="truncate">
+            {headline || (dueCount === 0 ? 'Nothing due yet' : 'All documents in order')}
+          </span>
         </p>
-      )}
+      ) : null}
 
       {variant === 'panel' && (
         <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
