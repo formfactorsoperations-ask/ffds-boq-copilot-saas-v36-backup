@@ -4,6 +4,7 @@ import { FullProjectData, ProjectStatus } from "../types";
 import Card from "./shared/Card";
 import { BuildingOfficeIcon, PlusIcon, NewFileIcon, DeleteIcon } from "./Icons";
 import { formatClientValue, timeAgo, formatCurrency } from "../lib/utils";
+import { getSingleProjectValue } from "../lib/financialsUtils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Info, PlayCircle, PauseCircle, CheckCircle, FileText, Send, MessageSquare, Briefcase, Zap, Trophy, LayoutDashboard, SlidersHorizontal, XCircle, Pin } from "lucide-react";
 import { ProjectPaymentBadge } from "./PaymentHealth";
@@ -19,7 +20,8 @@ import {
 } from "./CashFlowForecastDashboard";
 import { useOrg } from "../contexts/OrgContext";
 import { useMomActions } from "../hooks/useMomActions";
-import { getNextActions } from "../services/nextActionEngine";
+import { getNextActions, NextAction } from "../services/nextActionEngine";
+import { buildDocumentCompleteness, DocumentCompleteness } from "../lib/documentCompleteness";
 import { Lock, ArrowRight, CheckSquare, ChevronDown, ChevronUp } from "lucide-react";
 import ProjectStatusTransitionModal from "./ProjectStatusTransitionModal";
 import { CardContainer, CardBody, CardItem } from "./ui/3d-card";
@@ -198,165 +200,50 @@ const AnimatedRing = ({
 };
 
 
-function TodayPanel({ projects, currentUserRole, onOpenProject }: { projects: FullProjectData[], currentUserRole: string, onOpenProject: (p: FullProjectData) => void }) {
-    const [isExpanded, setIsExpanded] = useState(false);
 
-    // Compute the top action for each active project
-    const rows = [];
-    for (const project of projects) {
-        // Skip archived or fully completed projects
-        if (project.context?.status === 'completed' || project.context?.status === 'archived' as any || project.context?.status === 'lost') {
-            continue;
-        }
+/*
+  What one project is worth.
 
-        const nextActionsCtx = {
-            project: project.context,
-            designPaymentStages: project.context?.paymentMilestones,
-            designGate: (project.context as any)?.designGate,
-            drawingTrackerSummary: null,
-            scopeAdditionsSummary: { pending: ((project.context as any)?.scopeAdditions || []).filter((s:any) => s.status === 'pending_approval' || s.status === 'pending').length },
-            timeline: null
-        };
+  Deliberately the app's shared answer and not a local one. A first pass here
+  read the approved tier and fell back to context.financials, which reported
+  the whole forty-two-project book as 115.80L with nothing in the pipeline --
+  every unwon project priced at zero, because that fallback field is not where
+  their money lives. The cards had the same bug and showed a flat Rs 0 on
+  thirty-one of forty-two. getSingleProjectValue is what Clients, Home and
+  Reports already ask, so this screen now agrees with them by construction
+  rather than by coincidence.
+*/
+const valueOf = (p: FullProjectData): number => getSingleProjectValue(p);
 
-        const actions = getNextActions(nextActionsCtx, currentUserRole);
-        if (actions && actions.length > 0) {
-            rows.push({
-                project: project,
-                action: actions[0]
-            });
-        }
-    }
+/*
+  Three planes, not nine numbers.
 
-    // Sort: blockers first, then due, then suggested
-    rows.sort((a, b) => {
-        const priorityOrder = { 'blocker': 0, 'due': 1, 'suggested': 2 };
-        return priorityOrder[a.action.priority] - priorityOrder[b.action.priority];
-    });
+  The card lifted its layers to 25, 35, 28, 25, 20, 15, 30, 15 and 0 reading
+  downward, which put the project name in front of the money and the badges in
+  front of the indicators. That is not a hierarchy, it is nine values that each
+  happened to look fine alone. Depth should say the same thing the type sizes
+  say: chrome sits on the surface, supporting detail lifts a little, and the
+  three things you came to read lift most.
+*/
+/** Card chrome and running detail -- flat with the card's own surface. */
+const Z_SURFACE = 0;
+/** Contained panels that read as objects: the next move, the documents block. */
+const Z_DETAIL = 14;
+/** What the card is for: the project name and the money. */
+const Z_LEAD = 26;
 
-    const blockersCount = rows.filter(r => r.action.priority === 'blocker').length;
-    const dueCount = rows.filter(r => r.action.priority === 'due').length;
-    const suggestedCount = rows.filter(r => r.action.priority === 'suggested').length;
-    const projectCount = new Set(rows.map(r => r.project.id)).size;
+/** Nothing is owed on a project that is finished, lost or filed away. */
+const DORMANT = ['completed', 'lost', 'archived'];
 
-    if (rows.length === 0) {
-        return (
-            <div className="bg-emerald-50/50 backdrop-blur-sm border border-emerald-100 rounded-[1.25rem] p-3 sm:px-4 flex items-center justify-between gap-3 min-h-[50px]">
-                <div className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                        <CheckCircle className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                        <p className="text-xs font-semibold text-emerald-900 leading-tight">You're all caught up</p>
-                        <p className="text-[10px] text-emerald-600 font-medium">No critical actions pending today.</p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="bg-white rounded-[1.25rem] shadow-sm border border-slate-200 overflow-hidden">
-            {/* Collapsible Trigger Bar */}
-            <div 
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/50 transition-colors bg-slate-50/50 min-h-[50px]"
-            >
-                <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-white flex items-center justify-center shrink-0 shadow-sm">
-                        <Zap className="w-4 h-4 text-white fill-white" />
-                    </div>
-                    <div className="min-w-0">
-                        <h3 className="text-sm font-bold text-slate-800 leading-tight">Today's focus</h3>
-                        <p className="text-[10px] text-slate-500 font-medium">
-                            {rows.length} {rows.length === 1 ? 'action' : 'actions'} across {projectCount} {projectCount === 1 ? 'project' : 'projects'}
-                        </p>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
-                    <div className="flex items-center gap-1.5">
-                        {blockersCount > 0 && (
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 border border-rose-100 text-rose-600">
-                                {blockersCount} blocker{blockersCount > 1 ? 's' : ''}
-                            </span>
-                        )}
-                        {dueCount > 0 && (
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 border border-amber-100 text-amber-700">
-                                {dueCount} due
-                            </span>
-                        )}
-                        {suggestedCount > 0 && (
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 border border-blue-100 text-blue-600">
-                                {suggestedCount} suggested
-                            </span>
-                        )}
-                    </div>
-                    <div className="text-slate-400">
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </div>
-                </div>
-            </div>
-
-            {/* Collapsible List Container */}
-            <AnimatePresence initial={false}>
-                {isExpanded && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                        className="overflow-hidden border-t border-slate-100"
-                    >
-                        <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100">
-                            {rows.map((row) => {
-                                const { project, action } = row;
-                                const isBlocked = !!action.blockedBy;
-                                let chipColors = '';
-                                switch(action.priority) {
-                                    case 'blocker': chipColors = 'bg-rose-50 text-rose-700 border-rose-100 text-[9px] font-bold'; break;
-                                    case 'due': chipColors = 'bg-amber-50 text-amber-700 border-amber-100 text-[9px] font-bold'; break;
-                                    case 'suggested': chipColors = 'bg-blue-50 text-blue-700 border-blue-100 text-[9px] font-bold'; break;
-                                }
-
-                                return (
-                                    <div key={project.id} className="p-4 hover:bg-slate-50/50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 group">
-                                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                                            <span className={`shrink-0 uppercase tracking-wider px-2.5 py-0.5 rounded border ${chipColors}`}>
-                                                {action.priority}
-                                            </span>
-                                            <div className="min-w-0">
-                                                <span className="text-[10px] font-bold text-slate-800/60 uppercase tracking-wider block mb-0.5">
-                                                    {project.context?.name || "Unnamed"}
-                                                </span>
-                                                <h4 className="font-semibold text-sm text-slate-800 leading-snug">{action.title}</h4>
-                                                {isBlocked && (
-                                                    <p className="text-[10px] font-medium text-slate-500 mt-1.5 flex items-center gap-1">
-                                                        <Lock className="w-3 h-3" /> Waiting on: {action.blockedBy}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onOpenProject(project);
-                                            }}
-                                            className={`shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${isBlocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-100 text-slate-600 hover:bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 hover:text-white'}`}
-                                            disabled={isBlocked}
-                                        >
-                                            {action.ctaLabel}
-                                            {!isBlocked && <ArrowRight className="w-3 h-3" />}
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
-    );
-}
+/** One phase pill, one predicate. Kept together so the two cannot drift. */
+const PHASES: { key: string; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'draft', label: 'Pipeline' },
+  { key: 'proposal_sent', label: 'Proposals' },
+  { key: 'won', label: 'Execution' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'lost', label: 'Lost' },
+];
 
 const getProjectMetrics = (project: any) => {
     return {
@@ -393,8 +280,12 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
   const [statusModalProject, setStatusModalProject] = useState<FullProjectData | null>(null);
-  const [focusMode, setFocusMode] = useState(false);
-  const [sortBy, setSortBy] = useState<"updated" | "health">("updated");
+  /* Set by the alert bar's chips. The bar is the only thing that writes it,
+     and clicking the live chip again clears it. */
+  const [alertFilter, setAlertFilter] = useState<
+    'blocker' | 'due' | 'unsigned' | 'risk' | null
+  >(null);
+  const searchRef = React.useRef<HTMLInputElement | null>(null);
 
   const isDummyProject = (p: FullProjectData) => {
     if (p.context?.isDummy !== undefined) return p.context.isDummy;
@@ -402,6 +293,50 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
     const name = (p.context?.name || '').toLowerCase();
     return name.includes('sample') || name.includes('demo') || name.includes('test');
   };
+
+  /*
+    One pass over the book, read four times over.
+
+    getNextActions and buildDocumentCompleteness both walk a project's whole
+    context, and the alert bar, the phase counts, the summary strip and every
+    card's next-move line all want the same two answers. Deriving them once
+    here is partly about cost and mostly about agreement: a card that says
+    "chase the contract" above a bar reporting nothing outstanding is worse
+    than either of them alone.
+  */
+  const intel = useMemo(() => {
+    const role = orgData?.role || 'Admin';
+    const map = new Map<
+      string,
+      { action: NextAction | null; docs: DocumentCompleteness }
+    >();
+    for (const proj of projects) {
+      const status = (proj.context?.status || 'draft') as string;
+      const actions = DORMANT.includes(status)
+        ? []
+        : getNextActions(
+            {
+              project: proj.context,
+              designPaymentStages: proj.context?.paymentMilestones,
+              designGate: (proj.context as any)?.designGate,
+              drawingTrackerSummary: null,
+              scopeAdditionsSummary: {
+                pending: ((proj.context as any)?.scopeAdditions || []).filter(
+                  (sa: any) =>
+                    sa.status === 'pending_approval' || sa.status === 'pending',
+                ).length,
+              },
+              timeline: null,
+            },
+            role,
+          );
+      map.set(proj.id, {
+        action: actions[0] || null,
+        docs: buildDocumentCompleteness(proj.context),
+      });
+    }
+    return map;
+  }, [projects, orgData?.role]);
 
   const pipelineStats = useMemo(() => ({
     pendingDecisions: projects.filter(p => p.context?.status === 'proposal_sent' || p.context?.status === 'negotiation').length,
@@ -413,38 +348,155 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
     avgMargin: 35
   }), [projects]);
 
-  const filteredProjects = projects.filter(p => {
-    // Kind filter (Actual vs Dummy)
-    if (kindFilter === 'actual' && isDummyProject(p)) return false;
-    if (kindFilter === 'dummy' && !isDummyProject(p)) return false;
+  /*
+    Four predicates instead of one inline filter.
 
-    if (statusFilter !== 'all') {
-        const pStatus = p.context?.status || 'draft';
-        if (statusFilter === 'draft') {
-            // Pipeline stage
-            if (pStatus !== 'draft' && pStatus !== 'lead') return false;
-        } else if (statusFilter === 'proposal_sent') {
-            // Proposals stage
-            if (pStatus !== 'proposal_sent' && pStatus !== 'negotiation') return false;
-        } else if (statusFilter === 'won') {
-            // Execution stage
-            if (pStatus !== 'won' && pStatus !== 'execution' && pStatus !== 'work_paused') return false;
-        } else if (statusFilter === 'completed') {
-            if (pStatus !== 'completed') return false;
-        } else if (statusFilter === 'lost') {
-            if (pStatus !== 'lost') return false;
-        } else if (pStatus !== statusFilter) {
-            return false;
-        }
+    A phase pill has to answer "how many would I show", which means running
+    every test except its own. A single fused filter cannot answer that, which
+    is why the pills carried no counts and you could click into an empty phase.
+  */
+  const matchesKind = (proj: FullProjectData, kind: typeof kindFilter) =>
+    kind === 'all' ||
+    (kind === 'actual' ? !isDummyProject(proj) : isDummyProject(proj));
+
+  const matchesPhase = (proj: FullProjectData, phase: string) => {
+    if (phase === 'all') return true;
+    const st = proj.context?.status || 'draft';
+    if (phase === 'draft') return st === 'draft' || st === 'lead';
+    if (phase === 'proposal_sent')
+      return st === 'proposal_sent' || st === 'negotiation';
+    if (phase === 'won')
+      return st === 'won' || st === 'execution' || st === 'work_paused';
+    return st === phase;
+  };
+
+  const matchesSearch = (proj: FullProjectData) => {
+    if (!searchQuery) return true;
+    const st = (proj.context?.status || 'draft') as string;
+    /* The phase word is what people actually type -- "execution", "lost" --
+       and searching for one used to return nothing at all. */
+    /* The pill's own word too, not just the raw status: the Execution pill
+       counts seven, so typing "execution" had better not return four. */
+    const bucket = PHASES.find(
+      (ph) => ph.key !== 'all' && matchesPhase(proj, ph.key),
+    );
+    return [
+      proj.context?.name,
+      proj.context?.clientName,
+      (proj.context as any)?.city,
+      STATUS_CONFIG[st]?.label,
+      bucket?.label,
+      st,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+  };
+
+  const matchesAlert = (proj: FullProjectData) => {
+    if (!alertFilter) return true;
+    const it = intel.get(proj.id);
+    if (alertFilter === 'unsigned') return !!it?.docs.unsignedContract;
+    if (alertFilter === 'risk')
+      return ((proj as any).decisionBrainOutput?.riskScore || 0) > 0;
+    return it?.action?.priority === alertFilter;
+  };
+
+  const filteredProjects = useMemo(
+    () =>
+      projects.filter(
+        (proj) =>
+          matchesKind(proj, kindFilter) &&
+          matchesPhase(proj, statusFilter) &&
+          matchesSearch(proj) &&
+          matchesAlert(proj),
+      ),
+    [projects, kindFilter, statusFilter, searchQuery, alertFilter, intel],
+  );
+
+  /*
+    The alarm follows the Actual/Dummy switch and nothing else.
+
+    It is a screen-level alert, not a readout of the current view: filtering to
+    Completed should not make three live blockers disappear from the top of the
+    page. Scoping it to the kind switch only means demo projects stay out of it
+    without the real ones ever going quiet.
+  */
+  const alarm = useMemo(() => {
+    let blocker = 0;
+    let due = 0;
+    let unsigned = 0;
+    let risk = 0;
+    for (const proj of projects) {
+      if (!matchesKind(proj, kindFilter)) continue;
+      const it = intel.get(proj.id);
+      if (it?.action?.priority === 'blocker') blocker++;
+      else if (it?.action?.priority === 'due') due++;
+      if (it?.docs.unsignedContract) unsigned++;
+      if (((proj as any).decisionBrainOutput?.riskScore || 0) > 0) risk++;
     }
-    if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const name = (p.context?.name || '').toLowerCase();
-        const client = (p.context?.clientName || '').toLowerCase();
-        if (!name.includes(q) && !client.includes(q)) return false;
+    return { blocker, due, unsigned, risk, total: blocker + due + unsigned + risk };
+  }, [projects, kindFilter, intel]);
+
+  /* The four figures above the grid, counted over what is on screen. */
+  const deck = useMemo(() => {
+    let book = 0;
+    let booked = 0;
+    let onSite = 0;
+    let needsYou = 0;
+    let unsigned = 0;
+    for (const proj of filteredProjects) {
+      const v = valueOf(proj);
+      book += v;
+      const st = proj.context?.status;
+      /* Won, not priced. Keying the split on approvedTierId counted a new
+         lead with a locked tier as approved revenue, which is a different
+         claim from the one the words make. This matches On site. */
+      if (
+        st === 'won' ||
+        st === 'execution' ||
+        st === 'work_paused' ||
+        st === 'completed'
+      )
+        booked += v;
+      if (st === 'execution' || st === 'won' || st === 'work_paused') onSite++;
+      const it = intel.get(proj.id);
+      if (it?.action && it.action.priority !== 'suggested') needsYou++;
+      if (it?.docs.unsignedContract) unsigned++;
     }
-    return true;
-  });
+    return {
+      book,
+      booked,
+      pipeline: book - booked,
+      onSite,
+      needsYou,
+      unsigned,
+    };
+  }, [filteredProjects, intel]);
+
+  /* "/" jumps to search, Escape clears it -- the two keys every list in this
+     app should answer to. Ignored while you are already typing somewhere. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing =
+        !!el &&
+        (el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          el.tagName === 'SELECT' ||
+          el.isContentEditable);
+      if (e.key === '/' && !typing) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      } else if (e.key === 'Escape' && el === searchRef.current) {
+        setSearchQuery('');
+        searchRef.current?.blur();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50">
@@ -691,20 +743,104 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
 
       {activeTab === "projects" && (
         <div className="space-y-4 px-4">
-          {/* TOP ACTION BAR: Today's Focus + New Project */}
+          {/* TOP ACTION BAR: what is wrong, and the way straight to it.
+
+              This replaces the "Today's focus" accordion, which opened closed
+              and so hid its own contents by default. Each project's top action
+              now rides on that project's own card; what is left worth saying
+              at page level is the count, which fits on one line. */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="flex-1 min-w-0">
-              <TodayPanel
-                projects={projects}
-                currentUserRole={orgData?.role || 'Admin'}
-                onOpenProject={onOpenProject}
-              />
+              {alarm.total === 0 ? (
+                <div className="bg-white rounded-[1.25rem] border border-slate-200 cd-panel px-4 py-2.5 flex items-center gap-3 min-h-[50px]">
+                  <span className="w-6 h-6 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                  </span>
+                  <p className="text-xs font-semibold text-slate-700">
+                    Nothing is waiting on you.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-[1.25rem] border border-slate-200 cd-panel px-4 py-2 flex items-center gap-2 flex-wrap min-h-[50px]">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 shrink-0 mr-1">
+                    Needs you
+                  </span>
+                  {(
+                    [
+                      {
+                        key: 'blocker',
+                        n: alarm.blocker,
+                        word: alarm.blocker === 1 ? 'blocker' : 'blockers',
+                        off: 'bg-rose-50 text-rose-700 border-rose-200',
+                        on: 'bg-rose-600 text-white border-rose-600',
+                      },
+                      {
+                        key: 'due',
+                        n: alarm.due,
+                        word: 'due now',
+                        off: 'bg-amber-50 text-amber-800 border-amber-200',
+                        on: 'bg-amber-600 text-white border-amber-600',
+                      },
+                      {
+                        key: 'unsigned',
+                        n: alarm.unsigned,
+                        word:
+                          alarm.unsigned === 1
+                            ? 'contract unsigned'
+                            : 'contracts unsigned',
+                        off: 'bg-slate-50 text-slate-700 border-slate-200',
+                        on: 'bg-[#3D52A0] text-white border-[#3D52A0]',
+                      },
+                      {
+                        key: 'risk',
+                        n: alarm.risk,
+                        word: 'at risk',
+                        off: 'bg-slate-50 text-slate-700 border-slate-200',
+                        on: 'bg-[#3D52A0] text-white border-[#3D52A0]',
+                      },
+                    ] as const
+                  )
+                    .filter((chip) => chip.n > 0)
+                    .map((chip) => {
+                      const live = alertFilter === chip.key;
+                      return (
+                        <button
+                          key={chip.key}
+                          type="button"
+                          aria-pressed={live}
+                          onClick={() =>
+                            setAlertFilter(live ? null : (chip.key as any))
+                          }
+                          title={
+                            live
+                              ? 'Showing only these — click to clear'
+                              : 'Show only these projects'
+                          }
+                          className={`px-2.5 py-1 rounded-full border text-[11px] font-bold transition-all cursor-pointer ${
+                            live ? chip.on : `${chip.off} hover:border-slate-400`
+                          }`}
+                        >
+                          <span className="tabular-nums">{chip.n}</span> {chip.word}
+                        </button>
+                      );
+                    })}
+                  {alertFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setAlertFilter(null)}
+                      className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-700 transition-colors cursor-pointer px-1"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <motion.button
               whileHover={{ scale: 1.02, y: -1 }}
               whileTap={{ scale: 0.98 }}
               onClick={onCreateNew}
-              className="px-5 py-2.5 bg-gradient-to-r from-sky-500 via-sky-600 to-blue-600 hover:from-sky-400 hover:via-sky-500 hover:to-blue-500 text-white rounded-[1.25rem] transition-all shadow-sm shadow-sky-500/20 flex items-center justify-center gap-2 text-xs font-bold shrink-0 cursor-pointer h-[50px]"
+              className="px-5 py-2.5 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-[1.25rem] transition-colors shadow-sm flex items-center justify-center gap-2 text-xs font-bold shrink-0 cursor-pointer h-[50px]"
             >
               <PlusIcon className="w-4 h-4" /> New Project
             </motion.button>
@@ -715,112 +851,97 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
             <div className="flex flex-wrap gap-4 items-center">
               {/* Kind Filter (Actual vs Dummy) */}
               <div className="flex items-center gap-1.5 p-1 bg-slate-200/60 rounded-full border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setKindFilter("all")}
-                  className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                    kindFilter === "all"
-                      ? "bg-white text-slate-900 shadow-xs"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  All Projects
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setKindFilter("actual")}
-                  className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 ${
-                    kindFilter === "actual"
-                      ? "bg-sky-600 text-white shadow-xs"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-sky-300"></span>
-                  Actual
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setKindFilter("dummy")}
-                  className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 ${
-                    kindFilter === "dummy"
-                      ? "bg-amber-500 text-white shadow-xs"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-200"></span>
-                  Dummy
-                </button>
+                {(
+                  [
+                    { key: 'all', label: 'All Projects', dot: null },
+                    { key: 'actual', label: 'Actual', dot: '#ADBBDA' },
+                    { key: 'dummy', label: 'Dummy', dot: '#FDE68A' },
+                  ] as const
+                ).map((kind) => {
+                  const live = kindFilter === kind.key;
+                  const n = projects.filter(
+                    (proj) =>
+                      matchesKind(proj, kind.key) &&
+                      matchesPhase(proj, statusFilter) &&
+                      matchesSearch(proj) &&
+                      matchesAlert(proj),
+                  ).length;
+                  return (
+                    <button
+                      key={kind.key}
+                      type="button"
+                      onClick={() => setKindFilter(kind.key)}
+                      className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                        live
+                          ? kind.key === 'dummy'
+                            ? 'bg-amber-500 text-white shadow-xs'
+                            : kind.key === 'actual'
+                              ? 'bg-[#3D52A0] text-white shadow-xs'
+                              : 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      {kind.dot && (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ background: kind.dot }}
+                        />
+                      )}
+                      {kind.label}
+                      <span
+                        className={`tabular-nums text-[10px] ${live ? 'text-white/70' : 'text-slate-400'} ${live && kind.key === 'all' ? '!text-slate-400' : ''}`}
+                      >
+                        {n}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* Status/Phase Filter */}
+              {/* Status/Phase Filter — each pill states its own size, so you
+                  never click into an empty phase to find out it is empty. */}
               <div className="flex flex-wrap gap-1.5 items-center">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">
                   Phase:
                 </span>
-                <button
-                  onClick={() => setStatusFilter("all")}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "all" ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setStatusFilter("draft")}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "draft" ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-                >
-                  Pipeline
-                </button>
-                <button
-                  onClick={() => setStatusFilter("proposal_sent")}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "proposal_sent" ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-                >
-                  Proposals
-                </button>
-                <button
-                  onClick={() => setStatusFilter("won")}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "won" ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-                >
-                  Execution
-                </button>
-                <button
-                  onClick={() => setStatusFilter("completed")}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "completed" ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-                >
-                  Completed
-                </button>
-                <button
-                  onClick={() => setStatusFilter("lost")}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${statusFilter === "lost" ? "bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-                >
-                  Lost
-                </button>
+                {PHASES.map((phase) => {
+                  const live = statusFilter === phase.key;
+                  const n = projects.filter(
+                    (proj) =>
+                      matchesKind(proj, kindFilter) &&
+                      matchesPhase(proj, phase.key) &&
+                      matchesSearch(proj) &&
+                      matchesAlert(proj),
+                  ).length;
+                  return (
+                    <button
+                      key={phase.key}
+                      onClick={() => setStatusFilter(phase.key)}
+                      className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                        live
+                          ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs'
+                          : n === 0
+                            ? 'bg-slate-100 text-slate-300 hover:bg-slate-200'
+                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                      }`}
+                    >
+                      {phase.label}
+                      <span
+                        className={`tabular-nums text-[10px] ${live ? 'text-white/70' : 'text-slate-400'}`}
+                      >
+                        {n}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             <div className="flex flex-wrap gap-3 md:gap-4 w-full xl:w-auto pb-2 xl:pb-0">
-              <button
-                onClick={() => setFocusMode(!focusMode)}
-                className={`shrink-0 px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${focusMode ? "bg-rose-500 text-white shadow-md" : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"}`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${focusMode ? "bg-white animate-pulse" : "bg-rose-400"}`}
-                ></span>
-                Focus: At Risk
-              </button>
-
-              <div className="shrink-0 flex bg-white border border-slate-200 rounded-full px-4 py-1.5 items-center gap-2 hover:border-slate-300 transition-colors">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  Sort:
-                </span>
-                <select
-                  className="bg-transparent text-[11px] font-bold text-slate-700 outline-none uppercase tracking-wider cursor-pointer"
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                >
-                  <option value="updated">Recent</option>
-                  <option value="health">Urgent</option>
-                </select>
-              </div>
-
+              {/* The Sort dropdown and the Focus: At Risk toggle used to live
+                  here. Neither was ever read by the list — `sortBy` and
+                  `focusMode` changed their own appearance and nothing else.
+                  The alert bar above now does the focusing, honestly. */}
               <div className="relative flex-grow min-w-[200px] md:w-64 shrink-0">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                   <svg
@@ -836,25 +957,113 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                   </svg>
                 </span>
                 <input
+                  ref={searchRef}
                   type="text"
-                  placeholder="Search..."
+                  placeholder="Search name, client or phase…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold uppercase tracking-wider text-slate-700 outline-none focus:border-slate-400 transition-all placeholder:text-slate-400"
+                  className="w-full pl-10 pr-10 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold uppercase tracking-wider text-slate-700 outline-none focus:border-slate-400 transition-all placeholder:text-slate-400 placeholder:normal-case placeholder:tracking-normal"
                 />
+                {!searchQuery && (
+                  <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 border border-slate-200 rounded px-1.5 py-[1px] pointer-events-none">
+                    /
+                  </kbd>
+                )}
               </div>
+            </div>
+          </div>
+
+          {/* What is on screen right now, in four numbers. Every figure here
+              follows the filters above it — a count that ignored them would
+              contradict the cards it sits on top of. */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            <div className="bg-white rounded-2xl border border-slate-200 cd-panel px-4 py-3">
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                Book on screen
+              </p>
+              <p className="text-[22px] leading-none font-bold text-slate-900 tabular-nums mt-1.5">
+                {formatClientValue(deck.book)}
+              </p>
+              <p className="text-[10px] text-slate-500 font-medium mt-1.5">
+                {formatClientValue(deck.booked)} booked ·{' '}
+                {formatClientValue(deck.pipeline)} in the pipeline
+              </p>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 cd-panel px-4 py-3">
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                On site
+              </p>
+              <p className="text-[22px] leading-none font-bold text-slate-900 tabular-nums mt-1.5">
+                {deck.onSite}
+              </p>
+              <p className="text-[10px] text-slate-500 font-medium mt-1.5">
+                of {filteredProjects.length}{' '}
+                {filteredProjects.length === 1 ? 'project' : 'projects'} shown
+              </p>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 cd-panel px-4 py-3">
+              {/* Not "Needs you" -- the alert bar directly above already
+                  carries that label, and two different counts under one word,
+                  one above the other, is a screen arguing with itself. */}
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                Blocked or due
+              </p>
+              <p
+                className={`text-[22px] leading-none font-bold tabular-nums mt-1.5 ${
+                  deck.needsYou > 0 ? 'text-amber-700' : 'text-slate-400'
+                }`}
+              >
+                {deck.needsYou}
+              </p>
+              <p className="text-[10px] text-slate-500 font-medium mt-1.5">
+                {deck.needsYou === 0
+                  ? 'Nothing outstanding'
+                  : 'Suggestions are not counted'}
+              </p>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 cd-panel px-4 py-3">
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                Contracts
+              </p>
+              <p
+                className={`text-[22px] leading-none font-bold tabular-nums mt-1.5 ${
+                  deck.unsigned > 0 ? 'text-rose-700' : 'text-emerald-700'
+                }`}
+              >
+                {deck.unsigned > 0 ? deck.unsigned : '✓'}
+              </p>
+              <p className="text-[10px] text-slate-500 font-medium mt-1.5">
+                {deck.unsigned > 0
+                  ? deck.unsigned === 1
+                    ? 'awaiting signature'
+                    : 'awaiting signature'
+                  : 'All signed and clear'}
+              </p>
             </div>
           </div>
 
           {/* 3. PROJECT GRID */}
           {viewMode === "grid" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            /*
+              items-start, so a card ends where its content ends.
+
+              A grid stretches every item to its row's tallest by default, and
+              on this book that meant 356px cards padded out to sit beside
+              484px ones -- eight cards carrying between 40 and 128px of white
+              above the money, with nothing true to put in it. Letting them
+              keep their own height removes the space rather than filling it.
+              The trade is a ragged bottom edge across each row.
+            */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
               <AnimatePresence>
                 {filteredProjects.map((project, index) => {
                   const metrics = getProjectMetrics(project);
                   const isActive = activeProjectId === project.id;
                   
-                  const getLatestActivity = () => {
+                  const getLatestActivity = (): { time: number; text: string }[] => {
                       let events: { time: number, text: string }[] = [];
 
                       const updates = project.activeProject?.executionData?.updates;
@@ -882,14 +1091,15 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                           });
                       }
                       
-                      if (events.length > 0) {
-                          events.sort((a, b) => b.time - a.time);
-                          return events[0];
-                      }
-                      return null;
+                      /* It built the whole list and returned one line of it.
+                         Three costs nothing more and gives the short cards
+                         something to say in the space the grid stretches them
+                         into. */
+                      events.sort((a, b) => b.time - a.time);
+                      return events.slice(0, 3);
                   };
 
-                  const latestAct = getLatestActivity();
+                  const recentAct = getLatestActivity();
                   
                   const statusStyle =
                     STATUS_CONFIG[metrics.status] || STATUS_CONFIG["draft"];
@@ -1019,23 +1229,39 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ duration: 0.4, delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
-                      className="h-full"
+                      /* No h-full. height:100% on a grid item resolves against
+                         the row, not the content, so it quietly defeated the
+                         grid's items-start and every card came back at exactly
+                         the row height -- 636.32px across the board. The card's
+                         own inner h-full chain now resolves against an auto
+                         parent and follows the content. */
                     >
                       <CardContainer containerClassName="w-full h-full p-0 flex items-stretch" className="w-full h-full">
                         <CardBody
-                          className="h-full w-full bg-white border transition-all duration-300 relative group/card flex flex-col cursor-pointer overflow-hidden rounded-2xl"
+                          className="fx-tilt-card h-full w-full bg-white border relative group/card flex flex-col cursor-pointer overflow-hidden rounded-2xl"
                           onClick={() => onOpenProject(project)}
                           style={{
                             borderColor: isActive ? '#3D52A0' : 'rgb(226, 232, 240)',
-                            boxShadow: isActive ? '0 4px 20px -2px rgba(61, 82, 160, 0.15), 0 0 0 1px #3D52A0' : '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)',
+                            /* The shadow moved to .fx-tilt-card so it can track
+                               the tilt; only the active ring stays inline, fed
+                               to that rule as a second shadow. */
+                            ['--tilt-ring' as any]: isActive
+                              ? '0 0 0 1px #3D52A0'
+                              : '0 0 0 0 rgba(0, 0, 0, 0)',
                           }}
                         >
-                          {/* Animated Glowing Gradient Hover Effect */}
-                          <div className="absolute inset-0 bg-gradient-to-br from-sky-50/70 via-transparent to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-500 pointer-events-none z-0"></div>
-                          <div className="absolute -inset-[100%] bg-gradient-to-r from-transparent via-white/40 to-transparent rotate-45 group-hover/card:translate-x-[200%] transition-transform duration-1000 pointer-events-none z-10 opacity-0 group-hover/card:opacity-100"></div>
+                          {/* One hover wash, in the app's own indigo.
+
+                              The white shimmer that used to sweep across on
+                              hover -- a rotated gradient translated 200% over a
+                              second -- is gone. It is the most recognisable
+                              "template" flourish there is, it fired on all
+                              forty-two cards, and it was animating a layer
+                              twice the card's size on every pointer entry. */}
+                          <div className="absolute inset-0 bg-gradient-to-br from-[#EDE8F5]/60 via-transparent to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-500 pointer-events-none z-0"></div>
 
                           {/* Card Header & Status */}
-                          <CardItem translateZ={25} className="w-full">
+                          <CardItem translateZ={Z_SURFACE} className="w-full">
                             <div className="p-5 pb-0 flex flex-col gap-3 border-b border-slate-50/50 bg-slate-50/30 w-full relative z-20">
                               <div className="flex justify-between items-start">
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -1147,22 +1373,53 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
 
                           {/* Card Content (Name, Client, Metrics, Financial Summary) */}
                           <div className="p-5 flex-grow flex flex-col relative z-20">
-                            <CardItem translateZ={35} className="w-full mb-4">
-                              <div>
+                            {/* The name block gets a surface of its own.
+
+                                The card had exactly one bordered thing on it --
+                                the documents panel at the bottom -- so the top
+                                half read as loose text on white. This bookends
+                                it: the same rounded, tinted, inset-highlit
+                                treatment, kept lighter so the documents panel
+                                is still the heavier of the two, with a hairline
+                                between the name and the client so each has an
+                                edge of its own. */}
+                            <CardItem translateZ={Z_LEAD} className="w-full mb-4">
+                              <div
+                                className="rounded-2xl border border-[#E4E8F3] px-3.5 py-3"
+                                style={{
+                                  background:
+                                    'linear-gradient(135deg, #FFFFFF 0%, #F3F5FC 100%)',
+                                  boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.9)',
+                                }}
+                              >
                                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mb-0.5">
                                   Project Name
                                 </p>
                                 <h3
-                                  className="text-[1.1rem] font-semibold tracking-tight text-slate-900 leading-snug mb-2 line-clamp-2"
+                                  className="text-[1.1rem] font-semibold tracking-tight text-slate-900 leading-snug line-clamp-2"
                                   title={project.context?.name || "Unnamed Project"}
                                 >
                                   {project.context?.name || "Unnamed Project"}
                                 </h3>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-[#E4E8F3]">
                                   <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em]">
                                     Client:
                                   </p>
-                                  <div className="w-5 h-5 rounded-full bg-sky-50 border border-sky-100 flex items-center justify-center text-[9px] font-bold text-[#3D52A0] shrink-0">
+                                  {/* The one place on the card where a gradient
+                                      costs nothing to read. The project name is
+                                      what you scan, so it stays solid; a disc
+                                      holding a single letter can be decorative.
+                                      Also retires the last sky-50 on the card.
+
+                                      Stops chosen so white holds at both ends:
+                                      about 5:1 on #4F6BC4 and 10:1 on #2E3C78. */}
+                                  <div
+                                    className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                                    style={{
+                                      background:
+                                        'linear-gradient(135deg, #4F6BC4 0%, #2E3C78 100%)',
+                                    }}
+                                  >
                                     {(project.context?.clientName || "U")
                                       .charAt(0)
                                       .toUpperCase()}
@@ -1174,9 +1431,49 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                               </div>
                             </CardItem>
 
+                            {/* What this project is waiting for.
+
+                                Straight off the same nextActionEngine that fed
+                                the old "Today's focus" banner. Putting it on
+                                the card puts it next to the project it is
+                                about, which is where you were going to have to
+                                look anyway. */}
+                            {(() => {
+                              const move = intel.get(project.id)?.action;
+                              if (!move || DORMANT.includes(metrics.status)) return null;
+                              const skin =
+                                move.priority === 'blocker'
+                                  ? 'bg-rose-50 border-rose-100 text-rose-700'
+                                  : move.priority === 'due'
+                                    ? 'bg-amber-50 border-amber-100 text-amber-800'
+                                    : 'bg-slate-50 border-slate-200 text-slate-600';
+                              return (
+                                <CardItem translateZ={Z_DETAIL} className="w-full mb-3">
+                                  <div
+                                    className={`flex items-start gap-2 px-2.5 py-2 rounded-xl border ${skin}`}
+                                    title={move.why}
+                                  >
+                                    {move.blockedBy ? (
+                                      <Lock className="w-3 h-3 shrink-0 mt-[2px]" />
+                                    ) : (
+                                      <ArrowRight className="w-3 h-3 shrink-0 mt-[2px]" />
+                                    )}
+                                    <span className="text-[11px] font-semibold leading-snug">
+                                      {move.title}
+                                      {move.blockedBy && (
+                                        <span className="block font-medium opacity-70 mt-0.5">
+                                          Waiting on {move.blockedBy}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                </CardItem>
+                              );
+                            })()}
+
                             {/* Action Indicators */}
                             {metrics.status !== "lost" && (
-                              <CardItem translateZ={25} className="w-full">
+                              <CardItem translateZ={Z_SURFACE} className="w-full">
                                 <div className="flex items-center gap-2 mb-4 flex-wrap">
                                   {project.context?.commsSummary &&
                                     project.context.commsSummary.pendingCount > 0 && (
@@ -1196,12 +1493,59 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                               </CardItem>
                             )}
 
-                            <CardItem translateZ={20} className="w-full">
+                            <CardItem translateZ={Z_SURFACE} className="w-full">
                               {getIndicators()}
                             </CardItem>
 
+                            {/* Recent activity, placed to absorb the row stretch.
+
+                                grow on this block is what fills the gap: it
+                                takes the free space before the money does, so a
+                                card with history ends in a quiet list rather
+                                than a void.
+
+                                Only when there is history, though. Seven of
+                                eight projects on this book log no activity at
+                                all -- the events come from execution updates,
+                                contract sign-off, material confirmations and
+                                resolved blockers, and a project that has not
+                                started has none of them. Rendering the section
+                                regardless added 60px of "Nothing logged yet" to
+                                every card and made the stretch worse, not
+                                better. So the void stays on those cards, and
+                                the money keeps its mt-auto. */}
+                            {recentAct.length > 0 && (
+                            <CardItem translateZ={Z_SURFACE} className="w-full grow">
+                              <div className="mt-3 pt-3 border-t border-slate-100 h-full">
+                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mb-1.5">
+                                  Recent
+                                </p>
+                                {(
+                                  <ul className="space-y-1">
+                                    {recentAct.map((ev, i) => (
+                                      <li
+                                        key={`${ev.time}-${i}`}
+                                        className="flex justify-between items-baseline gap-3 text-[10px]"
+                                      >
+                                        <span className="truncate text-slate-600 font-medium">
+                                          {ev.text}
+                                        </span>
+                                        <span className="shrink-0 text-slate-400 font-bold uppercase tracking-wider tabular-nums">
+                                          {timeAgo(ev.time)}
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            </CardItem>
+                            )}
+
                             {/* Financial Summary */}
-                            <CardItem translateZ={30} className="w-full mt-auto pt-4 border-t border-slate-100">
+                            <CardItem
+                              translateZ={Z_LEAD}
+                              className={`w-full pt-4 border-t border-slate-100 ${recentAct.length > 0 ? '' : 'mt-auto'}`}
+                            >
                               <div className="w-full">
                                 {project.tiers && project.tiers.length > 0 ? (
                                   <>
@@ -1211,10 +1555,11 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                           t.id === project.context?.approvedTierId,
                                       )
                                       .map((tier) => {
-                                        const exec = tier.summary.totalSell || 0;
-                                        const fee = tier.summary.designFee || 0;
-                                        const total =
-                                          tier.summary.totalRevenue || exec + fee;
+                                        /* Not the tier's own total: that is the
+                                           price list, and it ignores approved
+                                           changes. valueOf is what the rest of
+                                           the app quotes for this project. */
+                                        const total = valueOf(project);
 
                                         return (
                                           <div
@@ -1249,9 +1594,19 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                           <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mb-0.5">
                                             Pipeline
                                           </p>
-                                          <p className="text-lg font-semibold text-slate-900 leading-none">
-                                            {formatClientValue(metrics.value)}
-                                          </p>
+                                          {/* A project nobody has priced yet is worth
+                                              nothing only in the arithmetic sense.
+                                              Printing "Rs 0" states a price; this
+                                              states the absence of one. */}
+                                          {valueOf(project) > 0 ? (
+                                            <p className="text-lg font-semibold text-slate-900 leading-none">
+                                              {formatClientValue(valueOf(project))}
+                                            </p>
+                                          ) : (
+                                            <p className="text-sm font-semibold text-slate-400 leading-none">
+                                              Not priced yet
+                                            </p>
+                                          )}
                                         </div>
                                       </div>
                                     )}
@@ -1262,9 +1617,15 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                       <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mb-0.5">
                                         Est. Value
                                       </p>
-                                      <p className="text-lg font-semibold text-slate-500 leading-none">
-                                        {formatClientValue(metrics.value)}
-                                      </p>
+                                      {valueOf(project) > 0 ? (
+                                        <p className="text-lg font-semibold text-slate-500 leading-none">
+                                          {formatClientValue(valueOf(project))}
+                                        </p>
+                                      ) : (
+                                        <p className="text-sm font-semibold text-slate-400 leading-none">
+                                          Not priced yet
+                                        </p>
+                                      )}
                                     </div>
                                   </div>
                                 )}
@@ -1272,26 +1633,31 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                             </CardItem>
 
                             {/* Document completeness — sits with the money because
-                                an unsigned contract is a money problem. */}
-                            <CardItem translateZ={15} className="w-full">
-                              <div className="mt-3 pt-3 border-t border-slate-100">
+                                an unsigned contract is a money problem.
+
+                                No rule above it any more: the meter now carries
+                                its own tinted panel, and a hairline divider
+                                immediately above a bordered box reads as a
+                                stray line. */}
+                            <CardItem translateZ={Z_DETAIL} className="w-full">
+                              <div className="mt-3">
                                 <DocumentMeter projectContext={project.context} />
                               </div>
                             </CardItem>
 
-                            {/* Latest Activity Footer */}
-                            {latestAct && (
-                              <CardItem translateZ={15} className="w-full">
-                                <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center text-[9px] text-slate-500 font-medium">
-                                  <span className="truncate pr-4">{latestAct.text}</span>
-                                  <span className="shrink-0 font-bold uppercase tracking-wider opacity-60">{timeAgo(latestAct.time)}</span>
-                                </div>
-                              </CardItem>
-                            )}
+
                           </div>
 
-                          {/* Footer actions */}
-                          <CardItem translateZ={25} className="w-full">
+                          {/* Footer actions.
+
+                              translateZ={0}, not 25. Under the container's
+                              perspective:1000px a lifted element below the
+                              card's centre projects upward, and this one sits
+                              at the very bottom -- it rendered 88px above its
+                              own layout box and left that much bare card
+                              beneath it. That strip of nothing at the foot of
+                              every card was this, not spacing. */}
+                          <CardItem translateZ={0} className="w-full">
                             <div className="border-t border-slate-100 bg-slate-50/80 px-5 py-3 flex items-center justify-between opacity-0 group-hover/card:opacity-100 transition-opacity duration-200">
                               <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#3D52A0] flex items-center gap-1.5 group-hover/card:text-[#334486] transition-colors">
                                 Open Project{" "}

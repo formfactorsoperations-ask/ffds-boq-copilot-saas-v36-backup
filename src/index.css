@@ -1855,3 +1855,40 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .cd-card:hover { transform: none; }
 }
+
+/* ── 3D card: a shadow that answers the tilt ─────────────────────────────
+
+   CardContainer publishes --tilt-x / --tilt-y (degrees) and --tilt-lift (0 or
+   1) on itself while the pointer is over it; those inherit down to the card.
+   The card then moves its shadow against a light that stays put, which is the
+   difference between an object tilting and a flat image being rotated. The
+   static shadow was most of why the effect read as a sticker.
+
+   --tilt-ring carries the "active project" outline so both can share the one
+   box-shadow property. The variables are only ever READ here with fallbacks --
+   declaring them on this selector would shadow the inherited values and the
+   whole thing would sit frozen at zero.
+
+   In CSS rather than Tailwind on purpose: an arbitrary value containing commas
+   compiles to nothing, silently. */
+.fx-tilt-card {
+  box-shadow:
+    calc(var(--tilt-y, 0) * -1.6px)
+    calc(6px + var(--tilt-x, 0) * 1.6px + var(--tilt-lift, 0) * 10px)
+    calc(12px + var(--tilt-lift, 0) * 26px)
+    -6px
+    rgba(18, 24, 47, calc(0.10 + var(--tilt-lift, 0) * 0.14)),
+    var(--tilt-ring, 0 0 0 0 rgba(0, 0, 0, 0));
+  transition: box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: box-shadow;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-tilt-card {
+    box-shadow: 0 6px 12px -6px rgba(18, 24, 47, 0.10),
+                var(--tilt-ring, 0 0 0 0 rgba(0, 0, 0, 0));
+    transition: none;
+    will-change: auto;
+  }
+}
