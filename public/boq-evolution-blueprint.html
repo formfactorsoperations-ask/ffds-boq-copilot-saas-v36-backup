@@ -92,6 +92,9 @@
         <button id="nav-btn-historical" onclick="switchTab('historical')" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-all flex items-center gap-2 cursor-pointer">
           <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i> 7. Empirical Data & Impact Zones
         </button>
+        <button id="nav-btn-packages" onclick="switchTab('packages')" class="px-4 py-2.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all flex items-center gap-2 cursor-pointer">
+          <i data-lucide="boxes" class="w-3.5 h-3.5 text-indigo-600"></i> 8. Room-Wise Packages & 2BHK Comparative Blueprint
+        </button>
       </div>
     </div>
 
@@ -1127,10 +1130,74 @@
             </div>
           </div>
 
-          <!-- Active Tier & Filter Strip -->
+          <!-- PROFESSIONAL STUDIO CONTROLS: ITEM BANK REPOSITORY & SPEC DELIBERATION TAGS -->
+          <div class="p-3 bg-slate-900 text-white border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+            <!-- Item Bank Catalog Status & Direct Link -->
+            <div class="flex items-center gap-3">
+              <div class="flex items-center gap-2">
+                <span class="p-1 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  <i data-lucide="database" class="w-3.5 h-3.5 text-indigo-400"></i>
+                </span>
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-extrabold text-[11px] text-white">Item Bank Master Linked</span>
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> 288 Standard Items
+                    </span>
+                  </div>
+                  <span class="text-[10px] text-slate-400">Auto-populates Materials, Trade Labor, & Baseline GMs</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Deliberation Stamps & Standard Assemblies -->
+            <div class="flex items-center gap-3 flex-wrap">
+              <!-- Practical Client Deliberation Flags -->
+              <div class="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-lg border border-slate-700/60">
+                <span class="text-[9px] uppercase font-bold tracking-wider text-slate-400 px-1">
+                  Tag Line:
+                </span>
+                <button onclick="applyWorkbenchSticker('CLIENT_LOVES')" title="Client explicitly loves and prioritized this selection" class="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1">
+                  ❤️ Client Must-Have
+                </button>
+                <button onclick="applyWorkbenchSticker('VALUE_ENG')" title="Target candidate for VE budget reduction if client exceeds cap" class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1">
+                  ✂️ VE Candidate
+                </button>
+                <button onclick="applyWorkbenchSticker('SAMPLE_SENT')" title="Physical finish or laminate swatch dispatched" class="px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 hover:bg-sky-500/30 text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1">
+                  🏷️ Swatch Sent
+                </button>
+                <button onclick="applyWorkbenchSticker('LONG_LEAD')" title="Requires 4+ weeks vendor procurement lead time" class="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1">
+                  ⏳ 4-Wk Lead
+                </button>
+                <button onclick="applyWorkbenchSticker('CLEARED')" class="px-1.5 py-0.5 rounded text-slate-400 hover:text-white text-[10px] font-bold cursor-pointer">
+                  &times; Clear
+                </button>
+              </div>
+
+              <!-- Quick Bank Assembly Injection -->
+              <div class="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-lg border border-slate-700/60">
+                <span class="text-[9px] uppercase font-bold tracking-wider text-emerald-400 px-1 flex items-center gap-1">
+                  <i data-lucide="package" class="w-3 h-3"></i> Add Assembly:
+                </span>
+                <button onclick="injectComboPreset('island_kitchen')" class="px-2 py-0.5 rounded bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold cursor-pointer transition-all">
+                  + Island Counter
+                </button>
+                <button onclick="injectComboPreset('walkin_wardrobe')" class="px-2 py-0.5 rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 text-[10px] font-bold cursor-pointer transition-all">
+                  + Walk-In Glass
+                </button>
+                <button onclick="injectComboPreset('italian_bath')" class="px-2 py-0.5 rounded bg-sky-600/20 hover:bg-sky-600/40 text-sky-300 border border-sky-500/30 text-[10px] font-bold cursor-pointer transition-all">
+                  + Rain Shower
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Tier & Filter Strip (Supports Drag-and-Drop) -->
           <div class="p-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-slate-500 text-[11px] font-bold uppercase">Focus Scope:</span>
+              <span class="text-slate-500 text-[11px] font-bold uppercase flex items-center gap-1">
+                <i data-lucide="move" class="w-3 h-3 text-slate-400"></i> Scope Room:
+              </span>
               <button id="filter-all-btn" onclick="filterWorkbenchRoom('all')" class="px-2.5 py-1 rounded-lg bg-white border border-indigo-400 text-indigo-700 font-bold shadow-xs">
                 All Rooms (28 items)
               </button>
@@ -1143,6 +1210,9 @@
               <button id="filter-civil-btn" onclick="filterWorkbenchRoom('civil')" class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 font-medium">
                 Civil & Wet Works (5)
               </button>
+              <span class="text-[10px] text-slate-400 italic hidden sm:inline ml-1">
+                (💡 Drag & drop rows using the grip handle to reorder)
+              </span>
             </div>
 
             <!-- Live Commercial Health Indicator -->
@@ -1185,26 +1255,74 @@
 
       </div>
 
-      <!-- SECTION 3: 4 REVOLUTIONARY SMART FEATURES TO ACCELERATE EDITING -->
+      <!-- SECTION 3: 6 INNOVATIVE SMART FEATURES & STICKER WORKFLOWS -->
       <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-6">
         <div>
-          <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Smart Productivity Boosters</span>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Productivity & Visual Deliberation Boosters</span>
           <h3 class="font-serif text-xl sm:text-2xl font-bold text-slate-900 mt-1">
-            4 Smart Features That Make Editing 5x Faster
+            6 Innovative Features: Drag & Drop, Stickers, Combos & AI Sentinels
           </h3>
           <p class="text-xs text-slate-500 mt-1 max-w-3xl">
-            Beyond standard spreadsheet cell inputs, these automated tools prevent manual math errors and repetitive keystrokes.
+            Beyond ordinary spreadsheet inputs, these innovative capabilities streamline client negotiations, eliminate forgotten scope, and make building luxury BOQs tactile and engaging.
           </p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
           
-          <!-- Feature 1 -->
+          <!-- Feature 1: Drag and Drop -->
+          <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+            <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+              <i data-lucide="grip-vertical" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-slate-900 text-sm">1. Tactile Drag-and-Drop Reorder</h4>
+            <p class="text-slate-600 leading-relaxed text-[11px]">
+              Grab any row using the drag grip handle <code class="font-mono text-[10px] bg-white px-1 border rounded">⠿</code> and drop it to reorder room priorities or move items between spaces instantly without cut-pasting.
+            </p>
+            <div class="p-2 bg-white rounded border border-slate-200 text-[10px] font-mono text-slate-700 flex items-center justify-between">
+              <span>⠿ Master Bed Wardrobe</span>
+              <span class="text-indigo-600 font-bold">&darr; Dropped to Pos #1</span>
+            </div>
+          </div>
+
+          <!-- Feature 2: Visual Decision Stickers -->
+          <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+            <div class="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
+              <i data-lucide="tag" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-slate-900 text-sm">2. Visual Decision Stickers</h4>
+            <p class="text-slate-600 leading-relaxed text-[11px]">
+              Stamp line items with tactile decision tags during client reviews: 
+              <span class="inline-block px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 font-bold text-[9px]">❤️ Client Loves</span>, 
+              <span class="inline-block px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold text-[9px]">✂️ Value Eng Cut</span>, 
+              or <span class="inline-block px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-bold text-[9px]">⏳ 4-Wk Lead</span>.
+            </p>
+            <div class="p-2 bg-white rounded border border-slate-200 text-[10px] font-mono text-slate-700 space-y-1">
+              <div>&bull; Filter/export specifically by "Client Loves" items</div>
+              <div>&bull; Stamped directly onto client PDF exports</div>
+            </div>
+          </div>
+
+          <!-- Feature 3: Smart Combo Bundles -->
+          <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+            <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+              <i data-lucide="package-plus" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-slate-900 text-sm">3. Pre-Packaged Combo Bundles</h4>
+            <p class="text-slate-600 leading-relaxed text-[11px]">
+              Instead of typing 8 separate carpentry lines, inject curated multi-item assemblies with 1 click (e.g., <em>Island Kitchen Trio: Base + Counter Quartz + Blum Servo-Drive</em>).
+            </p>
+            <div class="p-2 bg-white rounded border border-slate-200 text-[10px] font-mono text-slate-700 space-y-1">
+              <div class="text-emerald-700 font-bold">&check; 1-Click adds Substrate + Counter + Channels</div>
+              <div class="text-slate-500">Auto-calibrates unit costs with trade discount</div>
+            </div>
+          </div>
+
+          <!-- Feature 4: Smart Room Takeoff -->
           <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
             <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
               <i data-lucide="ruler" class="w-4 h-4"></i>
             </div>
-            <h4 class="font-bold text-slate-900 text-sm">1. Smart Room Takeoff Assist</h4>
+            <h4 class="font-bold text-slate-900 text-sm">4. Smart Room Takeoff Assist</h4>
             <p class="text-slate-600 leading-relaxed text-[11px]">
               Instead of manually calculating sq ft, click the dimension helper: type <strong>15 &times; 12 &times; 10</strong>.
             </p>
@@ -1215,44 +1333,28 @@
             </div>
           </div>
 
-          <!-- Feature 2 -->
+          <!-- Feature 5: Real-Time Margin Shield -->
           <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
-            <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
-              <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
-            </div>
-            <h4 class="font-bold text-slate-900 text-sm">2. 1-Click Spec Upgrader</h4>
-            <p class="text-slate-600 leading-relaxed text-[11px]">
-              Click any line item's finish tag to jump tiers without re-typing.
-            </p>
-            <div class="p-2 bg-white rounded border border-slate-200 text-[10px] font-mono text-slate-700 space-y-1">
-              <div class="text-slate-500">1.0mm Merino Laminate</div>
-              <div class="text-indigo-600 font-bold">&rarr; [Swap to Anti-Fingerprint PU]</div>
-              <div class="text-purple-600 font-bold">&rarr; [Swap to Fluted Veneer]</div>
-            </div>
-          </div>
-
-          <!-- Feature 3 -->
-          <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
-            <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+            <div class="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold">
               <i data-lucide="shield-alert" class="w-4 h-4"></i>
             </div>
-            <h4 class="font-bold text-slate-900 text-sm">3. Real-Time Margin Shield</h4>
+            <h4 class="font-bold text-slate-900 text-sm">5. Real-Time Margin Shield</h4>
             <p class="text-slate-600 leading-relaxed text-[11px]">
               If an estimator types a discounted sell price, the cell instantly alerts:
             </p>
             <div class="p-2 bg-white rounded border border-slate-200 text-[10px] font-mono text-slate-700 space-y-1">
-              <div class="text-emerald-600 font-bold">&check; &gt;30% GM: Green (Safe)</div>
+              <div class="text-emerald-600 font-bold">&check; &gt;30% GM: Green (Safe Studio Profit)</div>
               <div class="text-amber-600 font-bold">&#9888; 25-29% GM: Amber (Low Buffer)</div>
-              <div class="text-rose-600 font-bold">&#10008; &lt;25% GM: Red (Approval Needed)</div>
+              <div class="text-rose-600 font-bold">&#10008; &lt;25% GM: Red (Director Sign-off)</div>
             </div>
           </div>
 
-          <!-- Feature 4 -->
+          <!-- Feature 6: Ghost Item Sentinel -->
           <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
             <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
               <i data-lucide="ghost" class="w-4 h-4"></i>
             </div>
-            <h4 class="font-bold text-slate-900 text-sm">4. Ghost Item Sentinel</h4>
+            <h4 class="font-bold text-slate-900 text-sm">6. Ghost Item Sentinel</h4>
             <p class="text-slate-600 leading-relaxed text-[11px]">
               Detects required companion lines that were accidentally omitted.
             </p>
@@ -1622,6 +1724,237 @@
       </div>
     </div>
 
+    <!-- TAB 8: ROOM-WISE PACKAGES & 2BHK COMPARATIVE BLUEPRINT -->
+    <div id="tab-section-packages" class="space-y-6 hidden">
+      <!-- Header Banner -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-card space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
+                <i data-lucide="package-check" class="w-3 h-3 text-indigo-600"></i> Modular Assembly Architecture
+              </span>
+              <span class="text-xs text-slate-400 font-mono">Live Interactive Evaluator</span>
+            </div>
+            <h2 class="font-serif text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+              Room-Wise Package Architecture: 2BHK Case Study (Civil vs Non-Civil)
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-500 mt-1 max-w-3xl leading-relaxed">
+              Instead of scattering dozens of disconnected line items across the screen, the estimator selects structured, trade-tested <strong>Room Packages</strong> (e.g. Master Bedroom Carpentry, Living Room False Ceiling, Toilet Civil & Tile Package). Each package contains verified line items with editable <strong>Material Cost</strong>, <strong>Labor Cost</strong>, and <strong>Target Gross Margin</strong>, structured across <strong>3 distinct proposal tiers</strong> based on <span class="text-indigo-900 font-bold">Scope Breadth (Number of Items)</span> and <span class="text-indigo-900 font-bold">Material & Hardware Specifications</span>.
+            </p>
+          </div>
+
+          <!-- Scenario Comparison Switcher -->
+          <div class="bg-slate-100 p-1.5 rounded-xl border border-slate-200 flex flex-col gap-1.5 shrink-0 min-w-[280px]">
+            <span class="text-[9px] uppercase font-bold text-slate-500 px-2 tracking-wider">Select 2BHK Scenario:</span>
+            <div class="grid grid-cols-2 gap-1">
+              <button id="pkg-btn-without-civil" onclick="switchPackageScenario('without_civil')" class="px-3 py-2 rounded-lg text-xs font-bold transition-all text-center cursor-pointer bg-white text-indigo-700 shadow-xs">
+                🏠 2BHK Turnkey<br><span class="text-[9px] font-normal text-slate-500">(Without Civil)</span>
+              </button>
+              <button id="pkg-btn-with-civil" onclick="switchPackageScenario('with_civil')" class="px-3 py-2 rounded-lg text-xs font-bold transition-all text-center cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-200/60">
+                🔨 2BHK Deep Reno<br><span class="text-[9px] font-normal text-amber-700 font-bold">(With Full Civil)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metric KPI Cards across 3 Tiers -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 pt-1">
+          <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+            <span class="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Active Configuration</span>
+            <div id="pkg-summary-scope-title" class="text-xs font-bold text-slate-900 mt-0.5">2BHK Standard Turnkey (New Possession)</div>
+            <div id="pkg-summary-scope-desc" class="text-[10px] text-slate-500 mt-1">Carpentry, False Ceiling, Painting, Electrical. Zero hacking or wet civil.</div>
+          </div>
+          <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Tier 1: Essential</span>
+              <span id="pkg-t1-itemcount" class="text-[10px] font-mono font-bold text-slate-600 bg-white px-1.5 py-0.5 rounded border border-slate-200">12 items</span>
+            </div>
+            <div id="pkg-summary-t1-cost" class="text-base font-serif font-bold text-slate-900 mt-1">₹8,45,000</div>
+            <div class="text-[10px] text-slate-500 mt-0.5 flex justify-between">
+              <span>Avg GM: <strong id="pkg-summary-t1-gm" class="text-emerald-700 font-mono">27.5%</strong></span>
+              <span>Essential Specs</span>
+            </div>
+          </div>
+          <div class="p-3.5 rounded-xl bg-indigo-50/50 border border-indigo-200">
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] uppercase font-bold text-indigo-700 tracking-wider">Tier 2: Comfort (Signature)</span>
+              <span id="pkg-t2-itemcount" class="text-[10px] font-mono font-bold text-indigo-700 bg-white px-1.5 py-0.5 rounded border border-indigo-200">18 items</span>
+            </div>
+            <div id="pkg-summary-t2-cost" class="text-base font-serif font-bold text-indigo-950 mt-1">₹14,80,000</div>
+            <div class="text-[10px] text-indigo-700/80 mt-0.5 flex justify-between">
+              <span>Avg GM: <strong id="pkg-summary-t2-gm" class="text-emerald-700 font-mono">33.2%</strong></span>
+              <span>Premium Hardware</span>
+            </div>
+          </div>
+          <div class="p-3.5 rounded-xl bg-purple-50/50 border border-purple-200">
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] uppercase font-bold text-purple-700 tracking-wider">Tier 3: Luxury Harmony</span>
+              <span id="pkg-t3-itemcount" class="text-[10px] font-mono font-bold text-purple-700 bg-white px-1.5 py-0.5 rounded border border-purple-200">24 items</span>
+            </div>
+            <div id="pkg-summary-t3-cost" class="text-base font-serif font-bold text-purple-950 mt-1">₹22,90,000</div>
+            <div class="text-[10px] text-purple-700/80 mt-0.5 flex justify-between">
+              <span>Avg GM: <strong id="pkg-summary-t3-gm" class="text-emerald-700 font-mono">36.8%</strong></span>
+              <span>Veneer/Blum/PU/Auto</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Strategy Architecture Callout: What Differentiates Tiers in a Package? -->
+        <div class="p-4 rounded-xl bg-indigo-900 text-white text-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <i data-lucide="layers" class="w-4 h-4 text-amber-400"></i>
+              <span class="font-bold text-white text-sm">Two-Dimensional Tier Differentiation Formula</span>
+            </div>
+            <p class="text-slate-300 text-[11px] leading-relaxed max-w-3xl">
+              <strong>Dimension 1 — Scope Inclusions (Count of Items):</strong> Tier 1 includes core functional units only. Tier 2 unlocks feature additions (e.g., Bed Panelling, Loft Storage, LED profile coves). Tier 3 unlocks full lifestyle additions (e.g., Dresser Island, Accent Rafters, Smart Touch Automation).<br>
+              <strong>Dimension 2 — Material Chemistry & Hardware Grade:</strong> Commercial Laminate + MR Ply &rarr; Merino Matte + Marine BWP Ply + Hafele &rarr; Fluted Smoked Veneer + PU Paint + Blum Legrabox.
+            </p>
+          </div>
+          <div class="shrink-0 flex items-center gap-2">
+            <span class="px-3 py-1.5 rounded-lg bg-indigo-800 text-[11px] font-mono font-bold text-indigo-200 border border-indigo-700">
+              Formula: Sell = (Mat + Lab) / (1 - GM%)
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Packages Sandbox Workspace -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left: Package Navigator & Filter Strip (4 cols) -->
+        <div class="lg:col-span-4 space-y-4">
+          <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <i data-lucide="folder-tree" class="w-3.5 h-3.5 text-indigo-600"></i> Room Packages
+              </span>
+              <span id="pkg-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-700">
+                5 Packages Active
+              </span>
+            </div>
+
+            <!-- Trade Category Badges -->
+            <div class="flex flex-wrap gap-1 text-[10px]">
+              <button onclick="filterPackagesByTrade('all')" class="pkg-trade-btn active px-2 py-1 rounded bg-slate-900 text-white font-bold cursor-pointer">
+                All Trades
+              </button>
+              <button onclick="filterPackagesByTrade('civil')" class="pkg-trade-btn px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold cursor-pointer">
+                Civil & Wet
+              </button>
+              <button onclick="filterPackagesByTrade('carpentry')" class="pkg-trade-btn px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold cursor-pointer">
+                Carpentry
+              </button>
+              <button onclick="filterPackagesByTrade('ceiling')" class="pkg-trade-btn px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold cursor-pointer">
+                False Ceiling
+              </button>
+              <button onclick="filterPackagesByTrade('painting')" class="pkg-trade-btn px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold cursor-pointer">
+                Painting
+              </button>
+            </div>
+
+            <!-- Dynamic Package List -->
+            <div id="pkg-sidebar-list" class="space-y-2 pt-1 max-h-[560px] overflow-y-auto pr-1">
+              <!-- Rendered via JS -->
+            </div>
+
+            <!-- Add Custom Package Trigger -->
+            <div class="pt-2 border-t border-slate-100">
+              <button onclick="addNewCustomPackageModal()" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-indigo-50 border border-dashed border-slate-300 hover:border-indigo-300 text-slate-600 hover:text-indigo-700 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> + Add Standard Package from Item Bank
+              </button>
+            </div>
+          </div>
+
+          <!-- UI Transition Ease Assessment: Why Packages Make BOQ Editor Smoother -->
+          <div class="bg-gradient-to-br from-indigo-50/80 to-purple-50/80 rounded-2xl border border-indigo-100 p-4 text-xs space-y-2.5">
+            <div class="flex items-center gap-1.5 text-indigo-950 font-bold text-xs">
+              <i data-lucide="sparkles" class="w-4 h-4 text-indigo-600"></i>
+              Why Packages Make BOQ Editing Faster & Cleaner
+            </div>
+            <ul class="space-y-1.5 text-slate-700 text-[11px] leading-relaxed list-disc list-inside">
+              <li><strong>Zero Blank Canvas Fatigue:</strong> Selecting "2BHK Package Set" adds all 18 room-specific line items instantly.</li>
+              <li><strong>Clean Room Containment:</strong> No 80-row endless spreadsheet; line items stay grouped in neat room cards.</li>
+              <li><strong>Item-Level Granular Overrides:</strong> Every sub-item (hinges, ply, primer) remains 100% editable for material, labor, and margin.</li>
+              <li><strong>1-Click Scope Expansion:</strong> Upgrade an entire room package to Comfort with 1 click without touching unrelated rooms.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Right: Active Package Deep Inspector & Multi-Tier Matrix (8 cols) -->
+        <div class="lg:col-span-8 space-y-4">
+          <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-5">
+            
+            <!-- Package Header Banner -->
+            <div id="pkg-active-header" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+              <!-- Rendered via JS -->
+            </div>
+
+            <!-- Tier Selector Pill Tabs for Active Package -->
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+                <span class="text-[9px] uppercase font-bold text-slate-400 px-2">Inspect Tier Scope:</span>
+                <button id="pkg-tier-tab-t1" onclick="switchActivePackageTier('t1')" class="px-3 py-1 rounded-lg font-bold cursor-pointer transition-all text-slate-600 hover:text-slate-900">
+                  Tier 1 (Essential)
+                </button>
+                <button id="pkg-tier-tab-t2" onclick="switchActivePackageTier('t2')" class="px-3 py-1 rounded-lg font-bold cursor-pointer transition-all bg-white text-indigo-700 shadow-xs">
+                  Tier 2 (Comfort Signature)
+                </button>
+                <button id="pkg-tier-tab-t3" onclick="switchActivePackageTier('t3')" class="px-3 py-1 rounded-lg font-bold cursor-pointer transition-all text-slate-600 hover:text-slate-900">
+                  Tier 3 (Luxury Harmony)
+                </button>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button onclick="injectSubItemToActivePackage()" class="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer">
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Custom Item
+                </button>
+              </div>
+            </div>
+
+            <!-- Active Package Item Breakdown Table -->
+            <div class="overflow-x-auto rounded-xl border border-slate-200">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px]">
+                    <th class="p-3 w-8 text-center">#</th>
+                    <th class="p-3 w-56">Item Name & Item Bank SKU</th>
+                    <th class="p-3 w-28 text-center bg-indigo-50/50">Qty / Unit</th>
+                    <th class="p-3">Specification Detail</th>
+                    <th class="p-3 w-32 text-center bg-slate-50">Unit Cost (Mat+Lab)</th>
+                    <th class="p-3 w-20 text-center">GM %</th>
+                    <th class="p-3 w-24 text-right">Sell Rate</th>
+                    <th class="p-3 w-24 text-right">Line Total</th>
+                    <th class="p-3 w-16 text-center">Active</th>
+                  </tr>
+                </thead>
+                <tbody id="pkg-active-items-table-body" class="divide-y divide-slate-200 bg-white">
+                  <!-- Rendered via JS -->
+                </tbody>
+                <tfoot id="pkg-active-items-table-foot" class="bg-slate-50 border-t-2 border-slate-200 font-bold">
+                  <!-- Rendered via JS -->
+                </tfoot>
+              </table>
+            </div>
+
+            <!-- 3-Tier Side-by-Side Scope & Spec Contrast Cards for this Package -->
+            <div class="space-y-2 pt-2">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <i data-lucide="git-compare" class="w-3.5 h-3.5 text-indigo-600"></i> Tier Comparison for this Package
+              </span>
+              <div id="pkg-3tier-compare-grid" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <!-- Rendered via JS -->
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+
   </div>
 
   <script>
@@ -1831,7 +2164,7 @@
     // Tab Navigation
     function switchTab(tabId) {
       state.activeTab = tabId;
-      const tabIds = ['workflow', 'complex', 'ai', 'studiobrain', 'editorux', 'simulator', 'historical'];
+      const tabIds = ['workflow', 'complex', 'ai', 'studiobrain', 'editorux', 'simulator', 'historical', 'packages'];
       tabIds.forEach(id => {
         const sec = document.getElementById('tab-section-' + id);
         const btn = document.getElementById('nav-btn-' + id);
@@ -1847,6 +2180,9 @@
       }
       if (tabId === 'editorux') {
         renderWorkbench();
+      }
+      if (tabId === 'packages') {
+        renderPackagesSandbox();
       }
       lucide.createIcons();
     }
@@ -2353,63 +2689,78 @@
       items: [
         {
           id: 'wb-1',
+          bankId: 'bank-101',
+          bankName: '3-Door Wardrobe Joinery Assembly',
+          bankInSync: true,
           room: 'master_bed',
           roomName: 'Master Bedroom',
           category: 'Carpentry & Joinery',
           name: 'Full Height 3-Door Wardrobe with Internal Dresser',
           unit: 'sqft',
           qty: 75,
-          t1: { spec: '1.0mm Commercial Laminate + MR Ply + Standard Hardware', rate: 1450, cost: 1050, margin: 27.6 },
-          t2: { spec: '1.0mm Merino Matte Laminate + Century BWP Marine Ply + Hafele Soft-Close', rate: 1850, cost: 1250, margin: 32.4 },
-          t3: { spec: 'Fluted Smoked Oak Veneer with Polycoat + Century Club Prime + Blum Legrabox', rate: 2650, cost: 1720, margin: 35.1 }
+          t1: { spec: '1.0mm Commercial Laminate + MR Ply + Standard Hardware', material: 710, labor: 340, cost: 1050, margin: 27.6, rate: 1450 },
+          t2: { spec: '1.0mm Merino Matte Laminate + Century BWP Marine Ply + Hafele Soft-Close', material: 825, labor: 425, cost: 1250, margin: 32.4, rate: 1850 },
+          t3: { spec: 'Fluted Smoked Oak Veneer with Polycoat + Century Club Prime + Blum Legrabox', material: 1150, labor: 570, cost: 1720, margin: 35.1, rate: 2650 }
         },
         {
           id: 'wb-2',
+          bankId: 'bank-102',
+          bankName: 'Modular Kitchen Base & Wall Cabs',
+          bankInSync: true,
           room: 'kitchen',
           roomName: 'Modular Kitchen',
           category: 'Carpentry & Joinery',
           name: 'Modular Base & Overhead Cabinets with Tandem Drawers',
           unit: 'sqft',
           qty: 90,
-          t1: { spec: '0.8mm Gloss Laminate + HDHMR + Ebco Regular Channels', rate: 1650, cost: 1220, margin: 26.0 },
-          t2: { spec: 'Anti-fingerprint Satin PU Paint + Century BWP Marine + Blum Tandembox', rate: 2250, cost: 1510, margin: 32.9 },
-          t3: { spec: 'Ceramic / Glass Shutter Profile + BWP Ply + Blum Servo-Drive Electric Touch', rate: 3400, cost: 2180, margin: 35.8 }
+          t1: { spec: '0.8mm Gloss Laminate + HDHMR + Ebco Regular Channels', material: 830, labor: 390, cost: 1220, margin: 26.0, rate: 1650 },
+          t2: { spec: 'Anti-fingerprint Satin PU Paint + Century BWP Marine + Blum Tandembox', material: 1020, labor: 490, cost: 1510, margin: 32.9, rate: 2250 },
+          t3: { spec: 'Ceramic / Glass Shutter Profile + BWP Ply + Blum Servo-Drive Electric Touch', material: 1500, labor: 680, cost: 2180, margin: 35.8, rate: 3400 }
         },
         {
           id: 'wb-3',
+          bankId: 'bank-103',
+          bankName: 'Wet Area Floor & Dado Tile Package',
+          bankInSync: false,
           room: 'civil',
           roomName: 'Civil & Wet Works',
           category: 'Civil & Masonry',
           name: 'Bathroom Floor & Dado Tiling with Epoxy Grouting',
           unit: 'sqft',
           qty: 180,
-          t1: { spec: 'Tile-over-tile using polymer adhesive (Zero hacking) + standard grout', rate: 220, cost: 160, margin: 27.2 },
-          t2: { spec: 'Chipping to RCC + 800x1600 GVT slab tiles + Laticrete Epoxy Grouting', rate: 380, cost: 255, margin: 32.8 },
-          t3: { spec: 'Italian Statuario Marble bookmatched with 8-stage diamond hone polish', rate: 780, cost: 490, margin: 37.1 }
+          t1: { spec: 'Tile-over-tile using polymer adhesive (Zero hacking) + standard grout', material: 105, labor: 55, cost: 160, margin: 27.2, rate: 220 },
+          t2: { spec: 'Chipping to RCC + 800x1600 GVT slab tiles + Laticrete Epoxy Grouting', material: 170, labor: 85, cost: 255, margin: 32.8, rate: 380 },
+          t3: { spec: 'Italian Statuario Marble bookmatched with 8-stage diamond hone polish', material: 340, labor: 150, cost: 490, margin: 37.1, rate: 780 }
         },
         {
           id: 'wb-4',
+          bankId: 'bank-104',
+          bankName: 'Standard Gypsum False Ceiling Kit',
+          bankInSync: true,
           room: 'all',
           roomName: 'All Spaces',
           category: 'False Ceiling',
           name: 'Gypsum Board False Ceiling with Perimeter Cove Lighting',
           unit: 'sqft',
           qty: 450,
-          t1: { spec: 'Saint-Gobain Gypboard with perimeter border cove only', rate: 125, cost: 92, margin: 26.4 },
-          t2: { spec: 'Full ceiling drop with magnetic aluminum architectural profile tracks', rate: 165, cost: 112, margin: 32.1 },
-          t3: { spec: 'Acoustic micro-perforated Gypsum panels with seamless flush magnetic trims', rate: 245, cost: 158, margin: 35.5 }
+          t1: { spec: 'Saint-Gobain Gypboard with perimeter border cove only', material: 62, labor: 30, cost: 92, margin: 26.4, rate: 125 },
+          t2: { spec: 'Full ceiling drop with magnetic aluminum architectural profile tracks', material: 76, labor: 36, cost: 112, margin: 32.1, rate: 165 },
+          t3: { spec: 'Acoustic micro-perforated Gypsum panels with seamless flush magnetic trims', material: 108, labor: 50, cost: 158, margin: 35.5, rate: 245 }
         },
         {
           id: 'wb-5',
+          bankId: 'bank-105',
+          bankName: 'Premium Architectural Wall Painting Kit',
+          bankInSync: true,
           room: 'all',
           roomName: 'All Spaces',
           category: 'Painting & Finishing',
           name: 'Surface Preparation & Luxury Emulsion Painting',
           unit: 'sqft',
           qty: 850,
-          t1: { spec: '2 coats Birla White Putty + Asian Paints Tractor Emulsion', rate: 35, cost: 26, margin: 25.7 },
-          t2: { spec: 'Asian Paints Royale Luxury Emulsion with 2 coats acrylic primer & sanding', rate: 58, cost: 39, margin: 32.7 },
-          t3: { spec: 'Asian Paints Royale Aspira Teflon-coated washable finish with PU seal', rate: 88, cost: 56, margin: 36.3 }
+          t1: { spec: '2 coats Birla White Putty + Asian Paints Tractor Emulsion', material: 16, labor: 10, cost: 26, margin: 25.7, rate: 35 },
+          t2: { spec: 'Asian Paints Royale Luxury Emulsion with 2 coats acrylic primer & sanding', material: 25, labor: 14, cost: 39, margin: 32.7, rate: 58 },
+          t3: { spec: 'Asian Paints Royale Aspira Teflon-coated washable finish with PU seal', material: 36, labor: 20, cost: 56, margin: 36.3, rate: 88 }
         }
       ]
     };
@@ -2530,12 +2881,77 @@
       const item = workbenchState.items.find(i => i.id === itemId);
       if (item && item[tierKey]) {
         item[tierKey].rate = num;
-        if (item[tierKey].cost > 0) {
+        if (item[tierKey].cost > 0 && num > 0) {
           item[tierKey].margin = Math.round(((num - item[tierKey].cost) / num) * 1000) / 10;
         }
+        item.bankInSync = false;
         renderWorkbench();
-        showToast(`Updated ${tierKey.toUpperCase()} rate to ₹${num.toLocaleString('en-IN')}`);
+        showToast(`Updated ${tierKey.toUpperCase()} sell rate to ₹${num.toLocaleString('en-IN')}/unit (GM: ${item[tierKey].margin}%)`);
       }
+    }
+
+    function updateWorkbenchMaterial(itemId, tierKey, val) {
+      const num = parseFloat(val) || 0;
+      const item = workbenchState.items.find(i => i.id === itemId);
+      if (item && item[tierKey]) {
+        item[tierKey].material = num;
+        item[tierKey].cost = (item[tierKey].material || 0) + (item[tierKey].labor || 0);
+        // Recalculate sell rate based on fixed target margin
+        const marginDecimal = (item[tierKey].margin || 30) / 100;
+        if (marginDecimal < 1) {
+          item[tierKey].rate = Math.round(item[tierKey].cost / (1 - marginDecimal));
+        }
+        item.bankInSync = false;
+        renderWorkbench();
+        showToast(`Material updated to ₹${num}/unit → Total Cost ₹${item[tierKey].cost} | Sell Rate ₹${item[tierKey].rate}`);
+      }
+    }
+
+    function updateWorkbenchLabor(itemId, tierKey, val) {
+      const num = parseFloat(val) || 0;
+      const item = workbenchState.items.find(i => i.id === itemId);
+      if (item && item[tierKey]) {
+        item[tierKey].labor = num;
+        item[tierKey].cost = (item[tierKey].material || 0) + (item[tierKey].labor || 0);
+        const marginDecimal = (item[tierKey].margin || 30) / 100;
+        if (marginDecimal < 1) {
+          item[tierKey].rate = Math.round(item[tierKey].cost / (1 - marginDecimal));
+        }
+        item.bankInSync = false;
+        renderWorkbench();
+        showToast(`Labor updated to ₹${num}/unit → Total Cost ₹${item[tierKey].cost} | Sell Rate ₹${item[tierKey].rate}`);
+      }
+    }
+
+    function updateWorkbenchMargin(itemId, tierKey, val) {
+      const marginPct = parseFloat(val) || 0;
+      const item = workbenchState.items.find(i => i.id === itemId);
+      if (item && item[tierKey]) {
+        item[tierKey].margin = marginPct;
+        const marginDecimal = marginPct / 100;
+        if (marginDecimal < 1 && item[tierKey].cost > 0) {
+          item[tierKey].rate = Math.round(item[tierKey].cost / (1 - marginDecimal));
+        }
+        item.bankInSync = false;
+        renderWorkbench();
+        showToast(`Adjusted GM to ${marginPct}% → New Sell Rate ₹${item[tierKey].rate.toLocaleString('en-IN')}`);
+      }
+    }
+
+    function syncWithBankMaster(itemId) {
+      const item = workbenchState.items.find(i => i.id === itemId);
+      if (!item) return;
+      item.bankInSync = true;
+      renderWorkbench();
+      showToast(`Master Bank Synced: "${item.name}" linked to [${item.bankId}] "${item.bankName}". Rates locked to Studio catalog.`);
+    }
+
+    function pushToBankMaster(itemId) {
+      const item = workbenchState.items.find(i => i.id === itemId);
+      if (!item) return;
+      item.bankInSync = true;
+      renderWorkbench();
+      showToast(`Master Catalog Updated: Pushed custom rates (Mat: ₹${item.t2.material}, Lab: ₹${item.t2.labor}, GM: ${item.t2.margin}%) to Studio Bank [${item.bankId}]!`);
     }
 
     function upgradeWorkbenchSpec(itemId, tierKey) {
@@ -2597,6 +3013,151 @@
       renderWorkbench();
     }
 
+    // ==========================================
+    // INNOVATIVE FEATURES ENGINE: STICKERS & DRAG-AND-DROP
+    // ==========================================
+    let draggedItemId = null;
+
+    function handleDragStart(e, itemId) {
+      draggedItemId = itemId;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', itemId);
+      const row = document.getElementById(`row-${itemId}`);
+      if (row) row.classList.add('opacity-40', 'bg-indigo-50');
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    }
+
+    function handleDragEnter(e, targetItemId) {
+      e.preventDefault();
+      const targetRow = document.getElementById(`row-${targetItemId}`);
+      if (targetRow && draggedItemId !== targetItemId) {
+        targetRow.classList.add('border-t-2', 'border-indigo-600', 'bg-indigo-50/40');
+      }
+    }
+
+    function handleDragLeave(e, targetItemId) {
+      const targetRow = document.getElementById(`row-${targetItemId}`);
+      if (targetRow) {
+        targetRow.classList.remove('border-t-2', 'border-indigo-600', 'bg-indigo-50/40');
+      }
+    }
+
+    function handleDrop(e, targetItemId) {
+      e.preventDefault();
+      const sourceId = draggedItemId || e.dataTransfer.getData('text/plain');
+      if (!sourceId || sourceId === targetItemId) {
+        renderWorkbench();
+        return;
+      }
+
+      const fromIndex = workbenchState.items.findIndex(i => i.id === sourceId);
+      const toIndex = workbenchState.items.findIndex(i => i.id === targetItemId);
+
+      if (fromIndex !== -1 && toIndex !== -1) {
+        const [movedItem] = workbenchState.items.splice(fromIndex, 1);
+        // Inherit room if dropped into filtered room scope
+        if (workbenchState.activeRoom !== 'all') {
+          movedItem.room = workbenchState.activeRoom;
+        }
+        workbenchState.items.splice(toIndex, 0, movedItem);
+        showToast(`Tactile Reorder: Moved "${movedItem.name}" to position #${toIndex + 1}!`);
+      }
+      draggedItemId = null;
+      renderWorkbench();
+    }
+
+    function handleDragEnd() {
+      draggedItemId = null;
+      renderWorkbench();
+    }
+
+    function applyWorkbenchSticker(stickerType) {
+      const item = workbenchState.items.find(i => i.id === workbenchState.selectedItemId) || workbenchState.items[0];
+      if (!item) return;
+
+      if (stickerType === 'CLEARED') {
+        item.sticker = null;
+        showToast(`Cleared decision sticker from "${item.name}"`);
+      } else {
+        const stickersMap = {
+          'CLIENT_LOVES': { label: '❤️ Client Loves', bg: 'bg-rose-100 text-rose-800 border-rose-200' },
+          'VALUE_ENG': { label: '✂️ Value Eng Cut', bg: 'bg-amber-100 text-amber-800 border-amber-200' },
+          'SAMPLE_SENT': { label: '🏷️ Swatch Sent', bg: 'bg-blue-100 text-blue-800 border-blue-200' },
+          'LONG_LEAD': { label: '⏳ 4-Wk Lead', bg: 'bg-purple-100 text-purple-800 border-purple-200' }
+        };
+        item.sticker = stickersMap[stickerType];
+        showToast(`Applied "${item.sticker.label}" sticker to "${item.name}"! Tagged for client deliberation.`);
+      }
+      renderWorkbench();
+    }
+
+    function setItemStickerDirect(itemId, stickerType) {
+      const item = workbenchState.items.find(i => i.id === itemId);
+      if (!item) return;
+      workbenchState.selectedItemId = itemId;
+      applyWorkbenchSticker(stickerType);
+    }
+
+    function injectComboPreset(presetType) {
+      if (presetType === 'island_kitchen') {
+        const combo = {
+          id: 'wb-combo-' + Date.now(),
+          room: 'kitchen',
+          roomName: 'Modular Kitchen',
+          category: 'Carpentry & Joinery',
+          name: 'Island Breakfast Counter with Quartz Top & Wine Rack',
+          unit: 'sqft',
+          qty: 48,
+          t1: { spec: 'Marine Ply + 1mm Merino Laminate + 15mm Composite Quartz top', rate: 2100, cost: 1520, margin: 27.6 },
+          t2: { spec: 'BWP Ply + Fluted PU finish + 20mm Kalinga Caesarstone Quartz + Blum channels', rate: 2950, cost: 1980, margin: 32.8 },
+          t3: { spec: 'Solid Teak framing + Waterfall Italian Statuario Marble + integrated LED recessed cove', rate: 4600, cost: 2850, margin: 38.0 },
+          sticker: { label: '🍳 Combo Trio', bg: 'bg-emerald-100 text-emerald-800 border-emerald-300' }
+        };
+        workbenchState.items.splice(2, 0, combo);
+        workbenchState.selectedItemId = combo.id;
+        showToast('Injected "Island Kitchen Trio" Combo Bundle into Modular Kitchen!');
+      } else if (presetType === 'walkin_wardrobe') {
+        const combo = {
+          id: 'wb-combo-' + Date.now(),
+          room: 'master_bed',
+          roomName: 'Master Bedroom',
+          category: 'Carpentry & Joinery',
+          name: 'Walk-In Fluted Tinted Glass Wardrobe with Sensor Lighting',
+          unit: 'sqft',
+          qty: 65,
+          t1: { spec: 'Black anodized aluminum profile + 5mm toughened brown glass + Hafele hinges', rate: 2400, cost: 1750, margin: 27.0 },
+          t2: { spec: 'Rose Gold slim profile + Fluted glass + Leatherette lined drawers + proximity sensors', rate: 3600, cost: 2420, margin: 32.7 },
+          t3: { spec: 'Smart electrochromic switchable glass + Italian suede interior + motorized pull-down rails', rate: 5800, cost: 3650, margin: 37.0 },
+          sticker: { label: '👔 Luxury Suite', bg: 'bg-purple-100 text-purple-800 border-purple-300' }
+        };
+        workbenchState.items.splice(1, 0, combo);
+        workbenchState.selectedItemId = combo.id;
+        showToast('Injected "Walk-In Glass Suite" Combo Bundle into Master Bedroom!');
+      } else if (presetType === 'italian_bath') {
+        const combo = {
+          id: 'wb-combo-' + Date.now(),
+          room: 'civil',
+          roomName: 'Civil & Wet Works',
+          category: 'Sanitary & Civil',
+          name: 'Concealed Rain Shower Suite with Statuario Slab Cladding',
+          unit: 'rft',
+          qty: 120,
+          t1: { spec: 'Kohler thermostatic diverter + 600x1200 vitrified tile niche', rate: 1100, cost: 820, margin: 25.5 },
+          t2: { spec: 'Grohe SmartControl dual outlet rain shower + 9mm custom tempered glass partition', rate: 1950, cost: 1310, margin: 32.8 },
+          t3: { spec: 'Gessi ceiling-mounted waterfall body jets + bookmatched Statuario marble slab + linear drain', rate: 3800, cost: 2350, margin: 38.1 },
+          sticker: { label: '🚿 Master Bath', bg: 'bg-blue-100 text-blue-800 border-blue-300' }
+        };
+        workbenchState.items.push(combo);
+        workbenchState.selectedItemId = combo.id;
+        showToast('Injected "Master Italian Bath" Suite Combo into Civil & Wet Works!');
+      }
+      renderWorkbench();
+    }
+
     function renderWorkbench() {
       const container = document.getElementById('workbench-container');
       if (!container) return;
@@ -2651,8 +3212,9 @@
             <table class="w-full text-left text-xs border-collapse">
               <thead>
                 <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px]">
+                  <th class="p-3 w-8 text-center"><i data-lucide="grip-vertical" class="w-3.5 h-3.5 text-slate-400 mx-auto"></i></th>
                   <th class="p-3 w-8">#</th>
-                  <th class="p-3 w-48">Room & Component</th>
+                  <th class="p-3 w-56">Room & Component</th>
                   <th class="p-3 w-28 text-center bg-indigo-50/70 border-x border-indigo-100 text-indigo-900">
                     Spine Qty (All Tiers)
                   </th>
@@ -2666,14 +3228,49 @@
 
         items.forEach((item, idx) => {
           html += `
-            <tr class="hover:bg-slate-50/80 transition-colors">
+            <tr id="row-${item.id}"
+              draggable="true" 
+              ondragstart="handleDragStart(event, '${item.id}')"
+              ondragover="handleDragOver(event)"
+              ondragenter="handleDragEnter(event, '${item.id}')"
+              ondragleave="handleDragLeave(event, '${item.id}')"
+              ondrop="handleDrop(event, '${item.id}')"
+              ondragend="handleDragEnd()"
+              class="hover:bg-slate-50/80 transition-all">
+              <td class="p-2 text-center text-slate-400 cursor-grab hover:text-indigo-600" title="Drag to reorder row">
+                <span class="text-base select-none font-bold">⠿</span>
+              </td>
               <td class="p-3 font-mono text-slate-400 text-[10px]">${idx + 1}</td>
               <td class="p-3">
-                <span class="text-[9px] uppercase font-bold text-slate-400 block">${item.roomName}</span>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-[9px] uppercase font-bold text-slate-400 block">${item.roomName}</span>
+                  <!-- Item Bank Badge -->
+                  <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
+                    item.bankInSync ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                  }" title="Item Bank Master SKU: ${item.bankId}">
+                    <i data-lucide="database" class="w-2.5 h-2.5 ${item.bankInSync ? 'text-indigo-500' : 'text-amber-500'}"></i>
+                    ${item.bankId} ${item.bankInSync ? '✓' : '• Modified'}
+                  </span>
+                  ${item.sticker ? `
+                    <span class="px-1.5 py-0.2 rounded font-bold text-[9px] border ${item.sticker.bg}">
+                      ${item.sticker.label}
+                    </span>
+                  ` : ''}
+                </div>
                 <span class="font-bold text-slate-900">${item.name}</span>
-                <button onclick="openDimensionTakeoff('${item.id}')" class="text-[10px] text-blue-600 hover:underline flex items-center gap-1 mt-0.5 cursor-pointer">
-                  <i data-lucide="ruler" class="w-3 h-3"></i> Smart Takeoff (L × W)
-                </button>
+                <div class="flex items-center gap-2 mt-1">
+                  <button onclick="openDimensionTakeoff('${item.id}')" class="text-[10px] text-blue-600 hover:underline flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="ruler" class="w-3 h-3"></i> Takeoff (L × W)
+                  </button>
+                  ${!item.bankInSync ? `
+                    <button onclick="syncWithBankMaster('${item.id}')" class="text-[10px] text-amber-600 hover:underline flex items-center gap-0.5 cursor-pointer font-bold" title="Revert back to standard Master Catalog rates">
+                      <i data-lucide="refresh-cw" class="w-2.5 h-2.5"></i> Reset to Bank
+                    </button>
+                    <button onclick="pushToBankMaster('${item.id}')" class="text-[10px] text-indigo-600 hover:underline flex items-center gap-0.5 cursor-pointer font-bold" title="Update Master Item Bank with this project's rates">
+                      <i data-lucide="arrow-up-circle" class="w-2.5 h-2.5"></i> Push to Bank
+                    </button>
+                  ` : ''}
+                </div>
               </td>
               <td class="p-3 text-center bg-indigo-50/30 border-x border-indigo-100">
                 <div class="flex items-center justify-center gap-1">
@@ -2696,18 +3293,33 @@
                   <span class="font-mono font-bold text-slate-800">₹${(item.qty * item.t1.rate).toLocaleString('en-IN')}</span>
                 </div>
               </td>
-              <!-- TIER 2 (COMFORT) -->
+              <!-- TIER 2 (COMFORT) WITH DETAILED COST/LABOR/MARGIN -->
               <td class="p-3 bg-indigo-50/30 border-x border-indigo-200">
                 <div class="text-[11px] font-bold text-indigo-950 line-clamp-1 mb-1">${item.t2.spec}</div>
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-1">
-                    <span class="text-indigo-400 font-mono text-[10px]">₹</span>
-                    <input type="number" value="${item.t2.rate}" 
-                      onchange="updateWorkbenchRate('${item.id}', 't2', this.value)"
-                      class="w-16 p-0.5 font-mono font-bold text-indigo-900 border-b border-transparent hover:border-indigo-400 focus:border-indigo-600 text-xs outline-none" />
-                    <span class="text-[9px] font-bold text-emerald-600 px-1 py-0.5 rounded bg-emerald-50 border border-emerald-200 font-mono">${item.t2.margin}%</span>
+                <div class="flex items-center justify-between gap-1">
+                  <!-- Granular Mat & Lab Quick inputs -->
+                  <div class="flex items-center gap-1 text-[10px] font-mono text-slate-500">
+                    <span title="Material Cost">M:₹${item.t2.material}</span>
+                    <span>+</span>
+                    <span title="Labor Cost">L:₹${item.t2.labor}</span>
+                    <span>=</span>
+                    <span class="font-bold text-slate-700" title="Prime Unit Cost">₹${item.t2.cost}</span>
                   </div>
-                  <span class="font-mono font-black text-indigo-950 text-xs">₹${(item.qty * item.t2.rate).toLocaleString('en-IN')}</span>
+                  <!-- Margin & Sell Rate -->
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[9px] font-bold text-emerald-700 px-1 py-0.5 rounded bg-emerald-50 border border-emerald-200 font-mono">
+                      ${item.t2.margin}% GM
+                    </span>
+                    <div class="flex items-center gap-0.5">
+                      <span class="text-indigo-400 font-mono text-[10px]">₹</span>
+                      <input type="number" value="${item.t2.rate}" 
+                        onchange="updateWorkbenchRate('${item.id}', 't2', this.value)"
+                        class="w-16 p-0.5 font-mono font-bold text-indigo-900 border-b border-transparent hover:border-indigo-400 focus:border-indigo-600 text-xs outline-none text-right" />
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-1 text-right font-mono font-black text-indigo-950 text-xs">
+                  ₹${(item.qty * item.t2.rate).toLocaleString('en-IN')}
                 </div>
               </td>
               <!-- TIER 3 -->
@@ -2751,20 +3363,38 @@
         items.forEach(item => {
           const isSel = item.id === selectedItem.id;
           html += `
-            <div onclick="workbenchState.selectedItemId = '${item.id}'; renderWorkbench();"
+            <div id="row-${item.id}"
+              draggable="true" 
+              ondragstart="handleDragStart(event, '${item.id}')"
+              ondragover="handleDragOver(event)"
+              ondragenter="handleDragEnter(event, '${item.id}')"
+              ondragleave="handleDragLeave(event, '${item.id}')"
+              ondrop="handleDrop(event, '${item.id}')"
+              ondragend="handleDragEnd()"
+              onclick="workbenchState.selectedItemId = '${item.id}'; renderWorkbench();"
               class="p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
                 isSel
                   ? 'bg-indigo-50/80 border-indigo-300 shadow-xs ring-1 ring-indigo-400/20'
                   : 'bg-white border-slate-200 hover:border-slate-300'
               }">
-              <div class="min-w-0 flex-grow">
-                <span class="text-[9px] uppercase font-bold text-slate-400">${item.roomName} &bull; ${item.category}</span>
-                <h4 class="text-xs font-bold text-slate-900 truncate">${item.name}</h4>
-                <p class="text-[11px] text-slate-500 truncate mt-0.5">${item.t2.spec}</p>
-                <div class="mt-1 flex items-center gap-2 text-[10px] font-mono text-slate-500">
-                  <span>Unit Rate: <strong class="text-slate-800">₹${item.t2.rate}/${item.unit}</strong></span>
-                  <span>&bull;</span>
-                  <span>Margin: <strong class="text-emerald-700">${item.t2.margin}%</strong></span>
+              <div class="flex items-center gap-2.5 min-w-0 flex-grow">
+                <span class="text-slate-300 hover:text-slate-600 cursor-grab font-bold text-sm select-none" title="Drag to reorder card">⠿</span>
+                <div class="min-w-0 flex-grow">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[9px] uppercase font-bold text-slate-400">${item.roomName} &bull; ${item.category}</span>
+                    ${item.sticker ? `
+                      <span class="px-1.5 py-0.2 rounded-full font-bold text-[9px] border ${item.sticker.bg}">
+                        ${item.sticker.label}
+                      </span>
+                    ` : ''}
+                  </div>
+                  <h4 class="text-xs font-bold text-slate-900 truncate">${item.name}</h4>
+                  <p class="text-[11px] text-slate-500 truncate mt-0.5">${item.t2.spec}</p>
+                  <div class="mt-1 flex items-center gap-2 text-[10px] font-mono text-slate-500">
+                    <span>Unit Rate: <strong class="text-slate-800">₹${item.t2.rate}/${item.unit}</strong></span>
+                    <span>&bull;</span>
+                    <span>Margin: <strong class="text-emerald-700">${item.t2.margin}%</strong></span>
+                  </div>
                 </div>
               </div>
 
@@ -2789,12 +3419,94 @@
             <div class="lg:col-span-5 bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
               <div class="flex items-center justify-between border-b border-slate-200 pb-3">
                 <div>
-                  <span class="text-[9px] uppercase tracking-wider font-extrabold text-indigo-600">Tier Spectrum Inspector</span>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[9px] uppercase tracking-wider font-extrabold text-indigo-600">Tier Spectrum & Assembly Inspector</span>
+                    <!-- Bank Badge -->
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
+                      selectedItem.bankInSync ? 'bg-slate-200 text-slate-700' : 'bg-amber-100 text-amber-800'
+                    }">
+                      <i data-lucide="database" class="w-2.5 h-2.5"></i> ${selectedItem.bankId}
+                    </span>
+                  </div>
                   <h3 class="text-xs font-bold text-slate-900 truncate max-w-[240px]">${selectedItem.name}</h3>
                 </div>
-                <button onclick="openDimensionTakeoff('${selectedItem.id}')" class="px-2 py-1 rounded bg-white border border-slate-300 text-slate-700 font-bold text-[10px] flex items-center gap-1">
-                  <i data-lucide="ruler" class="w-3 h-3 text-blue-600"></i> Auto Takeoff
-                </button>
+                <div class="flex items-center gap-1">
+                  <button onclick="openDimensionTakeoff('${selectedItem.id}')" class="px-2 py-1 rounded bg-white border border-slate-300 text-slate-700 font-bold text-[10px] flex items-center gap-1">
+                    <i data-lucide="ruler" class="w-3 h-3 text-blue-600"></i> Takeoff
+                  </button>
+                </div>
+              </div>
+
+              <!-- Item Bank Master Link Status Bar -->
+              <div class="p-2.5 rounded-lg border text-[11px] flex items-center justify-between ${
+                selectedItem.bankInSync 
+                  ? 'bg-slate-100/70 border-slate-200 text-slate-700' 
+                  : 'bg-amber-50 border-amber-200 text-amber-900'
+              }">
+                <div class="flex items-center gap-1.5">
+                  <i data-lucide="${selectedItem.bankInSync ? 'check-circle-2' : 'alert-circle'}" class="w-3.5 h-3.5 ${selectedItem.bankInSync ? 'text-emerald-600' : 'text-amber-600'}"></i>
+                  <span>${selectedItem.bankInSync ? 'Master Bank Synchronized' : 'Project-Specific Override'}</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  ${!selectedItem.bankInSync ? `
+                    <button onclick="syncWithBankMaster('${selectedItem.id}')" class="px-2 py-0.5 rounded bg-white border border-amber-300 text-amber-800 font-bold text-[10px] hover:bg-amber-100 cursor-pointer">
+                      Reset
+                    </button>
+                    <button onclick="pushToBankMaster('${selectedItem.id}')" class="px-2 py-0.5 rounded bg-indigo-600 text-white font-bold text-[10px] hover:bg-indigo-700 cursor-pointer">
+                      Push to Master
+                    </button>
+                  ` : `
+                    <span class="text-[10px] text-slate-400 font-mono">Catalog Locked</span>
+                  `}
+                </div>
+              </div>
+
+              <!-- Financial Breakdown: Materials, Labor, Margin Controls -->
+              <div class="p-3.5 bg-white rounded-xl border border-slate-200 space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Active Tier (Comfort) Financials</span>
+                  <span class="text-xs font-mono font-extrabold text-indigo-950">Sell: ₹${selectedItem.t2.rate}/${selectedItem.unit}</span>
+                </div>
+
+                <!-- 2-Col Material & Labor inputs -->
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[9px] font-bold uppercase text-slate-400 mb-0.5">Material Cost</label>
+                    <div class="relative">
+                      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                      <input type="number" value="${selectedItem.t2.material}" 
+                        onchange="updateWorkbenchMaterial('${selectedItem.id}', 't2', this.value)"
+                        class="w-full pl-6 pr-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-indigo-600 outline-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-[9px] font-bold uppercase text-slate-400 mb-0.5">Trade Labor Cost</label>
+                    <div class="relative">
+                      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                      <input type="number" value="${selectedItem.t2.labor}" 
+                        onchange="updateWorkbenchLabor('${selectedItem.id}', 't2', this.value)"
+                        class="w-full pl-6 pr-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-indigo-600 outline-none" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Margin Slider with Real-Time feedback -->
+                <div class="pt-2 border-t border-slate-100">
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-[10px] font-bold uppercase text-slate-500">Gross Margin</label>
+                    <span class="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      ${selectedItem.t2.margin}%
+                    </span>
+                  </div>
+                  <input type="range" min="5" max="60" step="1" value="${selectedItem.t2.margin}"
+                    oninput="updateWorkbenchMargin('${selectedItem.id}', 't2', this.value)"
+                    class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                  
+                  <div class="flex justify-between items-center text-[10px] text-slate-500 pt-1 font-mono">
+                    <span>Prime Cost: ₹${selectedItem.t2.cost}</span>
+                    <span class="text-emerald-700 font-bold">Studio Profit: +₹${Math.round((selectedItem.t2.rate - selectedItem.t2.cost) * selectedItem.qty).toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
               </div>
 
               <!-- 3 Tier Compare Cards -->
@@ -2861,26 +3573,65 @@
               <table class="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px]">
+                    <th class="p-3 w-8 text-center"><i data-lucide="grip-vertical" class="w-3.5 h-3.5 text-slate-400 mx-auto"></i></th>
                     <th class="p-3 w-8">#</th>
-                    <th class="p-3 w-48">Room & Item Name</th>
+                    <th class="p-3 w-64">Item & Bank Catalog SKU</th>
                     <th class="p-3 w-28 text-center bg-indigo-50/50">Spine Qty</th>
                     <th class="p-3">Specification Detail (Comfort Baseline)</th>
+                    <th class="p-3 w-40 text-center bg-slate-50">Cost (Mat + Lab)</th>
                     <th class="p-3 w-24 text-right">Sell Rate</th>
                     <th class="p-3 w-20 text-center">GM %</th>
                     <th class="p-3 w-28 text-right">Line Total</th>
-                    <th class="p-3 w-24 text-center">Smart Actions</th>
+                    <th class="p-3 w-32 text-center">Deliberation & Actions</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200">
           `;
 
           items.forEach((item, idx) => {
+            const isSelected = workbenchState.selectedItemId === item.id;
             html += `
-              <tr class="hover:bg-slate-50/90 transition-colors">
+              <tr id="row-${item.id}" 
+                draggable="true" 
+                ondragstart="handleDragStart(event, '${item.id}')"
+                ondragover="handleDragOver(event)"
+                ondragenter="handleDragEnter(event, '${item.id}')"
+                ondragleave="handleDragLeave(event, '${item.id}')"
+                ondrop="handleDrop(event, '${item.id}')"
+                ondragend="handleDragEnd()"
+                onclick="workbenchState.selectedItemId = '${item.id}';"
+                class="hover:bg-slate-50/90 transition-all cursor-default ${isSelected ? 'bg-indigo-50/20' : ''}">
+                <td class="p-2 text-center text-slate-400 cursor-grab hover:text-indigo-600" title="Drag to reorder row">
+                  <span class="text-base select-none font-bold">⠿</span>
+                </td>
                 <td class="p-3 font-mono text-slate-400 text-[10px]">${idx + 1}</td>
                 <td class="p-3">
-                  <span class="text-[9px] uppercase font-bold text-slate-400 block">${item.roomName}</span>
-                  <span class="font-bold text-slate-900">${item.name}</span>
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-[9px] uppercase font-bold text-slate-400 block">${item.roomName}</span>
+                    <!-- Bank badge -->
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
+                      item.bankInSync ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }" title="Linked to Studio Master Bank: ${item.bankId}">
+                      <i data-lucide="database" class="w-2.5 h-2.5 ${item.bankInSync ? 'text-indigo-500' : 'text-amber-500'}"></i>
+                      ${item.bankId} ${item.bankInSync ? '✓' : '• Modified'}
+                    </span>
+                    ${item.sticker ? `
+                      <span class="px-1.5 py-0.2 rounded font-bold text-[9px] border ${item.sticker.bg}">
+                        ${item.sticker.label}
+                      </span>
+                    ` : ''}
+                  </div>
+                  <span class="font-bold text-slate-900 block mt-0.5">${item.name}</span>
+                  <div class="flex items-center gap-2 mt-1">
+                    <button onclick="openDimensionTakeoff('${item.id}')" class="text-[10px] text-blue-600 hover:underline flex items-center gap-1 cursor-pointer">
+                      <i data-lucide="ruler" class="w-2.5 h-2.5"></i> Takeoff
+                    </button>
+                    ${!item.bankInSync ? `
+                      <button onclick="syncWithBankMaster('${item.id}')" class="text-[10px] text-amber-600 hover:underline font-bold flex items-center gap-0.5 cursor-pointer">
+                        <i data-lucide="refresh-cw" class="w-2.5 h-2.5"></i> Reset
+                      </button>
+                    ` : ''}
+                  </div>
                 </td>
                 <td class="p-3 text-center bg-indigo-50/30">
                   <div class="flex items-center justify-center gap-1">
@@ -2894,6 +3645,25 @@
                   <input type="text" value="${item.t2.spec}" 
                     onchange="workbenchState.items.find(i=>i.id==='${item.id}').t2.spec = this.value; showToast('Saved specification edit!');"
                     class="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-600 outline-none text-slate-700 text-xs py-0.5" />
+                </td>
+                <!-- Decomposed Cost Column: Mat & Lab quick inputs -->
+                <td class="p-3 bg-slate-50 text-center">
+                  <div class="flex items-center justify-center gap-1 text-[11px] font-mono">
+                    <div class="flex items-center" title="Material Unit Cost">
+                      <span class="text-slate-400 text-[10px]">M:₹</span>
+                      <input type="number" value="${item.t2.material}" 
+                        onchange="updateWorkbenchMaterial('${item.id}', 't2', this.value)"
+                        class="w-12 p-0.5 text-right font-mono font-bold bg-white border border-slate-200 rounded text-slate-800 outline-none text-xs" />
+                    </div>
+                    <span class="text-slate-400">+</span>
+                    <div class="flex items-center" title="Labor Unit Cost">
+                      <span class="text-slate-400 text-[10px]">L:₹</span>
+                      <input type="number" value="${item.t2.labor}" 
+                        onchange="updateWorkbenchLabor('${item.id}', 't2', this.value)"
+                        class="w-12 p-0.5 text-right font-mono font-bold bg-white border border-slate-200 rounded text-slate-800 outline-none text-xs" />
+                    </div>
+                  </div>
+                  <div class="text-[9px] text-slate-400 mt-0.5 font-mono">Cost: ₹${item.t2.cost}</div>
                 </td>
                 <td class="p-3 text-right">
                   <div class="flex items-center justify-end gap-1">
@@ -2914,12 +3684,21 @@
                   ₹${(item.qty * item.t2.rate).toLocaleString('en-IN')}
                 </td>
                 <td class="p-3 text-center">
-                  <div class="flex items-center justify-center gap-1.5">
-                    <button onclick="openDimensionTakeoff('${item.id}')" title="Smart Takeoff" class="p-1 rounded hover:bg-slate-200 text-slate-600 cursor-pointer">
-                      <i data-lucide="ruler" class="w-3.5 h-3.5 text-blue-600"></i>
+                  <div class="flex items-center justify-center gap-1">
+                    <!-- Quick Tagging -->
+                    <button onclick="setItemStickerDirect('${item.id}', 'CLIENT_LOVES')" title="Flag as Client Must-Have" class="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 cursor-pointer">
+                      ❤️
                     </button>
+                    <button onclick="setItemStickerDirect('${item.id}', 'VALUE_ENG')" title="Flag as VE Candidate" class="p-1 rounded hover:bg-amber-50 text-slate-400 hover:text-amber-600 cursor-pointer">
+                      ✂️
+                    </button>
+                    <!-- 1-Click Spec Upgrade -->
                     <button onclick="upgradeWorkbenchSpec('${item.id}', 't2')" title="1-Click Spec Upgrade" class="p-1 rounded hover:bg-slate-200 text-slate-600 cursor-pointer">
                       <i data-lucide="arrow-up-right" class="w-3.5 h-3.5 text-indigo-600"></i>
+                    </button>
+                    <!-- Switch to Deep Studio Focus -->
+                    <button onclick="workbenchState.selectedItemId = '${item.id}'; switchWorkbenchMode('deep');" title="Open in Deep Assembly Studio" class="p-1 rounded hover:bg-indigo-50 text-indigo-600 cursor-pointer">
+                      <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
                     </button>
                   </div>
                 </td>
@@ -2934,69 +3713,152 @@
           `;
           container.innerHTML += html;
         } else {
-          // DEEP STUDIO VIEW (ASSEMBLY BREAKDOWN)
+          // DEEP STUDIO VIEW (ASSEMBLY BREAKDOWN WITH DIRECT FINANCIAL CONTROLS)
           let html = `
             <div class="space-y-4">
-              <div class="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl text-xs text-indigo-900 flex items-center justify-between">
-                <span><strong>Deep Assembly Mode:</strong> Inspecting unit rates decomposed into Materials, Labor, Hardware, and Studio Margin.</span>
-                <span class="font-mono text-[10px] text-indigo-700">Parametric Formula Active</span>
+              <div class="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl text-xs text-indigo-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="layers" class="w-4 h-4 text-indigo-600"></i>
+                  <span><strong>Deep Assembly Studio:</strong> Live breakdown of Materials, Labor, Prime Cost, and Gross Margin tied to the Studio Item Bank.</span>
+                </div>
+                <div class="flex items-center gap-2 text-[11px]">
+                  <span class="px-2 py-0.5 rounded bg-white border border-indigo-200 font-mono text-indigo-700">Formula: Sell = Cost / (1 - GM%)</span>
+                  <button onclick="switchWorkbenchMode('grid')" class="px-2 py-0.5 rounded bg-indigo-600 text-white font-bold text-[10px] hover:bg-indigo-700">
+                    &larr; Return to Fast Grid
+                  </button>
+                </div>
               </div>
           `;
 
           items.forEach(item => {
-            const matCost = Math.round(item.t2.cost * 0.65);
-            const labCost = Math.round(item.t2.cost * 0.35);
             const marginAmt = item.t2.rate - item.t2.cost;
 
             html += `
-              <div class="p-4 rounded-xl border border-slate-200 bg-white shadow-xs space-y-3">
+              <div id="row-${item.id}"
+                draggable="true" 
+                ondragstart="handleDragStart(event, '${item.id}')"
+                ondragover="handleDragOver(event)"
+                ondragenter="handleDragEnter(event, '${item.id}')"
+                ondragleave="handleDragLeave(event, '${item.id}')"
+                ondrop="handleDrop(event, '${item.id}')"
+                ondragend="handleDragEnd()"
+                class="p-4 rounded-xl border border-slate-200 bg-white shadow-xs space-y-3 transition-all">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                  <div>
-                    <span class="text-[9px] uppercase font-bold text-slate-400">${item.roomName} &bull; ${item.category}</span>
-                    <h4 class="text-sm font-bold text-slate-900">${item.name}</h4>
+                  <div class="flex items-center gap-2">
+                    <span class="text-slate-300 hover:text-slate-600 cursor-grab font-bold text-sm select-none" title="Drag to reorder card">⠿</span>
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <span class="text-[9px] uppercase font-bold text-slate-400">${item.roomName} &bull; ${item.category}</span>
+                        <!-- Item Bank Badge -->
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
+                          item.bankInSync ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }">
+                          <i data-lucide="database" class="w-2.5 h-2.5 ${item.bankInSync ? 'text-indigo-500' : 'text-amber-500'}"></i>
+                          ${item.bankId} (${item.bankName}) ${item.bankInSync ? '✓ Linked' : '• Custom Project Override'}
+                        </span>
+                        ${item.sticker ? `
+                          <span class="px-1.5 py-0.2 rounded-full font-bold text-[9px] border ${item.sticker.bg}">
+                            ${item.sticker.label}
+                          </span>
+                        ` : ''}
+                      </div>
+                      <h4 class="text-sm font-bold text-slate-900">${item.name}</h4>
+                    </div>
                   </div>
                   <div class="flex items-center gap-3">
-                    <span class="text-xs font-mono">Qty: <strong>${item.qty} ${item.unit}</strong></span>
+                    <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg text-xs font-mono">
+                      <span class="text-slate-400 text-[10px]">Qty:</span>
+                      <input type="number" value="${item.qty}" onchange="updateWorkbenchQty('${item.id}', this.value)" class="w-12 text-center font-bold bg-white border border-slate-200 rounded px-1" />
+                      <span class="text-slate-500 uppercase text-[10px]">${item.unit}</span>
+                    </div>
                     <span class="text-xs font-mono font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded">
                       Total: ₹${(item.qty * item.t2.rate).toLocaleString('en-IN')}
                     </span>
                   </div>
                 </div>
 
-                <!-- Assembly Formula Pills -->
+                <!-- Assembly Financial Decomposition & Live Rate Inputs -->
                 <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
-                  <div class="p-2 rounded bg-slate-50 border border-slate-200">
-                    <span class="text-[9px] uppercase text-slate-400 font-bold block">Materials Substrate</span>
-                    <span class="font-mono font-bold text-slate-800">₹${matCost}/${item.unit}</span>
+                  <!-- 1. Material Substrate -->
+                  <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                    <span class="text-[9px] uppercase text-slate-500 font-bold block">Material Substrate</span>
+                    <div class="flex items-center justify-center gap-0.5">
+                      <span class="text-slate-400 font-mono text-[10px]">₹</span>
+                      <input type="number" value="${item.t2.material}" 
+                        onchange="updateWorkbenchMaterial('${item.id}', 't2', this.value)"
+                        class="w-16 p-1 text-center font-mono font-bold bg-white border border-slate-200 rounded text-slate-900 focus:border-indigo-600 outline-none text-xs" />
+                      <span class="text-[10px] text-slate-400">/${item.unit}</span>
+                    </div>
                   </div>
-                  <div class="p-2 rounded bg-slate-50 border border-slate-200">
-                    <span class="text-[9px] uppercase text-slate-400 font-bold block">Trade Labor</span>
-                    <span class="font-mono font-bold text-slate-800">₹${labCost}/${item.unit}</span>
+
+                  <!-- 2. Trade Labor -->
+                  <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                    <span class="text-[9px] uppercase text-slate-500 font-bold block">Trade Labor</span>
+                    <div class="flex items-center justify-center gap-0.5">
+                      <span class="text-slate-400 font-mono text-[10px]">₹</span>
+                      <input type="number" value="${item.t2.labor}" 
+                        onchange="updateWorkbenchLabor('${item.id}', 't2', this.value)"
+                        class="w-16 p-1 text-center font-mono font-bold bg-white border border-slate-200 rounded text-slate-900 focus:border-indigo-600 outline-none text-xs" />
+                      <span class="text-[10px] text-slate-400">/${item.unit}</span>
+                    </div>
                   </div>
-                  <div class="p-2 rounded bg-slate-50 border border-slate-200">
-                    <span class="text-[9px] uppercase text-slate-400 font-bold block">Prime Cost</span>
-                    <span class="font-mono font-bold text-slate-800">₹${item.t2.cost}/${item.unit}</span>
+
+                  <!-- 3. Prime Unit Cost (Combined) -->
+                  <div class="p-2.5 rounded-xl bg-slate-100/70 border border-slate-200 space-y-1">
+                    <span class="text-[9px] uppercase text-slate-500 font-bold block">Prime Cost (Mat + Lab)</span>
+                    <span class="font-mono font-extrabold text-slate-800 text-sm block">₹${item.t2.cost}/${item.unit}</span>
+                    <span class="text-[9px] text-slate-400">Project Total: ₹${(item.t2.cost * item.qty).toLocaleString('en-IN')}</span>
                   </div>
-                  <div class="p-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-900">
-                    <span class="text-[9px] uppercase text-emerald-600 font-bold block">Studio Margin (${item.t2.margin}%)</span>
-                    <span class="font-mono font-bold text-emerald-700">+₹${marginAmt}/${item.unit}</span>
+
+                  <!-- 4. Studio Gross Margin Slider -->
+                  <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1">
+                    <div class="flex items-center justify-between">
+                      <span class="text-[9px] uppercase text-emerald-700 font-bold">Studio Margin</span>
+                      <span class="font-mono font-bold text-emerald-800 text-[11px]">${item.t2.margin}%</span>
+                    </div>
+                    <input type="range" min="5" max="60" step="1" value="${item.t2.margin}"
+                      oninput="updateWorkbenchMargin('${item.id}', 't2', this.value)"
+                      class="w-full h-1 bg-emerald-200 rounded cursor-pointer accent-emerald-600" />
+                    <span class="font-mono font-bold text-emerald-700 text-[10px] block">+₹${marginAmt}/${item.unit} margin</span>
                   </div>
-                  <div class="p-2 rounded bg-indigo-50 border border-indigo-200 text-indigo-950">
-                    <span class="text-[9px] uppercase text-indigo-600 font-bold block">Final Client Sell Rate</span>
-                    <span class="font-mono font-extrabold text-indigo-900 text-sm">₹${item.t2.rate}/${item.unit}</span>
+
+                  <!-- 5. Client Sell Rate -->
+                  <div class="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-950 space-y-1">
+                    <span class="text-[9px] uppercase text-indigo-600 font-bold block">Client Sell Rate</span>
+                    <div class="flex items-center justify-center gap-0.5">
+                      <span class="text-indigo-400 font-mono text-[10px]">₹</span>
+                      <input type="number" value="${item.t2.rate}" 
+                        onchange="updateWorkbenchRate('${item.id}', 't2', this.value)"
+                        class="w-16 p-1 text-center font-mono font-extrabold bg-white border border-indigo-300 rounded text-indigo-950 focus:border-indigo-600 outline-none text-xs" />
+                      <span class="text-[10px] text-indigo-400">/${item.unit}</span>
+                    </div>
+                    <span class="text-[9px] font-bold text-indigo-700 block">Total: ₹${(item.t2.rate * item.qty).toLocaleString('en-IN')}</span>
                   </div>
                 </div>
 
-                <div class="flex items-center justify-between text-xs pt-1">
+                <!-- Footer specification & Catalog Sync actions -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between text-xs pt-2 border-t border-slate-100 gap-2">
                   <div class="text-[11px] text-slate-500 font-medium">
                     Specification: <span class="text-slate-800 font-bold">${item.t2.spec}</span>
                   </div>
                   <div class="flex items-center gap-2">
-                    <button onclick="upgradeWorkbenchSpec('${item.id}', 't2')" class="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px]">
+                    ${!item.bankInSync ? `
+                      <button onclick="syncWithBankMaster('${item.id}')" class="px-2 py-1 rounded bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[10px] hover:bg-amber-100 cursor-pointer flex items-center gap-1">
+                        <i data-lucide="refresh-cw" class="w-3 h-3"></i> Reset to Bank Rates
+                      </button>
+                      <button onclick="pushToBankMaster('${item.id}')" class="px-2 py-1 rounded bg-indigo-600 text-white font-bold text-[10px] hover:bg-indigo-700 cursor-pointer flex items-center gap-1">
+                        <i data-lucide="arrow-up-circle" class="w-3 h-3"></i> Push to Studio Bank
+                      </button>
+                    ` : `
+                      <span class="text-[10px] text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        <i data-lucide="check" class="w-3 h-3"></i> Synchronized with Catalog
+                      </span>
+                    `}
+                    <button onclick="upgradeWorkbenchSpec('${item.id}', 't2')" class="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px]">
                       &uarr; Upgrade Spec
                     </button>
-                    <button onclick="openDimensionTakeoff('${item.id}')" class="px-2.5 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px]">
-                      Takeoff Calculator
+                    <button onclick="openDimensionTakeoff('${item.id}')" class="px-2.5 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] flex items-center gap-1">
+                      <i data-lucide="ruler" class="w-3 h-3"></i> Takeoff (L × W)
                     </button>
                   </div>
                 </div>
@@ -3012,12 +3874,840 @@
       lucide.createIcons();
     }
 
-    // Initialize on load
+    // ========================================================
+    // TAB 8: ROOM-WISE PACKAGES ARCHITECTURE & 2BHK SIMULATION
+    // ========================================================
+    const packagesState = {
+      scenario: 'without_civil', // 'without_civil' | 'with_civil'
+      activePackageId: 'pkg-mb-carpentry',
+      activeTier: 't2', // 't1' | 't2' | 't3'
+      activeTradeFilter: 'all',
+      packages: []
+    };
+
+    // 2BHK Datasets: Without Civil vs With Civil
+    const packageDataset_withoutCivil = [
+      {
+        id: 'pkg-mb-carpentry',
+        name: 'Master Bedroom Carpentry Suite',
+        room: 'Master Bedroom',
+        trade: 'carpentry',
+        icon: 'bed-double',
+        badge: 'Joinery Package',
+        desc: 'Wardrobes, bed with hydraulic storage, vanity and side tables.',
+        t1Summary: '1.0mm Com. Laminate + MR Ply • 3-Door Wardrobe only',
+        t2Summary: '1.0mm Merino Matte + Marine BWP + Hafele • Wardrobe + Bed + Dresser',
+        t3Summary: 'Fluted Smoked Veneer + PU Paint + Blum Legrabox • Full Architectural Suite',
+        items: [
+          {
+            id: 'p-101',
+            name: 'Full Height Sliding Wardrobe (3-Track)',
+            bankId: 'bank-101',
+            unit: 'sqft',
+            qty: 65,
+            t1: { active: true, spec: '1.0mm Commercial Laminate, MR Commercial Ply, Standard Soft-Close', material: 720, labor: 350, cost: 1070, margin: 26.2, rate: 1450 },
+            t2: { active: true, spec: '1.0mm Merino Matte Laminate, Century BWP Marine Ply, Hafele Slido System', material: 850, labor: 420, cost: 1270, margin: 31.4, rate: 1850 },
+            t3: { active: true, spec: 'Fluted Smoked Oak Veneer + Clear PU, Century Club Prime BWP, Blum Servo-Drive', material: 1250, labor: 600, cost: 1850, margin: 36.2, rate: 2900 }
+          },
+          {
+            id: 'p-102',
+            name: 'King Size Bed with Hydraulic Storage & Backrest',
+            bankId: 'bank-108',
+            unit: 'nos',
+            qty: 1,
+            t1: { active: false, spec: 'Excluded in Essential Tier (Client retains existing bed or buys retail)', material: 0, labor: 0, cost: 0, margin: 0, rate: 0 },
+            t2: { active: true, spec: 'Century Marine BWP Ply, Ebco heavy gas hydraulic lift, upholstered cushioned headboard', material: 22000, labor: 8500, cost: 30500, margin: 32.2, rate: 45000 },
+            t3: { active: true, spec: 'Solid hardwood framework, Italian boucle fabric upholstered headboard, Hafele electric lift', material: 38000, labor: 14000, cost: 52000, margin: 35.0, rate: 80000 }
+          },
+          {
+            id: 'p-103',
+            name: 'Wall-Hung Vanity Dresser with LED Backlit Mirror',
+            bankId: 'bank-109',
+            unit: 'rft',
+            qty: 5,
+            t1: { active: false, spec: 'Excluded in Essential Tier', material: 0, labor: 0, cost: 0, margin: 0, rate: 0 },
+            t2: { active: true, spec: 'BWP Ply vanity unit with 2 soft-close drawers & Saint-Gobain 5mm mirror with warm LED', material: 1200, labor: 550, cost: 1750, margin: 32.7, rate: 2600 },
+            t3: { active: true, spec: 'PU satin painted reeded drawer fronts with touch-sensor defogger mirror & vanity tray', material: 2100, labor: 850, cost: 2950, margin: 35.9, rate: 4600 }
+          },
+          {
+            id: 'p-104',
+            name: 'Bedside Nightstand Tables (Pair of 2)',
+            bankId: 'bank-110',
+            unit: 'nos',
+            qty: 2,
+            t1: { active: true, spec: 'Basic laminate nightstand with single open shelf', material: 2200, labor: 1100, cost: 3300, margin: 26.7, rate: 4500 },
+            t2: { active: true, spec: 'Floating dual-drawer nightstand with Hafele undermount runners', material: 3800, labor: 1600, cost: 5400, margin: 32.5, rate: 8000 },
+            t3: { active: true, spec: 'Curved radius fluted veneer nightstand with marble top insert & brass pull', material: 7200, labor: 2800, cost: 10000, margin: 37.5, rate: 16000 }
+          }
+        ]
+      },
+      {
+        id: 'pkg-kitchen-carpentry',
+        name: 'Modular Kitchen Cabinetry Package',
+        room: 'Kitchen',
+        trade: 'carpentry',
+        icon: 'utensils',
+        badge: 'Joinery Package',
+        desc: 'Base units, wall units, tall pantry, and anti-rust hardware baskets.',
+        t1Summary: '0.8mm Gloss Laminate + HDHMR • Base & Basic Wall Cabs',
+        t2Summary: 'Acrylic Gloss / Anti-fingerprint Satin PU + Marine BWP + Tandembox',
+        t3Summary: 'Ceramic Shutter Profiles + BWP Ply + Blum Servo-Drive + Pantry Tall Unit',
+        items: [
+          {
+            id: 'p-201',
+            name: 'Kitchen Under-Counter Base Cabinets',
+            bankId: 'bank-102',
+            unit: 'rft',
+            qty: 14,
+            t1: { active: true, spec: '0.8mm gloss laminate, Action TESA HDHMR, Ebco stainless steel wire baskets', material: 1250, labor: 600, cost: 1850, margin: 26.0, rate: 2500 },
+            t2: { active: true, spec: 'Acrylic / Anti-scratch laminate, Century BWP Marine Ply, Blum Tandembox soft-close runners', material: 1750, labor: 750, cost: 2500, margin: 32.4, rate: 3700 },
+            t3: { active: true, spec: 'Slim aluminum glass profile shutters + ceramic fascia, Century Club Prime, Blum Legrabox', material: 2600, labor: 1050, cost: 3650, margin: 36.0, rate: 5700 }
+          },
+          {
+            id: 'p-202',
+            name: 'Overhead Wall Storage Cabinets with Lift-Up System',
+            bankId: 'bank-111',
+            unit: 'rft',
+            qty: 12,
+            t1: { active: true, spec: 'Matching laminate wall cabinets with standard gas stays', material: 950, labor: 450, cost: 1400, margin: 26.3, rate: 1900 },
+            t2: { active: true, spec: 'Century Marine BWP with Blum Aventos HK-S stay-lift mechanism & concealed LED profile', material: 1450, labor: 600, cost: 2050, margin: 31.7, rate: 3000 },
+            t3: { active: true, spec: 'Tinted fluted glass shutters in black matte frame with Blum Aventos HF bi-fold motorized', material: 2350, labor: 900, cost: 3250, margin: 36.3, rate: 5100 }
+          },
+          {
+            id: 'p-203',
+            name: 'Tall Pantry Unit with Pull-Out Tandem Larder',
+            bankId: 'bank-112',
+            unit: 'nos',
+            qty: 1,
+            t1: { active: false, spec: 'Excluded in Essential Tier', material: 0, labor: 0, cost: 0, margin: 0, rate: 0 },
+            t2: { active: true, spec: '6-tier heavy-duty stainless steel pull-out pantry larder unit (Hafele Convoy Centro)', material: 26000, labor: 7000, cost: 33000, margin: 34.0, rate: 50000 },
+            t3: { active: true, spec: 'Blum Space Tower with 5 individual glass-front inner drawers & auto LED illumination', material: 42000, labor: 10000, cost: 52000, margin: 38.8, rate: 85000 }
+          }
+        ]
+      },
+      {
+        id: 'pkg-living-ceiling',
+        name: 'Living & Dining False Ceiling Package',
+        room: 'Living & Dining',
+        trade: 'ceiling',
+        icon: 'grid-2x2',
+        badge: 'Ceiling Package',
+        desc: 'Gypsum false ceiling drops, cove lighting recesses, and magnetic architectural track prep.',
+        t1Summary: 'Saint-Gobain Gypboard • Perimeter Border Cove Only',
+        t2Summary: 'Full Drop with Double Step Cove + Magnetic Accent Track Recesses',
+        t3Summary: 'Acoustic Micro-Perforated Gypsum + Curved Edge Bulkhead + Smart Drivers',
+        items: [
+          {
+            id: 'p-301',
+            name: 'Gypsum Board False Ceiling with Perimeter Cove',
+            bankId: 'bank-104',
+            unit: 'sqft',
+            qty: 280,
+            t1: { active: true, spec: 'Saint-Gobain 12.5mm Gypboard on Ultra G.I. framework with single perimeter cove', material: 60, labor: 32, cost: 92, margin: 26.4, rate: 125 },
+            t2: { active: true, spec: 'Full ceiling drop with double-step indirect ambient lighting cove & AC grill cutout', material: 78, labor: 38, cost: 116, margin: 31.8, rate: 170 },
+            t3: { active: true, spec: 'Seamless acoustic Gypsum with curved organic bullnose radius perimeter & negative shadow reveal', material: 115, labor: 55, cost: 170, margin: 35.8, rate: 265 }
+          },
+          {
+            id: 'p-302',
+            name: 'Architectural Magnetic Track Light Channels',
+            bankId: 'bank-113',
+            unit: 'rft',
+            qty: 24,
+            t1: { active: false, spec: 'Excluded in Essential Tier (Standard round LED downlights cutouts)', material: 0, labor: 0, cost: 0, margin: 0, rate: 0 },
+            t2: { active: true, spec: 'Flush recessed aluminum profile track with wiring prep for low-voltage magnetic spots', material: 320, labor: 120, cost: 440, margin: 32.3, rate: 650 },
+            t3: { active: true, spec: 'DALI dimmable smart magnetic track with curved continuous corner joiners & 48V busbar', material: 620, labor: 220, cost: 840, margin: 35.4, rate: 1300 }
+          }
+        ]
+      },
+      {
+        id: 'pkg-home-painting',
+        name: 'Full 2BHK Architectural Painting Package',
+        room: 'Entire Apartment',
+        trade: 'painting',
+        icon: 'paint-roller',
+        badge: 'Finishing Package',
+        desc: 'Substrate preparation, sanding, primer coats, and luxury wall finishes.',
+        t1Summary: 'Birla Putty + Asian Paints Tractor Emulsion (Budget Washable)',
+        t2Summary: 'Asian Paints Royale Luxury Emulsion + Acrylic Putty & 2-Coat Primer',
+        t3Summary: 'Asian Paints Royale Aspira (Teflon Washable) + 1 Signature Accent Texture Wall',
+        items: [
+          {
+            id: 'p-401',
+            name: 'Internal Wall & Ceiling Painting System',
+            bankId: 'bank-105',
+            unit: 'sqft',
+            qty: 1850,
+            t1: { active: true, spec: '2 coats Birla White Wall Putty + 1 coat primer + 2 coats Asian Paints Tractor Emulsion', material: 14, labor: 11, cost: 25, margin: 26.5, rate: 34 },
+            t2: { active: true, spec: 'Full surface sanding + Asian Paints Deco-Prime + 2 coats Asian Paints Royale Luxury Emulsion', material: 24, labor: 15, cost: 39, margin: 31.6, rate: 57 },
+            t3: { active: true, spec: '3-stage mechanical dustless sanding + Asian Paints Royale Aspira stain-repellent finish', material: 38, labor: 22, cost: 60, margin: 36.8, rate: 95 }
+          },
+          {
+            id: 'p-402',
+            name: 'Designer Feature Accent Wall (Living Hall)',
+            bankId: 'bank-114',
+            unit: 'sqft',
+            qty: 120,
+            t1: { active: false, spec: 'Excluded in Essential Tier (Standard single-tone color)', material: 0, labor: 0, cost: 0, margin: 0, rate: 0 },
+            t2: { active: true, spec: 'Asian Paints Royale Play special effects stucco / metallic spatula texture wall', material: 65, labor: 45, cost: 110, margin: 33.3, rate: 165 },
+            t3: { active: true, spec: 'Handcrafted Italian Lime Plaster / Microcement concrete finish with matte polyurethane topcoat', material: 160, labor: 95, cost: 255, margin: 37.8, rate: 410 }
+          }
+        ]
+      },
+      {
+        id: 'pkg-guest-carpentry',
+        name: 'Guest / Kids Bedroom Carpentry Package',
+        room: 'Guest Bedroom',
+        trade: 'carpentry',
+        icon: 'user-check',
+        badge: 'Joinery Package',
+        desc: '2-Door sliding wardrobe with study table and overhead book shelving.',
+        t1Summary: '1.0mm Com. Laminate • 2-Door Wardrobe only',
+        t2Summary: '1.0mm Merino Matte + Marine BWP • Wardrobe + Study Table with drawers',
+        t3Summary: 'Polyurethane PU Satin finish + Blum soft-close • Wardrobe + Study + Floating Bookshelf',
+        items: [
+          {
+            id: 'p-501',
+            name: '2-Door Sliding Wardrobe with Internal Shelving',
+            bankId: 'bank-101',
+            unit: 'sqft',
+            qty: 50,
+            t1: { active: true, spec: '1.0mm Commercial Laminate, MR Commercial Ply, Standard Soft-Close', material: 710, labor: 340, cost: 1050, margin: 26.1, rate: 1420 },
+            t2: { active: true, spec: '1.0mm Merino Matte Laminate, Century BWP Marine Ply, Hafele Slido System', material: 840, labor: 410, cost: 1250, margin: 31.3, rate: 1820 },
+            t3: { active: true, spec: 'Satin PU painted doors with integrated recessed J-pull handles, Century BWP, Blum Legrabox', material: 1180, labor: 580, cost: 1760, margin: 36.0, rate: 2750 }
+          },
+          {
+            id: 'p-502',
+            name: 'Integrated Study Desk with 3 Stationary Drawers',
+            bankId: 'bank-115',
+            unit: 'rft',
+            qty: 4.5,
+            t1: { active: false, spec: 'Excluded in Essential Tier', material: 0, labor: 0, cost: 0, margin: 0, rate: 0 },
+            t2: { active: true, spec: 'Cantilevered desk with wire manager grommet and soft-close drawer pedestal', material: 1400, labor: 650, cost: 2050, margin: 31.7, rate: 3000 },
+            t3: { active: true, spec: 'Solid oak bullnose edging, acoustic felt pinboard backdrop, wireless QI charging pad embedded', material: 2400, labor: 950, cost: 3350, margin: 35.6, rate: 5200 }
+          }
+        ]
+      }
+    ];
+
+    // Deep Civil 2BHK Scenario Packages (Includes all above PLUS Full Civil Suite)
+    const packageDataset_withCivil = [
+      ...JSON.parse(JSON.stringify(packageDataset_withoutCivil)),
+      {
+        id: 'pkg-civil-bathrooms',
+        name: '2 Full Bathrooms Demolition & Wet Civil Package',
+        room: 'Master & Common Bathrooms',
+        trade: 'civil',
+        icon: 'hammer',
+        badge: 'Heavy Civil & MEP',
+        desc: 'Hacking to RCC, core plumbing replacement, waterproofing, and tile laying.',
+        t1Summary: 'Tile-Over-Tile Polymer Adhesive (No Demolition) + Dr. Fixit 2K',
+        t2Summary: 'Full Hacking + Concealed CPVC Plumbing + Brick Bat Coba + 800x1600 GVT',
+        t3Summary: 'Acoustic Drainage + 3-Layer PU Waterproofing + Italian Marble Slabs + Grohe SmartControl',
+        items: [
+          {
+            id: 'p-601',
+            name: 'Old Tile Demolition, Debris Disposal & RCC Surface Chipping',
+            bankId: 'bank-106',
+            unit: 'sqft',
+            qty: 420,
+            t1: { active: false, spec: 'Tile-over-Tile method utilized (Zero demolition required, saves debris carting)', material: 0, labor: 0, cost: 0, margin: 0, rate: 0 },
+            t2: { active: true, spec: 'Complete hacking of wall & floor tiles down to mother slab, bagging & carting debris away', material: 12, labor: 28, cost: 40, margin: 33.3, rate: 60 },
+            t3: { active: true, spec: 'Precision diamond blade groove cutting, non-percussive chipping, society elevator protection & carting', material: 22, labor: 42, cost: 64, margin: 36.0, rate: 100 }
+          },
+          {
+            id: 'p-602',
+            name: 'Rigorous Waterproofing System (Mother Slab + Dado)',
+            bankId: 'bank-107',
+            unit: 'sqft',
+            qty: 240,
+            t1: { active: true, spec: '2-coat elastomeric Dr. Fixit Fastflex slurry coat over existing tile joints', material: 32, labor: 18, cost: 50, margin: 26.5, rate: 68 },
+            t2: { active: true, spec: 'Brick Bat Coba with polymer matrix (100mm) + angle fillets + 3-day water ponding hydro-test', material: 68, labor: 34, cost: 102, margin: 32.0, rate: 150 },
+            t3: { active: true, spec: 'SikaTop Seal-107 + Polyurethane (PU) injection grouting around core penetrations + 7-day ponding test', material: 110, labor: 52, cost: 162, margin: 35.2, rate: 250 }
+          },
+          {
+            id: 'p-603',
+            name: 'Concealed Water Supply & Drainage MEP Manifolds',
+            bankId: 'bank-116',
+            unit: 'nos',
+            qty: 2,
+            t1: { active: true, spec: 'Minor rerouting of visible CPVC lines without altering shaft headers', material: 8500, labor: 4500, cost: 13000, margin: 27.8, rate: 18000 },
+            t2: { active: true, spec: 'Complete re-piping using Ashirvad SDR-11 CPVC hot/cold lines with pressure-tested Grohe concealed divertor body', material: 21000, labor: 9500, cost: 30500, margin: 32.2, rate: 45000 },
+            t3: { active: true, spec: 'Viega PEX multi-layer manifold plumbing with acoustic sound-dampened SWR drainage pipe wrapping', material: 42000, labor: 16000, cost: 58000, margin: 35.6, rate: 90000 }
+          },
+          {
+            id: 'p-604',
+            name: 'Bathroom Floor & Dado Tile / Slab Installation',
+            bankId: 'bank-103',
+            unit: 'sqft',
+            qty: 380,
+            t1: { active: true, spec: 'Tile-over-tile using Roff non-skid polymer adhesive (300x300 ceramic tiles)', material: 75, labor: 35, cost: 110, margin: 26.7, rate: 150 },
+            t2: { active: true, spec: '800x1600mm Glazed Vitrified Tiles (GVT) with Laticrete SpectraLOCK Epoxy Grout & 45-degree mitered edges', material: 145, labor: 65, cost: 210, margin: 32.3, rate: 310 },
+            t3: { active: true, spec: 'Imported bookmatched Italian Statuario Marble full slabs with epoxy anchors & 8-stage diamond polish', material: 420, labor: 160, cost: 580, margin: 35.6, rate: 900 }
+          }
+        ]
+      },
+      {
+        id: 'pkg-civil-flooring',
+        name: 'Entire Home Flooring Replacement Package',
+        room: 'Living, Bedrooms & Passages',
+        trade: 'civil',
+        icon: 'layers-2',
+        badge: 'Flooring Civil',
+        desc: 'Sub-floor leveling screed, tile/marble laying across 650 sqft carpet area.',
+        t1Summary: 'Tile-over-Tile Vitrified (Zero Hacking, Polymer Bond)',
+        t2Summary: 'Complete Screed Bed Leveling + 1200x1800mm Large Format Tiles',
+        t3Summary: 'Continuous Italian Dyna / Botticino Marble with Mirror Polish',
+        items: [
+          {
+            id: 'p-701',
+            name: 'Apartment Main Flooring Installation System',
+            bankId: 'bank-117',
+            unit: 'sqft',
+            qty: 650,
+            t1: { active: true, spec: 'Tile-over-tile with high-strength polymer adhesive over existing builder flooring', material: 85, labor: 40, cost: 125, margin: 26.5, rate: 170 },
+            t2: { active: true, spec: '35mm self-leveling mortar screed bed + 1200x1800mm GVT tile with epoxy grout', material: 170, labor: 70, cost: 240, margin: 31.4, rate: 350 },
+            t3: { active: true, spec: 'Laser-leveled Italian Dyna Marble full-slab layout with 8-stage diamond hone mirror polish', material: 450, labor: 150, cost: 600, margin: 36.8, rate: 950 }
+          }
+        ]
+      }
+    ];
+
+    // Initialize package state
+    packagesState.packages = JSON.parse(JSON.stringify(packageDataset_withoutCivil));
+
+    function switchPackageScenario(scenarioKey) {
+      packagesState.scenario = scenarioKey;
+      const isWithCivil = scenarioKey === 'with_civil';
+
+      const btnWithout = document.getElementById('pkg-btn-without-civil');
+      const btnWith = document.getElementById('pkg-btn-with-civil');
+      if (btnWithout && btnWith) {
+        btnWithout.className = !isWithCivil 
+          ? "px-3 py-2 rounded-lg text-xs font-bold transition-all text-center cursor-pointer bg-white text-indigo-700 shadow-xs"
+          : "px-3 py-2 rounded-lg text-xs font-bold transition-all text-center cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-200/60";
+        
+        btnWith.className = isWithCivil
+          ? "px-3 py-2 rounded-lg text-xs font-bold transition-all text-center cursor-pointer bg-amber-600 text-white shadow-xs"
+          : "px-3 py-2 rounded-lg text-xs font-bold transition-all text-center cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-200/60";
+      }
+
+      if (isWithCivil) {
+        packagesState.packages = JSON.parse(JSON.stringify(packageDataset_withCivil));
+        packagesState.activePackageId = 'pkg-civil-bathrooms'; // Focus directly on the civil package
+      } else {
+        packagesState.packages = JSON.parse(JSON.stringify(packageDataset_withoutCivil));
+        packagesState.activePackageId = 'pkg-mb-carpentry';
+      }
+
+      renderPackagesSandbox();
+      showToast(isWithCivil ? 'Loaded 2BHK Deep Civil Renovation Package Suite!' : 'Loaded 2BHK Turnkey Interior Package Suite (Without Civil)!');
+    }
+
+    function switchActivePackage(pkgId) {
+      packagesState.activePackageId = pkgId;
+      renderPackagesSandbox();
+    }
+
+    function switchActivePackageTier(tierKey) {
+      packagesState.activeTier = tierKey;
+      ['t1', 't2', 't3'].forEach(k => {
+        const btn = document.getElementById('pkg-tier-tab-' + k);
+        if (btn) {
+          const isAct = k === tierKey;
+          btn.className = isAct
+            ? "px-3 py-1 rounded-lg font-bold cursor-pointer transition-all bg-white text-indigo-700 shadow-xs"
+            : "px-3 py-1 rounded-lg font-bold cursor-pointer transition-all text-slate-600 hover:text-slate-900";
+        }
+      });
+      renderPackagesSandbox();
+    }
+
+    function filterPackagesByTrade(tradeKey) {
+      packagesState.activeTradeFilter = tradeKey;
+      const buttons = document.querySelectorAll('.pkg-trade-btn');
+      buttons.forEach(btn => {
+        const text = btn.innerText.toLowerCase();
+        let match = false;
+        if (tradeKey === 'all' && text.includes('all')) match = true;
+        if (tradeKey === 'civil' && text.includes('civil')) match = true;
+        if (tradeKey === 'carpentry' && text.includes('carpentry')) match = true;
+        if (tradeKey === 'ceiling' && text.includes('ceiling')) match = true;
+        if (tradeKey === 'painting' && text.includes('painting')) match = true;
+
+        if (match) {
+          btn.className = "pkg-trade-btn active px-2 py-1 rounded bg-slate-900 text-white font-bold cursor-pointer";
+        } else {
+          btn.className = "pkg-trade-btn px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold cursor-pointer";
+        }
+      });
+      renderPackagesSandbox();
+    }
+
+    // Editable calculations within package items
+    function updatePkgItemMaterial(pkgId, itemId, tierKey, val) {
+      const pkg = packagesState.packages.find(p => p.id === pkgId);
+      if (!pkg) return;
+      const item = pkg.items.find(i => i.id === itemId);
+      if (!item) return;
+
+      const num = parseFloat(val) || 0;
+      item[tierKey].material = num;
+      item[tierKey].cost = item[tierKey].material + item[tierKey].labor;
+      // Recalculate sell rate based on cost and GM%
+      const gm = item[tierKey].margin / 100;
+      item[tierKey].rate = Math.round(item[tierKey].cost / (1 - gm));
+      renderPackagesSandbox();
+    }
+
+    function updatePkgItemLabor(pkgId, itemId, tierKey, val) {
+      const pkg = packagesState.packages.find(p => p.id === pkgId);
+      if (!pkg) return;
+      const item = pkg.items.find(i => i.id === itemId);
+      if (!item) return;
+
+      const num = parseFloat(val) || 0;
+      item[tierKey].labor = num;
+      item[tierKey].cost = item[tierKey].material + item[tierKey].labor;
+      const gm = item[tierKey].margin / 100;
+      item[tierKey].rate = Math.round(item[tierKey].cost / (1 - gm));
+      renderPackagesSandbox();
+    }
+
+    function updatePkgItemMargin(pkgId, itemId, tierKey, val) {
+      const pkg = packagesState.packages.find(p => p.id === pkgId);
+      if (!pkg) return;
+      const item = pkg.items.find(i => i.id === itemId);
+      if (!item) return;
+
+      const num = parseFloat(val) || 5;
+      item[tierKey].margin = num;
+      const gm = num / 100;
+      item[tierKey].rate = Math.round(item[tierKey].cost / (1 - gm));
+      renderPackagesSandbox();
+    }
+
+    function togglePkgItemActive(pkgId, itemId, tierKey) {
+      const pkg = packagesState.packages.find(p => p.id === pkgId);
+      if (!pkg) return;
+      const item = pkg.items.find(i => i.id === itemId);
+      if (!item) return;
+
+      item[tierKey].active = !item[tierKey].active;
+      showToast(`${item.name} is now ${item[tierKey].active ? 'INCLUDED' : 'EXCLUDED'} in ${tierKey.toUpperCase()} tier!`);
+      renderPackagesSandbox();
+    }
+
+    function updatePkgItemQty(pkgId, itemId, val) {
+      const pkg = packagesState.packages.find(p => p.id === pkgId);
+      if (!pkg) return;
+      const item = pkg.items.find(i => i.id === itemId);
+      if (!item) return;
+
+      item.qty = parseFloat(val) || 1;
+      renderPackagesSandbox();
+    }
+
+    function injectSubItemToActivePackage() {
+      const activePkg = packagesState.packages.find(p => p.id === packagesState.activePackageId);
+      if (!activePkg) return;
+
+      const newItem = {
+        id: 'p-custom-' + Date.now(),
+        name: 'Custom Tailored Sub-Assembly Component',
+        bankId: 'bank-custom',
+        unit: 'nos',
+        qty: 1,
+        t1: { active: false, spec: 'Excluded in Essential Tier', material: 0, labor: 0, cost: 0, margin: 0, rate: 0 },
+        t2: { active: true, spec: 'Custom marine ply fabrication with PU satin finish & premium hardware', material: 3200, labor: 1400, cost: 4600, margin: 32.4, rate: 6800 },
+        t3: { active: true, spec: 'Custom Italian veneer with motorized hardware and warm perimeter backlight', material: 6500, labor: 2500, cost: 9000, margin: 37.5, rate: 14400 }
+      };
+
+      activePkg.items.push(newItem);
+      showToast(`Added custom sub-assembly to ${activePkg.name}!`);
+      renderPackagesSandbox();
+    }
+
+    function addNewCustomPackageModal() {
+      const name = prompt("Enter package title (e.g., 'Master Ensuite Walk-In Closet Package'):", "Custom Architectural Package");
+      if (!name) return;
+
+      const newPkg = {
+        id: 'pkg-custom-' + Date.now(),
+        name: name,
+        room: 'Custom Space',
+        trade: 'carpentry',
+        icon: 'package-plus',
+        badge: 'Custom Package',
+        desc: 'User created modular package from Item Bank.',
+        t1Summary: 'Basic Standard Scope inclusions',
+        t2Summary: 'Comfort Signature Scope with upgraded hardware',
+        t3Summary: 'Luxury Harmony Architectural Inclusions',
+        items: [
+          {
+            id: 'p-cust-1',
+            name: 'Modular Storage Unit with Adjustable Shelves',
+            bankId: 'bank-101',
+            unit: 'sqft',
+            qty: 35,
+            t1: { active: true, spec: 'Commercial laminate, MR Ply, standard hinges', material: 700, labor: 350, cost: 1050, margin: 26, rate: 1420 },
+            t2: { active: true, spec: 'Century Marine BWP, Hafele soft-close hinges', material: 840, labor: 420, cost: 1260, margin: 32, rate: 1850 },
+            t3: { active: true, spec: 'Fluted veneer with PU clear coat, Blum Legrabox', material: 1200, labor: 580, cost: 1780, margin: 36, rate: 2780 }
+          }
+        ]
+      };
+
+      packagesState.packages.push(newPkg);
+      packagesState.activePackageId = newPkg.id;
+      showToast(`Created new Room Package: ${name}`);
+      renderPackagesSandbox();
+    }
+
+    // MAIN RENDER FUNCTION FOR TAB 8
+    function renderPackagesSandbox() {
+      const isWithCivil = packagesState.scenario === 'with_civil';
+
+      // 1. Calculate Total Costs across All Active Packages for Tiers 1, 2, 3
+      let totalT1 = 0, totalT2 = 0, totalT3 = 0;
+      let countT1 = 0, countT2 = 0, countT3 = 0;
+      let sumCostT1 = 0, sumCostT2 = 0, sumCostT3 = 0;
+
+      packagesState.packages.forEach(pkg => {
+        pkg.items.forEach(item => {
+          if (item.t1.active) {
+            totalT1 += item.qty * item.t1.rate;
+            sumCostT1 += item.qty * item.t1.cost;
+            countT1++;
+          }
+          if (item.t2.active) {
+            totalT2 += item.qty * item.t2.rate;
+            sumCostT2 += item.qty * item.t2.cost;
+            countT2++;
+          }
+          if (item.t3.active) {
+            totalT3 += item.qty * item.t3.rate;
+            sumCostT3 += item.qty * item.t3.cost;
+            countT3++;
+          }
+        });
+      });
+
+      const gmT1 = totalT1 > 0 ? (((totalT1 - sumCostT1) / totalT1) * 100).toFixed(1) : '0.0';
+      const gmT2 = totalT2 > 0 ? (((totalT2 - sumCostT2) / totalT2) * 100).toFixed(1) : '0.0';
+      const gmT3 = totalT3 > 0 ? (((totalT3 - sumCostT3) / totalT3) * 100).toFixed(1) : '0.0';
+
+      // Update Summary Header Banner
+      const titleEl = document.getElementById('pkg-summary-scope-title');
+      const descEl = document.getElementById('pkg-summary-scope-desc');
+      if (titleEl && descEl) {
+        titleEl.innerText = isWithCivil ? "2BHK Deep Renovation (Full Civil & Plumbing Included)" : "2BHK Standard Turnkey (New Possession, Without Civil)";
+        descEl.innerText = isWithCivil 
+          ? "Demolition to RCC, Brick Bat Coba waterproofing, CPVC repiping, full tile replacement + complete joinery & interiors."
+          : "Carpentry, Gypsum ceiling, Asian Paints Royale, electrical fittings. Zero hacking or wet civil alterations.";
+      }
+
+      const t1CostEl = document.getElementById('pkg-summary-t1-cost');
+      const t2CostEl = document.getElementById('pkg-summary-t2-cost');
+      const t3CostEl = document.getElementById('pkg-summary-t3-cost');
+      if (t1CostEl) t1CostEl.innerText = fmtINR(totalT1);
+      if (t2CostEl) t2CostEl.innerText = fmtINR(totalT2);
+      if (t3CostEl) t3CostEl.innerText = fmtINR(totalT3);
+
+      const t1CountEl = document.getElementById('pkg-t1-itemcount');
+      const t2CountEl = document.getElementById('pkg-t2-itemcount');
+      const t3CountEl = document.getElementById('pkg-t3-itemcount');
+      if (t1CountEl) t1CountEl.innerText = `${countT1} items`;
+      if (t2CountEl) t2CountEl.innerText = `${countT2} items`;
+      if (t3CountEl) t3CountEl.innerText = `${countT3} items`;
+
+      const t1GmEl = document.getElementById('pkg-summary-t1-gm');
+      const t2GmEl = document.getElementById('pkg-summary-t2-gm');
+      const t3GmEl = document.getElementById('pkg-summary-t3-gm');
+      if (t1GmEl) t1GmEl.innerText = `${gmT1}%`;
+      if (t2GmEl) t2GmEl.innerText = `${gmT2}%`;
+      if (t3GmEl) t3GmEl.innerText = `${gmT3}%`;
+
+      const badgeCount = document.getElementById('pkg-count-badge');
+      if (badgeCount) badgeCount.innerText = `${packagesState.packages.length} Packages Active`;
+
+      // 2. Render Left Sidebar Package List
+      const sidebarContainer = document.getElementById('pkg-sidebar-list');
+      if (sidebarContainer) {
+        let sidebarHtml = '';
+        const filteredPackages = packagesState.packages.filter(p => {
+          if (packagesState.activeTradeFilter === 'all') return true;
+          return p.trade === packagesState.activeTradeFilter;
+        });
+
+        filteredPackages.forEach(pkg => {
+          const isSelected = pkg.id === packagesState.activePackageId;
+          
+          // Compute package total for Active Tier
+          let pkgTierTotal = 0;
+          let activeItemCount = 0;
+          pkg.items.forEach(it => {
+            if (it[packagesState.activeTier].active) {
+              pkgTierTotal += it.qty * it[packagesState.activeTier].rate;
+              activeItemCount++;
+            }
+          });
+
+          sidebarHtml += `
+            <div onclick="switchActivePackage('${pkg.id}')" class="p-3 rounded-xl border transition-all cursor-pointer ${
+              isSelected 
+                ? 'bg-indigo-50/70 border-indigo-400 ring-2 ring-indigo-500/20 shadow-xs' 
+                : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+            }">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex items-start gap-2">
+                  <div class="w-8 h-8 rounded-lg ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'} flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="${pkg.icon || 'box'}" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <span class="text-[9px] uppercase font-bold text-slate-400">${pkg.room}</span>
+                    <h4 class="text-xs font-bold text-slate-900 line-clamp-1">${pkg.name}</h4>
+                  </div>
+                </div>
+                <span class="text-xs font-mono font-bold ${isSelected ? 'text-indigo-900' : 'text-slate-800'}">
+                  ${fmtINR(pkgTierTotal)}
+                </span>
+              </div>
+              <div class="mt-2 flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-100">
+                <span class="font-medium flex items-center gap-1">
+                  <i data-lucide="check-circle-2" class="w-3 h-3 text-emerald-600"></i> ${activeItemCount} / ${pkg.items.length} items included
+                </span>
+                <span class="px-1.5 py-0.2 rounded font-mono font-bold bg-slate-100 text-slate-600 text-[9px] uppercase">
+                  ${pkg.trade}
+                </span>
+              </div>
+            </div>
+          `;
+        });
+
+        sidebarContainer.innerHTML = sidebarHtml;
+      }
+
+      // 3. Render Active Package Header & Inspector
+      const activePkg = packagesState.packages.find(p => p.id === packagesState.activePackageId) || packagesState.packages[0];
+      if (!activePkg) return;
+
+      const activeHeader = document.getElementById('pkg-active-header');
+      if (activeHeader) {
+        let currentTierPkgTotal = 0;
+        let currentTierCost = 0;
+        activePkg.items.forEach(it => {
+          if (it[packagesState.activeTier].active) {
+            currentTierPkgTotal += it.qty * it[packagesState.activeTier].rate;
+            currentTierCost += it.qty * it[packagesState.activeTier].cost;
+          }
+        });
+        const currentTierGm = currentTierPkgTotal > 0 ? (((currentTierPkgTotal - currentTierCost) / currentTierPkgTotal) * 100).toFixed(1) : '0.0';
+
+        activeHeader.innerHTML = `
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                ${activePkg.room}
+              </span>
+              <span class="text-[10px] uppercase font-mono font-bold text-slate-400">
+                Trade: ${activePkg.trade.toUpperCase()}
+              </span>
+            </div>
+            <h3 class="font-serif text-lg font-bold text-slate-900 mt-1">${activePkg.name}</h3>
+            <p class="text-xs text-slate-500 mt-0.5">${activePkg.desc}</p>
+          </div>
+          <div class="flex items-center gap-4 bg-slate-50 p-2.5 rounded-xl border border-slate-200 shrink-0">
+            <div class="text-right">
+              <span class="text-[9px] uppercase font-bold text-slate-400 block">${packagesState.activeTier.toUpperCase()} Package Total</span>
+              <span class="text-base font-serif font-black text-indigo-950">${fmtINR(currentTierPkgTotal)}</span>
+            </div>
+            <div class="pl-3 border-l border-slate-200 text-left">
+              <span class="text-[9px] uppercase font-bold text-slate-400 block">Blended Margin</span>
+              <span class="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                ${currentTierGm}% GM
+              </span>
+            </div>
+          </div>
+        `;
+      }
+
+      // 4. Render Active Package Items Table
+      const tableBody = document.getElementById('pkg-active-items-table-body');
+      const tableFoot = document.getElementById('pkg-active-items-table-foot');
+      if (tableBody && tableFoot) {
+        let bodyHtml = '';
+        let pkgGrandTotal = 0;
+        let pkgTotalCost = 0;
+
+        activePkg.items.forEach((item, idx) => {
+          const tierData = item[packagesState.activeTier];
+          const isIncluded = tierData.active;
+          const lineTotal = isIncluded ? (item.qty * tierData.rate) : 0;
+          const lineCost = isIncluded ? (item.qty * tierData.cost) : 0;
+          pkgGrandTotal += lineTotal;
+          pkgTotalCost += lineCost;
+
+          bodyHtml += `
+            <tr class="hover:bg-slate-50/80 transition-colors ${!isIncluded ? 'opacity-40 bg-slate-50/50' : ''}">
+              <td class="p-3 text-center text-slate-400 font-mono text-[11px]">${idx + 1}</td>
+              <td class="p-3">
+                <div class="flex items-center gap-1.5 mb-0.5">
+                  <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                    <i data-lucide="database" class="w-2.5 h-2.5 text-indigo-500"></i> ${item.bankId}
+                  </span>
+                  ${!isIncluded ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Tier Scope Omitted</span>` : ''}
+                </div>
+                <span class="font-bold text-slate-900 block ${!isIncluded ? 'line-through text-slate-400' : ''}">${item.name}</span>
+              </td>
+              <td class="p-3 text-center bg-indigo-50/30">
+                <div class="flex items-center justify-center gap-1">
+                  <input type="number" value="${item.qty}" 
+                    onchange="updatePkgItemQty('${activePkg.id}', '${item.id}', this.value)"
+                    ${!isIncluded ? 'disabled' : ''}
+                    class="w-14 p-1 text-center font-mono font-bold bg-white border border-slate-200 rounded text-slate-900 outline-none text-xs focus:border-indigo-600" />
+                  <span class="text-slate-500 text-[10px] uppercase font-bold">${item.unit}</span>
+                </div>
+              </td>
+              <td class="p-3">
+                <span class="text-xs text-slate-700 leading-relaxed block">${tierData.spec}</span>
+              </td>
+              <!-- Editable Unit Material & Labor Cost -->
+              <td class="p-3 bg-slate-50 text-center">
+                <div class="flex items-center justify-center gap-1 font-mono text-[11px]">
+                  <div class="flex items-center" title="Material Cost">
+                    <span class="text-slate-400 text-[10px]">M:₹</span>
+                    <input type="number" value="${tierData.material}" 
+                      onchange="updatePkgItemMaterial('${activePkg.id}', '${item.id}', '${packagesState.activeTier}', this.value)"
+                      ${!isIncluded ? 'disabled' : ''}
+                      class="w-14 p-0.5 text-right font-mono font-bold bg-white border border-slate-200 rounded text-slate-800 outline-none text-xs" />
+                  </div>
+                  <span class="text-slate-400">+</span>
+                  <div class="flex items-center" title="Labor Cost">
+                    <span class="text-slate-400 text-[10px]">L:₹</span>
+                    <input type="number" value="${tierData.labor}" 
+                      onchange="updatePkgItemLabor('${activePkg.id}', '${item.id}', '${packagesState.activeTier}', this.value)"
+                      ${!isIncluded ? 'disabled' : ''}
+                      class="w-14 p-0.5 text-right font-mono font-bold bg-white border border-slate-200 rounded text-slate-800 outline-none text-xs" />
+                  </div>
+                </div>
+                <div class="text-[9px] text-slate-400 mt-0.5 font-mono">Unit Cost: ₹${tierData.cost}</div>
+              </td>
+              <!-- Editable Margin % -->
+              <td class="p-3 text-center">
+                <div class="flex items-center justify-center gap-0.5">
+                  <input type="number" value="${tierData.margin}" step="0.5"
+                    onchange="updatePkgItemMargin('${activePkg.id}', '${item.id}', '${packagesState.activeTier}', this.value)"
+                    ${!isIncluded ? 'disabled' : ''}
+                    class="w-12 p-0.5 text-center font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 rounded text-xs outline-none" />
+                  <span class="text-[10px] text-emerald-700">%</span>
+                </div>
+              </td>
+              <!-- Computed Sell Rate -->
+              <td class="p-3 text-right">
+                <span class="font-mono font-bold text-slate-900 text-xs">₹${tierData.rate.toLocaleString('en-IN')}</span>
+                <span class="text-[9px] text-slate-400 block font-mono">/${item.unit}</span>
+              </td>
+              <!-- Total -->
+              <td class="p-3 text-right">
+                <span class="font-mono font-black text-indigo-950 text-xs">
+                  ${isIncluded ? `₹${lineTotal.toLocaleString('en-IN')}` : '—'}
+                </span>
+              </td>
+              <!-- Inclusion Switch Toggle -->
+              <td class="p-3 text-center">
+                <button onclick="togglePkgItemActive('${activePkg.id}', '${item.id}', '${packagesState.activeTier}')" 
+                  title="${isIncluded ? 'Exclude from this tier' : 'Include in this tier'}"
+                  class="p-1.5 rounded-lg cursor-pointer transition-all ${
+                    isIncluded ? 'bg-emerald-100 text-emerald-800 hover:bg-rose-100 hover:text-rose-800' : 'bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-800'
+                  }">
+                  <i data-lucide="${isIncluded ? 'check-square' : 'square'}" class="w-4 h-4"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        });
+
+        tableBody.innerHTML = bodyHtml;
+
+        const blendedPackageGm = pkgGrandTotal > 0 ? (((pkgGrandTotal - pkgTotalCost) / pkgGrandTotal) * 100).toFixed(1) : '0.0';
+        tableFoot.innerHTML = `
+          <tr>
+            <td colspan="4" class="p-3 text-right text-slate-600 font-bold uppercase text-[10px]">
+              ${activePkg.name} (${packagesState.activeTier.toUpperCase()}) Total:
+            </td>
+            <td class="p-3 text-center font-mono text-slate-600 text-xs">
+              Prime Cost: ₹${pkgTotalCost.toLocaleString('en-IN')}
+            </td>
+            <td class="p-3 text-center font-mono text-emerald-700 text-xs font-bold bg-emerald-50">
+              ${blendedPackageGm}%
+            </td>
+            <td colspan="2" class="p-3 text-right font-mono font-black text-indigo-950 text-sm">
+              ₹${pkgGrandTotal.toLocaleString('en-IN')}
+            </td>
+            <td></td>
+          </tr>
+        `;
+      }
+
+      // 5. Render 3-Tier Side-by-Side Comparison for Active Package
+      const compareGrid = document.getElementById('pkg-3tier-compare-grid');
+      if (compareGrid) {
+        let t1Tot = 0, t2Tot = 0, t3Tot = 0;
+        let t1Ct = 0, t2Ct = 0, t3Ct = 0;
+
+        activePkg.items.forEach(it => {
+          if (it.t1.active) { t1Tot += it.qty * it.t1.rate; t1Ct++; }
+          if (it.t2.active) { t2Tot += it.qty * it.t2.rate; t2Ct++; }
+          if (it.t3.active) { t3Tot += it.qty * it.t3.rate; t3Ct++; }
+        });
+
+        compareGrid.innerHTML = `
+          <div class="p-3.5 rounded-xl border ${packagesState.activeTier === 't1' ? 'border-indigo-400 bg-indigo-50/40 ring-1 ring-indigo-400' : 'border-slate-200 bg-white'} space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-bold uppercase text-slate-500">Tier 1: Essential</span>
+              <span class="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">${t1Ct} / ${activePkg.items.length} Items</span>
+            </div>
+            <div class="text-base font-serif font-black text-slate-900">${fmtINR(t1Tot)}</div>
+            <p class="text-[11px] text-slate-600 leading-snug">${activePkg.t1Summary}</p>
+            <div class="pt-1 text-[10px] text-slate-500 font-mono">
+              Core Functional Inclusions Only
+            </div>
+          </div>
+
+          <div class="p-3.5 rounded-xl border ${packagesState.activeTier === 't2' ? 'border-indigo-500 bg-indigo-50/70 ring-2 ring-indigo-500/20' : 'border-slate-200 bg-white'} space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-bold uppercase text-indigo-700">Tier 2: Comfort (Signature)</span>
+              <span class="text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded">${t2Ct} / ${activePkg.items.length} Items</span>
+            </div>
+            <div class="text-base font-serif font-black text-indigo-950">${fmtINR(t2Tot)}</div>
+            <p class="text-[11px] text-indigo-900 leading-snug">${activePkg.t2Summary}</p>
+            <div class="pt-1 text-[10px] text-emerald-700 font-mono font-bold">
+              ✓ Best Studio Gross Margin & Trade Durability
+            </div>
+          </div>
+
+          <div class="p-3.5 rounded-xl border ${packagesState.activeTier === 't3' ? 'border-purple-500 bg-purple-50/50 ring-1 ring-purple-400' : 'border-slate-200 bg-white'} space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-bold uppercase text-purple-700">Tier 3: Luxury Harmony</span>
+              <span class="text-[10px] font-mono font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">${t3Ct} / ${activePkg.items.length} Items</span>
+            </div>
+            <div class="text-base font-serif font-black text-purple-950">${fmtINR(t3Tot)}</div>
+            <p class="text-[11px] text-purple-900 leading-snug">${activePkg.t3Summary}</p>
+            <div class="pt-1 text-[10px] text-purple-700 font-mono">
+              Full Architectural Inclusions + Premium Brands
+            </div>
+          </div>
+        `;
+      }
+
+      lucide.createIcons();
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       loadScenario('civil_reno');
       lucide.createIcons();
       renderSimulator();
       switchEditorParadigm('optionC');
+      renderPackagesSandbox();
     });
   </script>
 </body>

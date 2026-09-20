@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { FullProjectData } from "../types";
 import { formatINR, timeAgo } from "../lib/utils";
 import { getSingleProjectValue } from "../lib/financialsUtils";
@@ -36,6 +36,7 @@ import {
   Sparkles,
   Check,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 
 interface ClientsDirectoryProps {
@@ -83,17 +84,17 @@ const BUCKET_CONFIG: Record<
 > = {
   all: {
     label: "All Accounts",
-    color: "text-slate-700",
-    bg: "bg-slate-50",
-    border: "border-slate-200",
-    dot: "bg-slate-400"
+    color: "text-[#3A416B]",
+    bg: "bg-[#F6F7FB]",
+    border: "border-[#E2E5F0]",
+    dot: "bg-[#8E96B8]"
   },
   active: {
     label: "Active Site",
-    color: "text-sky-950",
-    bg: "bg-sky-50/80",
-    border: "border-sky-200",
-    dot: "bg-sky-600"
+    color: "text-[#12182F]",
+    bg: "bg-[#EDE8F5]/80",
+    border: "border-[#ADBBDA]",
+    dot: "bg-[#3D52A0]"
   },
   pipeline: {
     label: "In Pipeline",
@@ -111,27 +112,36 @@ const BUCKET_CONFIG: Record<
   },
   lost: {
     label: "Dormant",
-    color: "text-slate-600",
-    bg: "bg-slate-50",
-    border: "border-slate-200",
-    dot: "bg-slate-400"
+    color: "text-[#5A628A]",
+    bg: "bg-[#F6F7FB]",
+    border: "border-[#E2E5F0]",
+    dot: "bg-[#8E96B8]"
   }
+};
+
+/** The bucket colour as a value, for the rail down the edge of each card. */
+const RAIL: Record<BucketType, string> = {
+  all: '#ADBBDA',
+  pipeline: '#7091E6',
+  active: '#3D52A0',
+  delivered: '#2F9E6E',
+  lost: '#ADBBDA',
 };
 
 const PROJECT_STATUS_CONFIG: Record<
   string,
   { label: string; color: string; bg: string; border: string }
 > = {
-  lead: { label: "Discovery", color: "text-slate-700", bg: "bg-slate-100", border: "border-slate-200" },
-  draft: { label: "Drafting", color: "text-slate-700", bg: "bg-slate-100", border: "border-slate-200" },
+  lead: { label: "Discovery", color: "text-[#3A416B]", bg: "bg-[#EDEFF7]", border: "border-[#E2E5F0]" },
+  draft: { label: "Drafting", color: "text-[#3A416B]", bg: "bg-[#EDEFF7]", border: "border-[#E2E5F0]" },
   proposal_sent: { label: "Proposal", color: "text-amber-800", bg: "bg-amber-50", border: "border-amber-200" },
   negotiation: { label: "Negotiation", color: "text-amber-800", bg: "bg-amber-50", border: "border-amber-200" },
-  won: { label: "Contracted", color: "text-sky-950", bg: "bg-sky-50", border: "border-sky-200" },
-  execution: { label: "On Site", color: "text-sky-950", bg: "bg-sky-50", border: "border-sky-200" },
+  won: { label: "Contracted", color: "text-[#12182F]", bg: "bg-[#EDE8F5]", border: "border-[#ADBBDA]" },
+  execution: { label: "On Site", color: "text-[#12182F]", bg: "bg-[#EDE8F5]", border: "border-[#ADBBDA]" },
   work_paused: { label: "Paused", color: "text-rose-800", bg: "bg-rose-50", border: "border-rose-200" },
   completed: { label: "Handed Over", color: "text-emerald-800", bg: "bg-emerald-50", border: "border-emerald-200" },
-  lost: { label: "Lost", color: "text-slate-500", bg: "bg-slate-100", border: "border-slate-200" },
-  archived: { label: "Archived", color: "text-slate-400", bg: "bg-slate-50", border: "border-slate-200" },
+  lost: { label: "Lost", color: "text-[#5A628A]", bg: "bg-[#EDEFF7]", border: "border-[#E2E5F0]" },
+  archived: { label: "Archived", color: "text-[#8E96B8]", bg: "bg-[#F6F7FB]", border: "border-[#E2E5F0]" },
 };
 
 const LIFECYCLE_STAGES = [
@@ -175,8 +185,12 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
   const isDesigner = currentRole === 'Designer';
 
   const [selectedBucket, setSelectedBucket] = useState<BucketType>('all');
-  const [selectedProjectKind, setSelectedProjectKind] = useState<ProjectKindFilter>('all');
+  /* Opens on the real book. Sample projects are something you ask for. */
+  const [selectedProjectKind, setSelectedProjectKind] = useState<ProjectKindFilter>('actual');
   const [selectedSmartTag, setSelectedSmartTag] = useState<SmartFilterTag>('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersAt, setFiltersAt] = useState<{ top: number; left: number } | null>(null);
+  const filtersBtnRef = useRef<HTMLButtonElement>(null);
   const [sortBy, setSortBy] = useState<SortOption>('activity_desc');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [searchQuery, setSearchQuery] = useState("");
@@ -383,7 +397,19 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
       // Skip projects without client information
       if (!clientEmail && !clientName) continue;
 
-      const groupKey = (clientEmail || clientName).toLowerCase().trim();
+      /*
+        Two projects are the same account only when the email AND the name
+        agree.
+
+        Keying on `clientEmail || clientName` let one address override every
+        name behind it: four different people whose projects all carried the
+        studio's own inbox collapsed into a single card titled with whichever
+        name happened to load first, showing four unrelated projects. A
+        genuine repeat client still merges; a shared inbox no longer erases
+        who the client is.
+      */
+      const norm = (v?: string | null) => (v || '').toLowerCase().trim();
+      const groupKey = `${norm(clientEmail)}|${norm(clientName)}`;
       const projectValue = getSingleProjectValue(p);
       const projectStatus = p.context?.status || 'draft';
       const projectConfig = p.context?.config;
@@ -498,11 +524,33 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
     return list;
   }, [projects]);
 
+  /*
+    The accounts the summary is allowed to speak for.
+
+    It used to read from every account regardless of the Actual/Dummy switch,
+    so the headline said "₹3,01,63,637 across 27 accounts" whichever of the
+    three you picked — a portfolio figure with fourteen demo accounts folded
+    into it, and a number that never moved when you asked it to.
+  */
+  const inScope = useMemo(() => aggregatedClients.filter(c => {
+    if (selectedProjectKind === 'actual') return !c.isDummy;
+    if (selectedProjectKind === 'dummy') return c.isDummy;
+    return true;
+  }), [aggregatedClients, selectedProjectKind]);
+
   // Compute summary stats
+  /*
+    Counted over what is on screen, not over everything.
+
+    The bucket pills read 27 / 6 / 10 / 5 / 6 while the list below them showed
+    thirteen accounts — they were still totalling the whole book after the
+    directory had been scoped to real work. Only the Actual/Dummy split itself
+    stays global, because that control exists to say how big each side is.
+  */
   const stats = useMemo(() => {
-    let total = aggregatedClients.length;
-    let actualCount = 0;
-    let dummyCount = 0;
+    let total = inScope.length;
+    const actualCount = aggregatedClients.filter(c => !c.isDummy).length;
+    const dummyCount = aggregatedClients.length - actualCount;
     let pipeline = 0;
     let active = 0;
     let delivered = 0;
@@ -512,10 +560,7 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
     let vipCount = 0;
     let followupCount = 0;
 
-    for (const c of aggregatedClients) {
-      if (c.isDummy) dummyCount++;
-      else actualCount++;
-
+    for (const c of inScope) {
       if (c.bucket === 'pipeline') {
         pipeline++;
         openValue += c.totalValue;
@@ -535,6 +580,8 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
 
     return { 
       total, 
+      /** Every account, whichever side of the split — what the toggle counts. */
+      allCount: aggregatedClients.length,
       actualCount,
       dummyCount,
       pipeline, 
@@ -546,9 +593,8 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
       vipCount,
       followupCount
     };
-  }, [aggregatedClients]);
+  }, [aggregatedClients, inScope]);
 
-  // Determine stage progress for each client (1 to 6)
   const getClientStageIndex = (client: AggregatedClient): number => {
     let maxStage = 1;
     for (const p of client.projects) {
@@ -563,6 +609,78 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
     return maxStage;
   };
 
+  /*
+    What each account is actually waiting for.
+
+    Every other screen in this app answers "what do I do next" — the Money
+    panels, the Ops Matrix banner. A directory that only lists who exists
+    makes the reader work that out twenty-seven times over.
+  */
+  const nextAction = (c: AggregatedClient): { label: string; tone: 'warn' | 'go' | 'plain' } => {
+    if (c.hasPendingInvoices) return { label: 'Invoice out — chase the payment', tone: 'warn' };
+    if (c.needsFollowup) return { label: `Quiet ${c.daysIdle} days — worth a call`, tone: 'warn' };
+    if (c.bucket === 'active') return { label: 'On site — keep the updates going', tone: 'go' };
+    if (c.bucket === 'pipeline') return { label: 'In the pipeline — move it along', tone: 'go' };
+    if (c.bucket === 'delivered') return { label: 'Delivered — ask for the referral', tone: 'plain' };
+    return { label: 'Dormant — reopen it or let it go', tone: 'plain' };
+  };
+
+  /*
+    What the directory knows about itself.
+
+    Every figure here comes from the aggregated accounts already on screen —
+    nothing is fetched and nothing is estimated. The data-quality line exists
+    because a shared inbox silently merged four different clients into one
+    account, and there was no way to see that without opening the card.
+  */
+  const intel = useMemo(() => {
+    const namesByEmail = new Map<string, Set<string>>();
+    inScope.forEach(c => {
+      const em = (c.clientEmail || '').toLowerCase().trim();
+      if (!em) return;
+      if (!namesByEmail.has(em)) namesByEmail.set(em, new Set());
+      namesByEmail.get(em)!.add((c.clientName || '').trim());
+    });
+    const sharedEmails = [...namesByEmail.entries()].filter(([, names]) => names.size > 1);
+
+    const noContact = inScope.filter(c => !c.clientEmail && !c.clientPhone);
+    const unnamed = inScope.filter(c => !c.clientName || c.clientName === 'Unknown Client');
+
+    const byValue = [...inScope].sort((a, b) => b.totalValue - a.totalValue);
+    const book = byValue.reduce((sum, c) => sum + c.totalValue, 0);
+    const topThree = byValue.slice(0, 3).reduce((sum, c) => sum + c.totalValue, 0);
+    const dormantValue = inScope
+      .filter(c => c.bucket === 'lost')
+      .reduce((sum, c) => sum + c.totalValue, 0);
+
+    /* Quiet for longest, with the biggest book, first. */
+    const toCall = inScope
+      .filter(c => c.needsFollowup)
+      .sort((a, b) => (b.daysIdle * Math.max(b.totalValue, 1)) - (a.daysIdle * Math.max(a.totalValue, 1)))
+      .slice(0, 3);
+
+    const spread = LIFECYCLE_STAGES.map(st => ({
+      ...st,
+      n: inScope.filter(c => getClientStageIndex(c) === st.id).length,
+    }));
+
+    return {
+      sharedEmails, noContact, unnamed,
+      book,
+      top: byValue[0] || null,
+      topPct: book > 0 && byValue[0] ? Math.round((byValue[0].totalValue / book) * 100) : 0,
+      topThree,
+      topThreePct: book > 0 ? Math.round((topThree / book) * 100) : 0,
+      dormantValue,
+      dormantCount: inScope.filter(c => c.bucket === 'lost').length,
+      toCall,
+      toCallAll: inScope.filter(c => c.needsFollowup).length,
+      spread,
+      peakStage: Math.max(1, ...LIFECYCLE_STAGES.map(st => inScope.filter(c => getClientStageIndex(c) === st.id).length)),
+    };
+  }, [inScope]);
+
+  // Determine stage progress for each client (1 to 6)
   const handleExportCSV = () => {
     if (aggregatedClients.length === 0) return;
 
@@ -615,8 +733,9 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
   // Mount header vitals into the shell's PageTitleBlock!
   usePageHeader({
     vitals: [
+      /* "Actual" is dropped: the toolbar toggle already states the split, and
+         next to a scoped Accounts figure the two read as a contradiction. */
       { label: "Accounts", value: `${stats.total}` },
-      { label: "Actual", value: `${stats.actualCount}` },
       { label: "Active & Sites", value: `${stats.active}` },
       { label: "Delivered", value: `${stats.delivered}` },
       { 
@@ -625,7 +744,7 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
         tone: stats.openValue > 0 ? "good" : undefined 
       }
     ]
-  }, [stats.total, stats.actualCount, stats.active, stats.delivered, stats.openValue, stats.multiProjectCount, isDesigner]);
+  }, [stats.total, stats.active, stats.delivered, stats.openValue, stats.multiProjectCount, isDesigner]);
 
   // Filter & Sort clients
   const filteredAndSortedClients = useMemo(() => {
@@ -712,7 +831,15 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50/40 text-slate-900">
+    /*
+      The page sits on a tint so the white cards on it read as cards.
+
+      Everything here used to be white on very-nearly-white, separated only by
+      hairlines — which is why the screen looked flat however the colours were
+      swapped. Depth now comes from the ground and a soft shadow; most of the
+      borders are gone.
+    */
+    <div className="flex flex-col h-full bg-[#F1F3F9] text-[#12182F]">
 
       {/* The password is shown exactly once. It is never stored anywhere this
           app can read it back -- Firebase Auth holds only a hash -- so if it is
@@ -724,7 +851,7 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16 }}
-            className="fixed inset-0 z-[200] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[200] bg-[#12182F]/50 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setIssuedLogin(null)}
           >
             <motion.div
@@ -733,26 +860,26 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
               exit={{ opacity: 0, scale: 0.97, y: 8 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-white rounded-3xl border border-[#E2E5F0] shadow-2xl w-full max-w-md overflow-hidden"
             >
               <div className="p-5 sm:p-6 space-y-4">
                 <div>
-                  <h4 className="font-extrabold text-slate-900 text-[15px]">
+                  <h4 className="font-extrabold text-[#12182F] text-[15px]">
                     {issuedLogin.reissued ? "New password for" : "Portal login for"} {issuedLogin.clientName}
                   </h4>
-                  <p className="text-[13px] text-slate-600 font-medium mt-1 leading-relaxed">
+                  <p className="text-[13px] text-[#5A628A] font-medium mt-1 leading-relaxed">
                     Send these to your client. They will be asked to choose their own password when they first sign in.
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-                  <div className="px-3.5 py-2.5 bg-slate-50">
-                    <p className="text-[10px] uppercase font-black tracking-wider text-slate-400">Email</p>
-                    <p className="text-[13px] font-bold text-slate-800 mt-0.5 break-all">{issuedLogin.email}</p>
+                <div className="rounded-2xl border border-[#E2E5F0] divide-y divide-[#EDEFF7] overflow-hidden">
+                  <div className="px-3.5 py-2.5 bg-[#F6F7FB]">
+                    <p className="text-[10px] uppercase font-black tracking-wider text-[#8E96B8]">Email</p>
+                    <p className="text-[13px] font-bold text-[#252C4E] mt-0.5 break-all">{issuedLogin.email}</p>
                   </div>
                   <div className="px-3.5 py-2.5">
-                    <p className="text-[10px] uppercase font-black tracking-wider text-slate-400">Temporary password</p>
-                    <p className="text-[15px] font-black text-slate-900 mt-0.5 font-mono select-all">{issuedLogin.tempPassword}</p>
+                    <p className="text-[10px] uppercase font-black tracking-wider text-[#8E96B8]">Temporary password</p>
+                    <p className="text-[15px] font-black text-[#12182F] mt-0.5 tabular-nums select-all">{issuedLogin.tempPassword}</p>
                   </div>
                 </div>
 
@@ -761,11 +888,11 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
                 </p>
               </div>
 
-              <div className="bg-slate-50 px-5 py-3.5 border-t border-slate-200 flex justify-end gap-2.5">
+              <div className="bg-[#F6F7FB] px-5 py-3.5 border-t border-[#E2E5F0] flex justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIssuedLogin(null)}
-                  className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 transition"
+                  className="px-4 py-2 bg-white hover:bg-[#EDEFF7] border border-[#E2E5F0] rounded-xl text-xs font-bold text-[#3A416B] transition"
                 >
                   Done
                 </button>
@@ -807,15 +934,144 @@ Temporary password: ${issuedLogin.tempPassword}`
       </AnimatePresence>
 
       
+      {/* ── What the directory knows about itself ────────────────────── */}
+      <div className="px-4 lg:px-8 pt-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+
+          {/* Where the money actually sits */}
+          <div className="relative bg-white rounded-3xl cd-panel p-5 overflow-hidden">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#5A628A]">Under management</h3>
+            <div className="flex items-baseline gap-2 mt-2 flex-wrap">
+              <span className="text-[26px] leading-none font-bold text-[#12182F] tabular-nums">{formatINR(intel.book)}</span>
+              <span className="text-[11px] text-[#8E96B8]">across {inScope.length} {inScope.length === 1 ? 'account' : 'accounts'}</span>
+            </div>
+
+            {/* top three against the rest of the book */}
+            <div className="flex h-2 rounded-full overflow-hidden mt-4 bg-[#EDEFF7]">
+              <div className="mny-bar" style={{ width: `${intel.topThreePct}%`, background: 'linear-gradient(90deg,#7091E6,#3D52A0)' }} />
+              <div className="mny-bar flex-1" style={{ background: '#E2E5F0', animationDelay: '.1s' }} />
+            </div>
+            <p className="text-[11px] text-[#8E96B8] mt-2 leading-snug">
+              Top 3 hold <b className="text-[#12182F] tabular-nums">{intel.topThreePct}%</b>
+              {intel.top && <> · biggest is {intel.top.clientName} at {intel.topPct}%</>}
+              {intel.dormantCount > 0 && (
+                <> · <b className="text-amber-700 tabular-nums">{formatINR(intel.dormantValue)}</b> dormant</>
+              )}
+            </p>
+          </div>
+
+          {/* Who is worth a call */}
+          <div className="relative bg-white rounded-3xl cd-panel p-5 overflow-hidden">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#5A628A] flex items-center justify-between gap-2">
+              <span>Who to call next</span>
+              {intel.toCallAll > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedSmartTag(selectedSmartTag === 'followup' ? 'all' : 'followup')}
+                  className="text-[10px] font-semibold normal-case tracking-normal text-[#ADBBDA] hover:text-[#3D52A0] transition-colors"
+                >
+                  {intel.toCallAll} due &rsaquo;
+                </button>
+              )}
+            </h3>
+            <div className="flex items-baseline gap-2 mt-2 flex-wrap">
+              <span className={`text-[26px] leading-none font-bold tabular-nums ${stats.followupCount > 0 ? 'text-[#12182F]' : 'text-[#8E96B8]'}`}>
+                {intel.toCallAll}
+              </span>
+              <span className="text-[11px] text-[#8E96B8]">
+                {intel.toCallAll === 1 ? 'account has gone quiet' : 'accounts have gone quiet'}
+              </span>
+            </div>
+            {intel.toCall.length === 0 ? (
+              <p className="text-[11px] text-[#8E96B8] mt-3 leading-snug">Every live account has been touched inside a fortnight.</p>
+            ) : (
+              <ul className="mt-3 space-y-1">
+                {intel.toCall.map((c, i) => (
+                  <li key={c.clientKey}>
+                    <button
+                      type="button"
+                      onClick={() => setDossierClient(c)}
+                      className="w-full text-left flex items-center gap-2 rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[#F6F7FB] transition-colors"
+                    >
+                      <span className="text-[10px] font-black text-[#ADBBDA] tabular-nums w-3 shrink-0">{i + 1}</span>
+                      <span className="text-[12px] font-bold text-[#12182F] truncate flex-1 min-w-0">{c.clientName}</span>
+                      <span className="text-[10px] text-[#8E96B8] tabular-nums shrink-0">{c.daysIdle}d quiet</span>
+                      <span className="text-[11px] font-bold text-[#3A416B] tabular-nums shrink-0">{formatINR(c.totalValue)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Where the book is stuck */}
+          <div className="relative bg-white rounded-3xl cd-panel p-5 overflow-hidden">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#5A628A]">Where the book sits</h3>
+            {(() => {
+              const busiest = intel.spread.reduce((a, b) => (b.n > a.n ? b : a), intel.spread[0]);
+              return (
+                <div className="flex items-baseline gap-2 mt-2 flex-wrap">
+                  <span className="text-[26px] leading-none font-bold text-[#12182F] tabular-nums">{busiest.n}</span>
+                  <span className="text-[11px] text-[#8E96B8]">sitting at {busiest.label}</span>
+                </div>
+              );
+            })()}
+            <div className="flex items-end gap-1.5 mt-4" style={{ height: '38px' }}>
+              {intel.spread.map(st => (
+                <div key={st.id} className="flex-1 min-w-0 flex flex-col justify-end h-full" title={`${st.n} in ${st.label}`}>
+                  <div
+                    className="w-full rounded-t"
+                    style={{
+                      height: `${st.n === 0 ? 2 : Math.max(4, (st.n / intel.peakStage) * 34)}px`,
+                      background: st.n === 0 ? '#EDEFF7' : '#3D52A0',
+                      opacity: st.n === 0 ? 1 : 0.35 + 0.65 * (st.n / intel.peakStage),
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex items-start gap-1.5 mt-1.5">
+              {intel.spread.map(st => (
+                <span key={st.id} className="flex-1 min-w-0 text-center">
+                  <span className="block text-[9px] text-[#8E96B8] truncate">{st.label}</span>
+                  <span className="block text-[10px] font-bold text-[#3A416B] tabular-nums">{st.n}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── what is wrong with the directory itself ─────────────────── */}
+        {(intel.sharedEmails.length > 0 || intel.noContact.length > 0 || intel.unnamed.length > 0) && (
+          <div className="mt-3 rounded-2xl border border-[#E2E5F0] bg-white px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+            <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-800">
+              <AlertTriangle className="w-3.5 h-3.5" /> Worth a look
+            </span>
+            {intel.sharedEmails.map(([email, names]) => (
+              <span key={email} className="text-[11px] text-amber-900">
+                <b className="tabular-nums">{names.size}</b> accounts share <b>{email}</b>
+                <span className="text-amber-700"> ({[...names].filter(Boolean).join(', ')})</span>
+              </span>
+            ))}
+            {intel.noContact.length > 0 && (
+              <span className="text-[11px] text-amber-900"><b className="tabular-nums">{intel.noContact.length}</b> with no email or phone</span>
+            )}
+            {intel.unnamed.length > 0 && (
+              <span className="text-[11px] text-amber-900"><b className="tabular-nums">{intel.unnamed.length}</b> unnamed</span>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 1. FILTER & SEARCH TOOLBAR (Sky Blue Theme + Actual/Dummy Filter) */}
       <div className="px-4 lg:px-8 pt-2 pb-4">
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col gap-3">
+        <div className="bg-white p-4 rounded-3xl cd-panel flex flex-col gap-3">
           
           {/* Row 1: Search + Actual/Dummy Switcher + Sort + View Mode */}
           <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
             {/* Search Input */}
             <div className="relative flex-1">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8E96B8]">
                 <Search className="w-4 h-4" />
               </span>
               <input
@@ -823,12 +1079,12 @@ Temporary password: ${issuedLogin.tempPassword}`
                 placeholder="Search by client name, email, phone, city, or project..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9.5 pr-8 py-2 bg-slate-50/60 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-900 outline-none focus:bg-white focus:border-sky-500 focus:ring-1 focus:ring-sky-100 transition-all placeholder:text-slate-400"
+                className="w-full pl-9.5 pr-8 py-2 bg-[#F6F7FB]/60 border border-[#E2E5F0]/80 rounded-xl text-xs font-medium text-[#12182F] outline-none focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-[#E2E5F0] transition-all placeholder:text-[#8E96B8]"
               />
               {searchQuery && (
                 <button 
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8E96B8] hover:text-[#5A628A] p-0.5 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -836,28 +1092,28 @@ Temporary password: ${issuedLogin.tempPassword}`
             </div>
 
             {/* Actual vs Dummy Filter Pill */}
-            <div className="flex items-center bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/70 shrink-0">
+            <div className="flex items-center bg-[#EDEFF7]/90 p-0.5 rounded-xl border border-[#E2E5F0]/70 shrink-0">
               <button
                 type="button"
                 onClick={() => setSelectedProjectKind('all')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                   selectedProjectKind === 'all'
-                    ? 'bg-sky-600 text-white shadow-2xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-[#3D52A0] text-white shadow-2xs font-semibold'
+                    : 'text-[#5A628A] hover:text-[#12182F]'
                 }`}
               >
-                All ({stats.total})
+                All ({stats.allCount})
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedProjectKind('actual')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                   selectedProjectKind === 'actual'
-                    ? 'bg-sky-600 text-white shadow-2xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-[#3D52A0] text-white shadow-2xs font-semibold'
+                    : 'text-[#5A628A] hover:text-[#12182F]'
                 }`}
               >
-                <Pin className="w-3 h-3 text-sky-200" />
+                <Pin className="w-3 h-3 text-[#ADBBDA]" />
                 <span>Actual ({stats.actualCount})</span>
               </button>
               <button
@@ -865,8 +1121,8 @@ Temporary password: ${issuedLogin.tempPassword}`
                 onClick={() => setSelectedProjectKind('dummy')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                   selectedProjectKind === 'dummy'
-                    ? 'bg-sky-600 text-white shadow-2xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-[#3D52A0] text-white shadow-2xs font-semibold'
+                    : 'text-[#5A628A] hover:text-[#12182F]'
                 }`}
               >
                 <Sparkles className="w-3 h-3 text-amber-300" />
@@ -876,13 +1132,13 @@ Temporary password: ${issuedLogin.tempPassword}`
 
             {/* Sort & View Mode */}
             <div className="flex items-center gap-2 shrink-0">
-              <div className="flex items-center gap-1.5 bg-slate-50/80 border border-slate-200/80 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-700">
-                <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">Sort:</span>
+              <div className="flex items-center gap-1.5 bg-[#F6F7FB]/80 border border-[#E2E5F0]/80 px-3 py-1.5 rounded-xl text-xs font-medium text-[#3A416B]">
+                <ArrowUpDown className="w-3.5 h-3.5 text-[#8E96B8] shrink-0" />
+                <span className="text-[10px] uppercase font-semibold text-[#8E96B8] tracking-wider">Sort:</span>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className="bg-transparent text-xs font-medium text-slate-800 outline-none cursor-pointer hover:text-sky-600 transition-colors"
+                  className="bg-transparent text-xs font-medium text-[#252C4E] outline-none cursor-pointer hover:text-[#3D52A0] transition-colors"
                 >
                   <option value="activity_desc">Recent Activity</option>
                   {!isDesigner && <option value="value_desc">Portfolio Value</option>}
@@ -892,11 +1148,11 @@ Temporary password: ${issuedLogin.tempPassword}`
               </div>
 
               {/* View Mode Toggle */}
-              <div className="flex items-center bg-slate-100/80 p-0.5 rounded-xl border border-slate-200/60">
+              <div className="flex items-center bg-[#EDEFF7]/80 p-0.5 rounded-xl border border-[#E2E5F0]/60">
                 <button
                   type="button"
                   onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${viewMode === 'grid' ? 'bg-white text-sky-700 shadow-2xs font-semibold' : 'text-slate-400 hover:text-slate-700'}`}
+                  className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${viewMode === 'grid' ? 'bg-white text-[#334486] shadow-2xs font-semibold' : 'text-[#8E96B8] hover:text-[#3A416B]'}`}
                   title="Card Grid View"
                 >
                   <LayoutGrid className="w-4 h-4" />
@@ -904,7 +1160,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                 <button
                   type="button"
                   onClick={() => setViewMode('table')}
-                  className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${viewMode === 'table' ? 'bg-white text-sky-700 shadow-2xs font-semibold' : 'text-slate-400 hover:text-slate-700'}`}
+                  className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${viewMode === 'table' ? 'bg-white text-[#334486] shadow-2xs font-semibold' : 'text-[#8E96B8] hover:text-[#3A416B]'}`}
                   title="List Table View"
                 >
                   <List className="w-4 h-4" />
@@ -912,13 +1168,13 @@ Temporary password: ${issuedLogin.tempPassword}`
               </div>
 
               {/* Action Buttons inside Directory Toolbar */}
-              <div className="flex items-center gap-2 pl-1 border-l border-slate-200/80">
+              <div className="flex items-center gap-2 pl-1 border-l border-[#E2E5F0]/80">
                 <button
                   onClick={handleExportCSV}
                   title="Export client roster to CSV"
-                  className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-200 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  className="px-3 py-1.5 bg-white hover:bg-[#F6F7FB] text-[#3A416B] hover:text-[#12182F] border border-[#E2E5F0] rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
                 >
-                  <Download className="w-3.5 h-3.5 text-slate-400" />
+                  <Download className="w-3.5 h-3.5 text-[#8E96B8]" />
                   <span className="hidden sm:inline">Export CSV</span>
                 </button>
 
@@ -934,7 +1190,7 @@ Temporary password: ${issuedLogin.tempPassword}`
           </div>
 
           {/* Row 2: Lifecycle Tabs & Smart Studio Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-slate-100">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-[#EDEFF7]">
             
             {/* Primary Lifecycle Tabs (Sky Blue theme) */}
             <div className="flex flex-wrap gap-1.5 items-center">
@@ -956,13 +1212,13 @@ Temporary password: ${issuedLogin.tempPassword}`
                     onClick={() => setSelectedBucket(bucket)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                       isSelected
-                        ? "bg-sky-600 text-white shadow-2xs font-semibold"
-                        : "bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60"
+                        ? "bg-[#EDE8F5] text-[#2A3A73] border border-[#ADBBDA] font-semibold"
+                        : "bg-white hover:bg-[#F6F7FB] text-[#5A628A] border border-[#E2E5F0]"
                     }`}
                   >
                     <span>{BUCKET_CONFIG[bucket].label}</span>
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                      isSelected ? "bg-sky-700 text-sky-100" : "bg-white text-slate-500 border border-slate-200/60"
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full tabular-nums ${
+                      isSelected ? "bg-white text-[#3D52A0] border border-[#ADBBDA]" : "bg-[#F6F7FB] text-[#8E96B8] border border-[#E2E5F0]"
                     }`}>
                       {count}
                     </span>
@@ -971,36 +1227,91 @@ Temporary password: ${issuedLogin.tempPassword}`
               })}
             </div>
 
-            {/* Smart Studio Filter Tag Chips */}
-            <div className="flex flex-wrap gap-1.5 items-center">
-              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 mr-0.5">
-                <Tag className="w-3 h-3 text-slate-400" />
-                Filter:
-              </span>
+            {/*
+              One button instead of six chips.
 
-              {[
-                { id: 'all', label: 'All' },
-                { id: 'vip', label: '★ High Value (>₹25L)' },
-                { id: 'followup', label: `Touchpoint Due (${stats.followupCount})` },
-                { id: 'multiproject', label: 'Multi-Project' },
-                { id: 'execution', label: 'Active Site' },
-                { id: 'invoice_pending', label: 'Invoiced' },
-              ].map((chip) => {
-                const isSelected = selectedSmartTag === chip.id;
-                return (
-                  <button
-                    key={chip.id}
-                    onClick={() => setSelectedSmartTag(chip.id as SmartFilterTag)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
-                      isSelected
-                        ? "bg-sky-50 text-sky-900 border border-sky-200 font-semibold"
-                        : "bg-white text-slate-600 border border-slate-200/70 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                  >
-                    {chip.label}
-                  </button>
-                );
-              })}
+              Search and the five buckets are how you move around, so they stay
+              on show. These six are refinements you reach for occasionally,
+              and laid out flat they made the toolbar the busiest thing on the
+              page. The button carries a dot when one is on, so nothing hides.
+            */}
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                ref={filtersBtnRef}
+                onClick={() => {
+                  /*
+                    Measured, not guessed.
+
+                    The bucket row wraps, so this button sits on the left at
+                    narrow widths and on the right at wide ones. A fixed
+                    `right-0` hung the menu off the left edge at 800px; `left-0`
+                    hung it off the right edge at 1280. Clamping to the
+                    viewport is the only anchor that holds at both.
+                  */
+                  const r = filtersBtnRef.current?.getBoundingClientRect();
+                  if (r) {
+                    const W = 240;
+                    setFiltersAt({
+                      top: r.bottom + 8,
+                      left: Math.max(8, Math.min(r.left, window.innerWidth - W - 8)),
+                    });
+                  }
+                  setFiltersOpen(o => !o);
+                }}
+                aria-expanded={filtersOpen}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold transition-colors border ${
+                  selectedSmartTag !== 'all'
+                    ? 'bg-[#EDE8F5] text-[#2A3A73] border-[#ADBBDA]'
+                    : 'bg-white text-[#5A628A] border-[#E2E5F0] hover:text-[#12182F]'
+                }`}
+              >
+                <Tag className="w-3.5 h-3.5" />
+                Filters
+                {selectedSmartTag !== 'all' && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#3D52A0]" />
+                )}
+                <ChevronDown className={`w-3 h-3 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              <AnimatePresence>
+                {filtersOpen && filtersAt && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setFiltersOpen(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.15 }}
+                      style={{ position: 'fixed', top: filtersAt.top, left: filtersAt.left, width: 240, zIndex: 50 }}
+                      className="bg-white rounded-2xl cd-pop p-2"
+                    >
+                      {[
+                        { id: 'all', label: 'All accounts' },
+                        { id: 'vip', label: '★ High value (over ₹25L)' },
+                        { id: 'followup', label: `Touchpoint due (${stats.followupCount})` },
+                        { id: 'multiproject', label: 'Multi-project' },
+                        { id: 'execution', label: 'Active site' },
+                        { id: 'invoice_pending', label: 'Invoiced' },
+                      ].map((chip) => {
+                        const isSelected = selectedSmartTag === chip.id;
+                        return (
+                          <button
+                            key={chip.id}
+                            onClick={() => { setSelectedSmartTag(chip.id as SmartFilterTag); setFiltersOpen(false); }}
+                            className={`w-full text-left px-2.5 py-2 rounded-xl text-[11px] font-semibold transition-colors flex items-center justify-between ${
+                              isSelected ? 'bg-[#EDE8F5] text-[#2A3A73]' : 'text-[#5A628A] hover:bg-[#F6F7FB] hover:text-[#12182F]'
+                            }`}
+                          >
+                            {chip.label}
+                            {isSelected && <Check className="w-3.5 h-3.5" />}
+                          </button>
+                        );
+                      })}
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
@@ -1009,12 +1320,12 @@ Temporary password: ${issuedLogin.tempPassword}`
       {/* 2. MAIN DIRECTORY ROSTER */}
       <div className="px-4 lg:px-8 pb-16 flex-1">
         {filteredAndSortedClients.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
-            <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mx-auto mb-3.5 border border-sky-200">
+          <div className="bg-white rounded-2xl border border-[#E2E5F0] p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
+            <div className="w-12 h-12 rounded-2xl bg-[#EDE8F5] text-[#3D52A0] flex items-center justify-center mx-auto mb-3.5 border border-[#ADBBDA]">
               <Users className="w-5 h-5" />
             </div>
-            <h3 className="text-sm font-semibold text-slate-800">No client accounts found</h3>
-            <p className="text-xs text-slate-500 mt-1 mb-5">
+            <h3 className="text-sm font-semibold text-[#252C4E]">No client accounts found</h3>
+            <p className="text-xs text-[#5A628A] mt-1 mb-5">
               {searchQuery || selectedBucket !== 'all' || selectedSmartTag !== 'all' || selectedProjectKind !== 'all'
                 ? "Try clearing your search query or adjusting your filters."
                 : "No client records exist in the studio yet."}
@@ -1028,7 +1339,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                     setSelectedSmartTag('all');
                     setSelectedProjectKind('all');
                   }}
-                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+                  className="px-3.5 py-1.5 bg-[#EDEFF7] hover:bg-[#E2E5F0] text-[#3A416B] rounded-xl text-xs font-semibold transition-all cursor-pointer"
                 >
                   Reset Filters
                 </button>
@@ -1043,269 +1354,178 @@ Temporary password: ${issuedLogin.tempPassword}`
             </div>
           </div>
         ) : viewMode === 'grid' ? (
-          /* --- REFINED SKY BLUE THEMED CARD GRID VIEW --- */
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            <AnimatePresence>
-              {filteredAndSortedClients.map((client, index) => {
-                const clientKey = client.clientKey;
-                const isExpanded = expandedClients.has(clientKey);
-                const bConfig = BUCKET_CONFIG[client.bucket];
-                const notesCount = (clientNotes[clientKey] || []).length;
-                const stageIndex = getClientStageIndex(client);
+          /*
+            One table, not twenty-seven cards.
 
-                return (
-                  <motion.div
-                    key={clientKey}
-                    layout
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15, delay: Math.min(index * 0.02, 0.2) }}
-                    className="bg-white rounded-2xl border border-slate-200/80 hover:border-sky-300 transition-all shadow-xs hover:shadow-sm flex flex-col justify-between overflow-hidden group relative"
-                  >
-                    <div className="p-5 flex flex-col gap-4">
-                      
-                      {/* 1. Header Identity, Actual/Dummy Animated Note & Value */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 min-w-0">
-                          {/* Subtle Initials Avatar */}
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-semibold text-xs shrink-0 ${
-                            client.isVip 
-                              ? "bg-amber-50/80 text-amber-900 border border-amber-200" 
-                              : "bg-sky-50 text-sky-800 border border-sky-200/70"
-                          }`}>
+            A three-column grid of cards showed six accounts on a screen and
+            made every one of them look equally important. The Drawing Tracker
+            already proved the shape that works here: a named column header, a
+            dense row per record, the detail opening in place.
+          */
+          <div className="bg-white rounded-3xl cd-panel overflow-hidden">
+
+            <div className="hidden lg:grid grid-cols-[1.9fr_1fr_112px_1.4fr_112px_116px] gap-x-3 px-4 py-2.5 bg-[#F6F7FB] border-b border-[#E2E5F0]">
+              {['Account', 'Stage', 'Status', 'Next move', 'Portfolio', ''].map((h, i) => (
+                <span key={i} className={`text-[10px] font-black uppercase tracking-wider text-[#5A628A] ${i === 4 ? 'text-right' : ''}`}>{h}</span>
+              ))}
+            </div>
+
+            <div className="divide-y divide-[#EDEFF7]">
+              <AnimatePresence>
+                {filteredAndSortedClients.map((client, index) => {
+                  const clientKey = client.clientKey;
+                  const isExpanded = expandedClients.has(clientKey);
+                  const bConfig = BUCKET_CONFIG[client.bucket];
+                  const notesCount = (clientNotes[clientKey] || []).length;
+                  const stageIndex = getClientStageIndex(client);
+                  const act = nextAction(client);
+
+                  return (
+                    <motion.div
+                      key={clientKey}
+                      layout
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.14, delay: Math.min(index * 0.012, 0.18) }}
+                      className={`group relative transition-colors ${isExpanded ? 'bg-[#F6F7FB]' : 'hover:bg-[#F6F7FB]/70'}`}
+                    >
+                      <span aria-hidden className="absolute left-0 inset-y-0 w-[3px]" style={{ background: RAIL[client.bucket] }} />
+
+                      <div className="grid grid-cols-[1fr_auto] lg:grid-cols-[1.9fr_1fr_112px_1.4fr_112px_116px] items-center gap-x-3 gap-y-2 px-4 pl-5 py-2.5">
+
+                        {/* who */}
+                        <button
+                          type="button"
+                          onClick={(e) => toggleExpand(clientKey, e)}
+                          className="min-w-0 text-left flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <span
+                            className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-[10px] shrink-0 text-white"
+                            style={{
+                              background: client.isVip
+                                ? 'linear-gradient(135deg,#D9A441,#B4791F)'
+                                : 'linear-gradient(135deg,#7091E6,#3D52A0)',
+                            }}
+                          >
                             {getInitials(client.clientName)}
-                          </div>
-
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <h3 className="font-semibold text-sm text-slate-900 leading-snug truncate">
-                                {client.clientName}
-                              </h3>
-                              {client.isVip && (
-                                <span title="High Value Client (>₹25L)" className="text-amber-500 shrink-0">
-                                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
-                                </span>
+                          </span>
+                          <span className="min-w-0">
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-bold text-[13px] text-[#12182F] truncate">{client.clientName}</span>
+                              {client.isVip && <Star className="w-3 h-3 fill-amber-400 text-amber-500 shrink-0" />}
+                              {client.isDummy && (
+                                <span className="text-[8px] font-black uppercase tracking-wider text-amber-800 bg-amber-50 border border-amber-200 rounded px-1 py-[1px] shrink-0">Dummy</span>
                               )}
-
-                              {/* Waving Pinned Note Tag: Actual vs Dummy */}
-                              <motion.div
-                                animate={{ rotate: [0, -3, 3, -2, 2, 0] }}
-                                transition={{
-                                  repeat: Infinity,
-                                  repeatDelay: 4 + (index % 3),
-                                  duration: 1.8,
-                                  ease: "easeInOut"
-                                }}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border shadow-2xs origin-top-left ${
-                                  client.isDummy
-                                    ? "bg-amber-50 text-amber-800 border-amber-200/90"
-                                    : "bg-sky-50 text-sky-700 border-sky-200/90"
-                                }`}
-                                title={client.isDummy ? "Sample / Demo Project Data" : "Verified Live Studio Client"}
-                              >
-                                <Pin className={`w-2.5 h-2.5 ${client.isDummy ? "text-amber-600" : "text-sky-600"}`} />
-                                <span>{client.isDummy ? "Dummy" : "Actual"}</span>
-                              </motion.div>
-                            </div>
-
-                            <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
-                              {client.clientLocation && (
-                                <span className="flex items-center gap-0.5 truncate">
-                                  <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                                  {client.clientLocation}
-                                </span>
-                              )}
-                              {client.configs.length > 0 && (
-                                <>
-                                  <span className="text-slate-300">•</span>
-                                  <span className="truncate">{client.configs.join(", ")}</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Financial Value or Project Count */}
-                        <div className="text-right shrink-0">
-                          {!isDesigner ? (
-                            <>
-                              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider leading-none mb-1">
-                                Portfolio
-                              </p>
-                              <p className="text-sm font-semibold text-slate-900 font-mono tabular-nums leading-none">
-                                {formatINR(client.totalValue)}
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider leading-none mb-1">
-                                Scope
-                              </p>
-                              <p className="text-xs font-semibold text-slate-800 leading-none">
-                                {client.projects.length} {client.projects.length === 1 ? "Project" : "Projects"}
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* 2. Smart Status & Stage Progress Pip Bar */}
-                      <div className="bg-slate-50/70 p-2.5 rounded-xl border border-slate-100 flex flex-col gap-2">
-                        <div className="flex items-center justify-between text-[10px]">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium text-[10px] border ${bConfig.bg} ${bConfig.color} ${bConfig.border}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${bConfig.dot}`}></span>
-                              {bConfig.label}
                             </span>
+                            <span className="block text-[10px] text-[#8E96B8] truncate">
+                              {[client.clientLocation, client.configs.join(', '), client.clientEmail || client.clientPhone].filter(Boolean).join(' · ') || 'No contact'}
+                            </span>
+                          </span>
+                        </button>
 
-                            {client.needsFollowup && (
-                              <span 
-                                title={`No activity for ${client.daysIdle} days`}
-                                className="px-1.5 py-0.5 rounded text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-200"
-                              >
-                                Touchpoint Due ({client.daysIdle}d)
-                              </span>
-                            )}
+                        {/* how far along */}
+                        <div className="hidden lg:block min-w-0">
+                          <div className="flex items-center gap-[3px]">
+                            {LIFECYCLE_STAGES.map(stg => (
+                              <span
+                                key={stg.id}
+                                title={`Stage ${stg.id}: ${stg.label}`}
+                                className="flex-1 h-1.5 rounded-full"
+                                style={{
+                                  background: stg.id === stageIndex ? '#3D52A0'
+                                    : stg.id < stageIndex ? '#ADBBDA' : '#EDEFF7',
+                                }}
+                              />
+                            ))}
                           </div>
-
-                          <span className="text-slate-400 font-medium flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-slate-400" />
-                            {timeAgo(client.lastActivity)}
+                          <span className="block text-[10px] text-[#8E96B8] mt-1 truncate">
+                            {LIFECYCLE_STAGES[stageIndex - 1]?.label} · {stageIndex}/6
                           </span>
                         </div>
 
-                        {/* 6-Stage Progress Pips */}
-                        <div className="pt-1.5 border-t border-slate-200/60 flex items-center justify-between gap-1">
-                          {LIFECYCLE_STAGES.map((stg) => {
-                            const isPast = stg.id < stageIndex;
-                            const isCurrent = stg.id === stageIndex;
-
-                            return (
-                              <div 
-                                key={stg.id} 
-                                className="flex-1 flex flex-col items-center gap-1 group/pip relative"
-                                title={`Stage ${stg.id}: ${stg.label}`}
-                              >
-                                <div className={`w-full h-1 rounded-full transition-all ${
-                                  isCurrent
-                                    ? "bg-sky-600"
-                                    : isPast
-                                    ? "bg-slate-300"
-                                    : "bg-slate-200/60"
-                                }`} />
-                                <span className={`text-[8px] tracking-tight leading-none ${
-                                  isCurrent 
-                                    ? "font-semibold text-sky-700" 
-                                    : isPast 
-                                    ? "text-slate-500 font-normal" 
-                                    : "text-slate-400"
-                                }`}>
-                                  {stg.label}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* 3. Subtle Portal & Studio Quick Actions Strip */}
-                      <div className="pt-1 flex items-center justify-between gap-2">
-                        
-                        {/* Contact details */}
-                        <div className="min-w-0 flex items-center gap-2 text-xs text-slate-500">
-                          {client.clientPhone ? (
-                            <a 
-                              href={`tel:${client.clientPhone}`}
-                              className="hover:text-sky-700 flex items-center gap-1 truncate"
-                              title="Call Client"
-                            >
-                              <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span className="truncate">{client.clientPhone}</span>
-                            </a>
-                          ) : client.clientEmail ? (
-                            <a 
-                              href={`mailto:${client.clientEmail}`}
-                              className="hover:text-sky-700 flex items-center gap-1 truncate"
-                              title="Email Client"
-                            >
-                              <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span className="truncate">{client.clientEmail}</span>
-                            </a>
-                          ) : (
-                            <span className="text-slate-400 italic text-[11px]">No contact added</span>
-                          )}
+                        {/* what state */}
+                        <div className="hidden lg:flex flex-col items-start gap-1 min-w-0">
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-bold text-[10px] border ${bConfig.bg} ${bConfig.color} ${bConfig.border}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${bConfig.dot}`} />
+                            {bConfig.label}
+                          </span>
+                          <span className="text-[10px] text-[#ADBBDA] truncate">{timeAgo(client.lastActivity)}</span>
                         </div>
 
-                        {/* Action Icons */}
-                        <div className="flex items-center gap-1 shrink-0">
-                                                    {client.projects.length > 0 && (
+                        {/* what to do about it */}
+                        <p className={`hidden lg:block text-[11px] font-semibold leading-snug ${
+                          act.tone === 'warn' ? 'text-amber-700' : act.tone === 'go' ? 'text-[#3D52A0]' : 'text-[#8E96B8]'
+                        }`}>
+                          {act.label}
+                        </p>
+
+                        {/* how much */}
+                        <div className="hidden lg:block text-right">
+                          <span className="block text-[14px] font-black text-[#12182F] tabular-nums leading-none">
+                            {!isDesigner ? formatINR(client.totalValue) : `${client.projects.length}`}
+                          </span>
+                          <span className="block text-[10px] text-[#ADBBDA] mt-0.5">
+                            {client.projects.length} {client.projects.length === 1 ? 'project' : 'projects'}
+                            {notesCount > 0 && ` · ${notesCount} note${notesCount > 1 ? 's' : ''}`}
+                          </span>
+                        </div>
+
+                        {/* what you can do */}
+                        <div className="flex items-center justify-end gap-1 shrink-0">
+                          {client.projects.length > 0 && (
                             <button
                               type="button"
-                              onClick={(e) => handleIssueClientLogin(client.projects[0], client.name, false, e)}
+                              onClick={(e) => handleIssueClientLogin(client.projects[0], client.clientName, false, e)}
                               disabled={issuingLoginFor === client.projects[0].id}
                               title="Create or reset this client's portal login"
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-[#334486] hover:bg-sky-50 border border-slate-200/70 transition-colors cursor-pointer disabled:opacity-50"
+                              className="p-1.5 rounded-lg text-[#8E96B8] hover:text-[#334486] hover:bg-[#EDE8F5] transition-colors cursor-pointer disabled:opacity-50"
                             >
                               <KeyRound className="w-3.5 h-3.5" />
                             </button>
                           )}
-                          {/* Portal Copy / Open */}
                           {client.projects.length > 0 && (
                             <button
                               type="button"
                               onClick={(e) => handleCopyPortalUrl(client.projects[0].id, e)}
                               title="Copy client portal link"
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-sky-700 hover:bg-sky-50 border border-slate-200/70 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-[#8E96B8] hover:text-[#334486] hover:bg-[#EDE8F5] transition-colors cursor-pointer"
                             >
-                              {copiedId === "portal-" + client.projects[0].id ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              ) : copiedId === "noportal-" + client.projects[0].id ? (
-                                <X className="w-3.5 h-3.5 text-amber-600" />
-                              ) : (
-                                <Globe className="w-3.5 h-3.5" />
-                              )}
+                              {copiedId === 'portal-' + client.projects[0].id ? <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                : copiedId === 'noportal-' + client.projects[0].id ? <X className="w-3.5 h-3.5 text-amber-600" />
+                                : <Globe className="w-3.5 h-3.5" />}
                             </button>
                           )}
-
-                          {/* WhatsApp Template Launcher */}
                           {client.clientPhone && (
                             <div className="relative">
                               <button
                                 type="button"
                                 onClick={() => setActiveWhatsAppMenu(activeWhatsAppMenu === clientKey ? null : clientKey)}
-                                title="WhatsApp Quick Scripts"
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200/70 transition-colors cursor-pointer"
+                                title="WhatsApp quick scripts"
+                                className="p-1.5 rounded-lg text-[#8E96B8] hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
                               >
                                 <MessageCircle className="w-3.5 h-3.5" />
                               </button>
-
-                              {/* WhatsApp Template Popover */}
                               <AnimatePresence>
                                 {activeWhatsAppMenu === clientKey && (
                                   <>
-                                    <div 
-                                      className="fixed inset-0 z-40" 
-                                      onClick={() => setActiveWhatsAppMenu(null)}
-                                    />
+                                    <div className="fixed inset-0 z-40" onClick={() => setActiveWhatsAppMenu(null)} />
                                     <motion.div
                                       initial={{ opacity: 0, scale: 0.95, y: 5 }}
                                       animate={{ opacity: 1, scale: 1, y: 0 }}
                                       exit={{ opacity: 0, scale: 0.95, y: 5 }}
-                                      className="absolute right-0 bottom-full mb-2 w-64 bg-white rounded-xl shadow-lg border border-slate-200 p-2 z-50 text-left"
+                                      className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl cd-pop p-2 z-50 text-left"
                                     >
-                                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 py-1 border-b border-slate-100">
-                                        Send WhatsApp Message
-                                      </p>
+                                      <p className="text-[10px] font-bold text-[#8E96B8] uppercase tracking-wider px-2 py-1 border-b border-[#EDEFF7]">Send WhatsApp message</p>
                                       <div className="space-y-1 mt-1">
-                                        {WHATSAPP_TEMPLATES.map((tmpl) => (
+                                        {WHATSAPP_TEMPLATES.map(tmpl => (
                                           <button
                                             key={tmpl.id}
                                             onClick={() => openWhatsAppWithTemplate(client, tmpl.template)}
-                                            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 text-xs font-medium text-slate-700 transition-colors flex items-center justify-between group/w cursor-pointer"
+                                            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-[#F6F7FB] text-xs font-semibold text-[#3A416B] transition-colors flex items-center justify-between group/w cursor-pointer"
                                           >
                                             <span>{tmpl.title}</span>
-                                            <Send className="w-3 h-3 text-slate-400 group-hover/w:text-emerald-600 transition-colors" />
+                                            <Send className="w-3 h-3 text-[#8E96B8] group-hover/w:text-emerald-600 transition-colors" />
                                           </button>
                                         ))}
                                       </div>
@@ -1315,98 +1535,86 @@ Temporary password: ${issuedLogin.tempPassword}`
                               </AnimatePresence>
                             </div>
                           )}
-
-                          {/* Client Dossier Notes */}
                           <button
                             type="button"
                             onClick={() => setDossierClient(client)}
-                            title="View Client Dossier & Studio Notes"
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-sky-700 hover:bg-sky-50 border border-slate-200/70 transition-colors cursor-pointer"
+                            title="Open dossier and studio notes"
+                            className="p-1.5 rounded-lg text-[#8E96B8] hover:text-[#334486] hover:bg-[#EDE8F5] transition-colors cursor-pointer"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
+                          <button
+                            type="button"
+                            onClick={(e) => toggleExpand(clientKey, e)}
+                            aria-expanded={isExpanded}
+                            title={isExpanded ? 'Hide projects' : 'Show projects'}
+                            className="p-1.5 rounded-lg text-[#8E96B8] hover:text-[#334486] transition-colors cursor-pointer"
+                          >
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          </button>
                         </div>
                       </div>
-                    </div>
 
-                    {/* 4. Expandable Linked Projects Drawer */}
-                    <div className="bg-slate-50/60 border-t border-slate-100 px-5 py-2.5">
-                      <div 
-                        onClick={(e) => toggleExpand(clientKey, e)}
-                        className="flex justify-between items-center cursor-pointer select-none py-0.5 text-slate-500 hover:text-slate-800 transition-colors"
-                      >
-                        <span className="text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                          <Building className="w-3.5 h-3.5 text-slate-400" />
-                          {client.projects.length} {client.projects.length === 1 ? "Project" : "Projects"}
-                          {notesCount > 0 && (
-                            <span className="text-[9px] text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded font-normal normal-case border border-amber-200">
-                              {notesCount} note{notesCount > 1 ? 's' : ''}
-                            </span>
-                          )}
+                      {/* everything the row could not hold, on small screens */}
+                      <div className="lg:hidden px-4 pl-5 pb-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-bold text-[10px] border ${bConfig.bg} ${bConfig.color} ${bConfig.border}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${bConfig.dot}`} />
+                          {bConfig.label}
                         </span>
-                        <div>
-                          {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                        </div>
+                        <span className="text-[13px] font-black text-[#12182F] tabular-nums">{formatINR(client.totalValue)}</span>
+                        <span className={`text-[11px] font-semibold ${act.tone === 'warn' ? 'text-amber-700' : act.tone === 'go' ? 'text-[#3D52A0]' : 'text-[#8E96B8]'}`}>{act.label}</span>
                       </div>
 
                       <AnimatePresence initial={false}>
                         {isExpanded && (
                           <motion.div
                             initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
+                            animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                            className="overflow-hidden mt-2"
+                            className="overflow-hidden"
                           >
-                            <div className="space-y-1.5 pt-2 border-t border-slate-200/60 pb-1">
-                              {client.projects.map((proj) => {
+                            <div className="px-4 pl-5 pb-3 space-y-1.5">
+                              {client.projects.map(proj => {
                                 const pVal = getSingleProjectValue(proj);
                                 const pStatus = proj.context?.status || 'draft';
-                                const pConfig = PROJECT_STATUS_CONFIG[pStatus] || { label: pStatus, color: "text-slate-700", bg: "bg-slate-100", border: "border-slate-200" };
-
+                                const pConfig = PROJECT_STATUS_CONFIG[pStatus] || { label: pStatus, color: 'text-[#3A416B]', bg: 'bg-[#EDEFF7]', border: 'border-[#E2E5F0]' };
                                 return (
-                                  <div 
-                                    key={proj.id} 
+                                  <button
+                                    key={proj.id}
+                                    type="button"
                                     onClick={() => onOpenProject(proj)}
-                                    className="p-2.5 bg-white border border-slate-200/70 rounded-xl hover:border-sky-300 hover:shadow-2xs cursor-pointer transition-all flex items-center justify-between gap-2 group/item"
+                                    className="w-full text-left px-3 py-2 bg-white border border-[#E2E5F0] rounded-xl hover:border-[#ADBBDA] cursor-pointer transition-colors flex items-center justify-between gap-2 group/item"
                                   >
-                                    <div className="min-w-0 flex-1">
-                                      <p className="font-medium text-xs text-slate-900 group-hover/item:text-sky-600 leading-snug truncate transition-colors">
-                                        {proj.context?.name || "Untitled Project"}
-                                      </p>
-                                      <div className="flex items-center gap-1.5 mt-0.5">
-                                        <span className={`px-1.5 py-0.2 rounded text-[8px] font-semibold uppercase tracking-wider border ${pConfig.bg} ${pConfig.color} ${pConfig.border}`}>
-                                          {pConfig.label}
-                                        </span>
-                                        {proj.context?.config && (
-                                          <span className="text-[10px] text-slate-400">
-                                            {proj.context.config}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <span className="font-mono text-xs font-semibold text-slate-700 shrink-0">
-                                      {formatINR(pVal)}
+                                    <span className="min-w-0 flex-1 flex items-center gap-2">
+                                      <span className="font-bold text-[12px] text-[#12182F] group-hover/item:text-[#3D52A0] truncate transition-colors">
+                                        {proj.context?.name || 'Untitled project'}
+                                      </span>
+                                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border shrink-0 ${pConfig.bg} ${pConfig.color} ${pConfig.border}`}>
+                                        {pConfig.label}
+                                      </span>
+                                      {proj.context?.config && <span className="text-[10px] text-[#8E96B8] shrink-0">{proj.context.config}</span>}
                                     </span>
-                                  </div>
+                                    <span className="tabular-nums text-[12px] font-bold text-[#3A416B] shrink-0">{formatINR(pVal)}</span>
+                                  </button>
                                 );
                               })}
                             </div>
                           </motion.div>
                         )}
                       </AnimatePresence>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
           </div>
         ) : (
           /* --- LIST TABLE VIEW (Sky Blue) --- */
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div className="bg-white rounded-2xl border border-[#E2E5F0]/80 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead className="bg-slate-50 text-[10px] uppercase font-semibold text-slate-400 border-b border-slate-200/80">
+              <table className="w-full text-left text-xs text-[#3A416B]">
+                <thead className="bg-[#F6F7FB] text-[10px] uppercase font-semibold text-[#8E96B8] border-b border-[#E2E5F0]/80">
                   <tr>
                     <th className="px-5 py-3">Client</th>
                     <th className="px-4 py-3">Type</th>
@@ -1418,20 +1626,20 @@ Temporary password: ${issuedLogin.tempPassword}`
                     <th className="px-5 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
+                <tbody className="divide-y divide-[#EDEFF7] font-medium">
                   {filteredAndSortedClients.map((client) => {
                     const bConfig = BUCKET_CONFIG[client.bucket];
                     const stageIndex = getClientStageIndex(client);
                     return (
-                      <tr key={client.clientKey} className="hover:bg-sky-50/40 transition-colors group">
+                      <tr key={client.clientKey} className="hover:bg-[#EDE8F5]/40 transition-colors group">
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-800 flex items-center justify-center font-semibold text-xs shrink-0 border border-sky-200/60">
+                            <div className="w-8 h-8 rounded-lg bg-[#EDE8F5] text-[#2A3A73] flex items-center justify-center font-semibold text-xs shrink-0 border border-[#ADBBDA]/60">
                               {getInitials(client.clientName)}
                             </div>
                             <div>
-                              <p className="font-semibold text-slate-900 leading-tight">{client.clientName}</p>
-                              <p className="text-[11px] text-slate-400 mt-0.5">{client.clientEmail || client.clientPhone || 'No contact info'}</p>
+                              <p className="font-semibold text-[#12182F] leading-tight">{client.clientName}</p>
+                              <p className="text-[11px] text-[#8E96B8] mt-0.5">{client.clientEmail || client.clientPhone || 'No contact info'}</p>
                             </div>
                           </div>
                         </td>
@@ -1439,7 +1647,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
                             client.isDummy
                               ? "bg-amber-50 text-amber-800 border-amber-200"
-                              : "bg-sky-50 text-sky-700 border-sky-200"
+                              : "bg-[#EDE8F5] text-[#334486] border-[#ADBBDA]"
                           }`}>
                             <Pin className="w-2.5 h-2.5" />
                             {client.isDummy ? "Dummy" : "Actual"}
@@ -1451,13 +1659,13 @@ Temporary password: ${issuedLogin.tempPassword}`
                             {bConfig.label}
                           </span>
                         </td>
-                        <td className="px-4 py-3.5 text-slate-500">{client.clientLocation || "—"}</td>
+                        <td className="px-4 py-3.5 text-[#5A628A]">{client.clientLocation || "—"}</td>
                         <td className="px-4 py-3.5">
-                          <span className="text-xs text-sky-700 font-medium">{LIFECYCLE_STAGES[stageIndex - 1]?.label || 'Brief'}</span>
+                          <span className="text-xs text-[#334486] font-medium">{LIFECYCLE_STAGES[stageIndex - 1]?.label || 'Brief'}</span>
                         </td>
-                        <td className="px-4 py-3.5 text-slate-600">{client.projects.length}</td>
+                        <td className="px-4 py-3.5 text-[#5A628A]">{client.projects.length}</td>
                         {!isDesigner && (
-                          <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-900">
+                          <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#12182F]">
                             {formatINR(client.totalValue)}
                           </td>
                         )}
@@ -1469,7 +1677,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                                   type="button"
                                   onClick={(e) => handleCopyPortalUrl(client.projects[0].id, e)}
                                   title="Copy client portal link"
-                                  className="p-1.5 rounded-lg text-slate-500 hover:text-sky-700 hover:bg-sky-50 border border-slate-200/70 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-lg text-[#5A628A] hover:text-[#334486] hover:bg-[#EDE8F5] border border-[#E2E5F0]/70 transition-colors cursor-pointer"
                                 >
                                   {copiedId === "portal-" + client.projects[0].id ? (
                                     <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -1479,7 +1687,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                                 </button>
                                 <button
                                   onClick={() => onOpenProject(client.projects[0])}
-                                  className="px-2.5 py-1 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg border border-sky-200 transition-colors cursor-pointer"
+                                  className="px-2.5 py-1 text-xs font-semibold text-[#334486] bg-[#EDE8F5] hover:bg-[#E2E5F0] rounded-lg border border-[#ADBBDA] transition-colors cursor-pointer"
                                 >
                                   Open
                                 </button>
@@ -1506,7 +1714,7 @@ Temporary password: ${issuedLogin.tempPassword}`
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setDossierClient(null)}
-              className="absolute inset-0 bg-slate-900/30 backdrop-blur-2xs"
+              className="absolute inset-0 bg-[#12182F]/30 backdrop-blur-2xs"
             />
 
             <motion.div
@@ -1514,24 +1722,24 @@ Temporary password: ${issuedLogin.tempPassword}`
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 280 }}
-              className="relative w-full max-w-md bg-white h-full shadow-2xl z-10 flex flex-col justify-between border-l border-slate-200"
+              className="relative w-full max-w-md bg-white h-full shadow-2xl z-10 flex flex-col justify-between border-l border-[#E2E5F0]"
             >
               {/* Drawer Header */}
-              <div className="p-6 border-b border-slate-100 flex items-start justify-between bg-slate-50/60">
+              <div className="p-6 border-b border-[#EDEFF7] flex items-start justify-between bg-[#F6F7FB]/60">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-700 border border-sky-200 flex items-center justify-center font-bold text-sm">
+                  <div className="w-12 h-12 rounded-2xl bg-[#EDE8F5] text-[#334486] border border-[#ADBBDA] flex items-center justify-center font-bold text-sm">
                     {getInitials(dossierClient.clientName)}
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-slate-900">{dossierClient.clientName}</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <h3 className="text-base font-bold text-[#12182F]">{dossierClient.clientName}</h3>
+                    <p className="text-xs text-[#5A628A] mt-0.5">
                       {dossierClient.clientLocation || "No location specified"}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setDossierClient(null)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-[#8E96B8] hover:text-[#3A416B] hover:bg-[#EDEFF7] transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1542,15 +1750,15 @@ Temporary password: ${issuedLogin.tempPassword}`
                 
                 {/* Vitals Summary */}
                 <div className="grid grid-cols-2 gap-2.5">
-                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
-                    <span className="text-[10px] uppercase font-semibold text-slate-400 block">Total Portfolio</span>
-                    <span className="text-sm font-bold text-slate-900 font-mono mt-0.5 block">
+                  <div className="p-3 bg-[#F6F7FB] border border-[#E2E5F0]/80 rounded-xl">
+                    <span className="text-[10px] uppercase font-semibold text-[#8E96B8] block">Total Portfolio</span>
+                    <span className="text-sm font-bold text-[#12182F] tabular-nums mt-0.5 block">
                       {formatINR(dossierClient.totalValue)}
                     </span>
                   </div>
-                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
-                    <span className="text-[10px] uppercase font-semibold text-slate-400 block">Linked Sites</span>
-                    <span className="text-sm font-bold text-slate-900 mt-0.5 block">
+                  <div className="p-3 bg-[#F6F7FB] border border-[#E2E5F0]/80 rounded-xl">
+                    <span className="text-[10px] uppercase font-semibold text-[#8E96B8] block">Linked Sites</span>
+                    <span className="text-sm font-bold text-[#12182F] mt-0.5 block">
                       {dossierClient.projects.length} Project{dossierClient.projects.length > 1 ? 's' : ''}
                     </span>
                   </div>
@@ -1558,15 +1766,15 @@ Temporary password: ${issuedLogin.tempPassword}`
 
                 {/* Contact Records */}
                 <div className="space-y-2">
-                  <span className="text-xs font-bold text-slate-900 block uppercase tracking-wider">Contact Records</span>
-                  <div className="bg-slate-50 border border-slate-200/70 rounded-xl p-3.5 space-y-2.5 text-xs text-slate-700">
+                  <span className="text-xs font-bold text-[#12182F] block uppercase tracking-wider">Contact Records</span>
+                  <div className="bg-[#F6F7FB] border border-[#E2E5F0]/70 rounded-xl p-3.5 space-y-2.5 text-xs text-[#3A416B]">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Email</span>
-                      <span className="font-medium text-slate-900 select-all">{dossierClient.clientEmail || '—'}</span>
+                      <span className="text-[#8E96B8] flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Email</span>
+                      <span className="font-medium text-[#12182F] select-all">{dossierClient.clientEmail || '—'}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Phone</span>
-                      <span className="font-medium text-slate-900 select-all">{dossierClient.clientPhone || '—'}</span>
+                      <span className="text-[#8E96B8] flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Phone</span>
+                      <span className="font-medium text-[#12182F] select-all">{dossierClient.clientPhone || '—'}</span>
                     </div>
                   </div>
                 </div>
@@ -1574,8 +1782,8 @@ Temporary password: ${issuedLogin.tempPassword}`
                 {/* Studio Internal Notes */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">Internal Studio Notes</span>
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-xs font-bold text-[#12182F] uppercase tracking-wider">Internal Studio Notes</span>
+                    <span className="text-[10px] text-[#8E96B8]">
                       {(clientNotes[dossierClient.clientKey] || []).length} recorded
                     </span>
                   </div>
@@ -1590,12 +1798,12 @@ Temporary password: ${issuedLogin.tempPassword}`
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') handleAddNote(dossierClient.clientKey);
                       }}
-                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:bg-white focus:border-sky-500"
+                      className="flex-1 px-3 py-2 bg-[#F6F7FB] border border-[#E2E5F0] rounded-xl text-xs outline-none focus:bg-white focus:border-[#3D52A0]"
                     />
                     <button
                       onClick={() => handleAddNote(dossierClient.clientKey)}
                       disabled={!newNoteText.trim()}
-                      className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-40 text-white font-semibold text-xs rounded-xl transition-all cursor-pointer"
+                      className="px-3.5 py-2 bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-40 text-white font-semibold text-xs rounded-xl transition-all cursor-pointer"
                     >
                       Save
                     </button>
@@ -1604,19 +1812,19 @@ Temporary password: ${issuedLogin.tempPassword}`
                   {/* Notes Feed */}
                   <div className="space-y-2 pt-1 max-h-56 overflow-y-auto">
                     {(clientNotes[dossierClient.clientKey] || []).length === 0 ? (
-                      <p className="text-xs text-slate-400 italic py-2 text-center">No internal notes for this client yet.</p>
+                      <p className="text-xs text-[#8E96B8] italic py-2 text-center">No internal notes for this client yet.</p>
                     ) : (
                       (clientNotes[dossierClient.clientKey] || []).map((note) => (
-                        <div key={note.id} className="p-3 bg-slate-50 border border-slate-200/60 rounded-xl flex items-start justify-between gap-2 text-xs">
+                        <div key={note.id} className="p-3 bg-[#F6F7FB] border border-[#E2E5F0]/60 rounded-xl flex items-start justify-between gap-2 text-xs">
                           <div>
-                            <p className="text-slate-800 leading-relaxed">{note.text}</p>
-                            <p className="text-[10px] text-slate-400 mt-1">
-                              By <span className="font-medium text-slate-600">{note.author}</span> • {timeAgo(note.createdAt)}
+                            <p className="text-[#252C4E] leading-relaxed">{note.text}</p>
+                            <p className="text-[10px] text-[#8E96B8] mt-1">
+                              By <span className="font-medium text-[#5A628A]">{note.author}</span> • {timeAgo(note.createdAt)}
                             </p>
                           </div>
                           <button
                             onClick={() => handleDeleteNote(dossierClient.clientKey, note.id)}
-                            className="text-slate-300 hover:text-rose-500 p-1 transition-colors cursor-pointer"
+                            className="text-[#ADBBDA] hover:text-rose-500 p-1 transition-colors cursor-pointer"
                             title="Delete note"
                           >
                             <X className="w-3.5 h-3.5" />
@@ -1629,8 +1837,8 @@ Temporary password: ${issuedLogin.tempPassword}`
               </div>
 
               {/* Drawer Footer */}
-              <div className="p-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between gap-2">
-                <span className="text-[11px] text-slate-400">
+              <div className="p-4 border-t border-[#EDEFF7] bg-[#F6F7FB]/80 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-[#8E96B8]">
                   Last active {timeAgo(dossierClient.lastActivity)}
                 </span>
                 <div className="flex items-center gap-2">
@@ -1639,7 +1847,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                       <button
                         type="button"
                         onClick={(e) => handleCopyPortalUrl(dossierClient.projects[0].id, e, false)}
-                        className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                        className="px-3 py-2 bg-white hover:bg-[#F6F7FB] border border-[#E2E5F0] text-[#3A416B] font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
                         title="Copy active portal link"
                       >
                         {copiedId === "portal-" + dossierClient.projects[0].id ? (
@@ -1649,7 +1857,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                           </>
                         ) : (
                           <>
-                            <Globe className="w-3.5 h-3.5 text-sky-600" />
+                            <Globe className="w-3.5 h-3.5 text-[#3D52A0]" />
                             <span>Copy Link</span>
                           </>
                         )}
@@ -1657,7 +1865,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                       <button
                         type="button"
                         onClick={(e) => handleCopyPortalUrl(dossierClient.projects[0].id, e, true)}
-                        className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                        className="px-3 py-2 bg-white hover:bg-[#F6F7FB] border border-[#E2E5F0] text-[#3A416B] font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
                         title="Generate a brand new link and revoke earlier links"
                       >
                         {copiedId === "newportal-" + dossierClient.projects[0].id ? (

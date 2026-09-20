@@ -1832,3 +1832,26 @@ body {
   .mny-progress::after { display: none; }
   .mny-card:hover { transform: none; }
 }
+
+/* ── Clients directory surfaces ──────────────────────────────────────────
+   Written here rather than as Tailwind arbitrary values: a comma inside
+   `shadow-[0_2px_10px_-4px_rgba(18,24,47,0.12)]` stops the class compiling,
+   so the cards silently rendered with no shadow and — since the border had
+   been set to white to make room for it — no edge at all. */
+.cd-panel {
+  box-shadow: 0 2px 10px -4px rgba(18, 24, 47, 0.10);
+}
+.cd-card {
+  box-shadow: 0 2px 10px -4px rgba(18, 24, 47, 0.12);
+  transition: box-shadow .2s cubic-bezier(.22,1,.36,1), transform .2s cubic-bezier(.22,1,.36,1);
+}
+.cd-card:hover {
+  box-shadow: 0 16px 34px -14px rgba(18, 24, 47, 0.32);
+  transform: translateY(-2px);
+}
+.cd-pop {
+  box-shadow: 0 18px 40px -16px rgba(18, 24, 47, 0.40);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cd-card:hover { transform: none; }
+}
