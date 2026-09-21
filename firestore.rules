@@ -65,7 +65,7 @@ service cloud.firestore {
       allow update: if isSuperAdmin() ||
         (isAuthenticated() && request.auth.uid == userId &&
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['mustChangePassword', 'updatedAt', 'displayName', 'lastSeenAt', 'email'])) ||
+           .hasOnly(['mustChangePassword', 'updatedAt', 'displayName', 'lastSeenAt', 'email', 'lastProjectTabs', 'attentionState'])) ||
         /*
           Studio sign-in syncs the signed-in user's role from the organisation's
           team list, and has always done so from the browser. That is left

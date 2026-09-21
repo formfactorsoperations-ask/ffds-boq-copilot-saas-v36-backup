@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
+import React, { useState, useEffect, useMemo, useRef, lazy, Suspense, useCallback } from "react";
 import SuccessWithNextToast from './components/SuccessWithNextToast';
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
@@ -18,6 +18,8 @@ import StudioFooter from "./components/home/StudioFooter";
 import DataPrivacyPage from "./components/studio/DataPrivacyPage";
 import SupportDeskPage from "./components/studio/SupportDeskPage";
 import TermsOfUsePage from "./components/studio/TermsOfUsePage";
+import { readLastTabs, recordLastTab, LastTabs } from "./services/lastVisitedTabs";
+import { readAttentionState, writeAttentionEntry, AttentionState, AttentionEntry } from "./services/attentionState";
 import { buildProjectTemplate } from "./lib/cloneProject";
 import { ensureScopeRooms } from "./lib/scopeBuckets";
 import { showSuccessWithNext } from "./components/SuccessWithNextToast";
@@ -2204,6 +2206,26 @@ export default function App() {
   const MotionDiv = motion.div as any;
 
   // Render Logic
+    /* Where this person last was, per project. Loaded once on sign-in and
+       kept current by the effect below; "Continue where you left off" reads it
+       to reopen the tab you actually stopped on. */
+    const [lastTabs, setLastTabs] = useState<LastTabs>({});
+    /* Snoozed and dismissed items on the home worklist. Optimistic locally so
+       a tile disappears on click, then persisted. */
+    const [attention, setAttention] = useState<AttentionState>({});
+
+    useEffect(() => {
+      let alive = true;
+      readLastTabs(currentUserAuth?.uid).then((m) => alive && setLastTabs(m));
+      readAttentionState(currentUserAuth?.uid).then((m) => alive && setAttention(m));
+      return () => { alive = false; };
+    }, [currentUserAuth?.uid]);
+
+    const handleAttentionChange = useCallback((projectId: string, entry: AttentionEntry) => {
+      setAttention((prev) => ({ ...prev, [projectId]: entry }));
+      writeAttentionEntry(currentUserAuth?.uid, projectId, entry);
+    }, [currentUserAuth?.uid]);
+
     const isProjectTab = ![
     "home",
     "reports",
@@ -2222,6 +2244,18 @@ export default function App() {
     "support",
     "terms-of-use",
   ].includes(activeTab);
+
+  /* One effect rather than touching forty-six setActiveTab calls. Only fires
+     inside an open project, and only for project-scoped tabs -- landing on
+     Reports should not become "where you left off" in a site. */
+  useEffect(() => {
+    if (!isProjectTab || !activeInternalId || !currentUserAuth?.uid) return;
+    setLastTabs((prev) =>
+      prev[activeInternalId] === activeTab ? prev : { ...prev, [activeInternalId]: activeTab }
+    );
+    recordLastTab(currentUserAuth.uid, activeInternalId, activeTab);
+  }, [isProjectTab, activeInternalId, activeTab, currentUserAuth?.uid]);
+
   const hasProjectData = !!activeInternalId;
 
   // Top Header layout (sidebar width is 0px)
@@ -2640,6 +2674,9 @@ export default function App() {
                       onNavigate={setActiveTab}
                       role={orgData?.role || "Admin"}
                       userName={currentUserAuth?.displayName || currentUserAuth?.email || "there"}
+                      lastTabs={lastTabs}
+                      attention={attention}
+                      onAttentionChange={handleAttentionChange}
                       // ACTIVE_STUDIO_HOME
                     />
                   )}
@@ -3344,6 +3381,9 @@ export default function App() {
                       onNavigate={setActiveTab}
                       role={orgData?.role || "Admin"}
                       userName={currentUserAuth?.displayName || currentUserAuth?.email || "there"}
+                      lastTabs={lastTabs}
+                      attention={attention}
+                      onAttentionChange={handleAttentionChange}
                     />
                   )}
                   {activeTab === "reports" && (
