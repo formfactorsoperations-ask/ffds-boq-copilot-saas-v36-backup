@@ -446,6 +446,19 @@ export interface MaterialSelection {
     changeRequestedAt?: string | null;
     changeReason?: string | null;
     changeRequestedBy?: string | null;
+
+    /*
+      The studio's answer to a client's question, and the act of putting the
+      finish back to them.
+
+      A client could raise a question on a selection -- it landed, and the card
+      showed CHANGE REQUESTED -- but there was nowhere to answer it and no way
+      to reopen the approval, so the finish stopped dead: no confirm button for
+      the client, no action for the studio.
+    */
+    studioReply?: string | null;
+    studioReplyAt?: string | null;
+    studioReplyBy?: string | null;
     previousSelectionSnapshot?: any | null;
 }
 
@@ -827,6 +840,8 @@ export interface ProjectContext {
     designSummary?: DesignSummaryData;
     siteUpdates?: SiteUpdateRecord[];
     materialSelections?: MaterialSelection[];
+    /** Inbound notes from the client. See ClientMessage. */
+    clientMessages?: ClientMessage[];
     paintPalettes?: PaintPalette[];
     designDocuments?: DesignDocument[]; // URLs for approved design PDFs
     /**
@@ -1779,6 +1794,32 @@ export interface CommunicationTemplateItem {
   variables?: string[];
   isCustomised?: boolean;
   lastEditedAt?: any;
+}
+
+/**
+ * Something the client sent the studio.
+ *
+ * The portal had a "Send Note to Studio Manager" box whose handler cleared the
+ * textarea, closed the modal and told the client their message had been
+ * dispatched. Nothing was written anywhere. Every message any client ever sent
+ * through it was discarded, and they were told otherwise.
+ *
+ * Stored on the project so it reaches the studio through the same projection
+ * and rules as every other client action.
+ */
+export interface ClientMessage {
+  id: string;
+  /** What they wrote, verbatim. */
+  text: string;
+  sentAt: string;
+  sentBy: string;
+  /** Set when a studio member marks it dealt with. */
+  readAt?: string | null;
+  readBy?: string | null;
+  /** The finish or document it was sent from, when it came from one. */
+  aboutKind?: 'selection' | 'document' | 'general';
+  aboutId?: string | null;
+  aboutLabel?: string | null;
 }
 
 export interface CommunicationLogItem {

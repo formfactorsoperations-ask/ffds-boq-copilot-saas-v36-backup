@@ -1270,103 +1270,23 @@ export interface ScopeAdditionClassification {
     boqImpact: 'none' | 'delta_only' | 'new_items' | 'rework_required';
 }
 
-export async function classifyScopeAddition(
-    originalScopeSummary: string,
-    gateActivatedDate: string,
-    clientRequest: string
-): Promise<ScopeAdditionClassification | null> {
-    
-    // Logic fallback
-    let type: 'TYPE_A' | 'TYPE_B' | 'TYPE_C' | 'TYPE_D' = 'TYPE_B';
-    const req = (clientRequest || '').toLowerCase();
+/*
+  REMOVED: classifyScopeAddition and generateScopeAdditionBoq.
 
-    if (req.includes("redesign") || req.includes("rework") || req.includes("change layout")) {
-        type = 'TYPE_D';
-    } else if (req.includes("new room") || req.includes("major") || req.includes("balcony") || req.includes("bar")) {
-        type = 'TYPE_C';
-    } else if (req.includes("upgrade") || req.includes("material") || req.includes("finish") || req.includes("tile")) {
-        type = 'TYPE_A';
-    }
+  Neither ever called a model. `classifyScopeAddition` matched five keywords
+  ("tile" -> finish change, "balcony" -> new scope) and returned a hardcoded
+  `confidence: 0.95`, which the screen rendered as "95% Match" under a button
+  reading "Analyzing via Gemini Agent...". `generateScopeAdditionBoq` ignored
+  the request entirely and always returned the same two lines -- Custom Joinery
+  Work 50 sqft at 1500, Finishing & Polish 50 sqft at 120 -- so every generated
+  addition came to the same 75,000 whatever the client had asked for. Both then
+  slept 800ms to look like they were thinking.
 
-    let reasoning = "Standard minor addition.";
-    if (type === 'TYPE_A') reasoning = "Material or finish change only.";
-    if (type === 'TYPE_C') reasoning = "New space or major scope addition.";
-    if (type === 'TYPE_D') reasoning = "Space redesign or layout change.";
-
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    return {
-        type,
-        confidence: 0.95,
-        reasoning,
-        designFeeFormula: type === 'TYPE_A' ? "Waived" : (type === 'TYPE_B' ? "Max(5000, 10% of Ex)" : "Max(8000, 11% of Ex)"),
-        estimatedDesignFee: type === 'TYPE_A' ? 0 : (type === 'TYPE_D' ? null : 5000),
-        newDrawingsRequired: type === 'TYPE_A' ? [] : ['Updated Plan', 'New Elevation'],
-        boqImpact: type === 'TYPE_A' ? 'delta_only' : 'new_items'
-    };
-}
-
-export interface ScopeAdditionEngineeredBoq {
-    additionName: string;
-    items: {
-        description: string;
-        category: string;
-        unit: string;
-        qty: number;
-        estimatedUnitRate: number;
-        baseCost: number;
-    }[];
-    subTotal: number;
-    marginAt20Pct: number;
-    gstAt18Pct: number;
-    totalExecutionValue: number;
-    aiNote: string;
-}
-
-export async function generateScopeAdditionBoq(
-    additionType: string,
-    clientRequest: string,
-    dimensions: string | null,
-    projectStyle: string,
-    budgetTier: string
-): Promise<ScopeAdditionEngineeredBoq | null> {
-    
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    const items = [
-        {
-            description: "Custom Joinery Work (" + clientRequest.substring(0, 20) + "...)",
-            category: "woodwork",
-            unit: "sqft",
-            qty: 50,
-            estimatedUnitRate: 1500,
-            baseCost: 50 * 1500
-        },
-        {
-            description: "Finishing & Polish",
-            category: "paint",
-            unit: "sqft",
-            qty: 50,
-            estimatedUnitRate: 120,
-            baseCost: 50 * 120
-        }
-    ];
-
-    const subTotal = items.reduce((sum, i) => sum + i.baseCost, 0);
-    const marginAt20Pct = subTotal * 0.20;
-    const gstAt18Pct = (subTotal + marginAt20Pct) * 0.18;
-    const totalExecutionValue = subTotal + marginAt20Pct + gstAt18Pct;
-
-    return {
-        additionName: "Scope Addition Generation",
-        items,
-        subTotal,
-        marginAt20Pct,
-        gstAt18Pct,
-        totalExecutionValue,
-        aiNote: "Generated via local heuristic based on request."
-    };
-}
+  A studio could raise a real GST invoice off that. The addition type is now
+  chosen by the person raising it, with the design-fee rule shown as they pick,
+  and line items come from the rate bank, the project's own BOQ, or a previous
+  addition -- all of which are real numbers with a traceable source.
+*/
 
 export async function generateComprehensiveWeeklyReport(
     projectContext: ProjectContext,

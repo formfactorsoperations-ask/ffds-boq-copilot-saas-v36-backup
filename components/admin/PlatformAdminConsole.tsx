@@ -28,6 +28,7 @@ import { del } from 'idb-keyval';
 import { BuildingOfficeIcon, UserIcon, ShieldCheckIcon } from '../Icons';
 import { useOrg } from '../../contexts/OrgContext';
 import { runPermissionProbe, summariseProbe, PROBE_PATHS, ProbeResult } from '../../lib/platformProbe';
+import { scanPortalDrift, applyPortalDrift, ReconcileScan, ReconcileOutcome } from '../../services/portalReconcileService';
 import { CountUp, Gauge, Dot } from '../ui/HudBits';
 import Tabs from '../ui/Tabs';
 
@@ -99,6 +100,19 @@ export default function PlatformAdminConsole() {
   const [repairing, setRepairing] = useState(false);
   // Applying rewrites live project documents, so it asks first.
   const [confirmRepair, setConfirmRepair] = useState(false);
+
+  /*
+    Portal reconciliation. Client-side on purpose: it reads this studio's own
+    projects and their projections as the signed-in user, which is exactly the
+    access the rules already grant, and needs no function to be deployed to
+    answer.
+  */
+  const [recon, setRecon] = useState<ReconcileScan | null>(null);
+  const [reconErr, setReconErr] = useState<string | null>(null);
+  const [reconning, setReconning] = useState(false);
+  const [reconProgress, setReconProgress] = useState({ done: 0, total: 0 });
+  const [confirmRecon, setConfirmRecon] = useState(false);
+  const [reconDone, setReconDone] = useState<ReconcileOutcome | null>(null);
 
   // Client-side probe
   const [probe, setProbe] = useState<ProbeResult[] | null>(null);
@@ -179,6 +193,38 @@ export default function PlatformAdminConsole() {
       setRepairErr(looksUndeployed(e) ? `not-deployed:${e?.code || 'unknown'}` : (e?.code || e?.message || 'unknown'));
     } finally {
       setRepairing(false);
+    }
+  };
+
+  const runReconScan = async () => {
+    setReconning(true);
+    setReconErr(null);
+    setReconDone(null);
+    setConfirmRecon(false);
+    setRecon(null);
+    setReconProgress({ done: 0, total: 0 });
+    try {
+      const result = await scanPortalDrift((done, total) => setReconProgress({ done, total }));
+      setRecon(result);
+    } catch (e: any) {
+      setReconErr(e?.message || String(e));
+    } finally {
+      setReconning(false);
+    }
+  };
+
+  const runReconApply = async () => {
+    if (!recon) return;
+    setReconning(true);
+    setConfirmRecon(false);
+    try {
+      const outcome = await applyPortalDrift(recon);
+      setReconDone(outcome);
+      setRecon(null);
+    } catch (e: any) {
+      setReconErr(e?.message || String(e));
+    } finally {
+      setReconning(false);
     }
   };
 
@@ -297,7 +343,7 @@ export default function PlatformAdminConsole() {
   }));
 
   const notDeployed = !!overviewErr && overviewErr.startsWith('not-deployed');
-  const busy = loadingOverview || probing || sweeping || creating;
+  const busy = loadingOverview || probing || sweeping || creating || reconning;
 
   return (
     <div className="flex-1 bg-slate-50 overflow-y-auto">
@@ -620,6 +666,139 @@ export default function PlatformAdminConsole() {
         {/* -------------------------------------------------------------- DATA */}
         {tab === 'data' && (
           <>
+            <section className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hud-panel-in ${reconning ? 'hud-scanning' : ''}`}>
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="max-w-2xl">
+                  <h2 className="font-bold text-slate-800 flex items-center gap-2">
+                    Client actions the projects lost
+                    {reconning && <Dot tone="warn" live />}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    For a period, an action taken in the real client portal reached only one of the
+                    two places a project is stored, and the studio's next load preferred the other —
+                    so confirmations, signatures, clause queries and questions about finishes were
+                    discarded before anyone saw them. The portal's own copy was never in that path
+                    and still holds them. This compares the two and puts back only what a client
+                    did; nothing the studio owns is touched.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={runReconScan} disabled={reconning}
+                    className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-sm hover:bg-slate-50 disabled:opacity-50 whitespace-nowrap">
+                    {reconning ? 'Checking…' : 'Check projects'}
+                  </button>
+                  {recon && recon.results.some(r => r.merged) && (
+                    <button onClick={() => setConfirmRecon(true)} disabled={reconning}
+                      className="px-5 py-2.5 rounded-xl bg-[#3D52A0] text-white font-bold text-sm hover:bg-[#334486] disabled:opacity-50 whitespace-nowrap">
+                      Restore
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {reconning && reconProgress.total > 0 && (
+                <p className="mt-4 text-xs text-slate-500 tabular-nums">
+                  {reconProgress.done} of {reconProgress.total} projects
+                </p>
+              )}
+
+              {confirmRecon && recon && (
+                <div className="mt-4 text-sm bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                  <p className="text-amber-900 font-semibold">
+                    Restore {recon.results.filter(r => r.merged).length} project
+                    {recon.results.filter(r => r.merged).length === 1 ? '' : 's'}?
+                  </p>
+                  <p className="text-amber-800 mt-1">
+                    This edits live project documents. Each one is merged again at the moment it is
+                    written, against the project as it stands then — so anything done since the check
+                    above is kept, and only the client's own records are added back.
+                  </p>
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={runReconApply}
+                      className="px-4 py-2 rounded-lg bg-amber-600 text-white font-bold text-xs hover:bg-amber-700">
+                      Yes, restore them
+                    </button>
+                    <button onClick={() => setConfirmRecon(false)}
+                      className="px-4 py-2 rounded-lg border border-amber-300 text-amber-800 font-bold text-xs hover:bg-amber-100">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {reconErr && (
+                <p className="mt-4 text-sm text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-4 py-3">
+                  Check failed: {reconErr}
+                </p>
+              )}
+
+              {reconDone && (
+                <div className="mt-4 text-sm bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+                  <p className="text-emerald-900 font-semibold">
+                    Restored {reconDone.restored} project{reconDone.restored === 1 ? '' : 's'}.
+                  </p>
+                  {reconDone.alreadyResolved > 0 && (
+                    <p className="text-emerald-800 mt-1">
+                      {reconDone.alreadyResolved} had already come back on their own before this ran.
+                    </p>
+                  )}
+                  {reconDone.failed.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {reconDone.failed.map(f => (
+                        <li key={f.projectId} className="text-rose-800">
+                          {f.projectName} — {f.error}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="text-emerald-800 mt-2 text-xs">
+                    Reload the app to see them on the project pages.
+                  </p>
+                </div>
+              )}
+
+              {recon && (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-5">
+                    <Card label="Checked" value={recon.examined} note={`of ${recon.totalProjects} projects`} />
+                    <Card label="Never published" value={recon.withoutProjection} note="no portal copy to compare" />
+                    <Card label="To restore" value={recon.results.filter(r => r.merged).length} note="projects"
+                          tone={recon.results.some(r => r.merged) ? 'warn' : 'ok'} />
+                  </div>
+
+                  {!recon.results.some(r => r.merged) && (
+                    <p className="mt-4 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+                      Nothing to put back — every published project already holds what its portal copy
+                      does.
+                    </p>
+                  )}
+
+                  <div className="mt-4 space-y-3">
+                    {recon.results.map(r => (
+                      <div key={r.projectId}
+                           className={`rounded-xl border p-3 ${r.skipped ? 'border-slate-200 bg-slate-50' : 'border-amber-200 bg-amber-50/40'}`}>
+                        <div className="font-bold text-sm text-slate-800">{r.projectName}</div>
+                        {r.skipped ? (
+                          <p className="text-xs text-slate-500 mt-1">Skipped — {r.skipped}</p>
+                        ) : (
+                          <ul className="mt-2 space-y-1.5">
+                            {r.findings.map((f, i) => (
+                              <li key={i} className="text-xs text-slate-700 flex gap-2">
+                                <span className="shrink-0 px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                  {f.area}
+                                </span>
+                                <span><span className="font-semibold">{f.label}</span> — {f.detail}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+
             <section className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hud-panel-in ${repairing ? 'hud-scanning' : ''}`}>
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="max-w-2xl">

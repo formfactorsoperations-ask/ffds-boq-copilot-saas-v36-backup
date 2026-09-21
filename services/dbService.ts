@@ -1,6 +1,7 @@
 
 import { FullProjectData, Item , ProjectLifecycle, Vendor, PurchaseOrder, Observation, ProjectSchedule } from '../types';
 import { db as firestore, isFirebaseConfigured } from './firebaseClient';
+import { mergeClientOwned } from '../lib/clientOwned';
 import { auditDb } from './dbAudit';
 import { collection, getDocs, writeBatch, doc, setDoc, deleteDoc, getDoc, query, where, serverTimestamp } from 'firebase/firestore';
 import pako from 'pako';
@@ -870,7 +871,30 @@ const CloudStrategy: DBService = {
                 merged.lastModified = Math.max(globalProj.lastModified || 0, tenantProj.lastModified || 0);
 
                 if (globalProj.context && tenantProj.context) {
-                    merged.context = {
+                    /*
+                      A project is stored twice -- projects/{id} and
+                      organizations/{tenantId}/projects/{id} -- and saveProject
+                      writes both. The submitClientAction callable writes only
+                      the first, because that is the one the portal projection
+                      hangs off and the one the open-project listener watches.
+
+                      So the two copies diverge by exactly the client's actions,
+                      and this spread handed the argument to the tenant copy:
+                      `materialSelections`, `documents` and the sign-offs were
+                      replaced wholesale by a copy that had never seen them.
+                      Every confirmation, signature, dispute, query and question
+                      raised from the real portal was discarded here, on the next
+                      load, before it ever reached the screen -- and the studio's
+                      next auto-save then wrote that loss back to both copies.
+
+                      The portal kept showing them because the projection is a
+                      third document that nothing overwrites, which is why one
+                      side of the app disagreed with the other.
+
+                      The tenant copy still decides the studio's own fields. It
+                      just no longer decides the client's.
+                    */
+                    const studioPreferred = {
                         ...globalProj.context,
                         ...tenantProj.context,
                         lifecycle: {
@@ -878,6 +902,7 @@ const CloudStrategy: DBService = {
                             ...tenantProj.context.lifecycle
                         }
                     };
+                    merged.context = mergeClientOwned(studioPreferred, globalProj.context);
                     merged.context.status = tenantProj.context.status || globalProj.context.status || (tenantProj as any).status || (globalProj as any).status;
                 } else if (tenantProj.context) {
                     merged.context = { ...tenantProj.context };

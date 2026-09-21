@@ -26,6 +26,8 @@ import { db as fsDb } from '../services/firebaseClient';
 import { db as projectDb } from '../services/dbService';
 import { useTimelinePhases } from '../hooks/useTimelinePhases';
 import TermsAndPaymentTab from './studio/TermsAndPaymentTab';
+import { useScopeAdditions } from './ops/useScopeAdditions';
+import ScopeAdditionsMoneyPanel from './ops/ScopeAdditionsMoneyPanel';
 
 interface PaymentCalculatorTabProps {
     projectContext: ProjectContext;
@@ -1130,6 +1132,24 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
       and a second copy of it would quietly disagree with this one.
     */
     const moneyStudioId = orgData?.tenantId || 'demo-tenant-01';
+
+    /*
+      Scope additions.
+
+      This tab reported the contract as it stood on the day the BOQ was frozen
+      and nothing since, so supplementary invoices already sent to the client
+      were invisible here. Subscribed rather than fetched, so Money and the
+      Scope Additions screen can never disagree about what a project is worth.
+    */
+    const scopeContracted = taxableExecution + taxableDesign;
+    const scopeBaseMarginPct = scopeContracted > 0
+        ? ((scopeContracted - Number((activeTier as any)?.summary?.totalCost || 0)) / scopeContracted) * 100
+        : null;
+    const {
+        summary: scopeSummary,
+        loading: scopeLoading,
+        error: scopeError,
+    } = useScopeAdditions(moneyStudioId, projectId, scopeContracted, scopeBaseMarginPct, bank);
     const { settings: moneySettings } = useStudioSettings(moneyStudioId);
     const { paymentRequests: moneyRequests } = usePaymentRequests(projectId || '', moneyStudioId);
     const { phases: timelinePhasesForMoney } = useTimelinePhases(projectId || '', moneyStudioId);
@@ -3162,6 +3182,22 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             )}
                         </button>
                     </div>
+
+                    {/*
+                      Scope additions, over and above the frozen BOQ.
+
+                      Placed directly under the four panels because it changes
+                      what every one of them is a share OF: the contract this
+                      screen reports is no longer the BOQ alone.
+                    */}
+                    <ScopeAdditionsMoneyPanel
+                        summary={scopeSummary}
+                        contractedExGst={scopeContracted}
+                        baseMarginPct={scopeBaseMarginPct}
+                        loading={scopeLoading}
+                        error={scopeError}
+                    />
+
 
 
 

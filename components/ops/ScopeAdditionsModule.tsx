@@ -26,8 +26,13 @@ import {
     TrendingUp, 
     Info 
 } from 'lucide-react';
-import { classifyScopeAddition, generateScopeAdditionBoq, ScopeAdditionClassification } from '../../services/geminiService';
+import { ScopeAdditionClassification } from '../../services/geminiService';
+import { calculateProjectFinancials } from '../../lib/financialsUtils';
+import { normaliseAddition, summariseScopeAdditions } from '../../lib/scopeAdditions';
+import ScopeAdditionsHeader from './ScopeAdditionsHeader';
 import { jsPDF } from 'jspdf';
+import ScopeAdditionInvoiceDoc from '../client/ScopeAdditionInvoiceDoc';
+import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 import autoTable from 'jspdf-autotable';
 
 interface ScopeAdditionProps {
@@ -35,6 +40,10 @@ interface ScopeAdditionProps {
     projectContext: ProjectContext;
     bank: Item[];
     setProjectContext?: React.Dispatch<React.SetStateAction<ProjectContext>>;
+    /** The approved tier. Required for the contract figure to be real. */
+    activeTier?: any;
+    /** The project's own frozen BOQ, so an addition can be cloned from it. */
+    fullBoq?: any[];
 }
 
 interface DraftItem {
@@ -49,7 +58,7 @@ interface DraftItem {
     bankId?: string;
 }
 
-export default function ScopeAdditionsModule({ projectId, projectContext, bank, setProjectContext }: ScopeAdditionProps) {
+export default function ScopeAdditionsModule({ projectId, projectContext, bank, setProjectContext, activeTier, fullBoq = [] }: ScopeAdditionProps) {
     const designGateActive = (projectContext as any)?.designGate?.gateActivated || (projectContext as any)?.lifecycle?.gates?.designGateActive?.done || (projectContext as any)?.scopeAdditionsEnabled;
     if (!designGateActive) {
         return (
@@ -84,6 +93,32 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
     const orgId = orgData?.tenantId || 'demo-tenant-01';
     
     const [additions, setAdditions] = useState<any[]>([]);
+
+    /*
+      The same derivation the Money tab runs, from the same records. Computed
+      here rather than passed in because this screen owns the subscription --
+      but it is the shared function, so the two screens cannot drift apart on
+      what the revised contract is.
+    */
+    const scopeFin = useMemo(() => {
+        try { return calculateProjectFinancials(projectContext, activeTier); }
+        catch { return null; }
+    }, [projectContext, activeTier]);
+    const contractedExGst = ((scopeFin as any)?.taxableExecution || 0) + ((scopeFin as any)?.taxableDesign || 0);
+    const baseMarginPct = useMemo(() => {
+        const cost = Number(activeTier?.summary?.totalCost || 0);
+        return contractedExGst > 0 && cost > 0 ? ((contractedExGst - cost) / contractedExGst) * 100 : null;
+    }, [contractedExGst, activeTier]);
+
+    const scopeSummary = useMemo(
+        () => summariseScopeAdditions(
+            additions.map((a: any) => normaliseAddition(a.internalDocId || a.id, a)),
+            contractedExGst,
+            baseMarginPct,
+            bank
+        ),
+        [additions, contractedExGst, baseMarginPct, bank]
+    );
     const [loading, setLoading] = useState(true);
     
     // UI Panels toggle
@@ -91,9 +126,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
 
     // New additions formulation state
     const [clientRequest, setClientRequest] = useState('');
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [classification, setClassification] = useState<ScopeAdditionClassification | null>(null);
-    const [generatedBoq, setGeneratedBoq] = useState<any | null>(null);
     const [isCreating, setIsCreating] = useState(false);
 
     // Interactive builder states
@@ -104,6 +137,11 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
     // Search and add library items
     const [searchQuery, setSearchQuery] = useState('');
     const [isLibraryDropdownOpen, setIsLibraryDropdownOpen] = useState(false);
+    /* Which way of adding a line is open. Four sources, because a line can come
+       from the rate bank, from this project's own BOQ, from a previous addition
+       on it, or from nowhere but somebody's head. */
+    const [addSource, setAddSource] = useState<'bank' | 'boq' | 'prev' | null>(null);
+    const [boqQuery, setBoqQuery] = useState('');
 
     // Fetch org settings
     const [feeFloors, setFeeFloors] = useState({ typeB: 5000, typeC: 8000, marginDefault: 15 });
@@ -192,112 +230,123 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
         }
     };
 
-    // Analyze using Gemini Model triggers
-    const handleAnalyzeRequest = async () => {
-        if (!clientRequest.trim()) return;
-        setIsAnalyzing(true);
-        setClassification(null);
-        setGeneratedBoq(null);
+    /*
+      THE ADDITION'S TYPE, CHOSEN RATHER THAN GUESSED.
 
-        try {
-            const cls = await classifyScopeAddition(
-                (projectContext.name || '') + ' ' + (projectContext.config || ''),
-                new Date().toISOString(),
-                clientRequest
-            );
-            if (!cls) throw new Error("Failed to classify scope request type");
-            setClassification(cls);
+      This was set by a keyword match dressed as a model -- "tile" meant a
+      finish change, "balcony" meant new scope -- reported at a hardcoded 95%
+      confidence. The type decides whether a design fee is charged at all, so a
+      wrong guess nobody noticed silently waived it.
 
-            const miniBoq = await generateScopeAdditionBoq(
-                cls.type,
-                clientRequest,
-                (projectContext as any).dimensions || 'Standard',
-                (projectContext as any).style || 'Modern',
-                (projectContext as any).budgetTier || 'Premium'
-            );
-
-            if (miniBoq) {
-                // Initialize draft items with details & link to standard library
-                const loadedItems: DraftItem[] = miniBoq.items.map(item => {
-                    // Try to scan index matches in active bank rate library
-                    const bankMatch = bank.find(b => 
-                        (b.cat || '').toLowerCase() === (item.category || '').toLowerCase() && 
-                        (b.unit || '').toLowerCase() === (item.unit || '').toLowerCase()
-                    );
-                    
-                    if (bankMatch) {
-                        const standardRate = bankMatch.materials + bankMatch.labor;
-                        return {
-                            description: item.description,
-                            category: bankMatch.cat || item.category || 'General',
-                            unit: bankMatch.unit || item.unit || 'sqft',
-                            qty: item.qty,
-                            estimatedUnitRate: standardRate > 0 ? standardRate : item.estimatedUnitRate,
-                            baseCost: item.qty * (standardRate > 0 ? standardRate : item.estimatedUnitRate),
-                            marginOverride: bankMatch.margin || 20,
-                            source: 'library',
-                            bankId: bankMatch.id
-                        };
-                    }
-
-                    return {
-                        description: item.description,
-                        category: item.category || 'General',
-                        unit: item.unit || 'sqft',
-                        qty: item.qty,
-                        estimatedUnitRate: item.estimatedUnitRate,
-                        baseCost: item.baseCost,
-                        marginOverride: 20,
-                        source: 'ai'
-                    };
-                });
-
-                setDraftItems(loadedItems);
-                setDraftDesignFeeType('formula');
-                setDraftCustomDesignFee(0);
-                setGeneratedBoq(miniBoq);
-            }
-        } catch (error) {
-            console.error("AI Analysis failed:", error);
-            alert("AI analysis encountered an issue. Initializing manual template instead.");
-            handleSkipAI();
-        } finally {
-            setIsAnalyzing(false);
-        }
+      The person raising the addition knows which it is, and the fee rule for
+      each is shown as they pick.
+    */
+    const TYPE_META: Record<string, { label: string; blurb: string; fee: string; drawings: string[] }> = {
+        TYPE_A: {
+            label: 'Finish change',
+            blurb: 'Same layout, different material or finish.',
+            fee: 'No design fee',
+            drawings: [],
+        },
+        TYPE_B: {
+            label: 'Alteration',
+            blurb: 'An addition within the existing layout.',
+            fee: `10% of the work, minimum ₹${feeFloors.typeB.toLocaleString('en-IN')}`,
+            drawings: ['Updated Plan'],
+        },
+        TYPE_C: {
+            label: 'New scope',
+            blurb: 'New space or a substantial addition.',
+            fee: `11% of the work, minimum ₹${feeFloors.typeC.toLocaleString('en-IN')}`,
+            drawings: ['Updated Plan', 'New Elevation'],
+        },
     };
 
-    // Manual Bypass formulation
-    const handleSkipAI = () => {
+    const chooseType = (type: 'TYPE_A' | 'TYPE_B' | 'TYPE_C') => {
+        const meta = TYPE_META[type];
         setClassification({
-            type: 'TYPE_C',
-            reasoning: 'Logged directly via operations override.',
-            confidence: 1.0,
-            newDrawingsRequired: []
-        });
-        setDraftItems([
-            {
-                description: 'Scope Adjustment Item',
-                category: 'General Woodwork',
-                unit: 'sqft',
-                qty: 10,
-                estimatedUnitRate: 1500,
-                baseCost: 15000,
-                marginOverride: 20,
-                source: 'custom'
-            }
-        ]);
-        setDraftDesignFeeType('formula');
+            type,
+            /* No fabricated score. This was chosen, not inferred. */
+            confidence: 1,
+            reasoning: meta.blurb,
+            designFeeFormula: meta.fee,
+            estimatedDesignFee: null,
+            newDrawingsRequired: meta.drawings,
+            boqImpact: type === 'TYPE_A' ? 'delta_only' : 'new_items',
+        } as any);
+        setDraftDesignFeeType(type === 'TYPE_A' ? 'waived' : 'formula');
         setDraftCustomDesignFee(0);
-        setGeneratedBoq({
-            additionName: 'Manual Entry',
-            items: [],
-            subTotal: 15000,
-            marginAt20Pct: 3000,
-            gstAt18Pct: 3240,
-            totalExecutionValue: 21240,
-            aiNote: 'Manually customized draft.'
+    };
+
+    const addLine = (item: DraftItem) => setDraftItems(prev => [...prev, item]);
+
+    /* From the rate bank: the only source whose rate can later be checked for
+       drift, because it carries the bank id forward. */
+    const addFromBank = (b: Item) => {
+        const rate = (b.materials || 0) + (b.labor || 0);
+        addLine({
+            description: b.name,
+            category: b.cat || 'General',
+            unit: b.unit || 'sqft',
+            qty: 1,
+            estimatedUnitRate: rate,
+            baseCost: rate,
+            marginOverride: b.margin || 20,
+            source: 'library',
+            bankId: b.id,
+        });
+        setSearchQuery('');
+        setIsLibraryDropdownOpen(false);
+    };
+
+    /* From the project's own frozen BOQ. Most additions are more of something
+       already priced, and this keeps the description and the rate consistent
+       with what the client already signed. */
+    const addFromBoq = (line: any, useCurrentRate: boolean) => {
+        const frozenRate = (line.materials || 0) + (line.labor || 0);
+        const bankMatch = bank.find(x => x.id === line.id || x.name === line.name);
+        const currentRate = bankMatch ? (bankMatch.materials || 0) + (bankMatch.labor || 0) : frozenRate;
+        const rate = useCurrentRate ? currentRate : frozenRate;
+        addLine({
+            description: line.name,
+            category: line.cat || line.category || 'General',
+            unit: line.unit || 'sqft',
+            qty: 1,
+            estimatedUnitRate: rate,
+            baseCost: rate,
+            marginOverride: line.margin || 20,
+            source: bankMatch ? 'library' : 'custom',
+            bankId: bankMatch?.id,
         });
     };
+
+    /* From an earlier addition on this project, quantities cleared so nothing
+       is carried over by accident. */
+    const addFromPrevious = (add: any) => {
+        const lines: DraftItem[] = (add.miniBoq || []).map((i: any) => ({
+            description: i.description,
+            category: i.category || 'General',
+            unit: i.unit || 'sqft',
+            qty: 1,
+            estimatedUnitRate: i.estimatedUnitRate || 0,
+            baseCost: i.estimatedUnitRate || 0,
+            marginOverride: i.marginOverride !== undefined ? i.marginOverride : 20,
+            source: i.bankId ? 'library' : 'custom',
+            bankId: i.bankId,
+        }));
+        if (lines.length) setDraftItems(prev => [...prev, ...lines]);
+    };
+
+    const addBlankLine = () => addLine({
+        description: '',
+        category: 'General',
+        unit: 'sqft',
+        qty: 1,
+        estimatedUnitRate: 0,
+        baseCost: 0,
+        marginOverride: 20,
+        source: 'custom',
+    });
 
     // Builder helpers
     const updateDraftItem = (index: number, fields: Partial<DraftItem>) => {
@@ -451,7 +500,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
             // reset form & close panel
             setClientRequest('');
             setClassification(null);
-            setGeneratedBoq(null);
+            
             setDraftItems([]);
             setIsFormOpen(false);
         } catch (error) {
@@ -558,7 +607,12 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
             doc.setFontSize(8);
             doc.setTextColor(148, 163, 184);
             doc.text('PREMIUM COMMERCIAL & HOUSEHOLD INTERIORS • STATEMENT OF ACCOUNT', 15, 20);
-            doc.text('Ops Headquarters: Indiranagar, Bengaluru, India', 15, 25);
+            /* From the org profile. This printed "Ops Headquarters:
+               Indiranagar, Bengaluru, India" on a Thane studio's statement. */
+            doc.text(
+                [orgData?.officeAddress, orgData?.cityState].filter(Boolean).join(', ') || 'Address not set in Studio Settings',
+                15, 25,
+            );
 
             // Statement Ledger Date & Project Details
             doc.setFont('helvetica', 'bold');
@@ -674,167 +728,66 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
     };
 
     // Specific Scope addition Invoice PDF generator
+    /*
+      THE SUPPLEMENTARY INVOICE.
+
+      Drawn with jsPDF primitives at hand-placed coordinates, and hardcoded to a
+      Bengaluru address, a Karnataka GSTIN and an ICICI account number -- none of
+      which belong to this studio. It now renders the same styled-HTML document
+      every other client-facing paper uses, reading the studio's real details
+      from the org profile.
+    */
+    const [invoiceFor, setInvoiceFor] = useState<any | null>(null);
+
     const generateInvoicePDF = (add: any) => {
-        try {
-            const doc = new jsPDF() as any;
-            
-            // Slate top banner
-            doc.setFillColor(15, 23, 42); 
-            doc.rect(0, 0, 210, 40, 'F');
-            
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(16);
-            doc.setTextColor(255, 255, 255);
-            doc.text('FORM FACTORS DESIGN STUDIO', 15, 15);
-            
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(8);
-            doc.setTextColor(148, 163, 184);
-            doc.text('INVOICE OF SUPPLEMENTARY SCOPE ADDITIONS • CONTRACT MEMORANDUM', 15, 22);
-            doc.text('Corporate Office: Indiranagar, Bengaluru, Karnataka, India', 15, 27);
-            doc.text('GSTIN: 29AAGFF5421M1ZC', 15, 32);
-
-            // Document ID & Meta on top right of banner
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            doc.setTextColor(255, 215, 0); // Gold
-            doc.text(`INVOICE NO: INV/SA/${projectId.substring(0,6).toUpperCase()}/${add.id}`, 130, 15);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(230, 230, 230);
-            doc.text(`Date Logged: ${add.createdAt ? new Date(add.createdAt.seconds * 1000).toLocaleDateString('en-IN') : 'Just now'}`, 130, 22);
-            doc.text(`Account Status: ${add.paymentGate?.workAuthorized ? 'AUTHORIZED' : 'PENDING'}`, 130, 28);
-            doc.text(`Scope Class: ${add.type}`, 130, 34);
-
-            // Client and Project description details block
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(11);
-            doc.setTextColor(15, 23, 42);
-            doc.text('BILL TO:', 15, 52);
-            doc.text('PROJECT SITE DETAILS:', 110, 52);
-
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(9);
-            doc.setTextColor(71, 85, 105);
-            doc.text(`Client Name: ${projectContext.clientName || 'Valued Partner'}`, 15, 58);
-            doc.text(`Client Email: ${projectContext.clientEmail || 'N/A'}`, 15, 63);
-            doc.text(`Billing Contact: ${projectContext.clientPhone || 'N/A'}`, 15, 68);
-
-            doc.text(`Project Name: ${projectContext.name || 'Site'}`, 110, 58);
-            doc.text(`Site Configuration: ${projectContext.config || 'General Plan'}`, 110, 63);
-            doc.text(`Ops Manager: ${add.createdBy || 'Ops Director'}`, 110, 68);
-
-            doc.setDrawColor(226, 232, 240);
-            doc.line(15, 73, 195, 73);
-
-            // Overview request description
-            doc.setFont('helvetica', 'bold');
-            doc.text('Original Client Request Instruction:', 15, 79);
-            doc.setFont('helvetica', 'italic');
-            doc.setTextColor(100, 116, 139);
-            
-            // handle multi-line string wrapping
-            const splitRequest = doc.splitTextToSize(add.clientRequest || 'Custom instruction', 180);
-            doc.text(splitRequest, 15, 84);
-
-            let tableStartY = 95 + (splitRequest.length * 4);
-
-            // Itemized table using autoTable
-            const itemizedRows = (add.miniBoq || []).map((item: any, idx: number) => {
-                const sourceBadge = item.source === 'library' ? 'Rate Library' : (item.source === 'ai' ? 'AI Estimate' : 'Manual');
-                return [
-                    idx + 1,
-                    item.description || 'Supplementary scope item',
-                    item.category || 'General',
-                    item.qty || 1,
-                    item.unit || 'sqft',
-                    `Rs ${Math.floor(item.estimatedUnitRate || 0).toLocaleString('en-IN')}`,
-                    `${item.marginOverride || 20}%`,
-                    `Rs ${Math.floor(item.baseCost || 0).toLocaleString('en-IN')}`
-                ];
-            });
-
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(15, 23, 42);
-            doc.text('Bill of Quantities (Subtotal breakdown):', 15, tableStartY - 3);
-
-            autoTable(doc, {
-                startY: tableStartY,
-                head: [['S No.', 'Item Specification Spec', 'Category', 'Qty', 'Unit', 'Base Rate', 'Markup', 'Base Cost']],
-                body: itemizedRows,
-                headStyles: { fillColor: [61, 82, 160], textColor: [255, 255, 255], fontSize: 8 },
-                bodyStyles: { fontSize: 8, textColor: [51, 65, 85] },
-                columnStyles: {
-                    0: { cellWidth: 10 },
-                    1: { cellWidth: 55 },
-                    6: { halign: 'center' },
-                    7: { halign: 'right', fontStyle: 'bold' }
-                },
-                theme: 'striped'
-            });
-
-            let finalY = (doc as any).lastAutoTable.finalY + 8;
-
-            // Grand Ledger Split
-            // left grid: ICICI Bank Details
-            doc.setFillColor(248, 250, 252);
-            doc.rect(15, finalY, 85, 32, 'F');
-            doc.setDrawColor(226, 232, 240);
-            doc.rect(15, finalY, 85, 32, 'S');
-
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(8);
-            doc.setTextColor(15, 23, 42);
-            doc.text('BANK ESCROW FOR WIRE TRANSFERS:', 18, finalY + 6);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(71, 85, 105);
-            doc.text('Account Name: Form Factors Design Studio LLP', 18, finalY + 12);
-            doc.text('Bank: ICICI Bank Ltd., Indiranagar branch', 18, finalY + 16);
-            doc.text('Current A/C No: 0034050012354', 18, finalY + 20);
-            doc.text('IFSC Code: ICIC0000034', 18, finalY + 24);
-            doc.text('Payment Type: NEFT, RTGS or IMPS only.', 18, finalY + 28);
-
-            // right grid: financial summaries
-            doc.setFont('helvetica', 'bold');
-            doc.text('FINANCIAL STATEMENT:', 115, finalY + 6);
-            doc.setFont('helvetica', 'normal');
-            doc.text('Section A: Design Fee Subtotal', 115, finalY + 13);
-            doc.text(`Rs ${Math.floor(add.designFeeBase || 0).toLocaleString('en-IN')}`, 175, finalY + 13, { align: 'right' });
-
-            doc.text('Section A: Design GST (18%)', 115, finalY + 17);
-            doc.text(`Rs ${Math.floor(add.designFeeGst || 0).toLocaleString('en-IN')}`, 175, finalY + 17, { align: 'right' });
-
-            doc.text('Section B: Execution (inc. margin)', 115, finalY + 21);
-            doc.text(`Rs ${Math.floor(add.executionSubtotal + add.executionMargin).toLocaleString('en-IN')}`, 175, finalY + 21, { align: 'right' });
-
-            doc.text('Section B: Execution GST (18%)', 115, finalY + 25);
-            doc.text(`Rs ${Math.floor(add.executionGst || 0).toLocaleString('en-IN')}`, 175, finalY + 25, { align: 'right' });
-
-            doc.setDrawColor(15, 23, 42);
-            doc.line(115, finalY + 27, 180, finalY + 27);
-
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            doc.text('Grand Total Payable:', 115, finalY + 31);
-            doc.setTextColor(61, 82, 160);
-            doc.text(`Rs ${Math.floor(add.grandTotal || 0).toLocaleString('en-IN')}`, 175, finalY + 31, { align: 'right' });
-
-            // Signature approval lines
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(8);
-            doc.setTextColor(15, 23, 42);
-            doc.text('AUTHORIZED SIGNATORY', 25, finalY + 48);
-            doc.text('CLIENT SIGNATURE & SEAL', 130, finalY + 48);
-
-            doc.setDrawColor(15, 23, 42);
-            doc.line(15, finalY + 44, 85, finalY + 44);
-            doc.line(115, finalY + 44, 185, finalY + 44);
-
-            doc.save(`Invoice_${add.id}_${projectContext.name?.replace(/\s+/g, '_')}.pdf`);
-        } catch (error) {
-            console.error(error);
-            alert("Error constructing Invoice PDF layout.");
-        }
+        setInvoiceFor(add);
     };
+
+    /* Once the sheet is in the DOM, render it to PDF and take it back out. */
+    useEffect(() => {
+        if (!invoiceFor) return;
+        let cancelled = false;
+        const run = async () => {
+            /* One frame so the sheet and its stylesheet are laid out before
+               html2canvas measures anything. */
+            await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+            const element = document.getElementById('sa-invoice-sheet');
+            if (!element || cancelled) { setInvoiceFor(null); return; }
+            try {
+                const mod: any = await import('html2pdf.js');
+                const html2pdf = typeof mod === 'function' ? mod
+                    : typeof mod?.default === 'function' ? mod.default
+                    : mod?.default?.default;
+                if (!html2pdf) throw new Error('html2pdf unavailable');
+
+                const safeProject = (projectContext.name || 'Project').replace(/[^a-zA-Z0-9]+/g, '_');
+                await html2pdf()
+                    .set({
+                        margin: [15, 0, 15, 0],
+                        filename: `Invoice_${invoiceFor.id}_${safeProject}.pdf`,
+                        image: { type: 'jpeg' as const, quality: 1 },
+                        html2canvas: {
+                            scale: 2,
+                            useCORS: true,
+                            letterRendering: true,
+                            logging: false,
+                            onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc),
+                        },
+                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+                        pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.totals', '.paycols', '.sig', '.metabar'] },
+                    })
+                    .from(element)
+                    .save();
+            } catch (e) {
+                console.error('Invoice PDF failed', e);
+                alert('Could not produce the invoice PDF.');
+            } finally {
+                if (!cancelled) setInvoiceFor(null);
+            }
+        };
+        run();
+        return () => { cancelled = true; };
+    }, [invoiceFor, projectContext.name]);
 
     const isScopeAdditionsEnabled = projectContext.lifecycle?.gates?.designGateActive?.done || projectContext.scopeAdditionsEnabled;
     if (!isScopeAdditionsEnabled) {
@@ -900,81 +853,106 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
         );
     }
 
+    /* Full width. This was capped at max-w-6xl and centred, so on any real
+       screen a third of the page sat empty either side while the money was
+       squeezed into a ribbon down the middle. */
     return (
-        <div className="p-6 max-w-6xl mx-auto space-y-6">
-            
-            {/* Header Area */}
-            <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-sm flex items-center justify-end gap-2">
-                <div className="flex gap-2">
-                    <button 
-                        onClick={() => setIsFormOpen(!isFormOpen)}
-                        className="bg-[#3D52A0] hover:bg-[#334486] font-bold text-xs text-white px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-sm transition duration-150"
-                    >
-                        <Plus className="w-4 h-4" /> Log Proposed Alteration
-                    </button>
-                    {additions.length > 0 && (
-                        <button 
-                            onClick={generateLifetimeLedger}
-                            className="bg-sky-900 hover:bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 font-bold text-xs text-white px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-sm transition duration-150"
-                        >
-                            <FileText className="w-4 h-4" /> Export Combined Ledger PDF
-                        </button>
-                    )}
+        <div className="w-full px-4 pb-10 space-y-6">
+
+            {/* Off-screen while it renders. Positioned rather than hidden,
+                because html2canvas cannot measure display:none. */}
+            {invoiceFor && (
+                <div style={{ position: 'fixed', left: -10000, top: 0, width: 820, zIndex: -1 }} aria-hidden>
+                    <ScopeAdditionInvoiceDoc
+                        addition={invoiceFor}
+                        projectContext={projectContext}
+                        orgData={orgData as any}
+                        invoiceNo={`INV/SA/${String(projectId).slice(0, 6).toUpperCase()}/${invoiceFor.id}`}
+                    />
                 </div>
-            </div>
+            )}
+            
+            {/*
+              The header was two buttons floated right. It is now the reading an
+              owner needs before deciding anything: how far the job has drifted
+              from what was signed, whether the extra work is priced as well as
+              the original, and whether it is priced off rates that have moved.
+            */}
+            <ScopeAdditionsHeader
+                summary={scopeSummary}
+                contractedExGst={contractedExGst}
+                baseMarginPct={baseMarginPct}
+                onNew={() => setIsFormOpen(!isFormOpen)}
+                onExport={additions.length > 0 ? generateLifetimeLedger : undefined}
+            />
 
             {/* Configured Builder Form Panel */}
             {isFormOpen && (
                 <div className="bg-white border border-slate-300 rounded-2xl p-6 shadow-md space-y-6 transition duration-200">
                     <div className="flex justify-between items-center pb-4 border-b border-slate-100">
                         <div>
-                            <span className="text-[10px] font-bold text-[#3D52A0] tracking-wider uppercase">Active Draft Phase</span>
-                            <h3 className="font-bold text-slate-900 text-lg">Formulate Contract Modification</h3>
+                            <span className="text-[10px] font-bold text-[#3D52A0] tracking-wider uppercase">New addition</span>
+                            <h3 className="font-bold text-slate-900 text-lg">What has the client asked for?</h3>
                         </div>
                         <button 
-                            onClick={() => { setIsFormOpen(false); setClassification(null); setGeneratedBoq(null); }}
+                            onClick={() => { setIsFormOpen(false); setClassification(null); setDraftItems([]); setAddSource(null); }}
                             className="text-slate-400 hover:text-slate-600 text-xs font-bold"
                         >
-                            Cancel Formulation
+                            Cancel
                         </button>
                     </div>
 
                     {!classification && (
-                        <div className="space-y-4">
+                        <div className="space-y-5">
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Original Client Request Scope</label>
-                                <textarea 
-                                    className="w-full border border-slate-200 p-4 rounded-xl text-sm bg-slate-50 focus:bg-white transition-colors min-h-[100px] shadow-inner focus:outline-sky-500" 
-                                    placeholder="e.g. Add 3 extra electrical power plug points in kitchen, provide custom partition wall in master bed, and install premium quartz counter instead of granite..." 
-                                    value={clientRequest} 
-                                    onChange={e => setClientRequest(e.target.value)} 
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-[0.12em] mb-2">
+                                    In their words
+                                </label>
+                                <textarea
+                                    className="w-full border border-slate-200 p-4 rounded-xl text-[13.5px] bg-slate-50 focus:bg-white transition-colors min-h-[90px] focus:outline-[#3D52A0]"
+                                    placeholder="e.g. Add a shoe rack in the foyer, and swap the kitchen counter to quartz"
+                                    value={clientRequest}
+                                    onChange={e => setClientRequest(e.target.value)}
                                 />
                             </div>
-                            
-                            <div className="flex gap-2.5">
-                                <button 
-                                    disabled={isAnalyzing || !clientRequest.trim()}
-                                    onClick={handleAnalyzeRequest}
-                                    className="bg-[#3D52A0] font-bold text-xs text-white px-5 py-3 rounded-xl disabled:opacity-50 hover:bg-[#334486] transition duration-150 flex items-center justify-center gap-2 shadow-sm"
-                                >
-                                    {isAnalyzing ? (
-                                        <>
-                                            <span className="w-4 h-4 border-2 border-white/35 border-t-white rounded-full animate-spin" />
-                                            Analyzing via Gemini Agent...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Sparkles className="w-4 h-4 text-amber-200 animate-pulse" />
-                                            Analyze with Gemini AI Heuristics
-                                        </>
-                                    )}
-                                </button>
-                                <button 
-                                    onClick={handleSkipAI}
-                                    className="bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 font-bold text-xs px-5 py-3 rounded-xl transition duration-150"
-                                >
-                                    Log Manually (Direct Standard Estimate)
-                                </button>
+
+                            {/*
+                              Pick the kind of change. The fee rule for each is
+                              on the card, so the design fee is never a number
+                              that appears from nowhere.
+                            */}
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-[0.12em] mb-2">
+                                    What kind of change is it?
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    {(['TYPE_A', 'TYPE_B', 'TYPE_C'] as const).map(t => {
+                                        const meta = TYPE_META[t];
+                                        return (
+                                            <button
+                                                key={t}
+                                                type="button"
+                                                disabled={!clientRequest.trim()}
+                                                onClick={() => chooseType(t)}
+                                                className="text-left p-4 rounded-xl border border-slate-200 bg-white hover:border-[#3D52A0] hover:bg-[#3D52A0]/[0.03] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                            >
+                                                <span className="block text-[13.5px] font-bold text-slate-800">{meta.label}</span>
+                                                <span className="block text-[11.5px] text-slate-500 mt-1 leading-snug">{meta.blurb}</span>
+                                                <span className="block text-[11px] font-semibold mt-2 text-[#3D52A0]">{meta.fee}</span>
+                                                {meta.drawings.length > 0 && (
+                                                    <span className="block text-[10.5px] text-slate-400 mt-1">
+                                                        {meta.drawings.length} drawing {meta.drawings.length === 1 ? 'task' : 'tasks'} queued on release
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {!clientRequest.trim() && (
+                                    <p className="mt-2 text-[11.5px] text-slate-400">
+                                        Write down what the client asked for first — it goes on the invoice.
+                                    </p>
+                                )}
                             </div>
                         </div>
                     )}
@@ -990,12 +968,13 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-slate-800 text-sm">
-                                            {classification.type === 'TYPE_A' ? 'Material Update (Type A — Non-structural alteration)' :
-                                             classification.type === 'TYPE_B' ? 'Minor Scope Increment (Type B — Checklist gate addition)' :
-                                             classification.type === 'TYPE_C' ? 'Major New Area Scope (Type C — Structural draft addition)' : 
-                                             'Complex Space Redesign (Type D)'}
+                                            {/* The same words the picker used. It read
+                                                "Major New Area Scope (Type C — Structural
+                                                draft addition)" — a label from a taxonomy
+                                                the person choosing never saw. */}
+                                            {TYPE_META[classification.type]?.label || 'Alteration'}
                                         </h4>
-                                        <p className="text-slate-600 text-xs mt-1 leading-relaxed">{classification.reasoning}</p>
+                                        <p className="text-slate-600 text-xs mt-1 leading-relaxed">{classification.reasoning}{TYPE_META[classification.type]?.fee ? ` · ${TYPE_META[classification.type].fee}` : null}</p>
                                         {classification.newDrawingsRequired?.length > 0 && (
                                             <div className="mt-2 text-[10px] font-bold text-[#334486] bg-sky-50 inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-sky-100">
                                                 <Info className="w-3 h-3" /> Creates {classification.newDrawingsRequired.length} working drawing tasks: {classification.newDrawingsRequired.join(', ')}
@@ -1003,10 +982,16 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                         )}
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">AI Match Confidence</span>
-                                    <span className="font-mono text-sm font-bold text-slate-700 bg-white border px-2.5 py-1 rounded-lg">{(classification.confidence * 100).toFixed(0)}% Match</span>
-                                </div>
+                                {/* "AI Match Confidence 95%" stood here, printed from a
+                                    hardcoded 0.95. The type is chosen now, so the only
+                                    honest thing to offer is a way to change it. */}
+                                <button
+                                    type="button"
+                                    onClick={() => setClassification(null)}
+                                    className="shrink-0 text-[11.5px] font-bold text-[#3D52A0] hover:underline cursor-pointer"
+                                >
+                                    Change type
+                                </button>
                             </div>
 
                             {/* Portfolio margin warning preview */}
@@ -1019,7 +1004,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                             <div className="flex items-baseline gap-2 mt-0.5">
                                                 <span className="text-slate-400 text-xs">Current Blended: {marginAnalytics.blendedMarginPct?.toFixed(1)}%</span>
                                                 <span className="text-slate-600">→</span>
-                                                <span className={`font-bold font-mono text-lg ${ (((marginAnalytics.totalFirmMargin || 0) + calcs.marginTotal) / ((marginAnalytics.totalFirmBase || 0) + calcs.subTotal + (marginAnalytics.totalFirmMargin || 0) + calcs.marginTotal) * 100) < feeFloors.marginDefault ? 'text-amber-400 animate-pulse' : 'text-emerald-400' }`}>
+                                                <span className={`font-bold text-lg ${ (((marginAnalytics.totalFirmMargin || 0) + calcs.marginTotal) / ((marginAnalytics.totalFirmBase || 0) + calcs.subTotal + (marginAnalytics.totalFirmMargin || 0) + calcs.marginTotal) * 100) < feeFloors.marginDefault ? 'text-amber-400 animate-pulse' : 'text-emerald-400' }`}>
                                                     { (((marginAnalytics.totalFirmMargin || 0) + calcs.marginTotal) / ((marginAnalytics.totalFirmBase || 0) + calcs.subTotal + (marginAnalytics.totalFirmMargin || 0) + calcs.marginTotal) * 100).toFixed(1) }% Blended Post-Alteration
                                                 </span>
                                             </div>
@@ -1035,58 +1020,224 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
 
                             {/* Interactive Editable Draft Mini-BOQ Table */}
                             <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                                         Itemized Scope Breakdown <span className="text-xs font-normal text-slate-500">(Double check quantities and spec origins)</span>
-                                    </h4>
-                                    
-                                    {/* Active rate dropdown loader */}
-                                    <div className="relative">
-                                        <button 
-                                            onClick={() => setIsLibraryDropdownOpen(!isLibraryDropdownOpen)}
-                                            className="bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[#334486] font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition"
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <h4 className="font-bold text-slate-900 text-[14px]">What the work involves</h4>
+
+                                    {/*
+                                      Four ways in, and the order is the order of
+                                      preference. A rate-bank line carries its
+                                      bankId forward, which is the only thing that
+                                      makes its rate checkable for drift later. A
+                                      typed line can never be compared against
+                                      today's rates -- which is exactly why the
+                                      drift panel on this project currently reads
+                                      "not measurable".
+                                    */}
+                                    <div className="flex flex-wrap gap-2">
+                                        {([
+                                            { k: 'bank', label: 'Rate bank' },
+                                            { k: 'boq', label: 'From this BOQ' },
+                                            { k: 'prev', label: 'Reuse an addition' },
+                                        ] as const).map(src => (
+                                            <button
+                                                key={src.k}
+                                                type="button"
+                                                onClick={() => setAddSource(addSource === src.k ? null : src.k)}
+                                                disabled={src.k === 'boq' ? fullBoq.length === 0 : src.k === 'prev' ? additions.length === 0 : false}
+                                                className={`px-3 py-1.5 rounded-lg text-[11.5px] font-bold border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                                                    addSource === src.k
+                                                        ? 'bg-[#3D52A0] text-white border-[#3D52A0]'
+                                                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                {src.label}
+                                            </button>
+                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={addBlankLine}
+                                            className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 transition-colors cursor-pointer"
                                         >
-                                            <Search className="w-3.5 h-3.5" /> Log item from Rate Library
+                                            Blank line
                                         </button>
-                                        
-                                        {isLibraryDropdownOpen && (
-                                            <div className="absolute right-0 mt-2 w-96 bg-white border border-slate-300 rounded-xl shadow-xl z-30 p-3 space-y-2 max-h-80 overflow-y-auto">
-                                                <div className="flex items-center border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50">
-                                                    <Search className="w-3.5 h-3.5 text-slate-400 mr-2" />
-                                                    <input 
-                                                        className="bg-transparent text-xs outline-none w-full"
-                                                        placeholder="Type keywords (e.g. partition, ceiling, laminate)..."
-                                                        value={searchQuery}
-                                                        onChange={e => setSearchQuery(e.target.value)}
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <span className="text-[10px] font-bold text-slate-400 block mb-1">Standard Item Matches</span>
-                                                    {filteredLibraryItems.length === 0 ? (
-                                                        <p className="text-[11px] text-slate-500 text-center py-2">No matching rates in active catalog.</p>
-                                                    ) : (
-                                                        filteredLibraryItems.map(item => {
-                                                            const total = item.materials + item.labor;
-                                                            return (
-                                                                <button 
-                                                                    key={item.id} 
-                                                                    onClick={() => handleAddLibraryItem(item)}
-                                                                    className="w-full text-left p-2 hover:bg-slate-50 rounded-lg flex justify-between items-center border border-transparent hover:border-slate-100 transition"
-                                                                >
-                                                                    <div className="truncate pr-4">
-                                                                        <div className="text-[11px] font-bold text-slate-800 truncate">{item.name}</div>
-                                                                        <span className="text-[9px] text-slate-400 uppercase tracking-tight">{item.cat || 'General'} • {item.unit}</span>
-                                                                    </div>
-                                                                    <span className="text-xs font-bold text-slate-700 font-mono flex-shrink-0">{formatINR(total)}</span>
-                                                                </button>
-                                                            );
-                                                        })
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
+
+                                {/* ── whichever source is open ──────────────────────── */}
+                                {addSource === 'bank' && (
+                                    <div className="border border-slate-200 rounded-xl bg-white p-3">
+                                        <div className="flex items-center border border-slate-200 rounded-lg px-2.5 py-2 bg-slate-50">
+                                            <Search className="w-3.5 h-3.5 text-slate-400 mr-2 shrink-0" />
+                                            <input
+                                                autoFocus
+                                                className="bg-transparent text-[12.5px] outline-none w-full"
+                                                placeholder="Search the rate bank"
+                                                value={searchQuery}
+                                                onChange={e => setSearchQuery(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="mt-2 max-h-56 overflow-y-auto divide-y divide-slate-50">
+                                            {filteredLibraryItems.length === 0 ? (
+                                                <p className="text-[12px] text-slate-400 text-center py-4">
+                                                    Nothing in the bank matches that.
+                                                </p>
+                                            ) : filteredLibraryItems.map(item => (
+                                                <button
+                                                    key={item.id}
+                                                    onClick={() => addFromBank(item)}
+                                                    className="w-full text-left py-2 px-1 hover:bg-slate-50 rounded flex justify-between items-center gap-3 cursor-pointer"
+                                                >
+                                                    <span className="min-w-0">
+                                                        <span className="block text-[12.5px] font-semibold text-slate-800 truncate">{item.name}</span>
+                                                        <span className="block text-[10.5px] text-slate-400">{item.cat || 'General'} · per {item.unit}</span>
+                                                    </span>
+                                                    <span className="text-[12.5px] font-bold tabular-nums text-slate-700 shrink-0">
+                                                        {formatINR((item.materials || 0) + (item.labor || 0))}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {addSource === 'boq' && (
+                                    <div className="border border-slate-200 rounded-xl bg-white p-3">
+                                        <p className="text-[11.5px] text-slate-500 mb-2">
+                                            Most additions are more of something already priced. Pick the line, then take the
+                                            rate it was frozen at or what it costs today.
+                                        </p>
+                                        <div className="flex items-center border border-slate-200 rounded-lg px-2.5 py-2 bg-slate-50">
+                                            <Search className="w-3.5 h-3.5 text-slate-400 mr-2 shrink-0" />
+                                            <input
+                                                autoFocus
+                                                className="bg-transparent text-[12.5px] outline-none w-full"
+                                                placeholder="Search this project's BOQ"
+                                                value={boqQuery}
+                                                onChange={e => setBoqQuery(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="mt-2 max-h-56 overflow-y-auto divide-y divide-slate-50">
+                                            {fullBoq
+                                                .filter((l: any) => !boqQuery.trim() || (l.name || '').toLowerCase().includes(boqQuery.toLowerCase()))
+                                                .slice(0, 40)
+                                                .map((line: any, i: number) => {
+                                                    const frozen = (line.materials || 0) + (line.labor || 0);
+                                                    const match = bank.find(x => x.id === line.id || x.name === line.name);
+                                                    const current = match ? (match.materials || 0) + (match.labor || 0) : frozen;
+                                                    const moved = Math.abs(current - frozen) > 0.5;
+                                                    return (
+                                                        <div key={`${line.id}-${i}`} className="py-2 px-1 flex items-center justify-between gap-3">
+                                                            <span className="min-w-0">
+                                                                <span className="block text-[12.5px] font-semibold text-slate-800 truncate">{line.name}</span>
+                                                                <span className="block text-[10.5px] text-slate-400">
+                                                                    {line.roomId || line.cat || 'General'} · per {line.unit}
+                                                                </span>
+                                                            </span>
+                                                            <span className="flex items-center gap-1.5 shrink-0">
+                                                                <button
+                                                                    onClick={() => addFromBoq(line, false)}
+                                                                    className="px-2 py-1 rounded-md text-[11px] font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer tabular-nums"
+                                                                    title="The rate this line was frozen at"
+                                                                >
+                                                                    {formatINR(frozen)}
+                                                                </button>
+                                                                {moved && (
+                                                                    <button
+                                                                        onClick={() => addFromBoq(line, true)}
+                                                                        className="px-2 py-1 rounded-md text-[11px] font-bold border cursor-pointer tabular-nums"
+                                                                        style={{
+                                                                            color: current > frozen ? '#B45309' : '#0F766E',
+                                                                            borderColor: current > frozen ? '#F5D9AE' : '#BFE3D9',
+                                                                            background: current > frozen ? '#FEF6EC' : '#ECF7F4',
+                                                                        }}
+                                                                        title="What the rate bank says today"
+                                                                    >
+                                                                        {formatINR(current)} today
+                                                                    </button>
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {addSource === 'prev' && (
+                                    <div className="border border-slate-200 rounded-xl bg-white p-3">
+                                        <p className="text-[11.5px] text-slate-500 mb-2">
+                                            Copies the lines with quantities reset to one, so nothing carries over by accident.
+                                        </p>
+                                        <div className="divide-y divide-slate-50 max-h-56 overflow-y-auto">
+                                            {additions.map((add: any, i: number) => (
+                                                <button
+                                                    key={add.internalDocId || i}
+                                                    onClick={() => { addFromPrevious(add); setAddSource(null); }}
+                                                    className="w-full text-left py-2 px-1 hover:bg-slate-50 rounded flex justify-between items-center gap-3 cursor-pointer"
+                                                >
+                                                    <span className="min-w-0">
+                                                        <span className="block text-[12.5px] font-semibold text-slate-800">{add.id}</span>
+                                                        <span className="block text-[11px] text-slate-500 truncate">{add.clientRequest}</span>
+                                                    </span>
+                                                    <span className="text-[11px] text-slate-400 shrink-0">
+                                                        {(add.miniBoq || []).length} {(add.miniBoq || []).length === 1 ? 'line' : 'lines'}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/*
+                                  THE MARGIN GUARD.
+
+                                  Both additions already on this project were
+                                  priced below the contract they were added to
+                                  -- 20% and 25% against 25.6% -- and nobody saw
+                                  it until a report was built months later. The
+                                  comparison now happens while the price can
+                                  still be changed, against THIS job's own
+                                  margin rather than a number picked out of
+                                  the air.
+                                */}
+                                {draftItems.length > 0 && calcs.subTotal > 0 && (() => {
+                                    const pct = calcs.executionTotalBase > 0
+                                        ? (calcs.marginTotal / calcs.executionTotalBase) * 100
+                                        : 0;
+                                    const thin = baseMarginPct != null && pct < baseMarginPct;
+                                    const gap = baseMarginPct != null ? baseMarginPct - pct : 0;
+                                    return (
+                                        <div
+                                            className="rounded-xl border px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2"
+                                            style={{
+                                                borderColor: thin ? '#F2D0DC' : '#BFE3D9',
+                                                background: thin ? '#FFF8FA' : '#ECF7F4',
+                                            }}
+                                        >
+                                            <span className="text-[12px] text-slate-600">
+                                                This addition:{' '}
+                                                <strong className="font-bold tabular-nums" style={{ color: thin ? '#B4436A' : '#0F766E' }}>
+                                                    {pct.toFixed(1)}% margin
+                                                </strong>
+                                            </span>
+                                            {baseMarginPct != null && (
+                                                <span className="text-[12px] text-slate-600">
+                                                    This project:{' '}
+                                                    <strong className="font-bold tabular-nums text-slate-800">
+                                                        {baseMarginPct.toFixed(1)}%
+                                                    </strong>
+                                                </span>
+                                            )}
+                                            <span className="text-[11.5px] leading-snug" style={{ color: thin ? '#B4436A' : '#0F766E' }}>
+                                                {baseMarginPct == null
+                                                    ? 'No contract margin on record to compare against.'
+                                                    : thin
+                                                        ? `Priced ${gap.toFixed(1)} points under the job it is being added to — about ${formatINR((gap / 100) * calcs.executionTotalBase)} of margin.`
+                                                        : 'At or above the contract margin.'}
+                                            </span>
+                                        </div>
+                                    );
+                                })()}
 
                                 <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm overflow-x-auto text-[13px]">
                                     <table className="w-full text-left border-collapse min-w-[800px]">
@@ -1125,7 +1276,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                     <td className="py-2 px-4">
                                                         <input 
                                                             type="number" 
-                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#3D52A0] rounded px-2 py-1 text-xs outline-none bg-transparent text-center font-mono font-bold"
+                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#3D52A0] rounded px-2 py-1 text-xs outline-none bg-transparent text-center font-bold"
                                                             value={item.qty}
                                                             onChange={e => updateDraftItem(index, { qty: Math.max(1, Number(e.target.value) || 1) })}
                                                         />
@@ -1148,7 +1299,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                     <td className="py-2 px-4">
                                                         <input 
                                                             type="number" 
-                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#3D52A0] rounded px-2 py-1 text-xs outline-none bg-transparent font-mono text-slate-800"
+                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#3D52A0] rounded px-2 py-1 text-xs outline-none bg-transparent text-slate-800"
                                                             value={item.estimatedUnitRate}
                                                             onChange={e => updateDraftItem(index, { estimatedUnitRate: Math.max(0, Number(e.target.value) || 0) })}
                                                         />
@@ -1156,12 +1307,12 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                     <td className="py-2 px-4">
                                                         <input 
                                                             type="number" 
-                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#3D52A0] rounded px-2 py-1 text-xs outline-none bg-transparent text-center font-mono"
+                                                            className="w-full border border-slate-200/80 hover:border-slate-300 focus:border-[#3D52A0] rounded px-2 py-1 text-xs outline-none bg-transparent text-center"
                                                             value={item.marginOverride !== undefined ? item.marginOverride : 20}
                                                             onChange={e => updateDraftItem(index, { marginOverride: Math.max(0, Number(e.target.value) || 0) })}
                                                         />
                                                     </td>
-                                                    <td className="py-2 px-4 font-mono font-bold text-slate-800">
+                                                    <td className="py-2 px-4 font-bold text-slate-800">
                                                         {formatINR(item.baseCost)}
                                                     </td>
                                                     <td className="py-2 px-4">
@@ -1172,7 +1323,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                         )}
                                                         {item.source === 'ai' && (
                                                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#334486] bg-sky-50 px-2 py-0.5 rounded border border-sky-100 animate-pulse">
-                                                                <Sparkles className="w-3 h-3" /> ⚡ AI Estimate Link
+                                                                <Sparkles className="w-3 h-3" /> Estimated
                                                             </span>
                                                         )}
                                                         {item.source === 'custom' && (
@@ -1211,7 +1362,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                 {/* Section A: Design Fee Configurer */}
                                 <div className="space-y-4 border border-slate-100 bg-slate-50/50 p-4 rounded-xl">
                                     <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider pb-2 border-b border-slate-200">
-                                        Section A: Associated Architectural Design Fee
+                                        Design fee
                                     </h5>
                                     
                                     <div className="space-y-3 text-xs">
@@ -1233,7 +1384,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                                 <label className="block text-slate-500 mb-1 font-medium">Manual Fixed Fee Amount (₹)</label>
                                                 <input 
                                                     type="number" 
-                                                    className="w-full border border-slate-200 p-2 rounded-lg bg-white font-mono font-bold"
+                                                    className="w-full border border-slate-200 p-2 rounded-lg bg-white font-bold"
                                                     value={draftCustomDesignFee}
                                                     onChange={e => setDraftCustomDesignFee(Math.max(0, Number(e.target.value) || 0))}
                                                 />
@@ -1253,29 +1404,29 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                 {/* Section B: Costing Analytics Preview card */}
                                 <div className="lg:col-span-2 space-y-4 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white p-5 rounded-xl border border-sky-900 shadow-sm self-start">
                                     <h5 className="text-xs font-bold text-sky-200 uppercase tracking-wider pb-2 border-b border-sky-900">
-                                        Contract Invoice Financial Analytics
+                                        What the client will be invoiced
                                     </h5>
                                     
                                     <div className="grid grid-cols-2 gap-4 text-xs font-medium text-sky-200/80">
                                         <div>
-                                            <span>Section A: Design Fee</span>
+                                            <span>Design fee</span>
                                             <div className="text-white font-bold text-sm mt-0.5">{formatINR(calcs.designFeeBase)}</div>
-                                            <span className="text-[10px] text-sky-400 font-mono">+ 18% GST: {formatINR(calcs.designFeeGst)}</span>
+                                            <span className="text-[10px] text-sky-400">+ 18% GST: {formatINR(calcs.designFeeGst)}</span>
                                         </div>
                                         <div>
-                                            <span>Section B: Execution Base</span>
+                                            <span>Extra site work</span>
                                             <div className="text-white font-bold text-sm mt-0.5">{formatINR(calcs.executionTotalBase)}</div>
-                                            <span className="text-[10px] text-sky-400 font-mono">+ 18% GST: {formatINR(calcs.executionGst)}</span>
+                                            <span className="text-[10px] text-sky-400">+ 18% GST: {formatINR(calcs.executionGst)}</span>
                                         </div>
                                     </div>
 
                                     <div className="pt-4 border-t border-sky-900 flex justify-between items-end">
                                         <div>
-                                            <span className="text-xs text-sky-400 font-bold block">TOTAL COMMITTED PAYABLE</span>
-                                            <span className="text-xs text-[10px] text-sky-400">Section A + Section B + GST</span>
+                                            <span className="text-xs text-sky-400 font-bold block">Invoice total</span>
+                                            <span className="text-xs text-[10px] text-sky-400">design fee + site work + GST</span>
                                         </div>
                                         <div className="text-right">
-                                            <span className="text-xl font-extrabold text-white font-mono">{formatINR(calcs.grandTotal)}</span>
+                                            <span className="text-xl font-extrabold text-white">{formatINR(calcs.grandTotal)}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1284,10 +1435,10 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                             {/* Control action buttons */}
                             <div className="pt-4 border-t border-slate-100 flex justify-end gap-3 text-xs">
                                 <button 
-                                    onClick={() => { setClassification(null); setGeneratedBoq(null); }}
+                                    onClick={() => { setClassification(null); }}
                                     className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-50 rounded-lg transition"
                                 >
-                                    Restart AI Analysis
+                                    Start over
                                 </button>
                                 <button 
                                     disabled={isCreating}
@@ -1297,11 +1448,11 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                                     {isCreating ? (
                                         <>
                                             <span className="w-4 h-4 border-2 border-white/35 border-t-white rounded-full animate-spin" />
-                                            Saving Invoice...
+                                            Raising…
                                         </>
                                     ) : (
                                         <>
-                                            <CheckCircle2 className="w-4 h-4" /> Finalize & Save Bundled Invoice
+                                            <CheckCircle2 className="w-4 h-4" /> Raise supplementary invoice
                                         </>
                                     )}
                                 </button>
@@ -1313,157 +1464,237 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                 </div>
             )}
 
-            {/* Historical list details cards */}
+            {/*
+              ONE ADDITION, ACROSS THE WIDTH.
+
+              The card was a vertical stack inside a max-w-6xl column, so on any
+              real screen a third of the page was empty while the money sat in a
+              narrow ribbon down the middle. The two payable halves and the
+              status now sit side by side, which is also how they are decided:
+              you look at what the design fee is, what the site work is, and what
+              is still owed, in one glance rather than three scrolls.
+
+              Nothing here wears `font-mono`. index.html exempts that class from
+              the studio's own font setting, so every figure on this card was
+              quietly ignoring the typeface the studio had chosen.
+            */}
             <div className="space-y-4">
-                {additions.map((add, idx) => (
-                    <div key={add.internalDocId || idx} className={`bg-white border rounded-xl overflow-hidden shadow-sm transition ${add.paymentGate?.workAuthorized ? 'border-emerald-200' : 'border-amber-200'}`}>
-                        
-                        {/* Summary bar */}
-                        <div className={`p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-inherit ${add.paymentGate?.workAuthorized ? 'bg-emerald-50/30' : 'bg-amber-50/30'}`}>
-                            <div className="flex items-start gap-3">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center border shrink-0 ${add.paymentGate?.workAuthorized ? 'bg-emerald-100 border-emerald-200 text-emerald-700' : 'bg-amber-100 border-amber-200 text-amber-700'}`}>
-                                    {add.paymentGate?.workAuthorized ? <CheckCircle2 className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+                {additions.map((add, idx) => {
+                    const authorised = !!add.paymentGate?.workAuthorized;
+                    const designDue = add.type !== 'TYPE_A' && !add.paymentGate?.designFeePaid;
+                    const execDue = !add.paymentGate?.executionPaid;
+                    const createdOn = add.createdAt?.seconds
+                        ? new Date(add.createdAt.seconds * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                        : 'just now';
+
+                    return (
+                    <div
+                        key={add.internalDocId || idx}
+                        className={`relative bg-white border rounded-2xl overflow-hidden transition ${authorised ? 'border-emerald-200' : 'border-slate-200'}`}
+                    >
+                        <span
+                            aria-hidden
+                            className="absolute left-0 top-0 bottom-0 w-[3px]"
+                            style={{ background: authorised ? '#0F766E' : '#B45309' }}
+                        />
+
+                        {/* ── what was asked for, and what it costs ─────────── */}
+                        <div className="pl-6 pr-5 py-4 flex flex-col lg:flex-row lg:items-start justify-between gap-4 border-b border-slate-100">
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-[13px] font-bold tabular-nums text-slate-800">{add.id}</span>
+                                    <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-slate-100 text-slate-500 uppercase tracking-wider">
+                                        {add.type === 'TYPE_A' ? 'Finish change' : add.type === 'TYPE_C' ? 'New scope' : 'Alteration'}
+                                    </span>
+                                    <span className="text-[11px] text-slate-400">raised {createdOn}</span>
+                                    <span
+                                        className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider border ${
+                                            authorised
+                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                                        }`}
+                                    >
+                                        {authorised ? 'Authorised' : 'Awaiting client'}
+                                    </span>
                                 </div>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-bold text-slate-800 text-sm font-mono">{add.id}</span>
-                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white border border-slate-200 text-slate-600 uppercase tracking-tight">{add.type}</span>
-                                        <span className="text-[10px] text-slate-400">Created: {add.createdAt ? new Date(add.createdAt.seconds * 1000).toLocaleDateString() : 'Just now'}</span>
-                                    </div>
-                                    <p className="text-sm font-medium text-slate-700 mt-1">{add.clientRequest}</p>
-                                    {add.aiReasoning && (
-                                        <p className="text-slate-500 text-[11px] mt-0.5 italic">Rationale: {add.aiReasoning}</p>
-                                    )}
-                                </div>
+                                <p className="text-[13.5px] text-slate-700 mt-1.5 leading-snug">{add.clientRequest}</p>
+                                {add.aiReasoning && (
+                                    <p className="text-slate-400 text-[11px] mt-1">{add.aiReasoning}</p>
+                                )}
                             </div>
-                            <div className="flex sm:flex-col items-baseline sm:items-end justify-between sm:justify-start w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-0 border-slate-100">
-                                <span className="text-xs text-slate-400">Grand Total Invoice</span>
-                                <span className="text-lg font-extrabold text-slate-800 font-mono">{formatINR(add.grandTotal)}</span>
+
+                            <div className="shrink-0 lg:text-right">
+                                <span className="block text-[11px] text-slate-400">Invoice total</span>
+                                <span className="block text-[20px] font-bold tabular-nums text-slate-900 leading-tight">
+                                    {formatINR(add.grandTotal)}
+                                </span>
                             </div>
                         </div>
 
-                        {/* Financial segments splitting */}
-                        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
-                            
-                            {/* Section A: Design components info */}
-                            <div className="border border-sky-100 bg-sky-50/20 rounded-lg p-3">
-                                <div className="flex justify-between items-center border-b border-sky-100 pb-2 mb-2">
-                                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-sky-800">Section A: Architectural Design Fee</h4>
-                                    <span className="text-[10px] font-semibold text-[#3D52A0] bg-white border border-sky-100 px-1.5 py-0.5 rounded">Tax 18% GST</span>
+                        {/* ── the two payable halves and the status, side by side ── */}
+                        <div className="pl-6 pr-5 py-4 grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+                            {/* Design fee */}
+                            <div>
+                                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                                    <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Design fee</h4>
+                                    <span className="text-[9.5px] text-slate-400">incl. 18% GST</span>
                                 </div>
-                                <div className="space-y-1.5 text-xs">
+                                {add.type === 'TYPE_A' ? (
+                                    <p className="text-[12px] text-slate-500 py-2">
+                                        Waived — a finish change needs no new drawings.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-1 text-[12px]">
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500">Fee</span>
+                                            <span className="tabular-nums text-slate-700">{formatINR(add.designFeeBase)}</span>
+                                        </div>
+                                        <div className="flex justify-between pb-1.5 border-b border-dashed border-slate-100">
+                                            <span className="text-slate-500">GST</span>
+                                            <span className="tabular-nums text-slate-700">{formatINR(add.designFeeGst)}</span>
+                                        </div>
+                                        <div className="flex justify-between pt-1">
+                                            <span className="font-bold text-slate-800">Payable</span>
+                                            <span className="font-bold tabular-nums text-[#3D52A0]">{formatINR(add.designFeeTotal)}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Site work */}
+                            <div>
+                                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                                    <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Extra site work</h4>
+                                    <span className="text-[9.5px] text-slate-400">incl. 18% GST</span>
+                                </div>
+                                <div className="space-y-1 text-[12px]">
                                     <div className="flex justify-between">
-                                        <span className="text-slate-500">Net Fee Base Estimate</span>
-                                        <span className="font-medium text-slate-800">{formatINR(add.designFeeBase)}</span>
+                                        <span className="text-slate-500">Cost</span>
+                                        <span className="tabular-nums text-slate-700">{formatINR(add.executionValue)}</span>
                                     </div>
-                                    <div className="flex justify-between pb-1.5 border-b border-dashed border-sky-100">
-                                        <span className="text-slate-500">Design CGST + SGST (18%)</span>
-                                        <span className="font-medium text-slate-800">{formatINR(add.designFeeGst)}</span>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Margin</span>
+                                        <span className="tabular-nums text-slate-700">{formatINR(add.executionMargin)}</span>
                                     </div>
-                                    <div className="flex justify-between font-bold text-sm text-slate-900 pt-1">
-                                        <span>Total Design Payable</span>
-                                        <span className="font-mono text-[#334486]">{formatINR(add.designFeeTotal)}</span>
+                                    <div className="flex justify-between pb-1.5 border-b border-dashed border-slate-100">
+                                        <span className="text-slate-500">GST</span>
+                                        <span className="tabular-nums text-slate-700">{formatINR(add.executionGst)}</span>
                                     </div>
+                                    <div className="flex justify-between pt-1">
+                                        <span className="font-bold text-slate-800">Payable</span>
+                                        <span className="font-bold tabular-nums text-[#3D52A0]">{formatINR(add.executionTotal)}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Where it stands, and what releases it */}
+                            <div>
+                                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                                    <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Where it stands</h4>
                                 </div>
 
-                                <div className="mt-4 flex items-center justify-between">
-                                    {add.type === 'TYPE_A' ? (
-                                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-md w-full text-center">Waived (No structural layout change)</span>
-                                    ) : add.paymentGate?.designFeePaid ? (
-                                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-md w-full text-center border border-emerald-100 flex items-center justify-center gap-1">
-                                             ✓ Design Payment Recorded Office
-                                        </span>
-                                    ) : (
-                                        <button 
+                                {/*
+                                  Three steps, because that is exactly what the
+                                  record holds: this app authorises work only when
+                                  both halves are settled, so the gate is not a
+                                  separate decision somebody makes.
+                                */}
+                                <div className="space-y-1.5">
+                                    {[
+                                        { label: 'Invoice sent to client', done: true },
+                                        {
+                                            label: add.type === 'TYPE_A' ? 'Design fee waived' : 'Design fee received',
+                                            done: add.type === 'TYPE_A' || !!add.paymentGate?.designFeePaid,
+                                        },
+                                        { label: 'Site work received', done: !!add.paymentGate?.executionPaid },
+                                        { label: 'Work released to site', done: authorised },
+                                    ].map((step) => (
+                                        <div key={step.label} className="flex items-center gap-2">
+                                            <span
+                                                className={`w-3.5 h-3.5 rounded-full shrink-0 flex items-center justify-center border ${
+                                                    step.done
+                                                        ? 'bg-emerald-500 border-emerald-500'
+                                                        : 'bg-white border-slate-300'
+                                                }`}
+                                            >
+                                                {step.done && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3.5} />}
+                                            </span>
+                                            <span className={`text-[12px] ${step.done ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                {step.label}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-3 flex flex-col gap-2">
+                                    {designDue && (
+                                        <button
                                             onClick={() => handlePayment(add.internalDocId, 'design', add)}
-                                            className="w-full bg-[#3D52A0] hover:bg-[#334486] font-bold text-xs text-white py-1.5 rounded transition shadow-sm"
+                                            className="w-full bg-[#3D52A0] hover:bg-[#334486] font-bold text-[11.5px] text-white py-2 rounded-lg transition cursor-pointer"
                                         >
-                                            Mark Section A Paid (Clearance)
+                                            Record design fee received
                                         </button>
                                     )}
-                                </div>
-                            </div>
-
-                            {/* Section B: Execution additions */}
-                            <div className="border border-blue-100 bg-blue-50/20 rounded-lg p-3">
-                                <div className="flex justify-between items-center border-b border-blue-100 pb-2 mb-2">
-                                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-blue-800">Section B: Extra Materials & Site labor</h4>
-                                    <span className="text-[10px] font-semibold text-blue-600 bg-white border border-blue-100 px-1.5 py-0.5 rounded">Tax 18% GST</span>
-                                </div>
-                                <div className="space-y-1.5 text-xs">
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-500">Subtotal</span>
-                                        <span className="font-medium text-slate-800">{formatINR(add.executionSubtotal)}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-500">Applied Margin Markups</span>
-                                        <span className="font-medium text-slate-850">{formatINR(add.executionMargin)}</span>
-                                    </div>
-                                    <div className="flex justify-between pb-1.5 border-b border-dashed border-blue-100">
-                                        <span className="text-slate-500">Execution GST (18%)</span>
-                                        <span className="font-medium text-slate-800">{formatINR(add.executionGst)}</span>
-                                    </div>
-                                    <div className="flex justify-between font-bold text-sm text-slate-900 pt-1">
-                                        <span>Total Execution Scope</span>
-                                        <span className="font-mono text-blue-700">{formatINR(add.executionTotal)}</span>
-                                    </div>
-                                </div>
-
-                                <div className="mt-4">
-                                    {add.paymentGate?.executionPaid ? (
-                                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-md w-full text-center border border-emerald-100 flex items-center justify-center gap-1">
-                                             ✓ Execution Payment Settled
-                                        </span>
-                                    ) : (
-                                        <button 
+                                    {execDue && (
+                                        <button
                                             onClick={() => handlePayment(add.internalDocId, 'execution', add)}
-                                            className="w-full bg-blue-600 hover:bg-blue-700 font-bold text-xs text-white py-1.5 rounded transition shadow-sm"
+                                            className="w-full bg-[#3D52A0] hover:bg-[#334486] font-bold text-[11.5px] text-white py-2 rounded-lg transition cursor-pointer"
                                         >
-                                            Mark Section B Paid (Cleared to execute)
+                                            Record site work received
                                         </button>
+                                    )}
+                                    {authorised && (
+                                        <p className="text-[11.5px] text-emerald-700 leading-snug">
+                                            Released{add.paymentGate.workAuthorizedAt?.seconds
+                                                ? ` on ${new Date(add.paymentGate.workAuthorizedAt.seconds * 1000).toLocaleDateString('en-IN')}`
+                                                : ''}
+                                            {add.newDrawingsRequired?.length > 0 && (
+                                                <> · {add.newDrawingsRequired.length} drawing {add.newDrawingsRequired.length === 1 ? 'task' : 'tasks'} queued</>
+                                            )}
+                                        </p>
                                     )}
                                 </div>
                             </div>
-
                         </div>
 
-                        {/* Detailed BOQ collapse display */}
+                        {/* ── the line items ────────────────────────────────── */}
                         {add.miniBoq && add.miniBoq.length > 0 && (
-                            <div className="px-4 pb-3 pt-1 border-t border-slate-100 bg-slate-50/30">
+                            <div className="pl-6 pr-5 pb-3 pt-1 border-t border-slate-100 bg-slate-50/40">
                                 <details className="group">
-                                    <summary className="text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer list-none flex items-center gap-1 py-1">
+                                    <summary className="text-[11.5px] font-semibold text-slate-500 hover:text-slate-800 cursor-pointer list-none flex items-center gap-1 py-1.5">
                                         <ChevronDown className="w-3.5 h-3.5 transform group-open:rotate-180 transition duration-150" />
-                                        View Line Items specifications & markup breakdown ({add.miniBoq.length} items logged)
+                                        {add.miniBoq.length} line {add.miniBoq.length === 1 ? 'item' : 'items'}
                                     </summary>
-                                    <div className="mt-2 text-xs border border-slate-100 rounded-lg bg-white overflow-hidden shadow-inner">
+                                    <div className="mt-2 text-[12px] border border-slate-200 rounded-xl bg-white overflow-hidden">
                                         <table className="w-full text-left">
                                             <thead>
-                                                <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-500 font-bold uppercase">
-                                                    <th className="py-2 px-3">Specification Name</th>
-                                                    <th className="py-2 px-3 w-32">Category</th>
+                                                <tr className="bg-slate-50 border-b border-slate-200 text-[9.5px] text-slate-400 font-bold uppercase tracking-wider">
+                                                    <th className="py-2 px-3">Item</th>
+                                                    <th className="py-2 px-3 w-36">Category</th>
                                                     <th className="py-2 px-3 w-16 text-center">Qty</th>
                                                     <th className="py-2 px-3 w-16">Unit</th>
-                                                    <th className="py-2 px-3 w-28">Est Rate</th>
+                                                    <th className="py-2 px-3 w-28 text-right">Rate</th>
                                                     <th className="py-2 px-3 w-20 text-center">Margin</th>
-                                                    <th className="py-2 px-3 w-28">Line Subtotal</th>
-                                                    <th className="py-2 px-3 w-28">Snapshot Source</th>
+                                                    <th className="py-2 px-3 w-28 text-right">Cost</th>
+                                                    <th className="py-2 px-3 w-28">Priced from</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-slate-100 font-medium">
+                                            <tbody className="divide-y divide-slate-100">
                                                 {add.miniBoq.map((item: any, i: number) => (
-                                                    <tr key={i} className="hover:bg-slate-50/50">
+                                                    <tr key={i} className="hover:bg-slate-50/60">
                                                         <td className="py-2 px-3 text-slate-800">{item.description}</td>
                                                         <td className="py-2 px-3 text-slate-500">{item.category}</td>
-                                                        <td className="py-2 px-3 text-center">{item.qty}</td>
+                                                        <td className="py-2 px-3 text-center tabular-nums">{item.qty}</td>
                                                         <td className="py-2 px-3 text-slate-500">{item.unit}</td>
-                                                        <td className="py-2 px-3">{formatINR(item.estimatedUnitRate)}</td>
-                                                        <td className="py-2 px-3 text-center">{item.marginOverride !== undefined ? item.marginOverride : 20}%</td>
-                                                        <td className="py-2 px-3 font-semibold text-slate-700">{formatINR(item.baseCost)}</td>
+                                                        <td className="py-2 px-3 text-right tabular-nums">{formatINR(item.estimatedUnitRate)}</td>
+                                                        <td className="py-2 px-3 text-center tabular-nums">{item.marginOverride !== undefined ? item.marginOverride : 20}%</td>
+                                                        <td className="py-2 px-3 text-right font-semibold tabular-nums text-slate-700">{formatINR(item.baseCost)}</td>
                                                         <td className="py-2 px-3">
-                                                            {item.source === 'library' && <span className="text-[9px] font-bold text-emerald-600">Rate Library</span>}
-                                                            {item.source === 'ai' && <span className="text-[9px] font-bold text-[#3D52A0]">AI Estimate</span>}
-                                                            {item.source === 'custom' && <span className="text-[9px] font-bold text-amber-600">Custom Manual</span>}
-                                                            {!item.source && <span className="text-[9px] font-bold text-slate-400">Archived Record</span>}
+                                                            {item.source === 'library' && <span className="text-[10px] font-bold text-emerald-600">Rate bank</span>}
+                                                            {item.source === 'ai' && <span className="text-[10px] font-bold text-[#3D52A0]">AI estimate</span>}
+                                                            {item.source === 'custom' && <span className="text-[10px] font-bold text-amber-600">Typed in</span>}
+                                                            {!item.source && <span className="text-[10px] font-bold text-slate-400">Archived</span>}
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -1474,49 +1705,31 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                             </div>
                         )}
 
-                        {/* Footer status blocks */}
-                        <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-150 text-[10px] text-slate-500 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        {/* ── provenance and the invoice ────────────────────── */}
+                        <div className="pl-6 pr-5 py-2.5 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-400 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                             <span>
-                                Rate Snapshot Sourced on: {add.rateSnapshotDate ? new Date(add.rateSnapshotDate.seconds * 1000).toLocaleString('en-IN') : 'Archive'}. Execution commences upon Section payment clearances.
+                                Priced at the rates of{' '}
+                                {add.rateSnapshotDate?.seconds
+                                    ? new Date(add.rateSnapshotDate.seconds * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                                    : 'an earlier date'}
+                                {add.miniBoq?.some((i: any) => i.bankId)
+                                    ? ' — rate-bank items are checked for drift in the summary above.'
+                                    : ' — typed-in items cannot be checked against the rate bank.'}
                             </span>
-                            <div className="flex gap-2">
-                                <button 
-                                    onClick={() => generateInvoicePDF(add)}
-                                    className="text-[#3D52A0] hover:text-[#334486] font-bold flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-md shadow-sm transition"
-                                >
-                                    <Printer className="w-3.5 h-3.5" /> Download Tax Invoice PDF
-                                </button>
-                            </div>
+                            <button
+                                onClick={() => generateInvoicePDF(add)}
+                                className="shrink-0 text-[#3D52A0] hover:text-[#334486] font-bold flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-md transition cursor-pointer"
+                            >
+                                <Printer className="w-3.5 h-3.5" /> Invoice PDF
+                            </button>
                         </div>
-
-                        {add.paymentGate?.workAuthorized && (
-                            <div className="px-4 py-2 bg-emerald-50 border-t border-emerald-100 text-xs font-semibold text-emerald-800 flex items-center justify-between">
-                                <span className="flex items-center gap-1">
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
-                                    ✓ Work Authorized on {add.paymentGate.workAuthorizedAt ? new Date(add.paymentGate.workAuthorizedAt.seconds * 1000).toLocaleDateString('en-IN') : 'Just now'}
-                                </span>
-                                {add.newDrawingsRequired?.length > 0 ? (
-                                    <span className="text-[10px] bg-emerald-100 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded-full">
-                                         Queued {add.newDrawingsRequired.length} Drawing task updates
-                                    </span>
-                                ) : (
-                                    <span className="text-[10px] text-slate-400 font-normal italic">No supplementary plans needed</span>
-                                )}
-                            </div>
-                        )}
-                        
                     </div>
-                ))}
+                    );
+                })}
 
-                {additions.length === 0 && (
-                    <LockedState 
-                        isEmptyState={true}
-                        title="No Post-Agreement Alterations Logged" 
-                        why="Draft a budget deviation using Gemini estimation or direct catalogue rates." 
-                        actionLabel="Log Proposed Alteration" 
-                        onAction={() => {}} 
-                    />
-                )}
+                {/* The header already says the contract is untouched and offers
+                    "New addition", so a second empty state under it was the same
+                    message twice with two buttons. */}
             </div>
 
         </div>

@@ -1,4 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef, useLayoutEffect } from 'react';
+import PortalScopeAdditions from './client/PortalScopeAdditions';
+import PortalFinishCard from './client/PortalFinishCard';
+import ScopeAdditionInvoiceDoc from './client/ScopeAdditionInvoiceDoc';
 import { 
     FullProjectData, 
     ProjectContext,
@@ -408,6 +411,40 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     // Modals & Lightbox State
     const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
     const [showContactModal, setShowContactModal] = useState(false);
+    /* Which supplementary invoice the client is looking at. The portal shows
+       them the document itself, because PortalPayments' own rule is that money
+       is owed against a document and not against a screen of numbers. */
+    const [invoiceRef, setInvoiceRef] = useState<string | null>(null);
+    /* The finish an "Ask" is about. A general contact box could not say which
+       one, so a question arrived -- when it arrived at all -- with no subject. */
+    const [askAbout, setAskAbout] = useState<any | null>(null);
+    const [askText, setAskText] = useState('');
+
+    /*
+      A finish-confirmation link points at one selection. App stores its token
+      before sign-in; this picks it up once the portal has the project, opens
+      Decisions and marks that card, so the client lands on the thing they were
+      sent rather than on a tab and a hunt.
+    */
+    const [focusSelectionId, setFocusSelectionId] = useState<string | null>(null);
+    useEffect(() => {
+        let token: string | null = null;
+        try { token = sessionStorage.getItem('ffds_focus_selection'); } catch { /* private mode */ }
+        if (!token) return;
+        const match = (materialSelections || []).find((m: any) => m.confirmationToken === token);
+        if (!match) return;
+        /* Cleared on arrival: a link is followed once, and a token left behind
+           would re-open Decisions every time they came back. */
+        try { sessionStorage.removeItem('ffds_focus_selection'); } catch { /* ignore */ }
+        setActiveTab('decisions');
+        setFocusSelectionId(match.id);
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                document.getElementById(`finish-${match.id}`)
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 350);
+        });
+    }, [materialSelections]);
     const [clientMessageText, setClientMessageText] = useState('');
     const [clientMessageSent, setClientMessageSent] = useState(false);
     const [selectedMilestoneForInvoice, setSelectedMilestoneForInvoice] = useState<PaymentMilestone | null>(null);
@@ -1525,7 +1562,14 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     }[] = [
         { id: 'overview',   label: 'Everything' },
         { id: 'timeline',   label: 'Timeline' },
-        { id: 'decisions',  label: 'Decisions',  dividerBefore: true, urgent: true, badge: () => pendingClientDecisions.length },
+        {
+          id: 'decisions', label: 'Decisions', dividerBefore: true, urgent: true,
+          /* Finishes live here now, so they count towards the badge -- otherwise
+             a client with three finishes waiting sees a quiet tab. */
+          badge: () => pendingClientDecisions.length + materialSelections.filter(
+            (m: any) => m.status !== 'confirmed' && m.status !== 'approved',
+          ).length,
+        },
         { id: 'documents',  label: 'Documents',  urgent: true, badge: () => documentsNeedingAttention },
         { id: 'financials', label: 'Payments',   urgent: true, badge: () => duePayments.length },
         /*
@@ -1701,6 +1745,27 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         setTimeout(() => setSignSuccessMessage(null), 6000);
     };
 
+    /*
+      A question about a finish, written onto that finish.
+
+      Local state moves first so the client sees their question land, and
+      persistClientAction carries the durable half -- refusing loudly if the
+      server will not take it, rather than leaving them believing it was sent.
+    */
+    const handleAskAboutSelection = (matId: string, question: string) => {
+        const now = new Date().toISOString();
+        const updated = materialSelections.map((m: any) =>
+            m.id === matId
+                /* Clearing the previous answer here too, so the optimistic view
+               matches what the server writes rather than leaving a stale reply
+               sitting under a brand new question. */
+            ? { ...m, status: 'change_requested', changeReason: question, changeRequestedAt: now, studioReply: null, studioReplyAt: null }
+                : m,
+        );
+        setProjectContext((prev: any) => ({ ...prev, materialSelections: updated }));
+        persistClientAction({ type: 'querySelection', selectionId: matId, question });
+    };
+
     const handleConfirmMaterialSelection = (matId: string) => {
         const updatedMaterials = materialSelections.map(m => {
             if (m.id === matId) {
@@ -1817,17 +1882,49 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         setTimeout(() => setSignSuccessMessage(null), 9000);
     };
 
+    /*
+      This cleared the textarea, closed the modal and popped an alert reading
+      "Your message has been dispatched directly to the Studio Project Manager!"
+      -- while writing nothing anywhere. Every message any client ever sent
+      through it was discarded, and they were told the opposite.
+
+      It now goes through the same action path as everything else the client
+      does, and lands in the project's client messages, which Client Comms
+      shows. A refusal is surfaced by persistClientAction rather than swallowed.
+    */
     const handleSendMessageToStudio = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!clientMessageText.trim()) return;
+        const text = clientMessageText.trim();
+        if (!text) return;
 
         setClientMessageSent(true);
+        setProjectContext((prev: any) => ({
+            ...prev,
+            clientMessages: [
+                ...(prev?.clientMessages || []),
+                {
+                    id: `cm-${Date.now()}`,
+                    text,
+                    sentAt: new Date().toISOString(),
+                    sentBy: projectData?.context?.clientName || 'Client',
+                    readAt: null,
+                    aboutKind: 'general',
+                },
+            ],
+        }));
+        persistClientAction({ type: 'sendMessage', text, aboutKind: 'general' });
+
         setTimeout(() => {
             setClientMessageText('');
             setClientMessageSent(false);
             setShowContactModal(false);
-            alert('Your message has been dispatched directly to the Studio Project Manager!');
-        }, 1200);
+            /* Honest confirmation, through the portal's own toast. The alert this
+               replaced claimed delivery for a message that was thrown away; this
+               one follows a write that persistClientAction will shout about if
+               it is refused. */
+            setSignSuccessMessage('Sent to your studio');
+            setTimeout(() => setSignSuccessMessage(null), 6000);
+        }, 900);
     };
 
     // The portal used to be withheld from the client until the D1 advance was
@@ -2062,27 +2159,18 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                       );
                     })}
 
-                    {SPINE_FILTERS.length > 0 && <span className="w-px h-4 bg-slate-200 self-center mx-1 shrink-0" />}
-                    {SPINE_FILTERS.map(f => {
-                      const on = activeTab === 'overview' && spineFilter === f.id;
-                      return (
-                        <button
-                          key={f.id}
-                          onClick={(e) => {
-                            setActiveTab('overview');
-                            setSpineFilter(on ? 'all' : f.id);
-                            (e.currentTarget as HTMLElement).scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-                          }}
-                          aria-pressed={on}
-                          className={`shrink-0 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-bold whitespace-nowrap transition-colors cursor-pointer border select-none ${
-                            on ? 'bg-sky-50 text-[#334486] border-sky-200' : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900'
-                          }`}
-                        >
-                          {f.label}
-                          {f.count > 0 && <span className={`ml-1 tabular-nums font-extrabold ${on ? 'text-[#3D52A0]' : 'text-slate-400'}`}>{f.count}</span>}
-                        </button>
-                      );
-                    })}
+                    {/*
+                      The "Materials" chip stood here.
+
+                      It was the last filter dressed as a tab -- the same thing
+                      the "Site feed" tab was removed for. It appeared and
+                      disappeared as the studio published finishes, so the bar
+                      changed shape under the client, and clicking it returned
+                      them to Everything with most of the spine greyed out.
+
+                      Finishes now live on Decisions, which is where a client
+                      goes to see what they have been asked to choose.
+                    */}
                   </div>
 
                   {/* Right scroll chevron indicator */}
@@ -3091,6 +3179,89 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 )}
 
                                 <DecisionsTable decisions={decisions} stageNumber={lifecycleInfo.currentStageNumber} />
+
+                                {/*
+                                  Finishes, on the tab where choices are made.
+
+                                  A material selection IS a decision the client
+                                  has been asked for, and an over-allowance one
+                                  becomes a cost variation against the project --
+                                  so it belongs beside the decisions, with the
+                                  same standard of evidence. PortalFinishCard
+                                  carries the photograph, the brand and code, the
+                                  price against its allowance and the lead time,
+                                  because the first version of this asked for a
+                                  confirmation while showing a name and a room.
+                                */}
+                                {materialSelections.length > 0 && (() => {
+                                    /* Waiting on THEM, not merely unfinished. A
+                                       selection the studio is still sourcing was
+                                       being counted as "to confirm", so the badge
+                                       asked the client for things nobody had sent
+                                       them. */
+                                    const AWAITING = ['sent_for_approval', 'pending_approval', 'change_requested'];
+                                    const DONE = ['approved', 'confirmed', 'locked', 'ordered'];
+                                    const pending = materialSelections.filter((m: any) => AWAITING.includes(String(m.status)));
+                                    const sourcing = materialSelections.filter((m: any) => !AWAITING.includes(String(m.status)) && !DONE.includes(String(m.status)));
+                                    const settled = materialSelections.filter((m: any) => DONE.includes(String(m.status)));
+                                    const extraOf = (m: any) => {
+                                        const qty = m.estimatedQty || 0;
+                                        const total = m.estimatedTotal ?? (m.quotedPrice != null && qty ? m.quotedPrice * qty : m.quotedPrice ?? null);
+                                        const allow = m.allowancePrice != null ? m.allowancePrice * (qty || 1) : null;
+                                        return total != null && allow != null && !m.boqAbsorbed ? Math.round(total - allow) : 0;
+                                    };
+                                    const addedCost = pending.reduce((sum: number, m: any) => sum + Math.max(0, extraOf(m)), 0);
+
+                                    return (
+                                        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+                                            <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <h3 className="font-bold text-slate-900 text-[15px] flex items-center gap-2">
+                                                        <Layers className="w-4 h-4 text-amber-600" />
+                                                        Finishes to choose
+                                                    </h3>
+                                                    <p className="text-[12px] text-slate-500 mt-0.5">
+                                                        Materials picked for your home. Confirming one releases it for ordering.
+                                                    </p>
+                                                </div>
+                                                {pending.length > 0 && (
+                                                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                                        {pending.length} to confirm
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {/* The money consequence of the whole
+                                                set, before any of it is agreed. */}
+                                            {addedCost > 0 && (
+                                                <div className="px-5 py-3 bg-amber-50/60 border-b border-amber-100">
+                                                    <p className="text-[12.5px] text-amber-900 leading-relaxed">
+                                                        Together, the finishes still to confirm come to{' '}
+                                                        <strong className="font-bold">₹{addedCost.toLocaleString('en-IN')}</strong> more
+                                                        than the allowances in your contract. Each card shows its own difference.
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            <div className="p-5 grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                                {[...pending, ...sourcing, ...settled].map((mat: any) => (
+                                                    <PortalFinishCard
+                                                        key={mat.id}
+                                                        selection={mat}
+                                                        highlight={focusSelectionId === mat.id}
+                                                        onBehalf={isInternalStudioView}
+                                                        onConfirm={(id) => {
+                                                            handleConfirmMaterialSelection(id);
+                                                            setSignSuccessMessage(`Finish confirmed: ${mat.itemName || 'selection'}`);
+                                                            setTimeout(() => setSignSuccessMessage(null), 6000);
+                                                        }}
+                                                        onAsk={() => { setAskAbout(mat); setAskText(''); }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </motion.div>
                         )}
 
@@ -4106,6 +4277,13 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                     }}
                                     onContactStudio={() => setActiveTab('overview')}
                                 />
+
+                                {/* Work added after the scope was agreed. Renders
+                                    nothing when the studio has published none. */}
+                                <PortalScopeAdditions
+                                    additions={(projectData as any)?.scopeAdditions}
+                                    onOpenInvoice={(ref) => setInvoiceRef(ref)}
+                                />
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -4128,6 +4306,185 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                             <h4 className="font-bold text-base">{lightboxImage.title}</h4>
                             {lightboxImage.subtitle && <p className="text-xs text-slate-400">{lightboxImage.subtitle}</p>}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/*
+              THE SUPPLEMENTARY INVOICE, IN THE PORTAL.
+
+              The same document the studio sends, rendered from the published
+              projection so the client reads the invoice rather than a total
+              somebody typed onto a screen. Downloading it produces the same
+              PDF the studio's own copy does.
+            */}
+            {invoiceRef && (() => {
+                const add = ((projectData as any)?.scopeAdditions || []).find((a: any) => a.ref === invoiceRef);
+                if (!add) return null;
+                /* The client reads the projection's own studio block; the ops
+                   preview has no projection, so it falls back to the live org
+                   profile. Same letterhead either way. */
+                const studio: any = (projectData?.context as any)?.portalStudio || {
+                    name: orgData?.orgName,
+                    address: orgData?.officeAddress,
+                    cityState: orgData?.cityState,
+                    gstin: orgData?.gstin,
+                    phone: orgData?.contactPhone,
+                    email: orgData?.contactEmail,
+                    legalName: orgData?.legalName,
+                    signatoryName: orgData?.signatoryName,
+                    signatoryTitle: orgData?.signatoryTitle,
+                    bankDetails: (orgData as any)?.bankDetails,
+                };
+                const forDoc = {
+                    id: add.ref,
+                    type: add.nature === 'Finish change' ? 'TYPE_A' : add.nature === 'New scope' ? 'TYPE_C' : 'TYPE_B',
+                    clientRequest: add.request,
+                    createdAt: add.issuedAt ? { seconds: Math.floor(new Date(add.issuedAt).getTime() / 1000) } : undefined,
+                    designFeeBase: add.designFeeBase || 0,
+                    designFeeGst: add.designFeeGst || 0,
+                    designFeeTotal: add.designFeeTotal || 0,
+                    executionValue: add.executionSubtotal || 0,
+                    executionSubtotal: add.executionSubtotal || 0,
+                    executionMargin: 0,
+                    executionGst: add.executionGst || 0,
+                    executionTotal: add.executionTotal || 0,
+                    grandTotal: add.grandTotal || 0,
+                    miniBoq: (add.lines || []).map((l: any) => ({
+                        description: l.description,
+                        qty: l.qty,
+                        unit: l.unit,
+                        baseCost: l.amount,
+                        estimatedUnitRate: l.qty ? Math.round(l.amount / l.qty) : 0,
+                    })),
+                };
+                const org: any = {
+                    orgName: studio.name || studioCompanyName,
+                    legalName: studio.legalName,
+                    tagline: undefined,
+                    officeAddress: studio.address,
+                    cityState: studio.cityState,
+                    gstin: studio.gstin,
+                    contactPhone: studio.phone,
+                    contactEmail: studio.email,
+                    signatoryName: studio.signatoryName,
+                    signatoryTitle: studio.signatoryTitle,
+                    bankDetails: studio.bankDetails,
+                };
+                const download = async () => {
+                    const element = document.getElementById('sa-invoice-sheet');
+                    if (!element) return;
+                    try {
+                        const mod: any = await import('html2pdf.js');
+                        const html2pdf = typeof mod === 'function' ? mod
+                            : typeof mod?.default === 'function' ? mod.default
+                            : mod?.default?.default;
+                        if (!html2pdf) throw new Error('html2pdf unavailable');
+                        await html2pdf().set({
+                            margin: [15, 0, 15, 0],
+                            filename: `Invoice_${add.ref}.pdf`,
+                            image: { type: 'jpeg' as const, quality: 1 },
+                            html2canvas: { scale: 2, useCORS: true, letterRendering: true, logging: false },
+                            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+                            pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.totals', '.paycols', '.sig', '.metabar'] },
+                        }).from(element).save();
+                    } catch (e) {
+                        console.error('Invoice download failed', e);
+                        alert('Could not download that invoice. Please ask your studio for a copy.');
+                    }
+                };
+                return (
+                    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-start justify-center p-4 overflow-y-auto">
+                        <div className="bg-white rounded-2xl max-w-4xl w-full my-8 shadow-2xl border border-slate-200 overflow-hidden">
+                            <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-200 sticky top-0 bg-white z-10">
+                                <h3 className="font-bold text-slate-900 text-[15px]">Supplementary invoice {add.ref}</h3>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={download}
+                                        className="px-3 py-2 rounded-lg bg-[#3D52A0] hover:bg-[#334486] text-white text-[12px] font-bold transition cursor-pointer"
+                                    >
+                                        Download PDF
+                                    </button>
+                                    <button
+                                        onClick={() => setInvoiceRef(null)}
+                                        className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="p-4 bg-slate-100 overflow-x-auto">
+                                <ScopeAdditionInvoiceDoc
+                                    addition={forDoc as any}
+                                    projectContext={projectData.context as any}
+                                    orgData={org}
+                                    invoiceNo={`INV/SA/${String(projectData.id).slice(0, 6).toUpperCase()}/${add.ref}`}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/*
+              ASK ABOUT ONE FINISH.
+
+              Its own box rather than the general contact modal, because the
+              question is about a specific material and the studio needs to know
+              which. It writes onto that selection, so it appears on the card the
+              studio already works from instead of in an inbox nobody reads.
+            */}
+            {askAbout && (
+                <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+                        <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                            <div className="min-w-0">
+                                <h3 className="font-bold text-slate-900 text-base">Ask about this finish</h3>
+                                <p className="text-[12px] text-slate-500 mt-0.5 truncate">
+                                    {askAbout.itemName}
+                                    {askAbout.roomId ? ` · ${askAbout.roomId}` : ''}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setAskAbout(null)}
+                                className="shrink-0 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                                What would you like to know?
+                            </label>
+                            <textarea
+                                autoFocus
+                                value={askText}
+                                onChange={(e) => setAskText(e.target.value)}
+                                placeholder="e.g. Could we see a sample first? Is there a lighter shade in the same range?"
+                                className="w-full border border-slate-200 rounded-xl p-3 text-[13px] min-h-[110px] focus:outline-[#3D52A0] bg-slate-50 focus:bg-white transition-colors"
+                            />
+                            <p className="mt-2 text-[11.5px] text-slate-500 leading-snug">
+                                This goes to your studio against this finish, and pauses it until they reply. It
+                                does not confirm anything.
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                const q = askText.trim();
+                                if (!q) return;
+                                handleAskAboutSelection(askAbout.id, q);
+                                setSignSuccessMessage(`Question sent about ${askAbout.itemName}`);
+                                setTimeout(() => setSignSuccessMessage(null), 6000);
+                                setAskAbout(null);
+                                setAskText('');
+                            }}
+                            disabled={!askText.trim()}
+                            className="w-full py-3 rounded-xl bg-[#3D52A0] hover:bg-[#334486] text-white font-bold text-[13px] transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            Send to the studio
+                        </button>
                     </div>
                 </div>
             )}

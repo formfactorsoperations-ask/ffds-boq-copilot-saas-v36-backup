@@ -553,6 +553,36 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
         setCrStatusFilter('All');
     };
 
+    /*
+      Answering a client's question on a finish.
+
+      A question from the portal set the selection to change_requested with the
+      client's words in changeReason. The card showed the status and nothing
+      else: not what they asked, and no way to answer -- so the finish stopped,
+      with no action on either side. This records the reply and puts the finish
+      back to the client for confirmation, which is the only thing that restarts
+      it.
+    */
+    const [replyingTo, setReplyingTo] = useState<string | null>(null);
+    const [replyText, setReplyText] = useState('');
+
+    const handleReplyAndReopen = (id: string, reply: string) => {
+        const now = new Date().toISOString();
+        setSelections(selections.map(s => s.id === id ? {
+            ...s,
+            status: 'sent_for_approval' as any,
+            studioReply: reply,
+            studioReplyAt: now,
+            /* No user identity is threaded into this component; the studio as
+               an entity is the honest attribution rather than a guessed name. */
+            studioReplyBy: orgData?.orgName || 'Studio',
+            /* The question stays on the record. Clearing it would lose what the
+               reply is answering. */
+        } : s));
+        setReplyingTo(null);
+        setReplyText('');
+    };
+
     const handleDirectApprove = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
         setSelections(selections.map(s => {
@@ -2221,6 +2251,85 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                                             </div>
                                                         )}
                                                     </div>
+
+                                                    {/*
+                                                      A question raised by the CLIENT, which carries no
+                                                      previousSelectionSnapshot -- that only exists when the
+                                                      studio swapped a material. The block below was gated on
+                                                      the snapshot, so a client's question rendered nothing at
+                                                      all and the card was a dead end.
+                                                    */}
+                                                    {/* Shown for as long as the exchange matters, not only while
+                                                        the status says change_requested -- replying moves it back to
+                                                        sent_for_approval, and gated on the status the studio lost
+                                                        sight of the question the moment they answered it. */}
+                                                    {selection.changeReason && !selection.previousSelectionSnapshot
+                                                      && !['locked', 'ordered'].includes(String(statusMigrated)) && (
+                                                        <div className="bg-amber-50/50 border-t border-amber-100 p-3 space-y-2">
+                                                            <div>
+                                                                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                                                                    Client asked
+                                                                    {selection.changeRequestedAt && (
+                                                                        <span className="font-normal normal-case tracking-normal text-amber-600/80">
+                                                                            {' '}· {new Date(selection.changeRequestedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-xs text-slate-800 mt-1 leading-snug">{selection.changeReason}</p>
+                                                            </div>
+
+                                                            {selection.studioReply && (
+                                                                <div className="pt-2 border-t border-amber-100/70">
+                                                                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                                                        You replied
+                                                                        {selection.studioReplyAt && (
+                                                                            <span className="font-normal normal-case tracking-normal">
+                                                                                {' '}· {new Date(selection.studioReplyAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <p className="text-xs text-slate-600 mt-0.5 leading-snug">{selection.studioReply}</p>
+                                                                    <p className="text-[10px] text-slate-400 mt-1">
+                                                                        Back with the client for confirmation.
+                                                                    </p>
+                                                                </div>
+                                                            )}
+
+                                                            {replyingTo === selection.id ? (
+                                                                <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                                                                    <textarea
+                                                                        autoFocus
+                                                                        value={replyText}
+                                                                        onChange={(e) => setReplyText(e.target.value)}
+                                                                        placeholder="Answer their question. This goes back to them with the finish."
+                                                                        className="w-full border border-amber-200 rounded-lg p-2 text-xs min-h-[70px] bg-white focus:outline-[#3D52A0]"
+                                                                    />
+                                                                    <div className="flex gap-2">
+                                                                        <button
+                                                                            onClick={() => { if (replyText.trim()) handleReplyAndReopen(selection.id, replyText.trim()); }}
+                                                                            disabled={!replyText.trim()}
+                                                                            className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#3D52A0] hover:bg-[#334486] text-white text-[11px] font-bold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                        >
+                                                                            Reply &amp; send back for approval
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => { setReplyingTo(null); setReplyText(''); }}
+                                                                            className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-bold hover:bg-slate-50 transition"
+                                                                        >
+                                                                            Cancel
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); setReplyingTo(selection.id); setReplyText(selection.studioReply || ''); }}
+                                                                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-800 text-[11px] font-bold hover:bg-amber-50 transition"
+                                                                >
+                                                                    {selection.studioReply ? 'Reply again & send back' : 'Reply & send back for approval'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
 
                                                     {statusMigrated === 'change_requested' && selection.previousSelectionSnapshot && (
                                                         <div className="bg-rose-50/40 border-t border-rose-100/60 p-3 text-xs flex gap-2 items-center justify-between">

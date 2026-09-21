@@ -29,7 +29,17 @@ export type ClientAction =
       question: string;
     }
   | { type: 'raiseDispute'; kind: string; reason: string }
-  | { type: 'confirmSelection'; selectionId: string };
+  | { type: 'confirmSelection'; selectionId: string }
+  /*
+    A question about one finish. It lands on that selection as a change request
+    -- changeReason, who and when -- which is the mechanism the studio already
+    has for "the client has raised something on this", and which MaterialTab
+    already routes into the decisions ledger.
+  */
+  | { type: 'querySelection'; selectionId: string; question: string }
+  /* A general note. Lands in the project's client messages, which Client Comms
+     shows. Before this it landed nowhere at all. */
+  | { type: 'sendMessage'; text: string; aboutKind?: 'selection' | 'document' | 'general'; aboutId?: string | null; aboutLabel?: string | null };
 
 /**
  * Send one action. Resolves when the server has applied it.

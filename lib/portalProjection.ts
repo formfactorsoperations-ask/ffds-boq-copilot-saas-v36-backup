@@ -33,6 +33,51 @@ export interface PortalView {
   projectId: string;
   /** Published-only, client-safe. Shaped like ProjectContext on purpose. */
   context: Record<string, any>;
+  /** Work added after the BOQ was frozen. Absent when there is none. */
+  scopeAdditions?: PortalScopeAddition[];
+}
+
+/**
+ * A scope addition as the CLIENT sees it.
+ *
+ * What they asked for, what it costs them, and whether it is settled. What does
+ * NOT cross: the base cost, the margin, the markup percentage and the internal
+ * type code -- the studio's cost structure is not the client's business, and
+ * "TYPE_C" means nothing to them. The nature of the change travels as the words
+ * the picker uses.
+ */
+export interface PortalScopeAddition {
+  ref: string;
+  /** The request in the client's own words, as it appears on the invoice. */
+  request: string;
+  nature: string;
+  issuedAt: string | null;
+  designFeeTotal: number;
+  executionTotal: number;
+  grandTotal: number;
+  /*
+    The tax breakdown, so the portal can show the client the same invoice they
+    were sent rather than a total on a screen. Every one of these figures is
+    already printed on that document -- nothing here is studio-internal.
+  */
+  designFeeBase?: number;
+  designFeeGst?: number;
+  executionSubtotal?: number;
+  executionGst?: number;
+  /** True once the whole invoice is settled and the work is released to site. */
+  released: boolean;
+  designFeePaid: boolean;
+  executionPaid: boolean;
+  /**
+   * What the money buys.
+   *
+   * The first version of this carried totals only, so the portal asked a client
+   * for a six-figure sum while showing them a reference number. These are the
+   * same lines printed on their invoice -- description, quantity, unit and the
+   * amount. The base cost, the margin and the markup do not cross: what a line
+   * costs the studio to deliver is not part of what the client is agreeing to.
+   */
+  lines?: { description: string; qty: number; unit: string; amount: number }[];
 }
 
 /** Keep only published items, and only the fields a client has business seeing. */
@@ -53,6 +98,16 @@ export interface PortalStudio {
   phone?: string;
   email?: string;
   address?: string;
+  /*
+    Identity a tax invoice must carry. These appear on every invoice the studio
+    has already sent this client, so carrying them lets the portal render that
+    same document instead of reproducing its numbers without its letterhead.
+  */
+  cityState?: string;
+  gstin?: string;
+  legalName?: string;
+  signatoryName?: string;
+  signatoryTitle?: string;
   bankDetails?: {
     accountName?: string;
     bankName?: string;
@@ -123,6 +178,9 @@ export function buildPortalView(
     happens to the tier list.
   */
   clientBoqBaseline?: ClientBoqRow[],
+  /* Scope additions, already reduced to client-safe rows by the caller.
+     Last, so every existing positional call keeps working. */
+  scopeAdditions?: PortalScopeAddition[],
 ): PortalView {
   const c = ctx as any;
 
@@ -130,6 +188,9 @@ export function buildPortalView(
     v: 1,
     builtAt: new Date().toISOString(),
     projectId,
+    /* Absent rather than empty when there are none, so the portal can tell
+       "no additions" from "this projection predates the feature". */
+    scopeAdditions: scopeAdditions && scopeAdditions.length ? scopeAdditions : undefined,
     context: {
       // Identity the portal header needs.
       name: ctx.name,
@@ -165,10 +226,51 @@ export function buildPortalView(
         id: i.id, title: i.title || i.subject, date: i.date || i.meetingDate,
         decisions: i.decisions, meetingType: i.meetingType, clientVisibility: i.clientVisibility
       })),
+      /*
+        A finish the client is being asked to confirm, with the basis to decide.
+
+        This carried the name, room, brand, code, status and photos -- and
+        nothing else. Not the price, not the allowance it is measured against,
+        not the lead time. So the portal asked a client to confirm a selection
+        while showing them no cost at all, and the card could only report "the
+        studio has not priced this yet" about a finish the studio had priced at
+        8,250. The studio's own preview reads the project directly and showed
+        the real figures, so the two screens disagreed and only the client's was
+        wrong.
+
+        What crosses now is what a client needs to say yes, and all of it is
+        already theirs: the price they would pay, the allowance their own
+        contract carries for that item, how long it takes, and who supplies it.
+        `boqAbsorbed` crosses so the card can say the studio is covering an
+        overage rather than leaving them to assume they owe it.
+
+        What still does not cross: anything about what it costs the studio.
+      */
       materialSelections: published(c.materialSelections, (i) => ({
         id: i.id, itemName: i.itemName, roomId: i.roomId, category: i.category,
         brand: i.brand, finishCode: i.finishCode, status: i.status, photos: i.photos,
-        clientConfirmedAt: i.clientConfirmedAt, clientVisibility: i.clientVisibility
+        clientConfirmedAt: i.clientConfirmedAt, clientVisibility: i.clientVisibility,
+        vendor: i.vendor,
+        notes: i.notes,
+        dimensions: i.dimensions, colorTemp: i.colorTemp, wattage: i.wattage,
+        quotedPrice: i.quotedPrice, priceUnit: i.priceUnit,
+        estimatedQty: i.estimatedQty, estimatedTotal: i.estimatedTotal,
+        allowancePrice: i.allowancePrice,
+        boqAbsorbed: i.boqAbsorbed,
+        leadTimeDays: i.leadTimeDays,
+        /* Their own link's token, so a finish-confirmation link can land on the
+           right card once they are signed in. */
+        confirmationToken: i.confirmationToken,
+        /* Their own question, echoed back. Without it the card forgets what they
+           asked the moment the page reloads, and a client cannot tell whether it
+           was ever received. */
+        changeReason: i.changeReason,
+        changeRequestedAt: i.changeRequestedAt,
+        /* The studio's answer, so the question and the reply sit together on
+           the client's card rather than the reply arriving by some other route
+           while the portal still shows an unanswered question. */
+        studioReply: i.studioReply,
+        studioReplyAt: i.studioReplyAt,
       })),
       designDocuments: published(c.designDocuments, (i) => ({
         id: i.id, name: i.name || i.title, url: i.url, date: i.date || i.issuedAt,
@@ -204,7 +306,13 @@ export function buildPortalView(
         phone: studio.phone,
         email: studio.email,
         address: studio.address,
-        bankDetails: studio.bankDetails
+        bankDetails: studio.bankDetails,
+        /* Invoice letterhead. Already on every invoice this client holds. */
+        cityState: studio.cityState,
+        gstin: studio.gstin,
+        legalName: studio.legalName,
+        signatoryName: studio.signatoryName,
+        signatoryTitle: studio.signatoryTitle,
       } : undefined,
 
       // The scope, sell rates only. See lib/clientBoq for what is stripped.

@@ -7,6 +7,10 @@ import {
   ReportScope, SCOPE_LABEL, inScope, countClasses, classifyProject, isEmptyShell,
 } from "../../lib/projectClassification";
 import { db } from "../../services/dbService";
+import { db as fsDb } from "../../services/firebaseClient";
+import { collection, getDocs } from "firebase/firestore";
+import { useOrg } from "../../contexts/OrgContext";
+import { normaliseAddition, scopeAdditionsPath } from "../../lib/scopeAdditions";
 import AnimatedNumber from "../ui/AnimatedNumber";
 import { HudDial, HudDonut, HudTrace } from "./HudCharts";
 import BulkTagPanel from "./BulkTagPanel";
@@ -351,6 +355,12 @@ const MONEY_STATUSES = ["won", "execution", "work_paused", "completed"];
 
 const StudioAnalyticsDeck: React.FC<Props> = ({ projects, onOpenProject, onProjectsPatched }) => {
   const [posByProject, setPosByProject] = useState<Record<string, any[]>>({});
+  /* Authorised scope additions, so contracted value here matches the project's
+     own Money tab once a change request has been settled. */
+  const [additionsByProject, setAdditionsByProject] =
+    useState<Record<string, { authorised: number; collected: number }>>({});
+  const { orgData } = useOrg();
+  const tenantId = (orgData as any)?.tenantId;
 
   /*
     Three states, because the data has three.
@@ -421,7 +431,48 @@ const StudioAnalyticsDeck: React.FC<Props> = ({ projects, onOpenProject, onProje
     return () => { alive = false; };
   }, [scoped]);
 
-  const a = useMemo(() => buildStudioAnalytics(scoped, posByProject), [scoped, posByProject]);
+  /*
+    Scope additions, per project.
+
+    Read once rather than subscribed: this screen is a report, and a studio-wide
+    live subscription across every project would be dozens of listeners to keep
+    one figure current. The project's own Money tab subscribes, which is where
+    live matters.
+  */
+  useEffect(() => {
+    let alive = true;
+    const money = scoped.filter((p) => MONEY_STATUSES.includes(p.context?.status || ""));
+    if (!fsDb || !tenantId || !money.length) { setAdditionsByProject({}); return; }
+    Promise.all(
+      money.map(async (p) => {
+        try {
+          const snap = await getDocs(collection(fsDb, scopeAdditionsPath(tenantId, p.id)));
+          let authorised = 0;
+          let collected = 0;
+          snap.docs.forEach((d) => {
+            const a = normaliseAddition(d.id, d.data());
+            if (a.invoiceStatus === "cancelled" || a.invoiceStatus === "void" || a.invoiceStatus === "draft") return;
+            if (a.workAuthorized) authorised += a.grandTotal;
+            if (a.designFeePaid) collected += a.designFeeTotal;
+            if (a.executionPaid) collected += a.executionTotal;
+          });
+          return [p.id, { authorised, collected }] as const;
+        } catch {
+          /* A denied or failed read must not be reported as "no additions". */
+          return [p.id, { authorised: 0, collected: 0 }] as const;
+        }
+      })
+    ).then((pairs) => {
+      if (!alive) return;
+      setAdditionsByProject(Object.fromEntries(pairs));
+    });
+    return () => { alive = false; };
+  }, [scoped, tenantId]);
+
+  const a = useMemo(
+    () => buildStudioAnalytics(scoped, posByProject, additionsByProject),
+    [scoped, posByProject, additionsByProject]
+  );
   const isTest = scope === "test";
 
   const openById = (id: string) => onOpenProject?.(id);

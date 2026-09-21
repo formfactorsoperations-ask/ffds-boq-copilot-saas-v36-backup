@@ -90,7 +90,6 @@ const StudioSettingsShell = lazyWithRetry(() => import("./components/StudioSetti
 const SuperAdminDashboard = lazyWithRetry(() => import("./components/SuperAdminDashboard"));
 const ClientLoginScreen = lazyWithRetry(() => import("./components/ClientLoginScreen"));
 const AgreementSignoffPage = lazyWithRetry(() => import("./components/AgreementSignoffPage"));
-const SelectionConfirmPage = lazyWithRetry(() => import("./pages/SelectionConfirmPage"));
 const CommunicationTracker = lazyWithRetry(() => import("./components/ops/CommunicationTrackerPage").then(module => ({ default: module.CommunicationTracker })));
 const TermsDocketPage = lazyWithRetry(() => import("./components/client/TermsDocketPage"));
 const HandoverDocketPage = lazyWithRetry(() => import("./components/client/HandoverDocketPage"));
@@ -127,6 +126,7 @@ import {
 import { db, hydrateProjectDetail, projectFromDoc } from "./services/dbService";
 import { mergeClientOwned } from "./lib/clientOwned";
 import { db as firestoreDb } from "./services/firebaseClient";
+import { normaliseAddition, scopeAdditionsPath } from "./lib/scopeAdditions";
 import { collection, doc, getDoc, getDocs, writeBatch, serverTimestamp, onSnapshot, query, orderBy } from "firebase/firestore";
 import { toProjectDecisionRecords } from "./services/decisionProjection";
 import { issuePortalAccess, projectIdFromToken } from "./services/portalAccessService";
@@ -349,16 +349,12 @@ export default function App() {
     | "login"
     | "ops"
     | "client"
-    | "selection_confirm"
     | "agreement_signoff"
     | "booking_approval"
     | "mom_acknowledge"
   >("loading");
   const [signoffToken, setSignoffToken] = useState<string | null>(null);
   const [agreementSignoffToken, setAgreementSignoffToken] = useState<
-    string | null
-  >(null);
-  const [selectionConfirmToken, setSelectionConfirmToken] = useState<
     string | null
   >(null);
   const [momToken, setMomToken] = useState<string | null>(null);
@@ -476,13 +472,30 @@ export default function App() {
           }
         }
       }
+      /*
+        A finish-confirmation link now opens the client's own portal.
+
+        It used to render a standalone page that read localStorage and, finding
+        nothing, INVENTED a selection -- "Sample Material", brand Marino, code
+        L-100, with a stock photograph -- then offered a confirm button whose
+        handler set local state and returned. A client following that link saw
+        somebody else's laminate and confirmed nothing.
+
+        The same move was already made for decisions, a few lines above: the
+        standalone sign-off page was removed and those approvals happen in the
+        portal. The portal's finish card carries the photograph, the price
+        against its allowance and the lead time, and confirming there records
+        through submitClientAction -- the one path that writes.
+
+        The token is kept across the sign-in round trip so they land on the
+        finish they were sent, not on a dashboard.
+      */
       if (path.startsWith("/selection-confirm/")) {
-        const token = path.split("/")[2];
+        const token = path.split("/")[2]?.split("?")[0];
         if (token) {
-          setSelectionConfirmToken(token);
-          setAppMode("selection_confirm");
-          setIsDataLoaded(true);
-          return;
+          try { sessionStorage.setItem("ffds_focus_selection", token); } catch { /* private mode */ }
+          /* No return: fall through to the normal client entry, which is
+             sign-in and then their portal. */
         }
       }
       if (path.startsWith("/booking-approval/")) {
@@ -753,6 +766,11 @@ export default function App() {
         id: target,
         lastModified: Date.now(),
         context: view.context,
+        /* Carried alongside the context rather than folded into it, because
+           the projection keeps them separate on purpose: the context is the
+           project as the client may see it, these are invoices raised against
+           it. Absent on any view published before scope additions existed. */
+        scopeAdditions: (view as any).scopeAdditions,
       } as any);
       setAppMode("client");
     })();
@@ -1287,6 +1305,60 @@ export default function App() {
 
     checkAndPromote();
   }, [activeInternalId, projectContext?.status, projectContext?.paymentMilestones, projectContext?.onboardingData, projectContext?.lifecycle?.stage, orgData?.tenantId]);
+
+  /*
+    Scope additions for the portal preview.
+
+    The ops-side portal renders from live project state rather than the stored
+    projection -- that is what makes it a preview of what the client will see
+    once released. Additions live in a subcollection, so they have to be read
+    separately or the preview shows a Payments tab with no mention of invoices
+    the client has already been sent.
+  */
+  const [portalScopeAdditions, setPortalScopeAdditions] = useState<any[] | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    const tenant = orgData?.tenantId;
+    if (!firestoreDb || !tenant || !activeInternalId) { setPortalScopeAdditions(undefined); return; }
+    (async () => {
+      try {
+        const snap = await getDocs(collection(firestoreDb, scopeAdditionsPath(tenant, activeInternalId)));
+        if (!alive) return;
+        const rows = snap.docs
+          .map((d) => normaliseAddition(d.id, d.data()))
+          .filter((a) => a.invoiceStatus !== 'cancelled' && a.invoiceStatus !== 'void' && a.invoiceStatus !== 'draft')
+          .map((a) => ({
+            ref: a.ref,
+            request: a.clientRequest,
+            nature: a.type === 'TYPE_A' ? 'Finish change' : a.type === 'TYPE_C' ? 'New scope' : 'Alteration',
+            issuedAt: a.createdAt ? new Date(a.createdAt).toISOString() : null,
+            designFeeTotal: a.designFeeTotal,
+            designFeeBase: a.designFeeBase,
+            designFeeGst: a.designFeeGst,
+            executionSubtotal: a.executionSubtotal,
+            executionGst: a.executionGst,
+            executionTotal: a.executionTotal,
+            grandTotal: a.grandTotal,
+            released: a.workAuthorized,
+            designFeePaid: a.designFeePaid,
+            executionPaid: a.executionPaid,
+            lines: (a.miniBoq || [])
+              .map((l: any) => ({
+                description: String(l?.description || 'Item'),
+                qty: Number(l?.qty) || 0,
+                unit: String(l?.unit || ''),
+                amount: Number(l?.baseCost) || 0,
+              }))
+              .filter((l: any) => l.amount > 0 || l.qty > 0),
+          }));
+        setPortalScopeAdditions(rows.length ? rows : undefined);
+      } catch {
+        /* A failed read must not read as "no additions". */
+        if (alive) setPortalScopeAdditions(undefined);
+      }
+    })();
+    return () => { alive = false; };
+  }, [activeInternalId, orgData?.tenantId]);
 
   const activeCalculatedTier = useMemo(() => {
     return tiersWithCalculatedSummaries.find((t) => t.id === activeTierId);
@@ -2378,9 +2450,6 @@ export default function App() {
     return <AgreementSignoffPage token={agreementSignoffToken} />;
   }
 
-  if (appMode === "selection_confirm" && selectionConfirmToken) {
-    return <SelectionConfirmPage token={selectionConfirmToken} />;
-  }
 
   if (appMode === "mom_acknowledge" && momToken) {
     return <MomAcknowledgePage token={momToken} />;
@@ -3029,6 +3098,12 @@ export default function App() {
                           projectContext={projectContext}
                           bank={bank}
                           setProjectContext={setProjectContext}
+                          /* Without the tier, calculateProjectFinancials falls
+                             back to context.originalExecutionTotal, which is 0
+                             on most projects -- the same omission that made the
+                             old Reports screen under-report collections. */
+                          activeTier={activeCalculatedTier}
+                          fullBoq={fullBoqForActiveTier}
                         />
                       )}
                       {activeTab === "timeline" && (
@@ -3154,6 +3229,7 @@ export default function App() {
                             activeProject: activeProject,
                             leadProfile: leadProfile,
                             decisionBrainOutput: decisionBrainOutput,
+                            scopeAdditions: portalScopeAdditions,
                           }}
                           bank={bank}
                           onProjectUpdate={(updated) => {
@@ -3740,6 +3816,12 @@ export default function App() {
                           projectContext={projectContext}
                           bank={bank}
                           setProjectContext={setProjectContext}
+                          /* Without the tier, calculateProjectFinancials falls
+                             back to context.originalExecutionTotal, which is 0
+                             on most projects -- the same omission that made the
+                             old Reports screen under-report collections. */
+                          activeTier={activeCalculatedTier}
+                          fullBoq={fullBoqForActiveTier}
                         />
                       )}
                       {activeTab === "timeline" && (
@@ -3865,6 +3947,7 @@ export default function App() {
                             activeProject: activeProject,
                             leadProfile: leadProfile,
                             decisionBrainOutput: decisionBrainOutput,
+                            scopeAdditions: portalScopeAdditions,
                           }}
                           bank={bank}
                           onProjectUpdate={(updated) => {

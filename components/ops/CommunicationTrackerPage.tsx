@@ -259,8 +259,61 @@ export function CommunicationTracker({ projectId, studioId, projectContext, team
         { id: 'execution' as const, label: 'Execution phase', items: executionItems || [] },
     ];
 
+    /*
+      What the client has sent US.
+
+      Everything else on this page is the studio's outbound checklist -- did we
+      send the kickoff note, the schedule, the handover pack. Nothing here
+      listened. The portal's contact box wrote to nowhere and told the client it
+      had been delivered, so a project could carry weeks of unanswered questions
+      with no trace anywhere in the app.
+    */
+    const clientMessages = ((projectContext as any)?.clientMessages || []) as any[];
+    const unreadMessages = clientMessages.filter((m: any) => !m.readAt);
+
     return (
         <div className="space-y-4 pb-12">
+            {clientMessages.length > 0 && (
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between gap-3">
+                        <h3 className="font-bold text-slate-900 text-[14px]">From the client</h3>
+                        {unreadMessages.length > 0 && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                {unreadMessages.length} unanswered
+                            </span>
+                        )}
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                        {[...clientMessages]
+                            .sort((a: any, b: any) => String(b.sentAt).localeCompare(String(a.sentAt)))
+                            .map((m: any) => (
+                                <div key={m.id} className="px-5 py-3.5 flex items-start gap-3">
+                                    <span
+                                        className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${m.readAt ? 'bg-slate-200' : 'bg-amber-500'}`}
+                                        aria-hidden
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[13px] text-slate-800 leading-snug">{m.text}</p>
+                                        <p className="mt-1 text-[11px] text-slate-400">
+                                            {m.sentBy || 'Client'}
+                                            {m.sentAt && (
+                                                <> · {new Date(m.sentAt).toLocaleString('en-IN', {
+                                                    day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
+                                                })}</>
+                                            )}
+                                            {m.aboutLabel && <> · about {m.aboutLabel}</>}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                    </div>
+                    <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-100">
+                        <p className="text-[11px] text-slate-500">
+                            Questions about a specific finish arrive on that selection in SOF &amp; Selections, not here.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <section className="rounded-2xl border border-slate-200/80 bg-white p-5">
                 <div className="flex items-start justify-between gap-4 flex-wrap">

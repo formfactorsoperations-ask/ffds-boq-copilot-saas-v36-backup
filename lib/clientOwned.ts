@@ -23,6 +23,7 @@ export interface ClientOwned {
   designAgreementSignoff?: any;
   executionSignoff?: any;
   handoverSignoff?: any;
+  clientMessages?: any[];
 }
 
 /** Keys a client can change, and therefore keys a studio save must not blindly overwrite. */
@@ -32,6 +33,10 @@ export const CLIENT_OWNED_KEYS = [
   'designAgreementSignoff',
   'executionSignoff',
   'handoverSignoff',
+  /* Notes the client sent. Append-only and written only by them, so without
+     this a message that arrived while the studio had the project open was
+     erased by the next auto-save -- the same way a question on a finish was. */
+  'clientMessages',
 ] as const;
 
 function mergeDocuments(mine: any, theirs: any): any {
@@ -72,16 +77,67 @@ function mergeDocuments(mine: any, theirs: any): any {
 function mergeSelections(mine: any[] | undefined, theirs: any[] | undefined): any[] | undefined {
   if (!theirs?.length) return mine;
   if (!mine?.length) return theirs;
+  const at = (v: any) => Date.parse(String(v || '')) || 0;
   const byId = new Map<string, any>(theirs.map((m: any) => [m.id, m]));
+
   return mine.map((m: any) => {
     const other = byId.get(m.id);
+    if (!other) return m;
+    let next = m;
+
     // A confirmation is the client's to give and is not taken back by a save
     // from a session that never saw it.
-    if (other?.clientConfirmedAt && !m.clientConfirmedAt) {
-      return { ...m, status: other.status, clientConfirmedAt: other.clientConfirmedAt };
+    if (other.clientConfirmedAt && !m.clientConfirmedAt) {
+      next = { ...next, status: other.status, clientConfirmedAt: other.clientConfirmedAt };
     }
-    return m;
+
+    /*
+      A question the client raised is theirs too, and was being thrown away.
+
+      This carried the confirmation and nothing else, so when a client asked
+      about a finish while the studio had the project open, the sequence was:
+      the callable wrote the question onto the project, the snapshot arrived
+      here, this merge ignored it because it was not a confirmation, and the
+      next auto-save wrote the studio's in-memory context back over it. The
+      question survived only in the portal projection -- which the auto-save
+      does not touch -- so the client could see their question on their own
+      screen while it no longer existed on the project. One asked before the
+      session loaded survived; one asked during it did not.
+
+      Taken only when theirs is NEWER than what this session holds, so a studio
+      reply already given is not undone by an older copy of the question.
+    */
+    if (other.changeReason && at(other.changeRequestedAt) > at(next.changeRequestedAt)) {
+      next = {
+        ...next,
+        status: 'change_requested',
+        changeReason: other.changeReason,
+        changeRequestedAt: other.changeRequestedAt,
+        changeRequestedBy: other.changeRequestedBy,
+        /* A new question supersedes the answer to the last one. */
+        studioReply: null,
+        studioReplyAt: null,
+      };
+    }
+
+    return next;
   });
+}
+
+/**
+ * Messages are append-only and only the client writes them, so the union wins.
+ * A read stamp is the studio's, and moves forward only.
+ */
+function mergeMessages(mine: any[] | undefined, theirs: any[] | undefined): any[] | undefined {
+  if (!theirs?.length) return mine;
+  if (!mine?.length) return theirs;
+  const byId = new Map<string, any>(mine.map((m: any) => [m.id, m]));
+  theirs.forEach((t: any) => {
+    const existing = byId.get(t.id);
+    if (!existing) byId.set(t.id, t);
+    else if (!existing.readAt && t.readAt) byId.set(t.id, { ...existing, readAt: t.readAt, readBy: t.readBy });
+  });
+  return [...byId.values()].sort((a, b) => String(a.sentAt).localeCompare(String(b.sentAt)));
 }
 
 /** A signature already given survives a copy that does not have one. */
@@ -106,6 +162,7 @@ export function mergeClientOwned<T extends Record<string, any>>(mine: T, theirs:
     designAgreementSignoff: mergeSignoff(mine.designAgreementSignoff, theirs.designAgreementSignoff),
     executionSignoff: mergeSignoff(mine.executionSignoff, theirs.executionSignoff),
     handoverSignoff: mergeSignoff(mine.handoverSignoff, theirs.handoverSignoff),
+    clientMessages: mergeMessages(mine.clientMessages, theirs.clientMessages),
   };
 
   const changed = CLIENT_OWNED_KEYS.filter(

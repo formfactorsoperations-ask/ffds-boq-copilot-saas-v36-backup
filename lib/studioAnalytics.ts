@@ -152,7 +152,17 @@ export interface StudioAnalytics {
  */
 export function buildStudioAnalytics(
   projects: FullProjectData[],
-  posByProject: Record<string, any[]> = {}
+  posByProject: Record<string, any[]> = {},
+  /**
+   * Authorised scope additions per project, ex-GST, already summed by the
+   * caller. Work the client asked for after the BOQ was frozen and has since
+   * settled is contract value like any other -- leaving it out made the studio
+   * look smaller than it is, and put this screen at odds with the project's own
+   * Money tab the moment a change request was paid.
+   *
+   * Only AUTHORISED additions belong here. Raised-but-unsettled is a claim.
+   */
+  additionsByProject: Record<string, { authorised: number; collected: number }> = {}
 ): StudioAnalytics {
   let activeSites = 0;
   let sqftOnSite = 0;
@@ -253,7 +263,8 @@ export function buildStudioAnalytics(
     }
 
     /* ── cash, straight from the shared calculation ─────────────────── */
-    collected += fin.totalPaid || 0;
+    const adds = additionsByProject[p.id];
+    collected += (fin.totalPaid || 0) + (adds?.collected || 0);
     pending += fin.pendingAmt || 0;
 
     /* The by-month series re-uses that same calculation's own milestone
@@ -277,7 +288,9 @@ export function buildStudioAnalytics(
     }
 
     /* ── margin, mirroring PortfolioMarginPanel exactly ─────────────── */
-    const contractedValue = (fin.taxableExecution || 0) + (fin.taxableDesign || 0);
+    /* The frozen BOQ plus whatever the client has since authorised. */
+    const contractedValue =
+      (fin.taxableExecution || 0) + (fin.taxableDesign || 0) + (adds?.authorised || 0);
     const plannedCost = Number((tier as any)?.summary?.totalCost || 0);
 
     const pos = (posByProject[p.id] || []).filter(

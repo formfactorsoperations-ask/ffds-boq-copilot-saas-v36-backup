@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ProjectContext } from '../../types';
 import { writePortalView, probePortalView } from '../../services/portalViewService';
+import { collection, getDocs } from 'firebase/firestore';
+import { db as fsDb } from '../../services/firebaseClient';
+import { normaliseAddition, scopeAdditionsPath } from '../../lib/scopeAdditions';
+import { PortalScopeAddition } from '../../lib/portalProjection';
 import { ClientBoqRow } from '../../lib/clientBoq';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
@@ -93,6 +97,59 @@ export default function PortalPublishControls({ projectContext, setProjectContex
     project — so until the projection is rewritten, a publish has changed
     nothing on their side. Ops should be able to see that difference.
   */
+  /*
+    Scope additions, reduced to what a client should see.
+
+    Read at release time rather than held in state: this control already
+    rebuilds the whole projection on every send precisely so the stored view
+    cannot drift from what is true, and a stale additions list would reintroduce
+    exactly that drift. Cost is one read per send.
+
+    Cost, margin and the internal type code are deliberately dropped here -- the
+    client gets what they asked for, what it costs them, and whether it is
+    settled.
+  */
+  const gatherScopeAdditions = async (): Promise<PortalScopeAddition[] | undefined> => {
+    const tenant = orgData?.tenantId;
+    if (!fsDb || !tenant || !projectId) return undefined;
+    try {
+      const snap = await getDocs(collection(fsDb, scopeAdditionsPath(tenant, projectId)));
+      const rows = snap.docs
+        .map(d => normaliseAddition(d.id, d.data()))
+        .filter(a => a.invoiceStatus !== 'cancelled' && a.invoiceStatus !== 'void' && a.invoiceStatus !== 'draft')
+        .map<PortalScopeAddition>(a => ({
+          ref: a.ref,
+          request: a.clientRequest,
+          nature: a.type === 'TYPE_A' ? 'Finish change' : a.type === 'TYPE_C' ? 'New scope' : 'Alteration',
+          issuedAt: a.createdAt ? new Date(a.createdAt).toISOString() : null,
+          designFeeTotal: a.designFeeTotal,
+          designFeeBase: a.designFeeBase,
+          designFeeGst: a.designFeeGst,
+          executionSubtotal: a.executionSubtotal,
+          executionGst: a.executionGst,
+          executionTotal: a.executionTotal,
+          grandTotal: a.grandTotal,
+          released: a.workAuthorized,
+          designFeePaid: a.designFeePaid,
+          executionPaid: a.executionPaid,
+          /* Description, quantity, unit and amount only -- never baseCost or
+             marginOverride. */
+          lines: (a.miniBoq || [])
+            .map((l: any) => ({
+              description: String(l?.description || 'Item'),
+              qty: Number(l?.qty) || 0,
+              unit: String(l?.unit || ''),
+              amount: Number(l?.baseCost) || 0,
+            }))
+            .filter((l: any) => l.amount > 0 || l.qty > 0),
+        }));
+      return rows.length ? rows : undefined;
+    } catch {
+      /* A failed read must not silently publish "no additions". */
+      return undefined;
+    }
+  };
+
   const release = async (ctx: ProjectContext) => {
     if (!projectId) return;
     setSendError(null);
@@ -107,7 +164,12 @@ export default function PortalPublishControls({ projectContext, setProjectContex
         email: (settings as any)?.email || orgData?.contactEmail,
         address: (settings as any)?.address || orgData?.officeAddress,
         bankDetails: (settings as any)?.bankDetails || orgData?.bankDetails,
-      }, clientBoq, clientBoqBaseline);
+        cityState: orgData?.cityState,
+        gstin: orgData?.gstin,
+        legalName: orgData?.legalName,
+        signatoryName: orgData?.signatoryName,
+        signatoryTitle: orgData?.signatoryTitle,
+      }, clientBoq, clientBoqBaseline, await gatherScopeAdditions());
       if (view) {
         setReleasedAt(view.builtAt);
         setEverSent(true);
