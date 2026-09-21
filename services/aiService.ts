@@ -1,4 +1,5 @@
 import { getAi } from './aiClient';
+import { FLASH_MODEL } from "../constants/aiModels";
 
 export interface ExtractedMaterial {
     roomId: string;
@@ -33,7 +34,7 @@ Text to parse:
         const ai = getAi();
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
+            model: FLASH_MODEL,
             contents: prompt,
             config: {
                 temperature: 0.1,

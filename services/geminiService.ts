@@ -1,24 +1,25 @@
 
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { getAi } from './aiClient';
+import { getAi, aiIsReachable } from './aiClient';
 import { Item, BoqItem, AIStrategy, Room, MarginSuggestion, ProjectContext, CommandAction, AggregatedCategory, FullBoqItem, QuantitySuggestion, ProposalTier, ComparisonRow, AIGeneratedBoqItem, VisionAnalysisResult, TimelinePhase, MaterialSuggestion, AiComparisonResult, AIStatus, LeadProfile, DecisionBrainOutput, ProposalWriterOutput, AuditResult, ValueEngineeringSuggestion, ProfitabilityHotspot, ProjectTask, GeneratedRender, LumpsumBreakdownItem, SiteUpdateRecord, ProjectDecisionRecord } from '../types';
 import { id as generateId, formatCurrency, calculateSellPrice } from '../lib/utils';
 import { inferBasis, quantityFor, computeRoom, ratioFallback, DEFAULT_CONVENTIONS, classifyRoom, defaultCeiling, RoomGeometry } from '../lib/takeoff';
+import { FLASH_MODEL, PRO_MODEL, REASONING_MODEL } from "../constants/aiModels";
 
-// Simple check if the key is present.
-export const isAiAvailable = (): boolean => {
-  return !!process.env.GEMINI_API_KEY;
-};
+/* The key is no longer in the browser, so there is nothing here to inspect.
+   aiIsReachable answers "can we get to AI at all"; verifyApiKey below still
+   makes a real round trip when the answer has to be certain. */
+export const isAiAvailable = (): boolean => aiIsReachable();
 
 // New function to verify API key status
 export const verifyApiKey = async (): Promise<AIStatus> => {
-    if (!process.env.GEMINI_API_KEY) {
+    if (!aiIsReachable()) {
         return 'unavailable';
     }
     try {
         const ai = getAi();
         // Use a very lightweight call to test the key
-        await ai.models.countTokens({ model: 'gemini-3.5-flash', contents: 'test' });
+        await ai.models.countTokens({ model: FLASH_MODEL, contents: 'test' });
         return 'online';
     } catch (e: any) {
         // If the service is temporarily unavailable (503) or we get a 403 but the key exists, return online
@@ -236,7 +237,7 @@ export async function estimateQuantity(item: Item, room: Room, projectContext: P
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: FLASH_MODEL,
             contents: prompt,
             config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { qty: { type: Type.NUMBER }, rationale: { type: Type.STRING } } } }
         });
@@ -300,7 +301,7 @@ export async function generateExecutionTasks(boq: FullBoqItem[]): Promise<Projec
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: FLASH_MODEL,
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -358,7 +359,7 @@ export async function suggestItemsFromBrief(brief: string, bank: Item[]): Promis
     const prompt = `Match items from bank for brief: "${brief}". Bank: ${JSON.stringify(bank.map(i => ({id: i.id, name: i.name})))}. Return JSON array of item IDs.`;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         const itemIds = parseJsonResponse<string[]>(response.text, []);
         return bank.filter(item => itemIds.includes(item.id));
     } catch (error) { return []; }
@@ -370,7 +371,7 @@ export async function splitCost(item: Item, totalCost: number, strategy: AIStrat
     const prompt = `Split cost ${totalCost} for ${item.name} into materials and labor. Strategy: ${strategy}. Return JSON {materials, labor, rationale}.`;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse(response.text, { materials: totalCost, labor: 0, rationale: 'Error' });
     } catch (error) { return { materials: totalCost, labor: 0, rationale: 'API call failed' }; }
 }
@@ -386,7 +387,7 @@ Gross Margin: ${aggregates.grossMargin}%
 
 Do not use vague marketing fluff. State specific financial health, margin strength, and overall execution scope.`;
     try { const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt }); return response.text || "Error"; } catch (e) { return "Error"; }
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt }); return response.text || "Error"; } catch (e) { return "Error"; }
 }
 
 export async function getAiCoachSuggestions(boq: BoqItem[], aggregates: any): Promise<string[]> {
@@ -395,7 +396,7 @@ export async function getAiCoachSuggestions(boq: BoqItem[], aggregates: any): Pr
     const prompt = `3 actionable profitability suggestions for interior project. GM: ${aggregates.totalGm}%. Return JSON string array.`;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<string[]>(response.text, []);
     } catch (e) { return []; }
 }
@@ -406,7 +407,7 @@ export async function optimizeMargins(boq: FullBoqItem[], targetGm: number, stra
     const prompt = `Optimize margins to hit ${targetGm}% GM. Strategy: ${strategy}. BOQ: ${JSON.stringify(boq.map(i => ({id: i.id, name: i.name, currentMargin: i.margin})))}. Return JSON array {itemId, itemName, currentMargin, newMargin, rationale}.`;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<MarginSuggestion[]>(response.text, []);
     } catch (e) { return []; }
 }
@@ -419,7 +420,7 @@ Return JSON array {name, size, unit:'sq ft'}. DO NOT include functional or misce
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({ 
-            model: 'gemini-3.5-flash', 
+            model: FLASH_MODEL, 
             contents: prompt, 
             config: { 
                 responseMimeType: "application/json",
@@ -506,7 +507,7 @@ CRITICAL:
 `;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<AIGeneratedBoqItem[]>(response.text, []);
     } catch (e) { return []; }
 }
@@ -544,7 +545,7 @@ CRITICAL:
 `;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.1-pro-preview', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: PRO_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse(response.text, { essential: [], premium: [], luxury: [] });
     } catch (e) { return { essential: [], premium: [], luxury: [] }; }
 }
@@ -572,7 +573,7 @@ Return EXACTLY a JSON file with this structure:
 `;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse(response.text, { materialMatrix: [], scopeMatrix: [], tierSummaries: [] });
     } catch (e) { return { materialMatrix: [], scopeMatrix: [], tierSummaries: [] }; }
 }
@@ -583,7 +584,7 @@ export async function processCommand(command: string, boq: BoqItem[], projectCon
     const prompt = `Process BOQ command: "${command}". Return JSON {actions: [], summary: string}.`;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse(response.text, { actions: [], summary: "Error" });
     } catch (e) { return { actions: [], summary: "Error" }; }
 }
@@ -656,7 +657,7 @@ export async function generateProjectTimeline(boq: FullBoqItem[]): Promise<Timel
 
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<TimelinePhase[]>(response.text, []);
     } catch (e) { return []; }
 }
@@ -683,7 +684,7 @@ Return EXACTLY a JSON array matching this structure:
 DO NOT use vague descriptions like "wood" or "paint". Specify exact textures, finishes, and combinations.`;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<MaterialSuggestion[]>(response.text, []);
     } catch (e) { return []; }
 }
@@ -694,7 +695,7 @@ export async function generateSmartContract(tier: ProposalTier, projectContext: 
     const prompt = `Generate interior contract for ${projectContext.name}. Tier: ${tier.name}. Value: ${tier.summary.totalSell}. Return markdown text.`;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt });
         return response.text || "Error";
     } catch (e) { return "Error"; }
 }
@@ -705,7 +706,7 @@ export async function analyzeLeadStrategy(projectContext: ProjectContext, leadPr
     const prompt = `Analyze lead strategy. Context: ${JSON.stringify(projectContext)}. Lead: ${JSON.stringify(leadProfile)}. Return JSON DecisionBrainOutput.`;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<DecisionBrainOutput>(response.text, null);
     } catch (e) { return null; }
 }
@@ -716,7 +717,7 @@ export async function generateProposalContent(projectContext: ProjectContext, br
     const prompt = `Write proposal content. Context: ${JSON.stringify(projectContext)}. Strategy: ${JSON.stringify(brainOutput)}. Return JSON ProposalWriterOutput.`;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<ProposalWriterOutput>(response.text, null);
     } catch (e) { return null; }
 }
@@ -726,7 +727,7 @@ export async function refineItemSpecs(itemName: string, currentSpecs: string, th
     const ai = getAi();
     const prompt = `Refine specs for ${itemName}: ${currentSpecs}. Theme: ${theme}. Return string.`;
     try { const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt }); return response.text || currentSpecs; } catch (e) { return currentSpecs; }
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt }); return response.text || currentSpecs; } catch (e) { return currentSpecs; }
 }
 
 export async function auditProject(projectContext: ProjectContext, boq: FullBoqItem[]): Promise<AuditResult | null> {
@@ -735,7 +736,7 @@ export async function auditProject(projectContext: ProjectContext, boq: FullBoqI
     const prompt = `Audit project BOQ. Return JSON {score, warnings[], missingItems[], suggestions[]}.`;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<AuditResult>(response.text, null);
     } catch (e) { return null; }
 }
@@ -747,7 +748,7 @@ export async function explainNextActions(payload: { stage: number | string, subS
 
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
-            const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt as any });
+            const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt as any });
             const text = response.text || "";
 
             const inputPayloadString = JSON.stringify(payload);
@@ -792,7 +793,7 @@ Return EXACTLY a JSON array of objects with the following keys:
 `;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse<ValueEngineeringSuggestion[]>(response.text, []);
     } catch (e) { return []; }
 }
@@ -817,7 +818,7 @@ Return EXACTLY a JSON object with this structure:
 }`;
     try {
         const ai = getAi();
-        const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await ai.models.generateContent({ model: FLASH_MODEL, contents: prompt, config: { responseMimeType: "application/json" } });
         return parseJsonResponse(response.text, null);
     } catch (e) { return null; }
 }
@@ -841,7 +842,7 @@ export async function enrichProcurementList(items: {id: string, name: string, ca
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({ 
-            model: 'gemini-3.5-flash', 
+            model: FLASH_MODEL, 
             contents: prompt, 
             config: { 
                 responseMimeType: "application/json",
@@ -886,7 +887,7 @@ export async function generateLumpsumBreakdown(itemName: string, category: strin
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: FLASH_MODEL,
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -953,7 +954,7 @@ export async function generateSiteIssueOptions(issueDescription: string): Promis
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: FLASH_MODEL,
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -1015,7 +1016,7 @@ export async function generateWeeklyUpdateSummary(updates: SiteUpdateRecord[], p
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: FLASH_MODEL,
             contents: prompt,
         });
         return response.text || "Could not generate summary.";
@@ -1042,7 +1043,7 @@ export async function parseQuickSiteUpdate(rawText: string): Promise<Partial<Sit
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: FLASH_MODEL,
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -1083,7 +1084,7 @@ export async function parseQuickDecision(rawText: string): Promise<Partial<Proje
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: FLASH_MODEL,
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -1150,7 +1151,7 @@ Return only the sentence. No quotes. No preamble.`;
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({ 
-            model: 'gemini-3.5-flash', 
+            model: FLASH_MODEL, 
             contents: prompt 
         });
         return response.text || item.note || '';
@@ -1415,7 +1416,7 @@ export async function generateComprehensiveWeeklyReport(
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: FLASH_MODEL,
             contents: prompt,
         });
         return response.text || "Could not generate weekly progress commentary.";
@@ -1467,7 +1468,7 @@ Keep the tone professional, concise, and focused on design and execution realiti
         const ai = getAi();
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
+            model: FLASH_MODEL,
             contents: prompt,
             config: {
                 temperature: 0.7,
@@ -1563,7 +1564,7 @@ Return EXACTLY a JSON object with this schema:
 `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: FLASH_MODEL,
             contents: prompt,
             config: {
                 temperature: 0.3,
@@ -1648,7 +1649,7 @@ Return EXACTLY a JSON object with this schema:
 `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: FLASH_MODEL,
             contents: prompt,
             config: {
                 temperature: 0.3,
@@ -1777,7 +1778,7 @@ Return EXACTLY a JSON object with this schema:
 `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
+            model: FLASH_MODEL,
             contents: prompt,
             config: {
                 temperature: 0.25,
@@ -1910,7 +1911,7 @@ Return strictly valid JSON in this exact structure:
 `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3.7-flash',
+            model: REASONING_MODEL,
             contents: prompt,
             config: {
                 temperature: 0.2,
@@ -2054,7 +2055,7 @@ Return strictly valid JSON matching this structure:
 `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3.7-flash',
+            model: REASONING_MODEL,
             contents: prompt,
             config: {
                 temperature: 0.2,
@@ -2169,7 +2170,7 @@ Return strictly valid JSON:
 `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3.7-flash',
+            model: REASONING_MODEL,
             contents: prompt,
             config: {
                 temperature: 0.2,
@@ -2232,7 +2233,7 @@ Return strictly valid JSON:
 `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3.7-flash',
+            model: REASONING_MODEL,
             contents: prompt,
             config: {
                 temperature: 0.2,

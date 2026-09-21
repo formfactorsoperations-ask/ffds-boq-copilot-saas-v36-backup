@@ -6,6 +6,7 @@ import { getSingleProjectValue } from "../lib/financialsUtils";
 import { useStudioHomeData, tabFor, greetingWord } from "./home/useStudioHomeData";
 import ClockCalendar from "./home/ClockCalendar";
 import { useTilt } from "./home/useTilt";
+import StudioFooter from "./home/StudioFooter";
 import {
   ArrowRight, CheckCircle2, ChevronDown, Plus, Sparkles,
   LayoutGrid, Users, BarChart3, Store, FileSignature, Boxes,
@@ -543,6 +544,13 @@ export default function StudioHomeOrbit({
 
         </div>
         </div>
+
+        <StudioFooter
+          onNavigate={onNavigate}
+          activeCount={data.activeCount}
+          clientsCount={data.clientsCount}
+          openValue={data.openValue}
+        />
       </div>
     </motion.div>
   );

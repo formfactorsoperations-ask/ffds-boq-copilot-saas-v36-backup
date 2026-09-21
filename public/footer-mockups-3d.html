@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFDS Studio OS — 3D Homepage Footer Mockups & Design Lab</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ffds: {
+              midnight: '#12182F',
+              indigo: '#3D52A0',
+              accent: '#7091E6',
+              lavender: '#EDE8F5',
+              border: '#ADBBDA',
+              tint: '#F1F3F9',
+              card: '#FFFFFF',
+              muted: '#8E96B8',
+              slate: '#5A628A',
+              charcoal: '#252C4E'
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            serif: ['"Playfair Display"', 'serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #0E1325;
+      color: #E2E5F0;
+      overflow-x: hidden;
+      margin: 0;
+    }
+
+    /* 3D Perspective Canvas */
+    .perspective-stage {
+      perspective: 1200px;
+      transform-style: preserve-3d;
+    }
+
+    /* Floating 3D Slab */
+    .slab-3d {
+      transform-style: preserve-3d;
+      transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+      will-change: transform, box-shadow;
+    }
+
+    .slab-layer-lead {
+      transform: translateZ(28px);
+      transform-style: preserve-3d;
+    }
+
+    .slab-layer-mid {
+      transform: translateZ(16px);
+      transform-style: preserve-3d;
+    }
+
+    .slab-layer-base {
+      transform: translateZ(0px);
+    }
+
+    /* CAD Blueprint grid background */
+    .cad-grid {
+      background-size: 28px 28px;
+      background-image: 
+        linear-gradient(to right, rgba(112, 145, 230, 0.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(112, 145, 230, 0.06) 1px, transparent 1px);
+    }
+
+    .cad-grid-dense {
+      background-size: 14px 14px;
+      background-image: 
+        linear-gradient(to right, rgba(173, 187, 218, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(173, 187, 218, 0.05) 1px, transparent 1px);
+    }
+
+    /* Dynamic Shadow Tracking */
+    .shadow-3d-active {
+      box-shadow: 
+        calc(var(--tilt-y, 0) * -1.8px) 
+        calc(14px + var(--tilt-x, 0) * 1.8px) 
+        36px -8px rgba(5, 8, 18, 0.65),
+        0 0 0 1px rgba(112, 145, 230, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    }
+
+    /* Material Sample Box 3D Tiles */
+    .sample-tile {
+      transform-style: preserve-3d;
+      transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease, border-color 0.2s ease;
+    }
+    .sample-tile:hover {
+      transform: translateY(-8px) translateZ(24px) rotateX(-2deg);
+      box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(112, 145, 230, 0.4);
+    }
+
+    /* Shimmering Top Horizon Line */
+    .horizon-glow {
+      background: linear-gradient(90deg, transparent 0%, #3D52A0 25%, #7091E6 50%, #EDE8F5 75%, transparent 100%);
+      background-size: 200% 100%;
+      animation: horizonSweep 8s linear infinite;
+    }
+
+    @keyframes horizonSweep {
+      0% { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
+    }
+
+    /* Pulse Glow */
+    @keyframes pulseSoft {
+      0%, 100% { opacity: 0.8; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.08); }
+    }
+    .live-pulse {
+      animation: pulseSoft 3s ease-in-out infinite;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen flex flex-col bg-[#0D1122]">
+
+  <!-- TOP HEADER / CONTROL BAR -->
+  <header class="sticky top-0 z-50 bg-[#12182F]/90 backdrop-blur-md border-b border-[#252C4E] px-6 py-4">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-[#7091E6] to-[#3D52A0] flex items-center justify-center text-white shadow-md font-black text-sm">
+          FF
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-sm text-white tracking-wide">FFDS STUDIO OS</h1>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-[#3D52A0]/40 text-[#ADBBDA] border border-[#7091E6]/30">3D FOOTER LAB</span>
+          </div>
+          <p class="text-[11px] text-[#8E96B8]">Interactive 3D mockups & typographic architectural suggestions</p>
+        </div>
+      </div>
+
+      <!-- MOCKUP SWITCHER TABS -->
+      <div class="flex items-center bg-[#1A223E] p-1 rounded-xl border border-[#2B355A]">
+        <button onclick="switchMockup(1)" id="tab-opt-1" class="tab-btn px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#3D52A0] shadow-sm transition-all flex items-center gap-2">
+          <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+          <span>1. Blueprint Ledger (3D Tilt)</span>
+        </button>
+        <button onclick="switchMockup(2)" id="tab-opt-2" class="tab-btn px-4 py-1.5 rounded-lg text-xs font-semibold text-[#8E96B8] hover:text-white transition-all flex items-center gap-2">
+          <i data-lucide="box" class="w-3.5 h-3.5"></i>
+          <span>2. Material Sample Box</span>
+        </button>
+        <button onclick="switchMockup(3)" id="tab-opt-3" class="tab-btn px-4 py-1.5 rounded-lg text-xs font-semibold text-[#8E96B8] hover:text-white transition-all flex items-center gap-2">
+          <i data-lucide="compass" class="w-3.5 h-3.5"></i>
+          <span>3. Minimal Monolith</span>
+        </button>
+      </div>
+
+      <!-- INTERACTIVITY CONTROLS -->
+      <div class="flex items-center gap-2.5 text-xs text-[#8E96B8]">
+        <label class="flex items-center gap-1.5 cursor-pointer select-none bg-[#1A223E] px-3 py-1.5 rounded-lg border border-[#2B355A]">
+          <input type="checkbox" id="gyro-toggle" checked onchange="toggleTiltPhysics(this.checked)" class="rounded text-[#3D52A0] focus:ring-0">
+          <span>Interactive 3D Tilt</span>
+        </label>
+        <button onclick="resetPerspective()" class="px-2.5 py-1.5 bg-[#1A223E] hover:bg-[#252C4E] text-[#ADBBDA] rounded-lg border border-[#2B355A] flex items-center gap-1.5 transition">
+          <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+          <span>Reset</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MOCKUP INFO BANNER -->
+  <div class="bg-[#151C36] border-b border-[#202947] px-6 py-2.5">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between text-xs text-[#ADBBDA] gap-2">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 live-pulse"></span>
+        <span id="mockup-tagline" class="font-medium">Option 1 Active: Hover over and move cursor around the footer slab to experience physical 3D tilt and layer separation.</span>
+      </div>
+      <div class="text-[11px] text-[#8E96B8] font-mono">
+        <span class="text-white font-bold">Key Binding:</span> Hover freely · Depth planes mapped from Z:0px to Z:32px
+      </div>
+    </div>
+  </div>
+
+  <!-- SIMULATED HOMEPAGE PAGE CONTENT SKELETON (To show realistic footer context) -->
+  <main class="flex-1 max-w-7xl mx-auto w-full px-6 py-12 flex flex-col gap-8">
+    <div class="p-8 rounded-3xl bg-[#141B34]/60 border border-[#242F55] relative overflow-hidden">
+      <div class="absolute -right-20 -top-20 w-96 h-96 rounded-full bg-[#3D52A0]/10 blur-3xl pointer-events-none"></div>
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+        <div>
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#3D52A0]/20 border border-[#7091E6]/30 text-xs font-semibold text-[#ADBBDA] mb-3">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5 text-[#7091E6]"></i>
+            <span>FFDS Studio OS — Active Portfolio</span>
+          </div>
+          <h2 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Form Factors Design Studio</h2>
+          <p class="text-sm text-[#8E96B8] mt-1 max-w-xl">
+            This preview simulates the bottom of the studio dashboard/homepage so you can see how the footer grounds the entire application. Scroll below to test the 3D footer.
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="px-4 py-2.5 rounded-2xl bg-[#1A2344] border border-[#2B3968] text-right">
+            <span class="text-[10px] uppercase font-bold text-[#8E96B8] tracking-wider block">Live Book</span>
+            <span class="text-lg font-bold text-white tabular-nums">₹3,01,63,637</span>
+          </div>
+          <div class="px-4 py-2.5 rounded-2xl bg-[#1A2344] border border-[#2B3968] text-right">
+            <span class="text-[10px] uppercase font-bold text-[#8E96B8] tracking-wider block">Active Sites</span>
+            <span class="text-lg font-bold text-emerald-400 tabular-nums">14 Sites</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <!-- OPTION 1: THE ARCHITECTURAL BLUEPRINT LEDGER (3D TILT SLAB) -->
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <section id="view-opt-1" class="w-full perspective-stage pb-16 pt-4">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h3 class="text-xs uppercase font-bold tracking-widest text-[#7091E6] flex items-center gap-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#7091E6]"></span>
+            Option 1: The Architectural Blueprint Ledger
+          </h3>
+          <p class="text-xs text-[#8E96B8]">Floating physical drafting slab with dynamic 3D tilt, CAD grid texture, and live ops status.</p>
+        </div>
+        <span class="text-[11px] font-mono text-[#5A628A]">3D Tilt Enabled (Move Mouse Over)</span>
+      </div>
+
+      <!-- TILT CONTAINER -->
+      <div id="slab-card" class="slab-3d shadow-3d-active relative rounded-3xl bg-[#12182F] border border-[#2A355D] p-8 md:p-10 overflow-hidden cad-grid">
+        
+        <!-- Top Horizon Accent Bevel -->
+        <div class="absolute top-0 left-0 right-0 h-[2px] horizon-glow"></div>
+
+        <!-- Ambient Glow behind lead layer -->
+        <div class="absolute -left-20 -bottom-20 w-80 h-80 rounded-full bg-[#3D52A0]/20 blur-3xl pointer-events-none"></div>
+        <div class="absolute right-0 top-0 w-96 h-96 rounded-full bg-[#7091E6]/10 blur-3xl pointer-events-none"></div>
+
+        <!-- ROW 1: HEADER & LIVE STATUS BADGE (Z: 28px) -->
+        <div class="slab-layer-lead flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b border-[#222C4E]">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#3D52A0] via-[#2A3A73] to-[#12182F] border border-[#7091E6]/40 flex items-center justify-center text-white font-serif font-bold text-xl shadow-lg">
+              FF
+            </div>
+            <div>
+              <div class="flex items-center gap-2.5">
+                <h4 class="text-lg font-bold text-white tracking-tight">FORM FACTORS DESIGN STUDIO</h4>
+                <span class="px-2 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider bg-[#3D52A0]/40 text-[#EDE8F5] border border-[#7091E6]/40">Studio OS v3.4</span>
+              </div>
+              <p class="text-xs text-[#ADBBDA] mt-0.5 font-medium">Turnkey Interior Architecture, Engineering & Quantity Surveying</p>
+            </div>
+          </div>
+
+          <!-- Real-time Live Operations Pill -->
+          <div class="flex items-center gap-3 bg-[#18203D]/90 backdrop-blur border border-[#2E3B68] px-4 py-2 rounded-2xl shadow-sm">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 live-pulse"></span>
+            <div class="text-left">
+              <span class="text-[10px] uppercase font-bold tracking-wider text-[#8E96B8] block leading-tight">System State</span>
+              <span class="text-xs font-semibold text-white">42 Projects Monitored · Cloud Firestore Synced</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROW 2: ARCHITECTURAL WORKFLOW RAILS & DIRECTORIES (Z: 16px) -->
+        <div class="slab-layer-mid grid grid-cols-1 md:grid-cols-4 gap-8 py-8 border-b border-[#222C4E]">
+          
+          <!-- Column 1: Studio Operating Core -->
+          <div>
+            <h5 class="text-[11px] font-bold uppercase tracking-[0.14em] text-[#7091E6] mb-3.5 flex items-center gap-1.5">
+              <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+              <span>Lifecycle Rails</span>
+            </h5>
+            <ul class="space-y-2 text-xs">
+              <li><a href="#" class="text-[#ADBBDA] hover:text-white transition flex items-center gap-2"><span class="text-[#3D52A0] font-mono">01.</span> Client Discovery & Vitals</a></li>
+              <li><a href="#" class="text-[#ADBBDA] hover:text-white transition flex items-center gap-2"><span class="text-[#3D52A0] font-mono">02.</span> Master BOQ & Room Assemblies</a></li>
+              <li><a href="#" class="text-[#ADBBDA] hover:text-white transition flex items-center gap-2"><span class="text-[#3D52A0] font-mono">03.</span> 3-Tier Proposal Engine</a></li>
+              <li><a href="#" class="text-[#ADBBDA] hover:text-white transition flex items-center gap-2"><span class="text-[#3D52A0] font-mono">04.</span> Turnkey Contract & Milestones</a></li>
+              <li><a href="#" class="text-[#ADBBDA] hover:text-white transition flex items-center gap-2"><span class="text-[#3D52A0] font-mono">05.</span> Site Gate & Handover Vault</a></li>
+            </ul>
+          </div>
+
+          <!-- Column 2: Governance & Standards -->
+          <div>
+            <h5 class="text-[11px] font-bold uppercase tracking-[0.14em] text-[#7091E6] mb-3.5 flex items-center gap-1.5">
+              <i data-lucide="file-check-2" class="w-3.5 h-3.5"></i>
+              <span>Standards & Audit</span>
+            </h5>
+            <ul class="space-y-2 text-xs text-[#8E96B8]">
+              <li class="flex items-center justify-between"><span class="text-[#ADBBDA]">CPWD / IS Code Library</span> <span class="text-[9px] font-mono bg-[#1E2749] px-1.5 py-0.5 rounded text-[#7091E6]">Compliant</span></li>
+              <li class="flex items-center justify-between"><span class="text-[#ADBBDA]">GST Tax Rules & Reverse Charge</span> <span class="text-[9px] font-mono bg-[#1E2749] px-1.5 py-0.5 rounded text-[#7091E6]">18% Std</span></li>
+              <li class="flex items-center justify-between"><span class="text-[#ADBBDA]">Document Meter Audit Chain</span> <span class="text-[9px] font-mono bg-[#1E2749] px-1.5 py-0.5 rounded text-emerald-400">Verifiable</span></li>
+              <li class="flex items-center justify-between"><span class="text-[#ADBBDA]">Milestone Release Escrow</span> <span class="text-[9px] font-mono bg-[#1E2749] px-1.5 py-0.5 rounded text-[#ADBBDA]">Strict</span></li>
+              <li class="flex items-center justify-between"><span class="text-[#ADBBDA]">Material Rate Master Index</span> <span class="text-[9px] font-mono bg-[#1E2749] px-1.5 py-0.5 rounded text-[#ADBBDA]">Live 2026</span></li>
+            </ul>
+          </div>
+
+          <!-- Column 3: Regional Practice Hubs -->
+          <div>
+            <h5 class="text-[11px] font-bold uppercase tracking-[0.14em] text-[#7091E6] mb-3.5 flex items-center gap-1.5">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+              <span>Practice Presence</span>
+            </h5>
+            <div class="space-y-2 text-xs">
+              <div class="flex items-start gap-2 text-[#ADBBDA]">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#7091E6] mt-1.5"></span>
+                <div>
+                  <strong class="text-white block font-medium">Bengaluru Studio & Workshop</strong>
+                  <span class="text-[11px] text-[#8E96B8]">Indiranagar 100ft Rd & Whitefield</span>
+                </div>
+              </div>
+              <div class="flex items-start gap-2 text-[#ADBBDA]">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#7091E6] mt-1.5"></span>
+                <div>
+                  <strong class="text-white block font-medium">Hyderabad Operations</strong>
+                  <span class="text-[11px] text-[#8E96B8]">Jubilee Hills & Financial District</span>
+                </div>
+              </div>
+              <div class="flex items-start gap-2 text-[#ADBBDA]">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#7091E6] mt-1.5"></span>
+                <div>
+                  <strong class="text-white block font-medium">Mumbai & NCR Satellite Sites</strong>
+                  <span class="text-[11px] text-[#8E96B8]">BKC & Gurugram Turnkey Suites</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 4: Quick Command & Shortkeys -->
+          <div class="bg-[#18203D]/60 p-4 rounded-2xl border border-[#26325B]">
+            <h5 class="text-[11px] font-bold uppercase tracking-[0.14em] text-white mb-2.5 flex items-center gap-1.5">
+              <i data-lucide="command" class="w-3.5 h-3.5 text-[#7091E6]"></i>
+              <span>Studio Shortcuts</span>
+            </h5>
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between text-[#8E96B8]">
+                <span>Find project</span>
+                <kbd class="px-1.5 py-0.5 rounded bg-[#202A4E] text-[#EDE8F5] border border-[#344274] font-mono text-[10px]">/</kbd>
+              </div>
+              <div class="flex items-center justify-between text-[#8E96B8]">
+                <span>Global Command</span>
+                <kbd class="px-1.5 py-0.5 rounded bg-[#202A4E] text-[#EDE8F5] border border-[#344274] font-mono text-[10px]">⌘ K</kbd>
+              </div>
+              <div class="flex items-center justify-between text-[#8E96B8]">
+                <span>Quick New Project</span>
+                <kbd class="px-1.5 py-0.5 rounded bg-[#202A4E] text-[#EDE8F5] border border-[#344274] font-mono text-[10px]">N</kbd>
+              </div>
+            </div>
+            <div class="mt-3.5 pt-3 border-t border-[#293561]">
+              <p class="text-[10px] text-[#ADBBDA] leading-snug">
+                <strong class="text-white">Strict Traceability:</strong> All contract figures and BOQ items lock to verified vendor invoices.
+              </p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ROW 3: FOOTER SIGN-OFF & COPYRIGHT (Z: 28px) -->
+        <div class="slab-layer-lead pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-[#8E96B8]">
+          <div class="flex items-center gap-3">
+            <span class="text-[#ADBBDA]">© 2026 Form Factors Design Studio.</span>
+            <span class="hidden sm:inline text-[#3D52A0]">•</span>
+            <span>All rights reserved. Proprietary Enterprise OS.</span>
+          </div>
+
+          <!-- Micro Motto -->
+          <div class="font-serif italic text-sm text-[#EDE8F5]">
+            "Precise to the millimeter, traceable to the rupee."
+          </div>
+
+          <div class="flex items-center gap-4 text-[#ADBBDA]">
+            <a href="#" class="hover:text-white transition">Data Privacy</a>
+            <a href="#" class="hover:text-white transition">Contract Terms</a>
+            <a href="#" class="hover:text-white transition">Support Desk</a>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <!-- OPTION 2: THE MATERIAL SAMPLE BOX (TACTILE 3D TILES) -->
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <section id="view-opt-2" class="w-full hidden pb-16 pt-4">
+      <div class="mb-4">
+        <h3 class="text-xs uppercase font-bold tracking-widest text-[#7091E6] flex items-center gap-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#7091E6]"></span>
+          Option 2: The Precision Material Sample Box
+        </h3>
+        <p class="text-xs text-[#8E96B8]">Inspired by luxury physical material trays (statuary ceramic, fluted oak, satin brass). Hover to lift tiles.</p>
+      </div>
+
+      <div class="rounded-3xl bg-[#0F1426] border border-[#283358] p-8 md:p-10 shadow-2xl relative overflow-hidden">
+        
+        <!-- Header Text -->
+        <div class="text-center max-w-2xl mx-auto mb-8">
+          <p class="text-xs font-mono uppercase tracking-[0.2em] text-[#7091E6] mb-1">Architectural Discipline</p>
+          <h4 class="text-2xl font-serif text-white tracking-tight">Every stage of interior practice, unified in one box.</h4>
+          <p class="text-xs text-[#8E96B8] mt-2">Interact with the material plates below to inspect how each discipline interlocks into the turnkey delivery chain.</p>
+        </div>
+
+        <!-- 3D MATERIAL SAMPLE TRAY -->
+        <div class="bg-[#151C36] border border-[#27345E] rounded-2xl p-4 md:p-6 mb-8 perspective-stage">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <!-- Tile 1: Discovery & Concept -->
+            <div class="sample-tile bg-gradient-to-b from-[#1C2548] to-[#141B36] rounded-xl p-5 border border-[#334277] flex flex-col justify-between h-52 relative group cursor-pointer">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-mono text-[#7091E6] font-bold">PLATE 01</span>
+                <span class="text-[10px] uppercase font-bold text-amber-300/80 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/20">Lead & Vitals</span>
+              </div>
+              <div>
+                <i data-lucide="compass" class="w-6 h-6 text-[#ADBBDA] mb-2 group-hover:text-white transition"></i>
+                <h5 class="text-sm font-bold text-white leading-tight">Concept & Client Intake</h5>
+                <p class="text-[11px] text-[#8E96B8] mt-1 leading-snug">Client moodboards, 2BHK/3BHK configuration matrix, scope bounds.</p>
+              </div>
+              <div class="pt-2 border-t border-[#232F57] text-[10px] font-mono text-[#ADBBDA] flex items-center justify-between">
+                <span>Material: Ceramic</span>
+                <span class="text-white">Active</span>
+              </div>
+            </div>
+
+            <!-- Tile 2: BOQ Engineering -->
+            <div class="sample-tile bg-gradient-to-b from-[#1E2952] to-[#151D3A] rounded-xl p-5 border border-[#3E4F8C] flex flex-col justify-between h-52 relative group cursor-pointer shadow-md">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-mono text-[#7091E6] font-bold">PLATE 02</span>
+                <span class="text-[10px] uppercase font-bold text-[#ADBBDA] bg-[#3D52A0]/40 px-2 py-0.5 rounded border border-[#7091E6]/30">Quantity Survey</span>
+              </div>
+              <div>
+                <i data-lucide="calculator" class="w-6 h-6 text-[#7091E6] mb-2 group-hover:text-white transition"></i>
+                <h5 class="text-sm font-bold text-white leading-tight">Master BOQ & Margins</h5>
+                <p class="text-[11px] text-[#8E96B8] mt-1 leading-snug">Sub-item labor/material breakdown, 3-tier options, live gross margin %.</p>
+              </div>
+              <div class="pt-2 border-t border-[#232F57] text-[10px] font-mono text-[#ADBBDA] flex items-center justify-between">
+                <span>Finish: Anodized Alloy</span>
+                <span class="text-white">Formula Locked</span>
+              </div>
+            </div>
+
+            <!-- Tile 3: Contract Escrow -->
+            <div class="sample-tile bg-gradient-to-b from-[#1C2548] to-[#141B36] rounded-xl p-5 border border-[#334277] flex flex-col justify-between h-52 relative group cursor-pointer">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-mono text-[#7091E6] font-bold">PLATE 03</span>
+                <span class="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/20">Legally Bound</span>
+              </div>
+              <div>
+                <i data-lucide="file-signature" class="w-6 h-6 text-[#ADBBDA] mb-2 group-hover:text-white transition"></i>
+                <h5 class="text-sm font-bold text-white leading-tight">Milestone Milestones</h5>
+                <p class="text-[11px] text-[#8E96B8] mt-1 leading-snug">5-stage design & execution payment escrow, digital OTP sign-off.</p>
+              </div>
+              <div class="pt-2 border-t border-[#232F57] text-[10px] font-mono text-[#ADBBDA] flex items-center justify-between">
+                <span>Security: HMAC Signed</span>
+                <span class="text-white">Escrow</span>
+              </div>
+            </div>
+
+            <!-- Tile 4: Handover & Dossier -->
+            <div class="sample-tile bg-gradient-to-b from-[#1C2548] to-[#141B36] rounded-xl p-5 border border-[#334277] flex flex-col justify-between h-52 relative group cursor-pointer">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-mono text-[#7091E6] font-bold">PLATE 04</span>
+                <span class="text-[10px] uppercase font-bold text-[#EDE8F5] bg-[#3D52A0]/40 px-2 py-0.5 rounded border border-[#7091E6]/30">Key Turnover</span>
+              </div>
+              <div>
+                <i data-lucide="key" class="w-6 h-6 text-[#ADBBDA] mb-2 group-hover:text-white transition"></i>
+                <h5 class="text-sm font-bold text-white leading-tight">As-Built Handover Vault</h5>
+                <p class="text-[11px] text-[#8E96B8] mt-1 leading-snug">Snag resolution certificates, warranty cards, client portal credentials.</p>
+              </div>
+              <div class="pt-2 border-t border-[#232F57] text-[10px] font-mono text-[#ADBBDA] flex items-center justify-between">
+                <span>Asset: Final Dossier</span>
+                <span class="text-emerald-400">Zero Snags</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Footer Meta Row -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-[#222C4E] text-xs text-[#8E96B8]">
+          <div class="flex items-center gap-3">
+            <span class="font-bold text-white">FORM FACTORS DESIGN STUDIO</span>
+            <span>•</span>
+            <span>Headquarters: Indiranagar, Bengaluru, KA 560038</span>
+          </div>
+          <div class="flex items-center gap-6">
+            <span class="text-[#ADBBDA]">GSTIN: 29AABCF1234F1Z5</span>
+            <span class="text-[#ADBBDA]">Registered Architectural Practice</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <!-- OPTION 3: THE MINIMALIST MONOLITH (EXECUTIVE LUXURY) -->
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <section id="view-opt-3" class="w-full hidden pb-16 pt-4">
+      <div class="mb-4">
+        <h3 class="text-xs uppercase font-bold tracking-widest text-[#7091E6] flex items-center gap-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#7091E6]"></span>
+          Option 3: The Minimalist Monolith & Horizon Light
+        </h3>
+        <p class="text-xs text-[#8E96B8]">Italian luxury furniture studio aesthetic (Boffi / Poliform style). Dark monumental depth with refractive top horizon.</p>
+      </div>
+
+      <div class="rounded-3xl bg-[#090C17] border border-[#1E2540] p-10 md:p-14 shadow-2xl relative overflow-hidden">
+        
+        <!-- Refractive Top Horizon Line -->
+        <div class="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#7091E6] to-transparent"></div>
+
+        <!-- Giant Ambient Ghost Watermark -->
+        <div class="absolute right-6 -bottom-10 text-[110px] font-serif font-black text-[#151D38]/30 select-none pointer-events-none tracking-tighter">
+          FFDS
+        </div>
+
+        <div class="relative z-10">
+          <div class="max-w-xl mb-10">
+            <span class="text-[10px] font-mono tracking-[0.25em] uppercase text-[#7091E6] block mb-2">Form Factors Studio OS</span>
+            <h4 class="text-3xl sm:text-4xl font-serif text-white tracking-tight leading-tight">
+              Crafted for interior spaces that endure.
+            </h4>
+            <p class="text-sm text-[#8E96B8] mt-3 font-light leading-relaxed">
+              We replace spreadsheet ambiguity with audited architectural certainty. From the first client conversation to the final handover key turnover.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-8 py-8 border-y border-[#181F38] text-xs">
+            <div>
+              <span class="text-[10px] uppercase font-bold text-[#7091E6] tracking-wider block mb-2.5">Studio Operations</span>
+              <ul class="space-y-1.5 text-[#ADBBDA]">
+                <li><a href="#" class="hover:text-white transition">Projects Overview</a></li>
+                <li><a href="#" class="hover:text-white transition">Active Site Matrix</a></li>
+                <li><a href="#" class="hover:text-white transition">Drawings Tracker</a></li>
+                <li><a href="#" class="hover:text-white transition">Vendor Procurement</a></li>
+              </ul>
+            </div>
+            <div>
+              <span class="text-[10px] uppercase font-bold text-[#7091E6] tracking-wider block mb-2.5">Financial Engine</span>
+              <ul class="space-y-1.5 text-[#ADBBDA]">
+                <li><a href="#" class="hover:text-white transition">Master BOQ Matrix</a></li>
+                <li><a href="#" class="hover:text-white transition">3-Tier Proposal Pricing</a></li>
+                <li><a href="#" class="hover:text-white transition">Tax Invoicing (GST)</a></li>
+                <li><a href="#" class="hover:text-white transition">Cashflow Projections</a></li>
+              </ul>
+            </div>
+            <div>
+              <span class="text-[10px] uppercase font-bold text-[#7091E6] tracking-wider block mb-2.5">Client Experience</span>
+              <ul class="space-y-1.5 text-[#ADBBDA]">
+                <li><a href="#" class="hover:text-white transition">Live Client Portal</a></li>
+                <li><a href="#" class="hover:text-white transition">Daily Site Snapshots</a></li>
+                <li><a href="#" class="hover:text-white transition">Milestone Approvals</a></li>
+                <li><a href="#" class="hover:text-white transition">Digital Warranty Vault</a></li>
+              </ul>
+            </div>
+            <div>
+              <span class="text-[10px] uppercase font-bold text-[#7091E6] tracking-wider block mb-2.5">Studio Vitals</span>
+              <div class="space-y-2">
+                <div>
+                  <span class="text-[10px] text-[#8E96B8] block">Live Projects</span>
+                  <span class="text-sm font-bold text-white tabular-nums">42 Accounts</span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-[#8E96B8] block">Under Management</span>
+                  <span class="text-sm font-bold text-white tabular-nums">₹3.01 Cr</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#5A628A]">
+            <p>© 2026 Form Factors Design Studio. Bengaluru • Hyderabad • Mumbai.</p>
+            <p class="font-mono text-[11px] text-[#8E96B8]">Confidential Internal System</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <!-- COMPARISON MATRIX & COPY RECOMMENDATION -->
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <section class="mt-4 p-6 rounded-2xl bg-[#141B34] border border-[#232F55] text-xs text-[#ADBBDA]">
+      <div class="flex items-center gap-2 mb-3 text-white font-bold">
+        <i data-lucide="sparkles" class="w-4 h-4 text-[#7091E6]"></i>
+        <span>Design Evaluation & Copy Rationale</span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="p-3.5 rounded-xl bg-[#1A2346] border border-[#2B3868]">
+          <span class="font-bold text-white block mb-1">Option 1: Blueprint Ledger (Recommended)</span>
+          <p class="text-[#8E96B8] text-[11px]">Directly reuses your project card 3D tilt engine. Offers the most functional value with live ops indicators, keyboard hints, and clean lifecycle rails.</p>
+        </div>
+        <div class="p-3.5 rounded-xl bg-[#1A2346] border border-[#2B3868]">
+          <span class="font-bold text-white block mb-1">Option 2: Material Sample Box</span>
+          <p class="text-[#8E96B8] text-[11px]">Very tactile for clients. Visually explains how the 4 phases (Intake, BOQ, Contracts, Handover) interlock like physical finish samples.</p>
+        </div>
+        <div class="p-3.5 rounded-xl bg-[#1A2346] border border-[#2B3868]">
+          <span class="font-bold text-white block mb-1">Option 3: Minimal Monolith</span>
+          <p class="text-[#8E96B8] text-[11px]">Lowest visual noise, maximum luxury restraint. Great if you prefer a subtle, dark grounding anchor without interactive game-like motion.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- JAVASCRIPT LOGIC FOR 3D TILT & TAB SWITCHING -->
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    let tiltEnabled = true;
+
+    function toggleTiltPhysics(val) {
+      tiltEnabled = val;
+      if (!val) {
+        resetPerspective();
+      }
+    }
+
+    function resetPerspective() {
+      const card = document.getElementById('slab-card');
+      if (card) {
+        card.style.transform = 'rotateY(0deg) rotateX(0deg) scale(1)';
+        card.style.setProperty('--tilt-x', '0');
+        card.style.setProperty('--tilt-y', '0');
+      }
+    }
+
+    // Switch between Option 1, 2, and 3
+    function switchMockup(optIndex) {
+      ['view-opt-1', 'view-opt-2', 'view-opt-3'].forEach((id, idx) => {
+        const el = document.getElementById(id);
+        const tab = document.getElementById(`tab-opt-${idx + 1}`);
+        if (idx + 1 === optIndex) {
+          el.classList.remove('hidden');
+          tab.classList.add('bg-[#3D52A0]', 'text-white', 'shadow-sm');
+          tab.classList.remove('text-[#8E96B8]');
+        } else {
+          el.classList.add('hidden');
+          tab.classList.remove('bg-[#3D52A0]', 'text-white', 'shadow-sm');
+          tab.classList.add('text-[#8E96B8]');
+        }
+      });
+
+      const taglines = {
+        1: 'Option 1 Active: Hover over and move cursor around the footer slab to experience physical 3D tilt and layer separation.',
+        2: 'Option 2 Active: Hover over each material sample tile to see the 3D tactile elevation effect.',
+        3: 'Option 3 Active: Minimalist executive monolith with ambient top horizon line and monumental typography.'
+      };
+      document.getElementById('mockup-tagline').textContent = taglines[optIndex];
+    }
+
+    // Interactive 3D Tilt for Option 1
+    const slabCard = document.getElementById('slab-card');
+    if (slabCard) {
+      const MAX_TILT = 4.5; // subtle architectural tilt
+      const clamp = (v) => Math.max(-1, Math.min(1, v));
+
+      slabCard.addEventListener('mousemove', (e) => {
+        if (!tiltEnabled) return;
+        const rect = slabCard.getBoundingClientRect();
+        const nx = clamp(((e.clientX - rect.left) / rect.width) * 2 - 1);
+        const ny = clamp(((e.clientY - rect.top) / rect.height) * 2 - 1);
+
+        const ry = nx * MAX_TILT;
+        const rx = -ny * MAX_TILT;
+
+        slabCard.style.transform = `rotateY(${ry.toFixed(2)}deg) rotateX(${rx.toFixed(2)}deg) scale(1.008)`;
+        slabCard.style.setProperty('--tilt-x', rx.toFixed(2));
+        slabCard.style.setProperty('--tilt-y', ry.toFixed(2));
+      });
+
+      slabCard.addEventListener('mouseenter', () => {
+        if (!tiltEnabled) return;
+        slabCard.style.transition = 'transform 120ms cubic-bezier(0.22, 1, 0.36, 1)';
+      });
+
+      slabCard.addEventListener('mouseleave', () => {
+        slabCard.style.transition = 'transform 600ms cubic-bezier(0.22, 1, 0.36, 1)';
+        slabCard.style.transform = 'rotateY(0deg) rotateX(0deg) scale(1)';
+        slabCard.style.setProperty('--tilt-x', '0');
+        slabCard.style.setProperty('--tilt-y', '0');
+      });
+    }
+  </script>
+</body>
+</html>

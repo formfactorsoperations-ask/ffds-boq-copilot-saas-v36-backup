@@ -42,6 +42,9 @@ const META: Record<string, PageMeta> = {
   'ai-settings':          { title: 'AI Settings',       subtitle: 'Model behaviour and pricing strategy', scope: 'studio' },
   'saas-dashboard':       { title: 'Platform Admin',    subtitle: 'Tenants, usage and provisioning', scope: 'studio' },
   emails:                 { title: 'Email Drafts',      subtitle: 'Queued and sent client correspondence', scope: 'studio' },
+  'data-privacy':         { title: 'Data Privacy',      subtitle: 'What is stored, who processes it, what leaves the studio', scope: 'studio' },
+  support:                { title: 'Support Desk',      subtitle: 'System status and how to report a problem', scope: 'studio' },
+  'terms-of-use':         { title: 'Terms of Use',      subtitle: 'How the studio expects this system to be used', scope: 'studio' },
 
   // ---- Project: stage 1 ---------------------------------------------------
   leadiq:                 { subtitle: 'Space parameters, locked scopes, and sales-to-site handoff' },

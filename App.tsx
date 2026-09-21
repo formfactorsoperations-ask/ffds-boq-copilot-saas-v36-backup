@@ -14,6 +14,10 @@ import PageTitleBlock from "./components/PageTitleBlock";
 import { PageHeaderProvider } from "./contexts/PageHeaderContext";
 import { BackgroundBeamsWithCollision } from "./components/ui/background-beams-with-collision";
 import StudioHomeOrbit from "./components/StudioHomeOrbit";
+import StudioFooter from "./components/home/StudioFooter";
+import DataPrivacyPage from "./components/studio/DataPrivacyPage";
+import SupportDeskPage from "./components/studio/SupportDeskPage";
+import TermsOfUsePage from "./components/studio/TermsOfUsePage";
 import { buildProjectTemplate } from "./lib/cloneProject";
 import { ensureScopeRooms } from "./lib/scopeBuckets";
 import { showSuccessWithNext } from "./components/SuccessWithNextToast";
@@ -157,6 +161,7 @@ const DEFAULT_LEAD_PROFILE: LeadProfile = {
 
 export default function App() {
   // Global State
+  console.log("App.tsx is rendering...");
   const { orgData, currentUserAuth, currentRole, teamMembers } = useOrg();
   const [activeTab, setActiveTab] = useState("home");
   const [showWizardOverride, setShowWizardOverride] = useState(false);
@@ -180,7 +185,7 @@ export default function App() {
     is parsed inside init(), so the effect below retracts it as soon as we know.
   */
   const [showLanding, setShowLanding] = useState(
-    () => new URLSearchParams(window.location.search).has("landing"),
+    () => !localStorage.getItem("ffds_seen_landing"),
   );
   useEffect(() => {
     if (!showLanding) localStorage.setItem("ffds_seen_landing", "1");
@@ -706,11 +711,7 @@ export default function App() {
     if (!authResolved || !isDataLoaded) return;
 
     if (!authProfile) {
-      if (portalProjectId) {
-        setAppMode("login");
-      } else {
-        setAppMode("ops");
-      }
+      setAppMode("login");
       return;
     }
 
@@ -757,16 +758,12 @@ export default function App() {
     return () => { cancelled = true; };
   }, [authResolved, authProfile, isDataLoaded]);
 
-  const lastLoadedTenantRef = useRef<string | null>(null);
   // Re-fetch all data when tenantId changes (multi-tenant isolation safety)
   useEffect(() => {
     if (!orgData?.tenantId) return;
     
     // Skip if data is not loaded yet (since init() will load it anyway)
     if (!isDataLoaded) return;
-
-    if (lastLoadedTenantRef.current === orgData?.tenantId) return;
-    lastLoadedTenantRef.current = orgData?.tenantId;
 
     async function reloadTenantData() {
       console.log(`Tenant changed to ${orgData?.tenantId} - reloading library...`);
@@ -2221,6 +2218,9 @@ export default function App() {
     "communication-templates",
     "saas-dashboard",
     "admin-templates-bank",
+    "data-privacy",
+    "support",
+    "terms-of-use",
   ].includes(activeTab);
   const hasProjectData = !!activeInternalId;
 
@@ -2398,14 +2398,12 @@ export default function App() {
 
   if (appMode === "login") {
     return (
-      <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
-        <LoginScreen
-          onLoginOps={() => {
-            localStorage.setItem("ffds_app_mode", "ops");
-            setAppMode("ops");
-          }}
-        />
-      </Suspense>
+      <LoginScreen
+        onLoginOps={() => {
+          localStorage.setItem("ffds_app_mode", "ops");
+          setAppMode("ops");
+        }}
+      />
     );
   }
 
@@ -2493,6 +2491,7 @@ export default function App() {
     );
   }
 
+  console.log("App render returned JSX!");
   return (
     <PageHeaderProvider route={activeTab}>
       <div className={`min-h-screen overflow-x-hidden relative ${isProjectTab && hasProjectData ? "md:h-screen md:overflow-hidden" : ""}`}>
@@ -2693,6 +2692,17 @@ export default function App() {
                       // ACTIVE_ADMIN_TEMPLATES_BANK
                     />
                   )}
+
+                  {/* The slim footer, on the working screens only.
+
+                      Home renders the full one. Here it is the plate alone --
+                      studio, place, year, classification -- because the
+                      capability columns would link to the page you are already
+                      on and the statement would repeat itself five times. */}
+                  {activeTab === "data-privacy" && <DataPrivacyPage />}
+                  {activeTab === "support" && <SupportDeskPage />}
+                  {activeTab === "terms-of-use" && <TermsOfUsePage />}
+
 {activeTab === "bank" && (
                     <div className="space-y-4">
                       {/* ACTIVE_BANK */}
@@ -2799,6 +2809,19 @@ export default function App() {
                       confirmReset={confirmReset}
                       // ACTIVE_SAAS_SETTINGS_BLOCK_1
                     />
+                  )}
+
+                  {/* Mounted after every page branch, not beside one.
+                      Placed mid-chain it rendered ABOVE the content on any
+                      route declared further down -- which is how it ended up
+                      over the top of Settings. Being structurally last is what
+                      makes it a footer on every route rather than on the ones
+                      that happen to sit above it. */}
+                  {["projects", "clients", "reports", "admin-templates-bank",
+                    "data-privacy", "support", "terms-of-use", "studio-settings",
+                    "terms-and-payment", "communication-templates",
+                    "ai-settings"].includes(activeTab) && (
+                    <StudioFooter variant="slim" onNavigate={setActiveTab} />
                   )}
 
                   {/* PROJECT TABS - Only render if project exists - BLOCK 1 */}
@@ -3368,6 +3391,17 @@ export default function App() {
                       projects={projectLibrary}
                     />
                   )}
+
+                  {/* The slim footer, on the working screens only.
+
+                      Home renders the full one. Here it is the plate alone --
+                      studio, place, year, classification -- because the
+                      capability columns would link to the page you are already
+                      on and the statement would repeat itself five times. */}
+                  {activeTab === "data-privacy" && <DataPrivacyPage />}
+                  {activeTab === "support" && <SupportDeskPage />}
+                  {activeTab === "terms-of-use" && <TermsOfUsePage />}
+
 {activeTab === "bank" && (
                     <div className="space-y-4">
                       <div className="flex justify-end gap-3 items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full">
@@ -3470,6 +3504,19 @@ export default function App() {
                       onClearProject={handleClearProject}
                       confirmReset={confirmReset}
                     />
+                  )}
+
+                  {/* Mounted after every page branch, not beside one.
+                      Placed mid-chain it rendered ABOVE the content on any
+                      route declared further down -- which is how it ended up
+                      over the top of Settings. Being structurally last is what
+                      makes it a footer on every route rather than on the ones
+                      that happen to sit above it. */}
+                  {["projects", "clients", "reports", "admin-templates-bank",
+                    "data-privacy", "support", "terms-of-use", "studio-settings",
+                    "terms-and-payment", "communication-templates",
+                    "ai-settings"].includes(activeTab) && (
+                    <StudioFooter variant="slim" onNavigate={setActiveTab} />
                   )}
 
                   {/* PROJECT TABS - Only render if project exists - BLOCK 2 */}

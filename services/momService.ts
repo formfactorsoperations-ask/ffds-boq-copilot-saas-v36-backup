@@ -1,6 +1,7 @@
 import { collection, addDoc, doc, getDoc, runTransaction, Timestamp, query, getDocs } from 'firebase/firestore';
 import { db } from './firebaseClient';
 import { MOM, SiteVisitType } from '../types';
+import { FLASH_MODEL } from "../constants/aiModels";
 
 export const createMoMFromNotes = async (
     studioId: string,
@@ -96,7 +97,7 @@ export const createMoMFromNotes = async (
             })),
             scopeFlagSummary: momData.scopeFlagSummary || null,
             aiGenerated: true,
-            aiModel: "gemini-3.6-flash",
+            aiModel: FLASH_MODEL,
             aiConfidence: momData.confidence || 0.9,
         };
 

@@ -70,8 +70,18 @@ export function useStudioHomeData(projects: FullProjectData[], role: string): St
       const clientEmail = p.context?.clientEmail;
       const clientName = p.context?.clientName;
       if (clientEmail || clientName) {
-        const key = (clientEmail || clientName).toLowerCase().trim();
-        clientKeys.add(key);
+        /*
+          Email AND name, not whichever exists first.
+
+          `clientEmail || clientName` let one address stand for every name
+          behind it, so four different clients whose projects all carried the
+          studio's own inbox counted as one. Home reported 24 clients while the
+          Clients directory -- fixed earlier -- reported 27, and the two
+          screens disagreed about how many people the studio works for.
+          Matches the grouping in ClientsDirectory exactly.
+        */
+        const norm = (v?: string | null) => (v || "").toLowerCase().trim();
+        clientKeys.add(`${norm(clientEmail)}|${norm(clientName)}`);
       }
 
       // Build Cross-Project Worklist (Only non-closed)
