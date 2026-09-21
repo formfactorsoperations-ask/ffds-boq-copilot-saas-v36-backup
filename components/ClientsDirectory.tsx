@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from "react";
 import { FullProjectData } from "../types";
+import { classifyProject } from "../lib/projectClassification";
 import { formatINR, timeAgo } from "../lib/utils";
 import { getSingleProjectValue } from "../lib/financialsUtils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -351,24 +352,19 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
     saveNotes(updated);
   };
 
-  // Helper to determine if a project is dummy/sample
-  const isDummyProject = (p: FullProjectData) => {
-    // 1. Check explicit isDummy boolean property if set
-    if (typeof p.context?.isDummy === 'boolean') {
-      return p.context.isDummy;
-    }
-    // 2. Check explicit projectCategory if set
-    if (p.context?.projectCategory === 'dummy') return true;
-    if (p.context?.projectCategory === 'actual') return false;
+  /*
+    Classification comes from lib/projectClassification, which reads the
+    project's TAG and nothing else. This file kept its own copy that also
+    matched "sample"/"demo"/"test"/"template" against the project name, the
+    client name AND the client email -- so a real client whose email happened to
+    contain "test" was filed as a sample, and this screen disagreed with Reports
+    about who was real.
 
-    // 3. Fallback to heuristic string pattern matching
-    const name = (p.context?.name || '').toLowerCase();
-    const client = (p.context?.clientName || '').toLowerCase();
-    const email = (p.context?.clientEmail || '').toLowerCase();
-    return name.includes('sample') || name.includes('demo') || name.includes('test') || name.includes('template') ||
-           client.includes('sample') || client.includes('demo') || client.includes('test') || client.includes('abc') || client.includes('dummy') ||
-           email.includes('example.com') || email.includes('test.com') || p.id?.startsWith('sample-') || p.id?.startsWith('demo-');
-  };
+    A client counts as dummy only when EVERY project of theirs is tagged test
+    (the `dummyCount` check below). An untagged project therefore keeps its
+    client in the real directory, which is the safe direction to be wrong in.
+  */
+  const isDummyProject = (p: FullProjectData) => classifyProject(p) === 'test';
 
   // Aggregate projects by client
   const aggregatedClients = useMemo<AggregatedClient[]>(() => {

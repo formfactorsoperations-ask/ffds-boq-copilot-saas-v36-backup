@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { db } from '../services/dbService';
 import { FullProjectData, ProjectStatus } from "../types";
+import { classifyProject } from "../lib/projectClassification";
 import Card from "./shared/Card";
 import { BuildingOfficeIcon, PlusIcon, NewFileIcon, DeleteIcon } from "./Icons";
 import { formatClientValue, timeAgo, formatCurrency } from "../lib/utils";
@@ -279,7 +280,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   );
   const [activeTab, setActiveTab] = useState<"projects" | "intelligence" | "analytics">("projects");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [kindFilter, setKindFilter] = useState<"all" | "actual" | "dummy">("all");
+  const [kindFilter, setKindFilter] = useState<"all" | "actual" | "dummy" | "untagged">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
   const [statusModalProject, setStatusModalProject] = useState<FullProjectData | null>(null);
@@ -290,12 +291,17 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   >(null);
   const searchRef = React.useRef<HTMLInputElement | null>(null);
 
-  const isDummyProject = (p: FullProjectData) => {
-    if (p.context?.isDummy !== undefined) return p.context.isDummy;
-    if (p.context?.projectCategory) return p.context.projectCategory === 'dummy';
-    const name = (p.context?.name || '').toLowerCase();
-    return name.includes('sample') || name.includes('demo') || name.includes('test');
-  };
+  /*
+    Classification comes from lib/projectClassification now, which reads the
+    project's TAG and nothing else. This screen used to keep its own copy that
+    fell back to matching "sample"/"demo"/"test" in the name, so it disagreed
+    with Reports about which projects were real -- the chips read 23 actual /
+    19 dummy while the tags said 13 / 29.
+
+    Untagged is a third state here too, and it gets its own chip when any exist.
+    Folding it into either side would be the same guess by another route, and a
+    newly created project would silently land in "Actual".
+  */
 
   /*
     One pass over the book, read four times over.
@@ -359,8 +365,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
     is why the pills carried no counts and you could click into an empty phase.
   */
   const matchesKind = (proj: FullProjectData, kind: typeof kindFilter) =>
-    kind === 'all' ||
-    (kind === 'actual' ? !isDummyProject(proj) : isDummyProject(proj));
+    kind === 'all' || classifyProject(proj) === (kind === 'dummy' ? 'test' : kind);
 
   const matchesPhase = (proj: FullProjectData, phase: string) => {
     if (phase === 'all') return true;
@@ -859,6 +864,10 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                     { key: 'all', label: 'All Projects', dot: null },
                     { key: 'actual', label: 'Actual', dot: '#ADBBDA' },
                     { key: 'dummy', label: 'Dummy', dot: '#FDE68A' },
+                    /* Only worth a chip while something is unclassified. */
+                    ...(projects.some((proj) => classifyProject(proj) === 'untagged')
+                      ? ([{ key: 'untagged', label: 'Untagged', dot: '#FCA5A5' }] as const)
+                      : []),
                   ] as const
                 ).map((kind) => {
                   const live = kindFilter === kind.key;
@@ -878,9 +887,11 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                         live
                           ? kind.key === 'dummy'
                             ? 'bg-amber-500 text-white shadow-xs'
-                            : kind.key === 'actual'
-                              ? 'bg-[#3D52A0] text-white shadow-xs'
-                              : 'bg-white text-slate-900 shadow-xs'
+                            : kind.key === 'untagged'
+                              ? 'bg-rose-500 text-white shadow-xs'
+                              : kind.key === 'actual'
+                                ? 'bg-[#3D52A0] text-white shadow-xs'
+                                : 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-500 hover:text-slate-800'
                       }`}
                     >
@@ -1273,20 +1284,28 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
 
                                   {/* Waving Pinned-Note Classification Tag */}
                                   {(() => {
-                                    const isDummy = isDummyProject(project);
+                                    const kind = classifyProject(project);
+                                    const isDummy = kind === 'test';
+                                    const untagged = kind === 'untagged';
                                     return (
                                       <motion.div
                                         animate={{ rotate: [-2, 4, -3, 2, -2], y: [0, -1, 0, -1, 0] }}
                                         transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut" }}
                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-xs border transition-colors ${
-                                          !isDummy
-                                            ? 'bg-sky-50 text-sky-700 border-sky-200/80'
-                                            : 'bg-amber-50 text-amber-700 border-amber-200/80'
+                                          untagged
+                                            ? 'bg-rose-50 text-rose-700 border-rose-200/80'
+                                            : isDummy
+                                              ? 'bg-amber-50 text-amber-700 border-amber-200/80'
+                                              : 'bg-sky-50 text-sky-700 border-sky-200/80'
                                         }`}
-                                        title={`Project is marked as ${isDummy ? 'Dummy / Demo' : 'Actual Site'}`}
+                                        title={
+                                          untagged
+                                            ? 'Not classified yet — open the project and tag it Actual or Dummy'
+                                            : `Project is marked as ${isDummy ? 'Dummy / Demo' : 'Actual Site'}`
+                                        }
                                       >
-                                        <Pin className={`w-2.5 h-2.5 ${!isDummy ? 'text-sky-600' : 'text-amber-600'}`} />
-                                        <span className="capitalize">{isDummy ? 'Dummy' : 'Actual'}</span>
+                                        <Pin className={`w-2.5 h-2.5 ${untagged ? 'text-rose-600' : isDummy ? 'text-amber-600' : 'text-sky-600'}`} />
+                                        <span className="capitalize">{untagged ? 'Untagged' : isDummy ? 'Dummy' : 'Actual'}</span>
                                       </motion.div>
                                     );
                                   })()}

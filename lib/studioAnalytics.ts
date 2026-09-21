@@ -361,7 +361,11 @@ export function buildStudioAnalytics(
       quotedPct: contracted > 0 ? ((contracted - plannedCostTotal) / contracted) * 100 : 0,
       currentPct: contracted > 0 ? ((contracted - effectiveCostTotal) / contracted) * 100 : 0,
       drift: committedTotal > 0 ? plannedCostTotal - committedTotal : 0,
-      rows: marginRows.sort((a, b) => a.currentPct - b.currentPct),
+      /* Sorted by the figure the panel actually prints. It sorted by
+         currentPct while rendering quotedPct, so the moment one project had
+         purchase orders the two diverged and the list read as unsorted:
+         14%, 24%, 26%, 28%, 26%. */
+      rows: marginRows.sort((a, b) => a.quotedPct - b.quotedPct),
       withProcurement,
       procurementCoverage,
       /* Under a twentieth of planned cost committed means drift is noise, not

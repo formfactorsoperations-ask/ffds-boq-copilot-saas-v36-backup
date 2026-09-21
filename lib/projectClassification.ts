@@ -45,19 +45,29 @@ export function isEmptyShell(p: any, valueOf: (p: any) => number): boolean {
   );
 }
 
-/** What each scope counts. `actual` is strict: the tag, and only the tag. */
-export type ReportScope = "actual" | "untagged" | "all";
+/**
+ * What each scope counts. `actual` is strict: the tag, and only the tag.
+ *
+ * `test` is the mirror of it, and exists for a reason that is not curiosity:
+ * on this studio the only purchase orders ever raised sit on a test project, so
+ * the Margin panel reads permanently blind on real work. Test-only is the one
+ * place the procurement-to-margin chain can be watched actually computing.
+ * It is a workshop, not a report, and the screen says so while it is selected.
+ */
+export type ReportScope = "actual" | "untagged" | "all" | "test";
 
 export const SCOPE_LABEL: Record<ReportScope, string> = {
   actual: "Tagged actual",
   untagged: "Actual + untagged",
   all: "Everything",
+  test: "Test only",
 };
 
 export function inScope(p: any, scope: ReportScope): boolean {
   const k = classifyProject(p);
   if (scope === "all") return true;
   if (scope === "actual") return k === "actual";
+  if (scope === "test") return k === "test";
   return k !== "test";
 }
 

@@ -110,24 +110,33 @@ const MonthColumns: React.FC<{
   caption: (p: MonthPoint) => string;
 }> = ({ points, color, caption }) => {
   const max = points.reduce((m, p) => Math.max(m, p.value), 0) || 1;
+  const [hover, setHover] = useState<number | null>(null);
+
   if (points.length === 0) {
     return <div className="h-[132px] flex items-center text-[12px] text-slate-400">No dated activity yet.</div>;
   }
   return (
-    <div className="rp-chart rp-scan">
+    /* The scan sweep needs `overflow: hidden` to stay inside the plot, which
+       also clipped away the hover chip whenever it sat above the tallest bar --
+       the tooltip was in the DOM and invisible. The clip now wraps only the
+       bars; the chip is a sibling of that wrapper, free to overflow upward. */
+    <div className="rp-chart">
+      <div className="relative">
       {/* No `items-end` here. It shrinks each column to its content, and the
           content is a bar whose height is a PERCENTAGE of that column -- so the
           column measured zero, the bar resolved to zero, and the chart drew
           nothing but axis labels. The columns stretch; the bar is pinned to the
           bottom of its own full-height column instead. */}
-      <div className="flex gap-2 h-[112px]">
+        <div className="rp-scan flex gap-2 h-[112px]">
         {points.map((p, i) => {
           const h = Math.max(3, (p.value / max) * 100);
           return (
-            <div key={p.month} className="rp-col flex-1 min-w-0 h-full flex flex-col justify-end items-center group/col">
-              <span className="mb-1.5 text-[10px] font-semibold tabular-nums text-slate-500 opacity-0 group-hover/col:opacity-100 transition-opacity whitespace-nowrap">
-                {caption(p)}
-              </span>
+            <div
+              key={p.month}
+              className="rp-col flex-1 min-w-0 h-full flex flex-col justify-end items-center"
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover((c) => (c === i ? null : c))}
+            >
               {/* Capped, so a two-month series reads as two columns rather
                   than two slabs filling the panel. */}
               <div
@@ -141,10 +150,47 @@ const MonthColumns: React.FC<{
             </div>
           );
         })}
+
+        </div>
+
+        {/* One floating chip rather than a caption reserved inside every
+            column: the reading sits above the bar it belongs to and cannot
+            push the columns around as it appears. */}
+        {hover != null && (
+          <div
+            className="absolute pointer-events-none rounded-lg border border-slate-200 bg-white px-2 py-1 shadow-md whitespace-nowrap z-10"
+            style={(() => {
+              const barPct = Math.max(3, (points[hover].value / max) * 100);
+              /* Above the bar normally; tucked just inside the top of a tall one.
+                 The tallest bar always reaches 100%, so "above" would put the
+                 chip outside the plot and over the section heading. The chip is
+                 opaque, so sitting on the bar stays readable. */
+              const inside = barPct > 62;
+              return {
+                left: `${((hover + 0.5) / points.length) * 100}%`,
+                bottom: `${barPct}%`,
+                transform: inside ? "translate(-50%, calc(100% + 8px))" : "translate(-50%, -8px)",
+              };
+            })()}
+          >
+            <span className="block text-[9.5px] font-bold uppercase tracking-[0.1em] text-slate-400">
+              {points[hover].label}
+            </span>
+            <span className="block text-[12.5px] font-semibold tabular-nums" style={{ color: INK }}>
+              {caption(points[hover])}
+            </span>
+          </div>
+        )}
       </div>
+
       <div className="mt-2 flex gap-2 border-t border-slate-100 pt-2">
-        {points.map((p) => (
-          <div key={p.month} className="flex-1 min-w-0 text-center text-[10px] text-slate-400 truncate">
+        {points.map((p, i) => (
+          <div
+            key={p.month}
+            className={`flex-1 min-w-0 text-center text-[10px] truncate transition-colors ${
+              hover === i ? "font-semibold text-slate-600" : "text-slate-400"
+            }`}
+          >
             {p.label}
           </div>
         ))}
@@ -314,12 +360,14 @@ const StudioAnalyticsDeck: React.FC<Props> = ({ projects, onOpenProject, onProje
     which is how a template and nine empty "New Project" shells were being
     counted as real work.
 
-    The default counts actual AND untagged, and says so. Strict "tagged actual"
-    is one click away but currently resolves to a single lead, so defaulting to
-    it would render an empty page and read as a broken screen rather than as an
-    untagged one.
+    The default is now strict: only what the studio has tagged as actual work.
+    It briefly defaulted to actual-AND-untagged, because at the time a single
+    project carried a tag and strict would have rendered an empty page. That
+    backlog is cleared, and strict is the right default going forward -- a
+    project created tomorrow starts untagged, and should not be counted as real
+    work until somebody says it is.
   */
-  const [scope, setScope] = useState<ReportScope>("untagged");
+  const [scope, setScope] = useState<ReportScope>("actual");
   const [tagging, setTagging] = useState(false);
 
   const scoped = useMemo(
@@ -344,21 +392,74 @@ const StudioAnalyticsDeck: React.FC<Props> = ({ projects, onOpenProject, onProje
     [untagged]
   );
 
+  /*
+    Purchase orders, per project, exactly as the margin panel fetches them.
+
+    This effect was lost when the scope block above was rewritten, and nothing
+    failed loudly: `posByProject` simply stayed empty, so every margin reading
+    reported "0 of N contracted projects have any" and the panel declared itself
+    blind in every scope. A missing fetch and a studio that has raised no POs
+    look identical from the outside, which is exactly why it went unnoticed --
+    the honest empty state was covering for a bug.
+  */
+  useEffect(() => {
+    let alive = true;
+    const money = scoped.filter((p) => MONEY_STATUSES.includes(p.context?.status || ""));
+    if (!money.length) { setPosByProject({}); return; }
+    Promise.all(
+      money.map((p) =>
+        db.getPurchaseOrders(p.id)
+          .then((r) => [p.id, r || []] as const)
+          .catch(() => [p.id, []] as const)
+      )
+    ).then((pairs) => {
+      if (!alive) return;
+      const map: Record<string, any[]> = {};
+      pairs.forEach(([id, r]) => { map[id] = r as any[]; });
+      setPosByProject(map);
+    });
+    return () => { alive = false; };
+  }, [scoped]);
+
   const a = useMemo(() => buildStudioAnalytics(scoped, posByProject), [scoped, posByProject]);
+  const isTest = scope === "test";
 
   const openById = (id: string) => onOpenProject?.(id);
 
   /* The one line worth reading if you read nothing else. Derived, not written:
      whichever of the four questions currently has the worst answer speaks. */
   const headline = useMemo(() => {
+    /* In test scope the deck is a workshop, not a report. The derived headline
+       would otherwise tell the studio to chase proposals that do not exist and
+       worry about cash that was never owed -- advice drawn from invented rows.
+       It says what the view is for instead. */
+    if (scope === "test") {
+      const procurement = a.margin.withProcurement;
+      return {
+        tone: WARN,
+        text: procurement > 0
+          ? `Test records only — a workshop for checking the reports, not a picture of the studio. ${procurement} of these ${procurement === 1 ? "carries" : "carry"} purchase orders, which is the only place the margin panel below can show real drift.`
+          : "Test records only — a workshop for checking the reports, not a picture of the studio. Raise purchase orders on a test project to watch the margin panel compute drift end to end.",
+      };
+    }
+
     const m = a.capacity.wonByMonth;
     if (m.length >= 2) {
       const last = m[m.length - 1];
       const prev = m[m.length - 2];
       if (last.count < prev.count) {
+        /* What to do about it depends on what is left in the pipeline, and an
+           empty pipeline is the more urgent fact -- so it leads. */
+        const open = a.pipeline.openCount;
+        const tail =
+          open === 0
+            ? "and there is nothing open behind it. New enquiries are the only thing that changes this."
+            : open === 1
+              ? `and only one proposal is open, worth ${formatCompactINR(a.pipeline.pipelineValue)}. The pipeline is the constraint, not capacity.`
+              : `with ${open} proposals open — this is the month to chase them.`;
         return {
           tone: WARN,
-          text: `Contracting has slowed: ${prev.count} signed in ${prev.label}, ${last.count} in ${last.label}. With ${a.pipeline.openCount} proposals open, this is the month to chase them.`,
+          text: `Contracting has slowed: ${prev.count} signed in ${prev.label}, ${last.count} in ${last.label}, ${tail}`,
         };
       }
     }
@@ -372,7 +473,7 @@ const StudioAnalyticsDeck: React.FC<Props> = ({ projects, onOpenProject, onProje
       tone: GOOD,
       text: `${a.capacity.activeSites} sites live and ${pct(a.cash.collectionRate)} of contracted value collected.`,
     };
-  }, [a]);
+  }, [a, scope]);
 
   /* What the monthly columns do NOT account for, in rupees rather than as a
      percentage. Coverage here runs at 99.85%, which rounds to a flat "100% of
@@ -406,15 +507,29 @@ const StudioAnalyticsDeck: React.FC<Props> = ({ projects, onOpenProject, onProje
                 </strong>. Not a true picture of the studio.
               </>
             )}
+            {scope === "test" && (
+              <>
+                {" "}
+                — <strong className="font-semibold" style={{ color: WARN }}>test records only</strong>.
+                Nothing below is the studio's work.
+              </>
+            )}
           </p>
 
           <div className="flex rounded-xl border border-slate-200 bg-white p-1 shrink-0">
-            {(["actual", "untagged", "all"] as ReportScope[]).map((k) => (
+            {(["actual", "untagged", "all", "test"] as ReportScope[]).map((k) => (
               <button
                 key={k}
                 onClick={() => setScope(k)}
+                /* Test-only wears amber when selected, not the studio's indigo.
+                   The two scopes that show invented numbers should never look
+                   like the one that shows the business. */
                 className={`px-3 py-1.5 text-[11px] font-bold rounded-lg leading-none transition-colors cursor-pointer ${
-                  scope === k ? "bg-[#3D52A0] text-white" : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                  scope === k
+                    ? k === "test"
+                      ? "bg-amber-500 text-white"
+                      : "bg-[#3D52A0] text-white"
+                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
                 }`}
               >
                 {SCOPE_LABEL[k]}
@@ -474,7 +589,14 @@ const StudioAnalyticsDeck: React.FC<Props> = ({ projects, onOpenProject, onProje
       {/* ── the single line ─────────────────────────────────────────── */}
       <div
         className="rp-in rounded-2xl border px-4 py-3 flex items-start gap-2.5"
-        style={{ borderColor: `${headline.tone}33`, background: `${headline.tone}0D` }}
+        style={{
+          borderColor: `${headline.tone}33`,
+          background: `${headline.tone}0D`,
+          /* A standing amber rule while the deck is showing invented rows, so
+             the state is visible even after scrolling past the chips. */
+          borderLeftWidth: isTest ? 3 : 1,
+          borderLeftColor: isTest ? WARN : `${headline.tone}33`,
+        }}
       >
         <AlertTriangle className="w-4 h-4 shrink-0 mt-[1px]" strokeWidth={2.3} style={{ color: headline.tone }} />
         <p className="text-[13px] leading-[1.55]" style={{ color: INK }}>

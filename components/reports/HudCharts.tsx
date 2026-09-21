@@ -315,6 +315,7 @@ export const HudTrace: React.FC<{
 }> = ({ points, color = "#3D52A0", height = 96, format }) => {
   const ref = useRef<SVGPathElement>(null);
   const [len, setLen] = useState(600);
+  const [hover, setHover] = useState<number | null>(null);
 
   useEffect(() => {
     if (ref.current) {
@@ -339,39 +340,110 @@ export const HudTrace: React.FC<{
   const area = `${d} L ${xs(points.length - 1).toFixed(1)} ${H - PAD} L ${xs(0).toFixed(1)} ${H - PAD} Z`;
   const last = points[points.length - 1];
 
+  /*
+    Nearest point to the cursor, in viewBox space.
+
+    The SVG is drawn with preserveAspectRatio="none", so it stretches to the
+    container independently in x and y. Working in fractions of the container
+    and converting to the viewBox keeps the maths correct at any width, and
+    lets the marker be drawn in viewBox units with no pixel conversion at all.
+  */
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (!rect.width) return;
+    const vx = ((e.clientX - rect.left) / rect.width) * W;
+    const step = (W - PAD * 2) / (points.length - 1);
+    const i = Math.round((vx - PAD) / step);
+    setHover(Math.max(0, Math.min(points.length - 1, i)));
+  };
+
+  const shown = hover != null ? points[hover] : null;
+  const fmt = (v: number) => (format ? format(v) : Math.round(v).toLocaleString("en-IN"));
+
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={height} preserveAspectRatio="none" aria-hidden>
-        <defs>
-          <linearGradient id="rp-trace-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.16" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
-          </linearGradient>
-        </defs>
+      <div
+        className="relative"
+        style={{ height }}
+        onMouseMove={onMove}
+        onMouseLeave={() => setHover(null)}
+      >
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={height} preserveAspectRatio="none" aria-hidden>
+          <defs>
+            <linearGradient id="rp-trace-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.16" />
+              <stop offset="100%" stopColor={color} stopOpacity="0" />
+            </linearGradient>
+          </defs>
 
-        {[0.25, 0.5, 0.75].map((g) => (
-          <line key={g} x1={PAD} x2={W - PAD} y1={PAD + g * (H - PAD * 2)} y2={PAD + g * (H - PAD * 2)} className="rp-grid" />
-        ))}
+          {[0.25, 0.5, 0.75].map((g) => (
+            <line key={g} x1={PAD} x2={W - PAD} y1={PAD + g * (H - PAD * 2)} y2={PAD + g * (H - PAD * 2)} className="rp-grid" />
+          ))}
 
-        <path d={area} fill="url(#rp-trace-fill)" />
-        <path
-          ref={ref}
-          className="rp-line"
-          d={d}
-          fill="none"
-          stroke={color}
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ ["--rp-len" as any]: len }}
-        />
-        <circle cx={xs(points.length - 1)} cy={ys(last.value)} r={3.2} fill={color} />
-      </svg>
+          <path d={area} fill="url(#rp-trace-fill)" />
+          <path
+            ref={ref}
+            className="rp-line"
+            d={d}
+            fill="none"
+            stroke={color}
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ ["--rp-len" as any]: len }}
+          />
+
+          {/* The resting endpoint, hidden while a different month is held so
+              there is never more than one marked value on the line. */}
+          {hover == null && <circle cx={xs(points.length - 1)} cy={ys(last.value)} r={3.2} fill={color} />}
+
+          {hover != null && (
+            <g>
+              <line
+                x1={xs(hover)} x2={xs(hover)} y1={PAD} y2={H - PAD}
+                stroke={color} strokeOpacity={0.35} strokeWidth={1} strokeDasharray="3 3"
+                vectorEffect="non-scaling-stroke"
+              />
+              <circle
+                cx={xs(hover)} cy={ys(points[hover].value)} r={4}
+                fill={color} stroke="#fff" strokeWidth={2} vectorEffect="non-scaling-stroke"
+              />
+            </g>
+          )}
+        </svg>
+
+        {shown && (
+          <div
+            className="absolute pointer-events-none rounded-lg border border-slate-200 bg-white px-2 py-1 shadow-md whitespace-nowrap"
+            style={(() => {
+              const vy = ys(shown.value);
+              /* Above the point normally, below it near the top of the plot --
+                 a peak sits at the very top, and "above" would put the chip
+                 outside the chart and over the heading. */
+              const high = vy < 34;
+              return {
+                /* Clamped away from the edges so the chip never leaves the
+                   panel; the dashed guide still says which month it is. */
+                left: `${Math.min(88, Math.max(12, (xs(hover!) / W) * 100))}%`,
+                top: `${(vy / H) * 100}%`,
+                transform: high ? "translate(-50%, 28%)" : "translate(-50%, -132%)",
+              };
+            })()}
+          >
+            <span className="block text-[9.5px] font-bold uppercase tracking-[0.1em] text-slate-400">
+              {shown.label}
+            </span>
+            <span className="block text-[12.5px] font-semibold tabular-nums" style={{ color: INK }}>
+              {fmt(shown.value)}
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="mt-1.5 flex justify-between border-t border-slate-100 pt-1.5">
         <span className="text-[10px] text-slate-400">{points[0].label}</span>
         <span className="text-[10px] tabular-nums text-slate-500">
-          {last.label} · {format ? format(last.value) : Math.round(last.value)}
+          {shown ? `${shown.label} · ${fmt(shown.value)}` : `${last.label} · ${fmt(last.value)}`}
         </span>
       </div>
     </div>
