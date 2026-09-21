@@ -27,7 +27,8 @@ import {
   ShieldAlert, 
   Coins, 
   CheckSquare,
-  HelpCircle
+  HelpCircle,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface ProjectContextCardProps {
@@ -508,73 +509,112 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                 </div>
               </div>
 
-              {/* Project Category Tag: Actual vs Dummy Classification */}
+              {/*
+                PROJECT CLASSIFICATION.
+
+                This control used to light one of the two buttons even when
+                nothing had ever been saved, choosing which by testing the
+                project's NAME for "sample"/"demo"/"test". So every card looked
+                classified while 28 of 42 projects carried no tag at all -- you
+                would open a project, see "Actual Project" already highlighted
+                in blue, close the card, and nothing was written. Reports then
+                had to guess, and guessed wrong on templates and empty drafts.
+
+                Now the buttons show only what is STORED. With no tag, neither
+                is selected and the card says so, which is the one state that
+                actually needs your attention.
+              */}
               <div className="space-y-2 pt-2 border-t border-slate-200/60">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                     Project Classification (Actual vs Dummy)
                   </label>
                   <span className="text-[11px] text-slate-400">
-                    Controls client directory filters & analytics
+                    Controls client directory filters &amp; analytics
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProjectContext(prev => ({
-                        ...prev,
-                        isDummy: false,
-                        projectCategory: 'actual'
-                      }));
-                    }}
-                    className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
-                      projectContext.isDummy === false || (projectContext.isDummy === undefined && !projectContext.name?.toLowerCase().includes('sample') && !projectContext.name?.toLowerCase().includes('demo') && !projectContext.name?.toLowerCase().includes('test'))
-                        ? 'bg-sky-50 border-sky-400 text-sky-950 shadow-xs ring-1 ring-sky-300'
-                        : 'bg-white/40 border-slate-200 text-slate-600 hover:border-sky-200 hover:bg-sky-50/30'
-                    }`}
-                  >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                      projectContext.isDummy === false || (projectContext.isDummy === undefined && !projectContext.name?.toLowerCase().includes('sample') && !projectContext.name?.toLowerCase().includes('demo') && !projectContext.name?.toLowerCase().includes('test'))
-                        ? 'bg-sky-600 text-white'
-                        : 'bg-slate-100 text-slate-400'
-                    }`}>
-                      <Check className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900 leading-snug">Actual Project</p>
-                      <p className="text-[10px] text-slate-500 leading-tight">Live studio client engagement with commercial accounting</p>
-                    </div>
-                  </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProjectContext(prev => ({
-                        ...prev,
-                        isDummy: true,
-                        projectCategory: 'dummy'
-                      }));
-                    }}
-                    className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
-                      projectContext.isDummy === true || (projectContext.isDummy === undefined && (projectContext.name?.toLowerCase().includes('sample') || projectContext.name?.toLowerCase().includes('demo') || projectContext.name?.toLowerCase().includes('test')))
-                        ? 'bg-amber-50 border-amber-400 text-amber-950 shadow-xs ring-1 ring-amber-300'
-                        : 'bg-white/40 border-slate-200 text-slate-600 hover:border-amber-200 hover:bg-amber-50/30'
-                    }`}
-                  >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                      projectContext.isDummy === true || (projectContext.isDummy === undefined && (projectContext.name?.toLowerCase().includes('sample') || projectContext.name?.toLowerCase().includes('demo') || projectContext.name?.toLowerCase().includes('test')))
-                        ? 'bg-amber-600 text-white'
-                        : 'bg-slate-100 text-slate-400'
-                    }`}>
-                      <Sparkles className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900 leading-snug">Dummy / Sample Project</p>
-                      <p className="text-[10px] text-slate-500 leading-tight">Template or sandbox project excluded from actual accounts</p>
-                    </div>
-                  </button>
-                </div>
+                {(() => {
+                  /* The tag, and only the tag. isDummy is the newer explicit
+                     flag and wins where both exist. */
+                  const tag: 'actual' | 'dummy' | null =
+                    typeof projectContext.isDummy === 'boolean'
+                      ? (projectContext.isDummy ? 'dummy' : 'actual')
+                      : projectContext.projectCategory === 'dummy'
+                        ? 'dummy'
+                        : projectContext.projectCategory === 'actual'
+                          ? 'actual'
+                          : null;
+
+                  return (
+                    <>
+                      {tag === null && (
+                        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600 mt-[1px]" strokeWidth={2.4} />
+                          <p className="text-[11px] leading-[1.5] text-amber-900">
+                            <strong className="font-semibold">Not classified yet.</strong> Until you choose,
+                            this project is counted separately in Reports rather than as real work. Pick one
+                            below — it saves with the project.
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProjectContext(prev => ({
+                              ...prev,
+                              isDummy: false,
+                              projectCategory: 'actual'
+                            }));
+                          }}
+                          className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                            tag === 'actual'
+                              ? 'bg-sky-50 border-sky-400 text-sky-950 shadow-xs ring-1 ring-sky-300'
+                              : 'bg-white/40 border-slate-200 text-slate-600 hover:border-sky-200 hover:bg-sky-50/30'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                            tag === 'actual' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-400'
+                          }`}>
+                            <Check className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900 leading-snug">Actual Project</p>
+                            <p className="text-[10px] text-slate-500 leading-tight">Live studio client engagement with commercial accounting</p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProjectContext(prev => ({
+                              ...prev,
+                              isDummy: true,
+                              projectCategory: 'dummy'
+                            }));
+                          }}
+                          className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                            tag === 'dummy'
+                              ? 'bg-amber-50 border-amber-400 text-amber-950 shadow-xs ring-1 ring-amber-300'
+                              : 'bg-white/40 border-slate-200 text-slate-600 hover:border-amber-200 hover:bg-amber-50/30'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                            tag === 'dummy' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-400'
+                          }`}>
+                            <Sparkles className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900 leading-snug">Dummy / Sample Project</p>
+                            <p className="text-[10px] text-slate-500 leading-tight">Template or sandbox project excluded from actual accounts</p>
+                          </div>
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
           </div>
         </div>

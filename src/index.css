@@ -1892,3 +1892,91 @@ body {
     will-change: auto;
   }
 }
+
+
+/* ══ REPORTS DECK ═══════════════════════════════════════════════════════
+   Motion for the analytics screen. Every value here carries commas, which
+   Tailwind arbitrary values reject silently -- so the whole set lives as
+   named classes rather than half-compiling in the markup.
+
+   The restraint is deliberate: bars grow once on mount and lines draw once.
+   Nothing loops, nothing pulses. A figure that keeps moving after you have
+   read it is asking for attention it has not earned, and on a screen whose
+   job is planning that reads as decoration rather than data. */
+
+@keyframes rp-rise  { from { transform: scaleY(0); }            to { transform: scaleY(1); } }
+@keyframes rp-grow  { from { transform: scaleX(0); }            to { transform: scaleX(1); } }
+@keyframes rp-draw  { to   { stroke-dashoffset: 0; } }
+@keyframes rp-in    { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+@keyframes rp-scan  { from { transform: translateX(-102%); opacity: 0; }
+                      18%  { opacity: 1; }
+                      82%  { opacity: 1; }
+                      to   { transform: translateX(102%); opacity: 0; } }
+
+.rp-bar   { transform-origin: 50% 100%; animation: rp-rise 700ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+.rp-hbar  { transform-origin: 0 50%;    animation: rp-grow 760ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+.rp-in    { animation: rp-in 520ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+
+/* The draw needs the path length as --rp-len, set inline from getTotalLength. */
+.rp-line  { stroke-dasharray: var(--rp-len, 1200); stroke-dashoffset: var(--rp-len, 1200);
+            animation: rp-draw 1150ms cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+/* One pass of light across a chart as it arrives, then gone for good. */
+.rp-scan  { position: relative; overflow: hidden; }
+.rp-scan::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 38%, rgba(61, 82, 160, 0.10) 50%, transparent 62%);
+  animation: rp-scan 1500ms cubic-bezier(0.4, 0, 0.2, 1) 180ms 1 both;
+}
+
+/* Depth on hover instead of pointer tilt: a data panel that leans under the
+   cursor makes columns harder to compare, which is the one thing it is for. */
+.rp-panel { transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 420ms ease; }
+.rp-panel:hover { transform: translateZ(12px); box-shadow: 0 20px 44px -24px rgba(10, 27, 51, 0.30); }
+
+.rp-grid  { stroke: #E2E8F0; stroke-width: 1; }
+.rp-col   { transition: opacity 180ms ease; }
+/* Dim the other columns only while one is actually under the cursor. Keyed on
+   :hover of the chart instead, the whole series went pale whenever the pointer
+   merely rested in a gap between bars, which reads as a rendering fault. */
+.rp-chart:has(.rp-col:hover) .rp-col { opacity: 0.34; }
+.rp-chart .rp-col:hover { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rp-bar, .rp-hbar, .rp-in { animation: none; }
+  .rp-line { animation: none; stroke-dashoffset: 0; }
+  .rp-scan::after { animation: none; opacity: 0; }
+  .rp-panel, .rp-panel:hover { transition: none; transform: none; }
+}
+
+/* ── HUD instruments ──────────────────────────────────────────────────
+   Dials, rings and tick marks for the analytics screens. The "instrument"
+   read comes from geometry -- ticked bezels, concentric arcs, hairline
+   guides -- and NOT from colour or typeface: everything here inherits the
+   studio's Jakarta Sans and the app's own indigo. Nothing wears .font-mono,
+   because that class is exempted from the studio font setting in index.html
+   and would quietly opt these numbers out of the user's own choice. */
+
+.rp-hud-arc {
+  transition: stroke-dashoffset 1200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The bezel ticks fade in behind the arc rather than arriving with it. */
+@keyframes rp-bezel { from { opacity: 0; } to { opacity: 1; } }
+.rp-bezel { animation: rp-bezel 900ms ease 120ms backwards; }
+
+/* Corner brackets. Four hairline Ls, drawn with one gradient each so a panel
+   reads as an instrument housing without adding a second border. */
+.rp-frame { position: relative; }
+.rp-frame::before,
+.rp-frame::after {
+  content: ""; position: absolute; width: 13px; height: 13px; pointer-events: none;
+  border-color: rgba(61, 82, 160, 0.34); border-style: solid; border-width: 0;
+}
+.rp-frame::before { top: 10px;    left: 10px;  border-top-width: 1.5px; border-left-width: 1.5px;  border-top-left-radius: 4px; }
+.rp-frame::after  { bottom: 10px; right: 10px; border-bottom-width: 1.5px; border-right-width: 1.5px; border-bottom-right-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rp-hud-arc { transition: none; }
+  .rp-bezel { animation: none; }
+}

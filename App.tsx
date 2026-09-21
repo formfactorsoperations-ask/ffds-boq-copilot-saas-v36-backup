@@ -2688,6 +2688,13 @@ export default function App() {
                         const p = projectLibrary.find(x => x.id === id);
                         if (p) handleOpenProject(p, "project-reports");
                       }}
+                      onProjectsPatched={(updated) => {
+                        /* Classification changed from the Reports screen. Merge
+                           the written projects back in so the deck, the cards
+                           and the client directory all agree without a reload. */
+                        const byId = new Map(updated.map((u) => [u.id, u]));
+                        setProjectLibrary((lib) => lib.map((p) => byId.get(p.id) || p));
+                      }}
                       // ACTIVE_STUDIO_REPORTS
                     />
                   )}
@@ -3393,6 +3400,13 @@ export default function App() {
                       onOpenProject={(id) => {
                         const p = projectLibrary.find(x => x.id === id);
                         if (p) handleOpenProject(p, "project-reports");
+                      }}
+                      onProjectsPatched={(updated) => {
+                        /* Classification changed from the Reports screen. Merge
+                           the written projects back in so the deck, the cards
+                           and the client directory all agree without a reload. */
+                        const byId = new Map(updated.map((u) => [u.id, u]));
+                        setProjectLibrary((lib) => lib.map((p) => byId.get(p.id) || p));
                       }}
                     />
                   )}

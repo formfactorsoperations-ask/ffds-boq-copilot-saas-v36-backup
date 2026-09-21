@@ -42,7 +42,13 @@ export function realisedMargins(obs: Observation[]): MarginRecord[] {
       projectName: o.projectName || o.projectId,
       revenue: o.quoted!,
       cost: o.actual!,
-      marginPct: o.actual! > 0 ? ((o.quoted! - o.actual!) / o.actual!) * 100 : 0,
+      /* Margin OVER REVENUE, which is what the rest of the OS means by margin
+         (lib/procurement.ts:184, the project P&L card, the Reports deck). This
+         divided by COST, making it a markup: the page read "historical margin
+         46.2%" where studioSeed's own header states 31.6%, and
+         ProjectReportsTab subtracted a project's over-revenue margin from that
+         over-cost figure to show a comparison that could not mean anything. */
+      marginPct: o.quoted! > 0 ? ((o.quoted! - o.actual!) / o.quoted!) * 100 : 0,
     }))
     .sort((a, b) => b.marginPct - a.marginPct);
 }
@@ -54,7 +60,7 @@ export function blendedMargin(obs: Observation[]) {
   const cost = rows.reduce((s, r) => s + r.cost, 0);
   return {
     revenue, cost, n: rows.length,
-    marginPct: cost > 0 ? ((revenue - cost) / cost) * 100 : 0,
+    marginPct: revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0,
     best: rows[0],
     worst: rows[rows.length - 1],
   };
@@ -380,7 +386,10 @@ export function marginUplift(obs: Observation[]) {
   const rows: UpliftRow[] = realisedMargins(obs)
     .filter(m => m.marginPct < b.marginPct)
     .map(m => {
-      const costAtAverage = m.revenue / (1 + b.marginPct / 100);
+      /* Cost that would have produced the studio's average MARGIN on this
+         revenue. Was revenue / (1 + pct/100), the inverse of a markup -- wrong
+         once marginPct is measured over revenue. */
+      const costAtAverage = m.revenue * (1 - b.marginPct / 100);
       return {
         projectId: m.projectId,
         projectName: m.projectName,
