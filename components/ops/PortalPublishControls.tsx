@@ -6,6 +6,7 @@ import { db as fsDb } from '../../services/firebaseClient';
 import { normaliseAddition, scopeAdditionsPath } from '../../lib/scopeAdditions';
 import { PortalScopeAddition } from '../../lib/portalProjection';
 import { ClientBoqRow } from '../../lib/clientBoq';
+import { PortalMoney } from '../../lib/portalMoney';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
 import { buildPortalView, portalViewSummary } from '../../lib/portalProjection';
@@ -48,6 +49,12 @@ interface Props {
   clientBoq?: ClientBoqRow[];
   /** What those rows' markers were measured against, stored so they persist. */
   clientBoqBaseline?: ClientBoqRow[];
+  /*
+    The money, computed in App where the tier summary and the billing rules are
+    in scope. Without it the client's payments tab has percentages and no base
+    to apply them to, so a design ladder renders as a column of zeroes.
+  */
+  portalMoney?: PortalMoney;
 }
 
 const STATE_STYLE: Record<ClientVisibilityState | 'unmigrated', string> = {
@@ -57,7 +64,7 @@ const STATE_STYLE: Record<ClientVisibilityState | 'unmigrated', string> = {
   unmigrated:'text-slate-400 bg-slate-50 border-slate-200',
 };
 
-export default function PortalPublishControls({ projectContext, setProjectContext, currentUser, projectId, clientBoq, clientBoqBaseline }: Props) {
+export default function PortalPublishControls({ projectContext, setProjectContext, currentUser, projectId, clientBoq, clientBoqBaseline, portalMoney }: Props) {
   const [open, setOpen] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [releasing, setReleasing] = useState(false);
@@ -169,7 +176,7 @@ export default function PortalPublishControls({ projectContext, setProjectContex
         legalName: orgData?.legalName,
         signatoryName: orgData?.signatoryName,
         signatoryTitle: orgData?.signatoryTitle,
-      }, clientBoq, clientBoqBaseline, await gatherScopeAdditions());
+      }, clientBoq, clientBoqBaseline, await gatherScopeAdditions(), portalMoney);
       if (view) {
         setReleasedAt(view.builtAt);
         setEverSent(true);
@@ -197,8 +204,8 @@ export default function PortalPublishControls({ projectContext, setProjectContex
 
   /** What the client would receive if released right now. */
   const preview = useMemo(
-    () => portalViewSummary(buildPortalView(projectId || 'preview', projectContext, undefined, clientBoq)).filter(r => r.count > 0),
-    [projectContext, projectId, clientBoq]
+    () => portalViewSummary(buildPortalView(projectId || 'preview', projectContext, undefined, clientBoq, undefined, undefined, portalMoney)).filter(r => r.count > 0),
+    [projectContext, projectId, clientBoq, portalMoney]
   );
 
   const groups = useMemo(

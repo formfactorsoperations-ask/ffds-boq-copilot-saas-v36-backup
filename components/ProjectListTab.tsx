@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { db } from '../services/dbService';
 import { FullProjectData, ProjectStatus } from "../types";
 import { classifyProject } from "../lib/projectClassification";
+import { buildDisplayNames } from "../lib/projectNaming";
 import Card from "./shared/Card";
 import { BuildingOfficeIcon, PlusIcon, NewFileIcon, DeleteIcon } from "./Icons";
 import { formatClientValue, timeAgo, formatCurrency } from "../lib/utils";
@@ -265,6 +266,21 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   onStatusChange,
 }) => {
   const { orgData } = useOrg();
+
+  /*
+    What to call each project on this screen.
+
+    Sixteen of these were called "New Project", seven of them with real BOQs
+    behind them, and the list gave no way to tell which was which -- finding one
+    meant opening them in turn. Only names that actually collide get a suffix,
+    so a project with a real name is left exactly as it is.
+
+    Built from the whole list rather than the filtered one, so a label does not
+    change as somebody types in the search box.
+  */
+  const displayNames = useMemo(() => buildDisplayNames(projects), [projects]);
+  const displayName = (p: any) =>
+    displayNames.get(p?.id) || p?.context?.name || 'Unnamed Project';
   /* Hooked once here, never inside the card map -- the number of hook calls
      per render has to be constant. Everything below reads it from the closure. */
   const reduceMotion = useReducedMotion();
@@ -282,7 +298,23 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   const [statusFilter, setStatusFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState<"all" | "actual" | "dummy" | "untagged">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+  /*
+    Deleting more than one.
+
+    The single delete stays exactly as it was -- the same button, the same
+    confirmation -- it just goes through a list of one now. Nine abandoned
+    projects took nine trips through that dialog, and a dialog somebody clicks
+    nine times in a row is a dialog they have stopped reading by the third.
+  */
+  const [deleteTargets, setDeleteTargets] = useState<string[] | null>(null);
+  const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
+
+  const toggleSelected = (id: string) =>
+    setSelectedForDelete((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   const [statusModalProject, setStatusModalProject] = useState<FullProjectData | null>(null);
   /* Set by the alert bar's chips. The bar is the only thing that writes it,
      and clicking the live chip again clears it. */
@@ -389,6 +421,9 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
       (ph) => ph.key !== 'all' && matchesPhase(proj, ph.key),
     );
     return [
+      /* The label on the card, not just the stored name -- otherwise typing
+         the very detail the row shows you returns nothing. */
+      displayName(proj),
       proj.context?.name,
       proj.context?.clientName,
       (proj.context as any)?.city,
@@ -1072,6 +1107,32 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
               uniform row reads as one system rather than as eight cards padded
               out -- so stretch is back on.
             */
+            <>
+            {selectedForDelete.size > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 rounded-2xl border border-[#3D52A0]/25 bg-[#3D52A0]/5 px-4 py-3 flex items-center justify-between gap-4 flex-wrap"
+              >
+                <p className="text-sm font-bold text-[#334486]">
+                  {selectedForDelete.size} project{selectedForDelete.size === 1 ? '' : 's'} selected
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedForDelete(new Set())}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-white transition-colors cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    onClick={() => setDeleteTargets([...selectedForDelete])}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 transition-colors shadow-sm cursor-pointer"
+                  >
+                    Delete {selectedForDelete.size}
+                  </button>
+                </div>
+              </motion.div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <AnimatePresence>
                 {filteredProjects.map((project, index) => {
@@ -1402,9 +1463,9 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                 </p>
                                 <h3
                                   className="text-[1.1rem] font-semibold tracking-tight text-slate-900 leading-snug line-clamp-2"
-                                  title={project.context?.name || "Unnamed Project"}
+                                  title={displayName(project)}
                                 >
-                                  {project.context?.name || "Unnamed Project"}
+                                  {displayName(project)}
                                 </h3>
                                 <div className="flex items-center gap-2 mt-2">
                                   <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em]">
@@ -1801,7 +1862,25 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setProjectToDelete(project.id);
+                                    toggleSelected(project.id);
+                                  }}
+                                  className={`w-7 h-7 flex items-center justify-center border rounded transition-colors shadow-sm cursor-pointer ${
+                                    selectedForDelete.has(project.id)
+                                      ? 'bg-[#3D52A0] border-[#3D52A0] text-white'
+                                      : 'bg-white border-slate-200 text-slate-400 hover:text-slate-700 hover:border-slate-300'
+                                  }`}
+                                  title={selectedForDelete.has(project.id) ? 'Selected' : 'Select'}
+                                  aria-pressed={selectedForDelete.has(project.id)}
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                       stroke="currentColor" strokeWidth="3">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteTargets([project.id]);
                                   }}
                                   className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-slate-500 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 rounded transition-colors shadow-sm cursor-pointer"
                                   title="Delete"
@@ -1828,6 +1907,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                 })}
               </AnimatePresence>
             </div>
+            </>
           )}
 
           {/* --- COMPARISON VIEW --- */}
@@ -1854,7 +1934,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                             key={p.id}
                             className="p-5 min-w-[200px] font-light tracking-tighter text-slate-900 text-xl border-l border-slate-200/50"
                           >
-                            {p.context?.name || "Unnamed Project"}
+                            {displayName(p)}
                             <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-2">
                               {p.context?.clientName || "Unknown Client"}
                             </div>
@@ -1907,7 +1987,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
 
       {/* Delete Confirmation Modal */}
       <AnimatePresence>
-        {projectToDelete && (
+        {deleteTargets && deleteTargets.length > 0 && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-md p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -1920,30 +2000,66 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                   <DeleteIcon className="w-6 h-6" />
                 </div>
                 <h3 className="text-2xl font-light tracking-tighter text-slate-900 mb-3">
-                  Delete Project?
+                  {deleteTargets.length === 1
+                    ? 'Delete this project?'
+                    : `Delete ${deleteTargets.length} projects?`}
                 </h3>
+
+                {/* Named, not counted. Nine rows called "New Project" is how
+                    this list got into trouble; a dialog that says only "9
+                    projects" asks somebody to trust a number they cannot
+                    check. */}
+                <ul className="mb-5 max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                  {deleteTargets.map((id) => {
+                    const p: any = projects.find((x) => x.id === id);
+                    const lines = (p?.tiers || []).reduce(
+                      (n: number, t: any) => n + ((t.fullBoq || t.boq || []).length), 0,
+                    );
+                    const rooms = (p?.context?.rooms || []).length;
+                    const detail = [
+                      lines ? `${lines} BOQ line${lines === 1 ? '' : 's'}` : null,
+                      rooms ? `${rooms} room${rooms === 1 ? '' : 's'}` : null,
+                      p?.context?.clientName || null,
+                    ].filter(Boolean).join(' · ');
+                    return (
+                      <li key={id} className="text-[13px] text-slate-700 flex items-baseline gap-2">
+                        <span className="font-semibold">{displayName(p) }</span>
+                        <span className="text-[11px] text-slate-400">
+                          {detail || 'empty'}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+
                 <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-                  Are you sure you want to permanently delete this project? This
-                  action cannot be undone and all associated data will be lost
-                  forever.
+                  This cannot be undone. Everything hanging off{' '}
+                  {deleteTargets.length === 1 ? 'it' : 'them'} goes too — the BOQ,
+                  decisions, purchase orders and documents.{' '}
+                  {/* Worth saying out loud: it is the one consequence that
+                      reaches somebody outside the studio. */}
+                  <span className="text-slate-700 font-semibold">
+                    Any client portal among them is taken down at the same time.
+                  </span>
                 </p>
                 <div className="flex justify-end gap-3">
                   <button
-                    onClick={() => setProjectToDelete(null)}
+                    onClick={() => setDeleteTargets(null)}
                     className="px-6 py-3 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => {
-                      if (projectToDelete) {
-                        onDeleteProject(projectToDelete);
-                        setProjectToDelete(null);
-                      }
+                      deleteTargets.forEach((id) => onDeleteProject(id));
+                      setSelectedForDelete(new Set());
+                      setDeleteTargets(null);
                     }}
                     className="px-6 py-3 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition-all shadow-lg shadow-red-500/30 hover:shadow-red-500/50 hover:-translate-y-0.5"
                   >
-                    Delete Permanently
+                    {deleteTargets.length === 1
+                      ? 'Delete permanently'
+                      : `Delete ${deleteTargets.length} permanently`}
                   </button>
                 </div>
               </div>

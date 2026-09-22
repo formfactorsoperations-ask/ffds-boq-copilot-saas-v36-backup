@@ -38,6 +38,7 @@ import PortalHero from './client/PortalHero';
 // queries and addenda a flat table cannot carry.
 import { DecisionsTable } from './client/PortalTables';
 import PortalPayments from './client/PortalPayments';
+import { PortalMoney } from '../lib/portalMoney';
 import { issuePortalAccess } from '../services/portalAccessService';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -690,20 +691,36 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     }, [flatBoqList]);
 
     // --- FINANCIAL CALCULATIONS ---
-    const financials = context.financials || {
-        initiationFeePaid: 4999,
-        billablePercent: 100,
-        executionGstEnabled: true,
-        projectedCashValue: 0,
-        taxLimitYearly: 2000000,
-        goodwillDiscount: 0,
-        discounts: []
-    };
+    /*
+      The money the studio worked out and sent with the projection.
 
-    const gstRate = context.gstRate || 18;
-    const initiationFee = financials.initiationFeePaid;
-    const billablePercent = financials.billablePercent;
-    const executionGstEnabled = financials.executionGstEnabled;
+      Present in a real client session; absent in the studio's own preview,
+      where the tier and the billing rules are live and the figures below are
+      derived from them instead. Both paths run lib/portalMoney, so the preview
+      and the client's actual portal cannot quote different numbers.
+    */
+    const storedMoney = (context as any).portalMoney as PortalMoney | undefined;
+
+    /*
+      There was a fallback object here, and it was a liability.
+
+      `context.financials` does not cross into the projection, so in every real
+      client session this fell through to hard-coded values: a 4,999 retainer,
+      100% billable, execution GST on. The portal then showed that 4,999 as
+      CLEARED to every client on every project whether or not they had paid it,
+      and any project billing a cash split or without execution GST had its
+      figures quietly wrong on the client's own screen -- with nothing on the
+      page admitting the numbers were assumed.
+
+      Empty now. What the portal does not know it does not print; `moneyKnown`
+      below decides what the client is told instead.
+    */
+    const financials = context.financials || ({} as any);
+
+    const gstRate = storedMoney?.gstRate ?? (context.gstRate || 18);
+    const initiationFee = storedMoney?.retainerPaid ?? (Number(financials.initiationFeePaid) || 0);
+    const billablePercent = financials.billablePercent ?? 100;
+    const executionGstEnabled = financials.executionGstEnabled ?? true;
     const discounts = financials.discounts || [];
 
     const originalExecutionTotal = activeTier?.summary.totalSell || 0;
@@ -734,8 +751,14 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const executionDiscountVal = calculateDiscountValue(rawExecutionTotal, 'execution');
     const designDiscountVal = calculateDiscountValue(rawDesignFee, 'design');
 
-    const taxableExecution = Math.max(0, rawExecutionTotal - executionDiscountVal);
-    const taxableDesign = Math.max(0, rawDesignFee - designDiscountVal);
+    /*
+      Sent figures win over derived ones. The derivation behind them needs the
+      active tier for the design fee, and a client session has no tiers -- which
+      is exactly how a real client came to see a design fee ladder of 25%, 40%
+      and 35% against a base of zero.
+    */
+    const taxableExecution = storedMoney ? storedMoney.executionBase : Math.max(0, rawExecutionTotal - executionDiscountVal);
+    const taxableDesign = storedMoney ? storedMoney.designBase : Math.max(0, rawDesignFee - designDiscountVal);
 
     const executionBillable = taxableExecution * (billablePercent / 100);
     const executionCash = taxableExecution * ((100 - billablePercent) / 100);
@@ -744,7 +767,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const gstOnDesign = taxableDesign * (gstRate / 100);
     const totalGST = gstOnExecution + gstOnDesign;
 
-    const currentProjectValue = executionBillable + executionCash + taxableDesign + totalGST;
+    const currentProjectValue = storedMoney ? storedMoney.projectValue : (executionBillable + executionCash + taxableDesign + totalGST);
     const baseProjectValue = originalExecutionTotal + originalDesignFee + (originalExecutionTotal * (gstRate/100)) + (originalDesignFee * (gstRate/100));
 
     // Calculate Paid Amount
@@ -766,6 +789,11 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
      * worse than either figure being slightly off.
      */
     const calculateMilestoneTotal = (m: PaymentMilestone) => {
+        /* What the studio computed for this milestone, when it was sent. The
+           rest of this function is the preview's path, and mirrors it. */
+        const sent = storedMoney?.milestoneAmounts?.[m?.id];
+        if (sent !== undefined) return sent;
+
         const isFirstDesign =
             m.type === 'design' &&
             milestones.filter(x => x.type === 'design').indexOf(m) === 0;
@@ -807,8 +835,10 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const balanceDue = Math.max(0, currentProjectValue - totalPaid);
 
     // Breakdowns for fee tracking
-    const totalDesignValue = taxableDesign + gstOnDesign;
-    const totalExecutionValue = executionBillable + executionCash + gstOnExecution;
+    /* Taken whole rather than re-derived: whether execution GST applies and how
+       the billable/cash split falls are studio rules that do not cross. */
+    const totalDesignValue = storedMoney ? storedMoney.designTotal : taxableDesign + gstOnDesign;
+    const totalExecutionValue = storedMoney ? storedMoney.executionTotal : executionBillable + executionCash + gstOnExecution;
     
     let designPaid = initiationFee; // Initiation goes towards design
     let executionPaid = 0;
@@ -821,6 +851,23 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             }
         }
     });
+
+    /*
+      Whether these figures rest on anything.
+
+      True in the studio's preview, where the tier is live, and in a client
+      session once the studio has released a projection carrying the money.
+      False for a client holding a projection published before the money was
+      part of it -- and then the payments tab says so rather than printing a
+      confident zero.
+    */
+    const moneyKnown = !!storedMoney || isInternalStudioView;
+    if (!moneyKnown) {
+        console.warn(
+            'Portal: this projection carries no money figures. Release the project from ' +
+            'SOF & Selections to send them.',
+        );
+    }
 
     const designPaidPercentage = totalDesignValue > 0 ? Math.min(100, Math.round((designPaid / totalDesignValue) * 100)) : 0;
     const executionPaidPercentage = totalExecutionValue > 0 ? Math.min(100, Math.round((executionPaid / totalExecutionValue) * 100)) : 0;
@@ -4276,6 +4323,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                         pct: executionPaidPercentage,
                                     }}
                                     onContactStudio={() => setActiveTab('overview')}
+                                    known={moneyKnown}
                                 />
 
                                 {/* Work added after the scope was agreed. Renders

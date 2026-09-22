@@ -3,7 +3,7 @@ import { FullProjectData, Item , ProjectLifecycle, Vendor, PurchaseOrder, Observ
 import { db as firestore, isFirebaseConfigured } from './firebaseClient';
 import { mergeClientOwned } from '../lib/clientOwned';
 import { auditDb } from './dbAudit';
-import { collection, getDocs, writeBatch, doc, setDoc, deleteDoc, getDoc, query, where, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, writeBatch, doc, setDoc, deleteDoc, getDoc, query, where, limit, serverTimestamp } from 'firebase/firestore';
 import pako from 'pako';
 
 // Multi-tenant Helper
@@ -611,6 +611,47 @@ const lastWrittenTierBoq = new Map<string, string>();
   otherwise be too large to save at all.
 */
 const ENGAGEMENT_COLLECTION = 'engagement';
+
+/*
+  Every subcollection a project can own.
+
+  Firestore has no way to ask a document what subcollections it has -- deleting
+  a document leaves them all behind, orphaned and unreachable, and the client
+  SDK cannot enumerate them to find out. So the names are listed, and any that
+  do not exist cost one empty query each.
+
+  Swept under BOTH parents. A project is stored twice and its subcollections are
+  split across the two by no consistent rule -- `decisions` hangs off the global
+  copy, `purchaseOrders` off the tenant one, and a couple appear under each in
+  different files. Sweeping one name from both parents is cheap and immune to
+  getting that mapping wrong; guessing it is not.
+*/
+const PROJECT_SUBCOLLECTIONS = [
+  /* First, deliberately: this one is not litter. See deleteProject. */
+  'portalView',
+  'tierBoq', 'engagement', 'decisions', 'selections', 'paymentRequests',
+  'communicationLog', 'deliverables', 'journeySteps', 'stepProgress',
+  'timelinePhases', 'revisions', 'boqItems', 'purchaseOrders', 'schedule',
+  'drawingTracker', 'moms', 'liveFeed', 'marginAnalytics', 'scopeAdditions',
+  'boqVersions', 'designGate', 'drawingVersions', 'tasks', 'siteVisits',
+];
+
+/** Empty one subcollection, in batches, and say how many went. */
+async function purgeSubcollection(basePath: string, name: string): Promise<number> {
+  if (!firestore) return 0;
+  const PAGE = 450; // a write batch caps at 500, and a BOQ can exceed that alone
+  let removed = 0;
+  for (;;) {
+    const snap = await getDocs(query(collection(firestore, `${basePath}/${name}`), limit(PAGE)));
+    if (snap.empty) break;
+    const batch = writeBatch(firestore);
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    removed += snap.size;
+    if (snap.size < PAGE) break;
+  }
+  return removed;
+}
 const ENGAGEMENT_DOC = 'current';
 
 /** As with tier BOQs: skip an unchanged record rather than rewrite it every save. */
@@ -1270,12 +1311,54 @@ const CloudStrategy: DBService = {
 
     deleteProject: async (id) => {
         await LocalStrategy.deleteProject(id);
-        
+
         if (!firestore) return;
+        const tenantId = getCurrentTenantId();
         try {
+            /*
+              Take the client's portal down first.
+
+              This deleted the two project documents and nothing else, so every
+              subcollection survived -- including portalView, which is what the
+              client portal actually renders from. It never checks that the
+              project exists; if the projection is there, it serves. So deleting
+              a published project left its portal live: scope, payment figures
+              and documents still reachable by anyone holding the link, with no
+              way to take it down from the app, because the project was gone
+              from the list.
+
+              Tombstoned before it is removed, so a failure part-way through
+              fails safe. If the delete below succeeds the document is gone; if
+              it does not, `revoked` stands and the portal refuses to open. The
+              one outcome not available is a live portal for a deleted project.
+            */
+            try {
+                await setDoc(
+                    doc(firestore, 'projects', id, 'portalView', 'current'),
+                    { revoked: true, revokedAt: new Date().toISOString() },
+                    { merge: true },
+                );
+            } catch {
+                /* Never published, or already unreachable. Either is fine. */
+            }
+
+            for (const base of [`projects/${id}`, `organizations/${tenantId}/projects/${id}`]) {
+                for (const name of PROJECT_SUBCOLLECTIONS) {
+                    try {
+                        await purgeSubcollection(base, name);
+                    } catch (subErr) {
+                        /*
+                          Reported, not fatal. A subcollection left behind is
+                          litter; abandoning here would leave the project itself
+                          half-removed, which is worse.
+                        */
+                        console.warn(`Could not clear ${base}/${name}`, subErr);
+                    }
+                }
+            }
+
             await deleteDoc(doc(firestore, "projects", id));
-            
-            const tenantId = getCurrentTenantId();
+
             try {
                 await deleteDoc(doc(firestore, `organizations/${tenantId}/projects`, id));
             } catch (tenantDelErr) {

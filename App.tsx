@@ -135,6 +135,8 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth as firebaseAuth } from "./services/firebaseClient";
 import PortalPublishControls from "./components/ops/PortalPublishControls";
 import { buildClientBoqRows, baselineFromSentRows, ClientBoqRow } from "./lib/clientBoq";
+import { computePortalMoney, resolveMoneyInputs } from "./lib/portalMoney";
+import { nextDefaultProjectName } from "./lib/projectNaming";
 import { sendPortalAccessLink } from "./services/emailService";
 import { verifyApiKey } from "./services/geminiService";
 import { id as generateId, calculateSellPrice, calculateCostFromSell } from "./lib/utils";
@@ -759,6 +761,23 @@ export default function App() {
       if (cancelled) return;
       if (!view) {
         setPortalDenied("Your project is not published yet. Please contact your studio.");
+        setAppMode("login");
+        return;
+      }
+      /*
+        A portal whose project has been deleted.
+
+        The projection is the only thing a client session can read -- the
+        project document itself is denied to them by the rules -- so "does this
+        project still exist" is not a question that can be asked from here. It
+        has to be answered in advance, and deleteProject marks the projection
+        before removing it.
+
+        Said plainly rather than as "not published yet": one means wait, the
+        other means there is nothing to wait for.
+      */
+      if ((view as any).revoked) {
+        setPortalDenied("This project is no longer available. Please contact your studio.");
         setAppMode("login");
         return;
       }
@@ -1460,6 +1479,29 @@ export default function App() {
     });
   }, [activeCalculatedTier, bank, clientBoqRooms, projectContext, clientBoqBaseline]);
 
+  /*
+    The client's money, worked out here and sent with the projection.
+
+    It cannot be worked out in the portal. A client session has no tiers, so the
+    design fee base resolved to zero there and every design milestone rendered
+    as a percentage of nothing; `financials` does not cross either, so the
+    portal fell back to a hard-coded 4,999 retainer and an assumed 100% billable
+    split and showed both to the client as fact.
+
+    Computed from the same rows the client is sent, so the figures on their
+    payments tab and the scope they can read describe one project.
+  */
+  const portalMoney = useMemo(() => {
+    const scopeTotal = clientBoqRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
+    const revisions = (projectContext as any)?.boqRevisions || [];
+    return computePortalMoney(resolveMoneyInputs({
+      context: projectContext,
+      tierSummary: (activeCalculatedTier as any)?.summary,
+      scopeTotal,
+      hasActiveBoqRevisions: revisions.length > 0 || !!(projectContext as any)?.operativeBoqVersion,
+    }));
+  }, [clientBoqRows, projectContext, activeCalculatedTier]);
+
   const fullBoqForActiveTier = useMemo((): FullBoqItem[] => {
     if (!activeTierId) return [];
     const activeTier = tiers.find((t) => t.id === activeTierId);
@@ -1606,7 +1648,19 @@ export default function App() {
     const newId = generateId();
     setActiveInternalId(newId);
     setProjectArchitecture('canonical');
-    setProjectContext(DEFAULT_CONTEXT);
+    /*
+      Born with a name of its own.
+
+      Every new project used to be handed the same "New Project", and most are
+      never renamed -- which is how sixteen of them ended up sharing one name,
+      seven with real BOQs behind them and nothing on the list to tell them
+      apart. Dated rather than numbered, so the name still says something in a
+      month; the date only appears once the plain name is taken.
+    */
+    setProjectContext({
+      ...DEFAULT_CONTEXT,
+      name: nextDefaultProjectName(DEFAULT_CONTEXT.name, projectLibrary),
+    });
     setTiers([]);
     setActiveTierId(null);
     setActiveProject(null);
@@ -3215,6 +3269,7 @@ export default function App() {
                           projectId={activeInternalId || undefined}
                           clientBoq={clientBoqRows}
                           clientBoqBaseline={clientBoqBaseline}
+                          portalMoney={portalMoney}
                         />
                         <ClientPortal
                           clientBoq={clientBoqRows}
@@ -3933,6 +3988,7 @@ export default function App() {
                           projectId={activeInternalId || undefined}
                           clientBoq={clientBoqRows}
                           clientBoqBaseline={clientBoqBaseline}
+                          portalMoney={portalMoney}
                         />
                         <ClientPortal
                           clientBoq={clientBoqRows}

@@ -1,6 +1,7 @@
 import { ProjectContext } from '../types';
 import { isVisibleToClient } from './clientVisibility';
 import { ClientBoqRow } from './clientBoq';
+import { PortalMoney } from './portalMoney';
 
 /**
  * The published-only view of a project, as the client receives it.
@@ -181,6 +182,23 @@ export function buildPortalView(
   /* Scope additions, already reduced to client-safe rows by the caller.
      Last, so every existing positional call keeps working. */
   scopeAdditions?: PortalScopeAddition[],
+  /*
+    The money, already worked out by the studio.
+
+    Not derived here for the same reason the BOQ is not: the design fee base
+    lives on the active tier and the billing rules live in `financials`, and a
+    client session has neither. The portal used to recompute from what it could
+    see and silently fell back to invented defaults -- a 0 design fee against
+    real percentages, and a ROUNDED 4,999 retainer shown as cleared to every
+    client on every project.
+
+    Only figures the client is already quoted on their own invoices cross. The
+    billable/cash split, the discount structure and the tier summaries that
+    produced these numbers stay on the studio's side.
+
+    Appended last, so every existing positional call keeps working.
+  */
+  money?: PortalMoney,
 ): PortalView {
   const c = ctx as any;
 
@@ -389,7 +407,14 @@ export function buildPortalView(
       designAgreementSignoff: c.designAgreementSignoff,
       executionSignoff: c.executionSignoff,
       handoverSignoff: c.handoverSignoff,
-      weeklyRoomProgress: c.weeklyRoomProgress
+      weeklyRoomProgress: c.weeklyRoomProgress,
+
+      /*
+        Absent rather than zeroed when the studio has not sent it, so the portal
+        can tell "nothing owed" from "this projection predates the figures" and
+        say so instead of printing a confident zero.
+      */
+      portalMoney: money,
     }
   });
 }

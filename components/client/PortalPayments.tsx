@@ -44,6 +44,17 @@ interface Props {
   design: Phase;
   execution: Phase;
   onContactStudio: () => void;
+  /*
+    Whether these figures rest on anything.
+
+    False when the client is holding a projection published before the money
+    was part of it. The portal used to fill that gap from a hard-coded object --
+    a 4,999 retainer shown as cleared, an assumed 100% billable split -- so a
+    client read invented numbers on a money screen with nothing saying they were
+    invented. A payment page that admits it does not know is worth more than one
+    that guesses convincingly.
+  */
+  known?: boolean;
 }
 
 type Stage = 'cleared' | 'due' | 'upcoming';
@@ -79,8 +90,11 @@ const Fill: React.FC<{ pct: number; className: string; delay?: number }> = ({ pc
 
 export default function PortalPayments({
   milestones, amountOf, projectValue, totalPaid, balanceDue,
-  dueCount, design, execution, onContactStudio,
+  dueCount, design, execution, onContactStudio, known = true,
 }: Props) {
+  /** A figure, or an honest dash. */
+  const rupees = (n: number) => (known ? formatINR(n) : '\u2014');
+  const percent = (n: number) => (known ? `${n}%` : '\u2014');
   /*
     One pass over the schedule: the money in each state, the running total after
     each milestone, and the next thing the client actually has to deal with.
@@ -110,6 +124,20 @@ export default function PortalPayments({
   return (
     <div className="space-y-5">
 
+      {!known && (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 sm:p-6 flex gap-3">
+          <Info className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" />
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-amber-900">The amounts are not available here yet</p>
+            <p className="text-xs text-amber-800 font-medium mt-1 leading-relaxed max-w-xl">
+              The stages below are right — what they cost has not been published to your portal.
+              Your studio has the figures; ask them and they can send them through. Nothing on this
+              page is payable until they do.
+            </p>
+          </div>
+        </section>
+      )}
+
       {/* ── Where it stands. One meter, not four disconnected figures. ── */}
       <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -120,7 +148,7 @@ export default function PortalPayments({
             </p>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-extrabold text-slate-900 tabular-nums leading-none">{formatINR(projectValue)}</p>
+            <p className="text-2xl font-extrabold text-slate-900 tabular-nums leading-none">{rupees(projectValue)}</p>
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Agreed in total</p>
           </div>
         </div>
@@ -140,13 +168,13 @@ export default function PortalPayments({
             <span key={s.label} className="flex items-baseline gap-1.5">
               <span className={`w-2 h-2 rounded-full ${s.dot} self-center`} />
               <span className="text-[11px] font-bold text-slate-500">{s.label}</span>
-              <span className="text-[12px] font-extrabold text-slate-900 tabular-nums">{formatINR(s.value)}</span>
+              <span className="text-[12px] font-extrabold text-slate-900 tabular-nums">{rupees(s.value)}</span>
             </span>
           ))}
         </div>
 
         <p className="text-[11px] text-slate-500 font-semibold mt-3">
-          {Math.round(clearedPct)}% cleared
+          {known ? `${Math.round(clearedPct)}% cleared` : 'Nothing recorded as cleared here'}
           {dueCount === 0
             ? ' · nothing is awaiting payment'
             : ` · ${dueCount} ${dueCount === 1 ? 'payment has' : 'payments have'} been raised`}
@@ -174,7 +202,7 @@ export default function PortalPayments({
               </p>
             </div>
             <p className="text-2xl font-extrabold text-slate-900 tabular-nums leading-none">
-              {formatINR(next.amount)}
+              {rupees(next.amount)}
             </p>
           </div>
           {next.stage !== 'due' && (
@@ -191,17 +219,17 @@ export default function PortalPayments({
           <div key={key} className="rounded-2xl border border-slate-200/80 bg-white p-5">
             <div className="flex items-baseline justify-between gap-3">
               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p>
-              <p className={`text-[11px] font-extrabold tabular-nums ${text}`}>{phase.pct}%</p>
+              <p className={`text-[11px] font-extrabold tabular-nums ${text}`}>{percent(phase.pct)}</p>
             </div>
-            <p className="text-xl font-extrabold text-slate-900 tabular-nums mt-1.5">{formatINR(phase.total)}</p>
+            <p className="text-xl font-extrabold text-slate-900 tabular-nums mt-1.5">{rupees(phase.total)}</p>
             <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-              {formatINR(phase.taxable)} plus GST
+              {known ? `${formatINR(phase.taxable)} plus GST` : 'Not published yet'}
             </p>
             <div className="mt-3 h-1.5 rounded-full bg-slate-100 overflow-hidden">
               <Fill pct={phase.pct} className={bar} delay={0.1 + i * 0.1} />
             </div>
             <p className="text-[10px] text-slate-500 font-semibold mt-1.5">
-              {formatINR(phase.paid)} cleared
+              {known ? `${formatINR(phase.paid)} cleared` : 'Ask your studio'}
             </p>
           </div>
         ))}
@@ -266,9 +294,9 @@ export default function PortalPayments({
                     </div>
 
                     <div className="text-right shrink-0">
-                      <p className="text-[13px] font-extrabold text-slate-900 tabular-nums">{formatINR(r.amount)}</p>
+                      <p className="text-[13px] font-extrabold text-slate-900 tabular-nums">{rupees(r.amount)}</p>
                       <p className="text-[10px] text-slate-400 font-semibold tabular-nums mt-0.5">
-                        {formatINR(r.running)} by here
+                        {known ? `${formatINR(r.running)} by here` : 'to be confirmed'}
                       </p>
                     </div>
                   </motion.li>
