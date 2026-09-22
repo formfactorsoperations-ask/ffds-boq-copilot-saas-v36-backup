@@ -81,8 +81,6 @@ const ClientsDirectory = lazyWithRetry(() => import("./components/ClientsDirecto
 const StudioReports = lazyWithRetry(() => import("./components/StudioReports"));
 
 const LoginScreen = lazyWithRetry(() => import("./components/LoginScreen"));
-const LandingPage = lazyWithRetry(() => import("./components/marketing/LandingPage"));
-const LandingPageOrbit = lazyWithRetry(() => import("./components/marketing/LandingPageOrbit"));
 const TeamTab = lazyWithRetry(() => import("./components/TeamTab"));
 const SubscriptionTab = lazyWithRetry(() => import("./components/SubscriptionTab"));
 const StudioSetupWizard = lazyWithRetry(() => import("./components/StudioSetupWizard"));
@@ -188,13 +186,6 @@ export default function App() {
     link. The initial value cannot decide that on its own, because the portal id
     is parsed inside init(), so the effect below retracts it as soon as we know.
   */
-  const [showLanding, setShowLanding] = useState(
-    () => !localStorage.getItem("ffds_seen_landing"),
-  );
-  useEffect(() => {
-    if (!showLanding) localStorage.setItem("ffds_seen_landing", "1");
-  }, [showLanding]);
-
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIStatus>("checking");
 
@@ -679,10 +670,6 @@ export default function App() {
     state rather than the render condition means it also survives the client
     door handing off to the studio door, which clears portalProjectId.
   */
-  useEffect(() => {
-    if (portalProjectId || authProfile) setShowLanding(false);
-  }, [portalProjectId, authProfile]);
-
   /*
     Whose name the client door wears.
 
@@ -2509,18 +2496,16 @@ export default function App() {
     return <MomAcknowledgePage token={momToken} />;
   }
 
-  /* The public page is what a visitor lands on. Signing in is one click past
-     it, and anyone returning is taken straight to the sign-in screen. */
-  if (appMode === "login" && showLanding && !portalProjectId && !authProfile) {
-    /* Two public pages exist side by side. `?landing=orbit` shows the orbit
-       variant; anything else keeps the original, so the default path is
-       unchanged for every visitor who does not ask for it. */
-    const wantsOrbit =
-      new URLSearchParams(window.location.search).get("landing") === "orbit";
-    return wantsOrbit
-      ? <LandingPageOrbit onEnter={() => setShowLanding(false)} />
-      : <LandingPage onEnter={() => setShowLanding(false)} />;
-  }
+  /*
+    There is no public page any more.
+
+    A marketing page used to sit in front of everything -- pitch, pricing, one
+    "Open the studio" button -- shown once per browser and remembered in
+    localStorage under `ffds_seen_landing`. It has been removed deliberately:
+    the root address now opens the sign-in screen directly, for staff and
+    clients alike. `?landing=orbit`, which chose between two variants of it,
+    no longer does anything.
+  */
 
   /*
     The client door.
