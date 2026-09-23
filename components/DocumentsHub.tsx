@@ -511,17 +511,15 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
           </p>
         </div>
 
-        <div className="relative w-full md:w-72 shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search documents by name, stage…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[12px] font-medium text-slate-800
-                       placeholder-slate-400 outline-none focus:bg-white focus:border-[#3D52A0] transition-colors"
-          />
-        </div>
+        {/*
+          The search moved into the register's own filter bar.
+
+          It lived here, full width, and fed `groupedDocs` — which renders only
+          in the read-only fallback below. In the studio view, the one this
+          header actually sits above, typing in it filtered nothing at all. It
+          now sits beside the filters it belongs with, on the component that
+          owns the rows.
+        */}
       </motion.div>
 
       {/*
@@ -545,6 +543,8 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
           currentStage={currentStage}
           isExecutionGateOpen={isExecutionGateOpen}
           isDesigner={isDesigner}
+          search={searchQuery}
+          onSearch={setSearchQuery}
         />
       ) : (
       <>

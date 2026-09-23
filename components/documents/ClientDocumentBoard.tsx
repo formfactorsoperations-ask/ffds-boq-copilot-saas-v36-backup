@@ -68,7 +68,9 @@ import {
   AlertCircle,
   Layers,
   Check,
-  X
+  X,
+  Search,
+  Download
 } from 'lucide-react';
 
 interface ClientDocumentBoardProps {
@@ -80,6 +82,9 @@ interface ClientDocumentBoardProps {
   currentStage: number;
   isExecutionGateOpen: boolean;
   isDesigner: boolean;
+  /** Free text from the register's own filter bar. */
+  search?: string;
+  onSearch?: (v: string) => void;
 }
 
 type RowMode = SignatureMode | 'internal';
@@ -182,6 +187,32 @@ const ProgressRail: React.FC<{ state: DocumentState | null; mode: RowMode }> = (
   );
 };
 
+/*
+  The register's columns, declared once.
+
+  The header strip and every row read these same constants. Stating a width in
+  two places is how a header stops lining up with the thing it labels the first
+  time either one is touched.
+*/
+const COL = {
+  status: 'w-[172px]',
+  move: 'w-[104px]',
+  age: 'w-12',
+  act: 'w-[196px]',
+};
+
+/** Who owes the next move, in two words, for the column that asks. */
+const moveLabel = (args: {
+  kind: unknown; available: boolean; gateLocked: boolean;
+  court: 'mine' | 'client' | 'settled';
+}): { text: string; tone: string } => {
+  if (args.gateLocked || !args.available) return { text: 'Blocked', tone: 'text-slate-400' };
+  if (!args.kind) return { text: 'Not shared', tone: 'text-slate-400' };
+  if (args.court === 'settled') return { text: 'Settled', tone: 'text-slate-400' };
+  if (args.court === 'client') return { text: 'With client', tone: 'text-[#3E4F87]' };
+  return { text: 'Your move', tone: 'text-[#8A7440]' };
+};
+
 const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
   projectContext,
   setProjectContext,
@@ -190,12 +221,14 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
   currentUserName = 'Studio',
   currentStage,
   isExecutionGateOpen,
-  isDesigner
+  isDesigner,
+  search = '',
+  onSearch,
 }) => {
   const [expanded, setExpanded] = useState<string | null>(null);
   /* Whose court, as a filter. On a board of a dozen documents the question is
      never "show me everything", it is "what is mine". */
-  const [court, setCourt] = useState<'all' | 'mine' | 'client' | 'settled'>('all');
+  const [court, setCourt] = useState<'all' | 'mine' | 'client' | 'settled' | 'blocked'>('all');
   const [releasing, setReleasing] = useState<string | null>(null);
   const [releaseNote, setReleaseNote] = useState('');
   const [asPack, setAsPack] = useState(true);
@@ -310,13 +343,26 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
 
   const grouped = useMemo(() => {
     const out: Record<string, Row[]> = {};
+    const q = search.trim().toLowerCase();
     rows
-      .filter(r => court === 'all' || courtOf(r) === court)
+      .filter(r => court === 'all'
+        ? true
+        : court === 'blocked'
+          ? !!r.kind && (r.gateLocked || !r.available)
+          : courtOf(r) === court)
+      /*
+        Name, group and reference -- the three things somebody types when
+        looking for a document they half remember.
+      */
+      .filter(r => !q
+        || r.meta.name.toLowerCase().includes(q)
+        || r.meta.group.toLowerCase().includes(q)
+        || (r.issue?.reference || '').toLowerCase().includes(q))
       .forEach(r => {
         (out[r.meta.group] ||= []).push(r);
       });
     return out;
-  }, [rows, court, acceptance]);
+  }, [rows, court, acceptance, search]);
 
   /*
     The "needs you" summary that lived here is gone, and the derivation behind
@@ -325,7 +371,76 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
     from the first. `Your move` does the job and filters as well as counts.
   */
 
+  /*
+    What the register knows about itself, and what the rail reports.
 
+    Every figure below comes from `rows`, the same array the list renders, so
+    the summary and the documents underneath it cannot drift apart. Most of it
+    was already computed per row and thrown away: `gateLocked`, `available`,
+    `openQueryCount` and `lastViewed` reached the screen nowhere at all.
+  */
+  const register = useMemo(() => {
+    const client = rows.filter(r => courtOf(r) === 'client');
+    const settled = rows.filter(r => courtOf(r) === 'settled');
+    const mine = rows.filter(r => courtOf(r) === 'mine');
+    const signable = rows.filter(r => !!r.kind);
+
+    /* Held back rather than merely unfinished: a gate or a stage says no. */
+    const blocked = rows.filter(r => !!r.kind && (r.gateLocked || !r.available));
+
+    /* Sent, but no reading evidence ever came back. */
+    const unopened = rows.filter(r => !!r.issue && !r.lastViewed);
+    const questions = rows.reduce((n, r) => n + r.openQueryCount, 0);
+
+    /*
+      The oldest thing on the studio's side that the CLIENT is owed.
+
+      Internal working documents count as the studio's move too, so an
+      unsorted list named "Client Proposal" here -- a document nobody is
+      waiting on. Only documents with a kind ever reach a client.
+    */
+    const oldestMine = [...mine]
+      .filter(r => !!r.kind)
+      .sort((a, b) => (a.issue?.issuedAt || 0) - (b.issue?.issuedAt || 0))[0];
+
+    return {
+      client, settled, mine, blocked, unopened, questions, oldestMine,
+      executed: settled.length,
+      signableCount: signable.length,
+    };
+  }, [rows, acceptance]);
+
+
+
+  /*
+    The register as a file.
+
+    Built from `rows`, so the export says exactly what the screen says. Quotes
+    are doubled rather than stripped, because a document named 6" Skirting has
+    to survive the round trip into a spreadsheet.
+  */
+  const exportCsv = () => {
+    const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = ['Group', 'Document', 'Reference', 'Version', 'Status', 'Whose move', 'Issued', 'Opened', 'Open questions'];
+    const lines = rows.map(r => {
+      const ml = moveLabel({
+        kind: r.kind, available: r.available, gateLocked: r.gateLocked,
+        court: courtOf(r) as 'mine' | 'client' | 'settled',
+      });
+      const iso = (t?: number) => (t ? new Date(t).toISOString().slice(0, 10) : '');
+      return [
+        r.meta.group, r.meta.name, r.issue?.reference || '', r.issue ? `v${r.issue.version}` : '',
+        r.state || 'internal', ml.text, iso(r.issue?.issuedAt), iso(r.lastViewed), r.openQueryCount,
+      ].map(cell).join(',');
+    });
+    const csv = [header.map(cell).join(','), ...lines].join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `documents-${(projectContext.name || 'project').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const doRelease = (kind: ClientDocumentKind) => {
     const def = RELEASABLE_DOCUMENTS.find(d => d.kind === kind);
@@ -344,7 +459,15 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
 
   // ── Row primary action ─────────────────────────────────────────────────
   const primaryFor = (r: Row) => {
-    if (r.gateLocked) return { label: 'Locked', variant: 'locked' as const, onClick: () => {} };
+    /*
+      A locked row says why, rather than only that.
+
+      "Locked" with a dead click told the studio nothing and offered nothing:
+      the reason -- a design gate that has not cleared, or a stage not yet
+      reached -- was computed on the row and shown nowhere. Opening the drawer
+      is where the blockers already are.
+    */
+    if (r.gateLocked) return { label: 'Why blocked?', variant: 'ghost' as const, onClick: () => setExpanded(r.meta.id) };
     if (!r.available) return { label: 'Not yet due', variant: 'locked' as const, onClick: () => {} };
     if (!r.kind) return { label: 'Open', variant: 'ghost' as const, onClick: () => onNavigate(r.meta.id) };
 
@@ -361,8 +484,18 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
       default: // draft — a client document with a kind is releasable regardless
                // of mode. Review-mode docs (the onboarding kit) are still sent to
                // the client to read; they just carry no signature.
+        /*
+          "Review & release", because that is what the click does.
+
+          The button said "Release to client" and released nothing: it opened
+          the drawer, where a second button actually sent the document. Two
+          controls carrying the same verb, one of them inert, with the real one
+          further from the cursor. The row now names the step it opens, and
+          `openLabel` below turns it into Cancel while that drawer is open so
+          the pair never sits on screen competing.
+        */
         return r.readinessReady
-          ? { label: 'Release to client', variant: 'dark' as const, onClick: () => { setExpanded(r.meta.id); setReleasing(r.meta.id); setAsPack(true); setReleaseNote(''); } }
+          ? { label: 'Review & release', variant: 'dark' as const, onClick: () => { setExpanded(r.meta.id); setReleasing(r.meta.id); setAsPack(true); setReleaseNote(''); } }
           : { label: 'Prepare', variant: 'ghost' as const, onClick: () => onNavigate(r.meta.id) };
     }
   };
@@ -389,8 +522,8 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
   };
 
   const btnCls = (v: string) =>
-    v === 'primary' ? 'bg-[#3D52A0] hover:bg-[#334486] text-white'
-    : v === 'dark' ? 'bg-[#3D52A0] hover:bg-[#334486] text-white'
+    v === 'primary' ? 'bg-[#5468A8] hover:bg-[#3E4F87] text-white'
+    : v === 'dark' ? 'bg-[#5468A8] hover:bg-[#3E4F87] text-white'
     : v === 'locked' ? 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed'
     : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50';
 
@@ -594,25 +727,56 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
         </div>
       )}
 
-      {/* Whose court. Derived from the same verdict each row already shows,
-          so the filter and the rows can never disagree. */}
+      {/*
+        The register, and beside it what it knows.
+
+        The board used to be a single column of rows: everything it had worked
+        out about blockers, reading evidence and open questions stayed inside
+        the row objects and never reached a screen. The rail is that knowledge,
+        stated once, in numbers.
+      */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_288px] gap-4 items-start">
+      <div className="space-y-5 min-w-0">
+
+      {/* One sentence about the whole register, above the filters it agrees with. */}
+      <p className="text-[12.5px] text-slate-500 font-medium">
+        <b className="text-slate-800 font-bold">{rows.length} documents</b> on this project
+        {register.mine.length > 0 && <> · <b className="text-slate-800 font-bold">{register.mine.length} your move</b></>}
+        {register.client.length > 0
+          ? <> · {register.client.length} with the client</>
+          : <> · nothing waiting on the client</>}
+      </p>
+
+      {/*
+        Filters, search and the one action, on a single bar.
+
+        The search used to be a full-width box in the page header, nowhere near
+        the things it filters — and, in this view, wired to nothing. Sitting it
+        with the chips makes the bar say what it is: the controls for the list
+        directly beneath it.
+      */}
       <div className="flex items-center gap-1.5 flex-wrap">
         {([
           { id: 'all',     label: 'All documents' },
           { id: 'mine',    label: 'Your move' },
           { id: 'client',  label: 'With the client' },
           { id: 'settled', label: 'Settled' },
+          /* Held back by a gate or a stage. The rows knew; nothing asked. */
+          { id: 'blocked', label: 'Blocked' },
         ] as const).map(f => {
           const on = court === f.id;
-          const n = f.id === 'all' ? rows.length : rows.filter(r => courtOf(r) === f.id).length;
+          const n = f.id === 'all' ? rows.length
+            : f.id === 'blocked' ? register.blocked.length
+            : rows.filter(r => courtOf(r) === f.id).length;
+          if (f.id === 'blocked' && n === 0) return null;
           return (
             <button
               key={f.id}
               onClick={() => setCourt(f.id)}
               aria-pressed={on}
               className={`px-3 py-1.5 rounded-full text-[11px] font-bold cursor-pointer border transition-colors ${
-                on ? 'bg-sky-50 text-[#334486] border-sky-200'
-                   : 'text-slate-500 border-slate-200 hover:border-sky-300 hover:text-[#334486]'
+                on ? 'bg-[#EEF0F8] text-[#3E4F87] border-[#CDD5EA]'
+                   : 'text-slate-500 border-slate-200 hover:border-[#CDD5EA] hover:text-[#3E4F87]'
               }`}
             >
               {f.label}
@@ -620,7 +784,45 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
             </button>
           );
         })}
+
+        <span className="flex-1 min-w-[12px]" />
+
+        <div className="relative w-full sm:w-56">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => onSearch?.(e.target.value)}
+            placeholder="Search name, stage or ref…"
+            className="w-full pl-9 pr-8 py-1.5 bg-white border border-slate-200 rounded-full text-[11.5px] font-medium
+                       text-slate-800 placeholder-slate-400 outline-none focus:border-[#ADBBDA] transition-colors"
+          />
+          {search && (
+            <button
+              onClick={() => onSearch?.('')}
+              aria-label="Clear search"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        <button
+          onClick={exportCsv}
+          className="px-3 py-1.5 rounded-full text-[11px] font-bold cursor-pointer border border-slate-200
+                     text-slate-600 hover:border-[#ADBBDA] hover:text-[#3E4F87] transition-colors flex items-center gap-1.5"
+        >
+          <Download className="w-3.5 h-3.5" /> CSV
+        </button>
       </div>
+
+      {/* Nothing matched — said once, rather than three empty groups. */}
+      {search.trim() && Object.keys(grouped).length === 0 && (
+        <p className="text-[12.5px] text-slate-500 font-medium py-6 text-center">
+          No document matches <b className="text-slate-800">“{search.trim()}”</b>.
+        </p>
+      )}
 
       {/* ── The list ──────────────────────────────────────────────────── */}
       {GROUPS.map(group => {
@@ -628,11 +830,43 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
         if (!items || items.length === 0) return null;
         return (
           <div key={group} className="space-y-3">
-            <div className="flex items-center gap-2.5">
-              <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{group}</h3>
-              <span className="h-px flex-1 bg-slate-100" />
-              <span className="text-[11px] font-semibold text-slate-400">{items.length}</span>
-            </div>
+            {/*
+              The group, and how far through it this project is.
+
+              A bare label and a count said nothing about progress; the same
+              rows already know which of them are settled, so the bar is free.
+            */}
+            {(() => {
+              const done = items.filter(r => courtOf(r) === 'settled').length;
+              const pct = items.length ? Math.round((done / items.length) * 100) : 0;
+              return (
+                <div className="flex items-center gap-3">
+                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{group}</h3>
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    {items.length} document{items.length === 1 ? '' : 's'}
+                  </span>
+                  <span className="h-1 flex-1 max-w-[150px] rounded-full bg-slate-100 overflow-hidden">
+                    {/*
+                      Animated on the VALUE, not on mount.
+
+                      A scaleX entrance plays once and then never again, so
+                      releasing a document moved this bar with no transition at
+                      all. Animating width means the bar grows whenever the
+                      group's progress actually changes, which is the only time
+                      anyone is looking at it.
+                    */}
+                    <motion.span
+                      className="block h-full rounded-full bg-[#5468A8]/60"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pct}%` }}
+                      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                    />
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-400 tabular-nums w-8 text-right">{pct}%</span>
+                  <span className="h-px flex-1 bg-slate-100" />
+                </div>
+              );
+            })()}
 
             {/*
               One document, one line.
@@ -649,6 +883,31 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
               so filtering reflows rather than repaints.
             */}
             <motion.div layout className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+
+            {/*
+              Column headings, on the screens wide enough to have columns.
+
+              The rows below were a loose flex: a name, some pips, an age and a
+              cluster of buttons, none of them labelled. Naming them costs one
+              strip and turns a list into a register you can read down.
+            */}
+            <div className="hidden lg:flex items-center gap-3.5 px-4 py-2 bg-slate-50/70 border-b border-slate-100">
+              <span className="w-2 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 flex-1 text-[9.5px] font-extrabold uppercase tracking-[0.11em] text-slate-400">
+                Document
+              </span>
+              <span className={`${COL.status} shrink-0 pl-3 border-l border-slate-200/70 text-[9.5px] font-extrabold uppercase tracking-[0.11em] text-slate-400`}>
+                Status
+              </span>
+              <span className={`${COL.move} shrink-0 pl-3 border-l border-slate-200/70 text-[9.5px] font-extrabold uppercase tracking-[0.11em] text-slate-400`}>
+                Whose move
+              </span>
+              <span className={`${COL.age} shrink-0 pl-3 border-l border-slate-200/70 text-right text-[9.5px] font-extrabold uppercase tracking-[0.11em] text-slate-400`}>
+                Age
+              </span>
+              <span className={`${COL.act} shrink-0`} aria-hidden="true" />
+            </div>
+
             <AnimatePresence initial={false} mode="popLayout">
             {items.map((r, i) => {
               const isOpen = expanded === r.meta.id;
@@ -665,9 +924,11 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                   ? subLine(r)
                   : `${hand.studio.text} · ${hand.client.text}`;
 
-              const orb = proposalDone || settled ? 'bg-emerald-500'
-                : mine ? 'bg-amber-500'
-                : 'bg-violet-500';
+              /* Desaturated on purpose: the dot marks state, it does not
+                 compete with the document's name for attention. */
+              const orb = proposalDone || settled ? 'bg-[#7FA98F]'
+                : mine ? 'bg-[#D8B25E]'
+                : 'bg-[#8E9BC4]';
 
               return (
                 <motion.div
@@ -678,7 +939,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                   exit={{ opacity: 0, y: -4, transition: { duration: 0.15 } }}
                   transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.18), ease: [0.22, 1, 0.36, 1] }}
                   className={`group border-b border-slate-100 last:border-b-0 transition-colors ${
-                    isOpen ? 'bg-sky-50/40' : 'hover:bg-slate-50/70'
+                    isOpen ? 'bg-[#F8F9FC]' : 'hover:bg-slate-50/70'
                   }`}
                 >
                   <div className="px-4 py-3 flex items-center gap-3.5">
@@ -706,19 +967,44 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                       <p className="text-[11.5px] text-slate-500 font-medium mt-0.5 truncate">{sentence}</p>
                     </div>
 
-                    {r.kind && r.available && !r.gateLocked && (
-                      <div className="hidden lg:block shrink-0">
-                        <ProgressRail state={r.state} mode={r.mode} />
-                      </div>
-                    )}
+                    {/*
+                      Status, in its column.
 
-                    <span className="text-[10.5px] text-slate-400 whitespace-nowrap shrink-0 w-10 text-right">
+                      The rail was `hidden lg:block` with no reserved width, so
+                      rows of different states ended at different places and the
+                      ages beside them never lined up. The cell is now always
+                      there on lg+, whether or not it has a rail to put in it.
+                    */}
+                    <div className={`hidden lg:block ${COL.status} shrink-0 self-stretch pl-3 border-l border-slate-100 flex items-center`}>
+                      {r.kind && r.available && !r.gateLocked ? (
+                        <ProgressRail state={r.state} mode={r.mode} />
+                      ) : (
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
+                          {r.gateLocked ? 'Gate locked' : !r.available ? 'Not yet due' : 'Internal'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Whose move, said in words rather than inferred from a dot. */}
+                    <div className={`hidden lg:block ${COL.move} shrink-0 self-stretch pl-3 border-l border-slate-100 flex items-center`}>
+                      {(() => {
+                        const ml = moveLabel({
+                          kind: r.kind, available: r.available, gateLocked: r.gateLocked,
+                          court: proposalDone ? 'settled' : (courtOf(r) as 'mine' | 'client' | 'settled'),
+                        });
+                        return (
+                          <span className={`text-[11px] font-bold ${ml.tone}`}>{ml.text}</span>
+                        );
+                      })()}
+                    </div>
+
+                    <span className={`text-[10.5px] text-slate-400 whitespace-nowrap shrink-0 ${COL.age} lg:pl-3 lg:border-l lg:border-slate-100 text-right tabular-nums`}>
                       {hand.age}
                     </span>
 
                     {/* Primary always; the rest on hover or focus, so twelve rows
                         are not thirty-six competing buttons. */}
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center justify-end gap-1 shrink-0 lg:w-[196px]">
                       {/* The one action the summary line used to own. Offered
                           where it applies: sent, unopened or unsigned, quiet
                           for three days or more. */}
@@ -728,10 +1014,31 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                           onClick={() => setProjectContext(recordReminder(r.kind!, currentUserName, 'portal'))}
                           title="Log a reminder to the client"
                           className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg whitespace-nowrap text-slate-500
-                                     hover:text-[#334486] hover:bg-sky-50 cursor-pointer transition-all
+                                     hover:text-[#3E4F87] hover:bg-[#EEF0F8] cursor-pointer transition-all
                                      opacity-0 group-hover:opacity-100 focus:opacity-100"
                         >
                           Remind
+                        </button>
+                      )}
+                      {/*
+                        Edit, on the row, for anything with a workspace page.
+
+                        A ready draft's row offered only "Review & release" —
+                        the way to change the document before sending it lived
+                        two clicks away inside the drawer. It joins Remind and
+                        Send again in the hover cluster, so the row carries the
+                        three things you might do to a document without being
+                        three permanent buttons.
+                      */}
+                      {r.kind && r.state === 'draft' && r.readinessReady && (
+                        <button
+                          onClick={() => onNavigate(r.meta.id)}
+                          title="Open this document in its workspace"
+                          className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg whitespace-nowrap text-slate-500
+                                     hover:text-[#3E4F87] hover:bg-[#EEF0F8] cursor-pointer transition-all
+                                     opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        >
+                          Edit
                         </button>
                       )}
                       {canSendAgain(r) && (
@@ -739,25 +1046,38 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                           onClick={() => sendAgain(r)}
                           title="Issue a new version to the client"
                           className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg whitespace-nowrap text-slate-500
-                                     hover:text-[#334486] hover:bg-sky-50 cursor-pointer transition-all
+                                     hover:text-[#3E4F87] hover:bg-[#EEF0F8] cursor-pointer transition-all
                                      opacity-0 group-hover:opacity-100 focus:opacity-100"
                         >
                           Send again
                         </button>
                       )}
+                      {/*
+                        One Release on screen at a time.
+
+                        With the drawer open the row's trigger has done its job,
+                        so it becomes the way back out rather than a second copy
+                        of the button three inches below it.
+                      */}
                       <button
-                        onClick={primary.onClick}
+                        onClick={isOpen && primary.variant === 'dark'
+                          ? () => { setExpanded(null); setReleasing(null); }
+                          : primary.onClick}
                         disabled={primary.variant === 'locked'}
-                        className={`text-[11px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${primary.variant !== 'locked' ? 'cursor-pointer' : ''} ${btnCls(primary.variant)}`}
+                        className={`text-[11px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${primary.variant !== 'locked' ? 'cursor-pointer' : ''} ${
+                          isOpen && primary.variant === 'dark'
+                            ? 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                            : btnCls(primary.variant)
+                        }`}
                       >
-                        {primary.label}
+                        {isOpen && primary.variant === 'dark' ? 'Cancel' : primary.label}
                       </button>
-                      {r.kind && r.available && !r.gateLocked && (
+                      {r.kind && (r.available || r.gateLocked) && (
                         <button
                           onClick={() => setExpanded(isOpen ? null : r.meta.id)}
                           aria-expanded={isOpen}
                           aria-label={isOpen ? 'Hide details' : 'Show details'}
-                          className="text-slate-400 hover:text-[#3D52A0] p-1.5 rounded-lg hover:bg-sky-50 cursor-pointer transition-colors"
+                          className="text-slate-400 hover:text-[#3E4F87] p-1.5 rounded-lg hover:bg-[#EEF0F8] cursor-pointer transition-colors"
                         >
                           <motion.span animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.2 }} className="block">
                             <ChevronRight className="w-4 h-4" />
@@ -874,10 +1194,26 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                             placeholder="Optional note to the client…"
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-[12px] outline-none focus:border-[#3D52A0] resize-none"
                           />
-                          <div className="flex justify-end">
+                          {/*
+                            Editing sits beside sending, not in a footer.
+
+                            "Open in workspace to edit" was the last line of the
+                            drawer, below the signature panel and the activity
+                            log — so the one thing a studio does to a document
+                            it has not sent yet was the hardest thing to find on
+                            the screen. The decision here is send-or-change, so
+                            both are offered at the point it is made.
+                          */}
+                          <div className="flex items-center justify-between gap-3">
+                            <button
+                              onClick={() => onNavigate(r.meta.id)}
+                              className="px-3 py-2 border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-[12px] font-bold rounded-xl cursor-pointer flex items-center gap-1.5"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" /> Edit first
+                            </button>
                             <button
                               onClick={() => doRelease(r.kind!)}
-                              className="px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white text-[12px] font-bold rounded-xl cursor-pointer flex items-center gap-1.5"
+                              className="px-4 py-2 bg-[#5468A8] hover:bg-[#3E4F87] text-white text-[12px] font-bold rounded-xl cursor-pointer flex items-center gap-1.5"
                             >
                               <Check className="w-3.5 h-3.5" /> Release
                             </button>
@@ -939,12 +1275,23 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                         </div>
                       )}
 
-                      {/* Footer utilities */}
-                      <div className="flex items-center gap-3 pt-1">
-                        <button onClick={() => onNavigate(r.meta.id)} className="text-[11px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer flex items-center gap-1.5">
-                          <ExternalLink className="w-3.5 h-3.5" /> Open in workspace to edit
-                        </button>
-                      </div>
+                      {/*
+                        Footer utilities — only where the panel above has not
+                        already offered the same thing.
+
+                        The release panel now carries "Edit first" beside the
+                        send, so on a draft this footer was the second copy of
+                        one link. It stays for documents already sent, where no
+                        release panel renders and this is the only way through
+                        to the workspace.
+                      */}
+                      {!(r.state === 'draft' || releasing === r.meta.id) && (
+                        <div className="flex items-center gap-3 pt-1">
+                          <button onClick={() => onNavigate(r.meta.id)} className="text-[11px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer flex items-center gap-1.5">
+                            <ExternalLink className="w-3.5 h-3.5" /> Open in workspace to edit
+                          </button>
+                        </div>
+                      )}
                     </div>
                     </motion.div>
                   )}
@@ -957,6 +1304,162 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
           </div>
         );
       })}
+
+      </div>{/* ── end of the list column ─────────────────────────────── */}
+
+      {/*
+        What the register knows, in numbers.
+
+        Nothing here is recomputed: every figure reads the same `rows` the list
+        renders. These were all derived per row already and displayed nowhere —
+        a document could be held back by a gate, or signed without ever having
+        been opened, and no screen said so.
+
+        Signature exposure was drafted here too and dropped: "uncovered" needs a
+        definition the studio stands behind, and inventing one would put a
+        confident number on a guess.
+      */}
+      {/*
+        One card, not three floating ones.
+
+        Three separate panels read as three unrelated widgets parked in a
+        column. A register's health is one subject, so it is one surface with
+        hairline rules between its parts -- and it opens on a ring, because a
+        column of bare numerals gives the eye nothing to land on.
+      */}
+      <motion.aside
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        className="bg-white border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 xl:sticky xl:top-4"
+      >
+
+        {/* ── executed, as a ring ─────────────────────────────────── */}
+        {(() => {
+          const total = register.signableCount;
+          const done = register.executed;
+          const pct = total ? Math.round((done / total) * 100) : 0;
+          const R = 26, C = 2 * Math.PI * R;
+          return (
+            <div className="p-4 flex items-center gap-4">
+              <div className="relative shrink-0" style={{ width: 64, height: 64 }}>
+                <svg width="64" height="64" viewBox="0 0 64 64" className="-rotate-90">
+                  <circle cx="32" cy="32" r={R} fill="none" stroke="#EEF1F7" strokeWidth="6" />
+                  <motion.circle
+                    cx="32" cy="32" r={R} fill="none" stroke="#5468A8" strokeWidth="6" strokeLinecap="round"
+                    strokeDasharray={C}
+                    initial={{ strokeDashoffset: C }}
+                    animate={{ strokeDashoffset: C - (C * pct) / 100 }}
+                    transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                  />
+                </svg>
+                <span className="absolute inset-0 grid place-items-center text-[13px] font-extrabold text-slate-800 tabular-nums">
+                  {pct}%
+                </span>
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-slate-400">Executed</div>
+                <p className="text-[15px] font-extrabold text-slate-800 mt-0.5 tabular-nums">
+                  {done} <span className="text-slate-400 font-bold">of {total}</span>
+                </p>
+                <p className="text-[11px] text-slate-500 font-semibold leading-snug mt-0.5">
+                  client documents settled
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── whose move ──────────────────────────────────────────── */}
+        <div className="p-4">
+          <h4 className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-slate-400 mb-2.5">
+            Whose move
+          </h4>
+          <p className="text-[26px] font-extrabold text-slate-900 leading-none tracking-tight">
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.span
+                key={register.mine.length}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6, position: 'absolute' }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-block"
+              >
+                {register.mine.length}
+              </motion.span>
+            </AnimatePresence>
+            <span className="text-[11.5px] font-semibold text-slate-500 ml-1.5 tracking-normal">yours</span>
+          </p>
+          <div className="flex gap-5 mt-3">
+            <div>
+              <b className="block text-[15px] font-extrabold text-slate-700 tabular-nums">{register.client.length}</b>
+              <span className="text-[10px] font-bold text-slate-400">With client</span>
+            </div>
+            <div>
+              <b className="block text-[15px] font-extrabold text-slate-700 tabular-nums">{register.settled.length}</b>
+              <span className="text-[10px] font-bold text-slate-400">Settled</span>
+            </div>
+          </div>
+          {register.oldestMine && (
+            <p className="mt-2.5 text-[11.5px] text-slate-500 font-semibold leading-snug">
+              Oldest: <b className="text-slate-700">{register.oldestMine.meta.name}</b>
+              {!register.oldestMine.issue && <>, never released</>}
+            </p>
+          )}
+        </div>
+
+        {/* ── blocked ─────────────────────────────────────────────── */}
+        {register.blocked.length > 0 && (
+          <div className="p-4">
+            <h4 className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-slate-400 mb-2.5">
+              Blocked
+            </h4>
+            <ul className="space-y-2.5">
+              {register.blocked.slice(0, 4).map(r => (
+                <li key={r.meta.id} className="flex gap-2 items-start">
+                  <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                    r.gateLocked ? 'bg-[#C08A83]' : 'bg-slate-300'
+                  }`} />
+                  <div className="min-w-0">
+                    <div className="text-[12px] font-bold text-slate-700 leading-snug">{r.meta.name}</div>
+                    <div className="text-[11px] text-slate-400 font-medium leading-snug">
+                      {r.gateLocked ? 'Design gate not open' : `Opens at stage ${r.meta.minStage}`}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* ── unread and unanswered ───────────────────────────────── */}
+        {(register.unopened.length > 0 || register.questions > 0) && (
+          <div className="p-4">
+            <h4 className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-slate-400 mb-2.5">
+              Unread &amp; unanswered
+            </h4>
+            <div className="flex gap-5">
+              <div>
+                <b className="block text-[15px] font-extrabold text-slate-700 tabular-nums">{register.unopened.length}</b>
+                <span className="text-[10px] font-bold text-slate-400">Never opened</span>
+              </div>
+              <div>
+                <b className="block text-[15px] font-extrabold text-slate-700 tabular-nums">{register.questions}</b>
+                <span className="text-[10px] font-bold text-slate-400">
+                  Question{register.questions === 1 ? '' : 's'} open
+                </span>
+              </div>
+            </div>
+            {register.unopened[0] && (
+              <p className="mt-2.5 text-[11.5px] text-slate-500 font-semibold leading-snug">
+                <b className="text-slate-700">{register.unopened[0].meta.name}</b> sent, never opened.
+              </p>
+            )}
+          </div>
+        )}
+
+      </motion.aside>
+      </div>{/* ── end of the two-column register ─────────────────────── */}
 
     </div>
   );
