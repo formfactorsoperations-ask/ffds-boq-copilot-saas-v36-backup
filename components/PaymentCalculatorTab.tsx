@@ -1187,6 +1187,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const [moneyTab, setMoneyTab] = useState<'overview' | 'milestones' | 'tax' | 'history'>('overview');
     /* Retainer editor on the overview. Closed unless the user opens it. */
     const [retainerOpen, setRetainerOpen] = useState(false);
+    /* Per-invoice concession editor: the milestone id being edited, or null. */
+    const [discountFor, setDiscountFor] = useState<string | null>(null);
 
     /*
       What this screen knows but never said.
@@ -1873,6 +1875,16 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                 deductedInitiationFee = Math.min(rowInvoiceTotal, initiationFee);
                                 rowInvoiceTotal = Math.max(0, rowInvoiceTotal - initiationFee);
                             }
+
+                            /*
+                              The concession, in the same order as the card view
+                              and `computeSchedule`: after GST, after the retainer.
+                              Computed before the retainer branch below so both
+                              table paths report the same payable.
+                            */
+                            const rowBeforeDiscount = rowInvoiceTotal;
+                            const rowDiscount = Math.min(Math.max(0, Number(m.discountAmount) || 0), rowInvoiceTotal);
+                            rowInvoiceTotal = Math.max(0, rowInvoiceTotal - rowDiscount);
                             
                             const mainIndex = milestones.findIndex(x => x.id === m.id);
                             
@@ -2010,6 +2022,22 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             </td>
                                             <td className="p-4 text-right tabular-nums text-xs">-</td>
                                         </tr>
+                                        {rowDiscount > 0 && (
+                                        <tr className="bg-rose-50/20 border-t border-rose-100/50">
+                                            <td className="p-4 pl-8 text-rose-900 text-xs font-semibold leading-relaxed">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-rose-500 font-bold">&#8627;</span>
+                                                    <span>Less: discount{m.discountReason ? ` — ${m.discountReason}` : ''}</span>
+                                                </div>
+                                            </td>
+                                            <td className="p-4 text-center text-rose-600 tabular-nums text-xs">-</td>
+                                            <td className="p-4 text-right tabular-nums text-rose-700 font-bold border-l border-[#EDEFF7] text-sm">-{formatCurrency(rowDiscount)}</td>
+                                            <td className="p-4 text-center">
+                                                <span className="px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-800 border-rose-200">Discount</span>
+                                            </td>
+                                            <td className="p-4 text-right tabular-nums text-xs">-</td>
+                                        </tr>
+                                        )}
                                         <tr className="bg-blue-50/10 border-t border-blue-100/40">
                                             <td className="p-4 pl-8 text-slate-900 text-xs font-bold leading-relaxed">
                                                 <div className="flex items-center gap-1.5">
@@ -2093,6 +2121,52 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                         <div className="text-[9px] text-[#6F779E] font-sans font-medium mt-0.5">
                                             (Base: {formatCurrency(rowBillable)} + {applicableGstRate}% GST)
                                         </div>
+                                        {rowDiscount > 0 && (
+                                            <div className="text-[9px] text-rose-700 font-bold tabular-nums mt-0.5">
+                                                -{formatCurrency(rowDiscount)} discount (billed {formatCurrency(rowBeforeDiscount)})
+                                                {m.discountReason ? <span className="text-[#8E96B8] font-medium"> &middot; {m.discountReason}</span> : null}
+                                            </div>
+                                        )}
+                                        {!isReadOnlyMode && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setDiscountFor(discountFor === m.id ? null : m.id)}
+                                                className="text-[9px] font-bold text-[#8E96B8] hover:text-[#3D52A0] mt-0.5 cursor-pointer"
+                                            >
+                                                {rowDiscount > 0 ? 'Edit discount' : 'Add discount'}
+                                            </button>
+                                        )}
+                                        {discountFor === m.id && !isReadOnlyMode && (
+                                            <div className="mt-2 flex flex-col items-end gap-1.5">
+                                                <div className="flex items-center gap-1 px-2 py-1 bg-[#F6F7FB] rounded-lg border border-[#E2E5F0]">
+                                                    <span className="font-bold text-[#8E96B8] text-[10px]">&#8377;</span>
+                                                    <input
+                                                        type="number"
+                                                        autoFocus
+                                                        defaultValue={m.discountAmount || ''}
+                                                        placeholder="0"
+                                                        onChange={e => handleUpdateMilestone(mainIndex, { discountAmount: Math.max(0, Number(e.target.value) || 0) } as any)}
+                                                        className="w-20 text-right font-black text-[#252C4E] bg-transparent outline-none tabular-nums text-[11px]"
+                                                    />
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    defaultValue={m.discountReason || ''}
+                                                    placeholder="Reason"
+                                                    onChange={e => handleUpdateMilestone(mainIndex, { discountReason: e.target.value } as any)}
+                                                    className="w-36 px-2 py-1 bg-[#F6F7FB] rounded-lg border border-[#E2E5F0] text-[10px] text-[#252C4E] outline-none focus:border-[#ADBBDA] text-right"
+                                                />
+                                                <div className="flex items-center gap-1">
+                                                    <button type="button" onClick={() => setDiscountFor(null)}
+                                                        className="px-2 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-extrabold rounded-lg cursor-pointer">Done</button>
+                                                    {(m.discountAmount || 0) > 0 && (
+                                                        <button type="button"
+                                                            onClick={() => { handleUpdateMilestone(mainIndex, { discountAmount: 0, discountReason: '' } as any); setDiscountFor(null); }}
+                                                            className="px-2 py-1 text-[10px] font-bold text-[#8E96B8] hover:text-red-600 rounded-lg cursor-pointer">Remove</button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </td>
 
                                     {isExecution && billablePercent < 100 && (
@@ -2309,6 +2383,15 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             rowInvoiceTotal = Math.max(0, rowInvoiceTotal - initiationFee);
                         }
 
+                        /*
+                          A concession on this invoice, after GST and after the
+                          retainer -- the same order `computeSchedule` uses, so
+                          this row and the schedule cannot disagree.
+                        */
+                        const rowBeforeDiscount = rowInvoiceTotal;
+                        const rowDiscount = Math.min(Math.max(0, Number(m.discountAmount) || 0), rowInvoiceTotal);
+                        rowInvoiceTotal = Math.max(0, rowInvoiceTotal - rowDiscount);
+
                         const mainIndex = milestones.findIndex(x => x.id === m.id);
                         
                         const statusColor = m.status === 'paid' 
@@ -2508,6 +2591,26 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 -{formatCurrency(deductedInitiationFee)} Retainer applied (Gross: {formatCurrency(rowInvoiceTotal + deductedInitiationFee)})
                                             </div>
                                         )}
+                                        {/*
+                                          Billed, forgiven, payable -- three facts, not one
+                                          smaller number. Without the first of them nobody can
+                                          tell a discounted invoice from a cheaper milestone.
+                                        */}
+                                        {rowDiscount > 0 && (
+                                            <div className="text-[9px] text-rose-700 tabular-nums mt-0.5">
+                                                -{formatCurrency(rowDiscount)} discount (billed {formatCurrency(rowBeforeDiscount)})
+                                                {m.discountReason ? <span className="text-[#8E96B8]"> &middot; {m.discountReason}</span> : null}
+                                            </div>
+                                        )}
+                                        {!isReadOnlyMode && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setDiscountFor(discountFor === m.id ? null : m.id)}
+                                                className="text-[9px] font-bold text-[#8E96B8] hover:text-[#3D52A0] mt-0.5 cursor-pointer"
+                                            >
+                                                {rowDiscount > 0 ? 'Edit discount' : 'Add discount'}
+                                            </button>
+                                        )}
                                     </div>
 
                                     {/* Status Badge */}
@@ -2553,7 +2656,60 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             </span>
                                         )}
                                     </div>
-                                </div>
+                                    </div>
+
+                                    {/*
+                                      Setting a concession on this invoice.
+
+                                      Available on settled rows too, which is the
+                                      point: a closing discount is agreed after the
+                                      invoice has gone out, and every other control
+                                      on a paid row is hidden.
+                                    */}
+                                    {discountFor === m.id && (
+                                        <div className="mt-3 pt-3 border-t border-[#EDEFF7] flex flex-wrap items-end gap-2">
+                                            <div>
+                                                <label className="block text-[9px] font-black text-[#8E96B8] uppercase tracking-wider mb-1">Discount off this invoice</label>
+                                                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#F6F7FB] rounded-xl border border-[#E2E5F0]">
+                                                    <span className="font-bold text-[#8E96B8] text-xs">&#8377;</span>
+                                                    <input
+                                                        type="number"
+                                                        autoFocus
+                                                        defaultValue={m.discountAmount || ''}
+                                                        placeholder="0"
+                                                        onChange={e => handleUpdateMilestone(mainIndex, { discountAmount: Math.max(0, Number(e.target.value) || 0) } as any)}
+                                                        className="w-24 text-right font-black text-[#252C4E] bg-transparent outline-none tabular-nums text-xs"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 min-w-[160px]">
+                                                <label className="block text-[9px] font-black text-[#8E96B8] uppercase tracking-wider mb-1">Reason</label>
+                                                <input
+                                                    type="text"
+                                                    defaultValue={m.discountReason || ''}
+                                                    placeholder="e.g. agreed at project close"
+                                                    onChange={e => handleUpdateMilestone(mainIndex, { discountReason: e.target.value } as any)}
+                                                    className="w-full px-2.5 py-1.5 bg-[#F6F7FB] rounded-xl border border-[#E2E5F0] text-xs text-[#252C4E] outline-none focus:border-[#ADBBDA]"
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setDiscountFor(null)}
+                                                className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold rounded-xl transition-all uppercase tracking-wider cursor-pointer"
+                                            >
+                                                Done
+                                            </button>
+                                            {(m.discountAmount || 0) > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { handleUpdateMilestone(mainIndex, { discountAmount: 0, discountReason: '' } as any); setDiscountFor(null); }}
+                                                    className="px-3 py-1.5 text-[11px] font-bold text-[#8E96B8] hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+                                                >
+                                                    Remove
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                             </motion.div>
                         );
                     })}

@@ -36,6 +36,8 @@ interface Phase {
 interface Props {
   milestones: PaymentMilestone[];
   amountOf: (m: PaymentMilestone) => number;
+  /** Concessions by milestone id, so a reduced invoice says why it is reduced. */
+  discountOf?: (m: PaymentMilestone) => { amount: number; billed: number; reason?: string } | undefined;
   projectValue: number;
   totalPaid: number;
   balanceDue: number;
@@ -82,14 +84,39 @@ const Fill: React.FC<{ pct: number; className: string; delay?: number }> = ({ pc
   <motion.span
     initial={{ scaleX: 0 }}
     animate={{ scaleX: 1 }}
-    transition={{ duration: 0.7, delay, ease: [0.22, 1, 0.36, 1] }}
+    transition={{ duration: 0.7, delay, ease: [0.16, 1, 0.3, 1] }}
     style={{ width: `${pct}%`, transformOrigin: 'left' }}
-    className={`block h-full rounded-full ${className}`}
+    className={`block h-full ${className}`}
   />
 );
 
+/*
+  What to say under the amount.
+
+  This began as a running total -- "₹8,57,511 by here" -- accumulated over the
+  stored milestone array while the rows above it were grouped by phase, so a
+  design milestone that happened to sit last in the array showed a figure
+  containing the entire execution contract. It answered a question nobody asked,
+  and answered it wrongly.
+
+  It then carried dates, and dates are a liability here: a client comparing the
+  month on this screen against the date on their invoice has something to argue
+  about, and keeping the two in step is work the studio should not have to do.
+  So this states the billing fact and nothing else.
+
+  Deliberately NOT the same fact as the chip beside it. The chip says whether
+  the money is due; this says whether an invoice exists for it. A milestone can
+  be not yet due and not yet invoiced, or due precisely because an invoice went
+  out, and the pair reads correctly either way.
+*/
+const whenLine = (_m: PaymentMilestone, stage: Stage): string => {
+  if (stage === 'cleared') return 'Paid in full';
+  if (stage === 'due') return 'Invoice raised';
+  return 'Not yet invoiced';
+};
+
 export default function PortalPayments({
-  milestones, amountOf, projectValue, totalPaid, balanceDue,
+  milestones, amountOf, discountOf, projectValue, totalPaid, balanceDue,
   dueCount, design, execution, onContactStudio, known = true,
 }: Props) {
   /** A figure, or an honest dash. */
@@ -100,12 +127,11 @@ export default function PortalPayments({
     each milestone, and the next thing the client actually has to deal with.
   */
   const { rows, dueTotal, next } = useMemo(() => {
-    let running = 0;
-    const rows = milestones.map(m => {
-      const amount = amountOf(m);
-      running += amount;
-      return { m, amount, running, stage: stageOf(m) };
-    });
+    const rows = milestones.map(m => ({
+      m,
+      amount: amountOf(m),
+      stage: stageOf(m),
+    }));
     return {
       rows,
       dueTotal: rows.filter(r => r.stage === 'due').reduce((s, r) => s + r.amount, 0),
@@ -236,13 +262,18 @@ export default function PortalPayments({
       </section>
 
       {/* ── Every milestone, once. ──
-             Grouped by phase and carrying a running total, so a client can see
-             what they will have paid by any point rather than adding it up. */}
+             Grouped by phase, each row saying where it stands and when. The
+             totals per phase are in the cards above; repeating them per row is
+             what produced a design milestone quoting the execution contract. */}
       <section className="rounded-2xl border border-slate-200/80 bg-white overflow-hidden">
         <div className="px-5 sm:px-6 py-4 border-b border-slate-100">
           <h3 className="text-sm font-bold text-slate-900">Every payment on this project</h3>
+          {/*
+            The list renders in the order the studio arranged the milestones,
+            which is not necessarily date order -- so it no longer says it is.
+          */}
           <p className="text-xs text-slate-500 font-medium mt-0.5">
-            In the order they fall due, with what you will have paid by each one.
+            Grouped by design and execution, with where each one stands.
           </p>
         </div>
 
@@ -295,8 +326,27 @@ export default function PortalPayments({
 
                     <div className="text-right shrink-0">
                       <p className="text-[13px] font-extrabold text-slate-900 tabular-nums">{rupees(r.amount)}</p>
-                      <p className="text-[10px] text-slate-400 font-semibold tabular-nums mt-0.5">
-                        {known ? `${formatINR(r.running)} by here` : 'to be confirmed'}
+                      {/*
+                        A reduced invoice says why it is reduced.
+
+                        `amountOf` already nets the concession off, so on its own
+                        this row showed a smaller number with nothing to explain
+                        it -- indistinguishable from a cheaper milestone.
+                      */}
+                      {(() => {
+                        const d = discountOf?.(r.m);
+                        if (!d || d.amount <= 0) return null;
+                        return (
+                          <p className="text-[10px] text-emerald-700 font-bold tabular-nums mt-0.5">
+                            {formatINR(d.billed)} less {formatINR(d.amount)} discount
+                            {d.reason ? <span className="font-medium text-slate-400"> &middot; {d.reason}</span> : null}
+                          </p>
+                        );
+                      })()}
+                      <p className={`text-[10px] font-semibold mt-0.5 ${
+                        r.stage === 'due' ? 'text-amber-700' : 'text-slate-400'
+                      }`}>
+                        {whenLine(r.m, r.stage)}
                       </p>
                     </div>
                   </motion.li>

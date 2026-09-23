@@ -46,6 +46,17 @@ export interface PortalMoney {
 
   /** Milestone id → what the client owes at that milestone, to the rupee. */
   milestoneAmounts: Record<string, number>;
+
+  /**
+   * Concessions, by milestone id. Only the discounted ones appear.
+   *
+   * `milestoneAmounts` already nets the discount off, so without this the
+   * client sees a smaller number and no reason for it -- which reads as a
+   * cheaper milestone rather than as money their studio knocked off. A
+   * discount the client is not told about is not a discount they can thank
+   * anyone for.
+   */
+  milestoneDiscounts?: Record<string, { amount: number; billed: number; reason?: string }>;
 }
 
 const pct = (part: number, whole: number) =>
@@ -56,7 +67,17 @@ export function buildPortalMoney(schedule: ScheduleResult): PortalMoney {
   const t = schedule.totals;
 
   const milestoneAmounts: Record<string, number> = {};
-  schedule.amounts.forEach((a) => { milestoneAmounts[a.id] = a.owed; });
+  const milestoneDiscounts: Record<string, { amount: number; billed: number; reason?: string }> = {};
+  schedule.amounts.forEach((a) => {
+    milestoneAmounts[a.id] = a.owed;
+    if (a.discountApplied > 0) {
+      milestoneDiscounts[a.id] = {
+        amount: a.discountApplied,
+        billed: a.invoiceTotalBeforeDiscount,
+        reason: a.discountReason,
+      };
+    }
+  });
 
   /*
     The retainer counts towards the design side, because that is where it was
@@ -96,5 +117,6 @@ export function buildPortalMoney(schedule: ScheduleResult): PortalMoney {
     balanceDue: Math.max(0, t.grossProjectValue - t.totalPaid),
 
     milestoneAmounts,
+    milestoneDiscounts: Object.keys(milestoneDiscounts).length ? milestoneDiscounts : undefined,
   };
 }

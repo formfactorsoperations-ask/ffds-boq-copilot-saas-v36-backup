@@ -756,6 +756,14 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const calculateMilestoneTotal = (m: PaymentMilestone) =>
         (m && money?.milestoneAmounts?.[m.id]) ?? 0;
 
+    /*
+      A concession recorded against one invoice, read straight off the
+      projection. Read, never recomputed -- the studio's schedule is the only
+      place these are worked out.
+    */
+    const milestoneDiscountOf = (m: PaymentMilestone) =>
+        (m && money?.milestoneDiscounts?.[m.id]) || undefined;
+
     // --- SMART CLIENT ACTION ENGINE & LIFECYCLE PIPELINE ---
     const milestoneTotalsMap = useMemo(() => {
         const map: { [id: string]: number } = {};
@@ -4203,6 +4211,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 <PortalPayments
                                     milestones={milestones}
                                     amountOf={calculateMilestoneTotal}
+                                    discountOf={milestoneDiscountOf}
                                     projectValue={currentProjectValue}
                                     totalPaid={totalPaid}
                                     balanceDue={balanceDue}

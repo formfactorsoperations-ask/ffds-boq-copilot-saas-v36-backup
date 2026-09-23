@@ -291,6 +291,25 @@ export interface PaymentMilestone {
     invoiceNumber?: string;
     invoiceDate?: string;
     lockedTaxableBase?: number; // The taxable base amount at the time of invoicing
+
+    /**
+     * A concession against THIS invoice, in rupees off the payable total.
+     *
+     * Not a contract discount. `financials.discounts` reduces the contract
+     * before any milestone is computed, which is the right model for a deal
+     * agreed up front and the wrong one for money forgiven after the invoice
+     * went out -- applying a closing concession there cut the contract, made
+     * every remaining milestone smaller, and still reported the original sum as
+     * collected.
+     *
+     * This comes off the payable after GST, because that is how a concession is
+     * actually agreed: a round number off what the client owes. The invoice
+     * keeps its full value, so the record says what was billed, what was
+     * forgiven and what was paid, instead of only the last of the three.
+     */
+    discountAmount?: number;
+    /** Why it was given. Shown next to the amount. */
+    discountReason?: string;
     trigger?: string;
     subSteps?: { id: string; label: string; isDone: boolean }[];
     unlocks?: string;

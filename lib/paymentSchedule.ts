@@ -135,6 +135,12 @@ export interface MilestoneAmount {
   gst: number;
   /** What the invoice reads, retainer already deducted where it applies. */
   invoiceTotal: number;
+  /** Concession applied to this invoice, already taken off `invoiceTotal`. */
+  discountApplied: number;
+  /** Why it was given, for the row that reports it. */
+  discountReason?: string;
+  /** The payable before the concession, for the "was / less / now" line. */
+  invoiceTotalBeforeDiscount: number;
   /** Invoice plus any cash side -- the whole sum owed at this milestone. */
   owed: number;
   retainerDeducted: number;
@@ -244,9 +250,20 @@ export function computeSchedule(args: {
     */
     let lockedBase = 0;
     cleared.forEach((m) => {
-      lockedBase += (m.isFixedAmount && m.fixedAmount !== undefined)
+      const billed = (m.isFixedAmount && m.fixedAmount !== undefined)
         ? m.fixedAmount
         : (m.lockedTaxableBase ?? originalBase) * (m.percentage / 100);
+      /*
+        Money forgiven was never taken out of the contract, so it does not
+        count against it. Without this a closing concession made the track
+        look over-billed by the very amount the client was let off.
+      */
+      const forgivenExGst = (Number(m.discountAmount) || 0) > 0
+        ? Math.min(billed, (Number(m.discountAmount) || 0) / (1 + (
+            (isExec ? financials.executionGstEnabled : financials.designGstEnabled) ? gstRate / 100 : 0
+          )))
+        : 0;
+      lockedBase += Math.max(0, billed - forgivenExGst);
     });
 
     /*
@@ -308,10 +325,28 @@ export function computeSchedule(args: {
         invoiceTotal = Math.max(0, invoiceTotal - financials.initiationFeePaid);
       }
 
+      /*
+        A concession on this invoice, off the payable rather than the base.
+
+        Deliberately after GST and after the retainer: it is money forgiven on
+        what the client owed, not a change to the contract or to the tax on it.
+        `invoiceTotalBeforeDiscount` is kept so the row can show the full
+        invoice, the concession and the balance as three separate facts.
+      */
+      const invoiceTotalBeforeDiscount = invoiceTotal;
+      const discountApplied = Math.min(
+        Math.max(0, Number(m.discountAmount) || 0),
+        invoiceTotal,
+      );
+      invoiceTotal = R(invoiceTotal - discountApplied);
+
       amounts.push({
         id: m.id, name: m.name, type,
         base, billable, cash, gst, invoiceTotal,
         owed: invoiceTotal + cash,
+        discountApplied: R(discountApplied),
+        discountReason: discountApplied > 0 ? (m.discountReason || undefined) : undefined,
+        invoiceTotalBeforeDiscount: R(invoiceTotalBeforeDiscount),
         retainerDeducted,
         taxableBaseForLocking: lockBase,
         cleared: clearedRow,
