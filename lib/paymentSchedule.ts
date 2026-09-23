@@ -28,6 +28,8 @@ export interface ScheduleFinancials {
   initiationFeePaid: number;
   billablePercent: number;
   executionGstEnabled: boolean;
+  /** The design fee is invoiced officially unless this says otherwise. */
+  designGstEnabled: boolean;
   projectedCashValue: number;
   taxLimitYearly: number;
   goodwillDiscount: number;
@@ -39,10 +41,20 @@ export interface ScheduleFinancials {
   [key: string]: any;
 }
 
+/*
+  The initiation retainer defaults to nothing, because it is optional.
+
+  It used to default to 4999 here and in two other default objects, and was
+  read back elsewhere through `|| 4999`, so an explicit zero was overridden by
+  the very default it was meant to replace. Seventeen projects carried the
+  figure without anyone having chosen it, and every one of them had it deducted
+  from the first design invoice.
+*/
 export const DEFAULT_FINANCIALS: ScheduleFinancials = {
-  initiationFeePaid: 4999,
+  initiationFeePaid: 0,
   billablePercent: 100,
   executionGstEnabled: true,
+  designGstEnabled: true,
   projectedCashValue: 0,
   taxLimitYearly: 2000000,
   goodwillDiscount: 0,
@@ -87,6 +99,15 @@ export function resolveFinancials(raw: any): ScheduleFinancials {
     executionGstEnabled: typeof f.executionGstEnabled === 'boolean'
       ? f.executionGstEnabled
       : (hasRecord ? false : DEFAULT_FINANCIALS.executionGstEnabled),
+    /*
+      Absent means ON, which is the opposite of the execution flag above -- and
+      deliberately so. Each preserves what the app did before it existed: the
+      execution GST was read off a flag that defaulted to false, while the
+      design fee's GST was hard-wired and had no flag at all. Neither default
+      may change a contract that is already on the books.
+    */
+    designGstEnabled: typeof f.designGstEnabled === 'boolean'
+      ? f.designGstEnabled : DEFAULT_FINANCIALS.designGstEnabled,
     projectedCashValue: num(f.projectedCashValue, DEFAULT_FINANCIALS.projectedCashValue),
     taxLimitYearly: num(f.taxLimitYearly, DEFAULT_FINANCIALS.taxLimitYearly),
     goodwillDiscount: num(f.goodwillDiscount, DEFAULT_FINANCIALS.goodwillDiscount),
@@ -238,7 +259,9 @@ export function computeSchedule(args: {
       base = R(base);
       const billable = R(isExec ? base * (bp / 100) : base);
       const cash = R(isExec ? base * ((100 - bp) / 100) : 0);
-      const rate = isExec ? (financials.executionGstEnabled ? gstRate : 0) : gstRate;
+      const rate = isExec
+        ? (financials.executionGstEnabled ? gstRate : 0)
+        : (financials.designGstEnabled ? gstRate : 0);
       const gst = R(billable * (rate / 100));
       let invoiceTotal = R(billable + gst);
 
@@ -264,7 +287,7 @@ export function computeSchedule(args: {
   const executionBillable = taxableExecution * (bp / 100);
   const executionCash = taxableExecution * ((100 - bp) / 100);
   const gstOnExecution = financials.executionGstEnabled ? executionBillable * (gstRate / 100) : 0;
-  const gstOnDesign = taxableDesign * (gstRate / 100);
+  const gstOnDesign = financials.designGstEnabled ? taxableDesign * (gstRate / 100) : 0;
   const grossProjectValue = taxableExecution + taxableDesign + gstOnExecution + gstOnDesign;
 
   const byId: Record<string, MilestoneAmount> = {};
@@ -301,7 +324,7 @@ export function computeSchedule(args: {
  */
 export function sameFinancials(a: any, b: any): boolean {
   if (!a || !b) return false;
-  const scalars = ['initiationFeePaid', 'billablePercent', 'executionGstEnabled',
+  const scalars = ['initiationFeePaid', 'billablePercent', 'executionGstEnabled', 'designGstEnabled',
                    'projectedCashValue', 'taxLimitYearly', 'goodwillDiscount',
                    'approvedExecutionValue', 'approvedDesignValue'];
   for (const k of scalars) {

@@ -16,7 +16,8 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     // Get Initiation Fee from context or default
-    const initiationFee = projectContext?.financials?.initiationFeePaid || 4999;
+    // `??`, not `||` -- a retainer of zero is a real answer, not a missing one.
+    const initiationFee = projectContext?.financials?.initiationFeePaid ?? 0;
 
     // --- TURNKEY / PMC FALLBACK ---
     // If not Design Only (or if context missing), render standard card

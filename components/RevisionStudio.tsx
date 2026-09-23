@@ -95,7 +95,7 @@ export default function RevisionStudio({
     projectContext?.financials?.designFeePercentage || 8,
   );
   const [initiationFee, setInitiationFee] = useState<number>(
-    projectContext?.financials?.initiationFeePaid || 4999,
+    projectContext?.financials?.initiationFeePaid ?? 0,
   );
   const [summaryTone, setSummaryTone] = useState("Partnership");
   const [customSummary, setCustomSummary] = useState("");

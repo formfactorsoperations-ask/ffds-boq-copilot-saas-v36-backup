@@ -10,7 +10,8 @@ const DEFAULT_ONBOARDING_DATA: OnboardingData = {
     bankName: "Kotak Mahindra Bank",
     accountNumber: "1234 5678 9012",
     ifscCode: "KKBK0001234",
-    amount: 4999,
+    // No default retainer; the studio sets one only if it is charging it.
+    amount: 0,
     gstNote: "Inclusive of GST"
 };
 
@@ -256,7 +257,7 @@ const ClientOnboarding: React.FC<{ projectContext: ProjectContext; setProjectCon
 
     // --- CALCULATIONS ENGINE ---
     const financials = projectContext.financials || {
-        initiationFeePaid: 4999,
+        initiationFeePaid: 0,
         billablePercent: 100,
         executionGstEnabled: true,
         projectedCashValue: 0,

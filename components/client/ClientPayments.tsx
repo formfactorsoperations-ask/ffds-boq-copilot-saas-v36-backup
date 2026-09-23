@@ -58,7 +58,8 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
     // Derived state from context
     const signupDate = projectContext?.paymentScheduleConfig?.signupDate || new Date().toISOString().split('T')[0];
     const possessionDate = projectContext?.paymentScheduleConfig?.possessionDate || addDays(signupDate, 14);
-    const initiationFee = projectContext?.financials?.initiationFeePaid || 4999;
+    // `??`, not `||` -- a retainer of zero is a real answer, not a missing one.
+    const initiationFee = projectContext?.financials?.initiationFeePaid ?? 0;
 
     // --- RECALCULATE DATES ---
     const recalculateDates = (anchors: { start: string, exec: string }, currentMilestones: PaymentMilestone[]) => {

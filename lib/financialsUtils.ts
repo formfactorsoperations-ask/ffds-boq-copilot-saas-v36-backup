@@ -1,6 +1,7 @@
 export function calculateProjectFinancials(context: any, activeTier?: any) {
     const financials = context?.financials || {
-        initiationFeePaid: 4999,
+        // Optional: a retainer exists only when somebody entered one.
+        initiationFeePaid: 0,
         billablePercent: 100,
         executionGstEnabled: true,
         projectedCashValue: 0,

@@ -401,23 +401,22 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         ]
     }, [displayDesign, displayExec]);
 
-    useEffect(() => {
-        if (setProjectContext && (displayDesign > 0 || displayExec > 0)) {
-            setProjectContext(prev => {
-                if (prev.financials?.approvedDesignValue === displayDesign && prev.financials?.approvedExecutionValue === displayExec) {
-                    return prev;
-                }
-                return {
-                    ...prev,
-                    financials: {
-                        ...(prev.financials || {}),
-                        approvedDesignValue: displayDesign,
-                        approvedExecutionValue: displayExec,
-                    }
-                };
-            });
-        }
-    }, [displayDesign, displayExec, setProjectContext]);
+    /*
+      Opening a screen is not a decision, so this no longer writes one.
+
+      An effect here used to copy the active tier's totals into
+      `approvedDesignValue` / `approvedExecutionValue` the first time anyone
+      opened the Money tab. Three live projects were rewritten that way in a
+      single afternoon just by being looked at. Worse than the unrequested
+      write was what it wrote: `displayExec` above prefers the tier total OVER
+      the stored approved value, so a contract negotiated away from the BOQ was
+      silently replaced by the BOQ's own number whenever the BOQ moved.
+
+      Nothing needed it. `displayDesign` / `displayExec` already fall back to
+      the stored value, and `computeSchedule` receives `rawExecutionTotal` /
+      `rawDesignFee`, which fall back to the tier. The approved values now
+      change only when somebody sets them.
+    */
 
     // Reset Confirm State
     const [isResetting, setIsResetting] = useState(false);
@@ -810,7 +809,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         }
 
         const defaultFinancials = {
-            initiationFeePaid: 4999,
+            // Reset clears the retainer rather than reinstating a default one.
+            initiationFeePaid: 0,
             billablePercent: 100,
             executionGstEnabled: true,
             designGstEnabled: true,
@@ -915,7 +915,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         setProjectContext(prev => ({ ...prev, paymentMilestones: autoBalanceMilestones(newMilestones, m.type, m1.id) }));
     };
 
-    const executeInvoiceAction = (index: number, action: 'generate_invoice' | 'mark_paid' | 'revert_invoice', lockedTaxableBase?: number) => {
+    type InvoiceAction = 'generate_invoice' | 'mark_paid' | 'revert_invoice' | 'revert_payment';
+
+    const executeInvoiceAction = (index: number, action: InvoiceAction, lockedTaxableBase?: number) => {
         const projectCode = (projectContext?.name || 'PRJ').substring(0, 3).toUpperCase();
         const seq = String(index + 1).padStart(2, '0');
         
@@ -936,6 +938,25 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             showSuccessWithNext('Invoice raised successfully');
         } else if (action === 'mark_paid') {
             handleUpdateMilestone(index, { status: 'paid' });
+        } else if (action === 'revert_payment') {
+            /*
+              Un-marking a payment is not the same as cancelling the invoice.
+
+              `paid` used to be terminal: every control on the row was gated on
+              `!m.status || m.status === 'pending'`, and the revert button was
+              rendered only for `invoiced`. So a milestone marked paid by
+              mistake could not be corrected, split, reordered or deleted --
+              one wrong click was permanent. Harmony 704 sat on a paid sign-up
+              milestone locked to a design fee the project no longer had,
+              reporting more collected than the entire fee.
+
+              Stepping back to `invoiced` keeps the invoice and its number
+              intact, because "they have not paid" and "this invoice should not
+              exist" are different statements. The existing revert below makes
+              the second one, and from `pending` the edit controls return on
+              their own.
+            */
+            handleUpdateMilestone(index, { status: 'invoiced' });
         } else if (action === 'revert_invoice') {
             handleUpdateMilestone(index, { 
                 status: 'pending', 
@@ -946,7 +967,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         }
     };
 
-    const handleInvoiceAction = (index: number, action: 'generate_invoice' | 'mark_paid' | 'revert_invoice', lockedTaxableBase?: number) => {
+    const handleInvoiceAction = (index: number, action: InvoiceAction, lockedTaxableBase?: number) => {
         if (action === 'generate_invoice' || action === 'mark_paid') {
             const engagementStatus = projectContext.engagement?.status;
             if (engagementStatus !== 'acknowledged') {
@@ -1164,6 +1185,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
       simulator is one click away instead of twelve screens down.
     */
     const [moneyTab, setMoneyTab] = useState<'overview' | 'milestones' | 'tax' | 'history'>('overview');
+    /* Retainer editor on the overview. Closed unless the user opens it. */
+    const [retainerOpen, setRetainerOpen] = useState(false);
 
     /*
       What this screen knows but never said.
@@ -1961,6 +1984,13 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     </div>
                                                 ) : (
                                                     <span className="text-emerald-600 text-xs font-extrabold flex items-center justify-end gap-1">
+                                                        <button
+                                                        onClick={() => handleInvoiceAction(mainIndex, 'revert_payment')}
+                                                        className="p-1 text-[#8E96B8] hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                        title="Not actually paid - step back to invoiced"
+                                                    >
+                                                        <RotateCcw className="w-3.5 h-3.5" />
+                                                    </button>
                                                         <CheckIcon className="w-3.5 h-3.5 stroke-2" /> Paid
                                                     </span>
                                                 )}
@@ -2112,6 +2142,13 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             </div>
                                         ) : (
                                             <span className="text-emerald-600 text-xs font-extrabold flex items-center justify-end gap-1">
+                                                <button
+                                                        onClick={() => handleInvoiceAction(mainIndex, 'revert_payment')}
+                                                        className="p-1 text-[#8E96B8] hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                        title="Not actually paid - step back to invoiced"
+                                                    >
+                                                        <RotateCcw className="w-3.5 h-3.5" />
+                                                    </button>
                                                 <CheckIcon className="w-3.5 h-3.5 stroke-2" /> Paid
                                             </span>
                                         )}
@@ -2505,6 +2542,13 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             </div>
                                         ) : (
                                             <span className="text-emerald-600 text-xs font-extrabold flex items-center gap-1">
+                                                <button
+                                                        onClick={() => handleInvoiceAction(mainIndex, 'revert_payment')}
+                                                        className="p-1 text-[#8E96B8] hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                        title="Not actually paid - step back to invoiced"
+                                                    >
+                                                        <RotateCcw className="w-3.5 h-3.5" />
+                                                    </button>
                                                 <CheckIcon className="w-3.5 h-3.5 stroke-2" /> Paid
                                             </span>
                                         )}
@@ -3345,6 +3389,101 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         loading={scopeLoading}
                         error={scopeError}
                     />
+
+                    {/*
+                      The initiation retainer, where it can actually be found.
+
+                      It lived as a bare number input inside "Tax & ratios",
+                      three clicks from the money it changes, while defaulting
+                      to 4,999 on every project -- so the one figure nobody had
+                      chosen was applied silently, and the studio had to go
+                      hunting to correct it. It is optional, so the card states
+                      plainly when none is applied and offers to add one.
+                    */}
+                    <div className="rounded-2xl border border-[#E2E5F0] bg-white p-5 shadow-sm">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                                <h4 className="text-[11px] font-black text-[#8E96B8] uppercase tracking-wider">Initiation retainer</h4>
+                                {initiationFee > 0 ? (
+                                    <>
+                                        <p className="text-2xl font-black text-[#12182F] tabular-nums mt-1.5">{formatCurrency(initiationFee)}</p>
+                                        <p className="text-[11px] text-[#5A628A] mt-1 leading-relaxed">
+                                            Already collected — deducted from the first design invoice.
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-sm font-extrabold text-[#3A416B] mt-1.5">Not applied</p>
+                                        <p className="text-[11px] text-[#5A628A] mt-1 leading-relaxed max-w-md">
+                                            Optional. Add one only if the client paid a retainer up front — it is then
+                                            deducted from the first design invoice.
+                                        </p>
+                                    </>
+                                )}
+                            </div>
+                            {!isReadOnlyMode && !retainerOpen && (
+                                <button
+                                    type="button"
+                                    onClick={() => setRetainerOpen(true)}
+                                    className="shrink-0 px-3.5 py-1.5 bg-[#3D52A0] hover:bg-[#334486] text-white text-[11px] font-extrabold rounded-xl shadow-xs transition-all uppercase tracking-wider cursor-pointer"
+                                >
+                                    {initiationFee > 0 ? 'Edit' : 'Add retainer'}
+                                </button>
+                            )}
+                        </div>
+
+                        {!isReadOnlyMode && retainerOpen && (
+                            <div className="mt-4 pt-4 border-t border-[#EDEFF7] space-y-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {[4999, 10000, 25000].map(v => (
+                                        <button
+                                            key={v}
+                                            type="button"
+                                            onClick={() => setInitiationFee(v)}
+                                            className={`px-3 py-1.5 text-[11px] font-extrabold rounded-xl border transition-all cursor-pointer tabular-nums ${
+                                                initiationFee === v
+                                                    ? 'bg-[#EDE8F5] border-[#ADBBDA] text-[#334486]'
+                                                    : 'bg-white border-[#E2E5F0] text-[#5A628A] hover:border-[#ADBBDA] hover:text-[#334486]'
+                                            }`}
+                                        >
+                                            {formatCurrency(v)}
+                                        </button>
+                                    ))}
+                                    <span className="text-[10px] text-[#8E96B8] font-semibold uppercase tracking-wider ml-1">or</span>
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F6F7FB] rounded-xl border border-[#E2E5F0]">
+                                        <span className="font-bold text-[#8E96B8] text-xs">₹</span>
+                                        <input
+                                            type="number"
+                                            autoFocus
+                                            value={initiationFee || ''}
+                                            placeholder="0"
+                                            onChange={e => setInitiationFee(Math.max(0, Number(e.target.value) || 0))}
+                                            className="w-24 text-right font-black text-[#252C4E] bg-transparent outline-none tabular-nums text-xs"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setRetainerOpen(false)}
+                                        className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold rounded-xl transition-all uppercase tracking-wider cursor-pointer"
+                                    >
+                                        Done
+                                    </button>
+                                    {initiationFee > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setInitiationFee(0); setRetainerOpen(false); }}
+                                            className="px-3 py-1.5 text-[11px] font-bold text-[#8E96B8] hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+                                        >
+                                            Remove
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
 
 
 

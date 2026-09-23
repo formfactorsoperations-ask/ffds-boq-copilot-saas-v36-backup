@@ -2251,12 +2251,22 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
+                            {/*
+                              Quoted from the project, and only when there is one.
+
+                              This row printed a flat {formatINR(4999)} on every
+                              proposal regardless of what the project actually
+                              charged -- including projects charging no retainer
+                              at all, and one charging 41,300.
+                            */}
+                            {(projectContext?.financials?.initiationFeePaid ?? 0) > 0 && (
                             <tr>
                                 <td className="py-3 font-bold text-[#0F172A]"><Ed k="98bb44b9" ctl={edCtl}>Initiation</Ed></td>
                                 <td className="py-3 text-slate-500"><Ed k="28d06359" ctl={edCtl}>On appointment, to commence site validation & planning</Ed></td>
                                 <td className="py-3 text-right font-mono font-bold">-</td>
-                                <td className="py-3 text-right font-mono font-bold text-slate-900">{formatINR(4999)}</td>
+                                <td className="py-3 text-right font-mono font-bold text-slate-900">{formatINR(projectContext.financials.initiationFeePaid)}</td>
                             </tr>
+                            )}
                             <tr className="bg-slate-50 font-bold">
                                 <td className="py-2.5 px-2 text-xs uppercase text-[#C5A880]" colSpan={2}>DESIGN & COORDINATION FEE — {formatINR(taxableDesign)}</td>
                                 <td className="py-2.5 px-2"></td>
