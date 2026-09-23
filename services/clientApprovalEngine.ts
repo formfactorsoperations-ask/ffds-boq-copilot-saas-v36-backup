@@ -237,9 +237,12 @@ function resolveTerms(context: ProjectContext, currentStage: number): AgreementS
     acknowledged docket or engagement, or a signed document issue. The proposal
     gate still drives stage progression, which is what it is for.
 
-    Note the contrast with resolveContract and resolveHandover below, which do
-    read their gates: `contractSigned` and `handoverComplete` are named for the
-    signature itself, so there the gate and the agreement are the same event.
+    resolveContract and resolveHandover below now follow the same rule, for the
+    same reason. `contractSigned` and `handoverComplete` look like they name the
+    signature itself, but journeyEngine writes them from ops journey checklist
+    steps on every load, so what they actually record is that somebody ticked a
+    box on the Ops Matrix. That is worth keeping -- it is what `acceptedOffline`
+    carries -- but it is not the client signing.
   */
   const signed = !isDisputed && (record?.status === 'signed' || docketAcked || engagementAcked || issue.signed);
 
@@ -286,7 +289,17 @@ function resolveTerms(context: ProjectContext, currentStage: number): AgreementS
     isOverdue: !signed && currentStage > 2,
     gateStage: 2,
     signedAt: record?.signedAt || issue.signedAt || engagement?.acknowledgedAt || latestDocket?.acknowledgedAt || null,
-    signedBy: record?.signedBy || record?.clientName || issue.signedBy || context.clientName || null,
+    /*
+      No `context.clientName` fallback.
+
+      Falling back to it named the client as the signatory of a document that
+      was never issued and never signed -- on five projects the only evidence
+      was a lifecycle gate a migration had stamped `reference: "legacy"`, and
+      the screen still read "Signed by Mr Prasad & Mrs Mrunal Naik". Knowing who
+      the client is is not evidence that they signed anything. With no record
+      and no issue this is null, and `acceptedOffline` below says why.
+    */
+    signedBy: record?.signedBy || record?.clientName || issue.signedBy || null,
     issuedAt: record?.sentAt || engagement?.issuedAt || latestDocket?.sentAt || latestDocket?.generatedAt || issue.issuedAt || null,
     reference: engagement?.docketRef || latestDocket?.docketRef || record?.refId || issue.reference || null,
     acceptedOffline: !record && (engagementAcked || docketAcked),
@@ -311,8 +324,27 @@ function resolveContract(context: ProjectContext, currentStage: number): Agreeme
   const gateDone = !!context.lifecycle?.gates?.contractSigned?.done;
   const executed = ctx.contractStatus === 'executed';
 
+  /*
+    A lifecycle gate is not a signature.
+
+    `lifecycle.gates.*` is written by journeyEngine from the ops journey
+    checklist -- tick "Agreement signed" on the Ops Matrix and the gate is set,
+    with `reference: "auto-sync-journey"`, on every load. Treating that as proof
+    of signature made the Documents board and the client's own portal both read
+    "Signed" for a document that had never been issued, never released and never
+    signed by anybody. Clearing the gate did not help: the journey rewrote it
+    the next time the project was opened.
+
+    The tick still means something -- the studio considers this settled -- and
+    that is what `acceptedOffline` below carries. What it cannot do is stand in
+    for the client's signature.
+
+    A real signoff record, a signature on an issued document, or an explicit
+    contract status still count, because each of those is somebody asserting
+    the thing itself rather than ticking a step next to it.
+  */
   const isDisputed = record?.status === 'disputed';
-  const signed = !isDisputed && (record?.status === 'signed' || gateDone || executed || issue.signed);
+  const signed = !isDisputed && (record?.status === 'signed' || executed || issue.signed);
   const released = record?.status === 'sent' || issue.released;
   const hasDraft = !!context.contractContent || !!context.approvedTierId || !!context.operativeBoqVersion;
 
@@ -341,7 +373,17 @@ function resolveContract(context: ProjectContext, currentStage: number): Agreeme
     isOverdue: !signed && currentStage > 4,
     gateStage: 4,
     signedAt: record?.signedAt || issue.signedAt || context.lifecycle?.gates?.contractSigned?.at || null,
-    signedBy: record?.signedBy || record?.clientName || issue.signedBy || context.clientName || null,
+    /*
+      No `context.clientName` fallback.
+
+      Falling back to it named the client as the signatory of a document that
+      was never issued and never signed -- on five projects the only evidence
+      was a lifecycle gate a migration had stamped `reference: "legacy"`, and
+      the screen still read "Signed by Mr Prasad & Mrs Mrunal Naik". Knowing who
+      the client is is not evidence that they signed anything. With no record
+      and no issue this is null, and `acceptedOffline` below says why.
+    */
+    signedBy: record?.signedBy || record?.clientName || issue.signedBy || null,
     issuedAt: record?.sentAt || issue.issuedAt || null,
     reference: record?.refId || issue.reference || null,
     acceptedOffline: !record && (gateDone || executed),
@@ -361,7 +403,9 @@ function resolveHandover(context: ProjectContext, currentStage: number): Agreeme
   const issue = issueEvidence(context, 'handover');
   const gateDone = !!context.lifecycle?.gates?.handoverComplete?.done;
   const isDisputed = record?.status === 'disputed';
-  const signed = !isDisputed && (record?.status === 'signed' || gateDone || !!context.handoverDate || issue.signed);
+  /* Same rule as the contract: the journey gate is not a signature. A recorded
+     handover DATE is a fact about the job rather than a tick, so it stays. */
+  const signed = !isDisputed && (record?.status === 'signed' || !!context.handoverDate || issue.signed);
   const released = record?.status === 'sent' || issue.released;
 
   let state: AgreementState = 'not_started';
@@ -388,7 +432,17 @@ function resolveHandover(context: ProjectContext, currentStage: number): Agreeme
     isOverdue: false, // handover is never "late" from the client's side
     gateStage: 6,
     signedAt: record?.signedAt || issue.signedAt || context.handoverDate || null,
-    signedBy: record?.signedBy || record?.clientName || issue.signedBy || context.clientName || null,
+    /*
+      No `context.clientName` fallback.
+
+      Falling back to it named the client as the signatory of a document that
+      was never issued and never signed -- on five projects the only evidence
+      was a lifecycle gate a migration had stamped `reference: "legacy"`, and
+      the screen still read "Signed by Mr Prasad & Mrs Mrunal Naik". Knowing who
+      the client is is not evidence that they signed anything. With no record
+      and no issue this is null, and `acceptedOffline` below says why.
+    */
+    signedBy: record?.signedBy || record?.clientName || issue.signedBy || null,
     issuedAt: record?.sentAt || issue.issuedAt || null,
     reference: record?.refId || issue.reference || null,
     acceptedOffline: !record && (gateDone || !!context.handoverDate),

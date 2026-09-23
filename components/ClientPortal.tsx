@@ -3488,8 +3488,21 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                         </>
                                                                     ) : (
                                                                         <p className="text-[11px] text-slate-600">
-                                                                            Signed by <strong className="text-slate-900">{doc.signedBy || 'Client'}</strong>
-                                                                            {doc.signedAt ? ` on ${new Date(doc.signedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                                                                            {/*
+                                                                              Never "Signed by Client" on a document that was never
+                                                                              issued. Where the only evidence is the studio's own
+                                                                              record, say that -- a client who was never sent this
+                                                                              cannot have signed it, and telling them otherwise is
+                                                                              the one thing this screen must not do.
+                                                                            */}
+                                                                            {doc.signedBy ? (
+                                                                                <>
+                                                                                    Signed by <strong className="text-slate-900">{doc.signedBy}</strong>
+                                                                                    {doc.signedAt ? ` on ${new Date(doc.signedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                                                                                </>
+                                                                            ) : (
+                                                                                <>Your studio has this recorded as agreed{doc.signedAt ? ` on ${new Date(doc.signedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}.</>
+                                                                            )}
                                                                         </p>
                                                                     )}
                                                                     {!doc.recordedOffline && doc.acceptedOffline && (

@@ -421,9 +421,19 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
     if (r.state === 'signed' || r.state === 'executed') {
       return {
         edge: EDGE.emerald, age,
-        studio: { ...pane.emerald, text: r.issue ? `Sent ${ago(r.issue.issuedAt) || 'today'}` : 'Issued' },
+        /*
+          Only say "Issued" when something actually was. With no issue behind
+          it this read "Issued · Signed" on a document whose own signature panel
+          said, correctly, that it had never been sent.
+        */
+        studio: r.issue
+          ? { ...pane.emerald, text: `Sent ${ago(r.issue.issuedAt) || 'today'}` }
+          : { ...pane.amber, text: 'Never issued' },
         arrow: { dir: 'done' as const, cls: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
-        client: { ...pane.emerald, text: `${r.recordedOffline ? 'Recorded' : r.mode === 'acknowledge' ? 'Confirmed' : 'Signed'}${r.signedBy ? ` · ${r.signedBy}` : ''}` },
+        client: {
+          ...pane.emerald,
+          text: `${r.recordedOffline || !r.issue ? 'Recorded' : r.mode === 'acknowledge' ? 'Confirmed' : 'Signed'}${r.signedBy ? ` · ${r.signedBy}` : ''}`,
+        },
         verdict: 'Closed', verdictCls: 'text-emerald-700'
       };
     }
@@ -488,7 +498,16 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
     switch (r.state) {
       case 'signed':
       case 'executed':
-        return `${r.recordedOffline ? 'Recorded offline' : 'Signed'} by ${r.signedBy || 'client'}${r.signedAt ? ` · ${new Date(r.signedAt as any).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}`;
+        /*
+          Three different facts, said as three different sentences. A signature
+          taken in the portal names who signed; one recorded by the studio says
+          so; and a state carried only by a lifecycle gate says exactly that,
+          rather than borrowing the client's name to look like evidence.
+        */
+        if (!r.issue && !r.signedBy) {
+          return `Recorded as signed in the studio · no document was issued`;
+        }
+        return `${r.recordedOffline || !r.issue ? 'Recorded offline' : 'Signed'} by ${r.signedBy || 'the client'}${r.signedAt ? ` · ${new Date(r.signedAt as any).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}`;
       case 'queried':
         return `Client asked a question · ${r.openQueryCount} awaiting your reply`;
       case 'issued':

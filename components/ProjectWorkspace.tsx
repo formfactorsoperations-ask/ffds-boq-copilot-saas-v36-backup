@@ -11,6 +11,7 @@ import PageTitleBlock from './PageTitleBlock';
 import { LogOut, Home, Building2, Users, BarChart3, Library, CreditCard } from 'lucide-react';
 import ProjectStatusTransitionModal from './ProjectStatusTransitionModal';
 import { FloatingDock, FloatingDockItem } from './ui/floating-dock';
+import HubAlertsBell from './ops/HubAlertsBell';
 
 const WORKSPACE_STATUS_MAP: Record<
   string,
@@ -571,6 +572,23 @@ export function ProjectWorkspace({
               })}
               desktopClassName="h-auto bg-slate-200/50 border border-slate-200/80 px-2 py-1 gap-1 rounded-xl shadow-2xs"
               mobileClassName=""
+            />
+          </div>
+
+          {/*
+            What is waiting on you, at the end of the row.
+
+            Pushed to the far right and behind a divider because it is a
+            different kind of object from the tiles: those are places to go,
+            this is a thing to do. It sends nothing -- every alert opens the
+            screen that owns the decision, so the Client Portal tab stays the
+            only thing that can reach a client.
+          */}
+          <div className="ml-auto shrink-0">
+            <HubAlertsBell
+              projectId={projectId}
+              projectContext={projectContext}
+              onGoTo={setActiveTab}
             />
           </div>
         </div>
