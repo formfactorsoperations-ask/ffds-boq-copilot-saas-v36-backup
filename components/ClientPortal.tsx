@@ -380,6 +380,18 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const openDocument = (kind: ClientDocumentKind, issueId?: string) => {
         setReadingRoomKind(kind);
         setReadingRoomIssueId(issueId);
+        /*
+          Only a client reading their own portal is evidence that the client
+          read it.
+
+          `persistClientAction` below has always been guarded this way; the view
+          stamp was missed, and in the studio preview `setProjectContext` saves
+          the project -- so an ops user checking what the client would see wrote
+          `documents.lastViewedAt` into the live record. That is how a docket
+          nobody had ever sent came to report "Opened 23 days ago", and it
+          recurred on every preview.
+        */
+        if (source !== 'client') return;
         setProjectContext(recordDocumentView(kind));
         persistClientAction({ type: 'documentView', kind });
     };

@@ -2210,6 +2210,23 @@ export interface DocumentIssue {
     reminders?: { at: number; by: string; via: string }[];
 
     /**
+     * Set on a SYNTHESISED issue whose document was never actually released.
+     *
+     * `getCurrentIssue` builds an issue on the fly for legacy projects that
+     * predate the issue ledger, so the studio can still open and work on the
+     * document. That synthesis says nothing about whether anyone sent it — a
+     * docket sitting at `status: 'draft'` with `sentAt: null` synthesises just
+     * as readily as one that went out months ago. Reading the result as proof
+     * of despatch put "Sent 35 days ago · Opened 23 days ago" on the studio's
+     * Documents board for a docket the client's own portal correctly described
+     * as never released. The date was `generatedAt` — when the draft was made.
+     *
+     * The flag lets the working surfaces keep their snapshot while the status
+     * surfaces tell the truth.
+     */
+    legacyNeverReleased?: boolean;
+
+    /**
      * Set when an issue is retired without being signed — currently used to
      * retire snapshots built by the old rebuilt-document renderers. The issue
      * stays in history so the trail still shows what the client was sent.

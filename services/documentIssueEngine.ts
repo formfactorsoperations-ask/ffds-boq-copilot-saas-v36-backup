@@ -364,7 +364,19 @@ export function getCurrentIssue(
     read from an issue the studio published. A client only sees it if it was
     genuinely released to them.
   */
-  if (opts.clientView && !legacyWasReleased(context, kind)) return null;
+  /*
+    Whether this was released is a fact about the document, not about who is
+    asking. It used to be consulted only for `clientView`, so the client's
+    portal said "Not yet released" while the studio's board said "Sent" about
+    the same never-sent draft.
+
+    The studio still needs the synthesised snapshot -- the release panel has to
+    render the draft in order to release it -- so this no longer returns null
+    for them. It marks the issue instead, and `resolveDocumentState` refuses to
+    call an unreleased document issued.
+  */
+  const released = legacyWasReleased(context, kind);
+  if (opts.clientView && !released) return null;
 
   const ctx = context as any;
 
@@ -431,6 +443,7 @@ export function getCurrentIssue(
       snapshot,
       contentHash: hashSnapshot(snapshot),
       materialSections: deriveMaterialSections(termsSettings.sections),
+      legacyNeverReleased: !released,
       supersedes: null,
       supersededAt: null,
       counterSignature: null
@@ -457,6 +470,7 @@ export function getCurrentIssue(
       snapshot,
       contentHash: hashSnapshot(snapshot),
       materialSections: [],
+      legacyNeverReleased: !released,
       supersedes: null,
       supersededAt: null,
       counterSignature: null
@@ -554,6 +568,15 @@ export function resolveDocumentState(
   if (signed && issue?.counterSignature) return 'executed';
   if (signed) return 'signed';
   if (!issue) return 'draft';
+
+  /*
+    Nothing was sent, so nothing downstream of sending can be true.
+
+    `lastViewedAt` is checked below, and on a document that was never released
+    that stamp cannot have come from the client -- they had nothing to open.
+    Comparing the two turned a studio preview into "Opened 23 days ago".
+  */
+  if (issue.legacyNeverReleased) return 'draft';
 
   const openQuery = (context.documents?.queries || []).some(
     q => q.issueId === issue.id && q.status === 'open'

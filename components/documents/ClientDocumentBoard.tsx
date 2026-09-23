@@ -271,7 +271,15 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
       let recordedOffline: boolean | undefined;
 
       if (kind) {
-        issue = getCurrentIssue(projectContext, kind);
+        /*
+          The synthesised snapshot for a never-released document belongs to the
+          surfaces that WORK on it, not to the one that reports where it stands.
+          Every read of `issue` below is a status claim -- "Sent ...", the age
+          column, "Never issued" -- so an unsent draft is simply not an issue
+          here, and the row falls through to "Being prepared".
+        */
+        const rawIssue = getCurrentIssue(projectContext, kind);
+        issue = rawIssue?.legacyNeverReleased ? null : rawIssue;
         state = resolveDocumentState(projectContext, kind);
         const readiness = getReleaseReadiness(kind, projectContext, projectData);
         readinessReady = readiness.ready;
