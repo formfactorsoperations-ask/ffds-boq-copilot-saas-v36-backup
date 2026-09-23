@@ -79,14 +79,26 @@ const STAGE_CHIP: Record<Stage, string> = {
 const pctOf = (part: number, whole: number) =>
   whole > 0 ? Math.max(0, Math.min(100, (part / whole) * 100)) : 0;
 
-/** A bar that grows from the left on mount. Transform only — never a colour. */
+/**
+ * A bar that grows from the left on mount. Transform only — never a colour.
+ *
+ * Driven by the studio's own `.mny-bar` (src/index.css) rather than a
+ * transition written here: scaleX(0)→1 over .8s on cubic-bezier(.22,1,.36,1),
+ * `transform-origin: left center`, and `backwards` so the fill is never briefly
+ * at full width before it charges. The same class carries the fee cards and the
+ * Money tab, so every bar in the app moves identically.
+ *
+ * It also inherits the stylesheet's `prefers-reduced-motion` rule, which a
+ * hand-rolled transition here did not — a viewer who has asked for less motion
+ * was getting the animation anyway.
+ *
+ * The width stays inline because it is data, not decoration; the class only
+ * scales whatever width the value asked for.
+ */
 const Fill: React.FC<{ pct: number; className: string; delay?: number }> = ({ pct, className, delay = 0 }) => (
-  <motion.span
-    initial={{ scaleX: 0 }}
-    animate={{ scaleX: 1 }}
-    transition={{ duration: 0.7, delay, ease: [0.16, 1, 0.3, 1] }}
-    style={{ width: `${pct}%`, transformOrigin: 'left' }}
-    className={`block h-full ${className}`}
+  <span
+    className={`mny-bar block h-full ${className}`}
+    style={{ width: `${pct}%`, animationDelay: delay ? `${delay}s` : undefined }}
   />
 );
 

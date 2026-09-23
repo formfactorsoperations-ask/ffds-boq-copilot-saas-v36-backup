@@ -17,6 +17,7 @@
  */
 
 import React from 'react';
+import { resolveFinancials } from '../../lib/paymentSchedule';
 import { ProjectContext, PaymentSchedule } from '../../types';
 
 export interface PaymentScheduleSheetProps {
@@ -48,6 +49,18 @@ const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
   showAmounts = true,
   previewMode = false
 }) => {
+  /*
+    GST per phase, from the project rather than from a literal.
+
+    This sheet is the studio-side twin of PaymentSchedulePage and carried the
+    same hard-coded 0.18 on every line and both totals -- printing tax on
+    phases the studio has switched off.
+  */
+  const psFin = resolveFinancials((projectContext as any)?.financials);
+  const psRate = (projectContext as any)?.gstRate ?? 18;
+  const designGstMul = (psFin.designGstEnabled !== false ? psRate : 0) / 100;
+  const execGstMul = (psFin.executionGstEnabled !== false ? psRate : 0) / 100;
+
   // ── Derivations, lifted with the markup so both callers stay identical ──
   const orgData = org || {};
   const isOwner = showAmounts;
@@ -211,12 +224,12 @@ const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
                                             <td>{adv.dueCondition}</td>
                                             <td className="pct">{adv.percentage}%</td>
                                             <td className="amt">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${(adv.amount || 0).toLocaleString('en-IN')}` : '--'}</td>
-                                            <td className="amt text-slate-500">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * 0.18).toLocaleString('en-IN')}` : '--'}</td>
-                                            <td className="amt font-bold">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * 1.18).toLocaleString('en-IN')}` : '--'}</td>
+                                            <td className="amt text-slate-500">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * designGstMul).toLocaleString('en-IN')}` : '--'}</td>
+                                            <td className="amt font-bold">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * (1 + designGstMul)).toLocaleString('en-IN')}` : '--'}</td>
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot><tr><td colSpan={2}>Design Fee total</td><td className="r">{designPctTotal}%</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${designAmountTotal.toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal * 0.18).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal * 1.18).toLocaleString('en-IN')}` : '--'}</td></tr></tfoot>
+                                <tfoot><tr><td colSpan={2}>Design Fee total</td><td className="r">{designPctTotal}%</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${designAmountTotal.toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal * designGstMul).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal * (1 + designGstMul)).toLocaleString('en-IN')}` : '--'}</td></tr></tfoot>
                             </table>
                         </div>
                     )}
@@ -233,12 +246,12 @@ const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
                                             <td>{adv.dueCondition}</td>
                                             <td className="pct">{adv.percentage}%</td>
                                             <td className="amt">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${(adv.amount || 0).toLocaleString('en-IN')}` : '--'}</td>
-                                            <td className="amt text-slate-500">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * 0.18).toLocaleString('en-IN')}` : '--'}</td>
-                                            <td className="amt font-bold">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * 1.18).toLocaleString('en-IN')}` : '--'}</td>
+                                            <td className="amt text-slate-500">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * execGstMul).toLocaleString('en-IN')}` : '--'}</td>
+                                            <td className="amt font-bold">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * (1 + execGstMul)).toLocaleString('en-IN')}` : '--'}</td>
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot><tr><td colSpan={2}>Execution total</td><td className="r">{executionPctTotal}%</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${executionAmountTotal.toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * 0.18).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * 1.18).toLocaleString('en-IN')}` : '--'}</td></tr></tfoot>
+                                <tfoot><tr><td colSpan={2}>Execution total</td><td className="r">{executionPctTotal}%</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${executionAmountTotal.toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * execGstMul).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * (1 + execGstMul)).toLocaleString('en-IN')}` : '--'}</td></tr></tfoot>
                             </table>
                             <p className="note">Percentages are fixed; amounts are calculated from the values above. Each payment is triggered by the completed milestone shown, not by a calendar date.</p>
                             <p className="note" style={{ marginTop: '6px', lineHeight: '1.5' }}>

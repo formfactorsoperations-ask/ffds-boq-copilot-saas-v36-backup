@@ -916,8 +916,15 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
         const netTaxable = netDesign + netExec;
 
         // 3. GST Calculation
-        const gstRate = 0.18;
-        const designGST = netDesign * gstRate;
+        /*
+          The project's rate, and the design toggle, not a literal.
+
+          Execution was already checked below; design was not, and the rate
+          itself was pinned at 18% however the project was configured.
+        */
+        const gstRate = ((projectContext as any)?.gstRate ?? 18) / 100;
+        const isDesignGstEnabled = financials?.designGstEnabled !== false;
+        const designGST = isDesignGstEnabled ? netDesign * gstRate : 0;
         
         // Check if Execution GST is enabled (default to true if undefined, unless explicitly false)
         // However, in this app, the toggle usually starts false or true. 

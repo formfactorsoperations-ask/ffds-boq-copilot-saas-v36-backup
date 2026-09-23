@@ -14,8 +14,33 @@
 
 import React from 'react';
 import { ProjectContext } from '../../types';
+import { resolveFinancials } from '../../lib/paymentSchedule';
 
-export interface ExecutionAgreementSheetProps {
+export /*
+  GST comes from the project, per phase.
+
+  These annexures multiplied every line by a hard-coded 0.18, so a contract
+  annexure stated tax the studio does not charge. All nine real projects on this
+  studio have `executionGstEnabled: false` -- on Unique Vistas alone that is
+  ~2.95L of GST appearing on execution lines in a document a client signs.
+
+  `resolveFinancials` is the one place that answers "is GST on for this phase",
+  and `gstRate` is the project's own rate rather than a literal. A phase with
+  GST off now reads 0 on every line, and the Total equals the Amount -- stated
+  explicitly rather than omitted, because a missing column on a contract is a
+  question waiting to be asked.
+*/
+const phaseGstRate = (
+  phase: string | undefined,
+  fin: { executionGstEnabled?: boolean; designGstEnabled?: boolean },
+  rate: number,
+): number => {
+  const isExec = phase === 'execution' || phase === 'handover';
+  const on = isExec ? fin.executionGstEnabled !== false : fin.designGstEnabled !== false;
+  return on ? rate : 0;
+};
+
+interface ExecutionAgreementSheetProps {
   projectContext: ProjectContext;
   /** Studio letterhead + signatory, frozen at issue. */
   orgData: any;
@@ -100,6 +125,8 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
   deleteMilestone,
   updateOverride
 }) => {
+  /* One answer to "is GST on for this phase", shared by both annexure paths. */
+  const annexFin = resolveFinancials((projectContext as any)?.financials);
   // Forwarded only when the studio page needs it for PDF capture.
   const contentRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -1037,7 +1064,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     <tbody>
                         {allAdvances ? allAdvances.map((m: any, i: number) => {
                             const amount = m.amount || ((m.phase === 'execution' || m.phase === 'handover' ? executionTotal : designFee) * (m.percentage / 100));
-                            const gst = amount * 0.18;
+                            const gst = amount * (phaseGstRate(m.phase, annexFin, gstRate) / 100);
                             const total = amount + gst;
                             return (
                                 <tr key={i}>
@@ -1052,7 +1079,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                             );
                         }) : projectContext.paymentMilestones?.map((m: any, i) => {
                             const amount = (m.type === 'execution' ? executionTotal : designFee) * (m.percentage / 100);
-                            const gst = amount * 0.18;
+                            const gst = amount * (phaseGstRate(m.type, annexFin, gstRate) / 100);
                             const total = amount + gst;
                             return (
                                 <tr key={i}>
