@@ -324,12 +324,14 @@ export interface PaymentSnapshot {
     milestones: PaymentMilestone[];
     billablePercent?: number;
     executionGstEnabled?: boolean;
+    designGstEnabled?: boolean;
 }
 
 export interface FinancialConfig {
     initiationFeePaid: number;
     billablePercent: number; // 0 to 100
     executionGstEnabled: boolean; // Toggle for GST on execution
+    designGstEnabled?: boolean;   // Toggle for GST on the design fee. Absent means charged.
     projectedCashValue: number; // Saved value for global tracking
     taxLimitYearly: number; // 20L default
     goodwillDiscount: number; // Legacy flat discount field (kept for backward compat)

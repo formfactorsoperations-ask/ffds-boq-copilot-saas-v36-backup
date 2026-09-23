@@ -133,7 +133,8 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth as firebaseAuth } from "./services/firebaseClient";
 import PortalPublishControls from "./components/ops/PortalPublishControls";
 import { buildClientBoqRows, baselineFromSentRows, ClientBoqRow } from "./lib/clientBoq";
-import { computePortalMoney, resolveMoneyInputs } from "./lib/portalMoney";
+import { buildPortalMoney } from "./lib/portalMoney";
+import { computeSchedule } from "./lib/paymentSchedule";
 import { nextDefaultProjectName } from "./lib/projectNaming";
 import { sendPortalAccessLink } from "./services/emailService";
 import { verifyApiKey } from "./services/geminiService";
@@ -1478,16 +1479,13 @@ export default function App() {
     Computed from the same rows the client is sent, so the figures on their
     payments tab and the scope they can read describe one project.
   */
-  const portalMoney = useMemo(() => {
-    const scopeTotal = clientBoqRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
-    const revisions = (projectContext as any)?.boqRevisions || [];
-    return computePortalMoney(resolveMoneyInputs({
+  const portalMoney = useMemo(
+    () => buildPortalMoney(computeSchedule({
       context: projectContext,
       tierSummary: (activeCalculatedTier as any)?.summary,
-      scopeTotal,
-      hasActiveBoqRevisions: revisions.length > 0 || !!(projectContext as any)?.operativeBoqVersion,
-    }));
-  }, [clientBoqRows, projectContext, activeCalculatedTier]);
+    })),
+    [projectContext, activeCalculatedTier],
+  );
 
   const fullBoqForActiveTier = useMemo((): FullBoqItem[] => {
     if (!activeTierId) return [];
@@ -3261,7 +3259,7 @@ export default function App() {
                           projectData={{
                             id: activeInternalId!,
                             lastModified: Date.now(),
-                            context: projectContext,
+                            context: { ...projectContext, portalMoney },
                             tiers: tiersWithCalculatedSummaries,
                             materials: materialSuggestions,
                             timeline: timelinePhases,
@@ -3980,7 +3978,7 @@ export default function App() {
                           projectData={{
                             id: activeInternalId!,
                             lastModified: Date.now(),
-                            context: projectContext,
+                            context: { ...projectContext, portalMoney },
                             tiers: tiersWithCalculatedSummaries,
                             materials: materialSuggestions,
                             timeline: timelinePhases,

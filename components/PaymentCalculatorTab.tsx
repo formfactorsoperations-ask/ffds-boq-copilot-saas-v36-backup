@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { showSuccessWithNext } from './SuccessWithNextToast';
 import { calculateSellPrice } from "../lib/utils";
 import { ProjectContext, ProposalTier, PaymentMilestone, FullProjectData, Item, FullBoqItem, PaymentStatus, ProjectDiscount, BoqItem, AIStrategy } from '../types';
@@ -9,6 +9,7 @@ import { RotateCcw, Coins, CheckCircle, TrendingUp, Info, AlertTriangle, Sparkle
 import Card from './shared/Card';
 import { CalculatorIcon, ShieldCheckIcon, AlertIcon, CheckIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon, DeleteIcon, PlusIcon, ScissorsIcon, ClockIcon, CalendarIcon } from './Icons';
 import { useOrg } from '../contexts/OrgContext';
+import { computeSchedule, outstandingInvoices, resolveFinancials, sameFinancials } from '../lib/paymentSchedule';
 import { resolveDocumentState } from '../services/documentIssueEngine';
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import { FFDS_PAYMENT_STRUCTURE_DEFAULTS, getPaymentStructure, setPaymentStructure } from '../services/engagementService';
@@ -236,20 +237,23 @@ const PanelMetric: React.FC<{ value: string; caption: string; muted?: boolean }>
 const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectContext, setProjectContext, activeTier, tiers = [], allProjects = [], bank = [], fullBoq = [], setBoq, aiStrategy = 'balanced', projectId }) => {
     // --- STATE ---
     const { orgData } = useOrg();
-    const financials = projectContext.financials || {
-        initiationFeePaid: 4999,
-        billablePercent: 100,
-        executionGstEnabled: true,
-        projectedCashValue: 0,
-        taxLimitYearly: 2000000,
-        goodwillDiscount: 0,
-        discounts: []
-    };
+    /*
+      Field by field, not all-or-nothing.
+
+      This was `projectContext.financials || {defaults}`, which only fired when
+      the whole object was missing. Four live projects stored a PARTIAL one, so
+      `executionGstEnabled` came back undefined, was read as false, and the
+      execution GST vanished from the contract without a word -- Runwal Eirene
+      read 9,76,872 where it should have read 11,30,899. `taxLimitYearly`
+      undefined put a literal "NaN% of limit" on the cash gauge.
+    */
+    const financials = resolveFinancials(projectContext.financials);
 
     const [localGstRate, setGstRate] = useState<number>(projectContext.gstRate || 18);
     const [localInitiationFee, setInitiationFee] = useState<number>(financials.initiationFeePaid);
     const [localBillablePercent, setBillablePercent] = useState<number>(financials.billablePercent);
     const [localExecutionGstEnabled, setExecutionGstEnabled] = useState<boolean>(financials.executionGstEnabled);
+    const [localDesignGstEnabled, setDesignGstEnabled] = useState<boolean>(financials.designGstEnabled);
     const [localCashLimit, setCashLimit] = useState<number>(financials.taxLimitYearly);
     
     // Discounts
@@ -276,6 +280,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             milestones: PaymentMilestone[];
             billablePercent?: number;
             executionGstEnabled?: boolean;
+            designGstEnabled?: boolean;
             isCurrentActive: boolean;
             isSnapshot: boolean;
         }> = [];
@@ -297,6 +302,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             milestones: projectContext.paymentMilestones || [],
             billablePercent: localBillablePercent,
             executionGstEnabled: localExecutionGstEnabled,
+            designGstEnabled: localDesignGstEnabled,
             isCurrentActive: true,
             isSnapshot: false,
         });
@@ -322,6 +328,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 milestones: tMilestones,
                 billablePercent: matchingSnapshot?.billablePercent,
                 executionGstEnabled: matchingSnapshot?.executionGstEnabled,
+                designGstEnabled: matchingSnapshot?.designGstEnabled,
                 isCurrentActive: false,
                 isSnapshot: !!matchingSnapshot,
             });
@@ -340,6 +347,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     milestones: s.milestones || [],
                     billablePercent: s.billablePercent,
                     executionGstEnabled: s.executionGstEnabled,
+                    designGstEnabled: s.designGstEnabled,
                     isCurrentActive: false,
                     isSnapshot: true,
                 });
@@ -365,6 +373,10 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const executionGstEnabled = selectedHistoricalEntry && selectedHistoricalEntry.executionGstEnabled !== undefined 
         ? selectedHistoricalEntry.executionGstEnabled 
         : localExecutionGstEnabled;
+        
+        const designGstEnabled = selectedHistoricalEntry && selectedHistoricalEntry.designGstEnabled !== undefined
+            ? selectedHistoricalEntry.designGstEnabled
+            : localDesignGstEnabled;
 
     const initiationFee = isReadOnlyMode ? 0 : localInitiationFee;
     const discounts = isReadOnlyMode ? [] : localDiscounts;
@@ -801,6 +813,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             initiationFeePaid: 4999,
             billablePercent: 100,
             executionGstEnabled: true,
+            designGstEnabled: true,
             projectedCashValue: 0,
             taxLimitYearly: 2000000,
             goodwillDiscount: 0,
@@ -810,6 +823,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         setInitiationFee(defaultFinancials.initiationFeePaid);
         setBillablePercent(defaultFinancials.billablePercent);
         setExecutionGstEnabled(defaultFinancials.executionGstEnabled);
+        setDesignGstEnabled(defaultFinancials.designGstEnabled);
         setCashLimit(defaultFinancials.taxLimitYearly);
         setDiscounts([]);
 
@@ -1060,7 +1074,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
     // 4. GST (Liability) - Calculated on Taxable Amount
     const gstOnExecution = executionGstEnabled ? (executionBillable * (gstRate / 100)) : 0;
-    const gstOnDesign = taxableDesign * (gstRate / 100);
+    const gstOnDesign = designGstEnabled ? taxableDesign * (gstRate / 100) : 0;
     const totalGST = gstOnExecution + gstOnDesign;
 
     // 5. Totals & Net
@@ -1074,8 +1088,34 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     // 6. Final Receivables
     const netReceivable = grossProjectValue - initiationFee;
 
+    /*
+      Every milestone amount on this screen, from the one implementation.
+
+      There were seven copies of this calculation in two families that
+      disagreed: the table re-based unpaid rows onto the remaining contract,
+      while totalPaid, the collections list and the client portal used a flat
+      percentage of the original base. On Test Project for T&C the studio saw
+      93,797 for a milestone the client's portal priced at 86,579.
+    */
+    const schedule = useMemo(() => computeSchedule({
+        context: { ...projectContext, paymentMilestones: milestones },
+        tierSummary: { totalSell: originalExecutionTotal, designFee: originalDesignFee },
+        overrides: {
+            gstRate,
+            billablePercent,
+            executionGstEnabled,
+            designGstEnabled,
+            initiationFeePaid: initiationFee,
+            discounts: discounts as any,
+            approvedExecutionValue: rawExecutionTotal,
+            approvedDesignValue: rawDesignFee,
+        },
+    }), [projectContext, milestones, originalExecutionTotal, originalDesignFee, gstRate,
+         billablePercent, executionGstEnabled, designGstEnabled, initiationFee, discounts,
+         rawExecutionTotal, rawDesignFee]);
+
     // Calculate Total Paid and Remaining Balance
-    const totalPaid = useMemo(() => {
+    const legacyTotalPaid = useMemo(() => {
         let paid = initiationFee; // Initiation fee is already paid
         
         // Sum up paid milestones
@@ -1111,7 +1151,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
         return paid;
     }, [designMilestones, executionMilestones, originalNetDesign, originalNetExecution, gstRate, initiationFee, billablePercent, executionGstEnabled]);
+    void legacyTotalPaid;
 
+    const totalPaid = schedule.totals.totalPaid;
     const remainingBalance = grossProjectValue - totalPaid;
 
     /*
@@ -1318,36 +1360,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
       GST at the applicable rate, less the initiation fee on the first design
       invoice. Same arithmetic as totalPaid above, for the invoiced state.
     */
-    const invoicedOutstanding = useMemo(() => {
-        const out: { id: string; name: string; amount: number; invoicedAt?: string | null; invoiceNumber?: string | null }[] = [];
-
-        designMilestones.forEach((m, i) => {
-            if (m.status !== 'invoiced') return;
-            let base = m.isFixedAmount && m.fixedAmount !== undefined
-                ? m.fixedAmount
-                : (m.lockedTaxableBase || originalNetDesign) * (m.percentage / 100);
-            base = Math.round(base);
-            const gst = Math.round(base * (gstRate / 100));
-            let total = Math.round(base + gst);
-            if (i === 0 && initiationFee > 0) total = Math.max(0, total - initiationFee);
-            out.push({ id: m.id, name: m.name, amount: total, invoicedAt: m.invoiceDate || null, invoiceNumber: m.invoiceNumber || null });
-        });
-
-        executionMilestones.forEach(m => {
-            if (m.status !== 'invoiced') return;
-            let base = m.isFixedAmount && m.fixedAmount !== undefined
-                ? m.fixedAmount
-                : (m.lockedTaxableBase || originalNetExecution) * (m.percentage / 100);
-            base = Math.round(base);
-            const billableAmt = Math.round(base * (billablePercent / 100));
-            const gst = Math.round(billableAmt * ((executionGstEnabled ? gstRate : 0) / 100));
-            // The cash side is still owed even though no tax rides on it.
-            const cash = Math.round(base * ((100 - billablePercent) / 100));
-            out.push({ id: m.id, name: m.name, amount: billableAmt + gst + cash, invoicedAt: m.invoiceDate || null, invoiceNumber: m.invoiceNumber || null });
-        });
-
-        return out;
-    }, [designMilestones, executionMilestones, originalNetDesign, originalNetExecution, gstRate, initiationFee, billablePercent, executionGstEnabled]);
+    /* Raised and unsettled, priced the same way the table prices them. */
+    const invoicedOutstanding = useMemo(
+        () => outstandingInvoices(schedule, { paymentMilestones: milestones }),
+        [schedule, milestones],
+    );
 
     const escalationCfg = (moneySettings as any)?.paymentMilestones?.escalation || DEFAULT_ESCALATION;
     const chase = useMemo(
@@ -1378,13 +1395,35 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const cashUtilization = (totalFYCash / cashLimit) * 100;
     const isRiskHigh = totalFYCash > cashLimit;
 
-    // Persistence
+    /*
+      Persistence, and only after a real edit.
+
+      This wrote `financials` 500ms after the tab rendered, with no user action,
+      and compared "has it changed" with JSON.stringify of two objects whose
+      keys sit in different orders -- so an unchanged record almost never
+      compared equal. Opening the Money tab on any project rewrote that
+      project's financial record.
+
+      That is how a completed job for a real client had `executionGstEnabled`
+      go from absent to true, moving its recorded contract by 1,54,027, because
+      somebody opened the screen to look at it.
+
+      The first run for a project is the arrival, not an edit, so it is skipped.
+      After that the comparison is by value.
+    */
+    const settledFor = useRef<string | null>(null);
     useEffect(() => {
         if (isReadOnlyMode) return;
+        const key = projectId || projectContext?.name || 'unkeyed';
+        if (settledFor.current !== key) {
+            settledFor.current = key;
+            return;
+        }
         const newConfig = {
             initiationFeePaid: initiationFee,
             billablePercent,
             executionGstEnabled,
+            designGstEnabled,
             projectedCashValue: executionCash,
             taxLimitYearly: cashLimit,
             goodwillDiscount: 0, // Deprecated in UI but kept in type
@@ -1393,13 +1432,103 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             approvedDesignValue: financials.approvedDesignValue
         };
         const timer = setTimeout(() => {
-            if (JSON.stringify(projectContext.financials) !== JSON.stringify(newConfig)) {
+            /*
+              Compared against the RESOLVED record, not the raw one.
+
+              A stored record that simply omits a field is not different from
+              one carrying that field's default -- but comparing against the raw
+              record said it was, so arriving on a project with an older record
+              still wrote to it. Resolving both sides first means only a real
+              difference counts as a change.
+            */
+            if (!sameFinancials(resolveFinancials(projectContext.financials), newConfig)) {
                 setProjectContext(prev => ({ ...prev, financials: newConfig }));
             }
         }, 500);
         return () => clearTimeout(timer);
-    }, [initiationFee, billablePercent, executionGstEnabled, executionCash, cashLimit, discounts, financials.approvedExecutionValue, financials.approvedDesignValue, isReadOnlyMode]);
+    }, [initiationFee, billablePercent, executionGstEnabled, designGstEnabled, executionCash, cashLimit, discounts, financials.approvedExecutionValue, financials.approvedDesignValue, isReadOnlyMode, projectId, projectContext?.name]);
 
+
+    /*
+      The target date, editable wherever a milestone appears.
+
+      It was read-only the moment a milestone went to invoiced or paid, and the
+      Advanced table had no date field at all. On a legacy project -- one whose
+      invoices were all settled long before anybody typed them in here -- that
+      left no way to record when a single one of them fell due.
+
+      That matters beyond tidiness: the cash-flow forecast reads this field, the
+      client's portal spine and timeline read it, and a schedule of settled
+      milestones carrying no dates forecasts nothing and shows the client an
+      undated programme.
+
+      Editing a settled row is a correction to the record, not a plan, which is
+      what the tooltip says and why the relative "in 12 days" is dropped there.
+      It does not reopen the invoice or change a rupee.
+    */
+    /*
+      Dating a whole track in one go.
+
+      161 of 192 milestones across the studio carry no date, and 149 of those
+      are still pending -- so this is mostly a planning job, not a back-dating
+      one. Setting eight dates a project, one picker at a time, is why nobody
+      has done it, and the cash-flow forecast reads this field: undated
+      milestones forecast nothing.
+
+      Start date plus a rhythm, applied down the track in order. The rhythm
+      counts every milestone, dated or not, so skipping the ones already set
+      does not shift everything after them.
+    */
+    const [datingTrack, setDatingTrack] = useState<'design' | 'execution' | null>(null);
+    const [dateStart, setDateStart] = useState('');
+    const [dateEvery, setDateEvery] = useState(3);
+    const [dateOnlyBlanks, setDateOnlyBlanks] = useState(true);
+
+    const isoOf = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    /** What the current settings would write, without writing it. */
+    const trackDatePreview = useMemo(() => {
+        if (!datingTrack || !dateStart) return [] as { id: string; name: string; from?: string; to: string; skipped: boolean }[];
+        const start = new Date(dateStart + 'T00:00:00');
+        if (isNaN(start.getTime())) return [];
+        let slot = 0;
+        return milestones.filter(m => m.type === datingTrack).map(m => {
+            const d = new Date(start);
+            d.setDate(d.getDate() + slot * Math.max(0, dateEvery) * 7);
+            slot++;
+            const skipped = dateOnlyBlanks && !!m.date;
+            return { id: m.id, name: m.name, from: m.date, to: isoOf(d), skipped };
+        });
+    }, [datingTrack, dateStart, dateEvery, dateOnlyBlanks, milestones]);
+
+    const applyTrackDates = () => {
+        if (!datingTrack || !dateStart) return;
+        const byId = new Map<string, (typeof trackDatePreview)[number]>(trackDatePreview.map(r => [r.id, r]));
+        setProjectContext(prev => ({
+            ...prev,
+            paymentMilestones: (prev.paymentMilestones || []).map(m => {
+                const row = byId.get(m.id);
+                if (!row || row.skipped) return m;
+                return { ...m, date: row.to };
+            }),
+        }));
+        setDatingTrack(null);
+    };
+
+    const renderTargetDate = (m: PaymentMilestone, mainIndex: number, isCleared: boolean) => (
+        <DateField
+            size="sm"
+            value={m.date || ''}
+            onChange={v => handleUpdateMilestone(mainIndex, { date: v || undefined })}
+            placeholder={isCleared ? 'set date on record' : 'set target date'}
+            showRelative={!isCleared}
+            disabled={isReadOnlyMode}
+            title={isCleared
+                ? 'When this milestone fell due. Editing a settled row corrects the record \u2014 it does not reopen the invoice.'
+                : 'Target date \u2014 drives the cash-flow forecast and is shown to the client'}
+        />
+    );
 
     const renderSplitTable = (
         items: PaymentMilestone[], 
@@ -1518,6 +1647,12 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             )}
                         </div>
 
+                        {/* The date, beside the conditions rather than buried under them. */}
+                        <div className="flex items-start gap-2 text-[11px]">
+                            <span className="font-extrabold text-[#8E96B8] uppercase tracking-wider shrink-0 text-[9px] w-14 mt-1">DATE:</span>
+                            {renderTargetDate(m, mainIndex, isCleared)}
+                        </div>
+
                         {/* Handover advance checkbox for execution milestones */}
                         {isExecution && (
                             <div className="pt-0.5">
@@ -1633,6 +1768,19 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             </button>
                         </div>
 
+                        {!isReadOnlyMode && (
+                            <button
+                                onClick={() => {
+                                    setDatingTrack(isExecution ? 'execution' : 'design');
+                                    setDateStart(isoOf(new Date()));
+                                }}
+                                className="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl border border-[#E2E5F0] bg-white text-[#3A416B] hover:border-[#3D52A0] hover:text-[#3D52A0] transition-colors cursor-pointer"
+                                title="Give every milestone in this track a date, spaced evenly"
+                            >
+                                Set dates
+                            </button>
+                        )}
+
                         <div className={`text-xs font-black px-3 py-1.5 rounded-xl border tabular-nums ${isBalanced ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}`}>
                             Total: {totalEffectivePercent.toFixed(1).replace('.0', '')}%
                         </div>
@@ -1690,7 +1838,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             let rowBillable = Math.round(isExecution ? rowBaseOriginal * (billablePercent / 100) : rowBaseOriginal);
                             const rowCash = Math.round(isExecution ? rowBaseOriginal * ((100 - billablePercent) / 100) : 0);
                             
-                            const applicableGstRate = isExecution ? (executionGstEnabled ? gstRate : 0) : gstRate;
+                            const applicableGstRate = isExecution
+                                ? (executionGstEnabled ? gstRate : 0)
+                                : (designGstEnabled ? gstRate : 0);
                             let rowGST = Math.round(rowBillable * (applicableGstRate / 100));
                             
                             let rowInvoiceTotal = Math.round(rowBillable + rowGST);
@@ -2063,6 +2213,19 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             </button>
                         </div>
                         
+                        {!isReadOnlyMode && (
+                            <button
+                                onClick={() => {
+                                    setDatingTrack(isExecution ? 'execution' : 'design');
+                                    setDateStart(isoOf(new Date()));
+                                }}
+                                className="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl border border-[#E2E5F0] bg-white text-[#3A416B] hover:border-[#3D52A0] hover:text-[#3D52A0] transition-colors cursor-pointer"
+                                title="Give every milestone in this track a date, spaced evenly"
+                            >
+                                Set dates
+                            </button>
+                        )}
+
                         <div className={`text-xs font-black px-3 py-1.5 rounded-xl border tabular-nums ${isBalanced ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}`}>
                             Total: {totalEffectivePercent.toFixed(1).replace('.0', '')}%
                         </div>
@@ -2096,7 +2259,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         let rowBillable = Math.round(isExecution ? rowBaseOriginal * (billablePercent / 100) : rowBaseOriginal);
                         const rowCash = Math.round(isExecution ? rowBaseOriginal * ((100 - billablePercent) / 100) : 0);
                         
-                        const applicableGstRate = isExecution ? (executionGstEnabled ? gstRate : 0) : gstRate;
+                        const applicableGstRate = isExecution
+                            ? (executionGstEnabled ? gstRate : 0)
+                            : (designGstEnabled ? gstRate : 0);
                         let rowGST = Math.round(rowBillable * (applicableGstRate / 100));
                         
                         let rowInvoiceTotal = Math.round(rowBillable + rowGST);
@@ -2250,24 +2415,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                       here appears in what the client sees.
                                     */}
                                     <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                        {isCleared ? (
-                                            /* Settled rows still say when they were due, or that nobody set it. */
-                                            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[#8E96B8]">
-                                                <CalendarIcon className="w-3 h-3" />
-                                                {m.date
-                                                    ? new Date(m.date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-                                                    : 'no target date'}
-                                            </span>
-                                        ) : (
-                                            <DateField
-                                                size="sm"
-                                                value={m.date || ''}
-                                                onChange={v => handleUpdateMilestone(mainIndex, { date: v || undefined })}
-                                                placeholder="set target date"
-                                                showRelative
-                                                title="Target date — drives the cash-flow forecast and is shown to the client"
-                                            />
-                                        )}
+                                        {renderTargetDate(m, mainIndex, isCleared)}
                                     </div>
                                     {m.invoiceNumber && (
                                         <div className="text-[9px] text-[#8E96B8] tabular-nums mt-1.5">Ref: {m.invoiceNumber}</div>
@@ -3592,10 +3740,10 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                 {/* Right Side: Split Sliders & GST Overrides */}
                                 <div className="space-y-6">
                                     <div>
-                                        <h4 className="text-xs font-black text-[#8E96B8] uppercase tracking-wider mb-3">Official GST Revenue Split</h4>
+                                        <h4 className="text-xs font-black text-[#8E96B8] uppercase tracking-wider mb-3">Execution Cash Split</h4>
                                         <div className="p-4 bg-[#F6F7FB] rounded-2xl border border-[#E2E5F0]/80 space-y-4">
                                             <div className="flex justify-between items-end">
-                                                <span className="text-xs font-bold text-[#4A5178]">Billable / GST Percentage</span>
+                                                <span className="text-xs font-bold text-[#4A5178]">Billable share of execution</span>
                                                 <div className="text-right">
                                                     <span className="text-xl font-extrabold text-[#12182F] tabular-nums">{billablePercent}%</span>
                                                     <span className="text-[10px] text-[#8E96B8] ml-1.5">Official</span>
@@ -3610,14 +3758,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 className={`w-full h-1.5 bg-[#E2E5F0] rounded-lg appearance-none accent-[#3D52A0] ${isReadOnlyMode ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                                             />
                                             <div className="flex justify-between text-[10px] text-[#8E96B8] tabular-nums font-semibold">
-                                                <span>0% (Full Cash)</span>
-                                                <span>100% (Fully GST Compliant)</span>
+                                                <span>0% &middot; all cash</span>
+                                                <span>100% &middot; all invoiced</span>
                                             </div>
                                         </div>
                                     </div>
 
                                     <div>
-                                        <h4 className="text-xs font-black text-[#8E96B8] uppercase tracking-wider mb-3">Execution Taxes</h4>
+                                        <h4 className="text-xs font-black text-[#8E96B8] uppercase tracking-wider mb-3">GST</h4>
                                         <div className="p-4 bg-[#F6F7FB] rounded-2xl border border-[#E2E5F0]/80 flex items-center justify-between">
                                             <label className={`flex items-center gap-3 ${isReadOnlyMode ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                                                 <div className="relative">
@@ -3638,6 +3786,39 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             <div className="text-right border-l border-[#E2E5F0] pl-4">
                                                 <p className="text-[9px] text-[#8E96B8] font-bold uppercase tracking-wider">Estimated Cash value</p>
                                                 <p className="text-sm font-extrabold text-amber-700 tabular-nums">{formatCurrency(executionCash)}</p>
+                                            </div>
+                                        </div>
+                                        {/*
+                                          The design fee has its own switch.
+
+                                          It had none: its GST was hard-wired on, so a studio
+                                          sliding the execution split to "all cash" still saw
+                                          18% charged on the design fee and no way to say
+                                          otherwise. The two tracks are taxed differently --
+                                          a design fee is a professional service invoice, the
+                                          execution a works contract -- so they get a control
+                                          each rather than one slider pretending to govern both.
+                                        */}
+                                        <div className="p-4 bg-[#F6F7FB] rounded-2xl border border-[#E2E5F0]/80 flex items-center justify-between mt-3">
+                                            <label className={`flex items-center gap-3 ${isReadOnlyMode ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                                                <div className="relative">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={designGstEnabled}
+                                                        onChange={e => setDesignGstEnabled(e.target.checked)}
+                                                        disabled={isReadOnlyMode}
+                                                        className="sr-only peer"
+                                                    />
+                                                    <div className="w-11 h-6 bg-[#E2E5F0] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#CBD1E4] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                                </div>
+                                                <div>
+                                                    <span className="text-xs font-bold text-[#3A416B] block">Charge GST on Design Fee</span>
+                                                    <span className="text-[10px] text-[#8E96B8] block">Apply {gstRate}% on the professional fee</span>
+                                                </div>
+                                            </label>
+                                            <div className="text-right border-l border-[#E2E5F0] pl-4">
+                                                <p className="text-[9px] text-[#8E96B8] font-bold uppercase tracking-wider">GST on design</p>
+                                                <p className="text-sm font-extrabold text-[#3A416B] tabular-nums">{formatCurrency(gstOnDesign)}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -4634,6 +4815,88 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {datingTrack && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#12182F]/40 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl border border-[#E2E5F0] shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="px-5 py-4 border-b border-[#EDEFF7]">
+                            <h3 className="text-sm font-extrabold text-[#12182F]">
+                                Date the {datingTrack} track
+                            </h3>
+                            <p className="text-[11px] text-[#5A628A] font-medium mt-0.5">
+                                One start date and a rhythm. Every milestone below gets a target date,
+                                which is what the cash-flow forecast and the client's timeline read.
+                            </p>
+                        </div>
+
+                        <div className="px-5 py-4 space-y-3">
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex-1 min-w-[150px]">
+                                    <label className="block text-[10px] font-black uppercase tracking-wider text-[#8E96B8] mb-1">First milestone</label>
+                                    <DateField value={dateStart} onChange={setDateStart} placeholder="Start date" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase tracking-wider text-[#8E96B8] mb-1">Then every</label>
+                                    <div className="flex items-center gap-1.5">
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            value={dateEvery}
+                                            onChange={e => setDateEvery(Math.max(0, Number(e.target.value)))}
+                                            className="w-16 text-xs font-bold rounded-lg border border-[#E2E5F0] px-2 py-2 text-[#3A416B] tabular-nums focus:border-[#3D52A0] focus:outline-none"
+                                        />
+                                        <span className="text-xs font-semibold text-[#5A628A]">weeks</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={dateOnlyBlanks}
+                                    onChange={e => setDateOnlyBlanks(e.target.checked)}
+                                    className="w-3.5 h-3.5 rounded border-[#CBD1E4] text-[#3D52A0] cursor-pointer"
+                                />
+                                <span className="text-[11px] font-semibold text-[#3A416B]">
+                                    Leave milestones that already have a date
+                                </span>
+                            </label>
+
+                            {/* Shown before it is written, because this overwrites real dates. */}
+                            <div className="rounded-xl border border-[#E2E5F0] bg-[#F6F7FB]/60 max-h-52 overflow-y-auto divide-y divide-[#EDEFF7]">
+                                {trackDatePreview.length === 0 ? (
+                                    <p className="text-[11px] text-[#8E96B8] font-medium p-3">Pick a start date to see what this would set.</p>
+                                ) : trackDatePreview.map(r => (
+                                    <div key={r.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                                        <span className={`text-[11px] font-semibold truncate ${r.skipped ? 'text-[#ADBBDA]' : 'text-[#3A416B]'}`}>{r.name}</span>
+                                        <span className={`text-[11px] font-bold tabular-nums shrink-0 ${r.skipped ? 'text-[#ADBBDA]' : 'text-[#3D52A0]'}`}>
+                                            {r.skipped
+                                                ? 'kept ' + new Date((r.from as string) + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })
+                                                : new Date(r.to + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="px-5 py-3 border-t border-[#EDEFF7] flex justify-end gap-2">
+                            <button
+                                onClick={() => setDatingTrack(null)}
+                                className="px-4 py-2 rounded-xl text-xs font-bold text-[#5A628A] hover:bg-[#F6F7FB] transition-colors cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={applyTrackDates}
+                                disabled={!dateStart || trackDatePreview.every(r => r.skipped)}
+                                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#3D52A0] hover:bg-[#334486] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                Set {trackDatePreview.filter(r => !r.skipped).length} dates
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div>
     );

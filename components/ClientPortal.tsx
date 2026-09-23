@@ -692,185 +692,57 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
 
     // --- FINANCIAL CALCULATIONS ---
     /*
-      The money the studio worked out and sent with the projection.
+      There are none. The portal reads what the studio sent.
 
-      Present in a real client session; absent in the studio's own preview,
-      where the tier and the billing rules are live and the figures below are
-      derived from them instead. Both paths run lib/portalMoney, so the preview
-      and the client's actual portal cannot quote different numbers.
+      Every figure below used to be derived here, from a context a client
+      session does not have: no tiers, so the design fee base came out at zero,
+      and no `financials`, so a hard-coded 4,999 retainer and a 100% billable
+      split were printed as fact. Replacing that with a better calculator only
+      moved the problem -- two calculators drift, and the studio's Money tab
+      quoted 93,797 for a milestone this screen priced at 86,579.
+
+      lib/paymentSchedule works the project out once, on the studio's side. In a
+      client session these arrive in the stored projection; in the studio's own
+      preview App passes the same object in. One set of numbers, one origin, and
+      no fallback -- a fallback is a second calculator waiting to disagree.
     */
-    const storedMoney = (context as any).portalMoney as PortalMoney | undefined;
-
-    /*
-      There was a fallback object here, and it was a liability.
-
-      `context.financials` does not cross into the projection, so in every real
-      client session this fell through to hard-coded values: a 4,999 retainer,
-      100% billable, execution GST on. The portal then showed that 4,999 as
-      CLEARED to every client on every project whether or not they had paid it,
-      and any project billing a cash split or without execution GST had its
-      figures quietly wrong on the client's own screen -- with nothing on the
-      page admitting the numbers were assumed.
-
-      Empty now. What the portal does not know it does not print; `moneyKnown`
-      below decides what the client is told instead.
-    */
-    const financials = context.financials || ({} as any);
-
-    const gstRate = storedMoney?.gstRate ?? (context.gstRate || 18);
-    const initiationFee = storedMoney?.retainerPaid ?? (Number(financials.initiationFeePaid) || 0);
-    const billablePercent = financials.billablePercent ?? 100;
-    const executionGstEnabled = financials.executionGstEnabled ?? true;
-    const discounts = financials.discounts || [];
-
-    const originalExecutionTotal = activeTier?.summary.totalSell || 0;
-    const originalDesignFee = activeTier?.summary.designFee || 0;
-
-    // Dynamically sync execution value with revised totalScopeValue when revisions exist or when BOQ is active
-    const hasActiveBoqRevisions = boqRevisions.length > 0 || !!operativeBoq?.itemsSnapshot;
-    const effectiveExecutionValue = (hasActiveBoqRevisions && totalScopeValue > 0)
-        ? totalScopeValue
-        : (financials.approvedExecutionValue ?? (totalScopeValue > 0 ? totalScopeValue : originalExecutionTotal));
-
-    const rawExecutionTotal = effectiveExecutionValue;
-    const rawDesignFee = financials.approvedDesignValue ?? originalDesignFee;
-
-    const calculateDiscountValue = (base: number, target: 'execution' | 'design') => {
-        const targetDiscounts = discounts.filter(d => d.target === target);
-        let totalDeduction = 0;
-        targetDiscounts.forEach(d => {
-            if (d.type === 'percentage') {
-                totalDeduction += base * (d.value / 100);
-            } else {
-                totalDeduction += d.value;
-            }
-        });
-        return totalDeduction;
-    };
-
-    const executionDiscountVal = calculateDiscountValue(rawExecutionTotal, 'execution');
-    const designDiscountVal = calculateDiscountValue(rawDesignFee, 'design');
-
-    /*
-      Sent figures win over derived ones. The derivation behind them needs the
-      active tier for the design fee, and a client session has no tiers -- which
-      is exactly how a real client came to see a design fee ladder of 25%, 40%
-      and 35% against a base of zero.
-    */
-    const taxableExecution = storedMoney ? storedMoney.executionBase : Math.max(0, rawExecutionTotal - executionDiscountVal);
-    const taxableDesign = storedMoney ? storedMoney.designBase : Math.max(0, rawDesignFee - designDiscountVal);
-
-    const executionBillable = taxableExecution * (billablePercent / 100);
-    const executionCash = taxableExecution * ((100 - billablePercent) / 100);
-
-    const gstOnExecution = executionGstEnabled ? (executionBillable * (gstRate / 100)) : 0;
-    const gstOnDesign = taxableDesign * (gstRate / 100);
-    const totalGST = gstOnExecution + gstOnDesign;
-
-    const currentProjectValue = storedMoney ? storedMoney.projectValue : (executionBillable + executionCash + taxableDesign + totalGST);
-    const baseProjectValue = originalExecutionTotal + originalDesignFee + (originalExecutionTotal * (gstRate/100)) + (originalDesignFee * (gstRate/100));
-
-    // Calculate Paid Amount
+    const money = (context as any).portalMoney as PortalMoney | undefined;
     const milestones = context.paymentMilestones || [];
-    let totalPaid = initiationFee;
-    
-    /**
-     * What one milestone is worth to the client.
-     *
-     * This has to agree with the studio's Money tab to the rupee, and it did
-     * not: the portal computed in full precision while PaymentCalculatorTab
-     * rounds at every step, and the portal ignored the initiation fee that the
-     * Money tab deducts from the first design invoice. So the client's portal
-     * showed ₹2,45,708 where the studio's own screen showed ₹2,44,571, and a
-     * gross ₹50,000 where the studio showed ₹45,001 net of the retainer.
-     *
-     * The rounding below is deliberate and mirrors PaymentCalculatorTab line
-     * for line. Two screens quoting different figures for the same invoice is
-     * worse than either figure being slightly off.
-     */
-    const calculateMilestoneTotal = (m: PaymentMilestone) => {
-        /* What the studio computed for this milestone, when it was sent. The
-           rest of this function is the preview's path, and mirrors it. */
-        const sent = storedMoney?.milestoneAmounts?.[m?.id];
-        if (sent !== undefined) return sent;
-
-        const isFirstDesign =
-            m.type === 'design' &&
-            milestones.filter(x => x.type === 'design').indexOf(m) === 0;
-
-        let baseAmount = m.type === 'design' ? taxableDesign : taxableExecution;
-        if (m.lockedTaxableBase !== undefined) baseAmount = m.lockedTaxableBase;
-
-        const rowBaseOriginal = Math.round(
-            m.isFixedAmount && m.fixedAmount !== undefined
-                ? m.fixedAmount
-                : baseAmount * (m.percentage / 100),
-        );
-
-        if (m.type === 'execution') {
-            const rowBillable = Math.round(rowBaseOriginal * (billablePercent / 100));
-            const rowCash = Math.round(rowBaseOriginal * ((100 - billablePercent) / 100));
-            const rate = executionGstEnabled ? gstRate : 0;
-            const rowGST = Math.round(rowBillable * (rate / 100));
-            return Math.round(rowBillable + rowGST) + rowCash;
-        }
-
-        const rowGST = Math.round(rowBaseOriginal * (gstRate / 100));
-        const rowInvoiceTotal = Math.round(rowBaseOriginal + rowGST);
-
-        // The retainer already collected comes off the first design invoice,
-        // exactly as the Money tab shows it.
-        return isFirstDesign && initiationFee > 0
-            ? Math.max(0, rowInvoiceTotal - initiationFee)
-            : rowInvoiceTotal;
-    };
-
-    milestones.forEach(m => {
-        if (m.status === 'paid') {
-            totalPaid += calculateMilestoneTotal(m);
-        }
-    });
-
-    const paidPercentage = currentProjectValue > 0 ? Math.min(100, Math.round((totalPaid / currentProjectValue) * 100)) : 0;
-    const balanceDue = Math.max(0, currentProjectValue - totalPaid);
-
-    // Breakdowns for fee tracking
-    /* Taken whole rather than re-derived: whether execution GST applies and how
-       the billable/cash split falls are studio rules that do not cross. */
-    const totalDesignValue = storedMoney ? storedMoney.designTotal : taxableDesign + gstOnDesign;
-    const totalExecutionValue = storedMoney ? storedMoney.executionTotal : executionBillable + executionCash + gstOnExecution;
-    
-    let designPaid = initiationFee; // Initiation goes towards design
-    let executionPaid = 0;
-    milestones.forEach(m => {
-        if (m.status === 'paid') {
-            if (m.type === 'design') {
-                designPaid += calculateMilestoneTotal(m);
-            } else if (m.type === 'execution') {
-                executionPaid += calculateMilestoneTotal(m);
-            }
-        }
-    });
 
     /*
-      Whether these figures rest on anything.
-
-      True in the studio's preview, where the tier is live, and in a client
-      session once the studio has released a projection carrying the money.
-      False for a client holding a projection published before the money was
-      part of it -- and then the payments tab says so rather than printing a
-      confident zero.
+      Whether anything was sent. False for a client holding a projection
+      published before the money was part of it -- and then the payments tab
+      says so, rather than printing a confident zero.
     */
-    const moneyKnown = !!storedMoney || isInternalStudioView;
+    const moneyKnown = !!money;
     if (!moneyKnown) {
         console.warn(
-            'Portal: this projection carries no money figures. Release the project from ' +
-            'SOF & Selections to send them.',
+            'Portal: this projection carries no money figures. Release the project from '
+            + 'SOF & Selections to send them.',
         );
     }
 
-    const designPaidPercentage = totalDesignValue > 0 ? Math.min(100, Math.round((designPaid / totalDesignValue) * 100)) : 0;
-    const executionPaidPercentage = totalExecutionValue > 0 ? Math.min(100, Math.round((executionPaid / totalExecutionValue) * 100)) : 0;
+    const gstRate = money?.gstRate ?? (context.gstRate || 18);
+    const initiationFee = money?.retainerPaid ?? 0;
+
+    const taxableDesign = money?.designBase ?? 0;
+    const taxableExecution = money?.executionBase ?? 0;
+    const gstOnDesign = money?.designGst ?? 0;
+    const gstOnExecution = money?.executionGst ?? 0;
+
+    const currentProjectValue = money?.projectValue ?? 0;
+    const totalDesignValue = money?.designTotal ?? 0;
+    const totalExecutionValue = money?.executionTotal ?? 0;
+    const designPaid = money?.designPaid ?? 0;
+    const executionPaid = money?.executionPaid ?? 0;
+    const totalPaid = money?.totalPaid ?? 0;
+    const balanceDue = money?.balanceDue ?? 0;
+    const designPaidPercentage = money?.designPct ?? 0;
+    const executionPaidPercentage = money?.executionPct ?? 0;
+
+    /* A lookup, not a calculation. */
+    const calculateMilestoneTotal = (m: PaymentMilestone) =>
+        (m && money?.milestoneAmounts?.[m.id]) ?? 0;
 
     // --- SMART CLIENT ACTION ENGINE & LIFECYCLE PIPELINE ---
     const milestoneTotalsMap = useMemo(() => {
@@ -881,7 +753,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             }
         });
         return map;
-    }, [milestones, taxableExecution, taxableDesign, billablePercent, executionGstEnabled, gstRate]);
+    }, [milestones, money]);
 
     const lifecycleInfo = useMemo(() => {
         return calculateClientLifecycleStages(context);
