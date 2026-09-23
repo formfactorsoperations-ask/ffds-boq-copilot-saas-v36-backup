@@ -157,12 +157,38 @@ export interface ScheduleTotals {
   remainingBalance: number;
 }
 
+/** A track billed for more than its contract holds. */
+export interface OverBilled {
+  track: 'design' | 'execution';
+  /** The contract, after discounts. */
+  taxableBase: number;
+  /** What the cleared milestones already took out of it. */
+  lockedBase: number;
+  /** lockedBase - taxableBase, always > 0. */
+  overBy: number;
+  /** Milestones still unpaid, every one of which is being reported as zero. */
+  unpaidCount: number;
+}
+
 export interface ScheduleResult {
   amounts: MilestoneAmount[];
   byId: Record<string, MilestoneAmount>;
   totals: ScheduleTotals;
   financials: ScheduleFinancials;
   gstRate: number;
+  /*
+    Tracks billed beyond their contract.
+
+    The clamp below floors the remaining balance at zero, and the note there
+    said the caller is told to re-issue the schedule -- but nothing was ever
+    told, because there was no field to tell them in. Lake Pleasant Powai billed
+    13,754 of design over its contract for months with nothing on any screen
+    saying so, and on a project with unpaid rows left every one of them would
+    read a flat zero owed with no reason given.
+
+    Empty on a healthy project.
+  */
+  overBilled: OverBilled[];
 }
 
 const R = Math.round;
@@ -199,6 +225,7 @@ export function computeSchedule(args: {
 
   const bp = financials.billablePercent;
   const amounts: MilestoneAmount[] = [];
+  const overBilled: OverBilled[] = [];
 
   (['design', 'execution'] as const).forEach((type) => {
     const isExec = type === 'execution';
@@ -230,6 +257,15 @@ export function computeSchedule(args: {
       repair is to re-issue the schedule, which the caller is told to do.
     */
     const remaining = Math.max(0, taxableBase - lockedBase);
+    if (lockedBase - taxableBase > 1) {
+      overBilled.push({
+        track: type,
+        taxableBase: R(taxableBase),
+        lockedBase: R(lockedBase),
+        overBy: R(lockedBase - taxableBase),
+        unpaidCount: unpaid.length,
+      });
+    }
     const fixedPending = unpaid
       .filter((m) => m.isFixedAmount && m.fixedAmount !== undefined)
       .reduce((s, m) => s + (m.fixedAmount || 0), 0);
@@ -310,7 +346,7 @@ export function computeSchedule(args: {
       gstOnExecution, gstOnDesign, grossProjectValue,
       totalPaid, remainingBalance: grossProjectValue - totalPaid,
     },
-    financials, gstRate,
+    financials, gstRate, overBilled,
   };
 }
 

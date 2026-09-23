@@ -1148,9 +1148,27 @@ export default function App() {
     return () => unsub();
   }, [activeInternalId]);
 
+  /*
+    Which project this auto-save has already seen.
+
+    The effect below had no notion of a change: it ran whenever any of its
+    dependencies took a new identity, and opening a project gives every one of
+    them a new identity at once. So merely looking at a project wrote the
+    project back -- same values, new `lastModified`, a Firestore write per open.
+
+    Reading is not editing. The first run for a project is its arrival, so it is
+    skipped; every run after that is a real edit and saves as before. This is
+    the same guard the Money tab needed for `financials`, for the same reason.
+  */
+  const autoSaveArmedFor = useRef<string | null>(null);
+
   // Auto-save Project to DB
   useEffect(() => {
     if (activeInternalId && projectContext) {
+      if (autoSaveArmedFor.current !== activeInternalId) {
+        autoSaveArmedFor.current = activeInternalId;
+        return;
+      }
       console.log(
         "Auto-save useEffect triggered for project:",
         activeInternalId,

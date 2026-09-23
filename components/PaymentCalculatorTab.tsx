@@ -3031,6 +3031,42 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             })()}
                         </div>
 
+                        {/*
+                          Billed past the contract, said out loud.
+
+                          `computeSchedule` floors the remaining balance at zero
+                          when cleared milestones have already taken more than
+                          the contract holds. That made every unpaid row read a
+                          flat zero owed with nothing explaining why, and on a
+                          fully-billed track it hid the overage entirely -- Lake
+                          Pleasant carried 13,754 of it for months. The number
+                          is the point, so it goes above the tabs rather than
+                          inside one of them.
+                        */}
+                        {(schedule.overBilled || []).map(ob => (
+                            <div key={ob.track} className="mt-4 rounded-2xl border border-amber-300 bg-amber-50/70 px-5 py-4">
+                                <div className="flex items-start gap-3">
+                                    <span className="text-amber-600 text-lg leading-none mt-0.5">&#9888;</span>
+                                    <div className="min-w-0">
+                                        <p className="text-[13px] font-extrabold text-amber-900">
+                                            {ob.track === 'design' ? 'Design' : 'Execution'} is billed {formatCurrency(ob.overBy)} over its contract
+                                        </p>
+                                        <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">
+                                            Invoiced milestones account for {formatCurrency(ob.lockedBase)} against a contract of{' '}
+                                            {formatCurrency(ob.taxableBase)}.{' '}
+                                            {ob.unpaidCount > 0
+                                                ? `The ${ob.unpaidCount} milestone${ob.unpaidCount === 1 ? '' : 's'} still unpaid ${ob.unpaidCount === 1 ? 'is' : 'are'} reported as zero owed, because there is nothing left to bill against.`
+                                                : 'Every milestone on this track is settled, so the difference sits in what was invoiced rather than in what is owed.'}
+                                        </p>
+                                        <p className="text-[11px] text-amber-800 mt-1.5 leading-relaxed">
+                                            Either the contract value is understated, or a milestone was invoiced at the wrong base.
+                                            Check the locked base on each settled row under <span className="font-bold">Milestones</span>.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+
                         <div className="mt-4">
                             <Tabs
                                 ariaLabel="Money sections"
