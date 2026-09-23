@@ -31,7 +31,27 @@ export const PUBLISHABLE: PublishableGroup[] = [
   { key: 'momHistory',        label: 'Meeting notes',   titleOf: i => i.title || i.subject || 'Meeting note',          dateOf: i => i.date || i.meetingDate },
   { key: 'materialSelections',label: 'Material selections', titleOf: i => i.itemName || i.name || 'Selection',         dateOf: i => i.date || i.createdAt },
   { key: 'designDocuments',   label: 'Drawings & renders',  titleOf: i => i.name || i.title || 'Document',             dateOf: i => i.date || i.issuedAt },
-  { key: 'boqRevisions',      label: 'Scope variations',    titleOf: i => i.title || i.reason || 'Variation',          dateOf: i => i.date || i.createdAt },
+  /*
+    `boqRevisions` is NOT publishable, and was listed here as "Scope variations".
+
+    It is the studio's own edit ledger -- `lib/boqVersions.ts` and
+    `services/clientPortalEngine.ts` both already say so, the latter adding that
+    "client-facing variations live on projectUpdates". Its rows carry `item`,
+    `section`, `type`, `reasonCategory`, `note`, `oldValue`, `newValue` and
+    nothing else, so the projection's mapping of `title`/`date`/`status`/
+    `amount` resolved to undefined on every field: publishing one sent the
+    client an empty row. The types alone give it away -- MARK_PENDING,
+    APPROVE_PENDING, MARK_VENDOR are internal workflow states.
+
+    Listing it here also meant 99 ledger entries across three FINISHED projects
+    were counted as things the studio owed its clients, drowning the thirteen
+    items that genuinely were waiting.
+
+    The client still gets the "why" behind a change: `lib/clientBoq.ts` derives
+    it by diffing the BOQ version they approved against the current one, which
+    is deliberate -- the ledger is emptied when a revision is approved into a
+    new version, so by the time a client could read it there is nothing left.
+  */
   /*
     Released documents. They live at context.documents.issues rather than on a
     top-level array, hence the accessors.
