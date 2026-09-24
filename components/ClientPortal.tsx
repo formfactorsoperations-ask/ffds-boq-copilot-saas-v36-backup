@@ -826,78 +826,18 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         return projectData.context.rooms || [];
     }, [projectData.context.rooms]);
 
-    const roomProgressData = useMemo(() => {
-        const weeklyProgress = context.weeklyRoomProgress || {};
-        const itemStatuses = context.itemExecutionStatuses || {};
+    /*
+      `roomProgressData` lived here and was never used.
 
-        return roomsList.map((r, idx) => {
-            const roomId = r.id || `room-${idx}`;
-            const roomNameLower = (r.name || '').toLowerCase().trim();
+      Seventy lines resolving each room against `weeklyRoomProgress` by id,
+      roomId and name, with an item-level fallback -- recomputed whenever the
+      rooms, the progress map or the BOQ changed, and read by nothing. The
+      portal has no room-progress UI; the ops tab that fed it was named
+      "Room Progress Sync (Client Portal)" for a sync that had no other end.
 
-            // Find matching data in weeklyRoomProgress (by id, roomId, or name)
-            const roomData = (r.id && weeklyProgress[r.id] && r.id !== 'undefined')
-                ? weeklyProgress[r.id]
-                : (weeklyProgress[roomId] && roomId !== 'undefined')
-                    ? weeklyProgress[roomId]
-                    : (r.name && weeklyProgress[r.name] && r.name !== 'undefined')
-                        ? weeklyProgress[r.name]
-                        : null;
-
-            if (roomData && Object.keys(roomData).length > 0) {
-                const activeStageKey = Object.keys(roomData)[0] || 'Current';
-                const stageInfo = roomData[activeStageKey];
-                if (stageInfo && typeof stageInfo.progress === 'number') {
-                    return {
-                        id: roomId,
-                        name: r.name,
-                        progress: Math.min(100, Math.max(0, stageInfo.progress)),
-                        stage: stageInfo.stage || (stageInfo.progress === 100 ? 'Handover Completed' : stageInfo.progress > 0 ? 'In Progress' : 'Pending Execution Start')
-                    };
-                }
-            }
-
-            // If no explicit weeklyRoomProgress entry, check item-level statuses
-            const rItems = flatBoqList.filter(item => {
-                const iRoom = (item.roomId || item.room || item.roomName || item.roomGroup || '').toLowerCase();
-                return iRoom === roomNameLower || (r.id && iRoom === r.id.toLowerCase());
-            });
-
-            if (rItems.length > 0) {
-                let comp = 0;
-                let inProg = 0;
-                rItems.forEach(i => {
-                    const iId = i.id || i.tempId;
-                    const st = iId && itemStatuses[iId];
-                    if (st === 'completed') comp++;
-                    else if (st === 'in_progress') inProg++;
-                });
-
-                if (comp > 0 || inProg > 0) {
-                    const calcProg = Math.round(((comp * 1.0 + inProg * 0.5) / rItems.length) * 100);
-                    let calcStage = 'Carpentry & Assembly';
-                    if (calcProg === 100) calcStage = 'Handover Completed';
-                    else if (calcProg >= 80) calcStage = 'Painting & Finishes';
-                    else if (calcProg >= 50) calcStage = 'Carpentry & Assembly';
-                    else if (calcProg >= 30) calcStage = 'False Ceiling & Framing';
-                    else if (calcProg > 0) calcStage = 'Civil & MEP Layouts';
-
-                    return {
-                        id: roomId,
-                        name: r.name,
-                        progress: calcProg,
-                        stage: calcStage
-                    };
-                }
-            }
-
-            return {
-                id: roomId,
-                name: r.name,
-                progress: 0,
-                stage: 'Pending Execution Start'
-            };
-        });
-    }, [roomsList, context.weeklyRoomProgress, context.itemExecutionStatuses, flatBoqList]);
+      The underlying fields still travel in the projection and still feed the
+      stage-5 readiness score in clientPortalEngine.
+    */
 
     // Helper for category styling & visual cues
     const getCategoryInfo = (catName: string = '') => {

@@ -3398,9 +3398,17 @@ export default function App() {
                           activeProject={activeProject}
                           onProjectUpdate={setActiveProject}
                           onNavigateToTab={setActiveTab}
+                          /*
+                            `update-client-feed` is the document id for "Weekly
+                            Pulse Reports" (lib/documentActions.ts), so the
+                            Documents row of that name routes here. It used to
+                            open the Daily Site Feed instead -- a different tool
+                            with a different name -- which is now removed, so it
+                            opens the manager it is actually named after.
+                          */
                           initialModule={
                             activeTab === "update-client-feed"
-                              ? "client-updates"
+                              ? "weekly-reports"
                               : activeTab === "record-decision"
                                 ? "decision-tracker"
                                 : activeTab === "mom-action-tracker"
@@ -4117,9 +4125,17 @@ export default function App() {
                           activeProject={activeProject}
                           onProjectUpdate={setActiveProject}
                           onNavigateToTab={setActiveTab}
+                          /*
+                            `update-client-feed` is the document id for "Weekly
+                            Pulse Reports" (lib/documentActions.ts), so the
+                            Documents row of that name routes here. It used to
+                            open the Daily Site Feed instead -- a different tool
+                            with a different name -- which is now removed, so it
+                            opens the manager it is actually named after.
+                          */
                           initialModule={
                             activeTab === "update-client-feed"
-                              ? "client-updates"
+                              ? "weekly-reports"
                               : activeTab === "record-decision"
                                 ? "decision-tracker"
                                 : activeTab === "mom-action-tracker"

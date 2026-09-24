@@ -69,7 +69,7 @@ const META: Record<string, PageMeta> = {
   'design-gate':          { subtitle: 'Checks that must clear before execution' },
 
   // ---- Project: stage 5 ---------------------------------------------------
-  'site-ops':             { subtitle: 'Site progress, trade packages and client updates' },
+  'site-ops':             { subtitle: 'Site progress, trade packages and meeting notes' },
   materials:              { subtitle: 'Material selections, cost variations and purchase orders' },
   'scope-additions':      { subtitle: 'Work added after the contract was signed' },
   snaglist:               { title: 'Snag List', subtitle: 'Open defects and rectification status' },

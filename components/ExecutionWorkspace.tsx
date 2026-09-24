@@ -36,7 +36,6 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import WavyText from "./ui/WavyText";
-import RoomProgressTracker from "./ops/RoomProgressTracker";
 import { useOrg } from "../contexts/OrgContext";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../services/firebaseClient";
@@ -161,11 +160,11 @@ const ExecutionWorkspace = ({
   onUpdateExecutionData,
   onNavigateDrawings,
 }: any) => {
-  const { currentUserAuth, currentRole, orgData, teamMembers } = useOrg();
+  const { currentUserAuth, currentRole, orgData } = useOrg();
   const isDesigner = currentRole === "Designer";
 
   // Navigation sub-views to declutter the page
-  const [activeSubView, setActiveSubView] = useState<"packages" | "room-progress" | "controls">("packages");
+  const [activeSubView, setActiveSubView] = useState<"packages" | "controls">("packages");
   
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -197,9 +196,11 @@ const ExecutionWorkspace = ({
   // Auto-Unblock Toast/Feedback
   const [autoUnblockBanner, setAutoUnblockBanner] = useState<string | null>(null);
 
-  const siteSupervisors = useMemo(() => {
-    return teamMembers ? teamMembers.filter((m: any) => m.role === 'Site Supervisor') : [];
-  }, [teamMembers]);
+  /*
+    The `siteSupervisors` lookup that lived here is gone with the assignment
+    control it populated -- it filtered team members by role to fill a dropdown
+    that no longer exists.
+  */
 
   const handleContextChange = (field: string, value: any) => {
     if (setProjectContext) {
@@ -879,18 +880,6 @@ const ExecutionWorkspace = ({
             </button>
 
             <button
-              onClick={() => setActiveSubView("room-progress")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeSubView === "room-progress"
-                  ? "bg-white text-[#3D52A0] shadow-xs border border-slate-200/60"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <Building2 className="w-4 h-4" />
-              Room Progress Sync (Client Portal)
-            </button>
-
-            <button
               onClick={() => setActiveSubView("controls")}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeSubView === "controls"
@@ -899,7 +888,7 @@ const ExecutionWorkspace = ({
               }`}
             >
               <Sliders className="w-4 h-4" />
-              Site Dates & Supervisor Controls
+              Site Dates & Controls
             </button>
           </div>
 
@@ -1547,31 +1536,23 @@ const ExecutionWorkspace = ({
         </div>
       )}
 
-      {/* VIEW 2: ROOM PROGRESS SYNC (CLIENT PORTAL) */}
-      {activeSubView === "room-progress" && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-lg tracking-tight flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-[#3D52A0]" />
-                  Live Room Progress Matrix
-                </h3>
-                <p className="text-slate-500 text-xs mt-0.5">
-                  Synchronizes real-time progress percentages and active trade stages with the Client Portal.
-                </p>
-              </div>
-            </div>
+      {/*
+        "Room Progress Sync (Client Portal)" is gone.
 
-            <RoomProgressTracker
-              projectContext={projectContext}
-              setProjectContext={setProjectContext}
-              boq={boq}
-              bundles={bundlesToRender}
-            />
-          </div>
-        </div>
-      )}
+        The name promised something that never happened: the client portal does
+        not render room progress anywhere. It built `roomProgressData` -- 70
+        lines resolving rooms by id, roomId and name with an item-level
+        fallback -- and then used the variable nowhere. Computed on every
+        change, discarded every time.
+
+        `weeklyRoomProgress` and `itemExecutionStatuses` are untouched, still
+        shipped in the projection, and still feed the stage-5 readiness score in
+        `clientPortalEngine.ts`. That score keeps working on the data already
+        recorded, and falls back to the site-log count where there is none.
+
+        Usage was one or two rooms per real project and item tracking never used
+        at all -- somebody opening it once, not a workflow.
+      */}
 
       {/* VIEW 3: SITE CONTROLS & DATES */}
       {activeSubView === "controls" && (
@@ -1581,10 +1562,10 @@ const ExecutionWorkspace = ({
               <div>
                 <h3 className="font-extrabold text-slate-900 text-lg tracking-tight flex items-center gap-2">
                   <Sliders className="w-5 h-5 text-[#3D52A0]" />
-                  Site Controls, Supervisors & Key Milestones
+                  Site Controls & Key Milestones
                 </h3>
                 <p className="text-slate-500 text-xs mt-0.5">
-                  Configure target handover dates, SOF freeze deadlines, and assign site supervisors.
+                  Set the target handover date, the SOF freeze deadline, procurement lead time and the site readiness checkpoints.
                 </p>
               </div>
             </div>
@@ -1623,24 +1604,21 @@ const ExecutionWorkspace = ({
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Assigned Site Supervisor</label>
-                <div className="relative">
-                  <select
-                    value={projectContext?.assignedSupervisors?.[0] || ''}
-                    onChange={e => handleContextChange('assignedSupervisors', [e.target.value])}
-                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#3D52A0] outline-none appearance-none cursor-pointer pr-10 shadow-2xs"
-                  >
-                    <option value="">Unassigned (Reviewing...)</option>
-                    {siteSupervisors.map((s: any) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                  <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none">
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
-                  </div>
-                </div>
-              </div>
+              {/*
+                "Assigned Site Supervisor" is gone until the team feature is real.
+
+                It wrote `assignedSupervisors`, which App.tsx reads to decide
+                which projects a Site Supervisor sees in SupervisorMobileApp --
+                a screen that renders only when the signed-in user matches a
+                team member whose role is "Site Supervisor". The studio has no
+                team members at all, so nobody can reach that app, and the one
+                project carrying an assignment points at a team-member id that
+                does not exist.
+
+                A dropdown whose only option is "Unassigned" assigns people to
+                an app that cannot be opened. The field and its readers are
+                untouched: add team members and this control comes back.
+              */}
             </div>
 
             {/* Lifecycle Checkpoints */}

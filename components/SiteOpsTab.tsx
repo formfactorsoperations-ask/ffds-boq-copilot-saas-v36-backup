@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import Tabs from './ui/Tabs';
 import { ProjectContext, FullBoqItem } from "../types";
-import ClientUpdatesManager from "./ops/ClientUpdatesManager";
 import WeeklyPulseManager from "./ops/WeeklyPulseManager";
 import DecisionTracker from "./ops/DecisionTracker";
 import DesignDocumentsManager from "./ops/DesignDocumentsManager";
@@ -48,7 +47,6 @@ interface SiteOpsTabProps {
     | "execution"
     | "decision-tracker"
     | "action-tracker"
-    | "client-updates"
     | "weekly-reports"
     | "design-docs"
     | "tiling"
@@ -106,7 +104,6 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
     if (
       initialModule === "decision-tracker" ||
       initialModule === "action-tracker" ||
-      initialModule === "client-updates" ||
       initialModule === "weekly-reports"
     ) {
       return "logs";
@@ -116,11 +113,30 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
   });
 
   // Sub-modules inside Logs & Communications
-  const [logsSubMode, setLogsSubMode] = useState<"client-feed" | "weekly-reports" | "action-tracker" | "decision-tracker">(() => {
+/*
+  The Daily Site Feed is gone.
+
+  `ClientUpdatesManager` wrote `siteUpdates`, which the portal still renders in
+  its live feed -- so the five updates already published to Hiranandani's client
+  stay exactly where they are. What is removed is every way to post a NEW one:
+  the studio decided the write/publish/release round trip cost more than the
+  journal was worth, at seven updates across three projects in the app's life.
+
+  `siteUpdates` itself, its projection and the portal's rendering are all
+  untouched. Restoring the tool means re-adding an entry point, not rebuilding
+  a feature.
+*/
+
+  /*
+    No "decision-tracker" member any more.
+
+    `initialModule === "decision-tracker"` takes the `isDirectModuleView`
+    early return above, so this state was only ever set to a value the tabbed
+    view could no longer render once the sub-tab was removed.
+  */
+  const [logsSubMode, setLogsSubMode] = useState<"weekly-reports" | "action-tracker">(() => {
     if (initialModule === "action-tracker") return "action-tracker";
-    if (initialModule === "decision-tracker") return "decision-tracker";
-    if (initialModule === "weekly-reports") return "weekly-reports";
-    return "client-feed";
+    return "weekly-reports";
   });
 
   // Sub-modules inside Quality & Checklists
@@ -132,7 +148,6 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
   const isDirectModuleView =
     initialModule === "decision-tracker" ||
     initialModule === "action-tracker" ||
-    initialModule === "client-updates" ||
     initialModule === "weekly-reports";
 
   if (isDirectModuleView) {
@@ -155,13 +170,6 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
               projectContext?.clientName ||
               "N/A"
             }
-          />
-        )}
-        {initialModule === "client-updates" && (
-          <ClientUpdatesManager
-            projectContext={projectContext}
-            setProjectContext={setProjectContext}
-            activeProject={activeProject}
           />
         )}
         {initialModule === "weekly-reports" && (
@@ -190,7 +198,7 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
         items={[
           { id: 'workspace', label: 'Site Control Room', icon: LayoutDashboard },
           { id: 'vault', label: '3D Renders & Drawings', icon: Image },
-          { id: 'logs', label: 'MOMs, Decisions & Feed', icon: MessageSquare },
+          { id: 'logs', label: 'MOMs & Weekly Reports', icon: MessageSquare },
           { id: 'quality', label: 'Quality & Snag List', icon: ClipboardList },
           { id: 'procurement', label: 'Procurement', icon: IndianRupee },
         ]}
@@ -237,18 +245,6 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
             {/* Sub Mode Selector */}
             <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-wrap items-center justify-start w-full gap-1.5 print:hidden">
               <button
-                onClick={() => setLogsSubMode("client-feed")}
-                className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-                  logsSubMode === "client-feed"
-                    ? "bg-white text-slate-900 shadow-sm font-black border border-slate-200/60"
-                    : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
-                }`}
-              >
-                <Camera className="w-4 h-4 text-[#3D52A0]" />
-                Daily Site Feed
-              </button>
-
-              <button
                 onClick={() => setLogsSubMode("weekly-reports")}
                 className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
                   logsSubMode === "weekly-reports"
@@ -272,28 +268,23 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
                 MOMs & Action Tracker
               </button>
 
-              <button
-                onClick={() => setLogsSubMode("decision-tracker")}
-                className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-                  logsSubMode === "decision-tracker"
-                    ? "bg-white text-slate-900 shadow-sm font-black border border-slate-200/60"
-                    : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
-                }`}
-              >
-                <ShieldCheck className="w-4 h-4 text-amber-500" />
-                Decisions & Sign-offs
-              </button>
+              {/*
+                "Decisions & Sign-offs" used to sit here as a fourth tab.
+
+                It rendered the same DecisionTracker the Project Hub's Decisions
+                tile already opened -- one screen behind two doors, four levels
+                apart. Worse, this door is inside Execution & Site, which is
+                stage-gated: on a project still in design the stage is locked,
+                and the only decision on record was logged during design.
+
+                The hub tile is now the single way in. It is reachable at any
+                stage and carries the badge counting queried and waiting
+                decisions, which this tab never did.
+              */}
             </div>
 
             {/* Render selected Log module */}
             <div className="space-y-6">
-              {logsSubMode === "client-feed" && (
-                <ClientUpdatesManager
-                  projectContext={projectContext}
-                  setProjectContext={setProjectContext}
-                  activeProject={activeProject}
-                />
-              )}
 
               {logsSubMode === "weekly-reports" && (
                 <WeeklyPulseManager
@@ -315,14 +306,8 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
                 />
               )}
 
-              {logsSubMode === "decision-tracker" && (
-                <DecisionTracker
-                  projectContext={projectContext}
-                  setProjectContext={setProjectContext}
-                  projectId={projectId}
-                  decisionLedger={decisionLedger || []}
-                />
-              )}
+              {/* DecisionTracker now renders from App on the `record-decision`
+                  route, rather than through this tab's sub-mode. */}
             </div>
           </div>
         )}

@@ -368,9 +368,13 @@ const QUICK_ACTIONS_BY_STAGE: Record<string, { label: string, icon: any, route: 
     { label: 'Design Complete Gate', icon: <Lock className="w-5 h-5" />, route: 'design-gate', highlight: true },
     { label: 'Send via WhatsApp', icon: <MessageCircle className="w-5 h-5" />, route: 'ops' } 
   ],
+  /*
+    "Update client feed" is gone with the Daily Site Feed it opened. Logging a
+    decision is the action that remains at this stage, so it takes the primary
+    slot rather than leaving a highlighted gap.
+  */
   'execution': [
-    { label: 'Update client feed', icon: <MessageCircle className="w-5 h-5" />, route: 'update-client-feed', highlight: true },
-    { label: 'Log a decision', icon: <CheckSquare className="w-5 h-5" />, route: 'record-decision' }
+    { label: 'Log a decision', icon: <CheckSquare className="w-5 h-5" />, route: 'record-decision', highlight: true }
   ],
   'build-scope': [
     { label: 'Edit scope', icon: <Edit className="w-5 h-5" />, route: 'boq-editor', highlight: true }
@@ -921,13 +925,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectConte
                         >
                             <Settings2 className="w-3.5 h-3.5" /> Customize
                         </button>
-                        <button 
-                            onClick={() => setActiveTab('update-client-feed')}
-                            className="px-4 py-2 border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 text-xs font-bold rounded-full shadow-sm transition-colors flex items-center gap-1.5"
-                        >
-                            ↗ Share update
-                        </button>
-                        
+                        {/* Opened the Daily Site Feed, which has been removed. */}
                         {(!projectContext.approvedTierId && !projectContext.lifecycle?.gates?.proposalAccepted?.done && currentStageNum < 3 && onModifyBrief) && (
                             <button 
                                 onClick={onModifyBrief}
@@ -1189,19 +1187,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectConte
                             </div>
                             
                             <div className="grid grid-cols-2 gap-4 flex-1">
-                                <button 
-                                    onClick={() => setActiveTab('update-client-feed')}
-                                    className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-amber-500/20 hover:shadow-md/5 text-left group flex flex-col justify-between h-32 transition-all cursor-pointer"
-                                >
-                                    <div className="w-9 h-9 rounded-xl bg-sky-50 text-[#3D52A0] flex items-center justify-center group-hover:bg-[#3D52A0] group-hover:text-white transition-all">
-                                        <MessageCircle className="w-4 h-4" />
-                                    </div>
-                                    <div>
-                                        <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 leading-tight">Update Feed</h4>
-                                        <p className="text-[10px] text-slate-500 mt-1 font-medium leading-snug">Post photo updates</p>
-                                    </div>
-                                </button>
-                                
+                                {/* Opened the Daily Site Feed, which has been removed. */}
                                 <button 
                                     onClick={() => setActiveTab('record-decision')}
                                     className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-amber-500/20 hover:shadow-md/5 text-left group flex flex-col justify-between h-32 transition-all cursor-pointer"
