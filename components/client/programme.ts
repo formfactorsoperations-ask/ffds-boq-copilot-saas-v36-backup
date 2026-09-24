@@ -184,12 +184,19 @@ export function buildProgramme(
    * is why they belong inside the stage rather than on it.
    */
   const marks = new Map<number, ProgrammeMilestone[]>();
+  /*
+    Stage windows come from the PLANNED dates, the same ones the studio's Gantt
+    draws. `startDay`/`endDay` are the forecast -- unstarted work pulled to
+    today -- so reading those here put the client's stages in a different place
+    from the studio's chart the moment a project was anchored in the past. The
+    two views answer to one programme.
+  */
   result.tasks.forEach(t => {
     const stage = stageOfTask(t, designOrder);
     const cur = windows.get(stage);
     windows.set(stage, {
-      s: cur ? Math.min(cur.s, t.startDay) : t.startDay,
-      e: cur ? Math.max(cur.e, t.endDay) : t.endDay,
+      s: cur ? Math.min(cur.s, t.plannedStartDay) : t.plannedStartDay,
+      e: cur ? Math.max(cur.e, t.plannedEndDay) : t.plannedEndDay,
     });
     if (t.overrunning) {
       drift.set(stage, Math.max(drift.get(stage) || 0, t.driftDays));
@@ -199,8 +206,8 @@ export function buildProgramme(
       marks.get(stage)!.push({
         id: t.id,
         label: t.milestoneLabel || t.title,
-        dateISO: t.startISO,
-        day: t.startDay,
+        dateISO: t.plannedStartISO,
+        day: t.plannedStartDay,
         done: t.status === 'completed' || !!t.actualEndISO,
         date: '',
       });

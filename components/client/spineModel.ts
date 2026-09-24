@@ -305,9 +305,19 @@ export function buildSpine({
     const paid = m.status === 'paid';
     const raised = m.status === 'invoiced';
     const when = fmtDate(m.invoiceDate || m.date);
-    // Same rule: an invoice awaiting payment belongs to now, not to the stage
-    // whose trigger raised it.
-    push(raised ? current : (stageAtDate(programme, m.invoiceDate || m.date) ?? stageOfMilestone(m, groupIndex, current, designMs.length, execMs.length)), {
+    /*
+      Same rule: an invoice awaiting payment belongs to now, not to the stage
+      whose trigger raised it.
+
+      And the same distinction the timeline draws -- a date places a payment
+      only once it has been billed. An unbilled milestone's date is the plan ops
+      entered, so filing by it kept payments against stages the programme had
+      since moved away from; those are filed by their trigger instead.
+    */
+    const datePlaced = (paid || !!m.invoiceDate)
+      ? stageAtDate(programme, m.invoiceDate || m.date)
+      : null;
+    push(raised ? current : (datePlaced ?? stageOfMilestone(m, groupIndex, current, designMs.length, execMs.length)), {
       id: `pay-${m.id}`,
       kind: 'payments',
       title: m.name,

@@ -1,5 +1,5 @@
 import { showSuccessWithNext } from './SuccessWithNextToast';
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import LockedState from './LockedState';
 import {
   FullBoqItem,
@@ -41,7 +41,12 @@ import {
   Award,
   Share2,
   Trash2,
-  ExternalLink
+  ExternalLink,
+  HardHat,
+  Users,
+  MessageCircle,
+  ChevronsRight,
+  Brain
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTimelinePhases } from "../hooks/useTimelinePhases";
@@ -58,7 +63,7 @@ import ScheduleGantt from "./ScheduleGantt";
 import { buildScheduleFromProject } from "../lib/scheduleBuilder";
 import { buildMarkers } from "../lib/scheduleMarkers";
 import { db } from "../services/dbService";
-import { computeSchedule, DEFAULT_CALENDAR, toDayNum, workSpanEnd, toISO } from "../lib/schedule";
+import { computeSchedule, DEFAULT_CALENDAR, toDayNum, workSpanEnd, toISO, isWorkingDay, workingDaysBetween, shiftByWorkingDays } from "../lib/schedule";
 
 interface TimelineTabProps {
   projectId: string | null;
@@ -122,6 +127,15 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showScheduleResetModal, setShowScheduleResetModal] = useState(false);
+  const [showCompressionDetail, setShowCompressionDetail] = useState(false);
+  /** A start-date change waiting to be confirmed, with what it would move. */
+  const [pendingStartShift, setPendingStartShift] = useState<
+    {
+      fromISO: string; toISO: string; workingDays: number; phaseCount: number;
+      /** Phases that would end before today while still open. */
+      landingInPast: string[];
+    } | null
+  >(null);
   const [shiftDays, setShiftDays] = useState<number>(0);
   const [shiftFromPhase, setShiftFromPhase] = useState<number>(1);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
@@ -205,6 +219,23 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   const markers = React.useMemo(() => buildMarkers(visits, moms), [visits, moms]);
 
   const [scheduleOverride, setScheduleOverride] = useState<ProjectSchedule | null>(null);
+  /*
+    The newest schedule we have written or loaded.
+
+    The phase sync below rebuilds the schedule as `{...scheduleOverride, tasks}`,
+    and `scheduleOverride` there is whatever the closure captured when the effect
+    was created. Moving the project start writes the anchor and the phases at
+    almost the same moment, so that effect could run holding the PREVIOUS
+    schedule, merge the new phase dates onto the old anchor, and save -- putting
+    the old start date back after the move had already succeeded. That is exactly
+    what happened: the design tasks carried the new May dates while
+    `projectStartISO` had reverted to August.
+
+    Merging onto the ref instead of the captured value makes the sync additive.
+    It can change task durations and constraints; it can no longer resurrect a
+    field somebody else just wrote.
+  */
+  const latestScheduleRef = useRef<ProjectSchedule | null>(null);
 
   // Load persisted schedule
   useEffect(() => {
@@ -214,8 +245,10 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
       try {
         const saved = await db.getSchedule(safeProjectId);
         if (active && saved) {
+          latestScheduleRef.current = saved;
           setScheduleOverride(saved);
         } else if (active) {
+          latestScheduleRef.current = null;
           setScheduleOverride(null); // Reset when switching projects with no custom schedule
         }
       } catch (e) {
@@ -239,8 +272,10 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   useEffect(() => {
     if (!scheduleOverride || !phases.length) return;
 
+    const base = latestScheduleRef.current || scheduleOverride;
+
     let changed = false;
-    const updatedTasks = scheduleOverride.tasks.map(t => {
+    const updatedTasks = base.tasks.map(t => {
       if (t.kind === 'design') {
         const stepNum = parseInt(t.id.replace('design-', ''), 10);
         const phase = phases.find(p => p.stepNumber === stepNum);
@@ -260,17 +295,28 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
       return t;
     });
 
-    const expectedStartISO = phases[0]?.startDate?.slice(0, 10);
-    if (expectedStartISO && scheduleOverride.projectStartISO !== expectedStartISO) {
-      changed = true;
-    }
+    /*
+      The project start is no longer copied from phase 1 on every pass.
+
+      This block forced `projectStartISO` to `phases[0].startDate` whenever the
+      two differed -- and the effect depends on `scheduleOverride`, so typing a
+      start date triggered the very run that overwrote it and saved the
+      overwrite. The field looked editable and was not: a value survived about
+      one render, which is why moving a project start to May appeared to do
+      nothing at all.
+
+      Moving the start now means moving the phases, which `requestStartShift`
+      below does deliberately and with a preview. Phase durations and
+      constraints still sync from phases to tasks above; only the anchor stopped
+      being overwritten.
+    */
 
     if (changed) {
       const nextSchedule = {
-        ...scheduleOverride,
-        projectStartISO: expectedStartISO || scheduleOverride.projectStartISO,
+        ...base,
         tasks: updatedTasks
       };
+      latestScheduleRef.current = nextSchedule;
       setScheduleOverride(prev => {
         if (JSON.stringify(prev) === JSON.stringify(nextSchedule)) return prev;
         return nextSchedule;
@@ -282,6 +328,16 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
       }
     }
   }, [phases, scheduleOverride, safeProjectId]);
+
+  /*
+    The same `computeSchedule` the chart runs, so the status band above can name
+    the compression instead of leaving the chart to announce it separately.
+  */
+  const compression = React.useMemo(() => {
+    if (!projectSchedule.targetHandoverISO) return null;
+    const info = computeSchedule(projectSchedule).compressionInfo;
+    return info?.isCompressed ? info : null;
+  }, [projectSchedule]);
 
   const setProjectSchedule = async (next: ProjectSchedule) => {
     // Bidirectional Sync: next schedule -> phases
@@ -310,6 +366,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
       });
     }
 
+    latestScheduleRef.current = next;
     setScheduleOverride(next);
     if (safeProjectId) {
       try {
@@ -322,6 +379,126 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
 
   const handleResetSchedule = () => {
     setShowScheduleResetModal(true);
+  };
+
+  /*
+    Moving the project start moves the programme.
+
+    The caption under this field has always said "Anchors all independent
+    tasks", so setting it shifts every phase by the same number of WORKING days
+    -- durations and the gaps between phases are preserved, the whole thing just
+    slides. `shiftTimelinePhases` already knew how to do this in both
+    directions; nothing was calling it from here.
+
+    It is proposed rather than applied, because one keystroke in a date field
+    would otherwise rewrite every date on the project.
+  */
+  /*
+    A working-day move in either direction.
+
+    `shiftByWorkingDays` only walks forward -- it returns the day unchanged for a
+    negative delta -- and a start date moves both ways, so backwards is walked
+    the same way `useTimelinePhases.shiftTimelinePhases` walks it.
+  */
+  const shiftWorkingDay = (day: number, delta: number): number => {
+    if (delta === 0) return day;
+    if (delta > 0) return shiftByWorkingDays(DEFAULT_CALENDAR, day, delta);
+    let d = day, moved = 0;
+    while (moved < -delta) {
+      d--;
+      if (isWorkingDay(DEFAULT_CALENDAR, d)) moved++;
+    }
+    return d;
+  };
+
+  const requestStartShift = (nextISO: string) => {
+    if (!nextISO) return;
+    const currentISO = phases[0]?.startDate?.slice(0, 10)
+      || scheduleOverride?.projectStartISO
+      || null;
+    if (!currentISO || currentISO === nextISO) return;
+
+    const from = toDayNum(currentISO);
+    const to = toDayNum(nextISO);
+    // `workingDaysBetween` counts both ends, so a one-working-day move reads 2.
+    const span = workingDaysBetween(DEFAULT_CALENDAR, Math.min(from, to), Math.max(from, to)) - 1;
+    if (span <= 0) return;
+
+    /*
+      Phases the move would leave behind.
+
+      Dating work before today says it happened. A phase that ends in the past
+      and is not marked complete says both at once, and the client's portal
+      reads the dates -- so a back-dated programme quietly shows stages as
+      finished on the calendar while the studio's own record still has them
+      open. Worth naming before the move, not after.
+
+      They are only named. Completing a phase checks its deliverables, needs the
+      client sign-off it requires, and raises a payment request where the step
+      has a milestone trigger -- not something to do to five phases at once
+      behind a date picker.
+    */
+    const delta = to < from ? -span : span;
+    const todayDay = toDayNum(toISO(Math.floor(Date.now() / 86400000)));
+    const landingInPast = phases
+      .filter(p => p.stepProgress?.status !== 'completed')
+      .filter(p => p.endDate && shiftWorkingDay(toDayNum(p.endDate.slice(0, 10)), delta) < todayDay)
+      .map(p => p.title);
+
+    setPendingStartShift({
+      fromISO: currentISO,
+      toISO: nextISO,
+      workingDays: delta,
+      phaseCount: phases.length,
+      landingInPast,
+    });
+  };
+
+  const applyStartShift = async () => {
+    if (!pendingStartShift) return;
+    const { workingDays, toISO: targetISO } = pendingStartShift;
+
+    /*
+      The anchor is written BEFORE the phases move, and nothing here touches the
+      task dates.
+
+      Order matters, and both halves of that sentence were learned the hard way.
+      The phase sync above already copies each phase's start onto its task as
+      `notBeforeISO` -- that is its whole job, and it is the authoritative copy.
+      So:
+
+        - Shifting the task dates here as well meant two mechanisms computing the
+          same thing. The sync fires the moment the phases land, so it had often
+          already moved the tasks by the time this ran, and this shifted them a
+          second time: a move to May left the constraints in April until the next
+          sync happened to repair them.
+
+        - Writing the anchor afterwards left a window where the phases had moved
+          but the anchor had not, and a sync landing in that window merged the new
+          phase dates onto the OLD anchor and saved it. That is the write that put
+          the start date back to August after a move had visibly succeeded.
+
+      Anchor first, then phases, then let the sync do the only thing it is for.
+    */
+    const base = latestScheduleRef.current || scheduleOverride;
+    if (base && safeProjectId) {
+      const next: ProjectSchedule = { ...base, projectStartISO: targetISO };
+      latestScheduleRef.current = next;
+      setScheduleOverride(next);
+      try {
+        await db.saveSchedule(safeProjectId, next);
+      } catch (e) {
+        console.error("Could not save shifted schedule", e);
+      }
+    }
+
+    const first = phases[0];
+    if (first) {
+      await shiftTimelinePhases(first.stepNumber, workingDays);
+    }
+
+    setPendingStartShift(null);
+    showSuccessWithNext('Programme shifted');
   };
 
   // Auto-focus active phase on load
@@ -606,73 +783,171 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        {/*
+          Seven pills in seven colours, all the same weight, told you nothing
+          about what any of them did -- recording an event, replanning dates and
+          wiping the schedule all looked alike. They are grouped now by what they
+          actually do, and only the one people press every day is solid.
+
+          "Reset" is gone from here. It called `handleResetSchedule`, which is the
+          very same action as "Reset schedule" in the chart controls below: one
+          confirm dialog, reachable two ways, and the destructive one sitting in
+          the header next to Log Visit. It keeps the single home it already had.
+        */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* record what happened */}
           <button
             onClick={() => { setSiteVisitType('site_visit'); setSiteVisitModalOpen(true); }}
-            className="text-[10px] uppercase tracking-wider font-bold text-amber-700 bg-white border border-amber-200 hover:bg-amber-50/50 px-3 py-2 rounded-xl flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="text-[10px] uppercase tracking-wider font-bold text-white bg-[#3D52A0] hover:bg-[#334486] px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
           >
-            🏗️ Log Visit
+            <HardHat className="w-3.5 h-3.5" />Log visit
           </button>
           <button
             onClick={() => { setSiteVisitType('client_meeting'); setSiteVisitModalOpen(true); }}
-            className="text-[10px] uppercase tracking-wider font-bold text-sky-700 bg-white border border-sky-200 hover:bg-sky-50/50 px-3 py-2 rounded-xl flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="text-[10px] uppercase tracking-wider font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900 px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
           >
-            🤝 Log Meeting
+            <Users className="w-3.5 h-3.5" />Log meeting
           </button>
           <button
             onClick={() => setShowWhatsAppModal(true)}
-            className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 bg-white border border-emerald-200 hover:bg-emerald-50/50 px-3 py-2 rounded-xl flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="text-[10px] uppercase tracking-wider font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900 px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
           >
-            💬 WhatsApp
+            <MessageCircle className="w-3.5 h-3.5" />WhatsApp
           </button>
+
+          <span className="w-px h-5 bg-slate-200 mx-1" aria-hidden="true" />
+
+          {/* change the plan */}
           <button
             onClick={() => setShowShiftModal(true)}
-            className="text-[10px] uppercase tracking-wider font-bold text-[#334486] bg-white border border-sky-200 hover:bg-sky-50/50 px-3 py-2 rounded-xl flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="text-[10px] uppercase tracking-wider font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900 px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
           >
-            ⏭️ Shift
-          </button>
-          <button
-            onClick={() => setShowSiteVisitHistory(true)}
-            className="text-[10px] uppercase tracking-wider font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 px-3 py-2 rounded-xl shadow-xs cursor-pointer"
-          >
-            History
+            <ChevronsRight className="w-3.5 h-3.5" />Shift
           </button>
           <button
             onClick={handlePredictHandoverRisks}
-            className="text-[10px] uppercase tracking-wider font-bold text-[#B5945B] bg-white border border-[#ebdcb9]/50 hover:bg-amber-50/20 px-3 py-2 rounded-xl shadow-xs flex items-center gap-1 transition-all active:scale-95 font-mono cursor-pointer"
+            className="text-[10px] uppercase tracking-wider font-bold text-[#B5945B] bg-white border border-[#ebdcb9] hover:bg-amber-50/40 px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
           >
-            🧠 AI Predictor
+            <Brain className="w-3.5 h-3.5" />AI predictor
           </button>
+
+          <span className="w-px h-5 bg-slate-200 mx-1" aria-hidden="true" />
+
+          {/* look back */}
           <button
-            onClick={handleResetSchedule}
-            className="text-[10px] uppercase tracking-wider font-bold text-slate-400 hover:text-red-600 bg-white border border-slate-200 hover:border-red-100 px-3 py-2 rounded-xl shadow-xs cursor-pointer"
-            title="Reset schedule to BOQ defaults"
+            onClick={() => setShowSiteVisitHistory(true)}
+            className="text-[10px] uppercase tracking-wider font-bold text-slate-500 bg-transparent border border-transparent hover:bg-white hover:border-slate-200 px-3 py-2 rounded-xl transition-all cursor-pointer"
           >
-            Reset
+            History
           </button>
         </div>
       </div>
 
-      {/* Top Alerts Line */}
-      {(delayedCount > 0 || activeRequest) && (
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          {delayedCount > 0 && (
-            <button
-              onClick={() => {
-                setShowDelayPlanner(true);
-                handleFetchDelayAdvice();
-              }}
-              className="flex-1 flex items-center justify-between text-xs font-bold text-red-800 bg-red-50 border border-red-100 px-4 py-3 rounded-2xl hover:bg-red-100/50 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-red-600 animate-pulse" />
-                <span>{delayedCount} Design Stage{delayedCount > 1 ? 's' : ''} Delayed. Open AI Catch-up Planner &amp; Client Update Draft.</span>
+      {/*
+        One band for where the programme stands.
+
+        There used to be two, stacked, saying opposite things: a red "5 design
+        stages delayed" directly above an amber "Target Handover Limit Met &
+        Timeline Optimized". Both were true -- the stages ARE late, and the
+        engine HAS compressed the trades to still land on the target -- but read
+        together they cancelled out, and the second one read as good news for a
+        project in trouble.
+
+        They are one sentence now, because they are one situation: what is late,
+        what the engine did about it, and what that cost. The arithmetic behind
+        the compression is a disclosure rather than a wall of figures, since it
+        explains a number rather than asking for a decision.
+      */}
+      {(delayedCount > 0 || compression || activeRequest) && (
+        <div className="flex flex-col gap-3 mb-6">
+          {(delayedCount > 0 || compression) && (
+            <div className={`rounded-2xl border overflow-hidden ${
+              delayedCount > 0 ? 'border-red-100 bg-red-50/70' : 'border-amber-100 bg-amber-50/70'
+            }`}>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3">
+                <AlertTriangle className={`w-4 h-4 shrink-0 ${delayedCount > 0 ? 'text-red-600' : 'text-amber-600'}`} />
+                <p className={`flex-1 text-xs font-bold leading-relaxed ${delayedCount > 0 ? 'text-red-900' : 'text-amber-900'}`}>
+                  {delayedCount > 0 && (
+                    <>{delayedCount} design stage{delayedCount > 1 ? 's are' : ' is'} running late.</>
+                  )}
+                  {delayedCount > 0 && compression && ' '}
+                  {compression && (
+                    <span className="font-semibold">
+                      Trade durations have been compressed{' '}
+                      <strong className="font-extrabold">{Math.round((1 - compression.compressionFactor) * 100)}%</strong>
+                      {' '}to still hold the {new Date(projectSchedule.targetHandoverISO!).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} handover.
+                    </span>
+                  )}
+                </p>
+                {delayedCount > 0 && (
+                  <button
+                    onClick={() => { setShowDelayPlanner(true); handleFetchDelayAdvice(); }}
+                    className="shrink-0 self-start inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-extrabold text-white bg-red-600 hover:bg-red-700 px-3 py-2 rounded-xl shadow-sm transition-colors cursor-pointer"
+                  >
+                    Catch-up planner <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
-              <ChevronRight className="w-4 h-4" />
-            </button>
+
+              {/*
+                Which stages, not just how many.
+
+                "5 design stages are running late" is the count; this is the
+                list, and it is the part somebody can act on. It matters most on
+                a programme that was deliberately back-dated -- the stages are
+                not slipping, they are finished work nobody has closed -- and
+                that case never opens the shift dialog that would have warned
+                about it.
+              */}
+              {delayedCount > 0 && (
+                <div className="border-t border-red-100 px-4 py-2.5">
+                  <p className="text-[11.5px] text-red-900/80 leading-relaxed">
+                    <span className="font-bold">Dated before today, not marked complete:</span>{' '}
+                    {phases.filter(p => p.isDelayed).map(p => p.title).join(', ')}
+                  </p>
+                </div>
+              )}
+
+              {compression && (
+                <div className={`border-t ${delayedCount > 0 ? 'border-red-100' : 'border-amber-100'}`}>
+                  <button
+                    onClick={() => setShowCompressionDetail(v => !v)}
+                    className="w-full flex items-center justify-between px-4 py-2 text-[10px] uppercase tracking-wider font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                  >
+                    <span>How the dates were compressed</span>
+                    <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showCompressionDetail ? 'rotate-90' : ''}`} />
+                  </button>
+                  {showCompressionDetail && (
+                    <div className="px-4 pb-4 space-y-2.5">
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        Left alone the programme finished{' '}
+                        <strong className="text-slate-900">
+                          {new Date(compression.originalFinishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </strong>
+                        , which is <strong className="text-slate-900">{compression.shortfallDays} working days</strong> past the target.
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[
+                          ['Working days available', `${compression.availableWorkingDays}d`],
+                          ['Working days required', `${compression.requiredWorkingDays}d`],
+                          ['Sundays off', `${compression.sundaysCount}d`],
+                          ['Public holidays', `${compression.holidaysCount}d`],
+                        ].map(([label, value]) => (
+                          <div key={label} className="rounded-xl bg-white/70 border border-slate-200/70 px-3 py-2">
+                            <div className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400">{label}</div>
+                            <div className="text-sm font-extrabold text-slate-900 tabular-nums mt-0.5">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
+
           {activeRequest && (
-            <div className="flex-1 flex items-center gap-2 text-xs font-bold text-amber-800 bg-amber-50/80 border border-amber-100 px-4 py-3 rounded-2xl">
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-800 bg-amber-50/80 border border-amber-100 px-4 py-3 rounded-2xl">
               <Clock className="w-4 h-4 text-amber-600" />
               <span>Pending Payment Milestone: <strong className="text-amber-900">{activeRequest.milestoneLabel}</strong> · ₹{activeRequest.amount?.toLocaleString("en-IN") || '0'}</span>
             </div>
@@ -739,6 +1014,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
           schedule={projectSchedule} 
           onChange={setProjectSchedule} 
           onReset={handleResetSchedule}
+          onRequestStartShift={requestStartShift}
           projectContext={projectContext}
           phases={phases}
           projectId={safeProjectId}
@@ -907,6 +1183,93 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
         )}
       </AnimatePresence>
 
+      {/*
+        What moving the start would do, before it does it.
+
+        A start-date change rewrites every date on the project, so it is shown
+        as a proposal: which way, how many working days, how many phases, and
+        the two dates side by side.
+      */}
+      <AnimatePresence>
+        {pendingStartShift && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden"
+            >
+              <div className="p-6 border-b border-slate-100">
+                <h3 className="font-bold text-lg text-slate-900">Move the project start?</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Durations and the gaps between phases are kept. The whole programme slides.
+                </p>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-slate-400">From</div>
+                    <div className="text-[13px] font-bold text-slate-700 tabular-nums mt-0.5">
+                      {new Date(pendingStartShift.fromISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </div>
+                  </div>
+                  <span className="text-slate-300 font-bold">&rarr;</span>
+                  <div className="flex-1 rounded-xl border border-[#ADBBDA] bg-[#EEF0F8] px-3 py-2.5">
+                    <div className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#3E4F87]">To</div>
+                    <div className="text-[13px] font-bold text-[#2E3552] tabular-nums mt-0.5">
+                      {new Date(pendingStartShift.toISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[12.5px] text-slate-600 font-medium leading-relaxed">
+                  <b className="text-slate-900">{pendingStartShift.phaseCount} phase{pendingStartShift.phaseCount === 1 ? '' : 's'}</b>{' '}
+                  shift <b className="text-slate-900">{Math.abs(pendingStartShift.workingDays)} working day{Math.abs(pendingStartShift.workingDays) === 1 ? '' : 's'}</b>{' '}
+                  {pendingStartShift.workingDays < 0 ? 'earlier' : 'later'}, along with every task that depends on them.
+                </p>
+
+                {pendingStartShift.landingInPast.length > 0 && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-3.5 py-3">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-bold text-amber-900 leading-relaxed">
+                          {pendingStartShift.landingInPast.length} phase{pendingStartShift.landingInPast.length === 1 ? '' : 's'} will end before today, still marked open.
+                        </p>
+                        <p className="text-[11.5px] text-amber-800/90 mt-1 leading-relaxed">
+                          {pendingStartShift.landingInPast.join(', ')}
+                        </p>
+                        <p className="text-[11.5px] text-amber-800/80 mt-1.5 leading-relaxed">
+                          A date in the past reads as work already done, and the client&rsquo;s
+                          programme reads these dates. Close them off after the move so the
+                          calendar and the record say the same thing.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                <button
+                  onClick={() => setPendingStartShift(null)}
+                  className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={applyStartShift}
+                  className="px-5 py-2.5 bg-[#5468A8] hover:bg-[#3E4F87] text-white rounded-xl text-sm font-bold shadow-sm cursor-pointer"
+                >
+                  Move the programme
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Schedule Reset Confirmation Modal */}
       <AnimatePresence>
         {showScheduleResetModal && (
@@ -934,6 +1297,13 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                 <button onClick={() => setShowScheduleResetModal(false)} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800">Cancel</button>
                 <button 
                   onClick={async () => {
+                    /*
+                      The ref is cleared with the state. It holds the last schedule
+                      we wrote, and the phase sync merges onto it -- so leaving it
+                      set here would let the next sync save the schedule that was
+                      just deleted straight back again.
+                    */
+                    latestScheduleRef.current = null;
                     setScheduleOverride(null);
                     if (safeProjectId && db.deleteSchedule) {
                       try {

@@ -134,6 +134,7 @@ import { auth as firebaseAuth } from "./services/firebaseClient";
 import PortalPublishControls from "./components/ops/PortalPublishControls";
 import { buildClientBoqRows, baselineFromSentRows, ClientBoqRow } from "./lib/clientBoq";
 import { buildPortalMoney } from "./lib/portalMoney";
+import { buildScheduleFromProject } from "./lib/scheduleBuilder";
 import { computeSchedule } from "./lib/paymentSchedule";
 import { nextDefaultProjectName } from "./lib/projectNaming";
 import { sendPortalAccessLink } from "./services/emailService";
@@ -1536,6 +1537,25 @@ export default function App() {
         } as FullBoqItem;
       });
   }, [activeTierId, tiers, bank]);
+
+  /*
+    The programme the client is sent, derived from the same two inputs the
+    studio's own Timeline uses: the project's design phases and the active
+    tier's BOQ.
+
+    It is built here because this is the only place that has both. The portal
+    reads a live saved schedule when it can, but a client session runs with a
+    blank `studioId` -- which switches off the design-phase hook by design --
+    and most projects have no saved schedule at all, so without this the client
+    fell back to a programme reconstructed from the BOQ with no design steps in
+    it. See lib/portalProjection for what that produced.
+  */
+  const portalSchedule = useMemo(
+    () => buildScheduleFromProject(projectContext, fullBoqForActiveTier, {
+      designSteps: timelinePhases as any,
+    }),
+    [projectContext, fullBoqForActiveTier, timelinePhases],
+  );
 
   const setBoqForActiveTier: React.Dispatch<React.SetStateAction<BoqItem[]>> = (
     action,
@@ -3271,6 +3291,7 @@ export default function App() {
                           clientBoq={clientBoqRows}
                           clientBoqBaseline={clientBoqBaseline}
                           portalMoney={portalMoney}
+                          clientSchedule={portalSchedule}
                         />
                         <ClientPortal
                           clientBoq={clientBoqRows}
@@ -3998,6 +4019,7 @@ export default function App() {
                           clientBoq={clientBoqRows}
                           clientBoqBaseline={clientBoqBaseline}
                           portalMoney={portalMoney}
+                          clientSchedule={portalSchedule}
                         />
                         <ClientPortal
                           clientBoq={clientBoqRows}

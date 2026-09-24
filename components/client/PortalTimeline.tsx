@@ -209,7 +209,23 @@ export default function PortalTimeline({
     });
 
     return milestones.map((m, i) => {
-      const own = dayOf(m.invoiceDate) ?? dayOf(m.date);
+      /*
+        A date only pins a payment once it is a fact.
+
+        An invoice that has been raised has a real date on a real document, and
+        the client will compare the two -- so a billed milestone stays exactly
+        where it was billed, whatever happens to the programme afterwards.
+
+        An unbilled milestone's `date` is not a fact, it is a plan: ops entered
+        it when the programme said the work would land there. Treating it as a
+        pin left every future payment stranded on its original date while the
+        work moved -- move a programme back to June and the payments stayed in
+        September, triggered by stages that had already been redrawn around
+        them. Those follow the stage that triggers them, which is what their
+        own `trigger` text has always said they do.
+      */
+      const billed = m.status === 'paid' || m.status === 'invoiced' || !!m.invoiceDate;
+      const own = billed ? (dayOf(m.invoiceDate) ?? dayOf(m.date)) : null;
       const st = stageOfMilestone(m, i);
       const place = milestonePlacement(m);
       // -1 means "position me among my peers"; anything else is a fixed point
@@ -396,6 +412,21 @@ export default function PortalTimeline({
                   : s.status === 'active' ? 'In progress' : 'Not started';
 
                 /*
+                  Complete, on a date that has not arrived yet.
+
+                  Stage status comes from where the project stands in its
+                  lifecycle; the dates come from the schedule. They are normally
+                  consistent, but the studio can anchor a programme forward, and
+                  then a stage the client has genuinely finished carries a date
+                  in the future -- "2 Nov - 3 Nov, Completed", read in September.
+                  The status is the true half, so the dates step aside rather
+                  than contradict it.
+                */
+                const completedAhead = s.status === 'completed'
+                  && s.hasSchedule
+                  && s.endDay > programme.todayDay;
+
+                /*
                   A stage still open past the date it was meant to end has
                   already pushed the dates below it, so the client is looking at
                   a later handover than they were last month. Saying which stage
@@ -479,11 +510,17 @@ export default function PortalTimeline({
                           ? 'bg-amber-50 text-amber-800'
                           : s.hasSchedule ? 'bg-slate-100 text-slate-500' : 'bg-slate-50 text-slate-300 italic'
                       }`}>
-                        {s.hasSchedule ? `${short(s.startDay)} – ${short(s.endDay)}` : `~ ${short(s.startDay)}`}
-                        {s.hasSchedule && (
-                          <span className={s.status === 'completed' ? 'text-emerald-600' : ''}>
-                            · {standing}
-                          </span>
+                        {completedAhead ? (
+                          <span className="text-emerald-600">{standing}</span>
+                        ) : (
+                          <>
+                            {s.hasSchedule ? `${short(s.startDay)} – ${short(s.endDay)}` : `~ ${short(s.startDay)}`}
+                            {s.hasSchedule && (
+                              <span className={s.status === 'completed' ? 'text-emerald-600' : ''}>
+                                · {standing}
+                              </span>
+                            )}
+                          </>
                         )}
                         {s.runningLate && <span className="font-bold">· running later than planned</span>}
                       </span>

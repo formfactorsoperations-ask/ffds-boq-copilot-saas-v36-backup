@@ -186,6 +186,30 @@ export interface ResolvedTask extends ScheduleTask {
   overrunning: boolean;
   /** Neither started nor finished, and the day it should have begun has passed. */
   overdueToStart: boolean;
+
+  /*
+    Where the PROGRAMME puts this work, as opposed to where it can still happen.
+
+    `startDay`/`endDay` are a forecast: unstarted work is pulled forward to today
+    because it cannot be done in the past, and unfinished work keeps extending.
+    That is the right answer for "when will this project finish", and the wrong
+    one for "what is the plan" -- every task on a back-dated programme is in the
+    past, so the forecast collapses the whole thing onto today. A start moved
+    back to June redrew every bar in September, which made the project start
+    look unmovable.
+
+    These four are the plan: the same anchor, constraints, dependencies, holds
+    and pins, resolved WITHOUT the today rule. Dependencies chain planned-to-
+    planned, so the shape of the programme is preserved end to end. Actual start
+    and end dates still win over both, because those are what happened.
+
+    The chart draws these. Lateness has its own reporting -- `overdueToStart`,
+    `overrunning`, `driftDays` -- and does not need to move a bar to say so.
+  */
+  plannedStartDay: number;
+  plannedEndDay: number;
+  plannedStartISO: string;
+  plannedEndISO: string;
 }
 
 export interface ScheduleResult {
@@ -297,9 +321,14 @@ function runSchedulePass(
     const t = byId.get(id)!;
 
     // Earliest from dependencies: the day after the last predecessor ends.
+    // `start` is the forecast, `pStart` the plan; they diverge only where the
+    // today rule below applies, and are chained separately so neither drags the
+    // other. See the note on `plannedStartDay`.
     let start = anchor;
+    let pStart = anchor;
     if (schedule.projectStartISO && (!t.dependencies || t.dependencies.length === 0)) {
       start = toDayNum(schedule.projectStartISO);
+      pStart = start;
     }
     /*
       `notBeforeISO` is a floor, not a suggestion — "the earliest the task may
@@ -310,16 +339,26 @@ function runSchedulePass(
       Harmless while nothing looked at whether a task was late; not harmless now,
       because work that cannot begin yet was being reported as overdue to start.
     */
-    if (t.notBeforeISO) start = Math.max(start, toDayNum(t.notBeforeISO));
+    if (t.notBeforeISO) {
+      const floor = toDayNum(t.notBeforeISO);
+      start = Math.max(start, floor);
+      pStart = Math.max(pStart, floor);
+    }
 
     (t.dependencies || []).forEach(dep => {
       const r = resolved.get(dep);
-      if (r) start = Math.max(start, r.endDay + 1);
+      if (r) {
+        start = Math.max(start, r.endDay + 1);
+        pStart = Math.max(pStart, r.plannedEndDay + 1);
+      }
     });
 
     const actualStart = t.actualStartISO ? toDayNum(t.actualStartISO) : null;
     const actualEnd = t.actualEndISO ? toDayNum(t.actualEndISO) : null;
-    if (actualStart != null) start = actualStart;
+    if (actualStart != null) {
+      start = actualStart;
+      pStart = actualStart;
+    }
 
     const { blocked, hits } = actualEnd != null
       ? { blocked: new Set<number>(), hits: [] as ScheduleHold[] }
@@ -329,6 +368,10 @@ function runSchedulePass(
       start = nextWorkingDay(cal, start, hol);
       let guard = 0;
       while (blocked.has(start) && guard++ < 3000) start = nextWorkingDay(cal, start + 1, hol);
+
+      pStart = nextWorkingDay(cal, pStart, hol);
+      let pGuard = 0;
+      while (blocked.has(pStart) && pGuard++ < 3000) pStart = nextWorkingDay(cal, pStart + 1, hol);
     }
 
     const unblockedEnd = workSpanEnd(cal, start, t.workDays, hol);
@@ -344,6 +387,7 @@ function runSchedulePass(
         pinConflict = `Pinned to ${t.baselineStartISO}, but predecessors do not clear until ${toISO(start)}`;
       }
       start = pinnedDay;
+      pStart = pinnedDay;
     }
 
     /*
@@ -372,6 +416,15 @@ function runSchedulePass(
       `pinConflict` already reports it rather than moving it quietly.
     */
     const finished = actualEnd != null || t.status === 'completed';
+
+    /*
+      The plan is fixed here, before the today rule runs. Everything below this
+      line moves the forecast only.
+    */
+    const plannedStartDay = pStart;
+    const plannedEndDay = actualEnd != null
+      ? actualEnd
+      : workSpanEnd(cal, pStart, t.workDays, hol, blocked);
 
     let driftDays = 0;
     let overdueToStart = false;
@@ -405,6 +458,10 @@ function runSchedulePass(
       endDay: end,
       startISO: toISO(start),
       endISO: toISO(end),
+      plannedStartDay,
+      plannedEndDay,
+      plannedStartISO: toISO(plannedStartDay),
+      plannedEndISO: toISO(plannedEndDay),
       openGates,
       heldBy,
       floatDays: 0,
@@ -425,6 +482,8 @@ function runSchedulePass(
     const end = workSpanEnd(cal, anchor, t.workDays, hol);
     resolved.set(id, {
       ...t, startDay: anchor, endDay: end, startISO: toISO(anchor), endISO: toISO(end),
+      plannedStartDay: anchor, plannedEndDay: end,
+      plannedStartISO: toISO(anchor), plannedEndISO: toISO(end),
       openGates: [], heldBy: [], floatDays: 0, onCriticalPath: false, slipDays: 0,
       driftDays: 0, overrunning: false, overdueToStart: false,
     });
@@ -453,11 +512,33 @@ function runSchedulePass(
   });
 
   const criticalPath = order.filter(id => resolved.get(id)?.onCriticalPath);
-  const startDay = all.length ? Math.min(...all.map(r => r.startDay)) : null;
+  /*
+    The programme's own start, not the forecast's.
+
+    `startISO` feeds the "Schedule start" figure, which is read as the date the
+    project is anchored to. Taking it from the forecast made it today on every
+    back-dated project -- the card said "configured start anchor" above a number
+    that was nothing of the kind. The finish stays on the forecast, because that
+    question really is "when will this be done".
+  */
+  const startDay = all.length ? Math.min(...all.map(r => r.plannedStartDay)) : null;
+
+  /*
+    Where the forecast begins, kept separate from where the programme does.
+
+    Compression asks "can we still hit the target", which is a question about
+    the forecast: it measures the days available between the start and the
+    target against the days the work needs. Feeding it the PLANNED start while
+    `finishDay` is a forecast measures two different things against each other
+    -- on a back-dated project that inflates both windows by however far back
+    the anchor sits, and the compression it computes is meaningless.
+  */
+  const forecastStartDay = all.length ? Math.min(...all.map(r => r.startDay)) : null;
 
   return {
     tasks: all,
     startDay,
+    forecastStartDay,
     finishDay,
     criticalPath,
     cycles,
@@ -482,13 +563,15 @@ export function computeSchedule(schedule: ProjectSchedule, todayISO?: string): S
   const target = schedule.targetHandoverISO ? toDayNum(schedule.targetHandoverISO) : null;
   const startDay = basePass.startDay;
   const finishDay = basePass.finishDay;
+  /* Compression compares forecast against forecast -- see the note on it. */
+  const compressFrom = basePass.forecastStartDay;
 
   let compressionInfo: ScheduleResult['compressionInfo'] = undefined;
 
-  if (target != null && finishDay != null && startDay != null && finishDay > target) {
+  if (target != null && finishDay != null && compressFrom != null && finishDay > target) {
     // We have an overrun! Let's calculate working days and non-working days
-    const availableWorkingDays = workingDaysBetween(cal, startDay, target, hol);
-    const requiredWorkingDays = workingDaysBetween(cal, startDay, finishDay, hol);
+    const availableWorkingDays = workingDaysBetween(cal, compressFrom, target, hol);
+    const requiredWorkingDays = workingDaysBetween(cal, compressFrom, finishDay, hol);
     const shortfallDays = requiredWorkingDays - availableWorkingDays;
 
     if (requiredWorkingDays > availableWorkingDays && availableWorkingDays > 0) {
@@ -498,7 +581,7 @@ export function computeSchedule(schedule: ProjectSchedule, todayISO?: string): S
       let sundaysCount = 0;
       let holidaysCount = 0;
       const holidaysSetObj = holidaySet(cal);
-      for (let d = startDay; d <= target; d++) {
+      for (let d = compressFrom; d <= target; d++) {
         const wd = weekdayOf(d);
         if (wd === 6) { // Sunday is index 6
           sundaysCount++;

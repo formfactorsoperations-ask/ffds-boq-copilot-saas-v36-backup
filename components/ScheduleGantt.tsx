@@ -13,7 +13,7 @@ import {
 import { markersByDay, MARKER_LABEL } from '../lib/scheduleMarkers';
 import {
   Calendar, Pin, PauseCircle, AlertTriangle, Zap, Lock, Check, Circle, Play, Users, FileText, Printer, X, RefreshCw,
-  Plus, Trash2, Clock, ShieldAlert, Pencil, ArrowUp, ArrowDown, HelpCircle, Info, ListChecks,
+  Plus, Trash2, Clock, ShieldAlert, Pencil, ArrowUp, ArrowDown, HelpCircle, Info, ListChecks, MoreHorizontal,
 } from 'lucide-react';
 
 // ============================================================================
@@ -119,6 +119,13 @@ interface Props {
   schedule: ProjectSchedule;
   onChange?: (next: ProjectSchedule) => void;
   onReset?: () => void;
+  /**
+   * A requested move of the project start.
+   *
+   * Setting this date shifts the whole programme, so the parent proposes it
+   * rather than the field writing straight through -- see TimelineTab.
+   */
+  onRequestStartShift?: (iso: string) => void;
   readOnly?: boolean;
   projectContext?: ProjectContext;
   phases?: any[];
@@ -132,6 +139,7 @@ export default function ScheduleGantt({
   schedule,
   onChange,
   onReset,
+  onRequestStartShift,
   readOnly = false,
   projectContext,
   phases,
@@ -142,6 +150,9 @@ export default function ScheduleGantt({
 }: Props) {
   const [zoom, setZoom] = useState<Zoom>('week');
   const [showBaseline, setShowBaseline] = useState(true);
+  const [showScheduleMenu, setShowScheduleMenu] = useState(false);
+  const [editingStart, setEditingStart] = useState(false);
+  const [editingHandover, setEditingHandover] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   /*
@@ -221,12 +232,41 @@ export default function ScheduleGantt({
 
   const result = useMemo(() => computeSchedule(schedule), [schedule]);
 
+  /*
+    Work that cannot begin where the programme puts it.
+
+    `result.startISO` is the programme's own start now, so the start card no
+    longer has to apologise for showing today. What is still worth saying is the
+    opposite thing: how much of the plan is already behind. This counts the
+    tasks whose planned start has passed with nothing recorded against them --
+    the gap between the plan on the chart and what can still actually happen.
+  */
+  const overdueCount = result.tasks.filter(t => t.overdueToStart).length;
+
+  /*
+    How long the programme runs, start to handover.
+
+    This measured the planned start against the FORECAST finish, which is a real
+    quantity but not a useful one sitting in this row: the card beside it already
+    answers "when will this be done", and reading the two together invited the
+    obvious arithmetic -- start plus duration -- which did not reach the finish
+    date printed next to it.
+
+    It is the plan's own span now, so the three cards answer three different
+    questions: where the programme starts, how long it runs, and when the work
+    is actually expected to land given what has not begun yet.
+  */
+  const plannedFinishISO = useMemo(() => {
+    if (!result.tasks.length) return null;
+    return toISO(Math.max(...result.tasks.map(t => t.plannedEndDay)));
+  }, [result.tasks]);
+
   const totalProjectDays = useMemo(() => {
-    if (!result.startISO || !result.finishISO) return 0;
+    if (!result.startISO || !plannedFinishISO) return 0;
     const start = new Date(result.startISO).getTime();
-    const finish = new Date(result.finishISO).getTime();
+    const finish = new Date(plannedFinishISO).getTime();
     return Math.ceil((finish - start) / (1000 * 60 * 60 * 24)) + 1;
-  }, [result.startISO, result.finishISO]);
+  }, [result.startISO, plannedFinishISO]);
 
   const byDay = useMemo(() => markersByDay(schedule.markers || []), [schedule.markers]);
   const variance = useMemo(() => varianceReport(result), [result]);
@@ -245,17 +285,33 @@ export default function ScheduleGantt({
   */
   const nextMilestoneId = useMemo(() => {
     const ahead = result.tasks
-      .filter(t => t.kind === 'milestone' && t.startDay >= todayDayNum
+      .filter(t => t.kind === 'milestone' && t.plannedStartDay >= todayDayNum
         && t.status !== 'completed' && !t.actualEndISO)
-      .sort((a, b) => a.startDay - b.startDay);
+      .sort((a, b) => a.plannedStartDay - b.plannedStartDay);
     return ahead.length ? ahead[0].id : null;
   }, [result.tasks, todayDayNum]);
 
+  /*
+    The chart draws the programme.
+
+    Every position here reads `plannedStartDay`/`plannedEndDay` rather than
+    `startDay`/`endDay`. The latter are a forecast -- unstarted work pulled
+    forward to today because it cannot happen in the past -- which is the right
+    answer for "when will this finish" and useless for drawing a plan: on a
+    back-dated project every bar collapsed onto today, so moving the project
+    start to June redrew the whole chart in September and the move looked as if
+    it had not worked.
+
+    Lateness is not lost by this. `overdueToStart`, `driftDays` and the forecast
+    end are all still on the task and still shown -- as a marker and a label,
+    which is what they always should have been. A bar is where the work is
+    planned; it is not the place to encode that the plan has slipped.
+  */
   const span = useMemo(() => {
     if (!result.tasks.length) return { from: 0, to: 0, days: 0 };
-    const from = Math.min(...result.tasks.map(t => t.startDay), todayDayNum) - 3;
+    const from = Math.min(...result.tasks.map(t => t.plannedStartDay), todayDayNum) - 3;
     const to = Math.max(
-      ...result.tasks.map(t => t.endDay),
+      ...result.tasks.map(t => Math.max(t.plannedEndDay, t.endDay)),
       schedule.targetHandoverISO ? toDayNum(schedule.targetHandoverISO) : 0,
       todayDayNum
     ) + 5;
@@ -281,11 +337,20 @@ export default function ScheduleGantt({
   }, [selectedDesignStepNum, phases]);
 
   const handleUpdateStartDate = (val: string) => {
+    /*
+      Moving the start moves every phase, so this asks rather than writes.
+
+      Writing `projectStartISO` straight through looked like it worked and did
+      not: TimelineTab's phase sync copied phase 1's start back over it on the
+      next render and saved that. The parent now proposes the shift, shows what
+      it would move, and applies it to the phases on confirm.
+    */
+    if (onRequestStartShift) {
+      onRequestStartShift(val);
+      return;
+    }
     if (!onChange) return;
-    onChange({
-      ...schedule,
-      projectStartISO: val || undefined
-    });
+    onChange({ ...schedule, projectStartISO: val || undefined });
   };
 
   const handleUpdateHandoverDate = (val: string) => {
@@ -331,12 +396,52 @@ export default function ScheduleGantt({
       {/* 5-column KPI Headline */}
       <div className="rounded-2xl bg-white border border-slate-200 p-4">
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-left">
+          {/*
+            `result.startISO` is the programme's own start, so this card shows
+            the date the project is actually anchored to. It used to show the
+            resolved start -- which the engine pulls forward to today for any
+            unstarted work -- under the caption "Configured start anchor", so a
+            programme anchored in June read as today and moving the start looked
+            like it had done nothing.
+
+            Clicking the card edits the anchor, which is why the CONFIGURE row
+            that used to sit below the chart is gone.
+          */}
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Schedule Start</p>
-            <p className="text-lg font-bold text-slate-900 mt-1">
-              {result.startISO ? new Date(result.startISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+            {editingStart && !readOnly && onChange ? (
+              <input
+                type="date"
+                autoFocus
+                defaultValue={schedule.projectStartISO || result.startISO || ''}
+                onBlur={e => { setEditingStart(false); if (e.target.value) handleUpdateStartDate(e.target.value); }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                  if (e.key === 'Escape') setEditingStart(false);
+                }}
+                className="mt-1 w-full border border-[#ADBBDA] rounded-lg px-2 py-1 text-base font-bold text-slate-900 outline-none bg-white"
+              />
+            ) : (
+              <button
+                type="button"
+                disabled={readOnly || !onChange}
+                onClick={() => setEditingStart(true)}
+                className="group/edit text-left w-full disabled:cursor-default cursor-pointer"
+                title={readOnly || !onChange ? undefined : 'Change the project start'}
+              >
+                <p className="text-lg font-bold text-slate-900 mt-1 inline-flex items-center gap-1.5">
+                  {result.startISO ? new Date(result.startISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                  {!readOnly && onChange && (
+                    <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover/edit:opacity-100 transition-opacity" />
+                  )}
+                </p>
+              </button>
+            )}
+            <p className="text-xs text-slate-400 mt-0.5">
+              {overdueCount > 0
+                ? <span className="text-amber-600 font-semibold">{overdueCount} stage{overdueCount > 1 ? 's' : ''} yet to start</span>
+                : schedule.projectStartISO ? 'Configured start anchor' : 'Earliest task start'}
             </p>
-            <p className="text-xs text-slate-400 mt-0.5">Configured start anchor</p>
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Projected Finish</p>
@@ -352,14 +457,45 @@ export default function ScheduleGantt({
             <p className="text-lg font-bold text-slate-900 mt-1">
               {totalProjectDays ? `${totalProjectDays} days` : '—'}
             </p>
-            <p className="text-xs text-slate-400 mt-0.5">Total project timeline</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {plannedFinishISO
+                ? <>Start to handover, {new Date(plannedFinishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</>
+                : 'Start to handover'}
+            </p>
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Target Handover</p>
-            <p className="text-lg font-bold text-slate-900 mt-1">
-              {schedule.targetHandoverISO ? new Date(schedule.targetHandoverISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not configured'}
-            </p>
-            <p className="text-xs text-slate-400 mt-0.5">Deadline target</p>
+            {editingHandover && !readOnly && onChange ? (
+              <input
+                type="date"
+                autoFocus
+                defaultValue={schedule.targetHandoverISO || ''}
+                onBlur={e => { setEditingHandover(false); handleUpdateHandoverDate(e.target.value); }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                  if (e.key === 'Escape') setEditingHandover(false);
+                }}
+                className="mt-1 w-full border border-[#ADBBDA] rounded-lg px-2 py-1 text-base font-bold text-slate-900 outline-none bg-white"
+              />
+            ) : (
+              <button
+                type="button"
+                disabled={readOnly || !onChange}
+                onClick={() => setEditingHandover(true)}
+                className="group/edit text-left w-full disabled:cursor-default cursor-pointer"
+                title={readOnly || !onChange ? undefined : 'Change the target handover'}
+              >
+                <p className={`text-lg font-bold mt-1 inline-flex items-center gap-1.5 ${schedule.targetHandoverISO ? 'text-slate-900' : 'text-slate-400'}`}>
+                  {schedule.targetHandoverISO
+                    ? new Date(schedule.targetHandoverISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : 'Set a date'}
+                  {!readOnly && onChange && (
+                    <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover/edit:opacity-100 transition-opacity" />
+                  )}
+                </p>
+              </button>
+            )}
+            <p className="text-xs text-slate-400 mt-0.5">Used to compute overrun</p>
           </div>
           <div className="col-span-2 lg:col-span-1">
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Status Variance</p>
@@ -389,95 +525,32 @@ export default function ScheduleGantt({
             until the loop is broken.
           </p>
         )}
-        {result.compressionInfo?.isCompressed && (
-          <div className="mt-3 p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-xs leading-relaxed space-y-1.5 shadow-sm">
-            <div className="flex items-center gap-1.5 font-bold text-amber-950">
-              <AlertTriangle className="w-4 h-4 text-amber-700" />
-              <span>Target Handover Limit Met & Timeline Optimized</span>
-            </div>
-            <p>
-              The standard project timeline projected a finish date of{' '}
-              <strong className="text-amber-950 font-bold">
-                {new Date(result.compressionInfo.originalFinishISO).toLocaleDateString('en-IN', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                })}
-              </strong>
-              , which would exceed the Target Handover deadline of{' '}
-              <strong className="text-amber-950 font-bold">
-                {new Date(schedule.targetHandoverISO!).toLocaleDateString('en-IN', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                })}
-              </strong>{' '}
-              by <strong className="text-amber-950 font-bold">{result.compressionInfo.shortfallDays} working days</strong>.
-            </p>
-            <p>
-              To fit the target deadline, the scheduling engine has automatically optimized trade durations by{' '}
-              <strong className="text-amber-950 font-bold">
-                {Math.round((1 - result.compressionInfo.compressionFactor) * 100)}%
-              </strong>
-              .
-            </p>
-            <div className="pt-2 border-t border-amber-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-[10px] uppercase font-bold tracking-wider text-amber-800">
-              <div>
-                Available Working Days: <span className="text-amber-950 font-extrabold">{result.compressionInfo.availableWorkingDays}d</span>
-              </div>
-              <div>
-                Required Working Days: <span className="text-amber-950 font-extrabold">{result.compressionInfo.requiredWorkingDays}d</span>
-              </div>
-              <div>
-                Sundays (Sunday Offs): <span className="text-amber-950 font-extrabold">{result.compressionInfo.sundaysCount}d</span>
-              </div>
-              <div>
-                Public Holidays: <span className="text-amber-950 font-extrabold">{result.compressionInfo.holidaysCount}d</span>
-              </div>
-            </div>
-          </div>
-        )}
+        {/*
+          The compression notice used to live here, as a second banner directly
+          under a first one that said the opposite. It is now one sentence in the
+          status band at the top of the tab, with this arithmetic behind a
+          disclosure -- see the note there.
+        */}
       </div>
 
-      {/* Date Configuration Form Controls */}
-      {!readOnly && onChange && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-2xl bg-white border border-slate-200 p-4">
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-              Configure Project Start Date
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={schedule.projectStartISO || result.startISO || ""}
-                onChange={e => handleUpdateStartDate(e.target.value)}
-                className="border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 outline-none focus:border-sky-300 font-medium bg-slate-50"
-              />
-              <span className="text-[11px] text-slate-400">
-                Anchors all independent tasks
-              </span>
-            </div>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-              Configure Target Handover Date
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={schedule.targetHandoverISO || ""}
-                onChange={e => handleUpdateHandoverDate(e.target.value)}
-                className="border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 outline-none focus:border-sky-300 font-medium bg-slate-50"
-              />
-              <span className="text-[11px] text-slate-400">
-                Used to compute overrun/variance
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
+      {/*
+        The CONFIGURE row is gone.
 
-      {/* Controls */}
+        Project start and target handover each had two controls on this screen --
+        a metric card up top and a date input down here -- for the same two
+        stored values. The cards edit them now, where the numbers are already
+        being read.
+      */}
+
+      {/*
+        Viewing and changing are two different rows now.
+
+        One strip carried DAY/WEEK/MONTH, Baseline and Legend next to Add stage,
+        Pause site, Hold trade, Freeze baseline and Reset schedule -- ten controls
+        at one weight, where picking a zoom level and wiping the schedule sat side
+        by side. What you look with is on the left; what you change is on the
+        right, and everything destructive is behind one menu.
+      */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="inline-flex gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
           {(['day', 'week', 'month'] as Zoom[]).map(z => (
@@ -499,37 +572,60 @@ export default function ScheduleGantt({
           <HelpCircle className="w-3.5 h-3.5 text-sky-600" />
           <span>Legend &amp; Guide</span>
         </button>
-        {!readOnly && onChange && (
-          <>
-            <button onClick={() => setShowAddModal(true)}
-              className="px-3 py-2 rounded-xl text-[11px] font-bold border border-slate-200 text-slate-900 bg-white hover:bg-slate-50 transition-colors flex items-center gap-1 shadow-sm">
-              <Plus className="w-3.5 h-3.5 text-amber-600" />Add stage
-            </button>
-            <button onClick={() => setHoldOpen('site')}
-              className="px-3 py-2 rounded-xl text-[11px] font-bold border border-rose-200 text-rose-700 bg-rose-50/60">
-              <PauseCircle className="w-3.5 h-3.5 inline mr-1" />Pause site
-            </button>
-            <button onClick={() => setHoldOpen('trade')}
-              className="px-3 py-2 rounded-xl text-[11px] font-bold border border-slate-200 text-slate-600 bg-white">
-              <PauseCircle className="w-3.5 h-3.5 inline mr-1" />Hold trade
-            </button>
-            {!schedule.baselineAt && (
-              <button onClick={() => onChange(freezeBaseline(schedule))}
-                className="px-3 py-2 rounded-xl text-[11px] font-bold border border-sky-200 text-[#334486] bg-white">
-                <Lock className="w-3.5 h-3.5 inline mr-1" />Freeze baseline
-              </button>
-            )}
-            {onReset && (
-              <button onClick={onReset}
-                className="px-3 py-2 rounded-xl text-[11px] font-bold border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100/80 transition-colors flex items-center gap-1">
-                <RefreshCw className="w-3.5 h-3.5" />Reset schedule
-              </button>
-            )}
-          </>
-        )}
-        <span className="text-[11px] text-slate-400 ml-auto">
+        <span className="text-[11px] text-slate-400 hidden lg:inline">
           {zoom === 'day' ? 'Grey columns are non-working days' : 'Zoom to Day to see individual dates'}
         </span>
+
+        {!readOnly && onChange && (
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={() => setShowAddModal(true)}
+              className="px-3 py-2 rounded-xl text-[11px] font-bold border border-slate-200 text-slate-900 bg-white hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+              <Plus className="w-3.5 h-3.5 text-amber-600" />Add stage
+            </button>
+
+            <div className="relative">
+              <button onClick={() => setShowScheduleMenu(v => !v)}
+                className={`px-2.5 py-2 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                  showScheduleMenu ? 'border-slate-300 bg-slate-100 text-slate-900' : 'border-slate-200 bg-white text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
+                title="Schedule actions"
+                aria-haspopup="menu"
+                aria-expanded={showScheduleMenu}>
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+
+              {showScheduleMenu && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setShowScheduleMenu(false)} />
+                  <div className="absolute right-0 top-full mt-1.5 z-30 w-56 rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden py-1.5">
+                    <button onClick={() => { setShowScheduleMenu(false); setHoldOpen('site'); }}
+                      className="w-full text-left px-3.5 py-2 text-[12px] font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer">
+                      <PauseCircle className="w-3.5 h-3.5 text-slate-400" />Pause site
+                    </button>
+                    <button onClick={() => { setShowScheduleMenu(false); setHoldOpen('trade'); }}
+                      className="w-full text-left px-3.5 py-2 text-[12px] font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer">
+                      <PauseCircle className="w-3.5 h-3.5 text-slate-400" />Hold a trade
+                    </button>
+                    {!schedule.baselineAt && (
+                      <button onClick={() => { setShowScheduleMenu(false); onChange(freezeBaseline(schedule)); }}
+                        className="w-full text-left px-3.5 py-2 text-[12px] font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer">
+                        <Lock className="w-3.5 h-3.5 text-slate-400" />Freeze baseline
+                      </button>
+                    )}
+                    {onReset && (
+                      <>
+                        <div className="h-px bg-slate-100 my-1.5" />
+                        <button onClick={() => { setShowScheduleMenu(false); onReset(); }}
+                          className="w-full text-left px-3.5 py-2 text-[12px] font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer">
+                          <RefreshCw className="w-3.5 h-3.5" />Reset schedule
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Visual Legend & Guide */}
@@ -817,8 +913,19 @@ export default function ScheduleGantt({
                         an alarm about something that already happened.
                       */
                       const reached = t.status === 'completed' || !!t.actualEndISO;
-                      const until = workingDaysBetween(
-                        schedule.calendar || DEFAULT_CALENDAR, todayDayNum, t.startDay) - 1;
+                      /*
+                        Working days to the date, negative once it has passed.
+
+                        `workingDaysBetween` returns 0 when its second argument
+                        is the earlier one, so measuring forward from today gave
+                        -1 for EVERY past date: a gate three months behind and
+                        one a day behind both read "1 working day late". Past
+                        dates are measured in the direction they actually run.
+                      */
+                      const cal_ = schedule.calendar || DEFAULT_CALENDAR;
+                      const until = t.plannedStartDay >= todayDayNum
+                        ? workingDaysBetween(cal_, todayDayNum, t.plannedStartDay) - 1
+                        : -(workingDaysBetween(cal_, t.plannedStartDay, todayDayNum) - 1);
                       /*
                         Grey is behind us, green is ahead, rose is late — three
                         states readable without a legend. The green is kept
@@ -833,11 +940,11 @@ export default function ScheduleGantt({
                       return (
                         <button
                           onClick={() => setSelectedId(t.id)}
-                          title={`${t.title} — ${new Date(t.startISO).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}${
+                          title={`${t.title} — ${new Date(t.plannedStartISO).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}${
                             reached ? ' · reached' : t.overdueToStart ? ` · ${t.driftDays} working days late` : ''
                           }${t.slipDays > 0 ? ` · moved ${t.slipDays} working days since the baseline was frozen` : ''}`}
                           className="gt-milestone-wrap absolute top-1.5 flex items-center gap-1.5 cursor-pointer group"
-                          style={{ left: left(t.startDay) }}
+                          style={{ left: left(t.plannedStartDay) }}
                         >
                           <span
                             className={`ff-flag${nextMilestoneId === t.id ? ' ff-flag--next' : ''}`}
@@ -853,7 +960,11 @@ export default function ScheduleGantt({
                             {t.title}
                           </span>
                           <span className={`text-[9px] font-semibold tabular-nums whitespace-nowrap ${tone.ink}`}>
-                            {shortDate(t.startISO)} · {reached ? 'reached' : untilLabel(until)}
+                            {/* Both halves read the plan. This printed the
+                                forecast date beside a countdown measured from
+                                the planned one, so a gate could show a date in
+                                October and call itself a day late. */}
+                            {shortDate(t.plannedStartISO)} · {reached ? 'reached' : untilLabel(until)}
                           </span>
                           {/*
                             How far this date has walked away from the one the
@@ -872,19 +983,21 @@ export default function ScheduleGantt({
                     })()
                   ) : (
                     <button onClick={() => setSelectedId(t.id)}
-                      title={`${t.title} (${t.workDays} working days: ${t.startISO} to ${t.endISO})`}
+                      title={`${t.title} (${t.workDays} working days: ${t.plannedStartISO} to ${t.plannedEndISO})${
+                        t.overdueToStart ? ` — not started; earliest it can now begin is ${t.startISO}` : ''
+                      }`}
                       className={`gt-bar absolute top-2 h-5 rounded flex items-center justify-between px-1 text-[9px] font-bold text-white overflow-hidden gap-1${
                         t.onCriticalPath ? ' gt-bar--critical' : ''
                       }`}
                       style={{
-                        left: left(t.startDay),
-                        width: Math.max(px(t.endDay - t.startDay + 1), 6),
+                        left: left(t.plannedStartDay),
+                        width: Math.max(px(t.plannedEndDay - t.plannedStartDay + 1), 6),
                         /* backgroundColor, not the `background` shorthand: the
                            shorthand resets background-image and would wipe out
                            the extrusion gradient .gt-bar paints on top. */
                         backgroundColor: t.openGates.length ? STATUS_COLOR.blocked : (KIND_COLOR[t.kind] || '#64748b'),
                       }}>
-                      {px(t.endDay - t.startDay + 1) > 50 ? (
+                      {px(t.plannedEndDay - t.plannedStartDay + 1) > 50 ? (
                         <>
                           <span className="truncate flex-1 text-left min-w-0">{t.title}</span>
                           <span className="shrink-0 font-extrabold text-[8px] bg-black/15 px-1 rounded-sm leading-tight">
@@ -892,7 +1005,7 @@ export default function ScheduleGantt({
                           </span>
                         </>
                       ) : (
-                        px(t.endDay - t.startDay + 1) > 20 ? (
+                        px(t.plannedEndDay - t.plannedStartDay + 1) > 20 ? (
                           <span className="w-full text-center shrink-0 text-[8px] font-extrabold">
                             {t.workDays}d
                           </span>
@@ -912,7 +1025,7 @@ export default function ScheduleGantt({
                     <span
                       className="gt-dates ff-banner-wrap absolute top-[7px] pointer-events-none"
                       style={{
-                        left: left(t.endDay + 1) + 6,
+                        left: left(t.plannedEndDay + 1) + 6,
                         color: t.driftDays > 0 ? '#d97706' : (KIND_COLOR[t.kind] || '#94a3b8'),
                         /* Every banner starts at a different point in the cycle,
                            so the column reads as cloth in a breeze rather than
@@ -924,8 +1037,8 @@ export default function ScheduleGantt({
                       <span className={`ff-banner text-[8.5px] font-semibold tabular-nums whitespace-nowrap ${
                         t.driftDays > 0 ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-500'
                       }`}>
-                        {shortDate(t.startISO)} – {shortDate(t.endISO)}
-                        {t.driftDays > 0 && <span className="font-black"> · +{t.driftDays}d</span>}
+                        {shortDate(t.plannedStartISO)} – {shortDate(t.plannedEndISO)}
+                        {t.driftDays > 0 && <span className="font-black"> · {t.driftDays}d late</span>}
                       </span>
                     </span>
                   )}
@@ -2186,7 +2299,10 @@ function ScheduleAnalysisReportModal({ projectContext, schedule, result, varianc
                     <div key={idx} className="flex justify-between items-center text-xs p-2 rounded-lg bg-slate-50 border border-slate-100">
                       <div className="min-w-0">
                         <p className="font-semibold text-slate-900 truncate">{t.title}</p>
-                        <p className="text-[10px] text-slate-400">{t.startISO} to {t.endISO} · {t.workDays}d</p>
+                        <p className="text-[10px] text-slate-400">
+                          {t.plannedStartISO} to {t.plannedEndISO} · {t.workDays}d
+                          {t.overdueToStart && <span className="text-amber-600"> · can start {t.startISO}</span>}
+                        </p>
                       </div>
                       <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
                         t.status === 'in_progress' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'

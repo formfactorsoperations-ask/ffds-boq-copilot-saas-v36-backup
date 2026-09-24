@@ -1,4 +1,4 @@
-import { ProjectContext } from '../types';
+import { ProjectContext, ProjectSchedule } from '../types';
 import { isVisibleToClient } from './clientVisibility';
 import { ClientBoqRow } from './clientBoq';
 import { PortalMoney } from './portalMoney';
@@ -199,6 +199,27 @@ export function buildPortalView(
     Appended last, so every existing positional call keeps working.
   */
   money?: PortalMoney,
+  /*
+    The dated programme, as the studio's own Timeline draws it.
+
+    The portal reads the schedule and the design phases straight out of
+    Firestore, which works only where the studio has actually saved a schedule
+    -- and on most projects it has not. A client session also runs with a blank
+    `studioId`, which switches off the design-phase hook by design, so with no
+    saved schedule the portal fell back to `buildScheduleFromProject` with no
+    design steps and drew a programme derived from the BOQ alone.
+
+    The studio's own preview of that screen has the design phases, so it drew a
+    different programme from the same code: the preview was always the
+    better-informed of the two, which is the one place a discrepancy is
+    guaranteed not to be noticed.
+
+    Sent with the projection, the client reads what was published. It is a
+    fallback, not a replacement -- where the portal can still read a live saved
+    schedule it prefers that, so changing dates on the Timeline continues to
+    reach the client without a release.
+  */
+  schedule?: ProjectSchedule,
 ): PortalView {
   const c = ctx as any;
 
@@ -335,6 +356,8 @@ export function buildPortalView(
 
       // The scope, sell rates only. See lib/clientBoq for what is stripped.
       clientBoq: clientBoq && clientBoq.length ? clientBoq : undefined,
+      /* Task names, durations and dates. No rates: a ProjectSchedule has none. */
+      clientSchedule: schedule && schedule.tasks?.length ? schedule : undefined,
       clientBoqBaseline: clientBoqBaseline && clientBoqBaseline.length ? clientBoqBaseline : undefined,
 
       /*
@@ -433,6 +456,7 @@ export function portalViewSummary(view: PortalView): { section: string; count: n
     { section: 'Decisions', count: (c.projectDecisions || []).length },
     { section: 'Payment milestones', count: (c.paymentMilestones || []).length },
     { section: 'Scope lines', count: ((c as any).clientBoq || []).length },
+    { section: 'Programme tasks', count: ((c as any).clientSchedule?.tasks || []).length },
     /* Counted so that issuing a document marks the client's copy as behind.
        It did not, so a re-issued document could sit unsent with the panel
        reporting everything current. */

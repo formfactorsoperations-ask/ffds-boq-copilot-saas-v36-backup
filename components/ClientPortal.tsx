@@ -622,14 +622,30 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         return () => { active = false; };
     }, [projectData?.id]);
 
+    /*
+      The programme, from the best source this session can actually reach.
+
+      1. A saved schedule read live, so a date changed on the Timeline reaches
+         the client without anyone releasing.
+      2. Otherwise the programme that was published with the projection. A
+         client session has a blank `studioId`, so `designPhases` is empty for
+         them -- deriving here would drop every design step and invent a
+         programme out of the BOQ, while the studio's preview of this same
+         screen kept its phases and drew a different one.
+      3. Otherwise derive, which is what a studio preview does on a project that
+         has never been released and has no saved schedule.
+    */
+    const storedSchedule = (context as any).clientSchedule as ProjectSchedule | undefined;
+
     const clientSchedule = useMemo(() => {
         if (customSchedule) return customSchedule;
+        if (storedSchedule?.tasks?.length) return storedSchedule;
         // Same arguments the studio's Timeline passes, so both derive the
         // identical schedule rather than two different ones.
         return buildScheduleFromProject(projectData.context, displayBoq, {
             designSteps: designPhases as any,
         });
-    }, [customSchedule, projectData.context, displayBoq, designPhases]);
+    }, [customSchedule, storedSchedule, projectData.context, displayBoq, designPhases]);
 
     // --- BOQ CATEGORIZATION & REVISIONS ---
     const boqRevisions = context.boqRevisions || [];
@@ -1334,8 +1350,14 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         // Real dates, not ours to move, whenever the schedule is anchored to
         // something the studio set — a saved schedule, or design phases with
         // their own start dates.
-        () => buildProgramme(clientSchedule, lifecycleInfo, !!customSchedule || designPhases.length > 0),
-        [clientSchedule, customSchedule, designPhases, lifecycleInfo],
+        () => buildProgramme(
+            clientSchedule,
+            lifecycleInfo,
+            // A published programme counts as the studio's own, the same as a
+            // saved schedule or dated design phases.
+            !!customSchedule || !!storedSchedule?.tasks?.length || designPhases.length > 0,
+        ),
+        [clientSchedule, customSchedule, storedSchedule, designPhases, lifecycleInfo],
     );
 
     /**

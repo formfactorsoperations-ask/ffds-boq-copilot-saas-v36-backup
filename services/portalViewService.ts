@@ -1,6 +1,6 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebaseClient';
-import { ProjectContext } from '../types';
+import { ProjectContext, ProjectSchedule } from '../types';
 import { buildPortalView, PortalView, PortalStudio, PortalScopeAddition } from '../lib/portalProjection';
 import { PortalMoney } from '../lib/portalMoney';
 import { ClientBoqRow } from '../lib/clientBoq';
@@ -36,9 +36,10 @@ export async function writePortalView(
   clientBoqBaseline?: ClientBoqRow[],
   scopeAdditions?: PortalScopeAddition[],
   money?: PortalMoney,
+  schedule?: ProjectSchedule,
 ): Promise<PortalView | null> {
   if (!db || !projectId) return null;
-  const view = buildPortalView(projectId, context, studio, clientBoq, clientBoqBaseline, scopeAdditions, money);
+  const view = buildPortalView(projectId, context, studio, clientBoq, clientBoqBaseline, scopeAdditions, money, schedule);
   /*
     Deliberately not caught here.
 

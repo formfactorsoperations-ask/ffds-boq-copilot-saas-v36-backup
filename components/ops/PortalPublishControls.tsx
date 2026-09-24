@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ProjectContext } from '../../types';
+import { ProjectContext, ProjectSchedule } from '../../types';
 import { writePortalView, probePortalView } from '../../services/portalViewService';
+import { db as storageDb } from '../../services/dbService';
 import { collection, getDocs } from 'firebase/firestore';
 import { db as fsDb } from '../../services/firebaseClient';
 import { normaliseAddition, scopeAdditionsPath } from '../../lib/scopeAdditions';
@@ -55,6 +56,13 @@ interface Props {
     to apply them to, so a design ladder renders as a column of zeroes.
   */
   portalMoney?: PortalMoney;
+  /*
+    The dated programme, derived in App where the design phases and the tier's
+    BOQ are both in scope. Sent with the projection so a client whose project
+    has no saved schedule still reads the studio's programme rather than one
+    reconstructed from the BOQ alone. See the note in lib/portalProjection.
+  */
+  clientSchedule?: ProjectSchedule;
 }
 
 const STATE_STYLE: Record<ClientVisibilityState | 'unmigrated', string> = {
@@ -64,7 +72,7 @@ const STATE_STYLE: Record<ClientVisibilityState | 'unmigrated', string> = {
   unmigrated:'text-slate-400 bg-slate-50 border-slate-200',
 };
 
-export default function PortalPublishControls({ projectContext, setProjectContext, currentUser, projectId, clientBoq, clientBoqBaseline, portalMoney }: Props) {
+export default function PortalPublishControls({ projectContext, setProjectContext, currentUser, projectId, clientBoq, clientBoqBaseline, portalMoney, clientSchedule }: Props) {
   const [open, setOpen] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [releasing, setReleasing] = useState(false);
@@ -157,6 +165,26 @@ export default function PortalPublishControls({ projectContext, setProjectContex
     }
   };
 
+  /*
+    The programme to publish: the studio's saved schedule where there is one.
+
+    `clientSchedule` is derived from the design phases and the BOQ, which is the
+    right answer for a project nobody has scheduled by hand. Where ops HAS saved
+    a schedule, that is the programme they are looking at on the Timeline, and
+    publishing a freshly derived one instead would send the client a different
+    set of dates from the one on the studio's own screen.
+  */
+  const scheduleToSend = async (): Promise<ProjectSchedule | undefined> => {
+    if (!projectId) return clientSchedule;
+    try {
+      const saved = await storageDb.getSchedule(projectId);
+      if (saved?.tasks?.length) return saved;
+    } catch {
+      /* Fall back to the derived programme rather than publishing none. */
+    }
+    return clientSchedule;
+  };
+
   const release = async (ctx: ProjectContext) => {
     if (!projectId) return;
     setSendError(null);
@@ -176,7 +204,7 @@ export default function PortalPublishControls({ projectContext, setProjectContex
         legalName: orgData?.legalName,
         signatoryName: orgData?.signatoryName,
         signatoryTitle: orgData?.signatoryTitle,
-      }, clientBoq, clientBoqBaseline, await gatherScopeAdditions(), portalMoney);
+      }, clientBoq, clientBoqBaseline, await gatherScopeAdditions(), portalMoney, await scheduleToSend());
       if (view) {
         setReleasedAt(view.builtAt);
         setEverSent(true);
@@ -204,8 +232,8 @@ export default function PortalPublishControls({ projectContext, setProjectContex
 
   /** What the client would receive if released right now. */
   const preview = useMemo(
-    () => portalViewSummary(buildPortalView(projectId || 'preview', projectContext, undefined, clientBoq, undefined, undefined, portalMoney)).filter(r => r.count > 0),
-    [projectContext, projectId, clientBoq, portalMoney]
+    () => portalViewSummary(buildPortalView(projectId || 'preview', projectContext, undefined, clientBoq, undefined, undefined, portalMoney, clientSchedule)).filter(r => r.count > 0),
+    [projectContext, projectId, clientBoq, portalMoney, clientSchedule]
   );
 
   const groups = useMemo(
