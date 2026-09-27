@@ -8,7 +8,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Icon, Donut, useArmed, useUi, tipProps, Glyph, GlyphName } from './bits';
 import {
-  DrawingModel, DrawingCell, PaymentModel, GanttRow, GatePin, CostModel, ActivityItem,
+  DrawingModel, DrawingCell, PaymentModel, PaymentRung, GanttRow, GatePin, CostModel, ActivityItem,
   inr, inrShort, shortDate, dayNum, isoOf, DAY, anyMs, timelineModel,
 } from '../../lib/projectHome';
 
@@ -117,6 +117,9 @@ function cellTip(c: DrawingCell) {
 function DrawingsPanel({ drawings, sharedDocs, go }: Props) {
   const armed = useArmed();
   const ui = useUi();
+  // A stage the user is looking at: hovering previews it, clicking pins it.
+  const [hover, setHover] = useState<DrawingCell['state'] | null>(null);
+  const [pinned, setPinned] = useState<DrawingCell['state'] | null>(null);
   if (!drawings) return <div className="ph-panel"><div className="ph-empty"><b>Loading drawings…</b></div></div>;
   if (drawings.total === 0) {
     return (
@@ -130,60 +133,90 @@ function DrawingsPanel({ drawings, sharedDocs, go }: Props) {
     );
   }
   const d = drawings;
-  const seg = [
-    { n: d.approved, c: 'var(--ph-ok)' }, { n: d.withClient, c: 'var(--ph-gold)' },
-    { n: d.inRevision, c: 'var(--ph-b-tint)' }, { n: d.notIssued, c: 'var(--ph-line)' },
+  const focus = hover || pinned;
+  const all = [...d.rooms.flatMap(r => Object.values(r.cells).filter(Boolean) as DrawingCell[]), ...d.wide];
+  const waiting = all.filter(c => c.state === 'client' && c.daysWithClient != null).sort((a, b) => (b.daysWithClient || 0) - (a.daysWithClient || 0))[0];
+
+  // One sentence on where the set stands.
+  const lede = d.issued === 0
+    ? <>None of the <b>{d.total} working drawings</b> has gone to the client yet.</>
+    : <><b>{d.issued} of {d.total}</b> issued{d.approved ? <>, <b>{d.approved} approved</b></> : ''}.
+        {waiting ? <> The longest with the client is <b>{waiting.name}</b> — {waiting.daysWithClient} day{waiting.daysWithClient === 1 ? '' : 's'}.</> : ''}</>;
+
+  const STAGES: { s: DrawingCell['state']; label: string; n: number; glyph: GlyphName }[] = [
+    { s: 'none', label: 'Not issued', n: d.notIssued, glyph: 'sheet' },
+    { s: 'client', label: 'With client', n: d.withClient, glyph: 'hourglass' },
+    { s: 'revise', label: 'In revision', n: d.inRevision, glyph: 'pencil' },
+    { s: 'approved', label: 'Approved', n: d.approved, glyph: 'decision' },
   ];
-  const cols = `minmax(120px,1.2fr) ${d.types.map(() => 'minmax(0,1fr)').join(' ')}`;
-  const cell = (c: DrawingCell | undefined, i: number, prefix?: string) => c ? (
-    <button key={c.id} className={`ph-dcell ${c.state === 'none' ? '' : c.state}`} style={{ transitionDelay: `${i * 0.03}s` }}
-      onClick={() => go('drawing-tracker')} {...tipProps(ui, cellTip(c))}>
-      <span className="dt" />{prefix ? <><b style={{ color: 'var(--ph-ink-3)' }}>{prefix}</b>&nbsp;·&nbsp;</> : null}{STATE_LABEL[c.state]}
-    </button>
-  ) : <span key={`x${i}`} className="ph-dcell none-cell" />;
+  const typeGlyph = (t: string): GlyphName => /elevation/i.test(t) ? 'elevation' : /detail|carpentry|joinery/i.test(t) ? 'detail' : 'sheet';
+
+  const sheet = (c: DrawingCell | undefined, i: number, withName = false) => {
+    if (!c) return <span key={`x${i}`} className="ph-sheet-empty" />;
+    const meta = c.state === 'client' && c.daysWithClient != null ? `${c.daysWithClient} d`
+      : c.state === 'revise' && c.round ? `R${c.round}` : '';
+    return (
+      <button key={c.id} className={`ph-sheet ${c.state}${focus && focus !== c.state ? ' dim' : ''}`} style={{ ['--d' as any]: `${i * 0.025}s` }}
+        onClick={() => go('drawing-tracker')} aria-label={`${c.name}: ${STATE_LABEL[c.state]}`} {...tipProps(ui, cellTip(c))}>
+        <Glyph name={c.state === 'approved' ? 'decision' : typeGlyph(c.type || c.name)} />
+        <span className="t">{withName ? <b>{c.name.length > 30 ? c.name.slice(0, 28) + '…' : c.name}</b> : null}{STATE_LABEL[c.state]}</span>
+        {meta && <span className="m">{meta}</span>}
+      </button>
+    );
+  };
 
   let k = 0;
   return (
     <div className={`ph-panel${armed ? ' ph-go' : ''}`}>
-      <div className="ph-dr-sum">
-        <div className="big ph-num">{d.issued}<small> of {d.total} issued</small></div>
-        <div className="ph-dr-bar">
-          <div className="ph-dr-track">
-            {seg.map((s, i) => <i key={i} style={{ background: s.c, width: armed ? `${(s.n / d.total) * 100}%` : 0 }} />)}
-          </div>
-          <div className="ph-legend" style={{ marginTop: 8 }}>
-            <span><i style={{ background: 'var(--ph-ok)' }} />Approved {d.approved}</span>
-            <span><i style={{ background: 'var(--ph-gold)' }} />With client {d.withClient}</span>
-            <span><i style={{ background: 'var(--ph-b-tint)' }} />In revision {d.inRevision}</span>
-            <span><i style={{ background: '#fff', border: '1px dashed var(--ph-mut-3)' }} />Not issued {d.notIssued}</span>
-          </div>
+      <p className="ph-lede">{lede}</p>
+      <div className="ph-flow-row">
+        <div className="ph-flow" role="group" aria-label="Drawings by stage">
+          {STAGES.map((st, i) => (
+            <React.Fragment key={st.s}>
+              {i > 0 && <span className="ph-flow-sep" aria-hidden="true">{Icon.right(12)}</span>}
+              <button className={`ph-stage ${st.s}${st.n ? '' : ' zero'}${focus === st.s ? ' on' : ''}`} aria-pressed={pinned === st.s}
+                onMouseEnter={() => setHover(st.s)} onMouseLeave={() => setHover(null)}
+                onClick={() => setPinned(p => p === st.s ? null : st.s)}>
+                <span className="gi"><Glyph name={st.glyph} /></span>
+                <span className="tx"><b className="ph-num">{st.n}</b><small>{st.label}</small></span>
+              </button>
+            </React.Fragment>
+          ))}
         </div>
         <button className="ph-btn sm" onClick={() => go('drawing-tracker')}>Open Drawing Tracker</button>
       </div>
 
       {d.rooms.length > 0 && (
-        <div className="ph-dr-matrix" style={{ gridTemplateColumns: cols }}>
+        <div className="ph-sheets" style={{ gridTemplateColumns: `minmax(130px,.75fr) ${d.types.map(() => 'minmax(0,1fr)').join(' ')}` }}>
           <span className="h">Room</span>
-          {d.types.map(t => <span key={t} className="h">{t}</span>)}
-          {d.rooms.map(r => (
-            <React.Fragment key={r.room}>
-              <span className="rm" title={r.room}>{r.room}</span>
-              {d.types.map(t => cell(r.cells[t], k++))}
-            </React.Fragment>
-          ))}
+          {d.types.map(t => <span key={t} className="h"><Glyph name={typeGlyph(t)} />{t}</span>)}
+          {d.rooms.map(r => {
+            const cells = d.types.map(t => r.cells[t]).filter(Boolean) as DrawingCell[];
+            return (
+              <React.Fragment key={r.room}>
+                <span className="rm">
+                  <span className="nm" title={r.room}>{r.room}</span>
+                  <span className="ph-dots" aria-hidden="true">{cells.map(c => <i key={c.id} className={c.state} />)}</span>
+                </span>
+                {d.types.map(t => sheet(r.cells[t], k++))}
+              </React.Fragment>
+            );
+          })}
         </div>
       )}
       {d.wide.length > 0 && (
-        <div style={{ marginTop: d.rooms.length ? 12 : 0 }}>
-          {d.rooms.length > 0 && <div className="ph-eyebrow" style={{ marginBottom: 7 }}>Project-wide</div>}
-          <div className="ph-dr-wide">{d.wide.map(c => cell(c, k++, c.name.length > 26 ? c.name.slice(0, 24) + '…' : c.name))}</div>
+        <div style={{ marginTop: d.rooms.length ? 14 : 0 }}>
+          {d.rooms.length > 0 && <div className="ph-eyebrow" style={{ marginBottom: 8 }}>Project-wide</div>}
+          <div className="ph-sheets-wide">{d.wide.map(c => sheet(c, k++, true))}</div>
         </div>
       )}
       {sharedDocs.length > 0 && (
         <div className="ph-dr-shared">
           <span style={{ fontWeight: 700, color: 'var(--ph-ink-2)' }}>On the client&rsquo;s portal:</span>
           {sharedDocs.map(s => (
-            <span key={s.name} className="th" {...tipProps(ui, <><b>{s.name}</b>{s.ms ? `Published ${shortDate(s.ms)}` : 'Published'}</>)}><i />{s.name}</span>
+            <span key={s.name} className="th" {...tipProps(ui, <><b>{s.name}</b>{s.ms ? `Published ${shortDate(s.ms)}` : 'Published'}</>)}>
+              <Glyph name="portal" />{s.name}
+            </span>
           ))}
         </div>
       )}
@@ -196,7 +229,9 @@ function DrawingsPanel({ drawings, sharedDocs, go }: Props) {
 function PaymentsPanel({ payments, go }: Props) {
   const armed = useArmed(120);
   const ui = useUi();
-  const [hover, setHover] = useState(-1);
+  // A state the user is looking at: hovering previews it, clicking pins it.
+  const [hover, setHover] = useState<PaymentRung['state'] | null>(null);
+  const [pinned, setPinned] = useState<PaymentRung['state'] | null>(null);
   const pm = payments;
   if (!pm.rungs.length) {
     return (
@@ -206,40 +241,82 @@ function PaymentsPanel({ payments, go }: Props) {
       </div>
     );
   }
-  const parts = [
-    { value: pm.collected, colour: '#3F7D5B', label: 'Collected' },
-    { value: pm.dueNow, colour: '#B5945B', label: 'Due now' },
-    { value: pm.later, colour: '#DCE1EE', label: 'Later' },
+  const focus = hover || pinned;
+  const rungs = pm.rungs;
+  const pct = pm.gross ? Math.round((pm.collected / pm.gross) * 100) : 0;
+  const invoicedDue = pm.due.filter(r => r.invoiced).length;
+  const next = rungs.find(r => r.state === 'up');
+
+  // One sentence on where the money stands.
+  const lede = <>
+    <b>{inr(pm.collected)}</b> of {inr(pm.gross)} collected ({pct}%).{' '}
+    {pm.due.length
+      ? <><b>{inr(pm.dueNow)}</b> is due now across {pm.due.length} payment{pm.due.length === 1 ? '' : 's'}
+          {invoicedDue === 0 ? ' — none invoiced yet.' : invoicedDue === pm.due.length ? ' — all invoiced, awaiting payment.' : ` — ${invoicedDue} invoiced, ${pm.due.length - invoicedDue} still to raise.`}</>
+      : next ? <>Nothing is due right now. Next is <b>{next.name}</b>{next.trigger ? <> — {next.trigger.replace(/\.$/, '').replace(/^./, c => c.toLowerCase())}</> : ''}.</> : <>Every payment is collected.</>}
+  </>;
+
+  const STAGES: { s: PaymentRung['state']; label: string; amount: number; n: number; glyph: GlyphName }[] = [
+    { s: 'paid', label: 'Collected', amount: pm.collected, n: rungs.filter(r => r.state === 'paid').length, glyph: 'decision' },
+    { s: 'due', label: 'Due now', amount: pm.dueNow, n: pm.due.length, glyph: 'invoice' },
+    { s: 'up', label: 'Later', amount: pm.later, n: pm.laterCount, glyph: 'calnext' },
   ];
-  const ctr = hover < 0
-    ? <><b className="ph-num">{inr(pm.collected)}</b><span>collected of {inr(pm.gross)}</span></>
-    : <><b className="ph-num">{inr(parts[hover].value)}</b><span>{parts[hover].label} · {pm.gross ? ((parts[hover].value / pm.gross) * 100).toFixed(1) : 0}%</span></>;
-  const shortName = (n: string) => n.replace('Material Order Advance', 'Material').replace('Completion & Handover', 'Handover');
+
+  // Design and Execution labels over their runs of stations.
+  const runs: { type: string; from: number; to: number; total: number }[] = [];
+  rungs.forEach((r, i) => {
+    const last = runs[runs.length - 1];
+    if (last && last.type === r.type) { last.to = i; last.total += r.amount; }
+    else runs.push({ type: r.type, from: i, to: i, total: r.amount });
+  });
+  // The line between two stations: green once both are collected, gold into what is due now.
+  const link = (a?: PaymentRung, b?: PaymentRung) => !a || !b ? 'none' : a.state === 'paid' && b.state === 'paid' ? 'paid' : b.state === 'due' || a.state === 'due' ? 'due' : 'up';
+  const current = rungs.findIndex(r => r.state === 'due');
+  const maxAmt = Math.max(1, ...rungs.map(r => r.amount));
+  const status = (r: PaymentRung) => r.state === 'paid' ? 'Collected' : r.state === 'due' ? (r.invoiced ? 'Invoiced' : 'Not invoiced') : 'Later';
 
   return (
     <div className={`ph-panel${armed ? ' ph-go' : ''}`}>
-      <p className="ph-lede">Your terms put each payment <b>before</b> the work it releases. Hover any step to see its trigger.</p>
-      <div className="ph-money-top">
-        <Donut parts={parts} size={160} radius={66} width={15} play={armed} onHover={setHover}>{ctr}</Donut>
-        <div>
-          <div className="ph-gstat">
-            <div className="ph-gs"><div className="k"><i style={{ background: 'var(--ph-ok)' }} />Collected</div><div className="v ph-num">{inr(pm.collected)}</div><div className="s">Paid so far, incl. any initiation fee</div></div>
-            <div className="ph-gs"><div className="k"><i style={{ background: 'var(--ph-gold)' }} />Due now</div><div className="v ph-num">{inr(pm.dueNow)}</div><div className="s">{pm.due.length} payment{pm.due.length === 1 ? '' : 's'}, before the next releases</div></div>
-            <div className="ph-gs"><div className="k"><i style={{ background: 'var(--ph-b-tint)' }} />Later</div><div className="v ph-num">{inr(pm.later)}</div><div className="s">{pm.laterCount} payment{pm.laterCount === 1 ? '' : 's'} still to come</div></div>
-          </div>
-          <div className="ph-ladder">
-            {pm.rungs.map((r, i) => (
-              <div key={r.id} className={`ph-rung ${r.state}`} style={{ flexGrow: Math.max(r.amount, 1) }}
-                {...tipProps(ui, <><b>{r.name} · {inr(r.amount)}</b>{r.state === 'paid' ? 'Collected' : r.state === 'due' ? (r.invoiced ? 'Invoiced, awaiting payment' : 'Due now — not invoiced yet') : 'Later'}{r.trigger && <small>{r.trigger}</small>}</>)}>
-                <i style={{ transitionDelay: `${i * 0.08}s` }} />
-                <span className="lab">{inrShort(r.amount)}</span>
-              </div>
-            ))}
-          </div>
-          <div className="ph-lad-x">
-            {pm.rungs.map(r => <span key={r.id} style={{ flexGrow: Math.max(r.amount, 1) }}>{shortName(r.name)}</span>)}
-          </div>
-          <div style={{ marginTop: 12 }}><button className="ph-link" onClick={() => go('payment-calc')}>Open Money {Icon.right(13)}</button></div>
+      <p className="ph-lede">{lede}</p>
+      <div className="ph-flow-row">
+        <div className="ph-flow" role="group" aria-label="Payments by state">
+          {STAGES.map((st, i) => (
+            <React.Fragment key={st.s}>
+              {i > 0 && <span className="ph-flow-sep" aria-hidden="true">{Icon.right(12)}</span>}
+              <button className={`ph-stage pay-${st.s}${st.n ? '' : ' zero'}${focus === st.s ? ' on' : ''}`} aria-pressed={pinned === st.s}
+                onMouseEnter={() => setHover(st.s)} onMouseLeave={() => setHover(null)} onClick={() => setPinned(p => p === st.s ? null : st.s)}>
+                <span className="gi"><Glyph name={st.glyph} /></span>
+                <span className="tx"><b className="ph-num">{inr(st.amount)}</b><small>{st.label} · {st.n}</small></span>
+              </button>
+            </React.Fragment>
+          ))}
+        </div>
+        <button className="ph-btn sm" onClick={() => go('payment-calc')}>Open Money</button>
+      </div>
+
+      <div className="ph-stations-scroll">
+        <div className="ph-stations" style={{ gridTemplateColumns: `repeat(${rungs.length}, minmax(86px, 1fr))` }}>
+          {runs.map(r => (
+            <div key={`${r.type}-${r.from}`} className="ph-st-group" style={{ gridColumn: `${r.from + 1} / ${r.to + 2}` }}>
+              <span>{r.type === 'design' ? 'Design fee' : 'Execution'} · {inrShort(r.total)}</span>
+            </div>
+          ))}
+          {rungs.map((r, i) => (
+            <button key={r.id} className={`ph-st ${r.state}${i === current ? ' current' : ''}${focus && focus !== r.state ? ' dim' : ''}`}
+              style={{ gridRow: 2, gridColumn: i + 1, ['--d' as any]: `${0.1 + i * 0.07}s` }} onClick={() => go('payment-calc')}
+              aria-label={`${r.name}, ${inr(r.amount)}, ${status(r)}`}
+              {...tipProps(ui, <><b>{r.name} · {inr(r.amount)}</b>{status(r)}{r.state === 'due' && !r.invoiced ? ' — raise it in Money' : ''} · {((r.amount / (pm.gross || 1)) * 100).toFixed(1)}% of the total{r.trigger && <small>{r.trigger}</small>}</>)}>
+              <span className="rail">
+                <i className={`l ${link(rungs[i - 1], r)}`} />
+                <span className="node">{r.state === 'paid' ? Icon.check(13) : <Glyph name={r.state === 'due' ? 'rupee' : 'lock'} />}</span>
+                <i className={`r ${link(r, rungs[i + 1])}`} />
+              </span>
+              <b className="amt ph-num">{inrShort(r.amount)}</b>
+              <span className="nm">{r.name}</span>
+              <span className="sub">{status(r)}</span>
+              <span className="share"><i style={{ width: armed ? `${(r.amount / maxAmt) * 100}%` : 0 }} /></span>
+            </button>
+          ))}
         </div>
       </div>
     </div>
@@ -253,8 +330,8 @@ const monthStart = (ms: number) => { const d = new Date(ms); return Date.UTC(d.g
 function ProgrammePanel({ programme, go }: Props) {
   const armed = useArmed(120);
   const ui = useUi();
-  // The board leans with the cursor; kept above the empty-state return so hooks always run in the same order.
-  const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
+  // The task a hovered payment tag releases, lit up in the chart.
+  const [lit, setLit] = useState<string | null>(null);
   const { rows, pins, finishISO, stale } = programme;
   if (!rows.length) {
     return (
@@ -276,119 +353,102 @@ function ProgrammePanel({ programme, go }: Props) {
   const months: number[] = [];
   for (let m = from * DAY; m < to * DAY;) { months.push(m); const d = new Date(m); m = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1); }
   const fmt = (iso: string) => shortDate(dayNum(iso) * DAY);
-  const endPc = (r: GanttRow) => Math.min(100, pc(r.end) + 100 / span); // a task runs to the end of its last day
 
-  /*
-    Layout, top to bottom: month labels, the payments lane, then Design and Site
-    groups. Everything is placed on one board so the board alone carries the 3D:
-    grid on the floor, bars a little above it, tags and the today line higher still.
-  */
   const lastDesignEnd = Math.max(0, ...rows.filter(r => r.kind === 'design').map(r => dayNum(r.end)));
   const inDesign = (r: GanttRow) => r.kind === 'design' || (r.kind === 'milestone' && dayNum(r.start) <= lastDesignEnd);
   const groups = [
     { name: 'Design', glyph: 'plan' as GlyphName, rows: rows.filter(inDesign) },
     { name: 'Site', glyph: 'hardhat' as GlyphName, rows: rows.filter(r => !inDesign(r)) },
   ].filter(g => g.rows.length);
-  const ROW = 32, HEAD = 28, AXIS = 22;
-  let y = AXIS + (pins.length ? 58 : 6);
-  const placed: { r: GanttRow; y: number; i: number }[] = [];
-  const heads: { name: string; glyph: GlyphName; y: number; h: number; n: number }[] = [];
-  groups.forEach(g => {
-    const top = y;
-    y += HEAD;
-    g.rows.forEach(r => { placed.push({ r, y, i: placed.length }); y += ROW; });
-    heads.push({ name: g.name, glyph: g.glyph, y: top, h: y - top, n: g.rows.filter(r => r.kind !== 'milestone').length });
-    y += 8;
-  });
-  const height = y + 18;
-  const rowY = new Map(placed.map(p => [p.r.id, p.y]));
-  // A payment tag hangs over the task it releases, with a thread down to that task's bar.
-  const pinRow = (at: string) => rows.find(r => r.kind !== 'milestone' && (r.start === at || r.end === at));
-  // Names sit beside their bar: after it while there is room, before it near the right edge, inside a very long bar.
-  const side = (s: number, e: number) => e <= 62 ? 'after' : s >= 38 ? 'before' : 'inside';
-
-  const reduce = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (reduce || e.pointerType !== 'mouse') return;
-    const r = e.currentTarget.getBoundingClientRect();
-    setTilt({ rx: +((0.5 - (e.clientY - r.top) / r.height) * 5).toFixed(2), ry: +(((e.clientX - r.left) / r.width - 0.5) * 6).toFixed(2) });
-  };
+  // A payment tag belongs to the task it releases: the one that starts (or, for GFC, ends) on its date.
+  const pinTask = (at: string) => rows.find(r => r.kind !== 'milestone' && (r.start === at || r.end === at));
+  // Tags a few days apart would overlap; the second drops to a lower line.
+  const pinRows: number[] = [];
+  pins.forEach((g, i) => { pinRows[i] = i > 0 && Math.abs(pc(g.at) - pc(pins[i - 1].at)) < 6 && pinRows[i - 1] === 0 ? 1 : 0; });
+  const twoPinLines = pinRows.includes(1);
+  let i = 0;
 
   return (
     <div className={`ph-panel${armed ? ' ph-go' : ''}`}>
       <p className="ph-lede">
         {rows.length} tasks from {fmt(rows.map(r => r.start).sort()[0])} to a forecast handover on <b>{finishISO ? new Date(finishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</b>.
-        {pins.length > 0 && ' Gold tags mark payments due before the work they hang over.'}
+        {pins.length > 0 && ' Gold tags are payments due before the work they release — hover one to see which.'}
       </p>
-      <div className="ph-board-wrap" onPointerMove={onMove} onPointerLeave={() => setTilt({ rx: 0, ry: 0 })}>
-        <div className="ph-board" style={{ height, ['--rx' as any]: `${tilt.rx}deg`, ['--ry' as any]: `${tilt.ry}deg` }}>
-          {/* floor: month bands and labels */}
-          {months.map((m, i) => {
-            const l = ((m / DAY - from) / span) * 100;
-            const next = i + 1 < months.length ? ((months[i + 1] / DAY - from) / span) * 100 : 100;
-            const d = new Date(m);
-            return (
-              <React.Fragment key={m}>
-                <div className={`ph-b-month${i % 2 ? ' alt' : ''}`} style={{ left: `${l}%`, width: `${next - l}%`, top: AXIS }} />
-                <span className="ph-b-mlabel" style={{ left: `${l}%` }}>
-                  {d.toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' })}{d.getUTCMonth() === 0 ? ` ’${String(d.getUTCFullYear()).slice(2)}` : ''}
-                </span>
-              </React.Fragment>
-            );
-          })}
-          {heads.map(h => (
-            <React.Fragment key={h.name}>
-              <div className="ph-b-band" style={{ top: h.y, height: h.h }} />
-              <span className="ph-b-sec" style={{ top: h.y + 5 }}><Glyph name={h.glyph} />{h.name}<small>{h.n} task{h.n === 1 ? '' : 's'}</small></span>
+      <div className="ph-gt-scroll">
+        <div className="ph-gt">
+          {/* month bands and the today line, behind every row */}
+          <div className="ph-gt-grid" aria-hidden="true">
+            {months.map((m, k) => {
+              const l = ((m / DAY - from) / span) * 100;
+              const next = k + 1 < months.length ? ((months[k + 1] / DAY - from) / span) * 100 : 100;
+              return <div key={m} className={`ph-gt-month${k % 2 ? ' alt' : ''}`} style={{ left: `${l}%`, width: `${next - l}%` }} />;
+            })}
+            {today >= from && today <= to && (
+              <div className="ph-gt-today" style={{ left: `${((today - from + 0.5) / span) * 100}%` }}><b>Today</b></div>
+            )}
+          </div>
+
+          <div className="ph-gt-row axis">
+            <div className="nm" />
+            <div className="tr">
+              {months.map(m => {
+                const d = new Date(m);
+                return (
+                  <span key={m} style={{ left: `${((m / DAY - from) / span) * 100}%` }}>
+                    {d.toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' })}{d.getUTCMonth() === 0 ? ` ’${String(d.getUTCFullYear()).slice(2)}` : ''}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+
+          {pins.length > 0 && (
+            <div className={`ph-gt-row pay${twoPinLines ? ' two' : ''}`}>
+              <div className="nm"><i className="dot gold" />Payments due</div>
+              <div className="tr">
+                {pins.map((g, k) => {
+                  const task = pinTask(g.at);
+                  // One set of handlers: the tooltip's own and lighting the task it releases.
+                  const tip = tipProps(ui, <><b>{g.name} · {g.label}</b>Due before {task ? task.title : 'the work it releases'}{g.trigger && <small>{g.trigger}</small>}</>);
+                  return (
+                    <span key={g.name} className="ph-gt-tag" style={{ left: `${pc(g.at)}%`, top: pinRows[k] ? 26 : 5, ['--d' as any]: `${0.7 + k * 0.1}s` }}
+                      onMouseMove={tip.onMouseMove}
+                      onMouseEnter={e => { tip.onMouseEnter(e); setLit(task?.id || null); }}
+                      onMouseLeave={() => { tip.onMouseLeave(); setLit(null); }}>
+                      {g.label}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {groups.map(g => (
+            <React.Fragment key={g.name}>
+              <div className="ph-gt-row group">
+                <div className="nm"><Glyph name={g.glyph} />{g.name}<small>{g.rows.filter(r => r.kind !== 'milestone').length} tasks</small></div>
+                <div className="tr" />
+              </div>
+              {g.rows.map(r => {
+                const n = i++;
+                const s = pc(r.start), e = Math.min(100, pc(r.end) + 100 / span);
+                const tip = tipProps(ui, <><b>{r.title}</b>{fmt(r.start)}{r.end !== r.start ? ` – ${fmt(r.end)}` : ''}<small>{r.status.replace('_', ' ')}</small></>);
+                return (
+                  <div key={r.id} className={`ph-gt-row task${lit === r.id ? ' lit' : ''}`}>
+                    <div className="nm"><i className={`dot ${r.status}`} />{r.title}</div>
+                    <div className="tr">
+                      {r.kind === 'milestone'
+                        ? <button className={`ph-gt-ms ${r.status}`} style={{ left: `${s}%`, ['--d' as any]: `${0.15 + n * 0.04}s` }}
+                            onClick={() => go('timeline')} aria-label={`${r.title}, ${fmt(r.start)}`} {...tip} />
+                        : <button className={`ph-gt-bar ${r.status}${r.kind === 'execution' ? ' exec' : ''}`}
+                            style={{ left: `${s}%`, width: `${Math.max(0.8, e - s)}%`, ['--d' as any]: `${0.15 + n * 0.04}s` }}
+                            onClick={() => go('timeline')} aria-label={`${r.title}, ${fmt(r.start)} to ${fmt(r.end)}`} {...tip} />}
+                    </div>
+                  </div>
+                );
+              })}
             </React.Fragment>
           ))}
-
-          {/* the work */}
-          {placed.map(({ r, y: ry, i }) => {
-            const s = pc(r.start), e = endPc(r), sd = side(s, e);
-            const tip = tipProps(ui, <><b>{r.title}</b>{fmt(r.start)}{r.end !== r.start ? ` – ${fmt(r.end)}` : ''}<small>{r.status.replace('_', ' ')}</small></>);
-            if (r.kind === 'milestone') {
-              return (
-                <React.Fragment key={r.id}>
-                  <button className={`ph-b-gem ${r.status}`} style={{ left: `${s}%`, top: ry + ROW / 2, ['--d' as any]: `${0.2 + i * 0.05}s` }}
-                    onClick={() => go('timeline')} aria-label={`${r.title}, ${fmt(r.start)}`} {...tip} />
-                  <span className={`ph-b-lbl ms ${s <= 62 ? 'after' : 'before'}`} style={s <= 62 ? { left: `calc(${s}% + 14px)`, top: ry + ROW / 2 } : { right: `calc(${100 - s}% + 14px)`, top: ry + ROW / 2 }}>{r.title}</span>
-                </React.Fragment>
-              );
-            }
-            return (
-              <React.Fragment key={r.id}>
-                <button className={`ph-b-bar ${r.status}${r.kind === 'execution' ? ' exec' : ''}`}
-                  style={{ left: `${s}%`, width: `${Math.max(0.8, e - s)}%`, top: ry + 9, ['--d' as any]: `${0.15 + i * 0.05}s` }}
-                  onClick={() => go('timeline')} aria-label={`${r.title}, ${fmt(r.start)} to ${fmt(r.end)}`} {...tip}>
-                  {sd === 'inside' && <span className="in">{r.title}</span>}
-                </button>
-                {sd !== 'inside' && (
-                  <span className={`ph-b-lbl ${sd}`} style={sd === 'after'
-                    ? { left: `calc(${e}% + 8px)`, top: ry + ROW / 2, maxWidth: `calc(${100 - e}% - 10px)` }
-                    : { right: `calc(${100 - s}% + 8px)`, top: ry + ROW / 2, maxWidth: `calc(${s}% - 10px)` }}>{r.title}</span>
-                )}
-              </React.Fragment>
-            );
-          })}
-
-          {/* payments, hanging over the work they release */}
-          {pins.map((g, i) => {
-            const x = pc(g.at), tagY = AXIS + 8 + (i % 2) * 24, target = pinRow(g.at), toY = target ? (rowY.get(target.id) || 0) + 9 : AXIS + 50;
-            return (
-              <React.Fragment key={g.name}>
-                <span className="ph-b-thread" style={{ left: `${x}%`, top: tagY + 18, height: Math.max(0, toY - tagY - 18), ['--d' as any]: `${0.9 + i * 0.12}s` }} />
-                <span className="ph-b-tag" style={{ left: `${x}%`, top: tagY, ['--d' as any]: `${0.9 + i * 0.12}s` }}
-                  {...tipProps(ui, <><b>{g.name} · {g.label}</b>Due before the work it releases{g.trigger && <small>{g.trigger}</small>}</>)}>
-                  <Glyph name="rupee" />{g.label}
-                </span>
-              </React.Fragment>
-            );
-          })}
-
-          {today >= from && today <= to && (
-            <div className="ph-b-today" style={{ left: `${((today - from + 0.5) / span) * 100}%`, top: AXIS - 4, height: height - AXIS - 4 }}><b>Today</b></div>
-          )}
         </div>
       </div>
       {stale && (

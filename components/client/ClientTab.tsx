@@ -13,7 +13,7 @@ import { calculateSellPrice, generateDeterministicSchedule, formatINR } from '..
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 import { generateLocalComparison } from '../../lib/comparison';
 import { CloseIcon, ExportIcon, PrintIcon, CheckBadgeIcon, PencilRulerIcon, BriefcaseIcon } from '../Icons';
-import { TEMPLATE_TURNKEY, TEMPLATE_DESIGN_ONLY } from '../../constants';
+import { TEMPLATE_TURNKEY, TEMPLATE_DESIGN_ONLY, INITIAL_BANK } from '../../constants';
 
 export type PageOrientation = 'portrait' | 'landscape';
 
@@ -210,9 +210,19 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
   const [comparisonData, setComparisonData] = useState<AiComparisonResult>({ materialMatrix: [], scopeMatrix: [], tierSummaries: [] });
   const [editingSection, setEditingSection] = useState<string | null>(null);
 
-  const bankMap = useMemo(() => new Map(bank.map(item => [item.id, item])), [bank]);
   const validTiers = useMemo(() => tiers.filter(t => t !== null && t !== undefined), [tiers]);
   const projectContext = liveContext || validTiers[0]?.projectContext;
+
+  const bankMap = useMemo(() => {
+    const map = new Map((bank || []).map(item => [item.id, item]));
+    if (projectContext?.adHocItems) {
+      projectContext.adHocItems.forEach(item => map.set(item.id, item));
+    }
+    INITIAL_BANK.forEach(item => {
+      if (!map.has(item.id)) map.set(item.id, item);
+    });
+    return map;
+  }, [bank, projectContext?.adHocItems]);
 
   const proposalLevel = projectContext?.activeProposalLevel || 'LEVEL_1';
   const activeMode = projectContext?.activeProposalMode || 'TURNKEY';
@@ -269,7 +279,19 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
     return validTiers.map(tier => {
       const fullBoq: FullBoqItem[] = (tier.boq || []).map(boqItem => {
         const bankItem = bankMap.get(boqItem.bankId);
-        if (!bankItem) return null;
+        if (!bankItem) {
+          return {
+            id: boqItem.id,
+            name: (boqItem as any).item || (boqItem as any).name || (boqItem.roomId ? `${boqItem.roomId} Scope Item` : 'Scope Item'),
+            cat: (boqItem as any).cat || boqItem.roomId || 'General Scope',
+            materials: boqItem.baseRate !== undefined ? boqItem.baseRate : ((boqItem as any).rate || 0),
+            labor: 0,
+            margin: boqItem.marginOverride ?? 0,
+            unit: (boqItem as any).unit || 'nos',
+            specs: (boqItem as any).specs || 'Scope Details',
+            qty: boqItem.qty || 1
+          } as FullBoqItem;
+        }
         const effectiveMargin = boqItem.marginOverride ?? bankItem.margin;
         const effectiveMaterials = boqItem.baseRate !== undefined ? boqItem.baseRate : bankItem.materials;
         const { id, ...bankRest } = bankItem;
@@ -297,15 +319,27 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
     const tier = validTiers.find(t => t.id === tierId);
     if (!tier) return [];
     
+    const isGeneric = (s: any) => !s || typeof s !== 'string' || ['imported', 'imported.', 'custom / old item', ''].includes(s.trim().toLowerCase());
+
     const baselineBoq = (tier.boq || []).map(boqItem => {
       const bankItem = bankMap.get(boqItem.bankId);
-      if (!bankItem) return null;
-      const rate = calculateSellPrice(bankItem.materials, bankItem.labor, boqItem.marginOverride ?? bankItem.margin);
+      let itemName = '';
+      if (bankItem?.name && !isGeneric(bankItem.name)) itemName = bankItem.name;
+      else if ((boqItem as any).item && !isGeneric((boqItem as any).item)) itemName = (boqItem as any).item;
+      else if ((boqItem as any).name && !isGeneric((boqItem as any).name)) itemName = (boqItem as any).name;
+      else itemName = bankItem?.name || (boqItem as any).item || (boqItem as any).name || (boqItem.roomId ? `${boqItem.roomId} Scope Item` : 'Scope Item');
+
+      const rate = boqItem.selectedRate !== undefined && Number(boqItem.selectedRate) > 0
+        ? Number(boqItem.selectedRate)
+        : bankItem
+        ? calculateSellPrice(bankItem.materials, bankItem.labor, boqItem.marginOverride ?? bankItem.margin)
+        : Number((boqItem as any).rate || (boqItem as any).baseRate || 0);
+
       return {
         id: boqItem.id,
-        section: boqItem.roomId || bankItem.cat || 'General Scope',
-        item: bankItem.name,
-        unit: bankItem.unit,
+        section: boqItem.roomId || bankItem?.cat || 'General Scope',
+        item: itemName,
+        unit: (boqItem as any).unit || bankItem?.unit || 'nos',
         qty: boqItem.qty,
         rate: rate,
         total: rate * boqItem.qty,

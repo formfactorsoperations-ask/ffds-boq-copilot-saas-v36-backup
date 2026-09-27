@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFDS Studio OS — Design-to-BOQ Executive Diff &amp; Specification Inspector</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans & Newsreader Serif -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#EEF2F6',
+              100: '#E0E7FF',
+              500: '#4F46E5',
+              600: '#4338CA',
+              700: '#3730A3',
+              800: '#312E81',
+              900: '#1E1B4B',
+            },
+            slate: {
+              850: '#151E2E',
+              950: '#0B0F17',
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            serif: ['"Newsreader"', 'serif'],
+          },
+          boxShadow: {
+            card: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+            elevated: '0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #F8FAFC;
+      color: #0F172A;
+      -webkit-font-smoothing: antialiased;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: #F1F5F9;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+    .tab-btn.active {
+      background-color: #FFFFFF;
+      color: #0F172A;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      font-weight: 700;
+    }
+    .tab-btn:not(.active) {
+      color: #64748B;
+    }
+    .badge-added {
+      background-color: #FEF3C7;
+      color: #92400E;
+      border: 1px solid #FDE68A;
+    }
+    .badge-revised {
+      background-color: #E0E7FF;
+      color: #3730A3;
+      border: 1px solid #C7D2FE;
+    }
+    .badge-saving {
+      background-color: #D1FAE5;
+      color: #065F46;
+      border: 1px solid #A7F3D0;
+    }
+  </style>
+</head>
+<body class="min-h-screen custom-scroll antialiased selection:bg-indigo-100 selection:text-indigo-900">
+
+  <!-- TOP HEADER / STUDIO NAVIGATION BAR -->
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- Brand & Project Identity -->
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+              F
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">FFDS Client Portal</span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Design Finalized &amp; Frozen
+                </span>
+              </div>
+              <h1 class="text-sm font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
+                The Crest · Apt 1402
+                <span class="text-xs font-normal text-slate-500">(Mr. &amp; Mrs. Sharma)</span>
+              </h1>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Actions & Status Summary -->
+        <div class="flex items-center gap-3">
+          <div class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+            <span class="text-slate-500 font-medium">Agreement Contract Ref:</span>
+            <span class="font-bold text-slate-800">EXEC-2026-089</span>
+            <span class="text-slate-300">|</span>
+            <span class="text-slate-500 font-medium">BOQ Rev:</span>
+            <span class="font-bold text-indigo-700">2.0 (Frozen)</span>
+          </div>
+          <button onclick="window.print()" class="px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>Export Scope Docket</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+    <!-- HERO NOTIFICATION: CONTEXTUAL REASSURANCE BANNER -->
+    <div class="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 shadow-elevated relative overflow-hidden">
+      <!-- Decorative background accent -->
+      <div class="absolute -right-16 -top-16 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute right-1/3 -bottom-20 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div class="max-w-2xl space-y-2">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-xs text-indigo-200 text-xs font-semibold">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-indigo-300"></i>
+            <span>3D Design Sign-Off Completed &amp; Reconciled</span>
+          </div>
+          <h2 class="text-2xl sm:text-3xl font-serif tracking-tight text-white">
+            Your Final Scope &amp; Specification Audit
+          </h2>
+          <p class="text-slate-300 text-xs sm:text-sm leading-relaxed">
+            Congratulations on finalizing your 3D design renders! We translated every approved 3D visual, layout decision, and material finish into this transparent, audit-ready scope. You don't have to read 130 lines of technical carpentry codes: use the three lenses below to understand exactly <strong>what changed since booking</strong>, <strong>why the price moved</strong>, and <strong>the exact material specifications</strong> going into your home.
+          </p>
+        </div>
+
+        <!-- Metric Reconciliation Pill Board -->
+        <div class="shrink-0 bg-white/10 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/10 grid grid-cols-2 sm:grid-cols-3 gap-4 text-left">
+          <div class="space-y-0.5">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-indigo-200">Booking Baseline</div>
+            <div class="text-lg font-bold text-white tabular-nums">₹18,40,000</div>
+            <div class="text-[10px] text-slate-300">BOQ Rev 1.0 (Signed)</div>
+          </div>
+          <div class="space-y-0.5">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-indigo-200">Final Design Scope</div>
+            <div class="text-lg font-bold text-emerald-400 tabular-nums">₹19,85,000</div>
+            <div class="text-[10px] text-slate-300">BOQ Rev 2.0 (Operative)</div>
+          </div>
+          <div class="col-span-2 sm:col-span-1 space-y-0.5 border-t sm:border-t-0 sm:border-l border-white/15 pt-2 sm:pt-0 sm:pl-4">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-amber-300">Net Design Delta</div>
+            <div class="text-lg font-extrabold text-amber-300 tabular-nums">+₹1,45,000</div>
+            <div class="text-[10px] text-slate-300">+7.88% across 4 spaces</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXECUTIVE DELTA ATTRIBUTION STRIP (The 4-Second Answer to "Why did the price change?") -->
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-3">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <div class="w-2.5 h-2.5 rounded-full bg-indigo-600"></div>
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-900">
+            Net Change Breakdown at a Glance
+          </h3>
+          <span class="text-xs text-slate-500 font-normal">
+            (Total Net Movement: +₹1,45,000)
+          </span>
+        </div>
+        <span class="text-[11px] font-semibold text-slate-500">Every change was discussed and logged during 3D reviews</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <!-- Attribution 1: Client Additions -->
+        <div class="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-amber-950">New Design Elements</span>
+              <span class="text-xs font-extrabold text-amber-900 tabular-nums">+₹1,12,000</span>
+            </div>
+            <p class="text-[11px] text-amber-800/80 mt-0.5 leading-snug">
+              Kitchen Breakfast Island Counter, Master Fluted Feature Wall &amp; Foyer Shoe Bench with mirror.
+            </p>
+          </div>
+        </div>
+
+        <!-- Attribution 2: Material Upgrades -->
+        <div class="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center shrink-0">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-indigo-950">Finish &amp; Hardware Upgrades</span>
+              <span class="text-xs font-extrabold text-indigo-900 tabular-nums">+₹48,000</span>
+            </div>
+            <p class="text-[11px] text-indigo-800/80 mt-0.5 leading-snug">
+              Upgraded upper kitchen shutters to High-Gloss Anti-Fingerprint Acrylic + Hettich Sensys soft-close.
+            </p>
+          </div>
+        </div>
+
+        <!-- Attribution 3: Value Engineering Savings -->
+        <div class="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+            <i data-lucide="trending-down" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-emerald-950">Value Engineering Savings</span>
+              <span class="text-xs font-extrabold text-emerald-900 tabular-nums">-₹15,000</span>
+            </div>
+            <p class="text-[11px] text-emerald-800/80 mt-0.5 leading-snug">
+              Optimized Guest Bedroom wardrobe loft configuration and simplified false ceiling cove run.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- THE THREE LENSES NAVIGATION TAB -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-3">
+      <div class="inline-flex p-1 bg-slate-100 rounded-2xl ring-1 ring-slate-200/80">
+        <button id="tab-diff" onclick="switchLens('diff')" class="tab-btn active px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2">
+          <i data-lucide="git-commit" class="w-3.5 h-3.5 text-indigo-600"></i>
+          <span>1. Design Change Story</span>
+          <span class="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">5 Updates</span>
+        </button>
+
+        <button id="tab-specs" onclick="switchLens('specs')" class="tab-btn px-4 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-slate-500"></i>
+          <span>2. Specification Standards</span>
+          <span class="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-200 text-slate-700">All Trades</span>
+        </button>
+
+        <button id="tab-explorer" onclick="switchLens('explorer')" class="tab-btn px-4 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2">
+          <i data-lucide="table-properties" class="w-3.5 h-3.5 text-slate-500"></i>
+          <span>3. Smart BOQ Line Explorer</span>
+          <span class="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-200 text-slate-700">Detailed</span>
+        </button>
+      </div>
+
+      <!-- Quick Room Filter -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 shrink-0">Filter Room:</span>
+        <div class="flex items-center gap-1.5">
+          <button onclick="filterRoom('all')" class="room-btn active px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-900 text-white transition-colors">All Spaces</button>
+          <button onclick="filterRoom('kitchen')" class="room-btn px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">Kitchen (+₹68K)</button>
+          <button onclick="filterRoom('master')" class="room-btn px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">Master Bed (+₹55K)</button>
+          <button onclick="filterRoom('living')" class="room-btn px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">Living &amp; Foyer (+₹37K)</button>
+          <button onclick="filterRoom('guest')" class="room-btn px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">Guest Bed (-₹15K)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- LENS 1: DESIGN CHANGE STORY (What Changed, Why, & 3D Visual Context) -->
+    <!-- ========================================================================= -->
+    <div id="lens-diff" class="space-y-6">
+
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold text-slate-900">Design Evolution Journey</h3>
+          <p class="text-xs text-slate-500">
+            Comparing Booking Estimate (BOQ v1.0) with Final Approved 3D Design (BOQ v2.0).
+          </p>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md badge-added text-[10px] font-bold">New Item</span>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md badge-revised text-[10px] font-bold">Finish Upgrade</span>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md badge-saving text-[10px] font-bold">Value Saved</span>
+        </div>
+      </div>
+
+      <!-- CARDS LIST: ROOM BY ROOM WITH 3D RENDER VISUAL ANCHOR -->
+      <div class="space-y-4">
+
+        <!-- KITCHEN CHANGE CARD -->
+        <div class="room-card kitchen bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold text-sm">
+                🍳
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="text-sm font-bold text-slate-900">Modular Kitchen Scope Evolution</h4>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                    Net Delta: +₹68,000
+                  </span>
+                </div>
+                <p class="text-xs text-slate-500">
+                  Linked 3D Render: <span class="font-semibold text-slate-700">Render Sheet K-03 (Approved on Aug 16)</span>
+                </p>
+              </div>
+            </div>
+
+            <!-- Client's Stated Reason from Studio MoM -->
+            <div class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center gap-2 text-slate-600">
+              <i data-lucide="message-square" class="w-3.5 h-3.5 text-indigo-500"></i>
+              <span><strong>Design Meeting Note:</strong> "Client requested adding 5ft Breakfast Counter with quartz overhang"</span>
+            </div>
+          </div>
+
+          <!-- Line items diff table inside room -->
+          <div class="overflow-x-auto rounded-xl border border-slate-100">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
+                <tr>
+                  <th class="px-4 py-2.5">Specific Scope Item</th>
+                  <th class="px-4 py-2.5">Change Nature</th>
+                  <th class="px-4 py-2.5">Booking BOQ (v1.0)</th>
+                  <th class="px-4 py-2.5">Final Design (v2.0)</th>
+                  <th class="px-4 py-2.5 text-right">Cost Delta</th>
+                  <th class="px-4 py-2.5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-slate-700">
+                <!-- Row 1: Breakfast Island (NEW) -->
+                <tr class="hover:bg-slate-50/70 transition-colors">
+                  <td class="px-4 py-3">
+                    <div class="font-bold text-slate-900">Breakfast Island Counter (5ft × 2ft)</div>
+                    <div class="text-[11px] text-slate-500">Century Club Prime BWP Ply, 2 drawer tandem boxes, Quartz countertop carcass</div>
+                  </td>
+                  <td class="px-4 py-3">
+                    <span class="badge-added px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide">
+                      Added in 3D
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-slate-400 italic">Not in initial scope</td>
+                  <td class="px-4 py-3 font-semibold text-slate-900">1 unit · ₹48,000</td>
+                  <td class="px-4 py-3 text-right font-extrabold text-amber-700 tabular-nums">+₹48,000</td>
+                  <td class="px-4 py-3 text-right">
+                    <button onclick="openSpecModal('item-island')" class="text-indigo-600 hover:text-indigo-800 font-bold hover:underline">View Specs</button>
+                  </td>
+                </tr>
+
+                <!-- Row 2: Shutter Finish Upgrade -->
+                <tr class="hover:bg-slate-50/70 transition-colors">
+                  <td class="px-4 py-3">
+                    <div class="font-bold text-slate-900">Upper Cabinets Finish Upgrade</div>
+                    <div class="text-[11px] text-slate-500">Upgraded from 1mm standard laminate to 1.5mm Ultra-High Gloss Acrylic (Anti-Yellowing)</div>
+                  </td>
+                  <td class="px-4 py-3">
+                    <span class="badge-revised px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide">
+                      Finish Upgrade
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-slate-600">Standard 1mm Laminate (₹1,450/sqft)</td>
+                  <td class="px-4 py-3 font-semibold text-slate-900">Acrylic Shutter (₹1,850/sqft)</td>
+                  <td class="px-4 py-3 text-right font-extrabold text-indigo-700 tabular-nums">+₹20,000</td>
+                  <td class="px-4 py-3 text-right">
+                    <button onclick="openSpecModal('item-acrylic')" class="text-indigo-600 hover:text-indigo-800 font-bold hover:underline">View Specs</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- MASTER BEDROOM CHANGE CARD -->
+        <div class="room-card master bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-900 flex items-center justify-center font-bold text-sm">
+                🛏️
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="text-sm font-bold text-slate-900">Master Bedroom Scope Evolution</h4>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-800 border border-indigo-200">
+                    Net Delta: +₹55,000
+                  </span>
+                </div>
+                <p class="text-xs text-slate-500">
+                  Linked 3D Render: <span class="font-semibold text-slate-700">Master Suite 3D Shot 04 (Bed Wall Paneling)</span>
+                </p>
+              </div>
+            </div>
+
+            <!-- Client's Stated Reason -->
+            <div class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center gap-2 text-slate-600">
+              <i data-lucide="message-square" class="w-3.5 h-3.5 text-indigo-500"></i>
+              <span><strong>Design Meeting Note:</strong> "Selected charcoal acoustic fluted panels behind king bed headboard"</span>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-100">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
+                <tr>
+                  <th class="px-4 py-2.5">Specific Scope Item</th>
+                  <th class="px-4 py-2.5">Change Nature</th>
+                  <th class="px-4 py-2.5">Booking BOQ (v1.0)</th>
+                  <th class="px-4 py-2.5">Final Design (v2.0)</th>
+                  <th class="px-4 py-2.5 text-right">Cost Delta</th>
+                  <th class="px-4 py-2.5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-slate-700">
+                <tr class="hover:bg-slate-50/70 transition-colors">
+                  <td class="px-4 py-3">
+                    <div class="font-bold text-slate-900">Acoustic Fluted Bed Wall Paneling (10ft × 9ft)</div>
+                    <div class="text-[11px] text-slate-500">Royal Touche Charcoal Fluted Louvers with warm LED profile groove integration</div>
+                  </td>
+                  <td class="px-4 py-3">
+                    <span class="badge-added px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide">
+                      Added in 3D
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-slate-400 italic">Plain Royale Paint</td>
+                  <td class="px-4 py-3 font-semibold text-slate-900">90 sqft · ₹45,000</td>
+                  <td class="px-4 py-3 text-right font-extrabold text-amber-700 tabular-nums">+₹45,000</td>
+                  <td class="px-4 py-3 text-right">
+                    <button onclick="openSpecModal('item-fluted')" class="text-indigo-600 hover:text-indigo-800 font-bold hover:underline">View Specs</button>
+                  </td>
+                </tr>
+                <tr class="hover:bg-slate-50/70 transition-colors">
+                  <td class="px-4 py-3">
+                    <div class="font-bold text-slate-900">Wardrobe Internal Sensor Lighting</div>
+                    <div class="text-[11px] text-slate-500">Hafele Loox 12V automatic door sensor LED profile lights inside both master wardrobe carcasses</div>
+                  </td>
+                  <td class="px-4 py-3">
+                    <span class="badge-revised px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide">
+                      Hardware Upgrade
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-slate-400 italic">Manual switch point</td>
+                  <td class="px-4 py-3 font-semibold text-slate-900">2 sets · ₹10,000</td>
+                  <td class="px-4 py-3 text-right font-extrabold text-indigo-700 tabular-nums">+₹10,000</td>
+                  <td class="px-4 py-3 text-right">
+                    <button onclick="openSpecModal('item-sensor')" class="text-indigo-600 hover:text-indigo-800 font-bold hover:underline">View Specs</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- GUEST BEDROOM OPTIMIZATION / VALUE ENGINEERING CARD -->
+        <div class="room-card guest bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold text-sm">
+                🛋️
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="text-sm font-bold text-slate-900">Guest Bedroom Value Optimization</h4>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    Net Delta: -₹15,000 (Savings)
+                  </span>
+                </div>
+                <p class="text-xs text-slate-500">
+                  Optimization agreed in 2D review meeting to prevent room cramping.
+                </p>
+              </div>
+            </div>
+
+            <!-- Client's Stated Reason -->
+            <div class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center gap-2 text-slate-600">
+              <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600"></i>
+              <span><strong>Design Optimization:</strong> "Eliminated bulky ceiling pelmet box and streamlined wardrobe overhead lofts"</span>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-100">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
+                <tr>
+                  <th class="px-4 py-2.5">Specific Scope Item</th>
+                  <th class="px-4 py-2.5">Change Nature</th>
+                  <th class="px-4 py-2.5">Booking BOQ (v1.0)</th>
+                  <th class="px-4 py-2.5">Final Design (v2.0)</th>
+                  <th class="px-4 py-2.5 text-right">Cost Delta</th>
+                  <th class="px-4 py-2.5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-slate-700">
+                <tr class="hover:bg-slate-50/70 transition-colors">
+                  <td class="px-4 py-3">
+                    <div class="font-bold text-slate-900">False Ceiling Peripheral Pelmet</div>
+                    <div class="text-[11px] text-slate-500">Heavy multi-tier drywall boxing replaced with clean single-level perimeter cornice</div>
+                  </td>
+                  <td class="px-4 py-3">
+                    <span class="badge-saving px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide">
+                      Value Engineering
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-slate-600">Multi-tier Gyproc Boxing (₹25,000)</td>
+                  <td class="px-4 py-3 font-semibold text-slate-900">Clean Perimeter Trim (₹10,000)</td>
+                  <td class="px-4 py-3 text-right font-extrabold text-emerald-700 tabular-nums">-₹15,000</td>
+                  <td class="px-4 py-3 text-right">
+                    <button onclick="openSpecModal('item-gyproc')" class="text-indigo-600 hover:text-indigo-800 font-bold hover:underline">View Specs</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- LENS 2: SPECIFICATION STANDARDS (What exact materials & brands am I getting?) -->
+    <!-- ========================================================================= -->
+    <div id="lens-specs" class="space-y-6 hidden">
+      <div class="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h3 class="text-base font-bold text-slate-900">Certified Material &amp; Brand Standards</h3>
+          <p class="text-xs text-slate-500">
+            Every material in your BOQ is backed by contractually binding brand and grade commitments.
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input type="text" id="specSearch" onkeyup="searchSpecs()" placeholder="Search brand, plywood, paint..." class="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 w-52">
+          </div>
+        </div>
+      </div>
+
+      <!-- SPECIFICATION CATEGORY TILES -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="specsGrid">
+
+        <!-- Spec Card 1: Core Plywood -->
+        <div class="spec-card bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4 hover:border-indigo-300 transition-colors">
+          <div class="flex items-start justify-between">
+            <div class="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
+              <i data-lucide="layers" class="w-5 h-5"></i>
+            </div>
+            <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Contract Grade: A+
+            </span>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-slate-900">Core Plywood Substrates</h4>
+            <p class="text-xs text-slate-500 mt-0.5">Used across Kitchen, Wardrobes, &amp; Vanity carcasses</p>
+          </div>
+          <div class="space-y-2 pt-2 border-t border-slate-100 text-xs">
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Wet Areas (Kitchen/Bath):</span>
+              <span class="font-bold text-slate-900">Century Club Prime BWP 710</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Dry Areas (Wardrobes):</span>
+              <span class="font-bold text-slate-900">Century Sainik 710 / Greenply MR</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Preservative Treatment:</span>
+              <span class="font-bold text-emerald-700">Borer &amp; Termite Proof (GLP)</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Manufacturer Warranty:</span>
+              <span class="font-bold text-indigo-700">25 Years Direct Warranty</span>
+            </div>
+          </div>
+          <div class="pt-2">
+            <button onclick="openSpecModal('item-plywood-details')" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition-colors flex items-center justify-center gap-1.5">
+              <i data-lucide="info" class="w-3.5 h-3.5"></i>
+              <span>View Inclusions &amp; Lab Certs</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Spec Card 2: Hardware & Moving Mechanics -->
+        <div class="spec-card bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4 hover:border-indigo-300 transition-colors">
+          <div class="flex items-start justify-between">
+            <div class="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700">
+              <i data-lucide="cog" class="w-5 h-5"></i>
+            </div>
+            <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+              100% German Hardware
+            </span>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-slate-900">Fittings &amp; Drawer Systems</h4>
+            <p class="text-xs text-slate-500 mt-0.5">Hinges, Tandem Channels, &amp; Lift-ups</p>
+          </div>
+          <div class="space-y-2 pt-2 border-t border-slate-100 text-xs">
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Drawer Mechanics:</span>
+              <span class="font-bold text-slate-900">Hettich Atira / Hafele Quadro</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Cabinet Hinges:</span>
+              <span class="font-bold text-slate-900">Hettich Sensys Soft-Close (110°)</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Weight Load Rating:</span>
+              <span class="font-bold text-slate-900">35 kg / drawer tested</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Lifecycle Test:</span>
+              <span class="font-bold text-indigo-700">80,000 opening cycles</span>
+            </div>
+          </div>
+          <div class="pt-2">
+            <button onclick="openSpecModal('item-hardware-details')" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition-colors flex items-center justify-center gap-1.5">
+              <i data-lucide="info" class="w-3.5 h-3.5"></i>
+              <span>Hardware Schedule Breakdown</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Spec Card 3: Surface Finishes & Laminates -->
+        <div class="spec-card bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4 hover:border-indigo-300 transition-colors">
+          <div class="flex items-start justify-between">
+            <div class="w-10 h-10 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-700">
+              <i data-lucide="palette" class="w-5 h-5"></i>
+            </div>
+            <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+              Pre-Matched to 3D
+            </span>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-slate-900">Surfaces, Laminates &amp; Acrylic</h4>
+            <p class="text-xs text-slate-500 mt-0.5">Outer shutters, inner liners, &amp; fluted panels</p>
+          </div>
+          <div class="space-y-2 pt-2 border-t border-slate-100 text-xs">
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Outer Shutter Finish:</span>
+              <span class="font-bold text-slate-900">Merino 1mm Matt / 1.5mm Acrylic</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Inner Liner:</span>
+              <span class="font-bold text-slate-900">0.8mm Off-White Fabric Textured</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Edge Banding:</span>
+              <span class="font-bold text-slate-900">2mm Rehau PVC (Machine Bonded)</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Adhesive System:</span>
+              <span class="font-bold text-indigo-700">Jowat Hot-Melt Waterproof PUR</span>
+            </div>
+          </div>
+          <div class="pt-2">
+            <button onclick="openSpecModal('item-laminate-details')" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition-colors flex items-center justify-center gap-1.5">
+              <i data-lucide="info" class="w-3.5 h-3.5"></i>
+              <span>Swatch &amp; Code Registry</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Spec Card 4: Paint & Wall Chemistry -->
+        <div class="spec-card bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4 hover:border-indigo-300 transition-colors">
+          <div class="flex items-start justify-between">
+            <div class="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-700">
+              <i data-lucide="brush" class="w-5 h-5"></i>
+            </div>
+            <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+              6-Stage Application
+            </span>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-slate-900">Paint Chemistry &amp; Coats</h4>
+            <p class="text-xs text-slate-500 mt-0.5">Internal walls, ceilings, &amp; PU accents</p>
+          </div>
+          <div class="space-y-2 pt-2 border-t border-slate-100 text-xs">
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Wall Paint Emulsion:</span>
+              <span class="font-bold text-slate-900">Asian Paints Royale Luxury (Teflon)</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Ceiling Treatment:</span>
+              <span class="font-bold text-slate-900">Tractor Emulsion Anti-Bacterial</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Substrate Preparation:</span>
+              <span class="font-bold text-slate-900">2 Coats Acrylic Putty + 1 Primer</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Finish Sheen:</span>
+              <span class="font-bold text-indigo-700">Soft Silky Sheen (Low VOC)</span>
+            </div>
+          </div>
+          <div class="pt-2">
+            <button onclick="openSpecModal('item-paint-details')" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition-colors flex items-center justify-center gap-1.5">
+              <i data-lucide="info" class="w-3.5 h-3.5"></i>
+              <span>Shade Code &amp; Prep Protocol</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Spec Card 5: Electrical & Lighting Infrastructure -->
+        <div class="spec-card bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4 hover:border-indigo-300 transition-colors">
+          <div class="flex items-start justify-between">
+            <div class="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
+              <i data-lucide="zap" class="w-5 h-5"></i>
+            </div>
+            <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+              IS:694 Certified
+            </span>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-slate-900">Electrical &amp; Concealed Wiring</h4>
+            <p class="text-xs text-slate-500 mt-0.5">Conduits, wiring grades, &amp; modular plates</p>
+          </div>
+          <div class="space-y-2 pt-2 border-t border-slate-100 text-xs">
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Concealed Wiring:</span>
+              <span class="font-bold text-slate-900">Polycab FRLS Copper (Flame Retardant)</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Switches &amp; Plates:</span>
+              <span class="font-bold text-slate-900">Schneider AvatarOn / Legrand Mylinc</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">False Ceiling Lights:</span>
+              <span class="font-bold text-slate-900">Philips 3000K Warm White COB (9W)</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">LED Strip Driver:</span>
+              <span class="font-bold text-indigo-700">Mean Well Waterproof IP67</span>
+            </div>
+          </div>
+          <div class="pt-2">
+            <button onclick="openSpecModal('item-electrical-details')" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition-colors flex items-center justify-center gap-1.5">
+              <i data-lucide="info" class="w-3.5 h-3.5"></i>
+              <span>Circuit &amp; Switch Schedule</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Spec Card 6: Contractual Scope Boundaries (Inclusions/Exclusions) -->
+        <div class="spec-card bg-white rounded-2xl border border-slate-200 p-5 shadow-card space-y-4 hover:border-indigo-300 transition-colors">
+          <div class="flex items-start justify-between">
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
+              <i data-lucide="file-check-2" class="w-5 h-5"></i>
+            </div>
+            <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Zero Hidden Clauses
+            </span>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-slate-900">Clear Scope Inclusions/Exclusions</h4>
+            <p class="text-xs text-slate-500 mt-0.5">Knowing what is inside &amp; outside this BOQ</p>
+          </div>
+          <div class="space-y-2 pt-2 border-t border-slate-100 text-xs">
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Kitchen Counter Quartz:</span>
+              <span class="font-bold text-emerald-700">Included (Kalinga Stone 18mm)</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Kitchen Appliances:</span>
+              <span class="font-bold text-slate-600">Client Direct (Fitting by FFDS)</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Debris Disposal:</span>
+              <span class="font-bold text-emerald-700">Included to municipal zone</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Deep Cleaning Handover:</span>
+              <span class="font-bold text-indigo-700">Included prior to move-in</span>
+            </div>
+          </div>
+          <div class="pt-2">
+            <button onclick="openSpecModal('item-boundaries-details')" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition-colors flex items-center justify-center gap-1.5">
+              <i data-lucide="info" class="w-3.5 h-3.5"></i>
+              <span>View Complete Boundary Terms</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- LENS 3: SMART BOQ LINE EXPLORER (With Quick Spec Drawer & Diff Badges) -->
+    <!-- ========================================================================= -->
+    <div id="lens-explorer" class="space-y-6 hidden">
+      <div class="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-card space-y-6">
+        
+        <!-- Controls & Search -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <h4 class="font-bold text-slate-900 text-base">Deliverables Schedule with Specification Inspection</h4>
+            <p class="text-xs text-slate-500">
+              Click any line to inspect its core materials, brand fittings, dimensions, and drawing sheet references.
+            </p>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="relative w-full sm:w-64">
+              <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+              <input type="text" id="lineSearch" onkeyup="searchLines()" placeholder="Search item, room, specs..." class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs bg-slate-50 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <select id="lineFilterStatus" onchange="searchLines()" class="px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-white text-slate-700 outline-hidden">
+              <option value="all">All Statuses</option>
+              <option value="added">New Additions</option>
+              <option value="upgraded">Upgraded Specs</option>
+              <option value="unchanged">Baseline Items</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- The List of Items with Inline Expandable Spec Cards -->
+        <div class="space-y-3" id="boqItemsList">
+
+          <!-- Item 1: Kitchen Island Counter -->
+          <div class="boq-item-row p-4 rounded-2xl border border-amber-200 bg-amber-50/20 hover:bg-amber-50/40 transition-all cursor-pointer" onclick="toggleItemDetails('item-row-1')">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="flex items-start gap-3">
+                <span class="text-xs font-bold text-slate-400 mt-0.5">01</span>
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold text-sm text-slate-900">Breakfast Island Counter &amp; Storage Unit</span>
+                    <span class="badge-added px-2 py-0.5 rounded text-[10px] font-black uppercase">Added in 3D Finalization</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">Kitchen</span>
+                  </div>
+                  <p class="text-xs text-slate-600 mt-1">
+                    5ft (L) × 2ft (W) × 34in (H) with 2 Hettich soft-close tandem drawers &amp; quartz top support.
+                  </p>
+                </div>
+              </div>
+              <div class="text-left sm:text-right shrink-0">
+                <div class="text-sm font-extrabold text-slate-900 tabular-nums">₹48,000</div>
+                <div class="text-[11px] text-slate-500">1 unit · Was: <span class="italic text-slate-400">None (New)</span></div>
+              </div>
+            </div>
+
+            <!-- Expandable Specification Drawer -->
+            <div id="item-row-1" class="hidden mt-4 pt-4 border-t border-amber-200/80 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-700 bg-white/80 p-3.5 rounded-xl">
+              <div>
+                <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Core Substrate</span>
+                <span class="text-slate-600">Century Club Prime BWP 710 Plywood (18mm carcass, 12mm back)</span>
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Fittings &amp; Runners</span>
+                <span class="text-slate-600">Hettich InnoTech Atira tandem boxes with soft-close silent damping</span>
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Boundary &amp; Reference</span>
+                <span class="text-slate-600">Includes quartz fabrication support. Ref: Drawing Sheet K-03, Rev 2</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 2: Master Bedroom Headboard Feature Wall -->
+          <div class="boq-item-row p-4 rounded-2xl border border-indigo-200 bg-indigo-50/20 hover:bg-indigo-50/40 transition-all cursor-pointer" onclick="toggleItemDetails('item-row-2')">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="flex items-start gap-3">
+                <span class="text-xs font-bold text-slate-400 mt-0.5">02</span>
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold text-sm text-slate-900">Acoustic Fluted Bed Wall Paneling</span>
+                    <span class="badge-added px-2 py-0.5 rounded text-[10px] font-black uppercase">Added in 3D Finalization</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">Master Bed</span>
+                  </div>
+                  <p class="text-xs text-slate-600 mt-1">
+                    Full-height vertical fluted louvers behind king size bed with concealed LED warm profile channel.
+                  </p>
+                </div>
+              </div>
+              <div class="text-left sm:text-right shrink-0">
+                <div class="text-sm font-extrabold text-slate-900 tabular-nums">₹45,000</div>
+                <div class="text-[11px] text-slate-500">90 sq ft @ ₹500/sqft</div>
+              </div>
+            </div>
+
+            <div id="item-row-2" class="hidden mt-4 pt-4 border-t border-indigo-200/80 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-700 bg-white/80 p-3.5 rounded-xl">
+              <div>
+                <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Brand &amp; Material</span>
+                <span class="text-slate-600">Royal Touche HD Charcoal Fluted Panels on 6mm calibrated ply base</span>
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Integrated Lighting</span>
+                <span class="text-slate-600">Philips 24V Warm White 3000K recessed aluminum diffuser channel</span>
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Drawing Link</span>
+                <span class="text-slate-600">Render Sheet MB-02 (Signed off in 3D Client Review)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 3: Kitchen Upper Cabinets -->
+          <div class="boq-item-row p-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition-all cursor-pointer" onclick="toggleItemDetails('item-row-3')">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="flex items-start gap-3">
+                <span class="text-xs font-bold text-slate-400 mt-0.5">03</span>
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold text-sm text-slate-900">Modular Kitchen Overhead Cabinets</span>
+                    <span class="badge-revised px-2 py-0.5 rounded text-[10px] font-black uppercase">Finish Upgraded</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">Kitchen</span>
+                  </div>
+                  <p class="text-xs text-slate-600 mt-1">
+                    Upgraded from standard 1mm laminate to 1.5mm Senosan High-Gloss Acrylic with hydraulic lift-up stay.
+                  </p>
+                </div>
+              </div>
+              <div class="text-left sm:text-right shrink-0">
+                <div class="text-sm font-extrabold text-slate-900 tabular-nums">₹92,500</div>
+                <div class="text-[11px] text-slate-500">50 sq ft · Delta: <span class="font-bold text-indigo-700">+₹20,000</span></div>
+              </div>
+            </div>
+
+            <div id="item-row-3" class="hidden mt-4 pt-4 border-t border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl">
+              <div>
+                <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Shutter Material</span>
+                <span class="text-slate-600">Senosan (Austria) 1.5mm Anti-Fingerprint Ultra-Gloss Acrylic</span>
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Opening Mechanism</span>
+                <span class="text-slate-600">Blum Aventos HK-S Bi-fold / Stay flap lift systems</span>
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Edge Detail</span>
+                <span class="text-slate-600">Zero-joint seamless PUR laser edge banding</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 4: Master Wardrobe -->
+          <div class="boq-item-row p-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition-all cursor-pointer" onclick="toggleItemDetails('item-row-4')">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="flex items-start gap-3">
+                <span class="text-xs font-bold text-slate-400 mt-0.5">04</span>
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold text-sm text-slate-900">Master Wardrobe Carcass &amp; Lofts (8ft × 7ft)</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Unchanged Baseline</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">Master Bed</span>
+                  </div>
+                  <p class="text-xs text-slate-600 mt-1">
+                    Full wardrobe with hanger zones, 4 internal drawers, tie rack, &amp; 0.8mm internal linen-finish liner.
+                  </p>
+                </div>
+              </div>
+              <div class="text-left sm:text-right shrink-0">
+                <div class="text-sm font-extrabold text-slate-900 tabular-nums">₹1,45,000</div>
+                <div class="text-[11px] text-slate-500">56 sq ft · Matches Baseline</div>
+              </div>
+            </div>
+
+            <div id="item-row-4" class="hidden mt-4 pt-4 border-t border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl">
+              <div>
+                <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Plywood Grade</span>
+                <span class="text-slate-600">Century Sainik 710 MR Grade 18mm with GLP termite resistance</span>
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Hardware &amp; Hinges</span>
+                <span class="text-slate-600">Hettich Sensys 110° soft-close concealed clip-on hinges</span>
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Inclusions</span>
+                <span class="text-slate-600">Includes profile handles, brush buffers, &amp; wardrobe locks</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- CLIENT CONFIRMATION & PEACE OF MIND DOCKET FOOTER -->
+    <div class="rounded-3xl border border-slate-200 bg-white p-6 sm:p-7 shadow-card flex flex-col md:flex-row items-center justify-between gap-6">
+      <div class="space-y-1 text-center md:text-left">
+        <h4 class="text-base font-bold text-slate-900 flex items-center justify-center md:justify-start gap-2">
+          <i data-lucide="shield-check" class="w-5 h-5 text-indigo-600"></i>
+          <span>Contractual Guarantee &amp; Final Price Freeze</span>
+        </h4>
+        <p class="text-xs text-slate-500 max-w-2xl leading-relaxed">
+          This scope and specification docket is now frozen. Under Clause 4.2 of your FFDS Interior Agreement, no further quantity variations or rate changes can be made without your explicit written approval.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-3 shrink-0">
+        <button onclick="alert('Your studio project manager has been notified. We will contact you shortly to review any remaining questions.')" class="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors">
+          Ask a Question on Scope
+        </button>
+        <button onclick="confirmApproval()" class="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-2">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Confirm Scope Approval</span>
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- SPECIFICATION MODAL DIALOG -->
+  <div id="specModal" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-start justify-between border-b border-slate-100 pb-4">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">Technical Specification Card</span>
+          <h3 id="modalTitle" class="text-base font-bold text-slate-900 mt-1">Item Specifications</h3>
+        </div>
+        <button onclick="closeSpecModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div id="modalBody" class="space-y-4 text-xs text-slate-700">
+        <!-- Injected via JS -->
+      </div>
+
+      <div class="border-t border-slate-100 pt-4 flex items-center justify-between">
+        <span class="text-[11px] text-slate-400">FFDS Quality Assurance Grade: A+</span>
+        <button onclick="closeSpecModal()" class="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">
+          Close Inspector
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Tab Switching
+    function switchLens(lens) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.getElementById('lens-diff').classList.add('hidden');
+      document.getElementById('lens-specs').classList.add('hidden');
+      document.getElementById('lens-explorer').classList.add('hidden');
+
+      if (lens === 'diff') {
+        document.getElementById('tab-diff').classList.add('active');
+        document.getElementById('lens-diff').classList.remove('hidden');
+      } else if (lens === 'specs') {
+        document.getElementById('tab-specs').classList.add('active');
+        document.getElementById('lens-specs').classList.remove('hidden');
+      } else if (lens === 'explorer') {
+        document.getElementById('tab-explorer').classList.add('active');
+        document.getElementById('lens-explorer').classList.remove('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    // Room Filtering
+    function filterRoom(room) {
+      document.querySelectorAll('.room-btn').forEach(b => {
+        b.classList.remove('bg-slate-900', 'text-white');
+        b.classList.add('bg-white', 'text-slate-600');
+      });
+      event.target.classList.remove('bg-white', 'text-slate-600');
+      event.target.classList.add('bg-slate-900', 'text-white');
+
+      const cards = document.querySelectorAll('.room-card');
+      cards.forEach(card => {
+        if (room === 'all') {
+          card.classList.remove('hidden');
+        } else if (card.classList.contains(room)) {
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+    }
+
+    // Toggle Item Details Drawer in Explorer
+    function toggleItemDetails(id) {
+      const drawer = document.getElementById(id);
+      if (drawer) {
+        drawer.classList.toggle('hidden');
+      }
+    }
+
+    // Search Specs
+    function searchSpecs() {
+      const q = document.getElementById('specSearch').value.toLowerCase();
+      document.querySelectorAll('.spec-card').forEach(card => {
+        const text = card.innerText.toLowerCase();
+        card.style.display = text.includes(q) ? 'block' : 'none';
+      });
+    }
+
+    // Search Lines
+    function searchLines() {
+      const q = document.getElementById('lineSearch').value.toLowerCase();
+      const statusFilter = document.getElementById('lineFilterStatus').value;
+      
+      document.querySelectorAll('.boq-item-row').forEach(row => {
+        const text = row.innerText.toLowerCase();
+        let matchesStatus = true;
+        if (statusFilter === 'added') matchesStatus = text.includes('added in 3d');
+        if (statusFilter === 'upgraded') matchesStatus = text.includes('finish upgraded');
+        if (statusFilter === 'unchanged') matchesStatus = text.includes('unchanged baseline');
+        
+        row.style.display = (text.includes(q) && matchesStatus) ? 'block' : 'none';
+      });
+    }
+
+    // Spec Modal Logic
+    const SPEC_REGISTRY = {
+      'item-island': {
+        title: 'Modular Kitchen: Breakfast Island Counter',
+        content: `
+          <div class="space-y-3">
+            <div class="p-3 bg-slate-50 rounded-xl space-y-1">
+              <span class="font-bold text-slate-900 block">Why this was added:</span>
+              <p class="text-slate-600">Requested during 3D Render Review (Meeting of Aug 16, 2026) to provide informal seating for two while creating deep storage for large kitchen appliances.</p>
+            </div>
+            <div class="space-y-2">
+              <div class="flex justify-between border-b border-slate-100 pb-1.5"><span class="text-slate-500">Core Substrate:</span><span class="font-bold text-slate-800">Century Club Prime BWP 710 Plywood</span></div>
+              <div class="flex justify-between border-b border-slate-100 pb-1.5"><span class="text-slate-500">Hardware:</span><span class="font-bold text-slate-800">2x Hettich InnoTech Atira Tandem Soft-Close</span></div>
+              <div class="flex justify-between border-b border-slate-100 pb-1.5"><span class="text-slate-500">Finish Outer:</span><span class="font-bold text-slate-800">1mm Merino Silk Matt Laminate (Code #21045)</span></div>
+              <div class="flex justify-between border-b border-slate-100 pb-1.5"><span class="text-slate-500">Finish Inner:</span><span class="font-bold text-slate-800">0.8mm Off-white Anti-bacterial Liner</span></div>
+              <div class="flex justify-between border-b border-slate-100 pb-1.5"><span class="text-slate-500">Drawing Reference:</span><span class="font-bold text-indigo-700">DWG-KIT-04 &middot; 3D Render Sheet K-03</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">Inclusions:</span><span class="font-bold text-emerald-700">Countertop framework, handles, runners</span></div>
+            </div>
+          </div>
+        `
+      },
+      'item-acrylic': {
+        title: 'Upper Kitchen Cabinets: Ultra-Gloss Acrylic Upgrade',
+        content: `
+          <div class="space-y-3">
+            <div class="p-3 bg-indigo-50 rounded-xl space-y-1">
+              <span class="font-bold text-indigo-950 block">Upgrade Specification:</span>
+              <p class="text-indigo-800">Client upgraded upper shutters from standard 1mm laminate to 1.5mm high-gloss Senosan acrylic for reflection of natural light from balcony.</p>
+            </div>
+            <div class="space-y-2">
+              <div class="flex justify-between border-b border-slate-100 pb-1.5"><span class="text-slate-500">Material Grade:</span><span class="font-bold text-slate-800">Senosan (Austria) Scratch-Resistant Top Coat</span></div>
+              <div class="flex justify-between border-b border-slate-100 pb-1.5"><span class="text-slate-500">Shutter Core:</span><span class="font-bold text-slate-800">18mm High-Density Calibrated BWP 710</span></div>
+              <div class="flex justify-between border-b border-slate-100 pb-1.5"><span class="text-slate-500">Edge Banding:</span><span class="font-bold text-slate-800">2mm Zero-joint PUR Waterproof Joint</span></div>
+              <div class="flex justify-between border-b border-slate-100 pb-1.5"><span class="text-slate-500">Warranty:</span><span class="font-bold text-indigo-700">10 Years Anti-Yellowing Guarantee</span></div>
+            </div>
+          </div>
+        `
+      },
+      'item-fluted': {
+        title: 'Master Bed: Acoustic Fluted Headboard Wall',
+        content: `
+          <div class="space-y-3">
+            <div class="p-3 bg-slate-50 rounded-xl space-y-1">
+              <span class="font-bold text-slate-900 block">Design Feature Breakdown:</span>
+              <p class="text-slate-600">Replaces plain wall paint with Royal Touche architectural charcoal louvers and continuous warm LED accent groove.</p>
+            </div>
+            <div class="space-y-2">
+              <div class="flex justify-between border-b border-slate-100 pb-1.5"><span class="text-slate-500">Dimension:</span><span class="font-bold text-slate-800">10 ft width &times; 9 ft ceiling height (90 sqft)</span></div>
+              <div class="flex justify-between border-b border-slate-100 pb-1.5"><span class="text-slate-500">Louver Brand:</span><span class="font-bold text-slate-800">Royal Touche Charcoal Matte Fluted Series</span></div>
+              <div class="flex justify-between border-b border-slate-100 pb-1.5"><span class="text-slate-500">Lighting Included:</span><span class="font-bold text-slate-800">Philips 3000K 24V COB Strip with aluminum channel</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">Installation:</span><span class="font-bold text-emerald-700">Concealed clip mounting with 6mm ply base</span></div>
+            </div>
+          </div>
+        `
+      },
+      'item-plywood-details': {
+        title: 'Century Plywood Certification & Traceability',
+        content: `
+          <div class="space-y-2">
+            <p class="text-slate-600">All plywood delivered to your site is accompanied by CenturyPly QR authentication certificates and ISI lab test compliance reports.</p>
+            <div class="p-3 bg-amber-50 rounded-xl border border-amber-200">
+              <span class="font-bold text-amber-900 block">IS:710 Marine Grade BWP Specifications:</span>
+              <ul class="list-disc pl-4 mt-1 space-y-1 text-amber-800">
+                <li>Boiling Water Proof: Withstands 72 hours of continuous boiling water immersion without delamination.</li>
+                <li>GLP (Glue Line Protection): High-pressure chemical impregnation prevents wood-borers and subterranean termites.</li>
+                <li>Calibrated Precision: Quad-press calibration guarantees uniform thickness across all shutter carcasses.</li>
+              </ul>
+            </div>
+          </div>
+        `
+      }
+    };
+
+    function openSpecModal(key) {
+      const reg = SPEC_REGISTRY[key] || {
+        title: 'Material Specifications',
+        content: '<p class="text-slate-500">Detailed certified specification records loaded from the FFDS item bank.</p>'
+      };
+      document.getElementById('modalTitle').innerText = reg.title;
+      document.getElementById('modalBody').innerHTML = reg.content;
+      document.getElementById('specModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeSpecModal() {
+      document.getElementById('specModal').classList.add('hidden');
+    }
+
+    function confirmApproval() {
+      alert('Scope & Specification Docket Approved!\n\nThis approval is digitally locked to BOQ Revision 2.0 with cryptographic hash verification.');
+    }
+  </script>
+</body>
+</html>

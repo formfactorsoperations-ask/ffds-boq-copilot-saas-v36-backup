@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -56,6 +56,8 @@ import autoTable from "jspdf-autotable";
 import { useOrg } from "../contexts/OrgContext";
 import { generateClientNote } from "../services/geminiService";
 import { INITIAL_BANK } from "../constants";
+import { RevisionExcelImportModal } from "./RevisionExcelImportModal";
+import { db } from "../services/dbService";
 
 interface RevisionStudioProps {
   tiers: ProposalTier[];
@@ -85,6 +87,7 @@ export default function RevisionStudio({
   const { orgData } = useOrg();
   const [activeTab, setActiveTab] = useState("actions");
   const [showBaselineModal, setShowBaselineModal] = useState(false);
+  const [showExcelImportModal, setShowExcelImportModal] = useState(false);
   const [showDetailedClientView, setShowDetailedClientView] = useState(false);
   const [isWhatsappCopied, setIsWhatsappCopied] = useState(false);
   const [actions, setActions] = useState<RevisionAction[]>(
@@ -101,9 +104,60 @@ export default function RevisionStudio({
   const [customSummary, setCustomSummary] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Sync actions to projectContext
+  const handleApplyExcelRevisions = (
+    newActions: RevisionAction[],
+    newBankItems: Item[],
+    summaryText: string,
+  ) => {
+    // Overwrite staged actions so the revised Excel is the authoritative scope (no double-counting)
+    setActions(newActions);
+
+    if (newBankItems.length > 0) {
+      if (setBank) {
+        setBank((prev) => {
+          const existingIds = new Set(prev.map((i) => i.id));
+          const existingNames = new Set(prev.map((i) => i.name.toLowerCase().trim()));
+          const toAdd = newBankItems.filter(
+            (item) => !existingIds.has(item.id) && !existingNames.has(item.name.toLowerCase().trim())
+          );
+          if (toAdd.length === 0) return prev;
+          const updated = [...prev, ...toAdd];
+          db.saveBank(updated).catch((err) =>
+            console.error("Failed to sync imported items to Item Bank:", err)
+          );
+          return updated;
+        });
+      }
+
+      if (setProjectContext) {
+        setProjectContext((prev) => {
+          const currentAdHoc = prev.adHocItems || [];
+          const existingIds = new Set(currentAdHoc.map((i) => i.id));
+          const toAdd = newBankItems.filter((i) => !existingIds.has(i.id));
+          if (toAdd.length === 0) return prev;
+          return {
+            ...prev,
+            adHocItems: [...currentAdHoc, ...toAdd],
+          };
+        });
+      }
+    }
+
+    showToast(summaryText);
+  };
+
+  const isInternalSyncRef = useRef(false);
+
+  // Sync actions to projectContext when actions change internally
   useEffect(() => {
-    if (setProjectContext && actions !== projectContext?.boqRevisions) {
+    if (!setProjectContext) return;
+    if (isInternalSyncRef.current) {
+      isInternalSyncRef.current = false;
+      return;
+    }
+    const currentRevisions = projectContext?.boqRevisions || [];
+    if (JSON.stringify(actions) !== JSON.stringify(currentRevisions)) {
+      isInternalSyncRef.current = true;
       setProjectContext((prev) => ({
         ...prev,
         boqRevisions: actions,
@@ -111,8 +165,13 @@ export default function RevisionStudio({
     }
   }, [actions, setProjectContext]);
 
-  // Sync financials
+  // Sync financials only when changed, avoid firing on initial mount if unchanged
+  const initialFinancialsRef = useRef(false);
   useEffect(() => {
+    if (!initialFinancialsRef.current) {
+      initialFinancialsRef.current = true;
+      return;
+    }
     if (setProjectContext) {
       setProjectContext((prev) => {
         const currentFinancials = prev.financials || ({} as any);
@@ -136,9 +195,13 @@ export default function RevisionStudio({
 
   // Sync from projectContext if it changes externally
   useEffect(() => {
+    if (isInternalSyncRef.current) {
+      isInternalSyncRef.current = false;
+      return;
+    }
     if (
       projectContext?.boqRevisions &&
-      projectContext.boqRevisions !== actions
+      JSON.stringify(projectContext.boqRevisions) !== JSON.stringify(actions)
     ) {
       setActions(projectContext.boqRevisions);
     }
@@ -159,12 +222,12 @@ export default function RevisionStudio({
 
   // Keep selectedTierId updated if approvedTierId or activeTierId props change externally (e.g. from TierManager sync)
   useEffect(() => {
-    if (approvedTierId) {
+    if (approvedTierId && approvedTierId !== selectedTierId) {
       setSelectedTierId(approvedTierId);
-    } else if (activeTierId) {
+    } else if (activeTierId && activeTierId !== selectedTierId) {
       setSelectedTierId(activeTierId);
     }
-  }, [approvedTierId, activeTierId]);
+  }, [approvedTierId, activeTierId, selectedTierId]);
 
   const currentSelectedTier = useMemo(() => {
     return (
@@ -306,10 +369,33 @@ export default function RevisionStudio({
   const baselineBoq = useMemo(() => {
     if (!currentSelectedTier) return [];
 
-    const bankMap = new Map(bank.map((i) => [i.id, i]));
+    const bankMap = new Map((bank || []).map((i) => [i.id, i]));
     if (projectContext?.adHocItems) {
       projectContext.adHocItems.forEach((i) => bankMap.set(i.id, i));
     }
+    INITIAL_BANK.forEach((i) => {
+      if (!bankMap.has(i.id)) bankMap.set(i.id, i);
+    });
+
+    const isGeneric = (s: any): boolean => {
+      if (!s || typeof s !== "string") return true;
+      const t = s.trim().toLowerCase();
+      return (
+        t === "imported" ||
+        t === "imported." ||
+        t === "imported:" ||
+        t === "imported via excel" ||
+        t === "imported from excel" ||
+        t === "imported boq" ||
+        t === "custom / old item" ||
+        t === "custom / legacy item" ||
+        t === "custom item" ||
+        t === "deliverable item" ||
+        t === "unnamed item" ||
+        t === "item" ||
+        t === ""
+      );
+    };
 
     return (currentSelectedTier.boq || []).map((boqItem) => {
       const initialBankItem = INITIAL_BANK.find((i) => i.id === boqItem.bankId);
@@ -337,15 +423,62 @@ export default function RevisionStudio({
           bankItem.labor,
           boqItem.marginOverride ?? bankItem.margin,
         );
+      } else if ((boqItem as any).rate !== undefined && Number((boqItem as any).rate) > 0) {
+        rate = Number((boqItem as any).rate);
+      } else if ((boqItem as any).sellPrice !== undefined && Number((boqItem as any).sellPrice) > 0) {
+        rate = Number((boqItem as any).sellPrice);
       }
 
-      const itemTitle =
-        bankItem?.name ||
-        (boqItem as any).name ||
-        boqItem.rationale ||
-        "Custom / Old Item";
-      const itemUnit = bankItem?.unit || "lumpsum";
-      const itemCat = bankItem?.cat || "General Scope";
+      // Robust item name resolution that avoids "Imported" artifacts
+      let itemTitle = "";
+      const directCandidates = [
+        (boqItem as any).item,
+        (boqItem as any).name,
+        (boqItem as any).itemName,
+        (boqItem as any).title,
+      ];
+      for (const c of directCandidates) {
+        if (c && typeof c === "string" && !isGeneric(c)) {
+          itemTitle = c.trim();
+          break;
+        }
+      }
+
+      if (!itemTitle && bankItem?.name && !isGeneric(bankItem.name)) {
+        itemTitle = bankItem.name.trim();
+      }
+
+      if (!itemTitle) {
+        const specCandidates = [
+          (boqItem as any).specs,
+          (boqItem as any).description,
+          bankItem?.specs,
+        ];
+        for (const s of specCandidates) {
+          if (s && typeof s === "string" && !isGeneric(s)) {
+            itemTitle = s.trim();
+            break;
+          }
+        }
+      }
+
+      if (!itemTitle && boqItem.rationale && typeof boqItem.rationale === "string") {
+        const cleanRationale = boqItem.rationale.replace(/^imported:?\s*/i, "").trim();
+        if (cleanRationale && !isGeneric(cleanRationale)) {
+          itemTitle = cleanRationale;
+        }
+      }
+
+      if (!itemTitle || isGeneric(itemTitle)) {
+        itemTitle =
+          bankItem?.name ||
+          (boqItem as any).name ||
+          (boqItem as any).item ||
+          (boqItem.roomId ? `${boqItem.roomId} Scope Item` : "Scope Item");
+      }
+
+      const itemUnit = (boqItem as any).unit || bankItem?.unit || "nos";
+      const itemCat = (boqItem as any).cat || (boqItem as any).category || bankItem?.cat || "General Scope";
 
       return {
         id: boqItem.id,
@@ -452,10 +585,21 @@ export default function RevisionStudio({
             workingBoq[targetIndex].reasonCategory = action.reasonCategory;
           } else if (action.type === "REPLACE") {
             workingBoq[targetIndex].item = action.newValue.item;
+            workingBoq[targetIndex].name = action.newValue.item;
             workingBoq[targetIndex].rate = action.newValue.rate;
+            workingBoq[targetIndex].bankId =
+              action.newValue.bankId || ("ADHOC_REP_" + action.id);
+            if (action.newValue.qty !== undefined && !isNaN(Number(action.newValue.qty))) {
+              workingBoq[targetIndex].qty = Number(action.newValue.qty);
+            }
+            if (action.newValue.unit) {
+              workingBoq[targetIndex].unit = action.newValue.unit;
+            }
             workingBoq[targetIndex].total =
               workingBoq[targetIndex].qty * action.newValue.rate;
             workingBoq[targetIndex].status = "Replaced";
+            workingBoq[targetIndex].replacedFrom = action.oldValue;
+            workingBoq[targetIndex].originalId = action.targetId || workingBoq[targetIndex].id;
             workingBoq[targetIndex].note = action.note;
             workingBoq[targetIndex].reasonCategory = action.reasonCategory;
             if (action.newValue.inclusions)
@@ -469,6 +613,28 @@ export default function RevisionStudio({
 
     return workingBoq;
   }, [baselineBoq, actions]);
+
+  // Robust helper to find corresponding baseline item for diff/variance tracking
+  const findBaselineItem = (item: any) => {
+    if (!item) return undefined;
+    if (item.originalId) {
+      const matchByOrigId = baselineBoq.find((b: any) => b.id === item.originalId);
+      if (matchByOrigId) return matchByOrigId;
+    }
+    if (item.id) {
+      const matchById = baselineBoq.find((b: any) => b.id === item.id);
+      if (matchById) return matchById;
+    }
+    if (item.replacedFrom && item.replacedFrom.item) {
+      const matchByReplacedName = baselineBoq.find(
+        (b: any) => b.section === item.section && b.item === item.replacedFrom.item,
+      );
+      if (matchByReplacedName) return matchByReplacedName;
+    }
+    return baselineBoq.find(
+      (b: any) => b.section === item.section && b.item === item.item,
+    );
+  };
 
   // --- FINANCIAL CALCULATIONS ---
   const originalTotal = useMemo(
@@ -495,7 +661,8 @@ export default function RevisionStudio({
       currentRevisionBoq.reduce((sum: number, item: any) => {
         if (
           item.status === "Vendor Direct" ||
-          item.status === "Pending Decision"
+          item.status === "Pending Decision" ||
+          item.status === "Removed"
         )
           return sum;
         return sum + item.total;
@@ -521,7 +688,7 @@ export default function RevisionStudio({
   const rawRevisedDesignBaseTotal = useMemo(
     () =>
       currentRevisionBoq.reduce((sum: number, item: any) => {
-        if (item.status === "Pending Decision") return sum;
+        if (item.status === "Pending Decision" || item.status === "Removed") return sum;
         return sum + item.total;
       }, 0),
     [currentRevisionBoq],
@@ -800,9 +967,22 @@ export default function RevisionStudio({
       } else if (manualForm.type === "REPLACE") {
         if (!manualForm.newItemName)
           return showToast("Please provide a new item name for replacement.");
+        const newQtyVal =
+          manualForm.newQty !== undefined &&
+          manualForm.newQty !== "" &&
+          !isNaN(Number(manualForm.newQty))
+            ? Number(manualForm.newQty)
+            : existingItem.qty;
+        const newRateVal = Number(manualForm.newRate);
+        const newTotalVal = newQtyVal * newRateVal;
+        const repBankId = "ADHOC_REP_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 6);
         newValue = {
+          bankId: repBankId,
           item: manualForm.newItemName,
-          rate: Number(manualForm.newRate),
+          qty: newQtyVal,
+          rate: newRateVal,
+          total: newTotalVal,
+          unit: existingItem.unit || "nos",
           inclusions: manualForm.inclusions
             ? manualForm.inclusions.split("\n").filter((s) => s.trim())
             : [],
@@ -810,7 +990,14 @@ export default function RevisionStudio({
             ? manualForm.exclusions.split("\n").filter((s) => s.trim())
             : [],
         };
-        oldValue = { item: existingItem.item, rate: existingItem.rate };
+        oldValue = {
+          bankId: existingItem.bankId,
+          item: existingItem.item,
+          qty: existingItem.qty,
+          rate: existingItem.rate,
+          total: existingItem.total,
+          unit: existingItem.unit || "nos",
+        };
       }
 
       handleAddAction({
@@ -872,13 +1059,24 @@ export default function RevisionStudio({
       );
     }
     if (action.type === "REPLACE") {
+      const oldQty = action.oldValue?.qty ?? 1;
+      const oldRate = action.oldValue?.rate ?? 0;
+      const oldTotal = action.oldValue?.total ?? (oldQty * oldRate);
+      const newQty = action.newValue?.qty ?? oldQty;
+      const newRate = action.newValue?.rate ?? 0;
+      const newTotal = action.newValue?.total ?? (newQty * newRate);
+      const delta = newTotal - oldTotal;
+
       return (
-        <div className="text-xs">
+        <div className="text-xs space-y-0.5">
           <div className="line-through text-slate-400">
-            {action.oldValue.item} ({formatINR(action.oldValue.rate)})
+            {action.oldValue?.item || action.item} ({oldQty} {action.oldValue?.unit || "nos"} @ {formatINR(oldRate)} = {formatINR(oldTotal)})
           </div>
           <div className="text-[#3D52A0] font-medium">
-            ➔ {action.newValue.item} ({formatINR(action.newValue.rate)})
+            ➔ {action.newValue.item} ({newQty} {action.newValue.unit || "nos"} @ {formatINR(newRate)} = {formatINR(newTotal)})
+          </div>
+          <div className={`text-[10px] font-bold ${delta > 0 ? "text-amber-700" : delta < 0 ? "text-emerald-700" : "text-slate-500"}`}>
+            Difference: {delta > 0 ? "+" : ""}{formatINR(delta)}
           </div>
         </div>
       );
@@ -1067,9 +1265,19 @@ export default function RevisionStudio({
 
           {/* Manual Action Form */}
           <Card className="p-5 border border-slate-200/80 bg-white shadow-sm rounded-2xl">
-            <h4 className="font-bold text-slate-900 text-sm mb-3.5">
-              Scope Workbench & Action Entry
-            </h4>
+            <div className="flex items-center justify-between mb-3.5">
+              <h4 className="font-bold text-slate-900 text-sm">
+                Scope Workbench & Action Entry
+              </h4>
+              <button
+                onClick={() => setShowExcelImportModal(true)}
+                className="px-2.5 py-1 text-[11px] font-bold text-[#4f46e5] hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-1.5 border border-indigo-200/70 bg-indigo-50/50"
+                title="Import revised BOQ from Excel spreadsheet"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-[#4f46e5]" />
+                <span>Import Excel</span>
+              </button>
+            </div>
             <div className="space-y-4">
               <div>
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
@@ -1435,6 +1643,15 @@ export default function RevisionStudio({
                     : `${netDelta > 0 ? "+" : ""}${formatINR(netDelta)}`}
                 </span>
               </div>
+
+              <button
+                onClick={() => setShowExcelImportModal(true)}
+                className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100/80 text-[#4f46e5] border border-indigo-200/90 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5"
+                title="Upload updated Excel spreadsheet to detect scope changes automatically"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-[#4f46e5]" />
+                <span>Import Revised BOQ (Excel)</span>
+              </button>
 
               {actions.length > 0 && (
                 <div className="flex items-center gap-2">
@@ -2248,10 +2465,10 @@ export default function RevisionStudio({
         });
 
         const itemizedData = currentRevisionBoq.map((r: any) => {
-          const originalItem = baselineBoq.find((b: any) => b.id === r.id);
-          const originalTotal = originalItem ? originalItem.total : 0;
-          const originalQty = originalItem ? originalItem.qty : 0;
-          const originalRate = originalItem ? originalItem.rate : 0;
+          const originalItem = findBaselineItem(r);
+          const originalTotal = originalItem ? originalItem.total : (r.replacedFrom?.total ?? 0);
+          const originalQty = originalItem ? originalItem.qty : (r.replacedFrom?.qty ?? 0);
+          const originalRate = originalItem ? originalItem.rate : (r.replacedFrom?.rate ?? 0);
 
           let statusText = "As per agreed design";
           if (r.status === "Added")
@@ -2266,7 +2483,9 @@ export default function RevisionStudio({
 
           return {
             Section: r.section,
-            Item: r.item,
+            Item: r.status === "Replaced" && (originalItem || r.replacedFrom)
+              ? `${r.item} (Replaced: ${originalItem?.item || r.replacedFrom?.item})`
+              : r.item,
             "Original Quantity": originalQty,
             "Original Rate": originalRate,
             "Original Total": originalTotal,
@@ -2286,7 +2505,13 @@ export default function RevisionStudio({
         exportData = exportData.concat(itemizedData);
 
         baselineBoq.forEach((b: any) => {
-          const exists = currentRevisionBoq.find((r: any) => r.id === b.id);
+          const exists = currentRevisionBoq.find(
+            (r: any) =>
+              r.id === b.id ||
+              r.originalId === b.id ||
+              (r.replacedFrom && r.replacedFrom.item === b.item && r.section === b.section) ||
+              (r.section === b.section && r.item === b.item)
+          );
           if (!exists) {
             exportData.push({
               Section: b.section,
@@ -2361,9 +2586,7 @@ export default function RevisionStudio({
             changeType: item.status,
             description: item.item,
             origTotal:
-              baselineBoq.find(
-                (b) => b.section === item.section && b.item === item.item,
-              )?.total || 0,
+              findBaselineItem(item)?.total ?? (item.replacedFrom?.total ?? 0),
             revTotal: item.total,
           }),
         })),
@@ -2897,10 +3120,8 @@ export default function RevisionStudio({
         ]);
 
         sectionItems.forEach((item) => {
-          const origItem = baselineBoq.find(
-            (b) => b.section === section && b.item === item.item,
-          );
-          const origTotal = origItem ? origItem.total : 0;
+          const origItem = findBaselineItem(item);
+          const origTotal = origItem ? origItem.total : (item.replacedFrom?.total ?? 0);
           const variance =
             item.status === "Vendor Direct" ||
             item.status === "Pending Decision"
@@ -2924,9 +3145,13 @@ export default function RevisionStudio({
                 ? `+${formatINR(variance)}`
                 : `-${formatINR(Math.abs(variance))}`;
 
+          const itemTitle = item.status === "Replaced" && (origItem || item.replacedFrom)
+            ? `${item.item} (Replaced: ${origItem?.item || item.replacedFrom?.item})`
+            : item.item;
+
           boqBody.push([
             {
-              content: `${item.item}\n${getClientNote(item) ? "> " + getClientNote(item) : ""}`,
+              content: `${itemTitle}\n${getClientNote(item) ? "> " + getClientNote(item) : ""}`,
               styles: { textColor: [51, 65, 85] },
             },
             {
@@ -3206,18 +3431,16 @@ export default function RevisionStudio({
     );
 
     const revisionItemsForClient = currentRevisionBoq.map((item: any) => {
-      const origItem = baselineBoq.find(
-        (b: any) => b.section === item.section && b.item === item.item,
-      );
-      const origTotal = origItem ? origItem.total : 0;
+      const origItem = findBaselineItem(item);
+      const origTotal = origItem ? origItem.total : (item.replacedFrom?.total ?? 0);
 
       let actionType = "";
       if (item.status === "Added") actionType = "ADD";
       else if (item.status === "Removed") actionType = "REMOVE";
       else if (item.status === "Pending Decision") actionType = "MARK_PENDING";
       else if (item.status === "Vendor Direct") actionType = "MARK_VENDOR";
-      else if (item.status === "Revised" || item.status === "Replaced")
-        actionType = "REVISE_QTY";
+      else if (item.status === "Replaced") actionType = "REPLACE";
+      else if (item.status === "Revised") actionType = "REVISE_QTY";
 
       return {
         id: item.id,
@@ -3516,12 +3739,9 @@ export default function RevisionStudio({
                           <td colSpan={2}></td>
                         </tr>
                         {sectionItems.map((item: any, idx: number) => {
-                          const origItem = baselineBoq.find(
-                            (b: any) =>
-                              b.section === section && b.item === item.item,
-                          );
-                          const origQty = origItem ? origItem.qty : 0;
-                          const origTotal = origItem ? origItem.total : 0;
+                          const origItem = findBaselineItem(item);
+                          const origQty = origItem ? origItem.qty : (item.replacedFrom?.qty ?? 0);
+                          const origTotal = origItem ? origItem.total : (item.replacedFrom?.total ?? 0);
                           const variance = item.total - origTotal;
 
                           let rowClass = "bg-white";
@@ -3538,7 +3758,7 @@ export default function RevisionStudio({
                             item.status === "Replaced"
                           ) {
                             rowClass = "bg-blue-50";
-                            statusText = "Revised as per final design";
+                            statusText = item.status === "Replaced" ? "Replaced with alternative" : "Revised as per final design";
                           } else if (item.status === "Pending Decision") {
                             rowClass = "bg-purple-50";
                             statusText = "Pending client confirmation";
@@ -3565,7 +3785,12 @@ export default function RevisionStudio({
                               className={`hover:brightness-95 transition-all ${rowClass}`}
                             >
                               <td className="px-4 py-3 font-medium">
-                                {item.item}
+                                <div>{item.item}</div>
+                                {item.status === "Replaced" && (origItem || item.replacedFrom) && (
+                                  <div className="text-[10px] text-slate-500 font-normal mt-0.5">
+                                    Replaced: <span className="line-through text-slate-400">{origItem?.item || item.replacedFrom?.item}</span>
+                                  </div>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-xs text-slate-500">
                                 {item.unit || "SQFT"}
@@ -4100,24 +4325,31 @@ export default function RevisionStudio({
             <button
               onClick={() => {
                 const newAdHocItems = currentRevisionBoq
-                  .filter((b: any) => b.bankId && b.bankId.startsWith("ADHOC_"))
+                  .filter((b: any) => 
+                    (b.bankId && b.bankId.startsWith("ADHOC_")) ||
+                    b.status === "Replaced" ||
+                    b.status === "Added"
+                  )
                   .map((b: any) => ({
-                    id: b.bankId,
+                    id: b.bankId || ("ADHOC_REP_" + b.id),
                     name: b.item,
-                    unit: b.unit,
-                    materials: Math.round(b.rate * 0.7),
-                    labor: Math.round(b.rate * 0.3),
+                    unit: b.unit || "nos",
+                    materials: Math.round((b.rate || 0) * 0.7),
+                    labor: Math.round((b.rate || 0) * 0.3),
                     margin: 0,
-                    specs: "",
-                    cat: b.section,
-                    subcategory: "Ad-hoc",
+                    specs: (b.inclusions && b.inclusions.length > 0) ? b.inclusions.join("; ") : "",
+                    cat: b.section || "General Scope",
+                    subcategory: b.status === "Replaced" ? "Replacement Scope" : "Ad-hoc Revision",
                   }));
 
                 if (setBank && newAdHocItems.length > 0) {
                   setBank((prev) => {
                     const merged = [...prev];
                     newAdHocItems.forEach((newBI: any) => {
-                      if (!merged.find((i) => i.id === newBI.id)) {
+                      const existingIndex = merged.findIndex((i) => i.id === newBI.id);
+                      if (existingIndex >= 0) {
+                        merged[existingIndex] = { ...merged[existingIndex], ...newBI };
+                      } else {
                         merged.push(newBI as any);
                       }
                     });
@@ -4177,7 +4409,10 @@ export default function RevisionStudio({
                   const currentAdHocItems = prev.adHocItems || [];
                   const mergedAdHocItems = [...currentAdHocItems];
                   newAdHocItems.forEach((newItem: any) => {
-                    if (!mergedAdHocItems.find((i) => i.id === newItem.id)) {
+                    const existingIndex = mergedAdHocItems.findIndex((i) => i.id === newItem.id);
+                    if (existingIndex >= 0) {
+                      mergedAdHocItems[existingIndex] = { ...mergedAdHocItems[existingIndex], ...newItem };
+                    } else {
                       mergedAdHocItems.push(newItem);
                     }
                   });
@@ -4228,15 +4463,18 @@ export default function RevisionStudio({
                       )
                       .map((b: any) => ({
                         id: b.id,
-                        bankId: b.bankId || b.id,
+                        bankId: b.bankId || ("ADHOC_REP_" + b.id),
                         roomId: b.section,
+                        name: b.item,
+                        rationale: b.item,
                         qty: b.qty,
                         marginOverride:
                           b.marginOverride !== undefined
                             ? b.marginOverride
                             : undefined,
                         selectedRate: b.rate,
-                        rationale: b.item
+                        inclusions: b.inclusions || [],
+                        exclusions: b.exclusions || [],
                       })),
                     summary: {
                       totalSell: rawRevisedExecutionTotal,
@@ -4792,6 +5030,15 @@ export default function RevisionStudio({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Revised BOQ Excel Smart Import Modal */}
+      <RevisionExcelImportModal
+        isOpen={showExcelImportModal}
+        onClose={() => setShowExcelImportModal(false)}
+        baselineBoq={baselineBoq}
+        bank={bank || []}
+        onApplyImport={handleApplyExcelRevisions}
+      />
 
       {/* Toast Notification */}
       <AnimatePresence>

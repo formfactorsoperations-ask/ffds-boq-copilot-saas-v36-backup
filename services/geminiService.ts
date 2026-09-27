@@ -22,8 +22,13 @@ export const verifyApiKey = async (): Promise<AIStatus> => {
         await ai.models.countTokens({ model: FLASH_MODEL, contents: 'test' });
         return 'online';
     } catch (e: any) {
-        // If the service is temporarily unavailable (503) or we get a 403 but the key exists, return online
-        if (e && e.toString && (e.toString().includes('503') || e.toString().includes('403')) || e?.status === 'UNAVAILABLE' || e?.status === 'PERMISSION_DENIED') {
+        // If the service is temporarily unavailable (503) or we get a 403 or internal from missing function but key exists, return online
+        if (
+            (e && e.toString && (e.toString().includes('503') || e.toString().includes('403') || e.toString().includes('internal'))) ||
+            e?.status === 'UNAVAILABLE' ||
+            e?.status === 'PERMISSION_DENIED' ||
+            e?.code === 'internal'
+        ) {
             return 'online';
         }
         console.error("API Key verification failed:", e);

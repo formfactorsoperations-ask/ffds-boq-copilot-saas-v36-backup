@@ -240,17 +240,59 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
 
   const fullBoq = useMemo((): FullBoqItem[] => {
     if (!activeTier) return [];
+    const isGeneric = (s: any): boolean => {
+      if (!s || typeof s !== "string") return true;
+      const t = s.trim().toLowerCase();
+      return (
+        t === "imported" ||
+        t === "imported." ||
+        t === "imported:" ||
+        t === "imported via excel" ||
+        t === "imported from excel" ||
+        t === "imported boq" ||
+        t === "custom / old item" ||
+        t === "custom / legacy item" ||
+        t === "custom item" ||
+        t === "deliverable item" ||
+        t === "unnamed item" ||
+        t === "item" ||
+        t === ""
+      );
+    };
+
     return (activeTier.boq || []).map(boqItem => {
         const initialBankItem = INITIAL_BANK.find(i => i.id === boqItem.bankId);
+        let resolvedName = "";
+        const candidates = [
+          (boqItem as any).item,
+          (boqItem as any).name,
+          (boqItem as any).itemName,
+          (boqItem as any).title,
+          (boqItem as any).specs,
+          (boqItem as any).description,
+        ];
+        for (const c of candidates) {
+          if (c && typeof c === "string" && !isGeneric(c)) {
+            resolvedName = c.trim();
+            break;
+          }
+        }
+        if (!resolvedName && boqItem.rationale && typeof boqItem.rationale === "string") {
+          const cleanRationale = boqItem.rationale.replace(/^imported:?\s*/i, "").trim();
+          if (cleanRationale && !isGeneric(cleanRationale)) {
+            resolvedName = cleanRationale;
+          }
+        }
+
         const bankItem = bankMap.get(boqItem.bankId) || initialBankItem || {
             id: boqItem.bankId,
-            name: (boqItem as any).name || (boqItem as any).item || boqItem.rationale || 'Custom / Legacy Item',
-            cat: boqItem.roomId || 'General Scope',
+            name: resolvedName || (boqItem.roomId ? `${boqItem.roomId} Scope Item` : 'Scope Item'),
+            cat: (boqItem as any).cat || boqItem.roomId || 'General Scope',
             materials: 0,
             labor: 0,
             margin: boqItem.marginOverride ?? 0,
-            unit: 'lumpsum',
-            specs: 'Details missing from bank'
+            unit: (boqItem as any).unit || 'nos',
+            specs: (boqItem as any).specs || 'Standard Scope Details'
         } as Item;
         
         const effectiveMargin = boqItem.marginOverride ?? bankItem.margin;

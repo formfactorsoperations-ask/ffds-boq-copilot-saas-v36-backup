@@ -381,7 +381,7 @@ export function getClientViewItems(revisionItems: any[]) {
     // INCLUSIONS
     if (actionType === 'ADD') return true;
     if (actionType === 'REMOVE' && reasonCategory !== 'Correction') return true;
-    if ((actionType === 'REVISE_QTY' || actionType === 'REVISE_RATE') && revTotal !== origTotal) return true;
+    if ((actionType === 'REVISE_QTY' || actionType === 'REVISE_RATE' || actionType === 'REPLACE') && revTotal !== origTotal) return true;
     if (actionType === 'MARK_PENDING') return true;
     if (actionType === 'MARK_VENDOR') return true;
 

@@ -70,6 +70,9 @@ const RAW_GLYPHS = {
   realign: '<circle class="d" cx="12" cy="12" r="9"/><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8.5"/><path d="M20 3.5v5h-5"/>',
   advance: '<circle class="d" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><path d="M8 12h8M13 8.5l3.5 3.5-3.5 3.5"/>',
   pause: '<circle class="d" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/>',
+  sheet: '<path class="d" d="M6 3h9l4 4v14H6z"/><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 12h7M9 15.5h7M9 19h4"/>',
+  elevation: '<rect class="d" x="4" y="9" width="16" height="11" rx="1"/><path d="M3 20h18"/><rect x="4" y="9" width="16" height="11" rx="1"/><path d="M4 13h16M12 9v11M8 4.5h8l-1 4.5H9z"/>',
+  detail: '<path class="d" d="M3 17L17 3l4 4L7 21z"/><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>',
   swatch: '<rect class="d" x="3" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><path d="M13 17h8M17 13v8"/>',
 };
 export type GlyphName = keyof typeof RAW_GLYPHS;

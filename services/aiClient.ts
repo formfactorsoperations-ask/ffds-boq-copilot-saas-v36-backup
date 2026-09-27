@@ -94,15 +94,20 @@ const browserShim = () => ({
 });
 
 export const getAi = (): any => {
+  const apiKey =
+    typeof process !== "undefined"
+      ? (process.env.GEMINI_API_KEY || process.env.API_KEY || "")
+      : "";
+
+  if (apiKey) {
+    const ai = new GoogleGenAI({ apiKey });
+    const original = ai.models.generateContent;
+    ai.models.generateContent = async (params: any) =>
+      withRetry(() => original.call(ai.models, params));
+    return ai;
+  }
+
   if (isBrowser) return browserShim();
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is required");
-  }
-  const ai = new GoogleGenAI({ apiKey });
-  const original = ai.models.generateContent;
-  ai.models.generateContent = async (params: any) =>
-    withRetry(() => original.call(ai.models, params));
-  return ai;
+  throw new Error("GEMINI_API_KEY environment variable is required");
 };

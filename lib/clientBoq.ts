@@ -132,7 +132,53 @@ export function buildClientBoqRows({ boq, bank, rooms, revisions, previous }: Bu
   const baseline: ClientBoqRow[] = (boq || []).map((item: any, idx: number) => {
     const bankItem = bankMap.get(item.bankId);
 
-    const itemTitle = item.item || item.name || bankItem?.name || 'Deliverable Item';
+    const isGeneric = (s: any): boolean => {
+      if (!s || typeof s !== 'string') return true;
+      const t = s.trim().toLowerCase();
+      return (
+        t === 'imported' ||
+        t === 'imported.' ||
+        t === 'imported:' ||
+        t === 'imported via excel' ||
+        t === 'imported from excel' ||
+        t === 'imported boq' ||
+        t === 'custom / old item' ||
+        t === 'custom / legacy item' ||
+        t === 'custom item' ||
+        t === 'deliverable item' ||
+        t === 'unnamed item' ||
+        t === 'item' ||
+        t === ''
+      );
+    };
+
+    let itemTitle = '';
+    const candidates = [
+      item.item,
+      item.name,
+      item.itemName,
+      item.title,
+      bankItem?.name,
+      item.description,
+      item.specs,
+      bankItem?.specs,
+    ];
+    for (const c of candidates) {
+      if (c && typeof c === 'string' && !isGeneric(c)) {
+        itemTitle = c.trim();
+        break;
+      }
+    }
+    if (!itemTitle && item.rationale && typeof item.rationale === 'string') {
+      const cleanRationale = item.rationale.replace(/^imported:?\s*/i, '').trim();
+      if (cleanRationale && !isGeneric(cleanRationale)) {
+        itemTitle = cleanRationale;
+      }
+    }
+    if (!itemTitle || isGeneric(itemTitle)) {
+      itemTitle = bankItem?.name || item.name || item.item || (item.roomId ? `${item.roomId} Scope Item` : 'Deliverable Item');
+    }
+
     const itemCat = item.cat || item.category || bankItem?.cat || 'General Scope';
     const itemUnit = item.unit || bankItem?.unit || 'nos';
     const itemSpecs = item.description || item.specs || item.rationale || bankItem?.specs || '';
