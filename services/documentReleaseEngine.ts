@@ -31,6 +31,8 @@ import {
   hashSnapshot
 } from './documentIssueEngine';
 import { resolveApprovals } from './clientApprovalEngine';
+import { resolveBoqLine, isBillable, buildBankMap } from '../lib/boqPricing';
+import { displayName, normaliseUnit, clientDescription } from '../lib/detailedBoq';
 
 // ---------------------------------------------------------------------------
 // CATALOGUE
@@ -64,6 +66,12 @@ export interface ReleasableDocument {
   packWith?: ClientDocumentKind[];
   /** Why it carries the mode it does. Shown to the studio on release. */
   modeReason: string;
+  /**
+   * Built and issued from the Revision Studio, where the rate bank is. Generic
+   * release surfaces leave these alone, and they exist only on projects with
+   * the signed-scope flow switched on.
+   */
+  scopeFlowOnly?: boolean;
 }
 
 export const RELEASABLE_DOCUMENTS: ReleasableDocument[] = [
@@ -102,6 +110,24 @@ export const RELEASABLE_DOCUMENTS: ReleasableDocument[] = [
     mode: 'signature',
     signable: true,
     modeReason: 'Binds scope, programme and defect liability. Must be signed.'
+  },
+  {
+    kind: 'detailed_boq',
+    title: 'Detailed BOQ',
+    purpose: 'Every item in the scope, with its quantity, unit, rate and amount.',
+    mode: 'signature',
+    signable: true,
+    modeReason: 'It is the scope the agreement is priced on. The client signs it, or signs the revision it is attached to.',
+    scopeFlowOnly: true
+  },
+  {
+    kind: 'scope_revision',
+    title: 'Scope Revision',
+    purpose: 'What changed from the signed BOQ, room by room, and the revised BOQ it brings in.',
+    mode: 'signature',
+    signable: true,
+    modeReason: 'Signing it is what makes the revised BOQ the scope. Nothing changes until it is signed.',
+    scopeFlowOnly: true
   },
   {
     kind: 'handover_docket',
@@ -198,6 +224,24 @@ export function getReleaseReadiness(
       if (approvals.terms.state !== 'signed') {
         warnings.push('Terms of Engagement is not signed yet. Normally that comes first.');
       }
+      const scope = agreementScope(context, projectData);
+      if (scope.lines.length && !scope.priced) {
+        blockers.push('The BOQ could not be priced for Annexure F. Open the project once so its rate bank loads, then release.');
+      } else if (scope.unpriced > 0) {
+        warnings.push(`${scope.unpriced} BOQ line${scope.unpriced === 1 ? ' has' : 's have'} no rate and will show as ₹0 in Annexure F.`);
+      }
+      const approved = context.financials?.approvedExecutionValue;
+      if (scope.priced && approved && Math.abs(approved - scope.total) > 1) {
+        warnings.push(`The approved execution value (₹${Math.round(approved).toLocaleString('en-IN')}) differs from the BOQ total (₹${Math.round(scope.total).toLocaleString('en-IN')}). The agreement states the BOQ total, so the two agree with each other.`);
+      }
+      if (scope.source === 'detailed_boq') {
+        warnings.push(`Annexure F is the signed ${scope.reference}.`);
+      }
+      break;
+    }
+    case 'detailed_boq':
+    case 'scope_revision': {
+      blockers.push('Prepared and issued from the Revision Studio.');
       break;
     }
     case 'snag_list': {
@@ -225,6 +269,80 @@ export function getReleaseReadiness(
   }
 
   return { ready: blockers.length === 0, blockers, warnings };
+}
+
+// ---------------------------------------------------------------------------
+// THE AGREEMENT'S SCOPE
+// ---------------------------------------------------------------------------
+
+/**
+ * What Annexure F lists, and the total the agreement states.
+ *
+ * The snapshot used to freeze the tier's raw lines — `{ bankId, qty, roomId }`
+ * and whatever overrides they carried — and the sheet priced them from
+ * `unitCost`, `finalCost` or materials/labour/margin, none of which a stored
+ * tier has. On Test Project for T&C that produced 53 lines at ₹0 above a
+ * "Total Execution Value" taken from a stale engagement figure, and carried a
+ * margin override into the client's copy.
+ *
+ * Now the lines are priced here, by the app's own pricing, and reduced to what
+ * the client reads: name, description, unit, quantity, rate, amount. Where the
+ * project runs the signed-scope flow, the scope is the approved Detailed BOQ
+ * itself, so the agreement cannot disagree with the document the client signed.
+ */
+export interface AgreementScope {
+  source: 'detailed_boq' | 'tier';
+  reference?: string;
+  lines: any[];
+  total: number;
+  /** False when nothing could be priced (no rate bank supplied). */
+  priced: boolean;
+  /** Lines with a quantity and no rate. */
+  unpriced: number;
+}
+
+export function agreementScope(context: ProjectContext, projectData?: FullProjectData): AgreementScope {
+  if ((context as any).scopeFlow?.enabled) {
+    const approvedBoq = (context.documents?.issues || [])
+      .filter(i => i.kind === 'detailed_boq' && !i.withdrawnAt && (i.clientSignature || i.recordedApproval || i.signedVia))
+      .sort((a, b) => b.version - a.version)[0];
+    if (approvedBoq?.snapshot?.rooms) {
+      const lines = (approvedBoq.snapshot.rooms as any[]).flatMap((r: any) =>
+        (r.lines || []).map((l: any) => ({
+          id: l.id, name: l.name, room: r.name, cat: r.name, unit: l.unit, qty: l.qty,
+          unitCost: l.rate, finalCost: l.amount, specs: l.description || '',
+        }))
+      );
+      return { source: 'detailed_boq', reference: approvedBoq.reference, lines, total: approvedBoq.snapshot.total || 0, priced: true, unpriced: 0 };
+    }
+  }
+
+  const tier: any = projectData?.tiers?.find(t => t.id === context.approvedTierId) || projectData?.tiers?.[0];
+  const raw: any[] = tier?.boq || [];
+  const bank: any[] = (projectData as any)?.bank || [];
+  const bankMap = buildBankMap(bank, context.adHocItems);
+  const lines = raw
+    .filter(b => isBillable(b))
+    .map((b: any, i: number) => {
+      const r = resolveBoqLine(b, bankMap);
+      return {
+        id: String(b.id || `line-${i}`),
+        name: displayName(r.name),
+        room: r.room,
+        cat: r.room,
+        unit: normaliseUnit(r.unit),
+        qty: r.qty,
+        unitCost: r.rate,
+        finalCost: r.total,
+        specs: clientDescription(b, bankMap.get(b.bankId)) || '',
+      };
+    })
+    .filter(l => l.qty > 0);
+  const total = lines.reduce((s, l) => s + l.finalCost, 0);
+  const unpriced = lines.filter(l => !(l.unitCost > 0)).length;
+  // Every line at zero means the bank was not there to price them.
+  const priced = !lines.length || unpriced < lines.length;
+  return { source: 'tier', lines, total, priced, unpriced };
 }
 
 // ---------------------------------------------------------------------------
@@ -353,22 +471,24 @@ export function buildSnapshot(
     case 'execution_agreement': {
       // Everything the shared ExecutionAgreementSheet needs, frozen — so the
       // client's copy renders the studio's real agreement, not a summary.
-      const tier =
-        projectData?.tiers?.find(t => t.id === context.approvedTierId) || projectData?.tiers?.[0];
-      const boq: any[] = (tier as any)?.fullBoq || (tier as any)?.boq || [];
+      const scope = agreementScope(context, projectData);
+      const boq: any[] = scope.lines;
 
       const groupedBoq: Record<string, any[]> = {};
       boq.forEach((item: any) => {
-        const room = item.roomId || item.room || item.cat || 'General Scope';
+        const room = item.room || 'General Scope';
         (groupedBoq[room] = groupedBoq[room] || []).push(item);
       });
 
       const overrides = (context as any).executionAgreementOverrides || {};
       const designFee = ctx.engagement?.designFee ?? context.financials?.approvedDesignValue ?? 0;
+      /* The figure the agreement states is the figure Annexure F adds up to.
+         A deliberate override on the agreement page still wins. */
       const executionTotal =
-        ctx.engagement?.executionValue ??
-        context.financials?.approvedExecutionValue ??
-        boq.reduce((acc: number, i: any) => acc + (Number(i.total) || 0), 0);
+        overrides.executionTotal ??
+        (scope.priced && scope.total > 0
+          ? scope.total
+          : context.financials?.approvedExecutionValue ?? ctx.engagement?.executionValue ?? 0);
       const gstRate = context.gstRate ?? 18;
       const gstAmount = Math.round((designFee + executionTotal) * (gstRate / 100));
 
@@ -402,7 +522,8 @@ export function buildSnapshot(
           signatoryName: termsSettings?.signatory?.name || null,
           signatoryTitle: termsSettings?.signatory?.title || null
         },
-        boqVersion: context.operativeBoqVersion || null,
+        boqVersion: scope.reference || context.operativeBoqVersion || null,
+        boqSource: scope.source,
         frozenAt: context.designApprovedAt || Date.now()
       };
     }
@@ -550,6 +671,58 @@ export function buildMaterialSections(
     ];
   }
 
+  if (kind === 'scope_revision') {
+    const v2 = snapshot?.v2?.total;
+    const removed = snapshot?.removedCount || 0;
+    const removedValue = snapshot?.removedValue || 0;
+    const inr = (n: number) => `₹${Math.round(Math.abs(n)).toLocaleString('en-IN')}`;
+    return [
+      {
+        ref: '1',
+        title: 'Effect of this revision',
+        plainSummary: `The revised BOQ${v2 ? ` (${inr(v2)})` : ''} replaces your signed BOQ as the scope, and the payment schedule follows the new total.`,
+        minDwellSeconds: 6
+      },
+      {
+        ref: '2',
+        title: 'Where the change comes from',
+        plainSummary: 'Six parts, which add up to the change exactly.',
+        minDwellSeconds: 6
+      },
+      {
+        ref: '3',
+        title: 'Summary by room',
+        plainSummary: 'Every room before and after, including renamed and new rooms.',
+        minDwellSeconds: 5
+      },
+      {
+        ref: '4',
+        title: 'Schedule of changes',
+        plainSummary: removed
+          ? `Every changed item, before and after. ${removed} item${removed === 1 ? ' leaves' : 's leave'} the scope, worth ${inr(removedValue)}.`
+          : 'Every changed item, before and after.',
+        minDwellSeconds: 8
+      }
+    ];
+  }
+
+  if (kind === 'detailed_boq') {
+    return [
+      {
+        ref: '1',
+        title: 'Scope by room',
+        plainSummary: 'Every item you are buying, with its quantity, unit, rate and amount.',
+        minDwellSeconds: 8
+      },
+      {
+        ref: '2',
+        title: 'Not in this scope',
+        plainSummary: 'Anything not listed is excluded, and items listed here are not part of the price.',
+        minDwellSeconds: 4
+      }
+    ];
+  }
+
   // Sections 1-3 of HandoverDocketSheet, by their printed numbers.
   if (kind === 'handover_docket') {
     return [
@@ -610,6 +783,8 @@ const makeReference = (kind: ClientDocumentKind, context: ProjectContext, versio
     terms_docket: 'TD',
     payment_schedule: 'PS',
     execution_agreement: 'EA',
+    detailed_boq: 'BQ',
+    scope_revision: 'SR',
     onboarding_kit: 'OK',
     handover_docket: 'HD',
     snag_list: 'SNAG'

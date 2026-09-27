@@ -924,6 +924,25 @@ export interface ProjectContext {
     weeklyReports?: WeeklyReport[];
     snagList?: SnagItem[];
     learnedSnags?: Array<{ text: string; severity: 'low' | 'medium' | 'high'; count: number }>;
+
+    /**
+     * The signed-scope flow, switched on per project.
+     *
+     * Absent or disabled, the project behaves exactly as it always has: the
+     * Revision Studio approves and syncs on its own, and no scope documents
+     * appear anywhere. Enabled, the scope changes only by the client signing
+     * a Scope Revision. Per project so a live job can move over deliberately,
+     * after the same flow has been rehearsed on a copy of it.
+     */
+    scopeFlow?: {
+        enabled: boolean;
+        enabledAt: number;
+        enabledBy: string;
+    };
+    /** Every scope revision prepared on this project, drafts included. */
+    scopeRevisions?: import('./lib/scopeRevision').ScopeRevisionRecord[];
+    /** Set on a rehearsal copy: which project it was copied from, and when. */
+    rehearsalOf?: { projectId: string; projectName: string; copiedAt: number };
 }
 
 export interface QualityChecklistState {
@@ -2134,7 +2153,14 @@ export type ClientDocumentKind =
   /* The snag list is a pre-requisite for handover, so the client signs it:
      it is the record that every defect raised was closed or accepted before
      possession changed hands. */
-  | 'snag_list';
+  | 'snag_list'
+  /* The scope itself, as a document: every priced line the client is buying.
+     Signed on its own for a first approval; a later version is carried by the
+     Scope Revision that introduces it. See lib/detailedBoq.ts. */
+  | 'detailed_boq'
+  /* What changed between two Detailed BOQ versions, and why. Signing it is
+     what makes the new version the scope. See lib/scopeRevision.ts. */
+  | 'scope_revision';
 
 /** Lifecycle of one document, from the client's point of view. */
 export type DocumentState =
@@ -2252,6 +2278,32 @@ export interface DocumentIssue {
      */
     withdrawnAt?: number | null;
     withdrawnReason?: string | null;
+
+    /**
+     * An approval the client gave outside this issue, recorded by the studio.
+     *
+     * Unique Vistas approved its first BOQ as a package on 3 July, before the
+     * Detailed BOQ existed as a document. Asking the client to sign it again
+     * would be asking them to re-approve something already agreed; calling it
+     * signed would claim a signature that was never given. This says what
+     * happened: approved, on this date, recorded by this person.
+     */
+    recordedApproval?: {
+        approvedAt: number;
+        recordedBy: string;
+        recordedAt: number;
+        note: string;
+    } | null;
+
+    /**
+     * The issue whose signature covers this one.
+     *
+     * A revised Detailed BOQ is attached to the Scope Revision that introduces
+     * it, and the client signs once, on the revision. The revised BOQ is then
+     * issued as the record of what they signed, pointing back at the signature
+     * rather than carrying a copy of it.
+     */
+    signedVia?: string | null;
 }
 
 /** Proof the signatory actually engaged with the record. */

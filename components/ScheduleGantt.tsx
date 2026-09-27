@@ -1724,7 +1724,7 @@ function HoldDialog({ scope, trades, onCancel, onApply }: {
     <div className="fixed inset-0 z-[120] bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm flex items-center justify-center p-5"
       onClick={e => { if (e.target === e.currentTarget) onCancel(); }}>
       <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-2xl">
-        <h3 className="font-serif text-lg font-semibold text-slate-900">
+        <h3 className="text-lg font-semibold text-slate-900">
           {scope === 'site' ? 'Pause the whole site' : 'Hold a trade'}
         </h3>
         <p className="text-xs text-slate-500 mt-0.5 mb-4">
@@ -2138,7 +2138,7 @@ function ScheduleAnalysisReportModal({ projectContext, schedule, result, varianc
         <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6 no-print">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-slate-900" />
-            <h3 className="font-serif text-lg font-semibold text-slate-900">Timeline Analysis Report</h3>
+            <h3 className="text-lg font-semibold text-slate-900">Timeline Analysis Report</h3>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -2161,7 +2161,7 @@ function ScheduleAnalysisReportModal({ projectContext, schedule, result, varianc
           {/* Cover / Header */}
           <div className="text-center pb-4">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">BOQ Copilot · Timeline Audit</p>
-            <h2 className="font-serif text-2xl font-semibold text-slate-900 mt-1 uppercase tracking-wide">
+            <h2 className="text-2xl font-semibold text-slate-900 mt-1 uppercase tracking-wide">
               Timeline Analysis Report
             </h2>
             <p className="text-xs text-slate-500 mt-1">
@@ -2383,7 +2383,7 @@ function AddStageDialog({ tasks, trades = [], onCancel, onApply }: {
     <div className="fixed inset-0 z-[210] bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 backdrop-blur-sm flex items-center justify-center p-5 no-print"
       onClick={e => { if (e.target === e.currentTarget) onCancel(); }}>
       <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
-        <h3 className="font-serif text-lg font-semibold text-slate-900 flex items-center gap-2 mb-1">
+        <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2 mb-1">
           ✨ Add Custom Stage/Task
         </h3>
         <p className="text-xs text-slate-500 mb-4">

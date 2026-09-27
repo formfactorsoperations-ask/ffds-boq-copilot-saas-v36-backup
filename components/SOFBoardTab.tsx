@@ -420,7 +420,7 @@ export default function SOFBoardTab({ projectContext, setProjectContext }: SOFBo
                 <div className="space-y-6">
                     <div className="bg-white text-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
                         <div>
-                            <h2 className="text-2xl font-bold font-serif mb-1">Material Selections</h2>
+                            <h2 className="text-2xl font-bold mb-1">Material Selections</h2>
                             <p className="text-slate-500 text-sm">Review and approve materials selected for your project.</p>
                         </div>
                         <div className="text-right">

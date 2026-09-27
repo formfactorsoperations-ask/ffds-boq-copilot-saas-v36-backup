@@ -52,6 +52,7 @@ import {
 } from '../services/clientPortalEngine';
 import { buildSignoffPatch, buildDisputePatch, resolveApprovals, AgreementKind } from '../services/clientApprovalEngine';
 import DocumentReadingRoom from './client/DocumentReadingRoom';
+import PortalScopePanel from './client/PortalScopePanel';
 import { FFDSLogo } from './FFDSLogo';
 import BoqVersionCompare from './client/BoqVersionCompare';
 import { describeVersions } from '../lib/boqVersions';
@@ -811,10 +812,29 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     // Documents released to the client and not yet executed. A document sitting
     // with the studio, or one the client has queried, is deliberately excluded —
     // neither is theirs to act on.
+    /* The Detailed BOQ the client has approved and can see: the frozen scope. */
+    const approvedDetailedBoq = useMemo(
+        () => (context.documents?.issues || [])
+            .filter(i => i.kind === 'detailed_boq' && !i.withdrawnAt && i.clientVisibility?.state === 'published'
+                && !!(i.clientSignature || i.recordedApproval || i.signedVia))
+            .sort((a, b) => b.version - a.version)[0] || null,
+        [context],
+    );
+
+    /* A published scope revision the client has not signed yet. */
+    const pendingScopeRevisions = useMemo(
+        () => (context.documents?.issues || []).filter(i =>
+            i.kind === 'scope_revision' && !i.withdrawnAt && !i.clientSignature
+            && i.clientVisibility?.state === 'published').length,
+        [context],
+    );
+
     const documentsNeedingAttention = useMemo(() => {
         const kinds: ClientDocumentKind[] = [
             'terms_docket', 'payment_schedule', 'execution_agreement',
-            'onboarding_kit', 'handover_docket'
+            'onboarding_kit', 'handover_docket',
+            /* Only ever issued on projects running the signed-scope flow. */
+            'detailed_boq', 'scope_revision'
         ];
         return kinds.filter(k => {
             // The client's badge counts what the client can see.
@@ -1482,7 +1502,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
           client looking for "what does my home look like and what am I getting"
           should not have to find it filed under paperwork.
         */
-        { id: 'designScope', label: 'Design & Scope', badge: () => drawingSets.length },
+        { id: 'designScope', label: 'Design & Scope', badge: () => drawingSets.length + pendingScopeRevisions },
     ];
 
     useLayoutEffect(() => {
@@ -3734,6 +3754,9 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                 exit={{ opacity: 0, y: -8 }}
                                 className="space-y-6"
                             >
+                                {/* The scope as signed documents, where the studio
+                                    has issued them. Renders nothing otherwise. */}
+                                <PortalScopePanel context={context} onOpenDocument={openDocument} />
                                 {/*
                                   The scope header.
 
@@ -3762,13 +3785,13 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                             the working tier — it can change under them, and saying
                                             "Approved" over it would be the same kind of false comfort
                                             as the marketing band this replaced. */}
-                                        {context.operativeBoqVersion ? (
+                                        {context.operativeBoqVersion || approvedDetailedBoq ? (
                                           <>
                                             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-0.5">
                                               Approved
                                             </span>
                                             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 border border-slate-200 rounded-md px-2 py-0.5 tabular-nums">
-                                              Rev {context.operativeBoqVersion}
+                                              {approvedDetailedBoq ? `Detailed BOQ v${approvedDetailedBoq.version}` : `Rev ${context.operativeBoqVersion}`}
                                             </span>
                                           </>
                                         ) : (
@@ -3795,7 +3818,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                       </div>
                                       <p className="text-xs text-slate-500 font-medium mt-1.5 max-w-2xl leading-relaxed">
                                         Every line the studio is building, with its quantity, unit rate and total.
-                                        {context.operativeBoqVersion
+                                        {context.operativeBoqVersion || approvedDetailedBoq
                                           ? 'This is the version your agreement is priced against — if it changes, you will be asked to approve the change before it is built.'
                                           : 'Your studio is still working on this scope, so quantities and rates can still move. Once it is frozen you will be asked to approve it, and any change after that comes back to you.'}
                                       </p>

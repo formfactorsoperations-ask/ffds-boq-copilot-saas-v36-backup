@@ -509,6 +509,15 @@ export function getIssueHistory(
   return issues.sort((a, b) => b.version - a.version);
 }
 
+/**
+ * Whether the client has approved this exact issue, by any of the three routes:
+ * their signature on it, an approval they gave elsewhere that the studio
+ * recorded against it, or the signature on the revision it is attached to.
+ */
+export function issueIsApproved(issue: DocumentIssue | null | undefined): boolean {
+  return !!(issue && (issue.clientSignature || issue.recordedApproval || issue.signedVia));
+}
+
 /** Maps a document kind onto the agreement it gates, where one exists. */
 export function agreementKindFor(kind: ClientDocumentKind): AgreementKind | null {
   if (kind === 'terms_docket') return 'terms';
@@ -539,7 +548,7 @@ export function resolveDocumentState(
     // Acknowledge-mode documents have no agreement record to consult — the
     // client's confirmation is written onto the issue itself. Without this,
     // a confirmed payment schedule reads as "sent, never opened" forever.
-    signed = !!issue?.clientSignature;
+    signed = issueIsApproved(issue);
   }
 
   // A signed document with an unsigned addendum against it is not finished —
@@ -562,7 +571,7 @@ export function resolveDocumentState(
     own, so the signature on file belongs to the superseded version. That is an
     amendment awaiting signature, exactly like an addendum.
   */
-  const reissuedAfterSignature = !!issue && !!issue.supersedes && !issue.clientSignature;
+  const reissuedAfterSignature = !!issue && !!issue.supersedes && !issueIsApproved(issue);
 
   if (signed && (unsignedAddendum || reissuedAfterSignature)) return 'amended';
   if (signed && issue?.counterSignature) return 'executed';

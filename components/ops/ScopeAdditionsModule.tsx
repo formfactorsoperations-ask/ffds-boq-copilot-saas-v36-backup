@@ -796,7 +796,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
                 <div className="w-16 h-16 bg-amber-50 border border-amber-100 rounded-full flex items-center justify-center text-amber-500 mb-6 shadow-inner">
                     <Lock className="w-8 h-8" />
                 </div>
-                <h2 className="text-2xl font-bold text-slate-800 font-serif mb-3">Scope Additions Locked</h2>
+                <h2 className="text-2xl font-bold text-slate-800 mb-3">Scope Additions Locked</h2>
                 <p className="text-slate-600 text-sm max-w-md mb-8 leading-relaxed">
                     This module is designed to handle supplementary client requests and post-agreement changes. It is locked until the initial project design and budget are frozen.
                 </p>

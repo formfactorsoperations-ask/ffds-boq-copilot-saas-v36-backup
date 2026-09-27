@@ -5,6 +5,7 @@ import { calculateSellPrice, formatCurrency, id } from '../lib/utils';
 import { generateStandardPackages, TemplateData, INITIAL_TEMPLATES } from '../lib/standardPackages';
 import { resolveCivilScope, describeCivilScope } from '../lib/civilScope';
 import { realRooms } from '../lib/scopeBuckets';
+import { isScopeFlowOn, lockedTierId } from '../lib/scopeFlow';
 import { CompareIcon, DeleteIcon, PencilIcon, CheckBadgeIcon, SparklesIcon, SaveIcon, CheckIcon, FileSpreadsheetIcon, ArrowRightIcon } from './Icons';
 
 interface TierManagerProps {
@@ -23,6 +24,10 @@ interface TierManagerProps {
 }
 
 const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId, setActiveTierId, projectContext, setProjectContext, bank, setActiveTab, onImportClick, projects, templates }) => {
+    /* Signed scope: the version the client signed changes only through a
+       Scope Revision, so it cannot be synced, re-approved or deleted here. */
+    const scopeFlowOn = isScopeFlowOn(projectContext);
+    const signedTierId = lockedTierId(projectContext);
     const [editingTierId, setEditingTierId] = useState<string | null>(null);
     const [editingTierName, setEditingTierName] = useState('');
     const [discountHeadroom, setDiscountHeadroom] = useState<number>(0);
@@ -676,7 +681,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                 <button onClick={(e) => { e.stopPropagation(); handleEditTier(tier.id); }} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs">Edit BOQ</button>
                                 {onImportClick && <button onClick={(e) => { e.stopPropagation(); onImportClick(); }} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs">Import</button>}
                                 <div className="flex-1" />
-                                <button onClick={(e) => { e.stopPropagation(); handleDeleteTier(tier.id); }} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors rounded-lg" title="Delete Option"><DeleteIcon className="w-4 h-4" /></button>
+                                {tier.id !== signedTierId && <button onClick={(e) => { e.stopPropagation(); handleDeleteTier(tier.id); }} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors rounded-lg" title="Delete Option"><DeleteIcon className="w-4 h-4" /></button>}
                             </div>
                         )}
                     </div>
@@ -920,14 +925,15 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                     </span>
                                 )}
                                 {activeTier.lifecycleTag === 'Superseded' && <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full font-bold">Superseded</span>}
-                                <button 
+                                {activeTier.id === signedTierId && <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] px-2 py-0.5 rounded-full font-bold">In force · signed · read-only</span>}
+                                {!scopeFlowOn && <button 
                                     onClick={handleSyncTier} 
                                     className="ml-auto px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 border border-slate-200 shadow-sm"
                                     title="Push pricing & BOQ changes to Payment Schedule and Revision Studio"
                                 >
                                     <span>Sync to Payments & Revisions</span>
                                     <ArrowRightIcon className="w-3 h-3" />
-                                </button>
+                                </button>}
                             </div>
                             <p className="text-[13px] text-slate-500 mt-1">
                                 {activeTier.boq?.length || 0} items • cost {formatCurrency(activeTier.summary.totalCost || (displayValue * 0.78))} • created {new Date(activeTier.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -942,7 +948,19 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                     </div>
 
                     {/* Immutability / Status Banner */}
-                    {isApproved ? (
+                    {activeTier.id === signedTierId ? (
+                        <div className="bg-indigo-50/60 border border-indigo-200 rounded-lg p-4 flex flex-col md:flex-row justify-between md:items-center gap-3 mt-2">
+                            <div className="flex flex-col gap-1">
+                                <div className="text-indigo-900 text-sm font-bold">The signed scope — read-only</div>
+                                <p className="text-indigo-800/80 text-[13px]">Sync and approval are not offered here: the signature does that. To change this version, start a Scope Revision — the client signs the change, and the payment schedule follows.</p>
+                            </div>
+                            <button onClick={() => setActiveTab('revision-studio')} className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-indigo-700 transition-colors shrink-0">Start a revision</button>
+                        </div>
+                    ) : scopeFlowOn && signedTierId && !isApproved ? (
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mt-2 text-slate-600 text-sm">
+                            An option. The signed scope is another version, and it changes only through a Scope Revision the client signs — so this one cannot be approved over it.
+                        </div>
+                    ) : isApproved ? (
                         <div className="bg-emerald-50/50 border border-emerald-200 rounded-lg p-4 flex flex-col md:flex-row justify-between md:items-center gap-3 mt-2">
                             <div className="flex flex-col gap-1.5">
                                 <div className="flex items-center gap-2 text-emerald-800 text-sm font-bold">

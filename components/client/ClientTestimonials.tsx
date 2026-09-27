@@ -35,7 +35,7 @@ const ClientTestimonials: React.FC = () => {
                             transition={{ delay: idx * 0.2 }}
                             className="relative pl-6 border-l-2 border-slate-200"
                         >
-                            <p className="text-slate-600 italic text-base leading-relaxed mb-4 font-serif">
+                            <p className="text-slate-600 italic text-base leading-relaxed mb-4">
                                 "{review.text}"
                             </p>
                             <div>

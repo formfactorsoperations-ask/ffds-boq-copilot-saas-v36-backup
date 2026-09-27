@@ -672,7 +672,7 @@ export default function AgreementSignoffPage({ token: initialToken }: AgreementS
                 <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#3D52A0]">
                   Document Review
                 </span>
-                <h2 className="text-2xl font-serif font-bold text-slate-900 mt-1">
+                <h2 className="text-2xl font-bold text-slate-900 mt-1">
                   {getDocTitle()}
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">

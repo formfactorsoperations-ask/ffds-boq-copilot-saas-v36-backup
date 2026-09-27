@@ -1448,7 +1448,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                             <div className="absolute inset-8 border border-[#C5A880]/30 pointer-events-none"></div>
                             
                             <div className="flex flex-col gap-1 border-l-2 border-[#C5A880] pl-4 relative z-10">
-                                <span className="text-xl font-black tracking-widest text-[#0F172A] font-serif">{settings?.companyName?.toUpperCase() || 'FORM FACTORS'}</span>
+                                <span className="text-xl font-black tracking-widest text-[#0F172A]">{settings?.companyName?.toUpperCase() || 'FORM FACTORS'}</span>
                                 <span className="text-[9px] uppercase tracking-[0.3em] text-stone-500 font-sans"><Ed k="c350aa7c" ctl={edCtl}>DESIGN STUDIO</Ed></span>
                             </div>
 
@@ -1461,7 +1461,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                 </div>
                                 
                                 <div className="space-y-4">
-                                    <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-none text-stone-900 font-serif">
+                                    <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-none text-stone-900">
                                         {projectContext.name || 'Your Residence'}
                                     </h1>
                                     <p className="text-lg md:text-xl text-[#C5A880] tracking-wider font-sans font-semibold uppercase">

@@ -617,7 +617,7 @@ export default function WeeklyPulseDashboard({ projectContext, setProjectContext
         /* ==================== PROJECT JOURNEY BOOK TAB ==================== */
         <div className="space-y-6 max-w-4xl mx-auto">
           <div className="text-center py-6 border-b border-slate-100">
-            <h3 className="text-xl font-semibold text-slate-900 tracking-tight font-serif mb-2">
+            <h3 className="text-xl font-semibold text-slate-900 tracking-tight mb-2">
               The Journey Book
             </h3>
             <p className="text-xs text-slate-500 max-w-lg mx-auto leading-relaxed">
@@ -649,7 +649,7 @@ export default function WeeklyPulseDashboard({ projectContext, setProjectContext
 
                     {/* Editorial Week Title & Date */}
                     <div className="flex flex-col md:flex-row justify-between md:items-baseline gap-1.5 pt-0.5">
-                      <h4 className="text-lg font-semibold tracking-tight text-slate-900 font-serif">
+                      <h4 className="text-lg font-semibold tracking-tight text-slate-900">
                         Chapter {report.weekNumber}: Week Progress Update
                       </h4>
                       <span className="text-xs font-bold text-slate-400">

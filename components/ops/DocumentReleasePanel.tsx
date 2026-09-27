@@ -108,7 +108,7 @@ const DocumentReleasePanel: React.FC<DocumentReleasePanelProps> = ({
 
   const rows = useMemo(
     () =>
-      RELEASABLE_DOCUMENTS.map(def => {
+      RELEASABLE_DOCUMENTS.filter(def => !def.scopeFlowOnly).map(def => {
         const issue = getCurrentIssue(projectContext, def.kind);
         const state = resolveDocumentState(projectContext, def.kind);
         const readiness = getReleaseReadiness(def.kind, projectContext, projectData);

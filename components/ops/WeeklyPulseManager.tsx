@@ -837,7 +837,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
                   <div className="flex justify-between items-start">
                     <div className="space-y-1">
                       <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#B5945B] block">WEEKLY PULSE REPORT</span>
-                      <h2 className="text-2xl font-light text-slate-900 tracking-tight font-serif">Week {selectedReport.weekNumber}: Progress Digest</h2>
+                      <h2 className="text-2xl font-light text-slate-900 tracking-tight">Week {selectedReport.weekNumber}: Progress Digest</h2>
                       <span className="text-xs font-semibold text-slate-500 block">
                         Period: {formatDate(getWeekDatesForMonday(selectedReport.weekOf).start)} to {formatDate(getWeekDatesForMonday(selectedReport.weekOf).end)}
                       </span>

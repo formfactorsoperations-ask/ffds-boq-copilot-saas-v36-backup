@@ -25,7 +25,8 @@ import {
   ClientDocumentKind,
   DocumentState
 } from '../../types';
-import { PROJECT_DOCUMENTS, DocMeta } from '../../lib/documentActions';
+import { projectDocumentsFor, docRoute, DocMeta } from '../../lib/documentActions';
+import { isVisibleToClient } from '../../lib/clientVisibility';
 import {
   getCurrentIssue,
   resolveDocumentState,
@@ -109,6 +110,12 @@ interface Row {
   signedBy?: string | null;
   signedAt?: string | number | null;
   recordedOffline?: boolean;
+  /**
+   * Released, but only as a draft: the issue exists and the client cannot see
+   * it until it is published from the portal controls. The board said "Sent ·
+   * With client" about these, which is exactly what they are not.
+   */
+  staged: boolean;
 }
 
 const GROUPS: DocMeta['group'][] = ['Proposal', 'Agreement & Design', 'Execution'];
@@ -271,6 +278,8 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
   const courtOf = (r: Row): 'mine' | 'client' | 'settled' => {
     if (isProposalRow(r)) return acceptance.accepted ? 'settled' : 'mine';
     if (r.state === 'signed' || r.state === 'executed') return 'settled';
+    // Released as a draft: nothing has reached the client yet.
+    if (r.staged) return 'mine';
     // 'queried' is defined as the ball being with the studio.
     if (r.openQueryCount > 0 || r.state === 'queried') return 'mine';
     if (r.state === 'issued' || r.state === 'viewed' || r.state === 'amended') return 'client';
@@ -278,7 +287,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
   };
 
   const rows: Row[] = useMemo(() => {
-    return PROJECT_DOCUMENTS.filter(d => !(isDesigner && d.money)).map(meta => {
+    return projectDocumentsFor(projectContext).filter(d => !(isDesigner && d.money)).map(meta => {
       const kind = (meta.documentKind as ClientDocumentKind | undefined) || null;
       const available = currentStage >= meta.minStage;
       const gateLocked = !!(meta.gateGated && !isExecutionGateOpen);
@@ -302,6 +311,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
       let signedBy: string | null | undefined;
       let signedAt: string | number | null | undefined;
       let recordedOffline: boolean | undefined;
+      let staged = false;
 
       if (kind) {
         /*
@@ -330,13 +340,18 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
         signedBy = agreement?.signedBy;
         signedAt = agreement?.signedAt;
         recordedOffline = agreement?.recordedOffline;
+        /* Only a stored issue can be staged; a legacy one synthesised from the
+           engagement record is visible or not by its own rules. */
+        const stored = !!issue && (projectContext.documents?.issues || []).some(i => i.id === issue!.id);
+        staged = stored && !isVisibleToClient(issue as any)
+          && state !== 'signed' && state !== 'executed';
       }
 
       return {
         meta, kind, mode, state, available, gateLocked, issue,
         readinessReady, readinessWarnings, readinessBlockers,
         openQueryCount, addendaCount, unsignedAddenda, lastViewed, evidence,
-        signedBy, signedAt, recordedOffline
+        signedBy, signedAt, recordedOffline, staged
       };
     });
   }, [projectContext, projectData, approvals, currentStage, isExecutionGateOpen, isDesigner]);
@@ -469,7 +484,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
     */
     if (r.gateLocked) return { label: 'Why blocked?', variant: 'ghost' as const, onClick: () => setExpanded(r.meta.id) };
     if (!r.available) return { label: 'Not yet due', variant: 'locked' as const, onClick: () => {} };
-    if (!r.kind) return { label: 'Open', variant: 'ghost' as const, onClick: () => onNavigate(r.meta.id) };
+    if (!r.kind) return { label: 'Open', variant: 'ghost' as const, onClick: () => onNavigate(docRoute(r.meta)) };
 
     switch (r.state) {
       case 'signed':
@@ -496,7 +511,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
         */
         return r.readinessReady
           ? { label: 'Review & release', variant: 'dark' as const, onClick: () => { setExpanded(r.meta.id); setReleasing(r.meta.id); setAsPack(true); setReleaseNote(''); } }
-          : { label: 'Prepare', variant: 'ghost' as const, onClick: () => onNavigate(r.meta.id) };
+          : { label: 'Prepare', variant: 'ghost' as const, onClick: () => onNavigate(docRoute(r.meta)) };
     }
   };
 
@@ -512,7 +527,10 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
    * note field and the pack option before anything reaches the client.
    */
   const canSendAgain = (r: Row) =>
-    !!r.kind && r.available && !r.gateLocked && !!r.issue;
+    !!r.kind && r.available && !r.gateLocked && !!r.issue
+    /* Scope documents are rebuilt from the Revision Studio, never re-frozen
+       from here: this board has no rate bank to price them with. */
+    && !r.meta.scopeFlowOnly;
 
   const sendAgain = (r: Row) => {
     setExpanded(r.meta.id);
@@ -568,7 +586,10 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
           said, correctly, that it had never been sent.
         */
         studio: r.issue
-          ? { ...pane.emerald, text: `Sent ${ago(r.issue.issuedAt) || 'today'}` }
+          ? (isVisibleToClient(r.issue as any) || r.issue.id.endsWith('-legacy')
+              ? { ...pane.emerald, text: `Sent ${ago(r.issue.issuedAt) || 'today'}` }
+              /* Signed on the studio's device before it was ever published. */
+              : { ...pane.emerald, text: 'Signed in the studio' })
           : { ...pane.amber, text: 'Never issued' },
         arrow: { dir: 'done' as const, cls: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
         client: {
@@ -587,6 +608,18 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
         arrow: { dir: 'left' as const, cls: 'bg-violet-50 border-violet-200 text-violet-700' },
         client: { ...pane.slate, text: readingLine(r) || 'Waiting on you' },
         verdict: 'Your move', verdictCls: 'text-violet-700'
+      };
+    }
+
+    // Released as a draft and never published.
+    if (r.staged) {
+      return {
+        edge: EDGE.slate, age,
+        studio: { ...pane.amber, text: `Staged ${ago(r.issue?.issuedAt) || 'today'}` },
+        arrow: { dir: 'right' as const, cls: 'bg-slate-50 border-slate-200 text-slate-300' },
+        client: { ...pane.blank, text: 'Not in their portal' },
+        verdict: 'Publish to send',
+        verdictCls: 'text-[#8A7440]'
       };
     }
 
@@ -636,6 +669,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
     if (!r.kind) {
       return r.mode === 'review' ? 'Client can view this' : 'Internal working document';
     }
+    if (r.staged) return `Released as a draft ${ago(r.issue?.issuedAt)} · not in the client's portal until published`;
     switch (r.state) {
       case 'signed':
       case 'executed':
@@ -977,7 +1011,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                     */}
                     <div className={`hidden lg:block ${COL.status} shrink-0 self-stretch pl-3 border-l border-slate-100 flex items-center`}>
                       {r.kind && r.available && !r.gateLocked ? (
-                        <ProgressRail state={r.state} mode={r.mode} />
+                        <ProgressRail state={r.staged ? 'draft' : r.state} mode={r.mode} />
                       ) : (
                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
                           {r.gateLocked ? 'Gate locked' : !r.available ? 'Not yet due' : 'Internal'}
@@ -1032,7 +1066,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                       */}
                       {r.kind && r.state === 'draft' && r.readinessReady && (
                         <button
-                          onClick={() => onNavigate(r.meta.id)}
+                          onClick={() => onNavigate(docRoute(r.meta))}
                           title="Open this document in its workspace"
                           className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg whitespace-nowrap text-slate-500
                                      hover:text-[#3E4F87] hover:bg-[#EEF0F8] cursor-pointer transition-all
@@ -1111,8 +1145,8 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                           <DocumentThumbnail
                             issue={r.issue}
                             studioName={studioIdentity.orgName}
-                            stamp={r.state ? STATE_CHIP[r.state] : null}
-                            onOpen={() => onNavigate(r.meta.id)}
+                            stamp={r.staged ? { label: 'Staged', cls: STATE_CHIP.draft.cls } : r.state ? STATE_CHIP[r.state] : null}
+                            onOpen={() => onNavigate(docRoute(r.meta))}
                           />
                           <div className="space-y-2">
                             <h4 className="text-[13px] font-bold text-slate-900">{documentTitle(r.kind)}</h4>
@@ -1206,7 +1240,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                           */}
                           <div className="flex items-center justify-between gap-3">
                             <button
-                              onClick={() => onNavigate(r.meta.id)}
+                              onClick={() => onNavigate(docRoute(r.meta))}
                               className="px-3 py-2 border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-[12px] font-bold rounded-xl cursor-pointer flex items-center gap-1.5"
                             >
                               <ExternalLink className="w-3.5 h-3.5" /> Edit first
@@ -1287,7 +1321,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                       */}
                       {!(r.state === 'draft' || releasing === r.meta.id) && (
                         <div className="flex items-center gap-3 pt-1">
-                          <button onClick={() => onNavigate(r.meta.id)} className="text-[11px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer flex items-center gap-1.5">
+                          <button onClick={() => onNavigate(docRoute(r.meta))} className="text-[11px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer flex items-center gap-1.5">
                             <ExternalLink className="w-3.5 h-3.5" /> Open in workspace to edit
                           </button>
                         </div>

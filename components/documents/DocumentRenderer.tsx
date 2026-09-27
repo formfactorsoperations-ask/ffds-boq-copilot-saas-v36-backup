@@ -20,6 +20,8 @@ import ExecutionAgreementSheet from './ExecutionAgreementSheet';
 import HandoverDocketSheet from './HandoverDocketSheet';
 import OnboardingKitSheet from './OnboardingKitSheet';
 import SnagListSheet from './SnagListSheet';
+import DetailedBoqSheet from './DetailedBoqSheet';
+import ScopeRevisionSheet from './ScopeRevisionSheet';
 import ExecutionStamp from './ExecutionStamp';
 import { MessageCircleQuestion, MessagesSquare, Check } from 'lucide-react';
 import { formatCurrency, calculateSellPrice } from '../../lib/utils';
@@ -516,6 +518,34 @@ const DocumentRenderer: React.FC<DocumentRendererProps> = ({
           d1Amount={snap.d1Amount}
           docketRef={snap.docketRef}
           officeAddress={org.officeAddress}
+        />
+      );
+    }
+
+    // ── Detailed BOQ ───────────────────────────────────────────────────────
+    case 'detailed_boq': {
+      if (!snap.rooms) return <Unavailable what="BOQ" />;
+      return (
+        <DetailedBoqSheet
+          snapshot={snap}
+          studioName={orgName}
+          contentHash={issue.contentHash}
+          signedBy={issue.clientSignature?.signatoryName || null}
+          signedAt={issue.clientSignature?.signedAt || null}
+        />
+      );
+    }
+
+    // ── Scope Revision ─────────────────────────────────────────────────────
+    case 'scope_revision': {
+      if (!snap.v2) return <Unavailable what="scope revision" />;
+      return (
+        <ScopeRevisionSheet
+          snapshot={snap}
+          studioName={orgName}
+          contentHash={issue.contentHash}
+          signedBy={issue.clientSignature?.signatoryName || null}
+          signedAt={issue.clientSignature?.signedAt || null}
         />
       );
     }

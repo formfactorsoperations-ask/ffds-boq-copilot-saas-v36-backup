@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { ProjectContext } from '../types';
 import { useOrg } from '../contexts/OrgContext';
 import { 
-  PROJECT_DOCUMENTS, 
+  projectDocumentsFor, 
+  docRoute, 
   DocMeta, 
   buildSigningUrl, 
   getSigningToken 
@@ -112,7 +113,7 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
 
   // Derive status details for each document based on live ProjectContext
   const docRows = useMemo(() => {
-    return PROJECT_DOCUMENTS.map((doc) => {
+    return projectDocumentsFor(projectContext).map((doc) => {
       const isAvailable = currentStage >= doc.minStage;
       const isGateLocked = !!(doc.gateGated && !isExecutionGateOpen);
 
@@ -638,7 +639,7 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
                           {doc.isAvailable ? (
                             <>
                               <button 
-                                onClick={() => onNavigate(doc.id)}
+                                onClick={() => onNavigate(docRoute(doc))}
                                 className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100/80 text-[#334486] text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer whitespace-nowrap"
                               >
                                 Open Document
@@ -662,7 +663,7 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
                                   <div className="absolute right-0 bottom-full sm:bottom-auto sm:top-full mb-2 sm:mb-0 sm:mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-50 text-left animate-in fade-in slide-in-from-top-2 duration-150">
                                     <button 
                                       onClick={() => {
-                                        onNavigate(doc.id);
+                                        onNavigate(docRoute(doc));
                                         setActiveMenuId(null);
                                       }}
                                       className="w-full px-3.5 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-2 cursor-pointer font-medium"
@@ -674,7 +675,7 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
                                     {doc.signable && doc.tone !== 'signed' && (
                                       <button 
                                         onClick={() => {
-                                          onNavigate(doc.id);
+                                          onNavigate(docRoute(doc));
                                           setActiveMenuId(null);
                                         }}
                                         className="w-full px-3.5 py-2 text-xs text-[#334486] hover:bg-sky-50 transition-colors flex items-center gap-2 cursor-pointer font-bold"
@@ -697,7 +698,7 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
                                     {doc.downloadable && (
                                       <button 
                                         onClick={() => {
-                                          onNavigate(doc.id);
+                                          onNavigate(docRoute(doc));
                                           setActiveMenuId(null);
                                         }}
                                         className="w-full px-3.5 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-2 cursor-pointer font-medium"

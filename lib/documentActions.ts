@@ -23,6 +23,14 @@ export interface DocMeta {
   gateGated?: boolean;            // locked until the Design Gate opens
   clientVisible?: boolean;
   documentKind?: import('../types').ClientDocumentKind;
+  /**
+   * Only on projects with the signed-scope flow switched on. Everywhere else
+   * the document does not exist — not greyed, not "coming soon" — so a live
+   * project that has not moved over sees exactly what it saw before.
+   */
+  scopeFlowOnly?: boolean;
+  /** Where "Prepare" goes, when that is not a workspace tab of the same id. */
+  route?: string;
 }
 
 export const PROJECT_DOCUMENTS: DocMeta[] = [
@@ -67,8 +75,34 @@ export const PROJECT_DOCUMENTS: DocMeta[] = [
     clientVisible: true,
     documentKind: 'onboarding_kit'
   },
-  { 
-    id: 'execution-agreement', 
+  {
+    id: 'detailed-boq',
+    name: 'Detailed BOQ',
+    icon: FileText,
+    group: 'Agreement & Design',
+    minStage: 1,
+    money: true,
+    downloadable: true,
+    clientVisible: true,
+    documentKind: 'detailed_boq',
+    scopeFlowOnly: true,
+    route: 'revision-studio'
+  },
+  {
+    id: 'scope-revision',
+    name: 'Scope Revision',
+    icon: FileText,
+    group: 'Agreement & Design',
+    minStage: 1,
+    money: true,
+    downloadable: true,
+    clientVisible: true,
+    documentKind: 'scope_revision',
+    scopeFlowOnly: true,
+    route: 'revision-studio'
+  },
+  {
+    id: 'execution-agreement',
     name: 'Execution Agreement', 
     icon: Hammer, 
     group: 'Execution', 
@@ -130,6 +164,18 @@ export const PROJECT_DOCUMENTS: DocMeta[] = [
   /* Invoices are raised in Zoho Books, not here. This entry only ever opened
      a calculator, so the vault listed a client document that was never one. */
 ];
+
+/** The documents this project has: scope documents only where the flow is on. */
+export function projectDocumentsFor(ctx: ProjectContext | null | undefined): DocMeta[] {
+  /* The client's copy of the project carries documents but not the studio's
+     switch, so a scope document actually issued also turns the rows on. */
+  const on = !!ctx?.scopeFlow?.enabled
+    || (ctx?.documents?.issues || []).some(i => i.kind === 'detailed_boq' || i.kind === 'scope_revision');
+  return PROJECT_DOCUMENTS.filter(d => on || !d.scopeFlowOnly);
+}
+
+/** The workspace tab a document's "Prepare" or "Open" leads to. */
+export const docRoute = (d: DocMeta): string => d.route || d.id;
 
 export function buildSigningUrl(token: string): string {
   let origin = typeof window !== 'undefined' ? window.location.origin : '';

@@ -21,6 +21,7 @@ import TermsOfUsePage from "./components/studio/TermsOfUsePage";
 import { readLastTabs, recordLastTab, LastTabs } from "./services/lastVisitedTabs";
 import { readAttentionState, writeAttentionEntry, AttentionState, AttentionEntry } from "./services/attentionState";
 import { buildProjectTemplate } from "./lib/cloneProject";
+import { buildRehearsalCopy, keepLockedTier, lockedTierId } from "./lib/scopeFlow";
 import { ensureScopeRooms } from "./lib/scopeBuckets";
 import { showSuccessWithNext } from "./components/SuccessWithNextToast";
 import { OfflineIndicator } from "./components/OfflineIndicator";
@@ -1560,15 +1561,17 @@ export default function App() {
   const setBoqForActiveTier: React.Dispatch<React.SetStateAction<BoqItem[]>> = (
     action,
   ) => {
+    // The signed version (signed scope on) changes only through a Scope Revision.
+    const locked = lockedTierId(projectContext);
     setTiers((prevTiers) =>
-      prevTiers.map((tier) => {
+      keepLockedTier(prevTiers, prevTiers.map((tier) => {
         if (tier.id === activeTierId) {
           const newBoq =
             typeof action === "function" ? action(tier.boq) : action;
           return { ...tier, boq: newBoq };
         }
         return tier;
-      }),
+      }), locked),
     );
   };
 
@@ -1683,6 +1686,8 @@ export default function App() {
     setProjectContext({
       ...DEFAULT_CONTEXT,
       name: nextDefaultProjectName(DEFAULT_CONTEXT.name, projectLibrary),
+      // New projects work on signed scope from the start; the switch is for older ones.
+      scopeFlow: { enabled: true, enabledAt: Date.now(), enabledBy: currentUserAuth?.displayName || currentUserAuth?.email || "Studio" },
     });
     setTiers([]);
     setActiveTierId(null);
@@ -1772,6 +1777,11 @@ export default function App() {
       newId: generateId(),
       newTierId: () => generateId(),
     });
+    // A project started from a template is a new project: signed scope from the start.
+    template.context = {
+      ...template.context,
+      scopeFlow: { enabled: true, enabledAt: Date.now(), enabledBy: currentUserAuth?.displayName || currentUserAuth?.email || "Studio" },
+    };
 
     setProjectLibrary((prev) => [template, ...prev]);
     await db.saveProject(template);
@@ -1789,6 +1799,36 @@ export default function App() {
         ? `Template created with ${carried}. Client details, payments and sign-offs were not copied.`
         : 'Template created. Client details, payments and sign-offs were not copied.',
     );
+  };
+
+  /**
+   * A copy of the open project to rehearse the signed-scope flow on.
+   *
+   * Built from the same in-memory state the auto-save writes, so the copy is
+   * the project as it stands, and saved through the ordinary save path. It is
+   * not opened: the studio may be mid-way through something here.
+   */
+  const handleMakeRehearsalCopy = async (): Promise<string | null> => {
+    if (!activeInternalId) return null;
+    const current: FullProjectData = {
+      id: activeInternalId,
+      architecture: projectArchitecture,
+      lastModified: Date.now(),
+      context: projectContext,
+      tiers: tiersWithCalculatedSummaries,
+      activeTierId,
+      activeProject,
+      materials: materialSuggestions,
+      timeline: timelinePhases,
+      leadProfile,
+      decisionBrainOutput,
+    };
+    /* Numbered, so a second rehearsal is not a second project with the same name. */
+    const earlier = projectLibrary.filter((p) => (p.context as any)?.rehearsalOf?.projectId === activeInternalId).length;
+    const copy = buildRehearsalCopy(current, generateId(), Date.now(), earlier ? `Rehearsal ${earlier + 1}` : 'Rehearsal');
+    setProjectLibrary((prev) => [copy, ...prev]);
+    await db.saveProject(copy);
+    return copy.context.name;
   };
 
   const handleProjectStatusChange = async (
@@ -3108,6 +3148,7 @@ export default function App() {
                       {/* IN_BLOCK_1_STUDIO_DASHBOARD */}
                       {activeTab === "boq-editor" && (
                         <StudioDashboard
+                          onStartRevision={() => setActiveTab("revision-studio")}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           tiers={tiersWithCalculatedSummaries}
@@ -3343,6 +3384,9 @@ export default function App() {
                             materials: materialSuggestions,
                             timeline: timelinePhases,
                             activeTierId: activeTierId,
+                            /* Annexure F is priced at release; without the
+                               bank every bank-priced line froze at ₹0. */
+                            bank,
                           } as any}
                           onNavigate={(route) => setActiveTab(route)}
                         />
@@ -3377,6 +3421,7 @@ export default function App() {
                       )}
                       {activeTab === "revision-studio" && (
                         <RevisionStudio
+                          onMakeRehearsalCopy={handleMakeRehearsalCopy}
                           tiers={tiersWithCalculatedSummaries}
                           approvedTierId={projectContext.approvedTierId}
                           activeTierId={activeTierId}
@@ -3837,6 +3882,7 @@ export default function App() {
 
                       {activeTab === "boq-editor" && (
                         <StudioDashboard
+                          onStartRevision={() => setActiveTab("revision-studio")}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           tiers={tiersWithCalculatedSummaries}
@@ -4071,6 +4117,9 @@ export default function App() {
                             materials: materialSuggestions,
                             timeline: timelinePhases,
                             activeTierId: activeTierId,
+                            /* Annexure F is priced at release; without the
+                               bank every bank-priced line froze at ₹0. */
+                            bank,
                           } as any}
                           onNavigate={(route) => setActiveTab(route)}
                         />
@@ -4105,6 +4154,7 @@ export default function App() {
                       )}
                       {activeTab === "revision-studio" && (
                         <RevisionStudio
+                          onMakeRehearsalCopy={handleMakeRehearsalCopy}
                           tiers={tiersWithCalculatedSummaries}
                           approvedTierId={projectContext.approvedTierId}
                           activeTierId={activeTierId}

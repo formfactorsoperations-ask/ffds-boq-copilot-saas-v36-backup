@@ -581,7 +581,7 @@ export default function DesignCompleteGate({
                 <FileCheck className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-serif text-lg font-semibold text-slate-900">Record Client Sign-Off</h3>
+                <h3 className="text-lg font-semibold text-slate-900">Record Client Sign-Off</h3>
                 <p className="text-xs text-slate-500">Capture supporting evidence for final drawing approval</p>
               </div>
             </div>
@@ -623,7 +623,7 @@ export default function DesignCompleteGate({
                 <Snowflake className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-serif text-lg font-semibold text-slate-900">Freeze Design & Open Execution</h3>
+                <h3 className="text-lg font-semibold text-slate-900">Freeze Design & Open Execution</h3>
                 <p className="text-xs text-slate-500">Establish BOQ rate baseline and advance to Stage 5</p>
               </div>
             </div>

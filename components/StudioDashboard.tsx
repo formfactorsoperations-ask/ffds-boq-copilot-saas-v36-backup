@@ -12,7 +12,9 @@ import BulkImportModal from './BulkImportModal';
 import TakeoffPanel from './TakeoffPanel';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheckIcon, GridIcon, ListIcon, SaveIcon, CheckIcon, ExportIcon, CalculatorIcon } from './Icons';
-import { Search, X, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { Search, X, CheckCircle2, AlertCircle, Sparkles, Lock, Plus } from 'lucide-react';
+import { keepLockedTier, lockedTierId, scopeInForce, detailedBoqForTier, detailedBoqVersion } from '../lib/scopeFlow';
+import { resolveBoqLine, isBillable } from '../lib/boqPricing';
 import { useOrg } from '../contexts/OrgContext';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import { db as dbService } from '../services/dbService';
@@ -35,6 +37,8 @@ interface StudioDashboardProps {
     projectId?: string;
     projectArchitecture?: 'legacy' | 'canonical';
     onUpgradeArchitecture?: () => void;
+    /** Opens the Revision Studio, where a signed scope is changed. */
+    onStartRevision?: () => void;
 }
 
 // Helper function for applying command actions
@@ -93,7 +97,16 @@ const itemVar = {
     show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100, damping: 12 } }
 };
 
-const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture }) => {
+const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision }) => {
+  /* Signed scope: the version the client signed is shown but never changed
+     here. Every edit path below goes through setTiers, so it is guarded once. */
+  const signedTierId = lockedTierId(projectContext);
+  const isLocked = !!activeTierId && activeTierId === signedTierId;
+  const signedIssue = isLocked ? (detailedBoqForTier(projectContext, signedTierId) || scopeInForce(projectContext)) : null;
+  const setTiers: React.Dispatch<React.SetStateAction<ProposalTier[]>> = React.useCallback(
+    action => setTiersRaw(prev => keepLockedTier(prev, typeof action === 'function' ? (action as (p: ProposalTier[]) => ProposalTier[])(prev) : action, signedTierId)),
+    [setTiersRaw, signedTierId]
+  );
   const { orgData, currentRole } = useOrg();
   const isOwner = ['Super Admin', 'Admin', 'Ops Director'].includes(currentRole);
   
@@ -564,6 +577,19 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
           </div>
       </div>
 
+      {isLocked && (
+        <div className="flex flex-col md:flex-row md:items-center gap-4 rounded-3xl border border-[#3D52A0]/20 bg-[#3D52A0]/[0.04] px-5 py-4 print:hidden">
+          <span className="w-10 h-10 rounded-xl grid place-items-center bg-white border border-[#3D52A0]/20 text-[#3D52A0] shrink-0"><Lock className="w-4.5 h-4.5" /></span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[14px] font-bold text-slate-900">{signedIssue ? `Detailed BOQ v${detailedBoqVersion(signedIssue)} is the signed scope, so it is read-only.` : 'This version is the signed scope, so it is read-only.'}</div>
+            <p className="text-[12.5px] text-slate-600 mt-0.5">
+              {signedIssue ? `${signedIssue.reference} · ₹${Math.round(signedIssue.snapshot?.total || 0).toLocaleString('en-IN')}. ` : ''}To change it, start a revision: the client signs the change before anything moves, and the payment schedule follows. Other versions stay editable.
+            </p>
+          </div>
+          {onStartRevision && <button onClick={onStartRevision} className="px-4 py-2.5 rounded-xl bg-[#3D52A0] hover:bg-[#334486] text-white text-[12.5px] font-bold shrink-0 flex items-center gap-1.5"><Plus className="w-4 h-4" /> Start a revision</button>}
+        </div>
+      )}
+      {!isLocked && (<>
             {/* Unified Compact Toolbar Row */}
       <div className="mb-6 flex flex-col lg:flex-row gap-3 items-center justify-between bg-white border border-slate-200/90 p-2.5 rounded-2xl shadow-sm">
           {/* Smaller Focus Editor / Excel / Cards / Plan Takeoff View Switcher */}
@@ -683,9 +709,13 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
       
       
 
+      </>)}
       <div className="space-y-8">
           
           {/* Main Editor (Full Width) */}
+          {isLocked ? (
+            <SignedBoqReadOnly boq={activeTier?.boq || []} bankMap={bankMap} />
+          ) : (
           <div className="w-full">
               
               {/* INTERACTIVE WORKSPACE MODE */}
@@ -842,6 +872,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                   </MotionDiv>
               )}
           </div>
+          )}
           
           {/* Totals Breakdown */}
           {(() => {
@@ -1060,6 +1091,45 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
           )}
       </AnimatePresence>
       
+    </div>
+  );
+};
+
+/** The signed version, as the client agreed it: rooms, quantities, rates, amounts. */
+const SignedBoqReadOnly: React.FC<{ boq: any[]; bankMap: Map<string, Item> }> = ({ boq, bankMap }) => {
+  const lines = boq.filter(b => isBillable(b)).map(b => resolveBoqLine(b, bankMap)).filter(l => l.qty > 0);
+  const rooms = Array.from(new Set(lines.map(l => l.room)));
+  const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100 bg-slate-50/60">
+        <span className="text-[14px] font-bold text-slate-900">Signed BOQ</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider bg-white border border-slate-200 text-slate-500 rounded-full px-2 py-0.5">Signed · read-only</span>
+        <span className="ml-auto text-[12px] text-slate-500">Editing, re-pricing, bank sync and status changes are switched off here</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-[13px]">
+          <thead><tr className="text-[10.5px] uppercase tracking-wider text-slate-400 border-b border-slate-100">
+            <th className="text-left font-bold px-5 py-2">Item</th><th className="text-right font-bold px-3 py-2">Qty</th><th className="text-right font-bold px-3 py-2">Rate</th><th className="text-right font-bold px-5 py-2">Amount</th>
+          </tr></thead>
+          <tbody>
+            {rooms.map(room => (
+              <React.Fragment key={room}>
+                <tr className="bg-slate-50/50"><td colSpan={4} className="px-5 py-2 text-[12px] font-bold text-slate-700">{room}<span className="font-medium text-slate-400"> · {inr(lines.filter(l => l.room === room).reduce((t, l) => t + l.total, 0))}</span></td></tr>
+                {lines.filter(l => l.room === room).map((l, i) => (
+                  <tr key={room + i} className="border-t border-slate-100">
+                    <td className="px-5 py-2 text-slate-900 font-medium">{l.name}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{+l.qty.toFixed(3)} {l.unit}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{inr(l.rate)}</td>
+                    <td className="px-5 py-2 text-right tabular-nums font-semibold text-slate-900">{inr(l.total)}</td>
+                  </tr>
+                ))}
+              </React.Fragment>
+            ))}
+          </tbody>
+          <tfoot><tr className="border-t-2 border-slate-200"><td colSpan={3} className="px-5 py-2.5 text-right font-bold text-slate-700">Total</td><td className="px-5 py-2.5 text-right tabular-nums font-extrabold text-slate-900">{inr(lines.reduce((t, l) => t + l.total, 0))}</td></tr></tfoot>
+        </table>
+      </div>
     </div>
   );
 };

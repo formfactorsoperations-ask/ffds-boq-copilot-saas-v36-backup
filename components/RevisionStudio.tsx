@@ -57,6 +57,9 @@ import { useOrg } from "../contexts/OrgContext";
 import { generateClientNote } from "../services/geminiService";
 import { INITIAL_BANK } from "../constants";
 import { RevisionExcelImportModal } from "./RevisionExcelImportModal";
+import ScopeFlowPanel from "./scope/ScopeFlowPanel";
+import ScopeWorkspace from "./scope/ScopeWorkspace";
+import { isScopeFlowOn } from "../lib/scopeFlow";
 import { db } from "../services/dbService";
 
 interface RevisionStudioProps {
@@ -71,6 +74,8 @@ interface RevisionStudioProps {
   ) => void;
   setTiers?: React.Dispatch<React.SetStateAction<ProposalTier[]>>;
   setActiveTierId?: (id: string | null) => void;
+  /** Saves a rehearsal copy of this project; resolves to its name. */
+  onMakeRehearsalCopy?: () => Promise<string | null>;
 }
 
 export default function RevisionStudio({
@@ -83,8 +88,13 @@ export default function RevisionStudio({
   setProjectContext,
   setTiers,
   setActiveTierId,
+  onMakeRehearsalCopy,
 }: RevisionStudioProps) {
-  const { orgData } = useOrg();
+  const { orgData, currentUserAuth } = useOrg();
+  /* The signed-scope flow replaces Approve & Sync, per project. */
+  const scopeFlowOn = isScopeFlowOn(projectContext);
+  const currentUserName: string =
+    currentUserAuth?.displayName || currentUserAuth?.email || orgData?.orgName || "Studio";
   const [activeTab, setActiveTab] = useState("actions");
   const [showBaselineModal, setShowBaselineModal] = useState(false);
   const [showExcelImportModal, setShowExcelImportModal] = useState(false);
@@ -4319,8 +4329,13 @@ export default function RevisionStudio({
           </Card>
         </div>
 
-        {/* Sync to Payments */}
-        {setProjectContext && (
+        {/* Sync to Payments — replaced by a signed Scope Revision where the flow is on. */}
+        {setProjectContext && scopeFlowOn && (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+            <b className="text-slate-800">Approve & Sync is off for this project.</b> The scope changes when the client signs a Scope Revision — prepare one from the Signed scope panel at the top of this page.
+          </div>
+        )}
+        {setProjectContext && !scopeFlowOn && (
           <div className="mt-4 flex justify-end">
             <button
               onClick={() => {
@@ -4928,7 +4943,31 @@ export default function RevisionStudio({
     <div className="h-full flex flex-col bg-slate-50/50 relative">
       {/* Main Full-Width Workspace (Uses maximum available screen real estate) */}
       <div className="flex-grow p-4 sm:p-5 overflow-y-auto">
+        {projectContext && setProjectContext && scopeFlowOn ? (
+          /* Signed scope: one screen replaces the Workbench and its tabs. */
+          <ScopeWorkspace
+            tiers={tiers}
+            approvedTierId={approvedTierId}
+            bank={bank || []}
+            projectContext={projectContext}
+            setProjectContext={setProjectContext as any}
+            setTiers={setTiers}
+            setActiveTierId={setActiveTierId}
+            onMakeRehearsalCopy={onMakeRehearsalCopy}
+            currentUser={currentUserName}
+            orgName={orgData?.orgName}
+          />
+        ) : (
         <div className="w-full space-y-4">
+          {projectContext && setProjectContext && (
+            <ScopeFlowPanel
+              projectContext={projectContext}
+              setProjectContext={setProjectContext as any}
+              onMakeRehearsalCopy={onMakeRehearsalCopy}
+              currentUser={currentUserName}
+            />
+          )}
+
           {/* Streamlined 3-Tab Navigation Bar */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-slate-200/70 p-1.5 rounded-2xl border border-slate-200 w-full">
             {[
@@ -4985,6 +5024,7 @@ export default function RevisionStudio({
             )}
           </motion.div>
         </div>
+        )}
       </div>
 
       {/* Baseline Scope Modal Window */}

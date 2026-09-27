@@ -60,7 +60,7 @@ export const AuditCertificateModal: React.FC<AuditCertificateModalProps> = ({
               <span className="text-[10px] font-mono font-bold tracking-[0.25em] text-[#B5945B] uppercase block mb-1">
                 Forensic Health & Audit Certificate
               </span>
-              <h1 className="text-3xl font-serif text-slate-900 tracking-tight">
+              <h1 className="text-3xl text-slate-900 tracking-tight">
                 {projectName}
               </h1>
               <p className="text-xs text-slate-600 mt-1 font-sans">
@@ -89,7 +89,7 @@ export const AuditCertificateModal: React.FC<AuditCertificateModalProps> = ({
 
             <div className="col-span-2 space-y-2">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Executive Finding</span>
-              <p className="text-sm text-slate-800 leading-relaxed font-serif italic">
+              <p className="text-sm text-slate-800 leading-relaxed italic">
                 "{report.headlineSummary}"
               </p>
               <div className="text-xs text-slate-600 pt-1">

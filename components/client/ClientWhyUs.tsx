@@ -36,7 +36,7 @@ const ClientWhyUs: React.FC = () => {
             <div className="max-w-5xl mx-auto">
                 <div className="mb-12 md:text-center max-w-3xl mx-auto">
                     <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-3">The {orgData?.orgName ? orgData.orgName.split(' ')[0] : 'Studio'} Approach</p>
-                    <h2 className="text-3xl md:text-4xl font-serif font-bold mb-4">Designed for Life. Built to Last.</h2>
+                    <h2 className="text-3xl md:text-4xl font-bold mb-4">Designed for Life. Built to Last.</h2>
                     <p className="text-slate-400 text-sm leading-relaxed">
                         Interior design is more than just aesthetics; it's about solving problems elegantly. 
                         Here is how we ensure your journey is as refined as the destination.

@@ -18,7 +18,7 @@ import {
   DocumentIssue,
   SignoffRecord
 } from '../../types';
-import { PROJECT_DOCUMENTS } from '../../lib/documentActions';
+import { projectDocumentsFor } from '../../lib/documentActions';
 import {
   getCurrentIssue,
   getIssueHistory,
@@ -59,7 +59,9 @@ const RELEASE_CONDITION: Record<string, string> = {
   onboarding_kit: 'Shared once you have accepted the proposal.',
   execution_agreement: 'Drawn up once your design and BOQ are approved and frozen.',
   handover_docket: 'Issued after the joint snag walk-through, once finishing works are signed off.',
-  snag_list: 'Every defect raised on site, and how each one was closed.'
+  snag_list: 'Every defect raised on site, and how each one was closed.',
+  detailed_boq: 'Every item in your scope, with its quantity and rate. Issued when your BOQ is approved.',
+  scope_revision: 'Issued when your scope changes, showing what changed and why.'
 };
 
 const STATE_CHIP: Record<DocumentState, { label: string; tone: string }> = {
@@ -98,7 +100,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
   const approvals = useMemo(() => resolveApprovals(context, 1), [context]);
 
   const rows = useMemo(() => {
-    return PROJECT_DOCUMENTS.filter(d => d.clientVisible).map(doc => {
+    return projectDocumentsFor(context).filter(d => d.clientVisible).map(doc => {
       const kind = doc.documentKind as ClientDocumentKind | undefined;
       const issue = kind ? getCurrentIssue(context, kind, { clientView: true }) : null;
       const state: DocumentState = kind ? resolveDocumentState(context, kind, { clientView: true }) : 'draft';
@@ -183,6 +185,10 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                   const chipLabel = row.kind ? documentStatusLabel(row.state, row.kind, 'client') : chip.label;
                   const isOpen = expanded === row.id;
                   const older = row.history.filter(h => h.id !== row.issue?.id);
+                  /* Approved without a signature on this issue — recorded by the
+                     studio, or signed on the revision it is attached to. There is
+                     no certificate to show, so the document itself opens. */
+                  const approvedElsewhere = !!(row.issue?.recordedApproval || row.issue?.signedVia);
 
                   return (
                     <div
@@ -228,6 +234,17 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                               {row.agreement?.recordedOffline && (
                                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">
                                   Recorded offline
+                                </span>
+                              )}
+                              {row.issue?.recordedApproval && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
+                                  Approved{' '}
+                                  {new Date(row.issue.recordedApproval.approvedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </span>
+                              )}
+                              {row.issue?.signedVia && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
+                                  Signed with its scope revision
                                 </span>
                               )}
                             </div>
@@ -276,7 +293,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                           {row.readable && row.kind && (
                             <button
                               onClick={() =>
-                                row.state === 'signed' || row.state === 'executed'
+                                (row.state === 'signed' || row.state === 'executed') && !approvedElsewhere
                                   ? setCertificateFor(row.kind!)
                                   : onOpenDocument(row.kind!)
                               }
@@ -293,7 +310,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                               ) : (
                                 <Eye className="w-3.5 h-3.5" />
                               )}
-                              {ACTION_LABEL[row.state]}
+                              {approvedElsewhere ? 'Open' : ACTION_LABEL[row.state]}
                             </button>
                           )}
 

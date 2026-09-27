@@ -59,7 +59,9 @@ const DOC_TITLES: Record<ClientDocumentKind, string> = {
   execution_agreement: 'Master Execution Agreement',
   onboarding_kit: 'Onboarding Kit',
   handover_docket: 'Handover & Acceptance Docket',
-  snag_list: 'Snag List & Defect Report'
+  snag_list: 'Snag List & Defect Report',
+  detailed_boq: 'Detailed BOQ',
+  scope_revision: 'Scope Revision'
 };
 
 interface DocumentReadingRoomProps {

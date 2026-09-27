@@ -159,7 +159,7 @@ export default function DigitalSignatureDocketView({
               />
             ) : (
               <div className="p-3 border border-slate-300 rounded-lg bg-white shadow-2xs">
-                <p className="font-serif italic text-lg text-slate-900 font-bold px-4 py-1">
+                <p className="italic text-lg text-slate-900 font-bold px-4 py-1">
                   {docket.signatoryName}
                 </p>
               </div>
