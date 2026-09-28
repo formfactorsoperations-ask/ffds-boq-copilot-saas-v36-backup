@@ -11,6 +11,7 @@ import { UI_STYLES, UI_CONSTANTS } from '../../lib/UIConstants';
  
 import { calculateSellPrice, generateDeterministicSchedule, formatINR } from '../../lib/utils';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
+import { onDownloadIntent } from '../../lib/downloadIntent';
 import { generateLocalComparison } from '../../lib/comparison';
 import { CloseIcon, ExportIcon, PrintIcon, CheckBadgeIcon, PencilRulerIcon, BriefcaseIcon } from '../Icons';
 import { TEMPLATE_TURNKEY, TEMPLATE_DESIGN_ONLY, INITIAL_BANK } from '../../constants';
@@ -720,6 +721,12 @@ const MODEL_SWITCHER = [
       setIsBuildingPdf(false);
     }
   };
+
+  /* Download from the Documents board opens this page asking for the PDF. */
+  useEffect(() => {
+    return onDownloadIntent('client', '.vnext-proposal-wrapper .ff-page', () => { handleDownloadPdf(); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className={`transition-all ${isClientViewOnly ? '' : 'p-4 bg-slate-200/50 pattern-bg rounded-2xl print:p-0 print:bg-white print:rounded-none'}`}>

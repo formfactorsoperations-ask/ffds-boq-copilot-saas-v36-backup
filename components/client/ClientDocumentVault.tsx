@@ -29,7 +29,8 @@ import { resolveApprovals } from '../../services/clientApprovalEngine';
 import { documentStatusLabel } from '../../services/documentReleaseEngine';
 import { getQueries } from '../../services/documentQueryEngine';
 import { getAddenda } from '../../services/documentReleaseEngine';
-import SignatureCertificate from './SignatureCertificate';
+import SignatureCertificate, { signoffFromIssue } from './SignatureCertificate';
+import { useDocumentDownload, certificateFor } from '../documents/DocumentDownload';
 import {
   FileText,
   FileCheck,
@@ -98,6 +99,8 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
   const [certificateFor, setCertificateFor] = useState<ClientDocumentKind | null>(null);
 
   const approvals = useMemo(() => resolveApprovals(context, 1), [context]);
+  // The client downloads what they were issued, never a draft.
+  const pdf = useDocumentDownload({ context, projectData, studio: { orgName: studioName }, allowDrafts: false });
 
   const rows = useMemo(() => {
     return projectDocumentsFor(context).filter(d => d.clientVisible).map(doc => {
@@ -146,6 +149,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
 
   return (
     <div className="space-y-6">
+      {pdf.stage}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-2xs">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b border-slate-100 pb-5 mb-5">
           <div className="space-y-1.5">
@@ -314,6 +318,18 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                             </button>
                           )}
 
+                          {row.readable && row.kind && row.issue && (
+                            <button
+                              onClick={() => pdf.download({ kind: row.kind!, issue: row.issue as any, agreementRecord: (row.agreement?.record as SignoffRecord) || null })}
+                              disabled={pdf.busyKind !== null}
+                              title={`Download ${row.issue.reference} as PDF`}
+                              className="px-3 py-2 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 cursor-pointer flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                            >
+                              <Download className={`w-3.5 h-3.5 ${pdf.busyKind === row.kind ? 'animate-pulse' : ''}`} />
+                              Download
+                            </button>
+                          )}
+
                           {/* On every document, not only on a clause inside the
                               reading room. A client who wants to ask about a
                               document should not have to open it, find a clause
@@ -469,7 +485,8 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
         <AlertCircle className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
         <p className="text-[11px] text-slate-500 leading-relaxed max-w-2xl">
           Every signed document keeps a certificate showing exactly what you agreed to, when, and
-          how it was read. Open a signed document above to view or print it.
+          how it was read. Download a signed document to keep it, with its certificate as the
+          last page.
         </p>
       </div>
 
@@ -477,7 +494,8 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
         <SignatureCertificate
           issue={certRow.issue}
           documentTitle={certRow.name}
-          record={(certRow.agreement?.record as SignoffRecord) || null}
+          record={(certRow.agreement?.record as SignoffRecord) || signoffFromIssue(certRow.issue)}
+          approval={certificateFor(certRow.issue, context, (certRow.agreement?.record as SignoffRecord) || null)?.approval || null}
           studioName={studioName}
           clientName={context.clientName}
           projectName={context.name}

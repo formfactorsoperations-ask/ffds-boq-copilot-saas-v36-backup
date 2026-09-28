@@ -51,6 +51,8 @@ import { auditLegacyIssues, withdrawLegacyIssues, describeAudit } from '../../se
 import { useOrg } from '../../contexts/OrgContext';
 import SignatureStatusPanel from './SignatureStatusPanel';
 import DocumentThumbnail from './DocumentThumbnail';
+import { useDocumentDownload } from './DocumentDownload';
+import { requestDownload } from '../../lib/downloadIntent';
 import ClientQueryInbox from '../ops/ClientQueryInbox';
 import {
   ChevronDown,
@@ -110,6 +112,8 @@ interface Row {
   signedBy?: string | null;
   signedAt?: string | number | null;
   recordedOffline?: boolean;
+  /** The signature held in the approvals record (terms, agreement, handover). */
+  agreementRecord?: any;
   /**
    * Released, but only as a draft: the issue exists and the client cannot see
    * it until it is published from the portal controls. The board said "Sent ·
@@ -205,7 +209,7 @@ const COL = {
   status: 'w-[172px]',
   move: 'w-[104px]',
   age: 'w-12',
-  act: 'w-[196px]',
+  act: 'w-[228px]',
 };
 
 /** Who owes the next move, in two words, for the column that asks. */
@@ -246,6 +250,36 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
     orgName: orgData?.orgName,
     officeAddress: (orgData as any)?.officeAddress,
     contactEmail: (orgData as any)?.contactEmail
+  };
+
+  const pdf = useDocumentDownload({ context: projectContext, projectData, studio: studioIdentity, allowDrafts: true });
+
+  /*
+    Download, per row. An issued document downloads as issued, with its
+    certificate when signed; one never issued downloads as a DRAFT built from
+    today's data. The Client Proposal and the checklist are built on their own
+    pages, so Download opens the page and it runs its own export.
+  */
+  const PAGE_EXPORTS = new Set(['client', 'checklist']);
+  const downloadFor = (r: Row): { title: string; onClick: () => void } | null => {
+    if (r.gateLocked || !r.available) return null;
+    if (!r.kind) {
+      return PAGE_EXPORTS.has(r.meta.id)
+        ? { title: `Download ${r.meta.name} as PDF`, onClick: () => { requestDownload(r.meta.id); onNavigate(docRoute(r.meta)); } }
+        : null;
+    }
+    if (r.issue) {
+      const signed = r.state === 'signed' || r.state === 'executed' || !!r.issue.recordedApproval || !!r.issue.signedVia;
+      return {
+        title: `Download ${r.issue.reference} as PDF${signed ? ', with its certificate' : ''}`,
+        onClick: () => pdf.download({ kind: r.kind!, issue: r.issue as any, agreementRecord: r.agreementRecord }),
+      };
+    }
+    const problem = pdf.draftProblem(r.kind);
+    return {
+      title: problem || 'Download a DRAFT built from today\'s project data (not issued)',
+      onClick: () => pdf.download({ kind: r.kind!, issue: null }),
+    };
   };
 
   // Documents released before the studio sheets existed carry a snapshot the
@@ -311,6 +345,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
       let signedBy: string | null | undefined;
       let signedAt: string | number | null | undefined;
       let recordedOffline: boolean | undefined;
+      let agreementRecord: any = null;
       let staged = false;
 
       if (kind) {
@@ -340,6 +375,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
         signedBy = agreement?.signedBy;
         signedAt = agreement?.signedAt;
         recordedOffline = agreement?.recordedOffline;
+        agreementRecord = agreement?.record || null;
         /* Only a stored issue can be staged; a legacy one synthesised from the
            engagement record is visible or not by its own rules. */
         const stored = !!issue && (projectContext.documents?.issues || []).some(i => i.id === issue!.id);
@@ -351,7 +387,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
         meta, kind, mode, state, available, gateLocked, issue,
         readinessReady, readinessWarnings, readinessBlockers,
         openQueryCount, addendaCount, unsignedAddenda, lastViewed, evidence,
-        signedBy, signedAt, recordedOffline, staged
+        signedBy, signedAt, recordedOffline, agreementRecord, staged
       };
     });
   }, [projectContext, projectData, approvals, currentStage, isExecutionGateOpen, isDesigner]);
@@ -707,6 +743,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
 
   return (
     <div className="space-y-6">
+      {pdf.stage}
       {/* ── Legacy documents released before the studio sheets ────────── */}
       {((legacyAudit?.withdrawable?.length || 0) > 0 || (legacyAudit?.signedLegacy?.length || 0) > 0) && (
         <div className="bg-amber-50/70 border border-amber-300 rounded-2xl overflow-hidden">
@@ -1038,7 +1075,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
 
                     {/* Primary always; the rest on hover or focus, so twelve rows
                         are not thirty-six competing buttons. */}
-                    <div className="flex items-center justify-end gap-1 shrink-0 lg:w-[196px]">
+                    <div className="flex items-center justify-end gap-1 shrink-0 lg:w-[228px]">
                       {/* The one action the summary line used to own. Offered
                           where it applies: sent, unopened or unsigned, quiet
                           for three days or more. */}
@@ -1086,6 +1123,22 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
                           Send again
                         </button>
                       )}
+                      {(() => {
+                        const dl = downloadFor(r);
+                        if (!dl) return null;
+                        const busy = pdf.busyKind !== null && pdf.busyKind === r.kind;
+                        return (
+                          <button
+                            onClick={dl.onClick}
+                            disabled={pdf.busyKind !== null}
+                            title={dl.title}
+                            aria-label={dl.title}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-[#3E4F87] hover:bg-[#EEF0F8] cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-wait"
+                          >
+                            <Download className={`w-4 h-4 ${busy ? 'animate-pulse text-[#3E4F87]' : ''}`} />
+                          </button>
+                        );
+                      })()}
                       {/*
                         One Release on screen at a time.
 

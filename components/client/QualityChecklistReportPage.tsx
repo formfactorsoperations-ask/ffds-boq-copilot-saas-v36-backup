@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { onDownloadIntent } from '../../lib/downloadIntent';
 import { ProjectContext } from '../../types';
 import { useOrg } from '../../contexts/OrgContext';
 import { Download, Printer, ArrowLeft, ClipboardCheck, Check, Bolt } from 'lucide-react';
@@ -161,6 +162,12 @@ export default function QualityChecklistReportPage({ projectContext, onBack }: Q
             setIsDownloading(false);
         }
     };
+
+    /* Download from the Documents board opens this page asking for the PDF. */
+    useEffect(() => {
+        return onDownloadIntent('checklist', '#quality-checklist-document-render', () => { handleDownloadPdf(); });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
         <div className="space-y-6 w-full px-4 sm:px-6 lg:px-8 pb-12 animate-in fade-in duration-300">

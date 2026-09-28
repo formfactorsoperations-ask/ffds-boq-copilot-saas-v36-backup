@@ -12,6 +12,7 @@ import { Info, PlayCircle, PauseCircle, CheckCircle, FileText, Send, MessageSqua
 import { ProjectPaymentBadge } from "./PaymentHealth";
 import DocumentMeter from "./ops/DocumentMeter";
 import { ClockIcon } from "./Icons";
+import ProjectStatusIllustration from "./ProjectStatusIllustration";
 import {
   fetchPaymentHealthScore,
   PaymentHealth,
@@ -1335,10 +1336,13 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                       e.stopPropagation();
                                       setStatusModalProject(project);
                                     }}
-                                    className={`group/status flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-[0.15em] border transition-all hover:scale-105 hover:shadow-sm cursor-pointer ${statusStyle.bg} ${statusStyle.color} ${statusStyle.border}`}
+                                    /* An illustrated status chip (option 26 of the
+                                       status-chip mockups): a small full-colour drawing
+                                       on a white pill, the label in ink. */
+                                    className="group/status flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full whitespace-nowrap bg-white text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#1d2238] border border-[#e3e6ef] shadow-2xs transition-all hover:scale-105 hover:shadow-sm cursor-pointer"
                                     title="Click to change project status & manage downstream impacts"
                                   >
-                                    {statusStyle.icon && <statusStyle.icon className="w-3 h-3" />}
+                                    <ProjectStatusIllustration status={metrics.status} size={22} />
                                     <span>{statusStyle.label}</span>
                                     <ChevronDown className="w-2.5 h-2.5 opacity-60 group-hover/status:opacity-100 transition-opacity" />
                                   </button>
