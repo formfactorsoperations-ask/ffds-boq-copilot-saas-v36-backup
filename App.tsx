@@ -130,6 +130,7 @@ import { collection, doc, getDoc, getDocs, writeBatch, serverTimestamp, onSnapsh
 import { toProjectDecisionRecords } from "./services/decisionProjection";
 import { issuePortalAccess, projectIdFromToken } from "./services/portalAccessService";
 import { readPortalView } from "./services/portalViewService";
+import { syncStudioAccess, portalDoor } from "./services/studioAccess";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth as firebaseAuth } from "./services/firebaseClient";
 import PortalPublishControls from "./components/ops/PortalPublishControls";
@@ -234,13 +235,46 @@ export default function App() {
       }
       try {
         const snap = await getDoc(doc(firestoreDb, "users", user.uid));
-        const data = snap.exists() ? (snap.data() as any) : {};
+        let data = snap.exists() ? (snap.data() as any) : {};
+        /*
+          No role on the profile: a first sign-in, or somebody newly added to
+          a studio's team. Only the server may settle it -- the rules refuse a
+          role written from here -- and an account it places nowhere gets no
+          app at all, where it used to get "Admin" by default.
+        */
+        if (!data.role) {
+          const access = await syncStudioAccess();
+          const isOwner = user.email === "formfactors.operations@gmail.com";
+          if (access?.access === "none" || (!access && !isOwner)) {
+            setAuthProfile(null);
+            setAuthResolved(true);
+            return;
+          }
+          if (access) {
+            data = {
+              ...data,
+              role: access.role,
+              tenantId: access.tenantId || undefined,
+              projectIds: access.access === "client" ? access.projectIds : [],
+            };
+          }
+        }
+        /*
+          A login the studio created carries a temporary password that has to
+          be replaced before the app opens. Only when they actually signed in
+          with that password: someone who chose Google instead never had it.
+        */
+        let signedInWithPassword = false;
+        try {
+          signedInWithPassword = (await user.getIdTokenResult()).signInProvider === "password";
+        } catch { /* offline: no gate rather than a locked door */ }
         setAuthProfile({
           uid: user.uid,
           email: user.email || undefined,
           role: data.role || "Admin",
           tenantId: data.tenantId,
           projectIds: data.projectIds || [],
+          mustChangePassword: !!data.mustChangePassword && signedInWithPassword,
         });
       } catch {
         // No profile readable: treat as a studio user, which the studio rules
@@ -316,6 +350,10 @@ export default function App() {
     null,
   );
   const [portalProjectId, setPortalProjectId] = useState<string | null>(null);
+  /** The portal link's token, kept only so the sign-in door can ask whose it is. */
+  const [portalLinkToken, setPortalLinkToken] = useState<string | null>(null);
+  /** An agreement link or PIN arrived: show the client door, not the studio one. */
+  const [clientDoorRequested, setClientDoorRequested] = useState(false);
 
   /*
     Who is signed in, and what they are allowed to be.
@@ -326,7 +364,7 @@ export default function App() {
     storage can suggest a destination, never grant one.
   */
   const [authProfile, setAuthProfile] = useState<
-    { uid: string; email?: string; role: string; tenantId?: string; projectIds: string[] } | null
+    { uid: string; email?: string; role: string; tenantId?: string; projectIds: string[]; mustChangePassword?: boolean } | null
   >(null);
   const [authResolved, setAuthResolved] = useState(false);
   /** Branding for the client door, read from the public organizations doc. */
@@ -389,18 +427,45 @@ export default function App() {
         urlParams.get("contractSignoff") || hashParams.get("contractSignoff");
       const pinQuery = urlParams.get("pin") || hashParams.get("pin");
 
-      if (agreementQueryToken) {
-        setAgreementSignoffToken(agreementQueryToken);
-        setAppMode("agreement_signoff");
-        setIsDataLoaded(true);
-        return;
-      }
+      /*
+        An agreement link opens the client's portal now, not a page of its own.
 
-      if (pinQuery) {
-        setAgreementSignoffToken(pinQuery);
-        setAppMode("agreement_signoff");
-        setIsDataLoaded(true);
-        return;
+        AgreementSignoffPage found its project by reading every project in the
+        database and matching the link's token -- or a four-digit PIN, or just
+        the client's email address -- so anyone who knew a client's email could
+        open their agreement, and it needed the whole projects collection to be
+        public. Its signature was then saved from a signed-out browser, which
+        the rules refuse, so a remote client's signature never reached the
+        studio.
+
+        The portal already signs every one of these documents through
+        submitClientAction, on the server, for a client who has signed in. The
+        link says which project and which document; sign-in says who.
+      */
+      const openAgreementInPortal = (token: string) => {
+        const upper = token.toUpperCase();
+        const kind =
+          upper.startsWith("HANDOVER") ? "handover"
+          : upper.startsWith("EXEC") || upper.startsWith("CONTRACT") ? "contract"
+          : upper.startsWith("DESIGN") || upper.startsWith("TERMS") || upper.startsWith("PROPOSAL") ? "terms"
+          : null;
+        if (kind) {
+          try { sessionStorage.setItem("ffds_focus_agreement", kind); } catch { /* private mode */ }
+        }
+        const agreement = /^[A-Za-z]+_AGREEMENT_(.+)_[^_]+$/.exec(token);
+        if (agreement) {
+          setPortalProjectId(agreement[1]);
+          setPortalLinkToken(token);
+          localStorage.setItem("ffds_client_project_id", agreement[1]);
+        }
+        setClientDoorRequested(true);
+      };
+
+      if (agreementQueryToken) {
+        openAgreementInPortal(agreementQueryToken);
+      } else if (pinQuery) {
+        // A PIN names no project. The client signs in and lands on theirs.
+        setClientDoorRequested(true);
       }
 
       if (signoffQueryToken) {
@@ -414,17 +479,14 @@ export default function App() {
           signoffQueryToken.startsWith("SEC-");
 
         if (isAgreementToken) {
-          setAgreementSignoffToken(signoffQueryToken);
-          setAppMode("agreement_signoff");
+          openAgreementInPortal(signoffQueryToken);
+        } else {
+          // Not an agreement token, so it is a decision one. Decisions are
+          // approved in the client portal now; there is no standalone page to
+          // send them to, and pretending otherwise would strand them.
           setIsDataLoaded(true);
           return;
         }
-
-        // Not an agreement token, so it is a decision one. Decisions are
-        // approved in the client portal now; there is no standalone page to
-        // send them to, and pretending otherwise would strand them.
-        setIsDataLoaded(true);
-        return;
       }
 
       const path = window.location.pathname;
@@ -435,10 +497,8 @@ export default function App() {
         if (p.startsWith("/agreement-signoff/") || p.startsWith("/agreement/")) {
           const token = p.split("/")[2]?.split("?")[0];
           if (token) {
-            setAgreementSignoffToken(token);
-            setAppMode("agreement_signoff");
-            setIsDataLoaded(true);
-            return;
+            openAgreementInPortal(token);
+            break;
           }
         }
 
@@ -457,10 +517,8 @@ export default function App() {
               token.startsWith("SEC-");
 
             if (isAgreementToken) {
-              setAgreementSignoffToken(token);
-              setAppMode("agreement_signoff");
-              setIsDataLoaded(true);
-              return;
+              openAgreementInPortal(token);
+              break;
             }
 
             setIsDataLoaded(true);
@@ -523,6 +581,7 @@ export default function App() {
 
       if (portalId) {
         setPortalProjectId(portalId);
+        setPortalLinkToken(portalToken);
       }
 
       verifyApiKey().then((status) => setAiStatus(status));
@@ -676,35 +735,27 @@ export default function App() {
   /*
     Whose name the client door wears.
 
-    Best effort only: a portal link names a project, the project names a tenant,
-    and the tenant's organizations document is public profile data. If any step
-    is unreadable the door simply shows no branding rather than failing -- it is
-    decoration, not a gate.
+    Best effort only. This used to read the project and then the studio
+    profile straight from the browser, before anyone had signed in -- which is
+    why both collections had to be readable by the whole internet. The
+    portalDoor function checks the link and returns the name and logo alone.
+    Anything it does not recognise gets an unbranded door rather than an
+    error: it is decoration, not a gate.
   */
   useEffect(() => {
-    if (!portalProjectId || authProfile) return;
+    if (!portalLinkToken || authProfile) return;
     let cancelled = false;
-    (async () => {
-      try {
-        const projectSnap = await getDoc(doc(firestoreDb, "projects", portalProjectId));
-        const tenantId = projectSnap.exists() ? (projectSnap.data() as any)?.tenantId : null;
-        if (!tenantId || cancelled) return;
-        const orgSnap = await getDoc(doc(firestoreDb, "organizations", tenantId));
-        if (!orgSnap.exists() || cancelled) return;
-        const org = orgSnap.data() as any;
-        const looksLikeAnId = !org.orgName || /^[a-z0-9]+(-[a-z0-9]+)+$/.test(String(org.orgName));
-        setPortalStudioBrand({
-          name: looksLikeAnId ? undefined : org.orgName,
-          logo: org.orgLogo || undefined,
-          phone: org.contactPhone || undefined,
-          email: org.contactEmail || undefined,
-        });
-      } catch {
-        // Unbranded door.
-      }
-    })();
+    portalDoor(portalLinkToken).then((brand) => {
+      if (cancelled) return;
+      setPortalStudioBrand({
+        name: brand.name || undefined,
+        logo: brand.logo || undefined,
+        phone: brand.phone || undefined,
+        email: brand.email || undefined,
+      });
+    });
     return () => { cancelled = true; };
-  }, [portalProjectId, authProfile]);
+  }, [portalLinkToken, authProfile]);
 
   /*
     Identity decides the destination.
@@ -726,7 +777,10 @@ export default function App() {
     setPortalDenied(null);
 
     if (authProfile.role !== "Client") {
-      setAppMode("ops");
+      // A studio-issued login stays on the sign-in screen until its
+      // temporary password has been replaced. Clients do this on their own
+      // door (ClientLoginScreen).
+      setAppMode(authProfile.mustChangePassword ? "login" : "ops");
       return;
     }
 
@@ -2596,7 +2650,7 @@ export default function App() {
     to appear.
   */
   const clientSession = authProfile?.role === "Client";
-  if (appMode === "login" && (portalProjectId || clientSession)) {
+  if (appMode === "login" && (portalProjectId || clientSession || clientDoorRequested)) {
     return (
       <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
         <ClientLoginScreen
@@ -2617,7 +2671,16 @@ export default function App() {
   if (appMode === "login") {
     return (
       <LoginScreen
+        mustSetPasswordFor={
+          authProfile?.mustChangePassword && authProfile.role !== "Client" ? authProfile.email || "" : undefined
+        }
+        onPasswordSet={() =>
+          setAuthProfile((p) => (p ? { ...p, mustChangePassword: false } : p))
+        }
         onLoginOps={() => {
+          // Held on the sign-in screen until a temporary password is replaced;
+          // the identity effect opens the studio once it has been.
+          if (authProfile?.mustChangePassword) return;
           localStorage.setItem("ffds_app_mode", "ops");
           setAppMode("ops");
         }}

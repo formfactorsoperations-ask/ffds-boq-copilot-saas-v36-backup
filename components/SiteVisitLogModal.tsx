@@ -1,3 +1,4 @@
+import { apiFetch } from '../services/apiFetch';
 import React, { useState, useEffect } from 'react';
 import { SiteVisitType } from '../types';
 import { X, Calendar, Clock, MapPin, Users, FileText, Video, Loader2, CheckCircle2, Plus, Sparkles, Map, CalendarRange } from 'lucide-react';
@@ -89,7 +90,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
     if (!notes.trim()) return;
     setIsAnalyzing(true);
     try {
-        const res = await fetch('/api/parse-mom', {
+        const res = await apiFetch('/api/parse-mom', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ rawNotes: notes })

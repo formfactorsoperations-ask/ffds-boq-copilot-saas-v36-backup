@@ -1,3 +1,4 @@
+import { apiFetch } from '../services/apiFetch';
 import { showSuccessWithNext } from './SuccessWithNextToast';
 import React, { useState, useEffect, useRef } from "react";
 import LockedState from './LockedState';
@@ -157,7 +158,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
     setAiRiskModalOpen(true);
     try {
       const computed = computeSchedule(projectSchedule);
-      const res = await fetch("/api/predict-handover-delays", {
+      const res = await apiFetch("/api/predict-handover-delays", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

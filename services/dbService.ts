@@ -792,7 +792,16 @@ const CloudStrategy: DBService = {
 
             let globalFailed = false;
             try {
-                const globalSnapshot = await getDocs(collection(firestore, "projects"));
+                /*
+                  This studio's projects, not the whole collection.
+
+                  It used to read every project of every studio and filter to
+                  this tenant afterwards, in the browser -- which only worked
+                  because the rules let anyone read them all. The rules now
+                  admit a list only when the query itself is scoped to the
+                  caller's own tenant. Every stored project carries tenantId.
+                */
+                const globalSnapshot = await getDocs(query(collection(firestore, "projects"), where("tenantId", "==", tenantId)));
                 globalDocs = globalSnapshot.docs;
             } catch (e) {
                 globalFailed = true;
@@ -1567,7 +1576,7 @@ const CloudStrategy: DBService = {
         if (firestore) {
             try {
                 // Check connection and count
-                const querySnapshot = await getDocs(collection(firestore, "projects"));
+                const querySnapshot = await getDocs(query(collection(firestore, "projects"), where("tenantId", "==", getCurrentTenantId())));
                 cloudCount = querySnapshot.size;
                 cloudStatus = 'Connected';
             } catch (e: any) {

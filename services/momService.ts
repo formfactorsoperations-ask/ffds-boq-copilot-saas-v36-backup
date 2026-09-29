@@ -1,3 +1,4 @@
+import { apiFetch } from './apiFetch';
 import { collection, addDoc, doc, getDoc, runTransaction, Timestamp, query, getDocs } from 'firebase/firestore';
 import { db } from './firebaseClient';
 import { MOM, SiteVisitType } from '../types';
@@ -19,7 +20,7 @@ export const createMoMFromNotes = async (
     // 1. Structure the Notes
     let momData;
     try {
-        const response = await fetch('/api/structure-mom', {
+        const response = await apiFetch('/api/structure-mom', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

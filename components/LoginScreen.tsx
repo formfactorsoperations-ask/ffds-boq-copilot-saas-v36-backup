@@ -3,12 +3,20 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LockIcon, AlertCircleIcon, UserIcon } from './Icons';
 import { useOrg } from '../contexts/OrgContext';
 import { auth, db } from '../services/firebaseClient';
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, User, updatePassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { syncStudioAccess, NO_STUDIO_MESSAGE } from '../services/studioAccess';
 import { setCachedAccessToken } from '../services/authService';
 
 interface LoginScreenProps {
     onLoginOps: () => void;
+    /**
+     * Set (to the signed-in email) when a studio-issued login is still on its
+     * temporary password. The screen then asks for a new one instead of
+     * offering sign-in.
+     */
+    mustSetPasswordFor?: string;
+    onPasswordSet?: () => void;
 }
 
 /**
@@ -25,13 +33,73 @@ interface LoginScreenProps {
  * which is the only thing that names a project — so an option for them on this
  * screen was a door nobody walks through.
  */
-export default function LoginScreen({ onLoginOps }: LoginScreenProps) {
+const PLATFORM_OWNER = 'formfactors.operations@gmail.com';
+
+/*
+    Which studio this account belongs to, and as what.
+
+    This screen used to decide it. A first sign-in wrote the profile itself --
+    `tenantId: 'demo-tenant-01', role: 'Admin'` -- so any Google account became
+    an Admin, and every sign-in copied a role from the team list into the
+    profile from the browser. The rules now refuse both, and the syncStudioAccess
+    function settles it from the studio's own team list.
+
+    If the function cannot be reached, the stored profile is used as it is.
+    Nothing is ever created here: an account with no profile gets no access.
+*/
+async function resolveStudioAccess(user: User): Promise<{ tenantId: string; role: string } | 'none'> {
+    const ownerRole = (role: string) => (user.email === PLATFORM_OWNER ? 'Super Admin' : role);
+
+    const access = await syncStudioAccess();
+    if (access) {
+        if (access.access === 'none') return 'none';
+        return { tenantId: access.tenantId || 'demo-tenant-01', role: ownerRole(access.role) };
+    }
+
+    const snap = await getDoc(doc(db!, 'users', user.uid));
+    const data = snap.exists() ? (snap.data() as any) : null;
+    if (!data?.role && user.email !== PLATFORM_OWNER) return 'none';
+    return { tenantId: data?.tenantId || 'demo-tenant-01', role: ownerRole(data?.role || 'Admin') };
+}
+
+export default function LoginScreen({ onLoginOps, mustSetPasswordFor, onPasswordSet }: LoginScreenProps) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const { orgData, updateOrgData, setCurrentRole } = useOrg();
+
+    const handleSetPassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if (newPassword.length < 8) {
+            setError('Choose a password of at least 8 characters.');
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setError('Those two passwords do not match.');
+            return;
+        }
+        if (!auth?.currentUser || !db) return;
+        setIsLoading(true);
+        try {
+            await updatePassword(auth.currentUser, newPassword);
+            await setDoc(doc(db, 'users', auth.currentUser.uid),
+                { mustChangePassword: false, updatedAt: Date.now() }, { merge: true });
+            setNewPassword('');
+            setConfirmPassword('');
+            onPasswordSet?.();
+        } catch (err: any) {
+            setError(err?.code === 'auth/requires-recent-login'
+                ? 'For your security, sign out and sign in again with the temporary password, then set your new one.'
+                : err?.message || 'Could not set that password. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
     const handleOpsLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
@@ -42,43 +110,26 @@ export default function LoginScreen({ onLoginOps }: LoginScreenProps) {
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
                 
-                // Check for user tenant context
-                const userDocRef = doc(db, "users", user.uid);
-                const userDoc = await getDoc(userDocRef);
-                
-                let tenantId = 'demo-tenant-01'; // Fallback logic for legacy users
-                let userRole = user.email === 'formfactors.operations@gmail.com' ? 'Super Admin' : 'Admin';
-                if (userDoc.exists()) {
-                    tenantId = userDoc.data().tenantId || 'demo-tenant-01';
-                    if (user.email !== 'formfactors.operations@gmail.com') {
-                        userRole = userDoc.data().role || userRole;
-                    }
-                } else {
-                    // Create user profile for new login preserving FFDS compatibility
-                    await setDoc(userDocRef, {
-                        email: user.email,
-                        tenantId: 'demo-tenant-01',
-                        role: 'Admin'
-                    });
+                const resolved = await resolveStudioAccess(user);
+                if (resolved === 'none') {
+                    await auth.signOut().catch(() => {});
+                    setError(NO_STUDIO_MESSAGE);
+                    setIsLoading(false);
+                    return;
                 }
-                
-                try {
-                    const orgDoc = await getDoc(doc(db, "organizations", tenantId));
-                    if (orgDoc.exists() && orgDoc.data().team) {
-                        const team = orgDoc.data().team;
-                        const matchingMember = team.find((m: any) => m.email.toLowerCase() === user.email?.toLowerCase());
-                        if (matchingMember && matchingMember.role) {
-                            userRole = matchingMember.role;
-                            await setDoc(userDocRef, { role: userRole }, { merge: true });
-                        }
-                    }
-                } catch (e) {
-                    console.error("Could not sync organization team status");
-                }
-                
+                const { tenantId, role: userRole } = resolved;
+
                 // Sync to context
                 updateOrgData({ tenantId, contactEmail: email });
                 setCurrentRole(userRole as any);
+
+                // Still on a temporary password: stay here. App passes
+                // mustSetPasswordFor once it has read the same profile.
+                const profile = await getDoc(doc(db, 'users', user.uid)).catch(() => null);
+                if (profile?.exists() && profile.data()?.mustChangePassword) {
+                    setIsLoading(false);
+                    return;
+                }
                 onLoginOps();
             } catch (err: any) {
                 setError(err.message || 'Authentication failed');
@@ -108,39 +159,15 @@ export default function LoginScreen({ onLoginOps }: LoginScreenProps) {
             
             const user = userCredential.user;
             
-            const userDocRef = doc(db, "users", user.uid);
-            const userDoc = await getDoc(userDocRef);
-            
-            let tenantId = 'demo-tenant-01';
-            let userRole = user.email === 'formfactors.operations@gmail.com' ? 'Super Admin' : 'Admin';
-            if (userDoc.exists()) {
-                tenantId = userDoc.data().tenantId || 'demo-tenant-01';
-                if (user.email !== 'formfactors.operations@gmail.com') {
-                    userRole = userDoc.data().role || userRole;
-                }
-            } else {
-                await setDoc(userDocRef, {
-                    email: user.email,
-                    tenantId: 'demo-tenant-01',
-                    role: 'Admin'
-                });
+            const resolved = await resolveStudioAccess(user);
+            if (resolved === 'none') {
+                await auth.signOut().catch(() => {});
+                setError(NO_STUDIO_MESSAGE);
+                setIsLoading(false);
+                return;
             }
+            const { tenantId, role: userRole } = resolved;
 
-            // Sync with organization's team list for latest role
-            try {
-                const orgDoc = await getDoc(doc(db, "organizations", tenantId));
-                if (orgDoc.exists() && orgDoc.data().team) {
-                    const team = orgDoc.data().team;
-                    const matchingMember = team.find((m: any) => m.email.toLowerCase() === user.email?.toLowerCase());
-                    if (matchingMember && matchingMember.role) {
-                        userRole = matchingMember.role;
-                        await setDoc(userDocRef, { role: userRole }, { merge: true });
-                    }
-                }
-            } catch (e) {
-                console.error("Could not sync organization team status");
-            }
-            
             updateOrgData({ tenantId, contactEmail: user.email || '' });
             setCurrentRole(userRole as any);
             onLoginOps();
@@ -303,6 +330,65 @@ export default function LoginScreen({ onLoginOps }: LoginScreenProps) {
                     </div>
                 </div>
 
+                {mustSetPasswordFor !== undefined ? (
+                    /*
+                        A login the studio created arrives with a temporary
+                        password, read aloud or pasted into a message. It is
+                        replaced here before the studio opens -- the same step
+                        client logins already take on their own door.
+                    */
+                    <form onSubmit={handleSetPassword} className="w-full max-w-[400px] space-y-5 hud-panel-in">
+                        <div className="mb-6">
+                            <p className="text-[11px] font-black tracking-[0.18em] uppercase text-[#3D52A0] mb-2.5">
+                                One more step
+                            </p>
+                            <h2 className="text-[30px] font-black text-slate-900 tracking-tight leading-tight">
+                                Choose your own password
+                            </h2>
+                            <p className="text-slate-500 font-medium mt-2.5 text-[14.5px]">
+                                You signed in{mustSetPasswordFor ? ` as ${mustSetPasswordFor}` : ''} with a temporary
+                                password from your studio. Replace it to continue.
+                            </p>
+                        </div>
+                        <div>
+                            <label htmlFor="new-password" className="block text-[12.5px] font-bold text-slate-700 mb-2">New password</label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <LockIcon className="h-[18px] w-[18px] text-slate-400" />
+                                </div>
+                                <input id="new-password" type="password" value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    className={fieldClass} placeholder="At least 8 characters"
+                                    autoComplete="new-password" required />
+                            </div>
+                        </div>
+                        <div>
+                            <label htmlFor="confirm-password" className="block text-[12.5px] font-bold text-slate-700 mb-2">Type it again</label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <LockIcon className="h-[18px] w-[18px] text-slate-400" />
+                                </div>
+                                <input id="confirm-password" type="password" value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    className={fieldClass} autoComplete="new-password" required />
+                            </div>
+                        </div>
+                        {error && (
+                            <div className="p-4 bg-rose-50 text-rose-700 text-sm rounded-2xl border border-rose-100 flex items-start gap-3">
+                                <AlertCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                                <p className="font-semibold leading-relaxed">{error}</p>
+                            </div>
+                        )}
+                        <button type="submit" disabled={isLoading} className={primaryClass}>
+                            {isLoading ? 'Saving…' : 'Set password and continue'}
+                        </button>
+                        <button type="button"
+                            onClick={() => { auth?.signOut().catch(() => {}); setError(''); }}
+                            className="w-full text-[13px] font-bold text-slate-500 hover:text-slate-800">
+                            Sign out
+                        </button>
+                    </form>
+                ) : (
                 <motion.form
                     variants={column}
                     initial="hidden"
@@ -439,6 +525,7 @@ export default function LoginScreen({ onLoginOps }: LoginScreenProps) {
 
 
                 </motion.form>
+                )}
             </div>
         </div>
     );

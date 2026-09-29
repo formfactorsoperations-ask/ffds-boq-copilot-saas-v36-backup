@@ -407,6 +407,21 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         if (!t) { setReadingRoomKind(null); return; }
         openDocument(DOC_KIND_FOR_AGREEMENT[t]);
     };
+
+    /*
+      An agreement link lands here, after sign-in, on the document it was sent
+      for. App keeps which one before the sign-in round trip; it is opened once
+      and cleared, so coming back to the portal later opens the portal.
+    */
+    useEffect(() => {
+        if (source !== 'client') return;
+        let kind: string | null = null;
+        try { kind = sessionStorage.getItem('ffds_focus_agreement'); } catch { /* private mode */ }
+        if (kind !== 'terms' && kind !== 'contract' && kind !== 'handover') return;
+        try { sessionStorage.removeItem('ffds_focus_agreement'); } catch { /* ignore */ }
+        setSigningDocType(kind);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [source]);
     const [signSuccessMessage, setSignSuccessMessage] = useState<string | null>(null);
     const [approvalsFilter, setApprovalsFilter] = useState<'all' | 'agreements' | 'payments' | 'materials' | 'decisions' | 'variations'>('all');
     

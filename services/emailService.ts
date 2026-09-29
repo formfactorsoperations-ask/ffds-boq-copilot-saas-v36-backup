@@ -1,3 +1,4 @@
+import { apiFetch } from './apiFetch';
 import { db } from './firebaseClient';
 import { doc, getDoc } from 'firebase/firestore';
 import { ensureDecisionStudio, markDecisionNotified, markSignoffSent } from './decisionsService';
@@ -161,7 +162,7 @@ const sendResendEmail = async (to: string, subject: string, html: string, attach
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-        const response = await fetch('/api/send-email', {
+        const response = await apiFetch('/api/send-email', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -428,10 +429,6 @@ export const sendAgreementSignoffRequest = async (
                 <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                         <tr>
-                            <td style="color: #64748b; padding: 4px 0; width: 150px;">Document Access PIN:</td>
-                            <td style="font-family: monospace; font-size: 16px; font-weight: bold; color: #0f172a; letter-spacing: 0.1em;">${pinCode}</td>
-                        </tr>
-                        <tr>
                             <td style="color: #64748b; padding: 4px 0;">Document Fingerprint:</td>
                             <td style="font-family: monospace; font-size: 11px; color: #475569;">${docketHash}</td>
                         </tr>
@@ -444,8 +441,8 @@ export const sendAgreementSignoffRequest = async (
 
                 <!-- ZERO-CLICK DIRECT VERIFICATION INSTRUCTIONS -->
                 <div style="border-top: 1px dashed #cbd5e1; padding-top: 14px; font-size: 12px; color: #475569; line-height: 1.6;">
-                    <strong style="color: #0f172a; display: block; margin-bottom: 4px;">🛡️ Anti-Phishing Direct Verification (No Link Required):</strong>
-                    If you prefer not to click links in emails, you can open your browser, visit the official studio portal directly, select <strong>"Verify Document by PIN"</strong>, and enter your Access PIN: <strong style="color: #3D52A0; font-family: monospace;">${pinCode}</strong> and your email address.
+                    <strong style="color: #0f172a; display: block; margin-bottom: 4px;">🛡️ How to sign</strong>
+                    The button below opens your client portal. Sign in with the email and password ${studioInfo.name} gave you, and the document opens ready to review and sign. If you prefer not to click links in emails, open your portal directly, sign in, and find it under Documents.
                 </div>
             </div>
 

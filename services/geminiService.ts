@@ -1,4 +1,5 @@
 
+import { apiFetch } from './apiFetch';
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { getAi, aiIsReachable } from './aiClient';
 import { Item, BoqItem, AIStrategy, Room, MarginSuggestion, ProjectContext, CommandAction, AggregatedCategory, FullBoqItem, QuantitySuggestion, ProposalTier, ComparisonRow, AIGeneratedBoqItem, VisionAnalysisResult, TimelinePhase, MaterialSuggestion, AiComparisonResult, AIStatus, LeadProfile, DecisionBrainOutput, ProposalWriterOutput, AuditResult, ValueEngineeringSuggestion, ProfitabilityHotspot, ProjectTask, GeneratedRender, LumpsumBreakdownItem, SiteUpdateRecord, ProjectDecisionRecord } from '../types';
@@ -468,7 +469,7 @@ Return JSON array {name, size, unit:'sq ft'}. DO NOT include functional or misce
  * model genuinely found nothing; a failure says what failed.
  */
 export async function analyzeFloorPlan(imageBase64: string, area: number): Promise<Room[]> {
-    const response = await fetch('/api/analyze-floorplan', {
+    const response = await apiFetch('/api/analyze-floorplan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64, area })
@@ -596,7 +597,7 @@ export async function processCommand(command: string, boq: BoqItem[], projectCon
 
 export async function analyzeRoomImage(imageBase64: string): Promise<VisionAnalysisResult | null> {
     try {
-        const response = await fetch('/api/analyze-room-image', {
+        const response = await apiFetch('/api/analyze-room-image', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1115,7 +1116,7 @@ export async function parseQuickDecision(rawText: string): Promise<Partial<Proje
 
 export async function parseDecisionFromImage(imageBase64: string): Promise<Partial<ProjectDecisionRecord>> {
     try {
-        const response = await fetch('/api/parse-decision-image', {
+        const response = await apiFetch('/api/parse-decision-image', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

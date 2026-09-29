@@ -18,6 +18,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../services/firebaseClient';
 import { TeamMember, UserRole } from '../../types';
 import { Plus, Trash2, UserPlus, Users, Download, AlertTriangle, Check } from 'lucide-react';
+import { createStaffLogin, StaffLogin } from '../../services/studioAccess';
 
 const ROLES: UserRole[] = ['Super Admin', 'Admin', 'Ops Director', 'Designer', 'Site Supervisor', 'Viewer', 'Client'] as UserRole[];
 
@@ -54,6 +55,32 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
   const [importing, setImporting] = useState(false);
   const [importNote, setImportNote] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+
+  /*
+    Logins for staff are made here, on the server, rather than in the Firebase
+    console. An account made in the console has an unverified email, and the
+    sign-in check will not trust an unverified address -- anyone can register
+    one -- so those people would be turned away. See createStaffLogin.
+  */
+  const [issuingFor, setIssuingFor] = useState<string | null>(null);
+  const [issued, setIssued] = useState<(StaffLogin & { name: string }) | null>(null);
+  const [loginError, setLoginError] = useState<{ id: string; message: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const issueLogin = async (m: TeamMember) => {
+    setIssuingFor(m.id);
+    setLoginError(null);
+    try {
+      const login = await createStaffLogin(tenantId, m.email.trim());
+      update(m.id, { uid: login.uid, loginIssuedAt: new Date().toISOString() });
+      setCopied(false);
+      setIssued({ ...login, name: m.name || login.email });
+    } catch (e: any) {
+      setLoginError({ id: m.id, message: e?.message || 'Could not create the login. Please try again.' });
+    } finally {
+      setIssuingFor(null);
+    }
+  };
 
   const update = (id: string, patch: Partial<TeamMember>) =>
     onChange(team.map((m) => (m.id === id ? { ...m, ...patch } : m)));
@@ -249,15 +276,47 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
                 <div className="flex items-center gap-3 mt-3 flex-wrap text-[11px]">
                   <span className="text-slate-500">{ROLE_BLURB[m.role as string] || ''}</span>
                   {isYou && <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-bold">You</span>}
-                  {m.uid
-                    ? <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center gap-1"><Check className="w-3 h-3" /> Has an account</span>
-                    : <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">Not signed in yet</span>}
+                  {m.loginIssuedAt
+                    ? <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold">
+                        Login created {new Date(m.loginIssuedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      </span>
+                    : m.uid
+                      ? <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center gap-1"><Check className="w-3 h-3" /> Has an account</span>
+                      : <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">Not signed in yet</span>}
                   {incomplete && (
                     <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold flex items-center gap-1">
                       <AlertTriangle className="w-3 h-3" /> Needs a name and email
                     </span>
                   )}
+                  {canEdit && !isYou && !incomplete && (
+                    <span className="ml-auto">
+                      {m.uid || m.loginIssuedAt ? (
+                        <button
+                          type="button"
+                          onClick={() => issueLogin(m)}
+                          disabled={issuingFor === m.id}
+                          className="px-1 py-1 text-[#3D52A0] font-extrabold hover:underline disabled:opacity-50"
+                        >
+                          {issuingFor === m.id ? 'Resetting…' : 'Reset password'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => issueLogin(m)}
+                          disabled={issuingFor === m.id}
+                          className="px-3 py-1.5 rounded-lg bg-[#3D52A0] text-white font-extrabold hover:bg-[#334486] disabled:opacity-50"
+                        >
+                          {issuingFor === m.id ? 'Creating…' : 'Create login'}
+                        </button>
+                      )}
+                    </span>
+                  )}
                 </div>
+                {loginError?.id === m.id && (
+                  <p className="mt-2 text-[11.5px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                    {loginError.message}
+                  </p>
+                )}
               </div>
             );
           })}
@@ -268,6 +327,78 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           Nobody has the Site Supervisor role, so the supervisor picker on a project will still be empty.
         </p>
+      )}
+
+      {/* The same card client logins use: shown once, never retrievable. A
+          plain CSS entrance rather than a framer exit, which inside a settings
+          tab would hold up App's mode="wait" tab transition. */}
+      {issued && (
+        <div
+          className="fixed inset-0 z-[200] bg-[#12182F]/50 backdrop-blur-sm flex items-center justify-center p-4 hud-panel-in"
+          onClick={() => setIssued(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-[#E2E5F0] shadow-2xl w-full max-w-md overflow-hidden"
+          >
+            <div className="p-5 sm:p-6 space-y-4">
+              <div>
+                <h4 className="font-extrabold text-[#12182F] text-[15px]">
+                  {issued.reissued ? 'New password for' : 'Login for'} {issued.name}
+                </h4>
+                <p className="text-[13px] text-[#5A628A] font-medium mt-1 leading-relaxed">
+                  Send these to them. They will be asked to choose their own password when they first sign in.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-[#E2E5F0] divide-y divide-[#EDEFF7] overflow-hidden">
+                <div className="px-3.5 py-2.5 bg-[#F6F7FB]">
+                  <p className="text-[10px] uppercase font-black tracking-wider text-[#8E96B8]">Email</p>
+                  <p className="text-[13px] font-bold text-[#252C4E] mt-0.5 break-all">{issued.email}</p>
+                </div>
+                <div className="px-3.5 py-2.5">
+                  <p className="text-[10px] uppercase font-black tracking-wider text-[#8E96B8]">Temporary password</p>
+                  <p className="text-[15px] font-black text-[#12182F] mt-0.5 tabular-nums select-all">{issued.tempPassword}</p>
+                </div>
+                <div className="px-3.5 py-2.5">
+                  <p className="text-[10px] uppercase font-black tracking-wider text-[#8E96B8]">Access</p>
+                  <p className="text-[13px] font-bold text-[#252C4E] mt-0.5">{issued.role}</p>
+                </div>
+              </div>
+
+              <p className="text-[11.5px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 font-medium">
+                This password is shown once and can't be looked up later. Copy it now, then save the team.
+              </p>
+              <p className="text-[11.5px] text-[#3A416B] bg-[#E8ECFB] rounded-xl px-3 py-2 font-medium">
+                If they use Google with this same email, they can choose "Continue with Google" instead.
+              </p>
+            </div>
+
+            <div className="bg-[#F6F7FB] px-5 py-3.5 border-t border-[#E2E5F0] flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setIssued(null)}
+                className="px-4 py-2 bg-white hover:bg-[#EDEFF7] border border-[#E2E5F0] rounded-xl text-xs font-bold text-[#3A416B] transition"
+              >
+                Done
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard?.writeText(`Email: ${issued.email}\nTemporary password: ${issued.tempPassword}`);
+                    setCopied(true);
+                  } catch {
+                    setCopied(false);
+                  }
+                }}
+                className="px-5 py-2 rounded-xl text-xs font-extrabold text-white bg-[#3D52A0] hover:bg-[#334486] transition"
+              >
+                {copied ? 'Copied' : 'Copy both'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

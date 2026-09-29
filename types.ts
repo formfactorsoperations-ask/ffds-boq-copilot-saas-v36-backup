@@ -74,6 +74,11 @@ export interface TeamMember {
     title?: string;
     /** Firebase Auth uid, when this member has actually signed in. */
     uid?: string;
+    /**
+     * When the studio last created or reset this person's login (ISO). Set by
+     * the Team screen's Create login; the password itself is never stored.
+     */
+    loginIssuedAt?: string;
 }
 
 export type AIStrategy = 'balanced' | 'conservative' | 'aggressive';

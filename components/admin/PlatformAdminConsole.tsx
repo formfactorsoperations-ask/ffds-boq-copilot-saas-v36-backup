@@ -24,6 +24,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { db, auth, functions } from '../../services/firebaseClient';
 import { collection, getDocs, doc, setDoc, updateDoc, query, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { createStaffLogin } from '../../services/studioAccess';
 import { del } from 'idb-keyval';
 import { BuildingOfficeIcon, UserIcon, ShieldCheckIcon } from '../Icons';
 import { useOrg } from '../../contexts/OrgContext';
@@ -126,6 +127,8 @@ export default function PlatformAdminConsole() {
   // Studio creation
   const [form, setForm] = useState({ name: '', adminEmail: '', tier: 'Professional', contact: '', phone: '', city: '' });
   const [creating, setCreating] = useState(false);
+  /* The new studio's first login, shown once under the form. */
+  const [studioLogin, setStudioLogin] = useState<{ studio: string; email: string; tempPassword?: string; error?: string } | null>(null);
 
   // User editing
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -274,18 +277,36 @@ export default function PlatformAdminConsole() {
     e.preventDefault();
     if (!form.name.trim() || !db) return;
     setCreating(true);
+    setStudioLogin(null);
     try {
       const tenantId = 'tenant_' + Math.random().toString(36).slice(2, 11);
+      const adminEmail = form.adminEmail.trim().toLowerCase();
+      /*
+        The admin goes on the team as Owner. Sign-in grants studio access from
+        a studio's team list and nothing else, so an admin email recorded only
+        in `adminEmail` would be turned away at the door of their own studio.
+      */
       await setDoc(doc(db, 'organizations', tenantId), {
         tenantId,
         orgName: form.name,
-        adminEmail: form.adminEmail,
+        adminEmail,
         tierPlan: form.tier,
         contactPerson: form.contact,
         phone: form.phone,
         city: form.city,
         createdAt: new Date().toISOString(),
+        team: adminEmail
+          ? [{ id: `tm-${Date.now()}`, name: form.contact || adminEmail, email: adminEmail, role: 'Owner', status: 'Pending', title: '' }]
+          : [],
       });
+      if (adminEmail) {
+        try {
+          const login = await createStaffLogin(tenantId, adminEmail);
+          setStudioLogin({ studio: form.name, email: login.email, tempPassword: login.tempPassword });
+        } catch (loginErr: any) {
+          setStudioLogin({ studio: form.name, email: adminEmail, error: loginErr?.message || 'The login could not be created.' });
+        }
+      }
       setForm({ name: '', adminEmail: '', tier: 'Professional', contact: '', phone: '', city: '' });
       await Promise.all([loadDirect(), loadOverview()]);
     } catch (err) {
@@ -533,6 +554,30 @@ export default function PlatformAdminConsole() {
                   {creating ? 'Creating…' : 'Create studio'}
                 </button>
               </form>
+              {studioLogin && (
+                <div className="mt-4 rounded-2xl border border-[#E2E5F0] overflow-hidden max-w-md">
+                  <div className="px-4 py-3 bg-[#F6F7FB] text-[13px] font-bold text-[#12182F]">
+                    {studioLogin.studio}: first login
+                  </div>
+                  <div className="px-4 py-3 space-y-2 text-[13px]">
+                    <p><span className="text-[#8E96B8] font-bold text-[10px] uppercase tracking-wider block">Email</span>{studioLogin.email}</p>
+                    {studioLogin.tempPassword ? (
+                      <>
+                        <p><span className="text-[#8E96B8] font-bold text-[10px] uppercase tracking-wider block">Temporary password</span>
+                          <span className="font-black tabular-nums select-all">{studioLogin.tempPassword}</span></p>
+                        <p className="text-[11.5px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                          Shown once. They choose their own password on first sign-in, or can use Google with this email.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-[11.5px] text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+                        {studioLogin.error} The studio exists; create the login from its Team screen.
+                      </p>
+                    )}
+                    <button type="button" onClick={() => setStudioLogin(null)} className="text-xs font-bold text-[#3D52A0]">Done</button>
+                  </div>
+                </div>
+              )}
             </section>
           </>
         )}
