@@ -454,6 +454,7 @@ export default function StudioSettingsConsole(props: {
               <StudioTeamSection
                 team={(draft.team as TeamMember[]) || []}
                 onChange={(t) => setField('team', t)}
+                savedEmails={((orgData as any)?.team || []).map((m: TeamMember) => String(m?.email || '').trim().toLowerCase())}
                 currentEmail={currentUserAuth?.email || undefined}
                 tenantId={tenantId}
                 canEdit={canEdit}

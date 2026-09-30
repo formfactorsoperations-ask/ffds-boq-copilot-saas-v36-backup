@@ -2,11 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { ProjectContextTier } from './ProjectContextTier';
 import { ProjectContext, ProjectStatus, FullProjectData } from '../types';
 import { STAGE_LABELS, PHASES } from '../constants/journeyConstants';
-import { Lock, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, X, Compass, Activity, Check, Info, Settings, Edit3, AlertTriangle, LayoutGrid, Handshake, Palette, Layers, FileText, Truck, Hammer, Key, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Lock, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, X, Compass, Activity, Check, Info, Settings, Edit3, AlertTriangle, LayoutGrid, Handshake, Palette, Layers, FileText, Truck, Hammer, Key, Sparkles, SlidersHorizontal, Eye, Pencil } from 'lucide-react';
 import { NAV_CONFIG, ALWAYS_ON_BAND } from './navConfig';
 import { useProjectJourney } from '../hooks/useProjectJourney';
 import { useOrg } from '../contexts/OrgContext';
+import { seesStudioFinance, isDesignerRole, DESIGNER_EDITABLE_TABS, designerMayOpen, DESIGNER_HOME_TAB } from '../lib/roleAccess';
 import { FFDSLogo } from './FFDSLogo';
+import ViewOnlyGuard from './ViewOnlyGuard';
+import ProjectTeamButton from './projectHeader/ProjectTeamButton';
+import StudioMenuButton from './projectHeader/StudioMenuButton';
+import './projectHeader/projectHeader.css';
 import PageTitleBlock from './PageTitleBlock';
 import { LogOut, Home, Building2, Users, BarChart3, Library, CreditCard } from 'lucide-react';
 import ProjectStatusTransitionModal from './ProjectStatusTransitionModal';
@@ -27,6 +32,28 @@ const WORKSPACE_STATUS_MAP: Record<
   completed: { label: "Completed", color: "text-teal-700", bg: "bg-teal-50 hover:bg-teal-100", border: "border-teal-200" },
   lost: { label: "Lost", color: "text-slate-500", bg: "bg-slate-100 hover:bg-slate-200", border: "border-slate-200" },
 };
+
+/*
+  The project's progress as a ring that fills to its value when the project
+  opens (H1 in the header mockups).
+*/
+function ProgressRing({ pct }: { pct: number }) {
+  const C = 2 * Math.PI * 15;
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const t = window.setTimeout(() => setShown(Math.max(0, Math.min(100, pct))), 60);
+    return () => window.clearTimeout(t);
+  }, [pct]);
+  return (
+    <span className="phd-ring" aria-label={`${pct}% through the project`}>
+      <svg viewBox="0 0 38 38" aria-hidden="true">
+        <circle className="bg" cx="19" cy="19" r="15" />
+        <circle className="fg" cx="19" cy="19" r="15" strokeDasharray={C} strokeDashoffset={C * (1 - shown / 100)} />
+      </svg>
+      <span>{pct}%</span>
+    </span>
+  );
+}
 
 export function ProjectWorkspace({
   projectId,
@@ -51,7 +78,7 @@ export function ProjectWorkspace({
   onLeaveProject?: (targetTab?: string) => void;
   onStatusChange?: (status: ProjectStatus, note?: string) => Promise<void> | void;
 }) {
-  const { orgData } = useOrg();
+  const { orgData, currentUserAuth } = useOrg();
   const [isFloatingWidgetOpen, setIsFloatingWidgetOpen] = useState(false);
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
   const [isRailCollapsed, setIsRailCollapsed] = useState(false);
@@ -194,15 +221,27 @@ export function ProjectWorkspace({
     return { text: "Unlocks when prerequisite gates are met.", linkText: "Go to Overview →", linkRoute: "dashboard" };
   };
 
+  /* Money screens for anyone outside studio finance; for a Designer,
+     everything outside their allow-list (lib/roleAccess). */
+  const isDesigner = isDesignerRole(currentRole);
+  /* R1 in the header mockups: on a Designer's tabs, "view" marks the ones
+     they can only look at. The Drawing Tracker, which they work in, has none. */
+  const accessBadge = (route?: string): string | null =>
+    isDesigner && route && !DESIGNER_EDITABLE_TABS.has(route) ? 'view only' : null;
+  const hiddenForRole = (item: any): boolean =>
+    (!seesStudioFinance(currentRole) && !!item?.money) ||
+    (isDesigner && !designerMayOpen(item?.route));
+
   const renderNavItem = (item: any, isLockedStage: boolean, isHub: boolean = false) => {
-    if (currentRole === 'Designer' && item.money) return null;
+    if (hiddenForRole(item)) return null;
     
     let badgeText = item.statusBadge ? item.statusBadge(projectContext) : null;
     let tone = item.badgeTone ? item.badgeTone(projectContext) : 'neutral';
     
-    if (currentRole === 'Designer' && badgeText) {
-      // Remove ₹ and % for designer just in case
-      badgeText = badgeText.replace(/[₹%]/g, '');
+    if (!seesStudioFinance(currentRole) && badgeText) {
+      // Money tabs are hidden outright; this only catches a stray ₹. A "%" is
+      // usually progress ("35%" on Ops Matrix), which everyone may see.
+      badgeText = badgeText.replace(/₹/g, '');
     }
 
     const isActive = activeTab === item.route;
@@ -275,7 +314,7 @@ export function ProjectWorkspace({
 
   const getStageCounts = (stageConfig: typeof NAV_CONFIG[0]) => {
     // Filter out items hidden by role rules (Designer cannot see money: true)
-    const visibleItems = stageConfig.items.filter(item => !(currentRole === 'Designer' && item.money));
+    const visibleItems = stageConfig.items.filter(item => !(hiddenForRole(item)));
     let doneCount = 0;
     let totalCount = 0;
     
@@ -305,102 +344,117 @@ export function ProjectWorkspace({
         {/* Same energy rail as the studio bar, so the two headers read as one
             system rather than two unrelated surfaces. */}
         <span aria-hidden="true" className="hud-rail absolute bottom-0 left-0 right-0 h-px z-10" />
-        {/* Row 1: Project Metadata & Project Hub Dropdown */}
-        <div className="flex items-center justify-between gap-3 px-4 lg:px-6 py-2.5 border-b border-slate-100 flex-wrap">
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <button 
-              onClick={() => onLeaveProject?.()}
-              className="flex items-center gap-1 text-slate-500 hover:text-slate-800 transition-colors mr-1 cursor-pointer shrink-0"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span className="text-[14px] font-bold">Back</span>
-            </button>
+        {/*
+          Row 1 -- H1 from the header mockups: one bar that never wraps.
 
-            <div className="w-px h-5 bg-slate-200 shrink-0 hidden sm:block mx-1"></div>
-            
-            <button
-              onClick={() => {
-                setSelectedStage(0);
-                setActiveTab('dashboard');
-              }}
-              className={`flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs sm:text-[13px] font-bold transition-all shrink-0 ${
-                selectedStage === 0 || ALWAYS_ON_BAND.some(i => i.route === activeTab) || activeTab === 'dashboard'
-                  ? 'bg-[#3D52A0]/90 text-white shadow-md shadow-sky-600/20 backdrop-blur-md border border-white/20'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              <LayoutGrid className="w-4 h-4" />
-              Hub
-            </button>
+          It used to be two clusters that wrapped onto three lines whenever the
+          Details panel opened, with four shortcut icons, a progress button and
+          the Designer picker all competing. Now the project's facts live in the
+          Details drawer, who works on it is the row of faces, the progress is
+          a ring with its next step, and the studio's own screens fold into one
+          menu.
+        */}
+        <div className="phd-enter flex items-center gap-2.5 sm:gap-3 px-4 lg:px-6 py-2.5 border-b border-slate-100 min-w-0">
+          <button
+            onClick={() => onLeaveProject?.()}
+            className="flex items-center gap-1 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer shrink-0"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span className="text-[13.5px] font-bold hidden sm:inline">Back</span>
+          </button>
 
-            <div className="w-px h-5 bg-slate-200 shrink-0 hidden sm:block mx-1"></div>
+          <button
+            onClick={() => {
+              setSelectedStage(0);
+              // A Designer has no project home; their base is the drawings.
+              setActiveTab(isDesigner ? DESIGNER_HOME_TAB : 'dashboard');
+            }}
+            className={`phd-lift flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12.5px] font-bold shrink-0 ${
+              selectedStage === 0 || ALWAYS_ON_BAND.some(i => i.route === activeTab) || activeTab === 'dashboard' || (isDesigner && activeTab === DESIGNER_HOME_TAB)
+                ? 'bg-[#3D52A0] text-white shadow-md shadow-[#3D52A0]/25'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+            {isDesigner ? 'Drawings' : 'Hub'}
+          </button>
 
-            <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight truncate ml-1">
-              {projectContext.name || 'Untitled Project'}
-            </h1>
-
-            <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 font-normal ml-2 shrink-0">
-              <span className="text-slate-200">|</span>
-              <span className="truncate max-w-[140px]">Client: <strong className="text-slate-800 font-semibold">{projectContext.clientName || 'Not Set'}</strong></span>
-              <span className="text-slate-200">|</span>
-              {(() => {
-                const rawStatus = projectContext.status;
-                const statusKey = (rawStatus && WORKSPACE_STATUS_MAP[rawStatus]) ? rawStatus : 'draft';
-                const statusStyle = WORKSPACE_STATUS_MAP[statusKey];
-                return (
-                  <button
-                    type="button"
-                    onClick={() => setIsStatusModalOpen(true)}
-                    className={`group/statusBtn flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-2xs hover:scale-105 transition-all cursor-pointer ${statusStyle.bg} ${statusStyle.color} ${statusStyle.border}`}
-                    title="Change project lifecycle status & review downstream impact"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
-                    <span>{statusStyle.label}</span>
-                    <ChevronDown className="w-2.5 h-2.5 opacity-60 group-hover/statusBtn:opacity-100 transition-opacity" />
-                  </button>
-                );
-              })()}
-              <span className="text-slate-200">|</span>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold text-slate-700 bg-slate-100/80 border border-slate-200/80 tabular-nums">
-                {projectContext.area || 0} SQFT
-              </span>
-              <ProjectContextTier projectContext={projectContext} />
-            </div>
+          <div className="phd-tile hidden md:grid" aria-hidden="true">
+            <Building2 className="w-[18px] h-[18px] relative z-[1]" />
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="hidden sm:flex items-center gap-1.5">
-              <button onClick={() => { onLeaveProject?.('home'); }} className="group relative w-8 h-8 flex items-center justify-center rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors" aria-label="Home">
-                <Home className="w-4 h-4" />
-                <span className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-y-1 group-hover:translate-y-0 z-50 font-medium whitespace-nowrap shadow-lg">Home</span>
-              </button>
-              <button onClick={() => { onLeaveProject?.('projects'); }} className="group relative w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" aria-label="Projects">
-                <Building2 className="w-4 h-4" />
-                <span className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-y-1 group-hover:translate-y-0 z-50 font-medium whitespace-nowrap shadow-lg">Projects</span>
-              </button>
-              <button onClick={() => { onLeaveProject?.('clients'); }} className="group relative w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors" aria-label="Clients">
-                <Users className="w-4 h-4" />
-                <span className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-y-1 group-hover:translate-y-0 z-50 font-medium whitespace-nowrap shadow-lg">Clients</span>
-              </button>
-              <button onClick={() => { onLeaveProject?.('reports'); }} className="group relative w-8 h-8 flex items-center justify-center rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors" aria-label="Reports">
-                <BarChart3 className="w-4 h-4" />
-                <span className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-y-1 group-hover:translate-y-0 z-50 font-medium whitespace-nowrap shadow-lg">Reports</span>
-              </button>
-             
-            </div>
+          <div className="min-w-0 leading-tight">
+            <h1 className="text-[15px] sm:text-[16.5px] font-extrabold text-slate-900 tracking-tight truncate">
+              {projectContext.name || 'Untitled Project'}
+            </h1>
+            <p className="text-[11.5px] text-slate-500 truncate">
+              {projectContext.clientName || 'No client yet'}
+              {projectContext.location ? ` · ${projectContext.location}` : ''}
+              {projectContext.area ? ` · ${projectContext.area} sq ft` : ''}
+            </p>
+          </div>
 
-            <button 
+          {(() => {
+            const rawStatus = projectContext.status;
+            const statusKey = (rawStatus && WORKSPACE_STATUS_MAP[rawStatus]) ? rawStatus : 'draft';
+            const statusStyle = WORKSPACE_STATUS_MAP[statusKey];
+            return (
+              <button
+                type="button"
+                // Changing a project's status is the studio's decision.
+                disabled={isDesigner}
+                onClick={() => { if (!isDesigner) setIsStatusModalOpen(true); }}
+                className={`group/statusBtn hidden sm:flex items-center gap-1.5 pl-2.5 pr-2 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-[0.1em] border shrink-0 transition-transform ${isDesigner ? 'cursor-default' : 'hover:scale-105 cursor-pointer'} ${statusStyle.bg} ${statusStyle.color} ${statusStyle.border}`}
+                title={isDesigner ? statusStyle.label : 'Change project lifecycle status & review downstream impact'}
+              >
+                <span className="phd-dot" />
+                <span>{statusStyle.label}</span>
+                {!isDesigner && <ChevronDown className="w-2.5 h-2.5 opacity-60 group-hover/statusBtn:opacity-100 transition-opacity" />}
+              </button>
+            );
+          })()}
+
+          <ProjectContextTier projectContext={projectContext} />
+
+          <div className="flex-1" />
+
+          <ProjectTeamButton project={{ id: projectId, context: projectContext }} />
+
+          {/* The project's next step and progress: the studio's to run. */}
+          {!isDesigner && (
+            <button
               onClick={() => setIsFloatingWidgetOpen(!isFloatingWidgetOpen)}
-              className="flex items-center gap-2 bg-[#3D52A0] hover:bg-[#334486] text-white pl-2 pr-3 py-1.5 rounded-lg transition-all cursor-pointer text-xs font-semibold shadow-md shadow-sky-600/25 overflow-hidden min-w-[200px]"
+              className="phd-lift hidden md:flex items-center gap-2.5 pl-1 pr-2.5 py-1 rounded-2xl border border-transparent hover:border-slate-200 hover:bg-slate-50 cursor-pointer shrink-0"
+              title="Project progress and the next step"
             >
-              <div className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-black shrink-0 text-white shadow-inner">
-                {Math.round(projectContext.journeySummary?.pct ?? journey.overall.pct ?? 0)}%
-              </div>
-              <span className="truncate hidden sm:inline-block max-w-[280px]">
-                {journey.nextStep?.title || 'Up Next'}
+              <ProgressRing pct={Math.round(projectContext.journeySummary?.pct ?? journey.overall.pct ?? 0)} />
+              <span className="text-left leading-tight max-w-[180px] hidden lg:block">
+                <span className="block text-[9.5px] font-extrabold uppercase tracking-[0.12em] text-slate-400">Next</span>
+                <span className="block text-[12.5px] font-bold text-slate-800 truncate">{journey.nextStep?.title || 'Up next'}</span>
               </span>
-              <ChevronRight className={`w-3 h-3 opacity-90 hidden sm:block shrink-0 transition-transform duration-200 ${isFloatingWidgetOpen ? 'rotate-90' : ''}`} />
+              <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isFloatingWidgetOpen ? 'rotate-90' : ''}`} />
             </button>
+          )}
+
+          {/* The studio's own screens, folded into one menu. */}
+          <StudioMenuButton
+            items={[
+              { tab: 'home', label: 'Home', icon: Home, show: !isDesigner },
+              { tab: 'projects', label: 'Projects', icon: Building2, show: true },
+              { tab: 'clients', label: 'Clients', icon: Users, show: !isDesigner },
+              { tab: 'reports', label: 'Reports', icon: BarChart3, show: seesStudioFinance(currentRole) },
+            ].filter(i => i.show).map(({ show, ...i }) => i)}
+            onGo={(tab) => onLeaveProject?.(tab)}
+          />
+
+          {/* Who is signed in: name and role. */}
+          <div className="hidden lg:flex items-center gap-2 pl-3 border-l border-slate-200 shrink-0" title={currentUserAuth?.email || ''}>
+            <span className="text-[12px] font-extrabold text-slate-800 truncate max-w-[120px]">
+              {currentUserAuth?.displayName || (currentUserAuth?.email ? String(currentUserAuth.email).split('@')[0] : 'Signed in')}
+            </span>
+            <span className="text-[9.5px] font-extrabold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full bg-[#E8ECFB] text-[#3D52A0] whitespace-nowrap">
+              {currentRole}
+            </span>
           </div>
         </div>
 
@@ -417,7 +471,11 @@ export function ProjectWorkspace({
               const stageConfig = NAV_CONFIG.find(c => c.stage === stg);
               const label = STAGE_LABELS[stg] || `Stage ${stg}`;
               const isSelectedStage = selectedStage === stg && !ALWAYS_ON_BAND.some(i => i.route === activeTab) && activeTab !== 'dashboard';
-              
+              // The screens this person may open in the stage. A stage with none
+              // is left out for a Designer rather than offered as a dead end.
+              const openableItems = (stageConfig?.items || []).filter(item => !hiddenForRole(item));
+              if (isDesigner && openableItems.length === 0) return null;
+
               const shortLabel = label.split(' ')[0];
 
               return (
@@ -425,9 +483,9 @@ export function ProjectWorkspace({
                   <div className="relative group flex items-center">
                     <button
                       onClick={() => {
-                        if (stageConfig && stageConfig.items.length > 0) {
+                        if (openableItems.length > 0) {
                           setSelectedStage(stg);
-                          setActiveTab(stageConfig.items[0].route);
+                          setActiveTab(openableItems[0].route);
                         }
                       }}
                       className={`relative flex items-center gap-1 sm:gap-1.5 transition-all duration-300 cursor-pointer shrink-0 py-1.5 px-3 rounded-lg z-0 ${
@@ -473,10 +531,10 @@ export function ProjectWorkspace({
                         <div className="bg-white rounded-xl shadow-xl border border-slate-200/80 p-1.5 flex flex-col">
                           <div className="px-3 py-2 border-b border-slate-100 mb-1 flex justify-between items-center">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
-                            <span className="text-[10px] font-medium text-slate-400">{stageConfig.items.length} screens</span>
+                            <span className="text-[10px] font-medium text-slate-400">{openableItems.length} screens</span>
                           </div>
                           {stageConfig.items.map(item => {
-                            if (currentRole === 'Designer' && item.money) return null;
+                            if (hiddenForRole(item)) return null;
                             const isActiveItem = activeTab === item.route;
                             return (
                               <button
@@ -491,7 +549,10 @@ export function ProjectWorkspace({
                                     : 'text-slate-600 hover:bg-slate-50 hover:text-[#3D52A0]'
                                 }`}
                               >
-                                {item.label}
+                                <span className="flex items-center gap-1.5">
+                                  {item.label}
+                                  {accessBadge(item.route) && <Eye className="w-3.5 h-3.5 text-amber-600" aria-label="Read-only" />}
+                                </span>
                                 {isActiveItem && <div className="w-1.5 h-1.5 rounded-full bg-[#3D52A0] shrink-0" />}
                               </button>
                             )
@@ -511,11 +572,11 @@ export function ProjectWorkspace({
         {activeTab !== 'dashboard' && !ALWAYS_ON_BAND.some(i => i.route === activeTab) && selectedStage > 0 && activeStageConfig && activeStageConfig.items.length > 0 && (
           <div className="bg-slate-50/60 border-b border-slate-200 px-4 lg:px-6 py-2 flex items-center gap-2 shrink-0 flex-wrap">
             {activeStageConfig.items.map(item => {
-              if (currentRole === 'Designer' && item.money) return null;
+              if (hiddenForRole(item)) return null;
               const isActive = activeTab === item.route;
               let badgeText = item.statusBadge ? item.statusBadge(projectContext) : null;
-              if (currentRole === 'Designer' && badgeText) {
-                badgeText = badgeText.replace(/[₹%]/g, '');
+              if (!seesStudioFinance(currentRole) && badgeText) {
+                badgeText = badgeText.replace(/₹/g, '');
               }
               return (
                 <button
@@ -530,6 +591,16 @@ export function ProjectWorkspace({
                 >
                   {isActive && <div className="w-1.5 h-1.5 rounded-full bg-cyan-300 shrink-0" />}
                   <span className="tracking-tight">{item.label}</span>
+                  {accessBadge(item.route) && (
+                    <span
+                      title="Read-only for you"
+                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[9.5px] font-bold rounded-full ${
+                        isActive ? 'bg-white/25 text-white' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}
+                    >
+                      <Eye className="w-3 h-3" /> view
+                    </span>
+                  )}
                   {badgeText && (
                     <span className={`px-1.5 py-0.5 text-[9px] font-mono font-bold rounded-full ${
                       isActive ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-500 border border-slate-200'
@@ -553,19 +624,21 @@ export function ProjectWorkspace({
             <FloatingDock
               tooltipPosition="bottom"
               alwaysShowLabels={true}
-              items={ALWAYS_ON_BAND.filter((item) => !(currentRole === 'Designer' && item.money)).map((item) => {
+              items={ALWAYS_ON_BAND.filter((item) => !(hiddenForRole(item))).map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.route || (item.route === 'dashboard' && activeTab === 'dashboard');
                 let badgeText = item.statusBadge ? item.statusBadge(projectContext) : null;
-                if (currentRole === 'Designer' && badgeText) {
-                  badgeText = badgeText.replace(/[₹%]/g, '');
+                if (!seesStudioFinance(currentRole) && badgeText) {
+                  badgeText = badgeText.replace(/₹/g, '');
                 }
-                const badgeTone = item.badgeTone ? item.badgeTone(projectContext) : null;
+                // R1: a Designer's read-only tabs say so on the tab itself.
+                const readOnly = !!accessBadge(item.route);
+                const badgeTone = readOnly ? 'warn' : (item.badgeTone ? item.badgeTone(projectContext) : null);
                 return {
                   title: item.label,
                   icon: Icon ? <Icon className="w-full h-full" /> : null,
                   onClick: () => setActiveTab(item.route),
-                  badge: badgeText,
+                  badge: readOnly ? <Eye className="w-2.5 h-2.5" aria-label="Read-only" /> : badgeText,
                   badgeTone: badgeTone,
                   isActive,
                 };
@@ -584,13 +657,45 @@ export function ProjectWorkspace({
             screen that owns the decision, so the Client Portal tab stays the
             only thing that can reach a client.
           */}
-          <div className="ml-auto shrink-0">
+          {/* The studio's alerts lead to screens a Designer does not have. */}
+          <div className={`ml-auto shrink-0 ${isDesigner ? 'hidden' : ''}`}>
             <HubAlertsBell
               projectId={projectId}
               projectContext={projectContext}
               onGoTo={setActiveTab}
             />
           </div>
+
+          {/*
+            "Your access" (R3 in the header mockups). A Designer changes drawings
+            and nothing else: every other screen they have is look-only
+            (ViewOnlyGuard below), their saves are switched off in dbService and
+            refused by the Firestore rules. This says so up front, where the
+            tabs are, instead of a yellow bar across every screen.
+          */}
+          {isDesigner && (
+            <div className="phd-pop ml-auto shrink-0 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 shadow-2xs">
+              <div className="grid gap-1 text-[11.5px] leading-tight">
+                <span className="flex items-center gap-1.5 text-slate-700">
+                  <Pencil className="w-3.5 h-3.5 text-[#1F4D45]" />
+                  <b className="text-slate-900">You can edit:</b> Drawing Tracker
+                </span>
+                <span className="flex items-center gap-1.5 text-slate-600">
+                  <Eye className="w-3.5 h-3.5 text-amber-600" />
+                  <b className="text-slate-900">Read-only:</b> Brief &amp; Site, Design Gate, Timeline, Decisions
+                </span>
+              </div>
+              {!DESIGNER_EDITABLE_TABS.has(activeTab) && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(DESIGNER_HOME_TAB)}
+                  className="phd-lift px-3 py-1.5 rounded-xl bg-[#1F4D45] hover:bg-[#12332E] text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                >
+                  Open Drawing Tracker
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         </header>
@@ -625,12 +730,12 @@ export function ProjectWorkspace({
                 {/* Project Hub Center Icons */}
                 <div className="flex flex-col items-center gap-2.5 w-full">
                   {ALWAYS_ON_BAND.map(item => {
-                    if (currentRole === 'Designer' && item.money) return null;
+                    if (hiddenForRole(item)) return null;
                     const Icon = item.icon;
                     const isActive = activeTab === item.route;
                     let badgeText = item.statusBadge ? item.statusBadge(projectContext) : null;
-                    if (currentRole === 'Designer' && badgeText) {
-                      badgeText = badgeText.replace(/[₹%]/g, '');
+                    if (!seesStudioFinance(currentRole) && badgeText) {
+                      badgeText = badgeText.replace(/₹/g, '');
                     }
                     
                     return (
@@ -701,7 +806,7 @@ export function ProjectWorkspace({
                           <span className="text-[9px] text-white/50">{isLocked ? 'Locked' : isCompleted ? 'Completed' : 'Active'}</span>
                         </div>
                         {stageConfig && stageConfig.items.map(subItem => {
-                          if (currentRole === 'Designer' && subItem.money) return null;
+                          if (hiddenForRole(subItem)) return null;
                           const isSubActive = activeTab === subItem.route;
                           return (
                             <div 
@@ -869,7 +974,10 @@ export function ProjectWorkspace({
         {/* The dashboard route shows the setup wizard until the project has tiers,
             so the title has to follow the screen rather than the route. */}
         <PageTitleBlock route={isWizard ? 'project-setup' : activeTab} />
-        {children}
+        {/* Everything but the Drawing Tracker is look-only for a Designer. */}
+        <ViewOnlyGuard active={isDesigner && !DESIGNER_EDITABLE_TABS.has(activeTab)}>
+          {children}
+        </ViewOnlyGuard>
       </div>
       </div>
 

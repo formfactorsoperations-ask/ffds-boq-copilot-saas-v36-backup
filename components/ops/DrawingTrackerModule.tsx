@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { classifyRevisionCause, RevisionClassification } from '../../services/geminiService';
 import { useOrg } from '../../contexts/OrgContext';
+import { isDesignerRole } from '../../lib/roleAccess';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface DrawingTrackerModuleProps {
@@ -35,14 +36,21 @@ function AnimatedNumber({ value }: { value: number }) {
 export default function DrawingTrackerModule({ projectId, projectContext, fullBoq }: DrawingTrackerModuleProps) {
     const designGateActive = (projectContext as any)?.designGate?.gateActivated || (projectContext as any)?.lifecycle?.gates?.designGateActive?.done;
     
-    const { orgData } = useOrg();
+    const { orgData, currentRole } = useOrg();
     const orgId = orgData?.tenantId || 'demo-tenant-01';
     const studioName = orgData?.orgName || 'Studio';
 
     const [drawings, setDrawings] = useState<DrawingTrackerItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
-    const [userRole, setUserRole] = useState<'owner' | 'designer'>('owner');
+    /*
+      Whose view this is. It was a switch anyone could flip; a signed-in
+      Designer now always gets the Designer view, and the Owner/Designer switch
+      stays only for the studio, to preview what a Designer sees.
+    */
+    const signedInDesigner = isDesignerRole(currentRole);
+    const [userRole, setUserRole] = useState<'owner' | 'designer'>(() => signedInDesigner ? 'designer' : 'owner');
+    useEffect(() => { if (signedInDesigner) setUserRole('designer'); }, [signedInDesigner]);
     
     // View grouping mode: 'list' | 'grouped'
     const [viewMode, setViewMode] = useState<'list' | 'grouped'>('grouped');
@@ -483,9 +491,24 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
         await updateDoc(doc(db, `organizations/${orgId}/projects/${projectId}/drawingTracker`, drawing.id), {
             currentRound: newRoundNumber,
-            rounds: newRounds
+            rounds: newRounds,
+            // Issuing is the studio's answer to a Designer's submission.
+            pendingReview: null,
         });
         addLog('success', `Round ${newRoundNumber} of drawing "${drawing.name}" advanced to status "${customStatus.replace('_', ' ')}".`);
+    };
+
+    /*
+      Workflow A: a Designer prepares a round and hands it to the studio. It
+      stays with the studio until an Owner, Admin or Ops Director issues it, so
+      nothing goes to the client that the studio has not looked at.
+    */
+    const handleSubmitForReview = async (drawing: DrawingTrackerItem, roundNumber: number) => {
+        const by = auth?.currentUser?.displayName || auth?.currentUser?.email || 'Designer';
+        await updateDoc(doc(db, `organizations/${orgId}/projects/${projectId}/drawingTracker`, drawing.id), {
+            pendingReview: { roundNumber, submittedAt: Date.now(), submittedBy: by },
+        });
+        addLog('success', `"${drawing.name}" round ${roundNumber} submitted to the studio for review.`);
     };
 
     const handleApprove = async (drawing: DrawingTrackerItem, roundNumber: number) => {
@@ -595,7 +618,9 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         const nextRoundNumberWithRevision = (roundAdvances || cause === 'CLIENT_REVISION') ? nextRoundNumber : drawing.currentRound;
         const updates: any = {
              currentRound: nextRoundNumberWithRevision,
-             rounds: newRounds
+             rounds: newRounds,
+             // A revision starts a fresh round; any earlier submission is spent.
+             pendingReview: null,
         };
 
         if (roundAdvances || cause === 'CLIENT_REVISION') {
@@ -763,7 +788,8 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         if (d.gfc?.status === 'superseded') return 'Superseded';
         if (d.isGapFlagged && (d.currentRound === 0 || d.rounds.length === 0 || d.rounds.every(r => r.status === 'not_started'))) return 'Missing';
         if (d.approvedAt) return 'Approved';
-        
+        if (d.pendingReview) return 'Studio Review';
+
         const latestRound = d.rounds.find(r => r.roundNumber === d.currentRound);
         if (latestRound) {
             if (latestRound.status === 'in_review') return 'Client Review';
@@ -861,6 +887,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
     const FILTERS: { key: string; label: string }[] = [
         { key: 'All', label: 'All' },
         { key: 'Action Required', label: 'Needs you' },
+        { key: 'Studio Review', label: 'Submitted for review' },
         { key: 'Client Review', label: 'With client' },
         { key: 'Not Started', label: 'Not started' },
         { key: 'Approved', label: 'Approved' },
@@ -873,7 +900,9 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         for (const f of FILTERS) if (f.key !== 'All') c[f.key] = 0;
         for (const d of drawings) {
             const st = statusOf(d);
-            if (st === 'Client Review' || st === 'Site Hold' || d.isGapFlagged) c['Action Required']++;
+            // A submitted round needs the studio, not the Designer who sent it.
+            if (st === 'Client Review' || st === 'Site Hold' || d.isGapFlagged || (st === 'Studio Review' && isOwner)) c['Action Required']++;
+            if (st === 'Studio Review') c['Studio Review']++;
             if (st === 'Not Started') c['Not Started']++;
             if (st === 'Client Review') c['Client Review']++;
             if (st === 'Approved') c['Approved']++;
@@ -882,7 +911,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         }
         return c;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [drawings]);
+    }, [drawings, isOwner]);
 
     const stats = {
         total: drawings.length,
@@ -907,7 +936,8 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
         // Pill filter
         if (filter === 'All') return true;
-        if (filter === 'Action Required') return status === 'Client Review' || status === 'Site Hold' || d.isGapFlagged;
+        if (filter === 'Action Required') return status === 'Client Review' || status === 'Site Hold' || d.isGapFlagged || (status === 'Studio Review' && isOwner);
+        if (filter === 'Studio Review') return status === 'Studio Review';
         if (filter === 'Not Started') return status === 'Not Started';
         if (filter === 'Client Review') return status === 'Client Review';
         if (filter === 'Approved') return status === 'Approved';
@@ -1082,6 +1112,8 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs"><User className="w-3.5 h-3.5 text-[#2E7D6B]" />Client Review</span>;
             case 'Site Hold':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs"><AlertCircle className="w-3.5 h-3.5 text-rose-700" />Rejected / Hold</span>;
+            case 'Studio Review':
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 shadow-2xs"><Send className="w-3.5 h-3.5 text-indigo-600" />{isOwner ? 'Ready for your review' : 'With studio for review'}</span>;
             default:
                 if (status.includes('Issued')) {
                     return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs"><Clock className="w-3.5 h-3.5 text-amber-600" />{status}</span>;
@@ -1099,13 +1131,27 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                     <Clock className="w-6 h-6 text-slate-400 mx-auto mb-2" />
                     <span className="text-xs font-semibold text-slate-600">No rounds initiated yet.</span>
                     <div className="mt-3">
-                        <button 
-                            type="button"
-                            onClick={() => handleAdvanceRound(d, 1, 'issued')} 
-                            className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-[#1F4D45] hover:bg-[#12332E] text-white transition-all shadow-2xs cursor-pointer"
-                        >
-                            Issue Round 1 Now
-                        </button>
+                        {isOwner ? (
+                            <button
+                                type="button"
+                                onClick={() => handleAdvanceRound(d, 1, 'issued')}
+                                className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-[#1F4D45] hover:bg-[#12332E] text-white transition-all shadow-2xs cursor-pointer"
+                            >
+                                {d.pendingReview ? 'Reviewed — issue Round 1 to client' : 'Issue Round 1 Now'}
+                            </button>
+                        ) : d.pendingReview ? (
+                            <span className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-slate-100 text-slate-500">
+                                Submitted {formatDate(d.pendingReview.submittedAt)} · waiting on the studio
+                            </span>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => handleSubmitForReview(d, 1)}
+                                className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-[#1F4D45] hover:bg-[#12332E] text-white transition-all shadow-2xs cursor-pointer inline-flex items-center gap-1"
+                            >
+                                <Send className="w-3.5 h-3.5" /> Submit Round 1 for review
+                            </button>
+                        )}
                     </div>
                 </div>
             );
@@ -1157,16 +1203,32 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
                                 {isLatest && !d.approvedAt && (
                                     <div className="mt-3.5 pt-2.5 border-t border-slate-100 flex flex-wrap gap-2">
-                                        {(r.status === 'not_started' || r.status === 'not_issued') && (
-                                            <button 
+                                        {/* Workflow A: a Designer submits, the studio issues. */}
+                                        {(r.status === 'not_started' || r.status === 'not_issued') && isOwner && (
+                                            <button
                                                 type="button"
-                                                onClick={() => handleAdvanceRound(d, r.roundNumber, 'issued')} 
+                                                onClick={() => handleAdvanceRound(d, r.roundNumber, 'issued')}
                                                 className="px-3 py-1.5 text-xs font-bold bg-[#1F4D45] hover:bg-[#12332E] text-white rounded-lg transition-all shadow-2xs cursor-pointer"
                                             >
-                                                Issue Now
+                                                {d.pendingReview?.roundNumber === r.roundNumber ? 'Reviewed — issue to client' : 'Issue Now'}
                                             </button>
                                         )}
-                                        {r.status === 'issued' && (
+                                        {(r.status === 'not_started' || r.status === 'not_issued') && !isOwner && (
+                                            d.pendingReview?.roundNumber === r.roundNumber ? (
+                                                <span className="px-3 py-1.5 text-xs font-bold bg-slate-100 text-slate-500 rounded-lg">
+                                                    Submitted {formatDate(d.pendingReview.submittedAt)} · waiting on the studio
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSubmitForReview(d, r.roundNumber)}
+                                                    className="px-3 py-1.5 text-xs font-bold bg-[#1F4D45] hover:bg-[#12332E] text-white rounded-lg transition-all shadow-2xs cursor-pointer inline-flex items-center gap-1"
+                                                >
+                                                    <Send className="w-3.5 h-3.5" /> Submit for review
+                                                </button>
+                                            )
+                                        )}
+                                        {r.status === 'issued' && isOwner && (
                                             <button 
                                                 type="button"
                                                 onClick={() => handleAdvanceRound(d, r.roundNumber, 'in_review')} 
@@ -1588,8 +1650,9 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                 {/* The status actions live in the open row, not on every line. */}
                 {isExpanded && (
                     <div className="px-4 pb-3 flex flex-wrap items-center gap-2" onClick={e => e.stopPropagation()}>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">Set status</span>
-                        {(() => {
+                        {/* Setting a status approves or holds a drawing: the studio's call. */}
+                        {isOwner && <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">Set status</span>}
+                        {isOwner && (() => {
                             const current = (isApproved || status === 'Approved' || status === 'GFC Issued')
                                 ? 'approved' : status === 'Site Hold' ? 'rejected' : 'pending';
                             const opts: [string, 'pending' | 'approved' | 'rejected', string][] = [
@@ -1722,6 +1785,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 <div className="lg:col-span-5 space-y-5">
                                     <div className="flex items-center justify-between">
                                         <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Round Progression Timeline</h4>
+                                        {isOwner && (
                                         <div className="flex items-center gap-2">
                                             <button
                                                 type="button"
@@ -1741,12 +1805,13 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                                 <span>Delete</span>
                                             </button>
                                         </div>
+                                        )}
                                     </div>
 
                                     {renderTimeline(d)}
 
-                                    {/* Issue GFC block if approved */}
-                                    {isApproved && !d.gfc && (
+                                    {/* Issue GFC block if approved -- the studio releases GFC. */}
+                                    {isApproved && !d.gfc && isOwner && (
                                         <div className="p-4 bg-white border border-slate-200/90 rounded-2xl flex flex-col gap-3 shadow-2xs">
                                             <div className="text-xs font-medium text-slate-600 leading-relaxed">
                                                 All design feedback is incorporated and drawing is formally approved. Ready to release GFC.
@@ -1981,7 +2046,12 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                     {risk.overdue > 0 && <> · <b className="text-rose-700">{risk.overdue} overdue</b></>}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
+                            {signedInDesigner ? (
+                                <span className="shrink-0 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg bg-[#DCEBE6] text-[#1F4D45]">
+                                    Designer view
+                                </span>
+                            ) : (
+                            <div className="flex items-center gap-1.5 shrink-0" title="Preview what a Designer sees">
                                 <button type="button" onClick={() => setUserRole('owner')}
                                     className={`px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg transition-colors ${
                                         isOwner ? 'bg-[#1F4D45] text-white' : 'text-[#2E7D6B] hover:bg-[#DCEBE6]'}`}>
@@ -1993,6 +2063,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                     Designer
                                 </button>
                             </div>
+                            )}
                         </div>
                     </div>
 

@@ -19,6 +19,8 @@ import { db } from '../../services/firebaseClient';
 import { TeamMember, UserRole } from '../../types';
 import { Plus, Trash2, UserPlus, Users, Download, AlertTriangle, Check } from 'lucide-react';
 import { createStaffLogin, StaffLogin } from '../../services/studioAccess';
+import { useProjectDirectory, useProjectTeam } from '../../services/projectTeam';
+import AssignProjectsModal from '../projectHeader/AssignProjectsModal';
 
 const ROLES: UserRole[] = ['Super Admin', 'Admin', 'Ops Director', 'Designer', 'Site Supervisor', 'Viewer', 'Client'] as UserRole[];
 
@@ -49,9 +51,14 @@ interface Props {
   currentEmail?: string;
   tenantId: string;
   canEdit: boolean;
+  /**
+   * Emails on the team as last saved. The server creates a login only for
+   * someone on the saved list, so the button waits for the row to be saved.
+   */
+  savedEmails?: string[];
 }
 
-const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tenantId, canEdit }) => {
+const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tenantId, canEdit, savedEmails = [] }) => {
   const [importing, setImporting] = useState(false);
   const [importNote, setImportNote] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
@@ -66,6 +73,16 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
   const [issued, setIssued] = useState<(StaffLogin & { name: string }) | null>(null);
   const [loginError, setLoginError] = useState<{ id: string; message: string } | null>(null);
   const [copied, setCopied] = useState(false);
+
+  /* A Designer's projects (services/projectTeam), counted for their row and
+     changed through the shared Assign projects window. */
+  const directory = useProjectDirectory();
+  const { designersOn, canAssign: canAssignProjects } = useProjectTeam();
+  const [assigningFor, setAssigningFor] = useState<string | null>(null);
+  const projectCountFor = (email: string) => {
+    const e = email.trim().toLowerCase();
+    return directory.filter((p) => designersOn(p).includes(e)).length;
+  };
 
   const issueLogin = async (m: TeamMember) => {
     setIssuingFor(m.id);
@@ -288,9 +305,35 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
                       <AlertTriangle className="w-3 h-3" /> Needs a name and email
                     </span>
                   )}
+                  {/* A2 in the header mockups: a Designer's projects, set from their own row. */}
+                  {m.role === ('Designer' as UserRole) && !incomplete && savedEmails.includes(m.email.trim().toLowerCase()) && (
+                    <span className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-full font-bold ${projectCountFor(m.email) ? 'bg-[#DCEBE6] text-[#1F4D45]' : 'bg-slate-100 text-slate-500'}`}>
+                        {projectCountFor(m.email) ? `${projectCountFor(m.email)} project${projectCountFor(m.email) === 1 ? '' : 's'}` : 'No projects yet'}
+                      </span>
+                      {canAssignProjects && (
+                        <button
+                          type="button"
+                          onClick={() => setAssigningFor(m.email.trim().toLowerCase())}
+                          className="px-2.5 py-1 rounded-lg border border-[#1F4D45]/30 text-[#1F4D45] font-extrabold hover:bg-[#F1F7F5]"
+                        >
+                          Assign projects
+                        </button>
+                      )}
+                    </span>
+                  )}
                   {canEdit && !isYou && !incomplete && (
                     <span className="ml-auto">
-                      {m.uid || m.loginIssuedAt ? (
+                      {!savedEmails.includes(m.email.trim().toLowerCase()) ? (
+                        <button
+                          type="button"
+                          disabled
+                          title="Save the team first. A login can only be made for someone on the saved team."
+                          className="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-500 font-extrabold cursor-not-allowed"
+                        >
+                          Save first, then create login
+                        </button>
+                      ) : m.uid || m.loginIssuedAt ? (
                         <button
                           type="button"
                           onClick={() => issueLogin(m)}
@@ -327,6 +370,10 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           Nobody has the Site Supervisor role, so the supervisor picker on a project will still be empty.
         </p>
+      )}
+
+      {assigningFor && (
+        <AssignProjectsModal designerEmail={assigningFor} onClose={() => setAssigningFor(null)} />
       )}
 
       {/* The same card client logins use: shown once, never retrievable. A

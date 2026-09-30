@@ -19,7 +19,13 @@ export function getNextActions(context: {
 }, role: string): NextAction[] {
     const { project, designPaymentStages, designGate, drawingTrackerSummary, scopeAdditionsSummary, timeline } = context;
     const actions: NextAction[] = [];
-    
+
+    // The platform owner works a studio as its Admin. No list below names
+    // "Super Admin", and callers passed "Admin" for everyone until the real
+    // signed-in role reached this function, so without this the owner's
+    // Up next would be empty.
+    if (role === 'Super Admin') role = 'Admin';
+
     // RBAC logic: Designer must never see financials
     const isOwner = role === 'Admin' || role === 'Owner' || role === 'Ops Director';
     

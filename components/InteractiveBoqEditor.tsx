@@ -32,6 +32,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MarginDeviationIndicator } from './MarginDeviationIndicator';
+import { useOrg } from '../contexts/OrgContext';
+import { seesStudioFinance } from '../lib/roleAccess';
 
 interface InteractiveBoqEditorProps {
   items: FullBoqItem[];
@@ -65,6 +67,10 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
   
   // Custom View: Split-Pane Selection State
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  /* Cost rates, margin and profit are studio finance (lib/roleAccess). Other
+     roles still see the client sell price, and still set quantities. */
+  const { currentRole } = useOrg();
+  const finance = seesStudioFinance(currentRole);
 
   // Library state (Design Bank)
   const [libSearch, setLibSearch] = useState<string>('');
@@ -329,19 +335,8 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
               {spaceRooms.length} Rooms registered
             </span>
           </div>
-          <div className="flex items-center gap-3">
-            <a
-              href="/boq-evolution-blueprint.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-200 flex items-center gap-1.5 transition-all shadow-2xs"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              BOQ Evolution Blueprint Mockup
-            </a>
-            <div className="text-xs text-slate-500 font-normal">
-              BOQ Total: <strong className="font-mono text-slate-900 text-sm font-bold tabular-nums">{formatCurrency(projectStats.grandTotal)}</strong>
-            </div>
+          <div className="text-xs text-slate-500 font-normal">
+            BOQ Total: <strong className="font-mono text-slate-900 text-sm font-bold tabular-nums">{formatCurrency(projectStats.grandTotal)}</strong>
           </div>
         </div>
 
@@ -604,11 +599,13 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                         <div className="text-[10px] text-slate-400 mt-1 font-medium flex items-center gap-1.5">
                           <span>Unit Rate:</span>
                           <strong className="font-mono text-slate-700">{formatCurrency(sellPrice)} / {item.unit}</strong>
+                          {finance && (<>
                           <span className="text-slate-200">|</span>
                           <span className="text-slate-400 flex items-center gap-1.5 flex-wrap">
                             Margin: <strong className="text-slate-700">{item.margin}%</strong>
                             <MarginDeviationIndicator margin={item.margin} />
                           </span>
+                          </>)}
                         </div>
                       </div>
                     </div>
@@ -822,6 +819,16 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                   </div>
                 </div>
 
+                {!finance && (
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 flex justify-between items-center text-[11px] text-slate-500">
+                    <span>Client Sell Price (Unit):</span>
+                    <span className="font-mono text-slate-900 font-extrabold">
+                      {formatCurrency(calculateSellPrice(activeSelectedItem.materials, activeSelectedItem.labor, activeSelectedItem.margin))}
+                    </span>
+                  </div>
+                )}
+
+                {finance && (<>
                 {/* Total Unit Cost (Combined) Helper */}
                 <div>
                   <div className="flex justify-between items-center mb-1">
@@ -944,6 +951,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     </div>
                   </div>
                 </div>
+                </>)}
 
                 {/* 6. Space Assignment */}
                 <div>
@@ -1090,7 +1098,9 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
 
                               <div className="flex justify-between items-center mt-2 border-t border-slate-50 pt-1.5">
                                 <span className="text-[10px] text-slate-500">
-                                  Base Cost: <strong className="font-mono text-slate-700">{formatCurrency(bankItem.materials)}</strong>
+                                  {finance
+                                    ? <>Base Cost: <strong className="font-mono text-slate-700">{formatCurrency(bankItem.materials)}</strong></>
+                                    : <>Client price: <strong className="font-mono text-slate-700">{formatCurrency(calculateSellPrice(bankItem.materials, bankItem.labor, bankItem.margin))}</strong></>}
                                 </span>
                                 <span className="text-[8px] text-slate-400 font-extrabold bg-sky-50/50 px-1.5 py-0.5 rounded uppercase">
                                   {bankItem.cat}

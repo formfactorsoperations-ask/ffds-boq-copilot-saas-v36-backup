@@ -81,7 +81,8 @@ export const PROJECT_DOCUMENTS: DocMeta[] = [
     icon: FileText,
     group: 'Agreement & Design',
     minStage: 1,
-    money: true,
+    /* Not `money`: it carries client prices, which every role may see. The
+       flag hides a document from roles that do not see studio finance. */
     downloadable: true,
     clientVisible: true,
     documentKind: 'detailed_boq',
@@ -94,7 +95,7 @@ export const PROJECT_DOCUMENTS: DocMeta[] = [
     icon: FileText,
     group: 'Agreement & Design',
     minStage: 1,
-    money: true,
+    /* Client prices only, like the Detailed BOQ: not `money`. */
     downloadable: true,
     clientVisible: true,
     documentKind: 'scope_revision',

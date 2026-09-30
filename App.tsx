@@ -131,6 +131,8 @@ import { toProjectDecisionRecords } from "./services/decisionProjection";
 import { issuePortalAccess, projectIdFromToken } from "./services/portalAccessService";
 import { readPortalView } from "./services/portalViewService";
 import { syncStudioAccess, portalDoor } from "./services/studioAccess";
+import { publishProjectDirectory } from "./services/projectTeam";
+import { seesStudioFinance, FINANCE_TABS, isDesignerRole, designerMayOpen, STUDIO_TABS, DESIGNER_HOME_TAB, visibleToRole } from "./lib/roleAccess";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth as firebaseAuth } from "./services/firebaseClient";
 import PortalPublishControls from "./components/ops/PortalPublishControls";
@@ -168,7 +170,7 @@ const DEFAULT_LEAD_PROFILE: LeadProfile = {
 export default function App() {
   // Global State
   console.log("App.tsx is rendering...");
-  const { orgData, currentUserAuth, currentRole, teamMembers } = useOrg();
+  const { orgData, currentUserAuth, currentRole, setCurrentRole, teamMembers } = useOrg();
   const [activeTab, setActiveTab] = useState("home");
   const [showWizardOverride, setShowWizardOverride] = useState(false);
   useEffect(() => {
@@ -195,6 +197,27 @@ export default function App() {
 
   // Data Libraries
   const [projectLibrary, setProjectLibrary] = useState<FullProjectData[]>([]);
+  /*
+    The projects this person may open. A Designer works only on the projects
+    they are assigned to (the Team row in a project's Details), so every list,
+    count and picker reads from here rather than the whole library.
+  */
+  const projectDesigners = (orgData as any)?.projectDesigners;
+  const visibleProjects = useMemo(
+    () => visibleToRole(projectLibrary, currentRole, currentUserAuth?.email, projectDesigners),
+    [projectLibrary, currentRole, currentUserAuth?.email, projectDesigners],
+  );
+  /* The Team screen assigns Designers across projects; it reads this light
+     copy of the library rather than having it threaded through props. */
+  useEffect(() => {
+    publishProjectDirectory(projectLibrary.map((p) => ({
+      id: p.id,
+      name: p.context?.name || 'Untitled project',
+      client: p.context?.clientName,
+      status: p.context?.status,
+      context: { assignedDesigners: (p.context as any)?.assignedDesigners },
+    })));
+  }, [projectLibrary]);
   const [bank, setBank] = useState<Item[]>([]);
   const [draftBank, setDraftBank] = useState<Item[]>([]);
   const [isDraftBankMode, setIsDraftBankMode] = useState(false);
@@ -584,7 +607,7 @@ export default function App() {
         setPortalLinkToken(portalToken);
       }
 
-      verifyApiKey().then((status) => setAiStatus(status));
+      // The AI status is checked once signed in; see the effect on authProfile.
 
       const timeoutWrapper = <T,>(
         promise: Promise<T>,
@@ -756,6 +779,62 @@ export default function App() {
     });
     return () => { cancelled = true; };
   }, [portalLinkToken, authProfile]);
+
+  /*
+    Whether AI is reachable, asked once somebody is signed in.
+
+    It used to be asked the moment the page loaded, often before Firebase had
+    restored the session -- and the AI functions refuse a caller who is not
+    signed in, so the header read "AI Error: Check API Key" with a perfectly
+    good key, and nothing ever asked again.
+  */
+  useEffect(() => {
+    if (!authProfile?.uid) return;
+    let cancelled = false;
+    verifyApiKey().then((status) => { if (!cancelled) setAiStatus(status); });
+    return () => { cancelled = true; };
+  }, [authProfile?.uid]);
+
+  /*
+    The role every screen checks comes from the signed-in account.
+
+    It lived in localStorage, written once by the sign-in screen and read back
+    on every later visit -- so a session restored in a browser last used by
+    somebody else inherited their role, and anyone could type "Admin" into
+    local storage to unlock the Admin screens. The account's profile is
+    written only by the server now, so it is the one worth believing.
+  */
+  useEffect(() => {
+    if (!authProfile || authProfile.role === "Client") return;
+    const role = authProfile.email === "formfactors.operations@gmail.com" ? "Super Admin" : authProfile.role;
+    if (role && role !== currentRole) setCurrentRole(role as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authProfile?.role, authProfile?.email]);
+
+  /* Finance screens stay closed to roles that do not see studio finance, even
+     when reached by a link or a button rather than a tab. */
+  useEffect(() => {
+    // A Designer may open only their allow-list (lib/roleAccess).
+    if (isDesignerRole(currentRole)) {
+      if (designerMayOpen(activeTab)) return;
+      setActiveTab(STUDIO_TABS.has(activeTab) ? "projects" : DESIGNER_HOME_TAB);
+      return;
+    }
+    if (!(FINANCE_TABS.has(activeTab) && !seesStudioFinance(currentRole))) return;
+    const studioWide = ["reports", "admin-templates-bank", "clients", "studio-settings", "saas-dashboard"];
+    setActiveTab(studioWide.includes(activeTab) ? "projects" : "dashboard");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, currentRole]);
+
+  /* A Designer holding a project they are no longer assigned to -- opened
+     from a remembered tab or a link -- is taken back to their own list. */
+  useEffect(() => {
+    if (!isDesignerRole(currentRole) || !activeInternalId || projectLibrary.length === 0) return;
+    if (visibleProjects.some((p) => p.id === activeInternalId)) return;
+    setActiveProject(null);
+    setActiveTab("projects");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRole, activeInternalId, visibleProjects]);
 
   /*
     Identity decides the destination.
@@ -1725,6 +1804,8 @@ export default function App() {
   };
 
   const handleCreateNewProject = () => {
+    // Designers are given projects; they do not start them (lib/roleAccess).
+    if (isDesignerRole(currentRole)) return;
     const newId = generateId();
     setActiveInternalId(newId);
     setProjectArchitecture('canonical');
@@ -2866,7 +2947,7 @@ export default function App() {
                   projectContext={projectContext}
                   activeTab={activeTab}
                   setActiveTab={setActiveTab}
-                  currentRole={orgData?.role || "Admin"}
+                  currentRole={currentRole}
                   setProjectContext={setProjectContext}
                   // Must match the condition that actually renders the wizard
                   // below, or the workspace titles the page wrong and shows the
@@ -2915,11 +2996,11 @@ export default function App() {
                   {/* GLOBAL TABS - SECTION 1 */}
                   {activeTab === "home" && (
                     <StudioHomeOrbit
-                      projects={projectLibrary}
+                      projects={visibleProjects}
                       onOpenProject={handleOpenProject}
                       onCreateNew={handleCreateNewProject}
                       onNavigate={setActiveTab}
-                      role={orgData?.role || "Admin"}
+                      role={currentRole}
                       userName={currentUserAuth?.displayName || currentUserAuth?.email || "there"}
                       lastTabs={lastTabs}
                       attention={attention}
@@ -2929,7 +3010,7 @@ export default function App() {
                   )}
                   {activeTab === "reports" && (
                     <StudioReports
-                      projects={projectLibrary}
+                      projects={visibleProjects}
                       onNavigate={setActiveTab}
                       onOpenProject={(id) => {
                         const p = projectLibrary.find(x => x.id === id);
@@ -2947,7 +3028,7 @@ export default function App() {
                   )}
                   {activeTab === "projects" && (
                     <ProjectListTab
-                      projects={projectLibrary}
+                      projects={visibleProjects}
                       activeProjectId={activeInternalId}
                       onOpenProject={handleOpenProject}
                       onCreateNew={handleCreateNewProject}
@@ -2960,7 +3041,7 @@ export default function App() {
                   )}
                   {activeTab === "clients" && (
                     <ClientsDirectory
-                      projects={projectLibrary}
+                      projects={visibleProjects}
                       onOpenProject={handleOpenProject}
                       onCreateNew={handleCreateNewProject}
                       // ACTIVE_CLIENTS
@@ -2979,7 +3060,7 @@ export default function App() {
                       aiStrategy={aiStrategy}
                       highlightedBankItemId={highlightedBankItemId}
                       setHighlightedBankItemId={setHighlightedBankItemId}
-                      projects={projectLibrary}
+                      projects={visibleProjects}
                       // ACTIVE_ADMIN_TEMPLATES_BANK
                     />
                   )}
@@ -3063,7 +3144,7 @@ export default function App() {
                         aiStrategy={aiStrategy}
                         highlightedBankItemId={highlightedBankItemId}
                         onHighlightClear={() => setHighlightedBankItemId(null)}
-                        projects={projectLibrary}
+                        projects={visibleProjects}
                       />
                     </div>
                   )}
@@ -3202,8 +3283,8 @@ export default function App() {
                           boq={activeProject ? executionBoq : fullBoqForActiveTier}
                           projectId={activeInternalId}
                           activeTier={activeCalculatedTier}
-                          allProjects={projectLibrary}
-                          currentUserRole={orgData?.role || 'Admin'}
+                          allProjects={visibleProjects}
+                          currentUserRole={currentRole}
                           setActiveTab={setActiveTab}
                         />
                       )}
@@ -3304,7 +3385,7 @@ export default function App() {
                           setProjectContext={setProjectContext}
                           activeTier={activeCalculatedTier}
                           tiers={tiersWithCalculatedSummaries}
-                          allProjects={projectLibrary} // NEW: Passing full library for global calculation
+                          allProjects={visibleProjects} // NEW: Passing full library for global calculation
                           projectId={activeInternalId!}
                           bank={bank}
                           fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
@@ -3507,7 +3588,7 @@ export default function App() {
                           aiStrategy={aiStrategy}
                           tiers={tiersWithCalculatedSummaries}
                           projectContext={projectContext}
-                          currentUserRole={orgData?.role || 'Admin'}
+                          currentUserRole={currentRole}
                         />
                       )}
                       {(activeTab === "site-ops" ||
@@ -3594,7 +3675,7 @@ export default function App() {
                           bank={bank}
                           setBank={setBank} // NEW: Pass bank setter for dynamic creation
                           setActiveTab={setActiveTab}
-                          projects={projectLibrary}
+                          projects={visibleProjects}
                           templates={templates}
                         />
                       )}
@@ -3651,11 +3732,11 @@ export default function App() {
                   {/* GLOBAL TABS */}
                   {activeTab === "home" && (
                     <StudioHomeOrbit
-                      projects={projectLibrary}
+                      projects={visibleProjects}
                       onOpenProject={handleOpenProject}
                       onCreateNew={handleCreateNewProject}
                       onNavigate={setActiveTab}
-                      role={orgData?.role || "Admin"}
+                      role={currentRole}
                       userName={currentUserAuth?.displayName || currentUserAuth?.email || "there"}
                       lastTabs={lastTabs}
                       attention={attention}
@@ -3664,7 +3745,7 @@ export default function App() {
                   )}
                   {activeTab === "reports" && (
                     <StudioReports
-                      projects={projectLibrary}
+                      projects={visibleProjects}
                       onNavigate={setActiveTab}
                       onOpenProject={(id) => {
                         const p = projectLibrary.find(x => x.id === id);
@@ -3681,7 +3762,7 @@ export default function App() {
                   )}
                   {activeTab === "projects" && (
                     <ProjectListTab
-                      projects={projectLibrary}
+                      projects={visibleProjects}
                       activeProjectId={activeInternalId}
                       onOpenProject={handleOpenProject}
                       onCreateNew={handleCreateNewProject}
@@ -3693,7 +3774,7 @@ export default function App() {
                   )}
                   {activeTab === "clients" && (
                     <ClientsDirectory
-                      projects={projectLibrary}
+                      projects={visibleProjects}
                       onOpenProject={handleOpenProject}
                       onCreateNew={handleCreateNewProject}
                     />
@@ -3711,7 +3792,7 @@ export default function App() {
                       aiStrategy={aiStrategy}
                       highlightedBankItemId={highlightedBankItemId}
                       setHighlightedBankItemId={setHighlightedBankItemId}
-                      projects={projectLibrary}
+                      projects={visibleProjects}
                     />
                   )}
 
@@ -3793,7 +3874,7 @@ export default function App() {
                         aiStrategy={aiStrategy}
                         highlightedBankItemId={highlightedBankItemId}
                         onHighlightClear={() => setHighlightedBankItemId(null)}
-                        projects={projectLibrary}
+                        projects={visibleProjects}
                       />
                     </div>
                   )}
@@ -3937,8 +4018,8 @@ export default function App() {
                           boq={activeProject ? executionBoq : fullBoqForActiveTier}
                           projectId={activeInternalId}
                           activeTier={activeCalculatedTier}
-                          allProjects={projectLibrary}
-                          currentUserRole={orgData?.role || 'Admin'}
+                          allProjects={visibleProjects}
+                          currentUserRole={currentRole}
                           setActiveTab={setActiveTab}
                         />
                       )}
@@ -4037,7 +4118,7 @@ export default function App() {
                           setProjectContext={setProjectContext}
                           activeTier={activeCalculatedTier}
                           tiers={tiersWithCalculatedSummaries}
-                          allProjects={projectLibrary} // NEW: Passing full library for global calculation
+                          allProjects={visibleProjects} // NEW: Passing full library for global calculation
                           projectId={activeInternalId!}
                           bank={bank}
                           fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
@@ -4240,7 +4321,7 @@ export default function App() {
                           aiStrategy={aiStrategy}
                           tiers={tiersWithCalculatedSummaries}
                           projectContext={projectContext}
-                          currentUserRole={orgData?.role || 'Admin'}
+                          currentUserRole={currentRole}
                         />
                       )}
                       {(activeTab === "site-ops" ||
@@ -4327,7 +4408,7 @@ export default function App() {
                           bank={bank}
                           setBank={setBank} // NEW: Pass bank setter for dynamic creation
                           setActiveTab={setActiveTab}
-                          projects={projectLibrary}
+                          projects={visibleProjects}
                           templates={templates}
                         />
                       )}

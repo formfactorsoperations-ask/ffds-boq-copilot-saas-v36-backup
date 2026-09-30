@@ -22,6 +22,10 @@ import {
   CashFlowForecastDashboard,
 } from "./CashFlowForecastDashboard";
 import { useOrg } from "../contexts/OrgContext";
+import { seesStudioFinance, isDesignerRole } from "../lib/roleAccess";
+import { Users } from "lucide-react";
+import ProjectTeamButton from "./projectHeader/ProjectTeamButton";
+import AssignProjectsModal from "./projectHeader/AssignProjectsModal";
 import { useMomActions } from "../hooks/useMomActions";
 import { getNextActions, NextAction } from "../services/nextActionEngine";
 import { buildDocumentCompleteness, DocumentCompleteness } from "../lib/documentCompleteness";
@@ -266,7 +270,11 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   onQuickUpdate,
   onStatusChange,
 }) => {
-  const { orgData } = useOrg();
+  const { orgData, currentRole } = useOrg();
+  /* Margins, portfolio totals and cash are the studio's own figures; see
+     lib/roleAccess. Client prices on a card stay visible to everyone. */
+  const showFinance = seesStudioFinance(currentRole);
+  const [assignOpen, setAssignOpen] = useState(false);
 
   /*
     What to call each project on this screen.
@@ -347,7 +355,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
     than either of them alone.
   */
   const intel = useMemo(() => {
-    const role = orgData?.role || 'Admin';
+    const role = currentRole || 'Admin';
     const map = new Map<
       string,
       { action: NextAction | null; docs: DocumentCompleteness }
@@ -378,7 +386,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
       });
     }
     return map;
-  }, [projects, orgData?.role]);
+  }, [projects, currentRole]);
 
   const pipelineStats = useMemo(() => ({
     pendingDecisions: projects.filter(p => p.context?.status === 'proposal_sent' || p.context?.status === 'negotiation').length,
@@ -593,6 +601,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
               )}
             </motion.div>
 
+            {showFinance && (<>
             <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between hover:-translate-y-1 transition-transform">
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">
@@ -657,13 +666,16 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                 </div>
               </div>
             </motion.div>
+            </>)}
           </motion.div>
 
+          {showFinance && (
           <div className="px-4">
             <CashFlowSummaryWidget
               onNavigate={() => setActiveTab("reports")}
             />
           </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-4 mt-6">
             {/* Ops Feature 1: Procurement & Lead Time Risk */}
@@ -880,6 +892,20 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                 </div>
               )}
             </div>
+            {/* A3: hand one Designer several projects at once. */}
+            {seesStudioFinance(currentRole) && (
+              <motion.button
+                whileHover={{ scale: 1.02, y: -1 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setAssignOpen(true)}
+                className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-[1.25rem] transition-colors shadow-sm flex items-center justify-center gap-2 text-xs font-bold shrink-0 cursor-pointer h-[50px]"
+              >
+                <Users className="w-4 h-4" /> Assign Designer
+              </motion.button>
+            )}
+            {assignOpen && <AssignProjectsModal onClose={() => setAssignOpen(false)} />}
+            {/* A Designer works on the projects they are given; they do not start them. */}
+            {!isDesignerRole(currentRole) && (
             <motion.button
               whileHover={{ scale: 1.02, y: -1 }}
               whileTap={{ scale: 0.98 }}
@@ -888,7 +914,19 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
             >
               <PlusIcon className="w-4 h-4" /> New Project
             </motion.button>
+            )}
           </div>
+
+          {/* A Designer's list is only what they are assigned, so an empty one
+              says how to get a project rather than showing a row of zeros. */}
+          {isDesignerRole(currentRole) && projects.length === 0 && (
+            <div className="mb-4 rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-6 text-center">
+              <p className="text-sm font-bold text-slate-800">No projects are assigned to you yet.</p>
+              <p className="text-[13px] text-slate-500 mt-1">
+                Ask your studio to add you to a project: they tick your name under Details → Designers on this project.
+              </p>
+            </div>
+          )}
 
           {/* 2. SUPER CLEAN TOOLBAR */}
           <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-transparent pt-1 pb-3 border-b border-slate-200/50 mb-4 w-full">
@@ -1026,7 +1064,8 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
           {/* What is on screen right now, in four numbers. Every figure here
               follows the filters above it — a count that ignored them would
               contradict the cards it sits on top of. */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <div className={`grid grid-cols-2 gap-3 mb-4 ${showFinance ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+            {showFinance && (
             <div className="bg-white rounded-2xl border border-slate-200 cd-panel px-4 py-3">
               <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">
                 Book on screen
@@ -1039,6 +1078,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                 {formatClientValue(deck.pipeline)} in the pipeline
               </p>
             </div>
+            )}
 
             <div className="bg-white rounded-2xl border border-slate-200 cd-panel px-4 py-3">
               <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">
@@ -1284,8 +1324,12 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                   };
 
                   const conditions = getConditions();
+                  // The studio's next move (agreements, invoices, sign-offs) is not
+                  // a Designer's; their work on a project is in the Drawing Tracker.
                   const nextMove =
-                    DORMANT.includes(metrics.status) ? null : intel.get(project.id)?.action || null;
+                    DORMANT.includes(metrics.status) || isDesignerRole(currentRole)
+                      ? null
+                      : intel.get(project.id)?.action || null;
 
                   return (
                     <motion.div
@@ -1382,8 +1426,12 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                     </span>
                                   )}
                                 </div>
-                                <span className="text-[10px] text-slate-400 font-semibold tracking-wider shrink-0 mt-0.5">
-                                  {timeAgo(project.lastModified)}
+                                <span className="flex items-center gap-2 shrink-0">
+                                  {/* A3: who designs this project, changeable from the card. */}
+                                  <ProjectTeamButton project={project} size="sm" align="right" />
+                                  <span className="text-[10px] text-slate-400 font-semibold tracking-wider mt-0.5">
+                                    {timeAgo(project.lastModified)}
+                                  </span>
                                 </span>
                               </div>
                               
@@ -1581,7 +1629,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                     })()
                                   ) : (
                                     <span className="flex-1 px-2 py-1 text-[11px] font-medium text-slate-400">
-                                      Nothing waiting
+                                      {isDesignerRole(currentRole) ? 'Open to see your drawings' : 'Nothing waiting'}
                                     </span>
                                   )}
                                 </div>
@@ -1716,6 +1764,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                                 {formatClientValue(total)}
                                               </p>
                                             </div>
+                                            {showFinance && (
                                             <div className="text-right">
                                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mb-0.5">
                                                 Margin
@@ -1727,6 +1776,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                                 %
                                               </p>
                                             </div>
+                                            )}
                                           </div>
                                         );
                                       })}

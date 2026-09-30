@@ -28,6 +28,8 @@ import { id as generateId } from '../../lib/utils';
 import DocumentRenderer from '../documents/DocumentRenderer';
 import ScopeRevisionSheet from '../documents/ScopeRevisionSheet';
 import DocumentReadingRoom from '../client/DocumentReadingRoom';
+import { useOrg } from '../../contexts/OrgContext';
+import { seesStudioFinance } from '../../lib/roleAccess';
 
 /**
  * SCOPE REVISION — one screen for changing a signed scope.
@@ -658,6 +660,8 @@ function RevisionEditor({
   const draft: ScopeDraft = useMemo(() => draftOfRecord(rec, signed, base.boq, bankMap), [rec, signed, base.boq, bankMap]);
   const result = useMemo(() => revisionFromDraft(signed, draft), [signed, draft]);
   const margin = useMemo(() => draftMargin(signed, draft, result), [signed, draft, result]);
+  // The "Studio only" margin panel is studio finance (lib/roleAccess).
+  const finance = seesStudioFinance(useOrg().currentRole);
   const editable = rec.status === 'draft';
   const signedByClient = !!issue?.clientSignature;
   const stage = rec.status === 'draft' ? 0 : signedByClient ? 2 : 1;
@@ -1069,6 +1073,7 @@ function RevisionEditor({
             <p className="text-[11px] text-slate-400 mt-2.5">Six parts, always adding up to the change. The client sees the same breakdown.</p>
           </div>
 
+          {finance && (
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-4">
             <div className="flex items-center gap-2.5 mb-3"><Ic3 icon={Percent} tint="gold" size="sm" /><span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-500">Margin</span><span className="text-[9.5px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 rounded px-1.5 py-0.5">Studio only</span></div>
             {margin.lines === 0 ? <p className="text-[12px] text-slate-500">No changed lines yet.</p> : (
@@ -1081,6 +1086,7 @@ function RevisionEditor({
             )}
             <p className="text-[11px] text-slate-400 mt-2">Excel lines take their cost from the costing sheet; bank lines keep theirs. Never in a client document.</p>
           </div>
+          )}
 
           {draft.excel && draft.excel.basisDetected !== 1 && newLineBasisDelta && (
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-4">
@@ -1309,6 +1315,8 @@ const ItemPicker: React.FC<{
 }> = ({ bank, rooms, room: initialRoom, replacing, onClose, onBank, onCustom }) => {
   const [q, setQ] = useState(replacing ? '' : '');
   const [room, setRoom] = useState(initialRoom);
+  // A custom line's cost and margin are studio finance (lib/roleAccess).
+  const finance = seesStudioFinance(useOrg().currentRole);
   const [custom, setCustom] = useState(false);
   const [v, setV] = useState({ name: '', unit: 'nos', qty: '1', rate: '', cost: '', description: '' });
   const hits = useMemo(() => {
@@ -1365,9 +1373,9 @@ const ItemPicker: React.FC<{
             <label className="space-y-1"><span className="text-[11px] text-slate-500">Unit</span><select value={v.unit} onChange={e => setV({ ...v, unit: e.target.value })} className="w-full border border-slate-200 rounded-xl px-2 py-2">{UNITS.map(u => <option key={u}>{u}</option>)}</select></label>
             <label className="space-y-1"><span className="text-[11px] text-slate-500">Quantity</span><input type="number" value={v.qty} onChange={e => setV({ ...v, qty: e.target.value })} className="sw-num w-full border border-slate-200 rounded-xl px-3 py-2 text-right" /></label>
             <label className="space-y-1"><span className="text-[11px] text-slate-500">Rate (net, per unit)</span><input type="number" value={v.rate} onChange={e => setV({ ...v, rate: e.target.value })} className="sw-num w-full border border-slate-200 rounded-xl px-3 py-2 text-right" /></label>
-            <label className="space-y-1"><span className="text-[11px] text-slate-500">Your cost <span className="text-slate-400">· studio only</span></span><input type="number" value={v.cost} onChange={e => setV({ ...v, cost: e.target.value })} placeholder="optional" className="sw-num w-full border border-slate-200 rounded-xl px-3 py-2 text-right" /></label>
+            <label className={`space-y-1 ${finance ? '' : 'hidden'}`}><span className="text-[11px] text-slate-500">Your cost <span className="text-slate-400">· studio only</span></span><input type="number" value={v.cost} onChange={e => setV({ ...v, cost: e.target.value })} placeholder="optional" className="sw-num w-full border border-slate-200 rounded-xl px-3 py-2 text-right" /></label>
             <div className="col-span-2 sm:col-span-4 flex items-center justify-between pt-1">
-              <span className="text-[11.5px] text-slate-500 tabular-nums">{ok ? `Amount ${inr(Number(v.qty) * Number(v.rate))}${Number(v.cost) > 0 ? ` · margin ${(((Number(v.rate) - Number(v.cost)) / Number(v.rate)) * 100).toFixed(1)}%` : ' · 0% margin without a cost'}` : 'Name, quantity and rate are needed.'}</span>
+              <span className="text-[11.5px] text-slate-500 tabular-nums">{ok ? `Amount ${inr(Number(v.qty) * Number(v.rate))}${!finance ? '' : Number(v.cost) > 0 ? ` · margin ${(((Number(v.rate) - Number(v.cost)) / Number(v.rate)) * 100).toFixed(1)}%` : ' · 0% margin without a cost'}` : 'Name, quantity and rate are needed.'}</span>
               <button disabled={!ok} onClick={() => onCustom(room, { name: v.name.trim(), unit: v.unit, qty: Number(v.qty), rate: Number(v.rate), cost: Number(v.cost) > 0 ? Number(v.cost) : null, description: v.description.trim() || undefined })} className="px-4 py-2 rounded-xl bg-[#3D52A0] disabled:bg-slate-300 text-white text-[12.5px] font-bold cursor-pointer">{replacing ? 'Replace' : 'Add to the draft'}</button>
             </div>
           </div>

@@ -45,7 +45,7 @@ const STAGE_DETAILS_FOR_SYNC = [
 ];
 
 const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectContext, setActiveTab, setProjectContext, activeProject, tiers, projectId, projectArchitecture, onUpgradeArchitecture, onModifyBrief }) => {
-    const { orgData } = useOrg();
+    const { orgData, currentRole } = useOrg();
     const studioId = orgData?.tenantId || 'demo-tenant-01';
     const [selections, setSelections] = useState<any[]>([]);
 
@@ -92,7 +92,9 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectConte
         : (journey.overall.done === journey.overall.total ? PHASES.length - 1 : 0);
     const isMismatch = (currentStageNum - 1) !== actualPhaseIdx;
 
-    const currentUserRole = orgData?.role || 'Admin';
+    // The signed-in role. `orgData.role` does not exist on the studio record,
+    // so this always read "Admin" and nothing below was ever restricted.
+    const currentUserRole = currentRole || 'Admin';
     const nextActionsCtx = {
         project: projectContext,
         designPaymentStages: projectContext.paymentMilestones,

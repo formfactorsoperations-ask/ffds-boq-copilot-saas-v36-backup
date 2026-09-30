@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, Coins, Tag, ChevronDown, ChevronUp, AlignLeft, Info, Sparkles, AlertCircle, Percent } from 'lucide-react';
 import { refineItemSpecs, generateLumpsumBreakdown } from '../services/geminiService';
 import { MarginDeviationIndicator } from './MarginDeviationIndicator';
+import { useOrg } from '../contexts/OrgContext';
+import { seesStudioFinance } from '../lib/roleAccess';
 
 interface BoqItemCardProps {
   item: FullBoqItem;
@@ -116,6 +118,9 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
   const [isGeneratingBreakdown, setIsGeneratingBreakdown] = useState(false);
   
   const sellPrice = useMemo(() => calculateSellPrice(item.materials, item.labor, item.margin), [item.materials, item.labor, item.margin]);
+  // Cost, margin and profit are studio finance (lib/roleAccess); the sell rate is not.
+  const { currentRole } = useOrg();
+  const finance = seesStudioFinance(currentRole);
   const totalLineItem = sellPrice * item.qty;
   const categoryStyle = getCategoryStyle(item.cat);
 
@@ -361,7 +366,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                             />
                         </div>
                         {/* Cost */}
-                        <div>
+                        <div className={finance ? '' : 'hidden'}>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Cost (₹)</label>
                             <div className="flex gap-1">
                                 <EditableField 
@@ -534,7 +539,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
         <div className="bg-gradient-to-r from-slate-50 to-white border-t border-slate-100 p-3 px-4 flex flex-wrap items-center justify-between gap-4 relative overflow-hidden">
             
             {/* Visual Profit Progress Bar Background (Subtle) */}
-            <div className="absolute bottom-0 left-0 h-0.5 bg-slate-100 w-full">
+            <div className={`absolute bottom-0 left-0 h-0.5 bg-slate-100 w-full ${finance ? '' : 'hidden'}`}>
                 <motion.div 
                     initial={{ width: 0 }} 
                     animate={{ width: `${Math.min(100, Math.max(0, (sellPrice - (item.materials + item.labor)) / sellPrice * 100))}%` }} 
@@ -545,6 +550,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
 
             {/* Rates Area */}
             <div className="flex items-center gap-5 relative z-10">
+                {finance && (<>
                 <div className="group/cost cursor-help">
                      <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
                         <Coins className="w-2.5 h-2.5" /> Base Cost
@@ -568,6 +574,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                      </div>
                 </div>
                 <div className="w-px h-6 bg-slate-200"></div>
+                </>)}
                 <div className="group/sell">
                      <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
                         <Tag className="w-2.5 h-2.5" /> Sell Rate
@@ -575,7 +582,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                      <div className="flex items-center gap-2">
                         <div className="font-bold text-slate-800 text-xs group-hover/sell:text-[#3D52A0] transition-colors">{formatCurrency(sellPrice)}</div>
                         {/* Profit Tag */}
-                        <div className="hidden sm:flex items-center gap-0.5 text-[9px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded font-bold border border-emerald-100" title="Profit per item">
+                        <div className={`hidden items-center gap-0.5 text-[9px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded font-bold border border-emerald-100 ${finance ? 'sm:flex' : ''}`} title="Profit per item">
                             +{formatCurrency(sellPrice - (item.materials + item.labor))}
                         </div>
                      </div>

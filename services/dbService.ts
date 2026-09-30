@@ -1821,4 +1821,45 @@ const CloudStrategy: DBService = {
 // --- EXPORTED INSTANCE ---
 // Wrapped in the audit decorator so every DB read/write is logged for the
 // Data trail / diagnostics view (services/dbAudit.ts). Transparent to callers.
-export const db = auditDb(isFirebaseConfigured() ? CloudStrategy : LocalStrategy);
+/*
+  A view-only session writes nothing through here.
+
+  A Designer may look at a project but change only its drawings, which the
+  Drawing Tracker writes directly to its own records. Everything that passes
+  through this service -- the project save, which also fires by itself when a
+  project opens and its derived state settles, the bank, templates, schedules --
+  becomes a no-op for them, so opening a project can never rewrite it. The
+  Firestore rules refuse the same writes; this keeps the app from attempting
+  them and failing noisily.
+
+  The role is read from the value App keeps in step with the signed-in
+  account (see the authProfile effect in App.tsx).
+*/
+const WRITE_METHODS = new Set([
+  'saveProject', 'upgradeLegacyProject', 'deleteProject', 'saveBank', 'saveDraftBank', 'saveTemplates',
+  'seedMasterData', 'syncLocalToCloud', 'saveOrganizationProfile', 'seedDefaultTemplates',
+  'seedRewrittenTemplates', 'saveVendors', 'savePurchaseOrders', 'saveObservations', 'saveSchedule',
+  'deleteSchedule',
+]);
+
+const viewOnlySession = (): boolean => {
+  try { return localStorage.getItem('ffds_current_role') === 'Designer'; } catch { return false; }
+};
+
+function viewOnlyGuard<T extends object>(svc: T): T {
+  return new Proxy(svc, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value !== 'function' || !WRITE_METHODS.has(String(prop))) return value;
+      return (...args: any[]) => {
+        if (viewOnlySession()) {
+          console.info(`View-only session: ${String(prop)} was not saved.`);
+          return Promise.resolve();
+        }
+        return (value as Function).apply(target, args);
+      };
+    },
+  });
+}
+
+export const db = viewOnlyGuard(auditDb(isFirebaseConfigured() ? CloudStrategy : LocalStrategy));

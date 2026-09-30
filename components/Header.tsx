@@ -42,9 +42,13 @@ interface SidebarProps {
 }
 
 const TABS = [
-  { id: 'home', label: 'Home', icon: Home, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor', 'Designer'] },
+  // Not for Designers: the studio home is the studio's worklist. They go
+  // straight to Projects, which lists only the projects assigned to them.
+  { id: 'home', label: 'Home', icon: Home, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor'] },
   { id: 'projects', label: 'Projects', icon: Building2, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor', 'Designer'] },
-  { id: 'clients', label: 'Clients', icon: Users, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor', 'Designer'] },
+  // Not for Designers: the client list carries account values, and a Designer's
+  // work is reached through their assigned projects.
+  { id: 'clients', label: 'Clients', icon: Users, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor'] },
   { id: 'reports', label: 'Reports', icon: BarChart3, section: 'STUDIO', roles: ['Admin', 'Ops Director'] },
   
   { id: 'studio-settings', label: 'Studio Settings', icon: Settings, section: 'STUDIO ADMIN', roles: ['Admin', 'Ops Director'] },
@@ -418,6 +422,14 @@ const Sidebar: React.FC<SidebarProps> = ({
             className="group flex items-center gap-2 pl-1 pr-1.5 py-1 rounded-xl hover:bg-sky-50/80
                        transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7091E6]/60"
           >
+            {/* Who is signed in, always in view: name and role. The email is
+                in the menu below. */}
+            <span className="hidden md:flex items-center gap-2 min-w-0 pl-1">
+              <span className="text-[12.5px] font-extrabold text-slate-800 truncate max-w-[140px]">{userName}</span>
+              <span className="text-[9.5px] font-extrabold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full bg-[#E8ECFB] text-[#3D52A0] whitespace-nowrap">
+                {currentRole}
+              </span>
+            </span>
             <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#4C65B5] to-[#3D52A0] text-white
                              flex items-center justify-center font-black text-[13px] shrink-0
                              ring-1 ring-[#7091E6]/45 shadow-[0_2px_10px_rgba(61, 82, 160,.30)]
@@ -448,6 +460,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                   </span>
                   <div className="min-w-0">
                     <p className="text-[13px] font-extrabold text-slate-900 truncate leading-tight">{userName}</p>
+                    {currentUserAuth?.email && (
+                      <p className="text-[11px] text-slate-500 truncate leading-tight mt-0.5" title={currentUserAuth.email}>{currentUserAuth.email}</p>
+                    )}
                     <p className="text-[9.5px] font-mono font-bold text-[#3D52A0] uppercase tracking-[0.14em] mt-0.5">
                       {currentRole}
                     </p>

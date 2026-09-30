@@ -9,7 +9,8 @@ export interface FloatingDockItem {
   icon: React.ReactNode;
   href?: string;
   onClick?: () => void;
-  badge?: string | null;
+  /** Text, or a small icon (the read-only eye on a Designer's tabs). */
+  badge?: React.ReactNode;
   badgeTone?: 'alert' | 'ok' | 'warn' | 'neutral' | null;
   isActive?: boolean;
   key?: React.Key;

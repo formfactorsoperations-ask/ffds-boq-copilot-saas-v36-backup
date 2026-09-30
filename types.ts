@@ -1306,6 +1306,12 @@ export interface DrawingTrackerItem {
         clientApprovalRef: any | null;
     };
     comments?: DrawingComment[];
+    pendingReview?: {
+        roundNumber: number;
+        submittedAt: number;
+        submittedBy?: string;
+        note?: string;
+    } | null;
 }
 
 export interface AggregatedCategory {

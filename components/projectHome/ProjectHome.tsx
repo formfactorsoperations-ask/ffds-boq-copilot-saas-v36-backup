@@ -48,6 +48,7 @@ import {
 } from '../../lib/projectHome';
 import { Icon, Ring, UiProvider, useUi, useCountUp, useArmed, tipProps, Glyph, GlyphName } from './bits';
 import InsightsCard, { InsightTab } from './InsightsCard';
+import { seesStudioFinance } from '../../lib/roleAccess';
 import './projectHome.css';
 
 export interface ProjectHomeProps {
@@ -112,7 +113,8 @@ function Home(p: ProjectHomeProps) {
   const ctx: any = p.projectContext || {};
   const go = (route: string) => { if (route) p.setActiveTab(route); };
   // Mirrors ProjectPnlCard, which withholds the P&L from Designers and no one else.
-  const canSeeMoney = p.currentUserRole !== 'Designer';
+  // Collections, margin and cost are studio finance (lib/roleAccess).
+  const canSeeMoney = seesStudioFinance(p.currentUserRole);
 
   /* ───────────── live records ───────────── */
   const [drawItems, setDrawItems] = useState<DrawingTrackerItem[] | null>(null);
@@ -390,13 +392,15 @@ function Home(p: ProjectHomeProps) {
           </section>
 
           {/* ═══ figures ═══ */}
-          <div className={`ph-kpis${canSeeMoney ? '' : ' k3'}`}>
+          <div className={`ph-kpis${canSeeMoney ? '' : ' k2'}`}>
+            {canSeeMoney && (
             <button className="ph-card ph-kpi ph-tilt ph-rise" style={{ animationDelay: '.06s' }} onClick={() => openInsight('money')}>
               <Ring pct={collectedPct} colour="#3F7D5B" label={payments.gross ? `${Math.round(collectedPct)}%` : '—'} />
               <div><div className="l">Collected</div>
                 <div className="v ph-num">{payments.gross ? inr(collected) : '—'}</div>
                 <div className="s">{payments.gross ? `of ${inr(payments.gross)}` : 'No payment schedule yet'}</div></div>
             </button>
+            )}
             {canSeeMoney && (
               <button className="ph-card ph-kpi ph-tilt ph-rise" style={{ animationDelay: '.09s' }} onClick={() => openInsight('cost')}>
                 <Ring pct={pnl ? pnl.currentMarginPct : 0} colour="#3D52A0" label={pnl && pnl.contractedTotal ? `${Math.round(pnl.currentMarginPct)}%` : '—'} />
@@ -451,7 +455,7 @@ function Home(p: ProjectHomeProps) {
               currentUserRole={p.currentUserRole} onOpenProcurement={() => go('materials')} />}
             activity={activity}
             activitySummary={activitySummary}
-            activityStats={{ meetings: meetCount, sites: siteCount, hours, decisions: (ctx.projectDecisions || []).length, received: payments.collected }}
+            activityStats={{ meetings: meetCount, sites: siteCount, hours, decisions: (ctx.projectDecisions || []).length, received: canSeeMoney ? payments.collected : 0 }}
             jump={jump}
             go={go}
             openHistory={p.onOpenHistory}
@@ -607,6 +611,8 @@ function buildRows(a: {
   strip: ReturnType<typeof journeyStrip>;
 }): Row[] {
   const { p, ctx, go, openInsight, drawings, payments, programmeRows, followUps } = a;
+  // Invoicing prompts carry amounts and lead to the Money screen: studio finance.
+  const finance = seesStudioFinance(p.currentUserRole);
   const rows: Row[] = [];
   // Paused: the only thing to do is resume — the header no longer carries a button for it.
   if (ctx.status === 'work_paused') {
@@ -636,7 +642,7 @@ function buildRows(a: {
   // 2 — design money behind the work it was meant to precede.
   const designDone = (p.journey.phaseProgress[1]?.pct || 0) >= 100;
   const engineHasDesignMoney = engine.some(x => /d2|d3|design advance|design.*payment/i.test(x.title));
-  const owed = designDone && !engineHasDesignMoney ? payments.due.find(r => r.type === 'design' && !r.invoiced && !/gfc|good.for.construction/i.test(r.trigger)) : undefined;
+  const owed = finance && designDone && !engineHasDesignMoney ? payments.due.find(r => r.type === 'design' && !r.invoiced && !/gfc|good.for.construction/i.test(r.trigger)) : undefined;
   if (owed) {
     rows.push({
       key: `pay-${owed.id}`, tone: 'gold', icon: <Glyph name="invoice" />, title: <>Invoice {owed.name} · {inr(owed.amount)}</>,
@@ -648,7 +654,7 @@ function buildRows(a: {
   // 3 — the Ops Matrix's next step, checked against the Drawing Tracker.
   const ns = p.journey.nextStep;
   if (ns) {
-    const gfcMoney = payments.due.find(r => !r.invoiced && /gfc|good.for.construction/i.test(r.trigger));
+    const gfcMoney = finance && payments.due.find(r => !r.invoiced && /gfc|good.for.construction/i.test(r.trigger));
     if (ns.id === 'working_drawings_done' && drawings && drawings.total > 0 && drawings.issued < drawings.total) {
       rows.push({
         key: 'drawings', tone: 'b', icon: <Glyph name="plan" />, title: 'Issue the working drawings',

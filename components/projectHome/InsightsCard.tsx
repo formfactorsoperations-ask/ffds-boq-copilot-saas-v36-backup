@@ -39,9 +39,10 @@ export default function InsightsCard(p: Props) {
   const tabs = useMemo(() => {
     const t: { id: InsightTab; label: string; icon: React.ReactNode; owner?: boolean }[] = [
       { id: 'draw', label: 'Drawings', icon: Icon.grid() },
-      { id: 'money', label: 'Payments', icon: Icon.money() },
-      { id: 'prog', label: 'Programme', icon: Icon.bars() },
     ];
+    // Collections are studio finance, like cost and margin below.
+    if (p.canSeeMoney) t.push({ id: 'money', label: 'Payments', icon: Icon.money() });
+    t.push({ id: 'prog', label: 'Programme', icon: Icon.bars() });
     if (p.canSeeMoney) t.push({ id: 'cost', label: 'Cost & margin', icon: Icon.pie(), owner: true });
     t.push({ id: 'act', label: 'Activity', icon: Icon.pulse() });
     return t;
@@ -59,7 +60,7 @@ export default function InsightsCard(p: Props) {
     return null;
   });
   const tab = chosen || stageDefault;
-  const valid = tabs.some(t => t.id === tab) ? tab : (tabs.some(t => t.id === stageDefault) ? stageDefault : 'money');
+  const valid = tabs.some(t => t.id === tab) ? tab : (tabs.some(t => t.id === stageDefault) ? stageDefault : tabs[0].id);
 
   const choose = (t: InsightTab) => {
     setTab(t);

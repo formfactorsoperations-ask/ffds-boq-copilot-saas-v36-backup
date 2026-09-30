@@ -5,6 +5,8 @@ import { formatCurrency, calculateSellPrice } from '../lib/utils';
 import BoqItemCard from './BoqItemCard';
 import { AddToCartIcon } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useOrg } from '../contexts/OrgContext';
+import { seesStudioFinance } from '../lib/roleAccess';
 
 interface RoomCardProps {
   room: Room;
@@ -36,6 +38,9 @@ const RoomCard: React.FC<RoomCardProps> = ({
   onSaveAsBundle
 }) => {
   const [isMarkupOpen, setIsMarkupOpen] = useState(false);
+  // Setting margins is studio finance (lib/roleAccess).
+  const { currentRole } = useOrg();
+  const finance = seesStudioFinance(currentRole);
   const [isBulkActionsOpen, setIsBulkActionsOpen] = useState(false);
   const [markupValue, setMarkupValue] = useState(20);
   const [bulkMarkupValue, setBulkMarkupValue] = useState(20);
@@ -117,7 +122,8 @@ const RoomCard: React.FC<RoomCardProps> = ({
             <div className="flex items-center gap-2 relative">
                 {items.length > 0 && (
                     <>
-                        <button 
+                        {finance && (
+                        <button
                             onClick={() => {
                                 setIsMarkupOpen(!isMarkupOpen);
                                 setIsBulkActionsOpen(false);
@@ -125,6 +131,7 @@ const RoomCard: React.FC<RoomCardProps> = ({
                             className="px-3 py-2 bg-white text-slate-600 font-bold rounded-xl shadow-sm border border-slate-200 hover:bg-slate-50 transition-all text-xs whitespace-nowrap">
                             Set margin
                         </button>
+                        )}
 
                         <button 
                             onClick={() => {
@@ -157,7 +164,7 @@ const RoomCard: React.FC<RoomCardProps> = ({
                                 
                                 <div className="space-y-4 text-xs">
                                     {/* Margin / Markup override */}
-                                    <div className="border-b border-slate-100 pb-3">
+                                    <div className={`border-b border-slate-100 pb-3 ${finance ? '' : 'hidden'}`}>
                                         <label className="block font-bold text-slate-700 mb-1.5">Apply Margin % to Room Items</label>
                                         <div className="flex gap-2">
                                             <input 

@@ -2,8 +2,9 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { ProjectContext } from '../types';
 import { useOrg } from '../contexts/OrgContext';
-import { 
-  projectDocumentsFor, 
+import { seesStudioFinance } from '../lib/roleAccess';
+import {
+  projectDocumentsFor,
   docRoute, 
   DocMeta, 
   buildSigningUrl, 
@@ -61,8 +62,10 @@ export default function DocumentsHub({ projectContext, onNavigate, projectId, ac
 
   const actualProjectId = projectId || (projectContext as any)?.id;
 
-  const { orgData } = useOrg();
-  const isDesigner = orgData?.role === 'designer';
+  const { orgData, currentRole } = useOrg();
+  /* Was `orgData.role === 'designer'`: the studio record has no role, so this
+     was never true and nobody's documents were filtered. */
+  const isDesigner = !seesStudioFinance(currentRole);
   const lifecycle = projectContext?.lifecycle;
   const currentStage = lifecycle?.stage || 1;
   const isExecutionGateOpen = !!lifecycle?.gates?.designGateActive?.done;

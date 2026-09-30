@@ -10,6 +10,7 @@ import {
   AttentionState, isHidden, writeAttentionEntry, TOMORROW_9AM, NEXT_WEEK,
 } from "../services/attentionState";
 import StudioFooter from "./home/StudioFooter";
+import { isDesignerRole, seesStudioFinance } from "../lib/roleAccess";
 import {
   ArrowRight, CheckCircle2, ChevronDown, Plus, Sparkles, Clock, Wallet, Zap, Layers3, Check, BellOff,
   LayoutGrid, Users, BarChart3, Store, FileSignature, Boxes,
@@ -149,7 +150,9 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
         map.set(id, {
           project: w.project,
           actions: [],
-          value: getSingleProjectValue(w.project) || 0,
+          // Project values are studio finance (lib/roleAccess): zero for anyone
+          // else, which also drops every "held up" figure built from them.
+          value: seesStudioFinance(role) ? (getSingleProjectValue(w.project) || 0) : 0,
           worst: w.action.priority,
           /* Days since anyone touched this at all. The dimension this list was
              missing: something blocked since June is a different problem from
@@ -474,8 +477,10 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
 
                 {/* Bullseye. Sits outside the rings rather than on the inner
                     one, so it needs no counter-rotation and never wobbles. */}
+                {/* A Designer does not start projects; the centre takes them
+                    to the ones they are assigned instead. */}
                 <button
-                  onClick={onCreateNew}
+                  onClick={isDesignerRole(role) ? () => onNavigate('projects') : onCreateNew}
                   className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[168px] h-[168px] rounded-full flex flex-col items-center justify-center gap-1.5 text-white transition-transform hover:scale-[1.04] cursor-pointer"
                   style={{
                     background: `linear-gradient(150deg, ${BRAND}, #334486)`,
@@ -483,8 +488,8 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
                   }}
                 >
                   <Plus className="w-8 h-8" strokeWidth={2.2} />
-                  <span className="text-[15px] font-semibold">New project</span>
-                  <span className="text-[11px] text-white/70">Start from scratch</span>
+                  <span className="text-[15px] font-semibold">{isDesignerRole(role) ? 'Your projects' : 'New project'}</span>
+                  <span className="text-[11px] text-white/70">{isDesignerRole(role) ? 'The ones assigned to you' : 'Start from scratch'}</span>
                 </button>
               </div>
             </div>
@@ -552,8 +557,10 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
                 {[
                   { key: "oldest", icon: Clock, eyebrow: "Ignored longest",
                     line: (r: any) => idleLabel(r.idle) },
-                  { key: "biggest", icon: Wallet, eyebrow: "Most at stake",
-                    line: (r: any) => formatCompactINR(r.value) },
+                  { key: "biggest", icon: Wallet, eyebrow: seesStudioFinance(role) ? "Most at stake" : "Most to do",
+                    line: (r: any) => seesStudioFinance(role)
+                      ? formatCompactINR(r.value)
+                      : `${r.actions.length} action${r.actions.length === 1 ? "" : "s"} open` },
                   { key: "quickest", icon: Zap, eyebrow: "Quickest win",
                     line: (r: any) =>
                       `${r.actions.length} action${r.actions.length === 1 ? "" : "s"} to clear` },
@@ -848,12 +855,7 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
         </div>
         </div>
 
-        <StudioFooter
-          onNavigate={onNavigate}
-          activeCount={data.activeCount}
-          clientsCount={data.clientsCount}
-          openValue={data.openValue}
-        />
+        <StudioFooter onNavigate={onNavigate} />
       </div>
     </motion.div>
   );

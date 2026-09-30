@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
+    const env = loadEnv(mode, process.cwd(), '');
     return {
       server: {
         port: 3000,
@@ -23,8 +23,27 @@ export default defineConfig(({ mode }) => {
         outDir: 'dist',
         emptyOutDir: true,
         reportCompressedSize: false,
-        chunkSizeWarningLimit: 5000,
-        target: 'esnext'
+        chunkSizeWarningLimit: 2000,
+        target: 'esnext',
+        minify: false,
+        rollupOptions: {
+          maxParallelFileOps: 1,
+          output: {
+            manualChunks(id) {
+              if (id.includes('node_modules/exceljs/')) return 'vendor-exceljs';
+              if (id.includes('node_modules/xlsx/')) return 'vendor-xlsx';
+              if (id.includes('node_modules/jspdf/')) return 'vendor-jspdf';
+              if (id.includes('node_modules/html2pdf.js/') || id.includes('node_modules/html2canvas/')) return 'vendor-html2pdf';
+              if (id.includes('node_modules/firebase/') || id.includes('node_modules/@firebase/')) return 'vendor-firebase';
+              if (id.includes('node_modules/lucide-react/')) return 'vendor-lucide';
+              if (id.includes('node_modules/framer-motion/')) return 'vendor-framer';
+              if (id.includes('node_modules/recharts/')) return 'vendor-recharts';
+              if (id.includes('node_modules/d3') || id.includes('node_modules/d3-')) return 'vendor-d3';
+              if (id.includes('node_modules/@google/genai/')) return 'vendor-genai';
+              if (id.includes('node_modules/date-fns/')) return 'vendor-datefns';
+            }
+          }
+        }
       },
       optimizeDeps: {
         include: [
@@ -54,6 +73,7 @@ export default defineConfig(({ mode }) => {
         tailwindcss(),
         react(),
         VitePWA({
+          disable: true,
           registerType: 'autoUpdate',
           includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
           manifest: {
@@ -88,8 +108,8 @@ export default defineConfig(({ mode }) => {
             ]
           },
           workbox: {
-            maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
-            globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+            maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+            globPatterns: ['**/*.{css,html,ico,png,svg,woff,woff2}'],
             runtimeCaching: [
               {
                 urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

@@ -282,9 +282,11 @@ export default function PlatformAdminConsole() {
       const tenantId = 'tenant_' + Math.random().toString(36).slice(2, 11);
       const adminEmail = form.adminEmail.trim().toLowerCase();
       /*
-        The admin goes on the team as Owner. Sign-in grants studio access from
+        The admin goes on the team as Admin. Sign-in grants studio access from
         a studio's team list and nothing else, so an admin email recorded only
         in `adminEmail` would be turned away at the door of their own studio.
+        Admin rather than Owner: Owner is not in the Team screen's role list,
+        and Studio settings only lets Admin, Ops Director or Super Admin edit.
       */
       await setDoc(doc(db, 'organizations', tenantId), {
         tenantId,
@@ -296,7 +298,7 @@ export default function PlatformAdminConsole() {
         city: form.city,
         createdAt: new Date().toISOString(),
         team: adminEmail
-          ? [{ id: `tm-${Date.now()}`, name: form.contact || adminEmail, email: adminEmail, role: 'Owner', status: 'Pending', title: '' }]
+          ? [{ id: `tm-${Date.now()}`, name: form.contact || adminEmail, email: adminEmail, role: 'Admin', status: 'Pending', title: '' }]
           : [],
       });
       if (adminEmail) {

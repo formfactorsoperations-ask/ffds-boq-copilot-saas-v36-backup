@@ -1,0 +1,76 @@
+/*
+  The project header (H1 from the header mockups): one bar that never wraps,
+  with a little life in it. Every animation here is decorative and is switched
+  off for anyone who asks their system for less motion.
+*/
+
+/* Items arrive in a short stagger when a project opens. */
+.phd-enter > * { animation: phd-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.phd-enter > *:nth-child(2) { animation-delay: 0.03s; }
+.phd-enter > *:nth-child(3) { animation-delay: 0.06s; }
+.phd-enter > *:nth-child(4) { animation-delay: 0.09s; }
+.phd-enter > *:nth-child(5) { animation-delay: 0.12s; }
+.phd-enter > *:nth-child(6) { animation-delay: 0.15s; }
+.phd-enter > *:nth-child(7) { animation-delay: 0.18s; }
+.phd-enter > *:nth-child(8) { animation-delay: 0.21s; }
+@keyframes phd-rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+/* The project's tile, with a slow sheen passing over it. */
+.phd-tile {
+  position: relative; overflow: hidden; flex-shrink: 0;
+  width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(140deg, #4C65B5, #334486);
+  box-shadow: 0 6px 16px -8px rgba(61, 82, 160, 0.7);
+}
+.phd-tile::after {
+  content: ""; position: absolute; inset: -40%;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.35) 50%, transparent 60%);
+  transform: translateX(-60%); animation: phd-sheen 6s ease-in-out infinite;
+}
+@keyframes phd-sheen { 0%, 72% { transform: translateX(-60%); } 100% { transform: translateX(60%); } }
+
+/* The status dot breathes. */
+.phd-dot { position: relative; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.phd-dot::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid currentColor;
+  opacity: 0; animation: phd-ping 2.4s ease-out infinite;
+}
+@keyframes phd-ping { 0% { transform: scale(0.4); opacity: 0.7; } 100% { transform: scale(1.6); opacity: 0; } }
+
+/* Progress ring: fills to its value once, on arrival. */
+.phd-ring { position: relative; width: 38px; height: 38px; flex-shrink: 0; }
+.phd-ring svg { width: 38px; height: 38px; transform: rotate(-90deg); }
+.phd-ring circle { fill: none; stroke-width: 4; }
+.phd-ring .bg { stroke: #E2E5F0; }
+.phd-ring .fg { stroke: #3D52A0; stroke-linecap: round; transition: stroke-dashoffset 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
+.phd-ring span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #3D52A0; }
+
+/* Team faces spread apart when you reach for them. */
+.phd-faces { display: flex; align-items: center; }
+.phd-face {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 10.5px; font-weight: 800; color: #fff; border: 2px solid #fff; margin-left: -8px;
+  transition: margin 0.25s cubic-bezier(0.22, 1, 0.36, 1), transform 0.25s;
+}
+.phd-face:first-child { margin-left: 0; }
+.phd-faces:hover .phd-face { margin-left: 2px; }
+.phd-faces:hover .phd-face:first-child { margin-left: 0; }
+.phd-faces.sm .phd-face { width: 22px; height: 22px; font-size: 9px; }
+.phd-face.add { background: #F6F7FB; color: #3D52A0; border: 2px dashed #C9D0E6; }
+
+/* Popovers and the details drawer. */
+.phd-pop { animation: phd-pop 0.2s cubic-bezier(0.22, 1, 0.36, 1); transform-origin: top right; }
+@keyframes phd-pop { from { opacity: 0; transform: scale(0.96) translateY(-4px); } }
+.phd-drawer { animation: phd-slide 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes phd-slide { from { transform: translateX(28px); opacity: 0; } }
+.phd-scrim { animation: phd-fade 0.2s ease-out; }
+@keyframes phd-fade { from { opacity: 0; } }
+
+/* Small icon buttons lift a little on hover. */
+.phd-lift { transition: transform 0.2s, background-color 0.2s, color 0.2s; }
+.phd-lift:hover { transform: translateY(-2px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .phd-enter > *, .phd-tile::after, .phd-dot::after, .phd-pop, .phd-drawer, .phd-scrim { animation: none !important; }
+  .phd-ring .fg, .phd-face, .phd-lift { transition: none !important; }
+}
