@@ -13,7 +13,7 @@ import { db as dbService } from '../../services/dbService';
 import { db as firestore } from '../../services/firebaseClient';
 import { doc, updateDoc } from 'firebase/firestore';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
-import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
+import { downloadSectionsAsPdf, PDF_CONTENT_WIDTH_PX } from '../../lib/documentPdf';
 import DigitalSignatureDocketView from '../common/DigitalSignatureDocket';
 import DigitalSignaturePad from '../common/DigitalSignaturePad';
 import ManualAcceptanceOverrideModal from '../ops/ManualAcceptanceOverrideModal';
@@ -174,6 +174,19 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
         updateOverride('advances', currentMilestones);
     };
 
+    /*
+      The agreement is laid out on screen as A4 "page cards" with grey gaps
+      between them, and each card grows past A4 when its section is long. The
+      old export (html2pdf) cut that whole strip at fixed A4 heights, so cuts
+      fell mid-section: half-empty pages, grey bands, and the cards' own
+      "Page 1" footers in the middle of a page.
+
+      Now the sheets are laid out as print for the capture (no cards, no
+      gaps), and each section goes through the shared document PDF builder on
+      its own: every section starts a new page, a clause or table row is never
+      cut in two, and the page header, footer and "Page x of y" are drawn on
+      every page.
+    */
     const handleDownloadPdf = () => {
         const wasEditing = isEditMode;
         if (wasEditing) {
@@ -181,59 +194,30 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
         }
         setIsGenerating(true);
 
-        setTimeout(() => {
+        setTimeout(async () => {
             const element = contentRef.current;
-            if (!element) {
-                setIsGenerating(false);
-                if (wasEditing) setIsEditMode(true);
-                return;
-            }
-
-            import('html2pdf.js').then((module) => {
-                let html2pdfObj: any;
-                const html2pdf = module as any;
-                if (typeof html2pdf === 'function') {
-                    html2pdfObj = html2pdf;
-                } else if (html2pdf && typeof html2pdf.default === 'function') {
-                    html2pdfObj = html2pdf.default;
-                } else if (html2pdf.default && typeof html2pdf.default.default === 'function') {
-                    html2pdfObj = html2pdf.default.default;
-                }
-
-                if (!html2pdfObj) {
-                    alert("PDF tools not loading");
-                    setIsGenerating(false);
-                    if (wasEditing) setIsEditMode(true);
-                    return;
-                }
-
-                const opt = {
-                    margin: [0, 0, 0, 0],
+            try {
+                if (!element) return;
+                element.classList.add('ea-printing');
+                // A timer, not animation frames: frames pause while the tab is in the background.
+                await new Promise((r) => setTimeout(r, 120));
+                const sections = Array.from(element.querySelectorAll('.ea-page')) as HTMLElement[];
+                await downloadSectionsAsPdf(sections, {
                     filename: `FFDS-Execution-Agreement-${(projectContext as any).projectId || 'Draft'}.pdf`,
-                    image: { type: 'jpeg' as const, quality: 1 },
-                    html2canvas: { 
-                        scale: 2, 
-                        useCORS: true, 
-                        letterRendering: true, 
-                        windowWidth: 800,
-                        logging: false,
-                        onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc)
-                    },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-                    pagebreak: { mode: ['css', 'legacy'] }
-                };
-
-                html2pdfObj().set(opt).from(element).toPdf().get('pdf').then((pdf: any) => {
-                    // PDF generated
-                }).save().finally(() => {
-                    setIsGenerating(false);
-                    if (wasEditing) setIsEditMode(true);
+                    title: `Integrated Execution Agreement · ${(projectContext as any)?.name || ''}`.trim(),
+                    studioName,
+                    keepTogether: '.ea-clause,.ea-box,.ea-sig-grid,.ea-avoid-break,.ea-annex-title',
+                    // A section starts on the same page when at least a third of it is left.
+                    flowWhenRemaining: 0.33,
                 });
-            }).catch(err => {
-                console.error("Failed to load html2pdf", err);
+            } catch (err) {
+                console.error('Failed to generate the agreement PDF', err);
+                alert('The PDF could not be made. Please try again.');
+            } finally {
+                element?.classList.remove('ea-printing');
                 setIsGenerating(false);
                 if (wasEditing) setIsEditMode(true);
-            });
+            }
         }, 150);
     };
 
@@ -484,6 +468,12 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                             letter-spacing: 1px;
                             font-size: 18px;
                         }
+                        /* Print layout, used while the PDF is drawn (handleDownloadPdf). */
+                        .execution-agreement-container.ea-printing { width: ${PDF_CONTENT_WIDTH_PX}px !important; min-width: ${PDF_CONTENT_WIDTH_PX}px !important; flex-shrink: 0 !important; background: #fff !important; }
+                        /* Sections run on in the PDF; the running page header names the document, so the letterhead prints once. */
+                        .ea-printing .ea-page ~ .ea-page .ea-header { display: none; }
+                        .ea-printing .ea-page { width: auto; min-height: 0; margin: 0; padding: 0 0 6px 0; page-break-after: auto; }
+                        .ea-printing .ea-footer { display: none; }
                         @media print {
                             .ea-doc { background: #fff; }
                             .ea-page { margin: 0; box-shadow: none; width: 210mm; min-height: 297mm; }
@@ -588,7 +578,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                 <tbody>
                                     <tr>
                                         <td>Execution Works Value, excluding GST</td>
-                                        <td className="ea-right font-mono font-semibold">
+                                        <td className="ea-right tabular-nums font-semibold">
                                             {isEditMode ? (
                                                 <div className="flex items-center justify-end gap-1 font-sans">
                                                     <span className="text-[11px] font-bold text-slate-500">₹</span>
@@ -617,7 +607,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                     </tr>
                                     <tr>
                                         <td>Design / Professional Fees, if billed under this Agreement</td>
-                                        <td className="ea-right font-mono font-semibold">
+                                        <td className="ea-right tabular-nums font-semibold">
                                             {isEditMode ? (
                                                 <div className="flex items-center justify-end gap-1 font-sans">
                                                     <span className="text-[11px] font-bold text-slate-500">₹</span>
@@ -650,11 +640,11 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                                 <span>GST ({gstRate}%)</span>
                                             )}
                                         </td>
-                                        <td className="ea-right font-mono font-semibold">₹ {formatCurrency(gstAmount).replace('₹','')}</td>
+                                        <td className="ea-right tabular-nums font-semibold">₹ {formatCurrency(gstAmount).replace('₹','')}</td>
                                     </tr>
                                     <tr>
                                         <td><strong>Grand Total</strong></td>
-                                        <td className="ea-right font-mono font-bold text-slate-900"><strong>₹ {formatCurrency(grandTotal).replace('₹','')}</strong></td>
+                                        <td className="ea-right tabular-nums font-bold text-slate-900"><strong>₹ {formatCurrency(grandTotal).replace('₹','')}</strong></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -900,7 +890,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                                             <span className="text-[11px] font-bold text-slate-900">%</span>
                                                         </div>
                                                     </td>
-                                                    <td className="p-2 text-right font-mono font-bold text-slate-700">
+                                                    <td className="p-2 text-right tabular-nums font-bold text-slate-700">
                                                         ₹ {formatCurrency(m.amount || (executionTotal * (m.percentage / 100))).replace('₹','')}
                                                     </td>
                                                     <td className="p-2 text-center">
@@ -945,7 +935,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                                     <td className="font-semibold text-slate-900">{m.label}</td>
                                                     <td>{m.dueCondition}</td>
                                                     <td className="font-bold text-slate-700">{m.percentage}%</td>
-                                                    <td className="font-mono font-semibold text-slate-900">₹ {formatCurrency(amount).replace('₹','')}</td>
+                                                    <td className="tabular-nums font-semibold text-slate-900">₹ {formatCurrency(amount).replace('₹','')}</td>
                                                     <td>Before stage begins</td>
                                                 </tr>
                                             );
@@ -1226,7 +1216,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                         <section className="ea-page">
                             <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Annexures</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
 
-                            <div className="ea-annex-title">Annexure A: Payment Schedule</div>
+                            <div data-pdf-keep-next className="ea-annex-title">Annexure A: Payment Schedule</div>
                             <table>
                                 <thead>
                                     <tr><th>Invoice / Stage</th><th>Trigger</th><th>Amount</th><th>GST</th><th>Total</th><th>Due Date</th><th>Unlocks</th></tr>
@@ -1273,7 +1263,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                 </tbody>
                             </table>
 
-                            <div className="ea-annex-title">Annexure B: Revision and Change Request Charges</div>
+                            <div data-pdf-keep-next className="ea-annex-title">Annexure B: Revision and Change Request Charges</div>
                             <table>
                                 <thead>
                                     <tr><th>Item</th><th>Included</th><th>Charge Beyond Included Scope</th></tr>
@@ -1286,7 +1276,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                 </tbody>
                             </table>
 
-                            <div className="ea-annex-title">Annexure C: As-Actuals and Client-Procured Items</div>
+                            <div data-pdf-keep-next className="ea-annex-title">Annexure C: As-Actuals and Client-Procured Items</div>
                             <table>
                                 <thead>
                                     <tr><th>Category</th><th>Procurement By</th><th>Payment By</th><th>{studioName} Responsibility</th><th>Notes</th></tr>
@@ -1300,7 +1290,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                 </tbody>
                             </table>
 
-                            <div className="ea-annex-title">Annexure D: Scope Exclusion Checklist</div>
+                            <div data-pdf-keep-next className="ea-annex-title">Annexure D: Scope Exclusion Checklist</div>
                             <table>
                                 <thead>
                                     <tr><th className="ea-num">No.</th><th>Item</th><th>Included?</th><th>Remarks</th></tr>
@@ -1315,7 +1305,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                 </tbody>
                             </table>
 
-                            <div className="ea-annex-title">Annexure E: Execution Start Readiness Checklist</div>
+                            <div data-pdf-keep-next className="ea-annex-title">Annexure E: Execution Start Readiness Checklist</div>
                             <p className="ea-small">This annexure is to be completed before site mobilisation. It records pre-execution dependencies so that delays caused by missing approvals, access, selections, permissions, or client-supplied items are clearly attributable.</p>
                             <table>
                                 <thead>
@@ -1335,7 +1325,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                                 </tbody>
                             </table>
 
-                            <div className="ea-annex-title mt-6">Annexure F: Final Approved BOQ & Technical Specifications</div>
+                            <div data-pdf-keep-next className="ea-annex-title mt-6">Annexure F: Final Approved BOQ & Technical Specifications</div>
                             <p className="ea-small mb-3">The execution shall strictly follow the approved Bill of Quantities (BOQ) version listed below. Any variations must be documented as Change Requests.</p>
                             
                             {Object.entries(groupedBoq).map(([room, items]) => (

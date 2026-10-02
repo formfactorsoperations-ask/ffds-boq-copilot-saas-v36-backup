@@ -25,6 +25,11 @@ const PX_PER_MM = 96 / 25.4;
 export const PDF_CONTENT_WIDTH_PX = Math.round((PAGE.w - 2 * MARGIN.side) * PX_PER_MM);
 const PAGE_CONTENT_HEIGHT_PX = Math.floor((PAGE.h - MARGIN.top - MARGIN.bottom) * PX_PER_MM);
 
+/** Headings that should not be left alone at the foot of a page. */
+const KEEP_WITH_NEXT = 'h1,h2,h3,h4,h5,[data-pdf-keep-next]';
+/** How much of what follows a heading must fit under it, in CSS pixels. */
+const KEEP_WITH_NEXT_PX = 64;
+
 /** Blocks a page break should not cut through, when they fit on a page. */
 const KEEP_TOGETHER = [
   'tr', 'h1', 'h2', 'h3', 'h4', 'h5', 'p', 'li', 'img', 'figure', 'dt', 'dd',
@@ -41,6 +46,8 @@ export interface PdfOptions {
   draft?: boolean;
   /** The document's status, marked on every page (see drawStatusMarks). */
   ribbon?: PdfRibbon | null;
+  /** More blocks a page break should not cut through, beyond KEEP_TOGETHER. */
+  keepTogether?: string;
 }
 
 export type PdfRibbonTone = 'signed' | 'approved' | 'issued' | 'draft';
@@ -162,15 +169,19 @@ export function pdfFilename(...parts: (string | number | null | undefined)[]): s
  * be cut there, in which case it ends above that thing. `[data-pdf-break-before]`
  * always starts a new page (the signature certificate does).
  */
-function pageBreaks(el: HTMLElement, pageHeight: number): number[] {
+function pageBreaks(el: HTMLElement, pageHeight: number, keep = KEEP_TOGETHER, firstHeight = pageHeight): number[] {
   const origin = el.getBoundingClientRect().top;
   const total = el.scrollHeight;
-  const blocks = Array.from(el.querySelectorAll<HTMLElement>(KEEP_TOGETHER))
+  const blocks = Array.from(el.querySelectorAll<HTMLElement>(keep))
     .map(b => {
       const r = b.getBoundingClientRect();
       return { top: r.top - origin, bottom: r.bottom - origin };
     })
     .filter(b => b.bottom - b.top > 0 && b.bottom - b.top < pageHeight * 0.9);
+  const heads = Array.from(el.querySelectorAll<HTMLElement>(KEEP_WITH_NEXT)).map(h => {
+    const r = h.getBoundingClientRect();
+    return { top: r.top - origin, bottom: r.bottom - origin };
+  });
   const forced = Array.from(el.querySelectorAll<HTMLElement>('[data-pdf-break-before]'))
     .map(b => b.getBoundingClientRect().top - origin)
     .filter(y => y > 0)
@@ -179,13 +190,18 @@ function pageBreaks(el: HTMLElement, pageHeight: number): number[] {
   const ends: number[] = [];
   let start = 0;
   while (start < total - 1) {
-    let end = Math.min(start + pageHeight, total);
+    // The first page may already be partly used by the previous section.
+    const limit = ends.length ? pageHeight : firstHeight;
+    let end = Math.min(start + limit, total);
     const hardStop = forced.find(y => y > start + 1 && y < end);
     if (hardStop !== undefined) {
       end = hardStop;
     } else if (end < total) {
-      const cut = blocks.filter(b => b.top < end && b.bottom > end && b.top > start + pageHeight * 0.3);
+      const cut = blocks.filter(b => b.top < end && b.bottom > end && b.top > start + limit * 0.3);
       if (cut.length) end = Math.min(...cut.map(b => b.top));
+      // A heading with too little of its content under it moves to the next page.
+      const orphan = heads.filter(h => h.top > start + limit * 0.3 && h.top < end && h.bottom + KEEP_WITH_NEXT_PX > end);
+      if (orphan.length) end = Math.min(end, ...orphan.map(h => h.top));
     }
     // Never stall: a page always moves forward.
     if (end <= start + 1) end = Math.min(start + pageHeight, total);
@@ -201,16 +217,17 @@ async function tools() {
   return { html2canvas: (h2c as any).default || h2c, jsPDF: (jspdf as any).jsPDF || (jspdf as any).default };
 }
 
-/**
- * Render `el` to a PDF and hand it to the browser as a download.
- *
- * `el` should be laid out at {@link PDF_CONTENT_WIDTH_PX}. It may sit off
- * screen: the clone is moved into view before it is drawn.
- */
-export async function downloadElementAsPdf(el: HTMLElement, opts: PdfOptions): Promise<void> {
-  const { html2canvas, jsPDF } = await tools();
-  if (document.fonts?.ready) await document.fonts.ready;
+/** One element drawn to a canvas, with where its pages end. */
+interface Capture {
+  canvas: HTMLCanvasElement;
+  scale: number;
+  /** Page ends, in CSS pixels from the element's top. */
+  ends: number[];
+  /** The element's width in CSS pixels; the page scales to it. */
+  width: number;
+}
 
+async function capture(el: HTMLElement, html2canvas: any, keep: string, firstPageMm?: number): Promise<Capture> {
   /* Some sheets are drawn at a fixed A4 width (the onboarding kit and the
      agreement are 794px) and ran past the 703px page area, so the capture cut
      the end off every line. The document is captured at its full natural width
@@ -224,6 +241,8 @@ export async function downloadElementAsPdf(el: HTMLElement, opts: PdfOptions): P
   // The canvas limit is about 32,767px on its long side; stay well under it.
   const scale = Math.max(0.75, Math.min(2, 30000 / Math.max(height, 1)));
   const pageHeight = Math.floor(PAGE_CONTENT_HEIGHT_PX * (width / PDF_CONTENT_WIDTH_PX));
+  const pxPerMm = width / (PAGE.w - 2 * MARGIN.side);
+  const firstHeight = firstPageMm !== undefined ? Math.floor(firstPageMm * pxPerMm) : pageHeight;
   let ends: number[] = [];
 
   el.setAttribute('data-pdf-stage', '1');
@@ -263,32 +282,46 @@ export async function downloadElementAsPdf(el: HTMLElement, opts: PdfOptions): P
         doc.head.appendChild(st);
         if ((doc as any).fonts?.ready) await (doc as any).fonts.ready;
         // Measured here, on the copy that is actually drawn.
-        ends = pageBreaks(stage || el, pageHeight);
+        ends = pageBreaks(stage || el, pageHeight, keep, firstHeight);
       },
     });
   } finally {
     el.removeAttribute('data-pdf-stage');
   }
-  if (!ends.length) ends = pageBreaks(el, pageHeight);
+  if (!ends.length) ends = pageBreaks(el, pageHeight, keep, firstHeight);
+  return { canvas, scale, ends, width };
+}
 
-  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+/**
+ * Cut a capture into A4 pages and add them to `pdf`. The first slice goes on a
+ * new page, or at `firstY` mm on the current one. Returns where the content
+ * ends on the last page, in mm from the top.
+ */
+function addPages(pdf: any, cap: Capture, startOnNewPage: boolean, firstY: number = MARGIN.top): number {
   const contentW = PAGE.w - 2 * MARGIN.side;
-  const mmPerPx = contentW / width;
+  const mmPerPx = contentW / cap.width;
   let start = 0;
-  ends.forEach((end, i) => {
-    const sliceH = Math.max(1, Math.round((end - start) * scale));
+  let bottom = MARGIN.top;
+  cap.ends.forEach((end, i) => {
+    const sliceH = Math.max(1, Math.round((end - start) * cap.scale));
     const slice = document.createElement('canvas');
-    slice.width = canvas.width;
+    slice.width = cap.canvas.width;
     slice.height = sliceH;
     const ctx = slice.getContext('2d')!;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, slice.width, slice.height);
-    ctx.drawImage(canvas, 0, Math.round(start * scale), canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-    if (i > 0) pdf.addPage();
-    pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', MARGIN.side, MARGIN.top, contentW, (end - start) * mmPerPx);
+    ctx.drawImage(cap.canvas, 0, Math.round(start * cap.scale), cap.canvas.width, sliceH, 0, 0, cap.canvas.width, sliceH);
+    if (i > 0 || startOnNewPage) pdf.addPage();
+    const y = i === 0 && !startOnNewPage ? firstY : MARGIN.top;
+    pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', MARGIN.side, y, contentW, (end - start) * mmPerPx);
+    bottom = y + (end - start) * mmPerPx;
     start = end;
   });
+  return bottom;
+}
 
+/** Running header, footer, page numbers and status marks on every page. */
+function finishPages(pdf: any, opts: PdfOptions) {
   const pages = pdf.internal.getNumberOfPages();
   const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   for (let i = 1; i <= pages; i++) {
@@ -319,6 +352,57 @@ export async function downloadElementAsPdf(el: HTMLElement, opts: PdfOptions): P
 
     if (opts.ribbon) drawStatusMarks(pdf, opts.ribbon);
   }
+}
 
+const keepSelector = (opts: PdfOptions) => (opts.keepTogether ? `${KEEP_TOGETHER},${opts.keepTogether}` : KEEP_TOGETHER);
+
+/**
+ * Render `el` to a PDF and hand it to the browser as a download.
+ *
+ * `el` should be laid out at {@link PDF_CONTENT_WIDTH_PX}. It may sit off
+ * screen: the clone is moved into view before it is drawn.
+ */
+export async function downloadElementAsPdf(el: HTMLElement, opts: PdfOptions): Promise<void> {
+  const { html2canvas, jsPDF } = await tools();
+  if (document.fonts?.ready) await document.fonts.ready;
+  const cap = await capture(el, html2canvas, keepSelector(opts));
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  addPages(pdf, cap, false);
+  finishPages(pdf, opts);
+  pdf.save(opts.filename);
+}
+
+/**
+ * Render a long document section by section: each section starts a new page,
+ * and is drawn on its own so the whole document never has to fit one canvas.
+ * A 25-page agreement drawn as one canvas comes out at the lowest scale the
+ * canvas limit allows; drawn per section, every page stays sharp.
+ */
+export async function downloadSectionsAsPdf(
+  sections: HTMLElement[],
+  opts: PdfOptions & {
+    /**
+     * Let a section continue on the page the previous one ended on, when at
+     * least this share of a page is left (0 to 1). Off: every section starts
+     * a new page.
+     */
+    flowWhenRemaining?: number;
+  },
+): Promise<void> {
+  if (!sections.length) throw new Error('Nothing to print.');
+  const { html2canvas, jsPDF } = await tools();
+  if (document.fonts?.ready) await document.fonts.ready;
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const keep = keepSelector(opts);
+  const contentH = PAGE.h - MARGIN.top - MARGIN.bottom;
+  const GAP = 6;
+  let bottom: number | null = null;
+  for (const section of sections) {
+    const remaining = bottom === null ? contentH : PAGE.h - MARGIN.bottom - (bottom + GAP);
+    const flow = bottom !== null && opts.flowWhenRemaining !== undefined && remaining >= contentH * opts.flowWhenRemaining;
+    const cap = await capture(section, html2canvas, keep, flow ? remaining : undefined);
+    bottom = addPages(pdf, cap, bottom !== null && !flow, flow ? (bottom as number) + GAP : MARGIN.top);
+  }
+  finishPages(pdf, opts);
   pdf.save(opts.filename);
 }

@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FFDS Studio OS — BOQ Copilot | Studio Workspace</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans & Playfair Display -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            serif: ['"Playfair Display"', 'serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#312e81',
+            }
+          },
+          boxShadow: {
+            'card': '0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.04)',
+            'bubble': '0 16px 40px -4px rgba(15, 23, 42, 0.18), 0 4px 16px -2px rgba(15, 23, 42, 0.08)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Architectural Blueprint & Grid Patterns */
+    .cad-canvas-bg {
+      background-color: #fafbfc;
+      background-size: 24px 24px, 120px 120px;
+      background-image: 
+        radial-gradient(circle, #cbd5e1 0.75px, transparent 0.75px),
+        linear-gradient(to right, rgba(226, 232, 240, 0.5) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(226, 232, 240, 0.5) 1px, transparent 1px);
+    }
+    
+    .room-zone {
+      transition: fill 0.2s ease, stroke 0.2s ease, transform 0.2s ease;
+    }
+    .room-zone:hover {
+      fill-opacity: 0.06;
+    }
+
+    /* Architectural Wall Styling */
+    .wall-thick {
+      stroke: #1e293b;
+      stroke-width: 5;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+
+    .wall-partition {
+      stroke: #334155;
+      stroke-width: 3.5;
+    }
+
+    /* Placed Item SVG animations */
+    .placed-item-node {
+      transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), filter 0.18s ease;
+      cursor: pointer;
+    }
+    .placed-item-node:hover {
+      filter: drop-shadow(0 4px 10px rgba(79, 70, 229, 0.35));
+    }
+    .placed-item-node.selected {
+      filter: drop-shadow(0 0 0 2px #4f46e5) drop-shadow(0 6px 14px rgba(79, 70, 229, 0.4));
+    }
+
+    /* Drop Zone Highlight */
+    .drag-target-active {
+      stroke: #4f46e5 !important;
+      stroke-width: 3 !important;
+      stroke-dasharray: 6 4;
+      animation: dashPulse 1.2s linear infinite;
+    }
+
+    @keyframes dashPulse {
+      to { stroke-dashoffset: -20; }
+    }
+
+    /* Custom subtle scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #f8fafc; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 font-sans antialiased h-screen flex flex-col overflow-hidden select-none">
+
+  <!-- TOP HEADER / BRAND NAVIGATION -->
+  <header class="bg-white border-b border-slate-200 px-6 py-2.5 flex items-center justify-between z-30 shadow-sm shrink-0">
+    <div class="flex items-center space-x-3">
+      <!-- App Brand Logo Mark -->
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm shadow-indigo-200">
+        b
+      </div>
+      <div class="flex items-center space-x-2 text-xs">
+        <span class="font-bold text-slate-900 tracking-tight text-sm">BOQ Copilot</span>
+        <span class="text-slate-300">/</span>
+        <span class="text-slate-600 font-medium">Studio workspace</span>
+      </div>
+    </div>
+
+    <!-- Right User & Status Badge -->
+    <div class="flex items-center space-x-3 text-xs">
+      <span class="text-slate-500 font-medium flex items-center space-x-1.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span>Operations • Concept prototype</span>
+      </span>
+      <div class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs">
+        MK
+      </div>
+    </div>
+  </header>
+
+  <!-- SUBHEADER / PROJECT DOCKET STRIP -->
+  <div class="bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between z-20 shrink-0">
+    <div>
+      <div class="text-[11px] font-bold tracking-wider uppercase text-slate-400">
+        PROJECT / RESIDENTIAL / APARTMENT 04
+      </div>
+      <h1 class="font-serif text-xl font-bold text-slate-900 mt-0.5 tracking-tight">
+        A space for every line item.
+      </h1>
+      <p class="text-xs text-slate-500 font-medium mt-0.5">
+        Plan your rooms. Place your items. Build your BOQ.
+      </p>
+    </div>
+
+    <div class="flex items-center space-x-3">
+      <span class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+        Working draft
+      </span>
+      <button onclick="handleExportBOQ()" class="px-4 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 shadow-sm transition-all flex items-center space-x-1.5">
+        <span>Export BOQ</span>
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 3-COLUMN MAIN WORKSPACE -->
+  <div class="flex-1 flex overflow-hidden relative">
+
+    <!-- ======================================================== -->
+    <!-- COLUMN 1: LEFT SIDEBAR - ITEM LIBRARY & ROOM ASSEMBLY -->
+    <!-- ======================================================== -->
+    <aside class="w-80 bg-white border-r border-slate-200 flex flex-col shrink-0 z-20 shadow-sm">
+      
+      <!-- Header & Search -->
+      <div class="p-3.5 border-b border-slate-100">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-xs font-bold text-slate-900">Item library</h2>
+          <span class="text-[11px] text-slate-400 font-semibold" id="itemBankCountBadge">9 items</span>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="relative">
+          <svg class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input type="text" id="itemSearchInput" oninput="filterItemsBySearch(this.value)" placeholder="Search items..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white transition-all"/>
+        </div>
+
+        <!-- Filter Pills (All, Objects, Finishes) -->
+        <div class="flex items-center space-x-1.5 mt-2.5">
+          <button id="pillFilterAll" onclick="setItemFilter('all')" class="px-3 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm transition-all">All</button>
+          <button id="pillFilterObjects" onclick="setItemFilter('objects')" class="px-3 py-1 rounded-full text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">Objects</button>
+          <button id="pillFilterFinishes" onclick="setItemFilter('finishes')" class="px-3 py-1 rounded-full text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">Finishes</button>
+        </div>
+      </div>
+
+      <!-- Scrollable Items List -->
+      <div id="itemLibraryScroll" class="flex-1 overflow-y-auto p-3 space-y-2">
+
+        <!-- Item 1: 3-seat sofa -->
+        <div class="item-library-card p-3 bg-white rounded-xl border border-slate-200 hover:border-indigo-400 hover:shadow-card cursor-grab active:cursor-grabbing transition-all group relative"
+             draggable="true" ondragstart="handleDragStart(event, 'sofa_3seat')" onclick="handleQuickAdd('sofa_3seat')" data-type="objects">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors">
+                <!-- Sofa Icon -->
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M20 9V7a2 2 0 00-2-2H6a2 2 0 00-2 2v2m16 0v7a2 2 0 01-2 2H6a2 2 0 01-2-2V9m16 0H4m16 0h-2M4 9h2m2 7v2m8-2v2"/></svg>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">3–seat sofa</h4>
+                <div class="text-[11px] text-slate-500 font-medium">₹42,000 <span class="text-slate-400 text-[10px]">/ nos</span></div>
+              </div>
+            </div>
+            <span class="text-[10px] text-indigo-600 opacity-0 group-hover:opacity-100 font-semibold transition-opacity flex items-center">
+              Add +
+            </span>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-1 pl-12">7'-0" W × 3'-0" D • Fabric Upholstery</div>
+        </div>
+
+        <!-- Item 2: Lounge chair -->
+        <div class="item-library-card p-3 bg-white rounded-xl border border-slate-200 hover:border-indigo-400 hover:shadow-card cursor-grab active:cursor-grabbing transition-all group relative"
+             draggable="true" ondragstart="handleDragStart(event, 'lounge_chair')" onclick="handleQuickAdd('lounge_chair')" data-type="objects">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors">
+                <!-- Chair Icon -->
+                <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="3" stroke-width="1.8"/><line x1="8" y1="18" x2="8" y2="21" stroke-width="1.8"/><line x1="16" y1="18" x2="16" y2="21" stroke-width="1.8"/></svg>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Lounge chair</h4>
+                <div class="text-[11px] text-slate-500 font-medium">₹14,500 <span class="text-slate-400 text-[10px]">/ nos</span></div>
+              </div>
+            </div>
+            <span class="text-[10px] text-indigo-600 opacity-0 group-hover:opacity-100 font-semibold transition-opacity flex items-center">
+              Add +
+            </span>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-1 pl-12">2'-8" W × 2'-8" D • Teak Legs</div>
+        </div>
+
+        <!-- Item 3: Queen bed -->
+        <div class="item-library-card p-3 bg-white rounded-xl border border-slate-200 hover:border-indigo-400 hover:shadow-card cursor-grab active:cursor-grabbing transition-all group relative"
+             draggable="true" ondragstart="handleDragStart(event, 'queen_bed')" onclick="handleQuickAdd('queen_bed')" data-type="objects">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors">
+                <!-- Bed Icon -->
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Queen bed</h4>
+                <div class="text-[11px] text-slate-500 font-medium">₹38,000 <span class="text-slate-400 text-[10px]">/ nos</span></div>
+              </div>
+            </div>
+            <span class="text-[10px] text-indigo-600 opacity-0 group-hover:opacity-100 font-semibold transition-opacity flex items-center">
+              Add +
+            </span>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-1 pl-12">5'-0" W × 6'-6" L • Hydraulic Lift</div>
+        </div>
+
+        <!-- Item 4: Wardrobe -->
+        <div class="item-library-card p-3 bg-white rounded-xl border border-slate-200 hover:border-indigo-400 hover:shadow-card cursor-grab active:cursor-grabbing transition-all group relative"
+             draggable="true" ondragstart="handleDragStart(event, 'wardrobe_custom')" onclick="handleQuickAdd('wardrobe_custom')" data-type="objects">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors">
+                <!-- Wardrobe Icon -->
+                <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Wardrobe</h4>
+                <div class="text-[11px] text-slate-500 font-medium">₹1,850 <span class="text-slate-400 text-[10px]">/ sq ft</span></div>
+              </div>
+            </div>
+            <span class="text-[10px] text-indigo-600 opacity-0 group-hover:opacity-100 font-semibold transition-opacity flex items-center">
+              Add +
+            </span>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-1 pl-12">Floor-to-ceiling • Soft-close hinges</div>
+        </div>
+
+        <!-- Item 5: Vitrified Tile Flooring (Finishes) -->
+        <div class="item-library-card p-3 bg-white rounded-xl border border-slate-200 hover:border-indigo-400 hover:shadow-card cursor-grab active:cursor-grabbing transition-all group relative"
+             draggable="true" ondragstart="handleDragStart(event, 'vitrified_tile')" onclick="handleQuickAdd('vitrified_tile')" data-type="finishes">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors">
+                <!-- Tile Pattern Icon -->
+                <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5" stroke-width="1.8"/><rect x="13" y="3" width="8" height="8" rx="1.5" stroke-width="1.8"/><rect x="3" y="13" width="8" height="8" rx="1.5" stroke-width="1.8"/><rect x="13" y="13" width="8" height="8" rx="1.5" stroke-width="1.8"/></svg>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Vitrified tile flooring</h4>
+                <div class="text-[11px] text-slate-500 font-medium">₹125 <span class="text-slate-400 text-[10px]">/ sq ft</span></div>
+              </div>
+            </div>
+            <span class="text-[10px] text-indigo-600 opacity-0 group-hover:opacity-100 font-semibold transition-opacity flex items-center">
+              Apply +
+            </span>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-1 pl-12">Auto-scales to room floor area + 7% wastage</div>
+        </div>
+
+        <!-- Item 6: Royal Luxury Emulsion (Finishes) -->
+        <div class="item-library-card p-3 bg-white rounded-xl border border-slate-200 hover:border-indigo-400 hover:shadow-card cursor-grab active:cursor-grabbing transition-all group relative"
+             draggable="true" ondragstart="handleDragStart(event, 'wall_paint_royal')" onclick="handleQuickAdd('wall_paint_royal')" data-type="finishes">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors">
+                <!-- Paint Roller Icon -->
+                <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Royale wall emulsion</h4>
+                <div class="text-[11px] text-slate-500 font-medium">₹38 <span class="text-slate-400 text-[10px]">/ sq ft</span></div>
+              </div>
+            </div>
+            <span class="text-[10px] text-indigo-600 opacity-0 group-hover:opacity-100 font-semibold transition-opacity flex items-center">
+              Apply +
+            </span>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-1 pl-12">Net wall plaster area • 3 coats with primer</div>
+        </div>
+
+        <!-- Item 7: Recessed LED Downlights (Objects/Electrical) -->
+        <div class="item-library-card p-3 bg-white rounded-xl border border-slate-200 hover:border-indigo-400 hover:shadow-card cursor-grab active:cursor-grabbing transition-all group relative"
+             draggable="true" ondragstart="handleDragStart(event, 'led_downlights_set')" onclick="handleQuickAdd('led_downlights_set')" data-type="objects">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="w-9 h-9 rounded-xl bg-purple-50 border border-purple-200 text-purple-600 flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors">
+                <!-- Lightbulb/Downlight Icon -->
+                <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" stroke-width="1.8"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">COB LED downlight (9W)</h4>
+                <div class="text-[11px] text-slate-500 font-medium">₹1,250 <span class="text-slate-400 text-[10px]">/ nos</span></div>
+              </div>
+            </div>
+            <span class="text-[10px] text-indigo-600 opacity-0 group-hover:opacity-100 font-semibold transition-opacity flex items-center">
+              Add +
+            </span>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-1 pl-12">Philips Warm White • Complete wiring</div>
+        </div>
+
+      </div>
+
+      <!-- Footnote Prompt -->
+      <div class="px-3.5 py-2 text-[10.5px] text-slate-400 border-t border-slate-100 bg-slate-50/50">
+        Drag an item into a room, or click to add it to the selected room. Drop a finish to apply it to the room.
+      </div>
+
+      <!-- ROOM ASSEMBLY / PACKAGES -->
+      <div class="p-3.5 border-t border-slate-200 bg-white">
+        <div class="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+          ROOM ASSEMBLY
+        </div>
+        <div class="text-xs font-bold text-slate-800 mb-2">
+          Flooring + paint + downlights
+        </div>
+        <button onclick="applyRoomAssemblyPackage()" class="w-full py-2 bg-slate-50 hover:bg-indigo-50 text-indigo-700 hover:text-indigo-800 border border-slate-200 hover:border-indigo-300 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center space-x-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+          <span>Apply room package</span>
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- ======================================================== -->
+    <!-- COLUMN 2: CENTER - ARCHITECTURAL CANVAS & CONTROLS -->
+    <!-- ======================================================== -->
+    <main class="flex-1 flex flex-col relative overflow-hidden bg-slate-100">
+
+      <!-- TOP CANVAS TOOLBAR STRIP -->
+      <div class="bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between z-20 shrink-0">
+        
+        <!-- Floor Level Button & Undo/Redo -->
+        <div class="flex items-center space-x-3">
+          <button class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center space-x-1.5 shadow-sm">
+            <svg class="w-3.5 h-3.5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/></svg>
+            <span>Ground floor</span>
+          </button>
+
+          <div class="flex items-center space-x-1 text-slate-400">
+            <button onclick="undoAction()" class="p-1 hover:text-slate-700 rounded-lg hover:bg-slate-100" title="Undo">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+            </button>
+            <button onclick="redoAction()" class="p-1 hover:text-slate-700 rounded-lg hover:bg-slate-100" title="Redo">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10H11a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Room Switcher Tabs -->
+        <div class="flex items-center space-x-1 overflow-x-auto">
+          <button id="tab_living" onclick="selectRoom('living')" class="room-tab px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 transition-all">
+            Living & dining
+          </button>
+          <button id="tab_bedroom" onclick="selectRoom('bedroom')" class="room-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all">
+            Bedroom
+          </button>
+          <button id="tab_kitchen" onclick="selectRoom('kitchen')" class="room-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all">
+            Kitchen
+          </button>
+          <button id="tab_study" onclick="selectRoom('study')" class="room-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all">
+            Study
+          </button>
+          <button id="tab_bath" onclick="selectRoom('bath')" class="room-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all">
+            Bath
+          </button>
+        </div>
+
+        <!-- CAD Dimensions Checkbox -->
+        <div class="flex items-center space-x-2">
+          <label class="flex items-center space-x-2 text-xs font-semibold text-slate-700 cursor-pointer">
+            <input type="checkbox" id="checkDimensions" checked onchange="toggleDimensions(this.checked)" class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"/>
+            <span>Dimensions</span>
+          </label>
+        </div>
+
+      </div>
+
+      <!-- MAIN CAD ARCHITECTURAL FLOORPLAN CANVAS -->
+      <div id="cadCanvasArea" class="flex-1 cad-canvas-bg overflow-auto flex items-center justify-center p-8 relative"
+           ondragover="handleCanvasDragOver(event)" ondrop="handleCanvasDrop(event)">
+        
+        <!-- SVG Floorplan Viewport (820px × 560px) -->
+        <div id="floorplanWrapper" class="relative bg-white rounded-2xl shadow-xl border border-slate-300 overflow-hidden"
+             style="width: 780px; height: 530px;">
+          
+          <svg id="architecturalSvg" width="780" height="530" viewBox="0 0 780 530" class="w-full h-full select-none" xmlns="http://www.w3.org/2000/svg">
+            
+            <!-- EXTERNAL DIMENSION TICKS & LABELS (TOP & LEFT) -->
+            <g id="dimensionLayerGroup" class="transition-opacity duration-200">
+              <!-- Top Dimension: Living & Dining (4.8 m = 15'-9") -->
+              <line x1="140" y1="36" x2="480" y2="36" stroke="#94a3b8" stroke-width="1.2"/>
+              <line x1="140" y1="28" x2="140" y2="44" stroke="#94a3b8" stroke-width="1.2"/>
+              <line x1="480" y1="28" x2="480" y2="44" stroke="#94a3b8" stroke-width="1.2"/>
+              <rect x="290" y="24" width="75" height="20" rx="4" fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>
+              <text x="327.5" y="38" font-family="'Plus Jakarta Sans', sans-serif" font-size="10.5" font-weight="700" fill="#475569" text-anchor="middle">
+                15'-9" <tspan font-size="9" fill="#94a3b8">(4.8m)</tspan>
+              </text>
+
+              <!-- Top Dimension: Bedroom (3.6 m = 11'-10") -->
+              <line x1="480" y1="36" x2="710" y2="36" stroke="#94a3b8" stroke-width="1.2"/>
+              <line x1="710" y1="28" x2="710" y2="44" stroke="#94a3b8" stroke-width="1.2"/>
+              <rect x="575" y="24" width="75" height="20" rx="4" fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>
+              <text x="612.5" y="38" font-family="'Plus Jakarta Sans', sans-serif" font-size="10.5" font-weight="700" fill="#475569" text-anchor="middle">
+                11'-10" <tspan font-size="9" fill="#94a3b8">(3.6m)</tspan>
+              </text>
+
+              <!-- Left Dimension: Top Tier (4.2 m = 13'-9") -->
+              <line x1="105" y1="55" x2="105" y2="295" stroke="#94a3b8" stroke-width="1.2"/>
+              <line x1="97" y1="55" x2="113" y2="55" stroke="#94a3b8" stroke-width="1.2"/>
+              <line x1="97" y1="295" x2="113" y2="295" stroke="#94a3b8" stroke-width="1.2"/>
+              <rect x="68" y="165" width="74" height="20" rx="4" fill="#ffffff" stroke="#e2e8f0" stroke-width="1" transform="rotate(-90 105 175)"/>
+              <text x="105" y="179" font-family="'Plus Jakarta Sans', sans-serif" font-size="10.5" font-weight="700" fill="#475569" text-anchor="middle" transform="rotate(-90 105 179)">
+                13'-9" <tspan font-size="9" fill="#94a3b8">(4.2m)</tspan>
+              </text>
+
+              <!-- Left Dimension: Bottom Tier (2.8 m = 9'-2") -->
+              <line x1="105" y1="295" x2="105" y2="475" stroke="#94a3b8" stroke-width="1.2"/>
+              <line x1="97" y1="475" x2="113" y2="475" stroke="#94a3b8" stroke-width="1.2"/>
+              <rect x="70" y="375" width="70" height="20" rx="4" fill="#ffffff" stroke="#e2e8f0" stroke-width="1" transform="rotate(-90 105 385)"/>
+              <text x="105" y="389" font-family="'Plus Jakarta Sans', sans-serif" font-size="10.5" font-weight="700" fill="#475569" text-anchor="middle" transform="rotate(-90 105 389)">
+                9'-2" <tspan font-size="9" fill="#94a3b8">(2.8m)</tspan>
+              </text>
+            </g>
+
+            <!-- ============================================== -->
+            <!-- ROOM BOUNDARIES & CLICKABLE FLOOR PLATES -->
+            <!-- ============================================== -->
+            
+            <!-- ROOM 1: LIVING & DINING (Top Left) -->
+            <g id="svg_room_living" class="room-zone cursor-pointer" onclick="selectRoom('living')" data-room="living">
+              <rect id="rect_room_living" x="140" y="55" width="340" height="240" fill="#4f46e5" fill-opacity="0.04" stroke="#1e293b" stroke-width="5" class="transition-all"/>
+              
+              <!-- Room Label Badge -->
+              <g transform="translate(155, 70)">
+                <text x="0" y="12" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="700" fill="#1e293b">Living &amp; dining</text>
+                <text x="0" y="27" font-family="'Plus Jakarta Sans', sans-serif" font-size="10.5" font-weight="600" fill="#64748b">
+                  217 sq ft <tspan fill="#94a3b8">(20.16 m²)</tspan> • <tspan id="badge_finish_living" fill="#4f46e5">tile</tspan>
+                </text>
+              </g>
+            </g>
+
+            <!-- ROOM 2: BEDROOM (Top Right) -->
+            <g id="svg_room_bedroom" class="room-zone cursor-pointer" onclick="selectRoom('bedroom')" data-room="bedroom">
+              <rect id="rect_room_bedroom" x="480" y="55" width="230" height="240" fill="#ffffff" fill-opacity="0.01" stroke="#1e293b" stroke-width="5" class="transition-all"/>
+              
+              <!-- Label -->
+              <g transform="translate(495, 70)">
+                <text x="0" y="12" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="700" fill="#1e293b">Bedroom</text>
+                <text x="0" y="27" font-family="'Plus Jakarta Sans', sans-serif" font-size="10.5" font-weight="600" fill="#64748b">
+                  163 sq ft <tspan fill="#94a3b8">(15.12 m²)</tspan>
+                </text>
+              </g>
+            </g>
+
+            <!-- ROOM 3: KITCHEN (Bottom Left) -->
+            <g id="svg_room_kitchen" class="room-zone cursor-pointer" onclick="selectRoom('kitchen')" data-room="kitchen">
+              <rect id="rect_room_kitchen" x="140" y="295" width="180" height="180" fill="#ffffff" fill-opacity="0.01" stroke="#1e293b" stroke-width="5" class="transition-all"/>
+              
+              <g transform="translate(155, 310)">
+                <text x="0" y="12" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="700" fill="#1e293b">Kitchen</text>
+                <text x="0" y="27" font-family="'Plus Jakarta Sans', sans-serif" font-size="10.5" font-weight="600" fill="#64748b">
+                  96 sq ft <tspan fill="#94a3b8">(8.96 m²)</tspan>
+                </text>
+              </g>
+            </g>
+
+            <!-- ROOM 4: STUDY (Bottom Center) -->
+            <g id="svg_room_study" class="room-zone cursor-pointer" onclick="selectRoom('study')" data-room="study">
+              <rect id="rect_room_study" x="320" y="295" width="190" height="180" fill="#ffffff" fill-opacity="0.01" stroke="#1e293b" stroke-width="5" class="transition-all"/>
+              
+              <g transform="translate(335, 310)">
+                <text x="0" y="12" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="700" fill="#1e293b">Study</text>
+                <text x="0" y="27" font-family="'Plus Jakarta Sans', sans-serif" font-size="10.5" font-weight="600" fill="#64748b">
+                  84 sq ft <tspan fill="#94a3b8">(7.84 m²)</tspan>
+                </text>
+              </g>
+            </g>
+
+            <!-- ROOM 5: BATH (Bottom Right) -->
+            <g id="svg_room_bath" class="room-zone cursor-pointer" onclick="selectRoom('bath')" data-room="bath">
+              <rect id="rect_room_bath" x="510" y="295" width="200" height="180" fill="#ffffff" fill-opacity="0.01" stroke="#1e293b" stroke-width="5" class="transition-all"/>
+              
+              <g transform="translate(525, 310)">
+                <text x="0" y="12" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="700" fill="#1e293b">Bath</text>
+                <text x="0" y="27" font-family="'Plus Jakarta Sans', sans-serif" font-size="10.5" font-weight="600" fill="#64748b">
+                  72 sq ft <tspan fill="#94a3b8">(6.72 m²)</tspan>
+                </text>
+              </g>
+            </g>
+
+            <!-- ============================================== -->
+            <!-- PLACED ITEMS LAYER (Objects on Floorplan) -->
+            <!-- ============================================== -->
+            <g id="placedItemsGroup">
+
+              <!-- LIVING: 3-Seat Sofa (FF-001) -->
+              <g id="node_item_sofa" class="placed-item-node" onclick="inspectItem('sofa_3seat', 'living', event)" transform="translate(195, 130)">
+                <!-- Sofa Outer Frame -->
+                <rect x="0" y="0" width="110" height="60" rx="8" fill="#ffffff" stroke="#1e293b" stroke-width="2"/>
+                <!-- Backrest -->
+                <rect x="0" y="0" width="110" height="16" rx="6" fill="#f8fafc" stroke="#1e293b" stroke-width="1.5"/>
+                <!-- Armrests -->
+                <rect x="0" y="16" width="16" height="44" rx="4" fill="#f8fafc" stroke="#1e293b" stroke-width="1.5"/>
+                <rect x="94" y="16" width="16" height="44" rx="4" fill="#f8fafc" stroke="#1e293b" stroke-width="1.5"/>
+                <!-- 3 Seat Dividers -->
+                <line x1="42" y1="16" x2="42" y2="60" stroke="#cbd5e1" stroke-width="1.5"/>
+                <line x1="68" y1="16" x2="68" y2="60" stroke="#cbd5e1" stroke-width="1.5"/>
+                <!-- Tag -->
+                <text x="55" y="78" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="700" fill="#64748b" text-anchor="middle">FF-001</text>
+              </g>
+
+              <!-- LIVING: Lounge Chair (FF-002) -->
+              <g id="node_item_chair" class="placed-item-node" onclick="inspectItem('lounge_chair', 'living', event)" transform="translate(330, 140)">
+                <rect x="0" y="0" width="48" height="48" rx="8" fill="#ffffff" stroke="#1e293b" stroke-width="2"/>
+                <rect x="0" y="0" width="48" height="12" rx="4" fill="#f8fafc" stroke="#1e293b" stroke-width="1.5"/>
+                <text x="24" y="66" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="700" fill="#64748b" text-anchor="middle">FF-002</text>
+              </g>
+
+              <!-- BEDROOM: Queen Bed (FF-003) -->
+              <g id="node_item_bed" class="placed-item-node" onclick="inspectItem('queen_bed', 'bedroom', event)" transform="translate(540, 110)">
+                <rect x="0" y="0" width="90" height="110" rx="8" fill="#ffffff" stroke="#1e293b" stroke-width="2"/>
+                <!-- Headboard -->
+                <rect x="0" y="0" width="90" height="14" rx="4" fill="#f8fafc" stroke="#1e293b" stroke-width="1.5"/>
+                <!-- Pillows -->
+                <rect x="10" y="18" width="30" height="18" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+                <rect x="50" y="18" width="30" height="18" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+                <!-- Quilt fold -->
+                <line x1="0" y1="60" x2="90" y2="60" stroke="#cbd5e1" stroke-width="1.5"/>
+                <text x="45" y="128" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="700" fill="#64748b" text-anchor="middle">FF-003</text>
+              </g>
+
+              <!-- BEDROOM: Wardrobe (JW-001) -->
+              <g id="node_item_wardrobe" class="placed-item-node" onclick="inspectItem('wardrobe_custom', 'bedroom', event)" transform="translate(538, 240)">
+                <rect x="0" y="0" width="94" height="24" rx="3" fill="#ffffff" stroke="#1e293b" stroke-width="2"/>
+                <line x1="31" y1="0" x2="31" y2="24" stroke="#cbd5e1" stroke-width="1.2"/>
+                <line x1="63" y1="0" x2="63" y2="24" stroke="#cbd5e1" stroke-width="1.2"/>
+                <text x="47" y="38" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="700" fill="#64748b" text-anchor="middle">JW-001</text>
+              </g>
+
+              <!-- KITCHEN: Recessed Downlight (EL-001) -->
+              <g id="node_item_light" class="placed-item-node" onclick="inspectItem('led_downlights_set', 'kitchen', event)" transform="translate(215, 370)">
+                <circle cx="15" cy="15" r="14" fill="#ffffff" stroke="#1e293b" stroke-width="2"/>
+                <circle cx="15" cy="15" r="5" fill="#e0e7ff" stroke="#4f46e5" stroke-width="2"/>
+                <text x="15" y="44" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="700" fill="#64748b" text-anchor="middle">EL-001</text>
+              </g>
+
+              <!-- STUDY: Desk & Chair (JN-002) -->
+              <g id="node_item_desk" class="placed-item-node" onclick="inspectItem('study_desk', 'study', event)" transform="translate(380, 375)">
+                <rect x="0" y="0" width="70" height="34" rx="6" fill="#ffffff" stroke="#1e293b" stroke-width="2"/>
+                <text x="35" y="49" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="700" fill="#64748b" text-anchor="middle">JN-002</text>
+              </g>
+
+            </g>
+
+            <!-- NORTH POINTER & FOOTER LEGEND (BOTTOM) -->
+            <g transform="translate(145, 500)">
+              <text x="0" y="0" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" fill="#1e293b">N ↑</text>
+            </g>
+            <g transform="translate(620, 500)">
+              <text x="0" y="0" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="500" fill="#94a3b8">Illustrative geometry • not a survey</text>
+            </g>
+
+          </svg>
+
+          <!-- FLOATING PARAMETRIC INSPECTOR BUBBLE -->
+          <div id="canvasInspectorBubble" class="hidden absolute z-30 bg-white rounded-2xl shadow-bubble border border-slate-200 p-4 w-76 text-slate-800 transition-all">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div class="flex items-center space-x-2">
+                <div id="inspectIconWrap" class="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs">
+                  •
+                </div>
+                <div>
+                  <h4 id="inspectTitle" class="text-xs font-bold text-slate-900 leading-tight">Item Name</h4>
+                  <p id="inspectCode" class="text-[10px] text-slate-400 font-mono">CODE: FF-001</p>
+                </div>
+              </div>
+              <button onclick="closeInspector()" class="w-5 h-5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <!-- Quantity & Dimension Control -->
+            <div class="py-2.5 space-y-2">
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-500 font-medium">Quantity / Size:</span>
+                <span class="font-mono font-bold text-indigo-700" id="inspectQtyDisplay">1 nos</span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <button onclick="adjustInspectQty(-1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 text-sm flex items-center justify-center">−</button>
+                <div class="flex-1 text-center font-mono font-bold text-xs bg-slate-50 py-1 rounded border border-slate-200" id="inspectQtyBox">1</div>
+                <button onclick="adjustInspectQty(1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 text-sm flex items-center justify-center">+</button>
+              </div>
+
+              <!-- Price Rollup -->
+              <div class="p-2 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-center text-xs mt-2">
+                <span class="text-slate-500">Item Total:</span>
+                <span class="font-mono font-bold text-indigo-700 text-sm" id="inspectTotalDisplay">₹42,000</span>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex space-x-2 pt-1 border-t border-slate-100">
+              <button onclick="removeInspectedItem()" class="flex-1 py-1.5 rounded-lg text-[11px] font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-all">
+                Remove
+              </button>
+              <button onclick="closeInspector()" class="flex-1 py-1.5 rounded-lg text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all shadow-sm">
+                Done
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- CANVAS BOTTOM METRIC FOOTER BAR -->
+      <div class="bg-white border-t border-slate-200 px-6 py-2.5 flex items-center justify-between text-xs text-slate-500 shrink-0">
+        <div class="flex items-center space-x-5">
+          <span>Sample plan • Dimensions in <strong>ft &amp; sq ft</strong></span>
+          <span class="text-slate-300">|</span>
+          <span>Snap <strong>0.5 ft</strong> • Schematic</span>
+          <span class="text-slate-300">|</span>
+          <span class="flex items-center space-x-1">
+            <span class="w-3 h-3 rounded bg-amber-100 border border-amber-300 inline-block"></span>
+            <span>Surface-linked quantity</span>
+          </span>
+          <span class="text-slate-300">|</span>
+          <span class="flex items-center space-x-1">
+            <span class="w-3 h-3 rounded bg-white border border-slate-400 inline-block"></span>
+            <span>Placed item</span>
+          </span>
+        </div>
+        <div class="text-slate-400 italic">
+          Select an item for details
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ======================================================== -->
+    <!-- COLUMN 3: RIGHT SIDEBAR - LIVE BOQ BREAKDOWN -->
+    <!-- ======================================================== -->
+    <aside class="w-88 bg-white border-l border-slate-200 flex flex-col shrink-0 z-20 shadow-sm" style="width: 360px;">
+      
+      <!-- Top Title & Room Filter Switcher -->
+      <div class="p-3.5 border-b border-slate-100">
+        <div class="flex items-center justify-between mb-2.5">
+          <h2 class="text-xs font-bold text-slate-900">Live BOQ</h2>
+          <span class="text-[11px] text-slate-400 font-semibold" id="boqLinesCountBadge">3 lines</span>
+        </div>
+
+        <!-- Toggle: Selected Room vs All Rooms -->
+        <div class="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl">
+          <button id="btnFilterSelectedRoom" onclick="setBOQScope('selected')" class="py-1 text-[11px] font-bold rounded-lg bg-white text-indigo-700 shadow-sm transition-all text-center">
+            Selected room
+          </button>
+          <button id="btnFilterAllRooms" onclick="setBOQScope('all')" class="py-1 text-[11px] font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all text-center">
+            All rooms
+          </button>
+        </div>
+      </div>
+
+      <!-- Selected Room Header & Dimension Card -->
+      <div class="p-3.5 bg-slate-50/70 border-b border-slate-100">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-xs font-bold text-slate-900" id="rightRoomTitle">Living &amp; dining</h3>
+            <span class="text-[10px] font-mono font-semibold text-slate-400" id="rightRoomCode">R01</span>
+          </div>
+          <button onclick="openEditDimensionsModal()" class="text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+            Edit dimensions
+          </button>
+        </div>
+        <div class="mt-1 flex items-baseline space-x-2">
+          <span class="text-sm font-extrabold text-slate-900 font-mono" id="rightRoomAreaSqft">217 sq ft</span>
+          <span class="text-xs text-slate-400 font-medium" id="rightRoomAreaM2">(20.16 m²)</span>
+        </div>
+        <div class="text-[10px] text-slate-400 mt-0.5">
+          Sample measurements • verify on site
+        </div>
+      </div>
+
+      <!-- BOQ Items List -->
+      <div id="boqItemsListContainer" class="flex-1 overflow-y-auto p-3.5 space-y-3">
+        <!-- Dynamically rendered by renderLiveBOQ() -->
+      </div>
+
+      <!-- Bottom Subtotal & Financial Footnote -->
+      <div class="p-4 border-t border-slate-200 bg-white">
+        <div class="flex items-baseline justify-between mb-1">
+          <span class="text-xs font-bold text-slate-700" id="lblSubtotalScope">Room subtotal</span>
+          <span class="text-base font-extrabold text-indigo-600 font-mono" id="lblSubtotalAmount">₹85,524</span>
+        </div>
+        <div class="text-[10.5px] text-slate-400">
+          Illustrative rates • excluding tax (GST 18% applied at docket)
+        </div>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- BOTTOM PERSISTENT TOAST NOTIFICATION & MASTER ESTIMATE BAR -->
+  <footer class="bg-white border-t border-slate-200 px-6 py-2.5 flex items-center justify-between z-30 shadow-sm shrink-0">
+    
+    <!-- Status Toast / Activity Stream -->
+    <div class="flex items-center space-x-2.5">
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span class="text-xs text-slate-700 font-medium" id="bottomToastMessage">
+        Package applied: flooring, wall paint and 4 downlights. Existing surface finishes replaced.
+      </span>
+    </div>
+
+    <!-- Master Project Estimate Total -->
+    <div class="flex items-center space-x-3">
+      <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">PROJECT ESTIMATE</span>
+      <span class="text-lg font-extrabold text-slate-900 font-mono tracking-tight" id="bottomMasterProjectEstimate">
+        ₹2,37,336
+      </span>
+    </div>
+
+  </footer>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: EDIT ROOM DIMENSIONS (ft & in) -->
+  <!-- ======================================================== -->
+  <div id="modalEditDimensions" class="hidden fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-sm w-full p-5 text-slate-800">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 class="text-sm font-bold text-slate-900" id="modalRoomTitle">Edit Room Dimensions</h3>
+        <button onclick="closeEditDimensionsModal()" class="w-6 h-6 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="py-4 space-y-3.5">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Length / Width (East-West)</label>
+          <div class="flex items-center space-x-2">
+            <input type="number" id="dimWidthFt" value="15.75" step="0.25" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 font-mono"/>
+            <span class="text-xs text-slate-500 font-semibold">ft</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Depth / Height (North-South)</label>
+          <div class="flex items-center space-x-2">
+            <input type="number" id="dimHeightFt" value="13.75" step="0.25" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 font-mono"/>
+            <span class="text-xs text-slate-500 font-semibold">ft</span>
+          </div>
+        </div>
+
+        <div class="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 text-xs">
+          <div class="flex justify-between items-center">
+            <span class="text-indigo-900 font-medium">Recalculated Carpet Area:</span>
+            <span class="font-bold text-indigo-700 font-mono" id="modalPreviewSqft">217 sq ft</span>
+          </div>
+          <p class="text-[10px] text-indigo-600 mt-1">All linked surface finishes (flooring, paint) and cove ceilings will automatically rescale.</p>
+        </div>
+      </div>
+
+      <div class="flex space-x-2.5 pt-2">
+        <button onclick="closeEditDimensionsModal()" class="flex-1 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all">
+          Cancel
+        </button>
+        <button onclick="saveRoomDimensions()" class="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all shadow-sm">
+          Update Space
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT STATE ENGINE & INTERACTION LOGIC -->
+  <script>
+    // ----------------------------------------------------
+    // DATA MODEL: ROOMS, DIMENSIONS & LIVE BOQ ITEMS
+    // ----------------------------------------------------
+    const ROOMS = {
+      living: {
+        id: 'living',
+        code: 'R01',
+        name: 'Living & dining',
+        length_ft: 15.75, // 15'-9"
+        depth_ft: 13.75,  // 13'-9"
+        sqft: 216.56,     // approx 217 sqft (20.16 m2)
+        finish: 'tile',
+        items: [
+          { id: 'item_1', key: 'sofa_3seat', code: 'FF-001', name: '3–seat sofa', type: 'object', qty: 1, unit: 'nos', rate: 42000, desc: 'Placed item • 1 count' },
+          { id: 'item_2', key: 'lounge_chair', code: 'FF-002', name: 'Lounge chair', type: 'object', qty: 1, unit: 'nos', rate: 14500, desc: 'Placed item • 1 count' },
+          { id: 'item_3', key: 'vitrified_tile', code: 'FL-001', name: 'Vitrified tile', type: 'finish', qty: 232.19, unit: 'sq ft', rate: 125, desc: 'Floor area + 7% wastage' }
+        ]
+      },
+      bedroom: {
+        id: 'bedroom',
+        code: 'R02',
+        name: 'Bedroom',
+        length_ft: 11.83, // 11'-10"
+        depth_ft: 13.75,  // 13'-9"
+        sqft: 162.66,     // approx 163 sqft (15.12 m2)
+        finish: 'wooden_laminate',
+        items: [
+          { id: 'item_4', key: 'queen_bed', code: 'FF-003', name: 'Queen bed', type: 'object', qty: 1, unit: 'nos', rate: 38000, desc: 'Placed item • 1 count' },
+          { id: 'item_5', key: 'wardrobe_custom', code: 'JW-001', name: 'Floor-to-ceiling Wardrobe', type: 'object', qty: 38, unit: 'sq ft', rate: 1850, desc: 'Placed item • 38 sq ft surface' }
+        ]
+      },
+      kitchen: {
+        id: 'kitchen',
+        code: 'R03',
+        name: 'Kitchen',
+        length_ft: 10.5,
+        depth_ft: 9.14,
+        sqft: 95.97, // approx 96 sqft (8.96 m2)
+        finish: 'anti_skid_tile',
+        items: [
+          { id: 'item_6', key: 'led_downlights_set', code: 'EL-001', name: 'Recessed COB Downlight', type: 'object', qty: 2, unit: 'nos', rate: 1250, desc: 'Placed item • 2 count' }
+        ]
+      },
+      study: {
+        id: 'study',
+        code: 'R04',
+        name: 'Study',
+        length_ft: 9.18,
+        depth_ft: 9.14,
+        sqft: 83.9, // approx 84 sqft (7.84 m2)
+        finish: 'tile',
+        items: [
+          { id: 'item_7', key: 'study_desk', code: 'JN-002', name: 'Custom Study Workstation', type: 'object', qty: 1, unit: 'nos', rate: 24000, desc: 'Placed item • 1 count' }
+        ]
+      },
+      bath: {
+        id: 'bath',
+        code: 'R05',
+        name: 'Bath',
+        length_ft: 7.87,
+        depth_ft: 9.14,
+        sqft: 71.9, // approx 72 sqft (6.72 m2)
+        finish: 'anti_skid_tile',
+        items: []
+      }
+    };
+
+    // ITEM CATALOG REPOSITORY
+    const CATALOG = {
+      sofa_3seat: { name: '3–seat sofa', code: 'FF-001', rate: 42000, unit: 'nos', type: 'objects', desc: 'Placed item • 1 count' },
+      lounge_chair: { name: 'Lounge chair', code: 'FF-002', rate: 14500, unit: 'nos', type: 'objects', desc: 'Placed item • 1 count' },
+      queen_bed: { name: 'Queen bed', code: 'FF-003', rate: 38000, unit: 'nos', type: 'objects', desc: 'Placed item • 1 count' },
+      wardrobe_custom: { name: 'Wardrobe', code: 'JW-001', rate: 1850, unit: 'sq ft', type: 'objects', defaultQty: 38, desc: 'Placed item • Custom size' },
+      vitrified_tile: { name: 'Vitrified tile', code: 'FL-001', rate: 125, unit: 'sq ft', type: 'finishes', desc: 'Floor area + 7% wastage' },
+      wall_paint_royal: { name: 'Royale wall emulsion', code: 'PT-001', rate: 38, unit: 'sq ft', type: 'finishes', desc: 'Net wall plaster area' },
+      led_downlights_set: { name: 'COB LED downlight (9W)', code: 'EL-001', rate: 1250, unit: 'nos', type: 'objects', desc: 'Placed downlight' },
+      study_desk: { name: 'Custom Study Workstation', code: 'JN-002', rate: 24000, unit: 'nos', type: 'objects', desc: 'Teak finish with wire grommet' }
+    };
+
+    // ACTIVE STATE
+    let activeRoomId = 'living';
+    let boqScope = 'selected'; // 'selected' | 'all'
+    let inspectedItemObj = null;
+    let draggedKey = null;
+
+    // INR Formatter
+    function formatINR(val) {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0
+      }).format(Math.round(val));
+    }
+
+    // ----------------------------------------------------
+    // INITIALIZATION
+    // ----------------------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      selectRoom('living');
+      updateProjectTotals();
+    });
+
+    // ----------------------------------------------------
+    // ROOM SWITCHING
+    // ----------------------------------------------------
+    function selectRoom(roomId) {
+      if (!ROOMS[roomId]) return;
+      activeRoomId = roomId;
+
+      // Update Tab Styles
+      document.querySelectorAll('.room-tab').forEach(btn => {
+        btn.className = 'room-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all';
+      });
+      const activeTabBtn = document.getElementById('tab_' + roomId);
+      if (activeTabBtn) {
+        activeTabBtn.className = 'room-tab px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 transition-all';
+      }
+
+      // Update SVG Floorplan Rect Highlights
+      Object.keys(ROOMS).forEach(id => {
+        const rect = document.getElementById('rect_room_' + id);
+        if (rect) {
+          if (id === roomId) {
+            rect.setAttribute('fill', '#4f46e5');
+            rect.setAttribute('fill-opacity', '0.06');
+            rect.setAttribute('stroke', '#4f46e5');
+          } else {
+            rect.setAttribute('fill', '#ffffff');
+            rect.setAttribute('fill-opacity', '0.01');
+            rect.setAttribute('stroke', '#1e293b');
+          }
+        }
+      });
+
+      // Update Right Sidebar Room Docket
+      const room = ROOMS[roomId];
+      document.getElementById('rightRoomTitle').textContent = room.name;
+      document.getElementById('rightRoomCode').textContent = room.code;
+      document.getElementById('rightRoomAreaSqft').textContent = Math.round(room.sqft) + ' sq ft';
+      const m2 = (room.sqft * 0.092903).toFixed(2);
+      document.getElementById('rightRoomAreaM2').textContent = '(' + m2 + ' m²)';
+
+      renderLiveBOQ();
+    }
+
+    // ----------------------------------------------------
+    // LIVE BOQ RENDERING & CALCULATIONS
+    // ----------------------------------------------------
+    function setBOQScope(scope) {
+      boqScope = scope;
+      const btnSel = document.getElementById('btnFilterSelectedRoom');
+      const btnAll = document.getElementById('btnFilterAllRooms');
+
+      if (scope === 'selected') {
+        btnSel.className = 'py-1 text-[11px] font-bold rounded-lg bg-white text-indigo-700 shadow-sm transition-all text-center';
+        btnAll.className = 'py-1 text-[11px] font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all text-center';
+        document.getElementById('lblSubtotalScope').textContent = 'Room subtotal';
+      } else {
+        btnAll.className = 'py-1 text-[11px] font-bold rounded-lg bg-white text-indigo-700 shadow-sm transition-all text-center';
+        btnSel.className = 'py-1 text-[11px] font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-all text-center';
+        document.getElementById('lblSubtotalScope').textContent = 'Project subtotal';
+      }
+      renderLiveBOQ();
+    }
+
+    function renderLiveBOQ() {
+      const container = document.getElementById('boqItemsListContainer');
+      container.innerHTML = '';
+
+      let itemsToRender = [];
+      if (boqScope === 'selected') {
+        itemsToRender = (ROOMS[activeRoomId]?.items || []).map(it => ({ ...it, roomId: activeRoomId }));
+      } else {
+        Object.keys(ROOMS).forEach(rId => {
+          (ROOMS[rId].items || []).forEach(it => {
+            itemsToRender.push({ ...it, roomId: rId });
+          });
+        });
+      }
+
+      document.getElementById('boqLinesCountBadge').textContent = itemsToRender.length + ' lines';
+
+      if (itemsToRender.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-10 px-4">
+            <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 mx-auto flex items-center justify-center mb-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+            </div>
+            <p class="text-xs font-bold text-slate-700">No line items in this scope</p>
+            <p class="text-[11px] text-slate-400 mt-1">Drag items from the left library into the floorplan to populate the BOQ.</p>
+          </div>
+        `;
+        document.getElementById('lblSubtotalAmount').textContent = formatINR(0);
+        return;
+      }
+
+      let subtotal = 0;
+
+      itemsToRender.forEach(it => {
+        const lineTotal = it.qty * it.rate;
+        subtotal += lineTotal;
+
+        const card = document.createElement('div');
+        card.className = 'p-3 bg-white rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-card transition-all group';
+        
+        card.innerHTML = `
+          <div class="flex items-start justify-between">
+            <div>
+              <h4 class="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors flex items-center space-x-1">
+                <span>${it.name}</span>
+                <svg class="w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+              </h4>
+              <div class="text-[11px] text-slate-500 font-mono mt-0.5">
+                ${it.qty} ${it.unit} × ${formatINR(it.rate)}
+              </div>
+            </div>
+            <span class="text-xs font-extrabold text-slate-900 font-mono">
+              ${formatINR(lineTotal)}
+            </span>
+          </div>
+          <div class="mt-1.5 text-[10px] text-slate-400 flex items-center justify-between">
+            <span class="flex items-center space-x-1">
+              <span>↳</span>
+              <span>${it.desc}</span>
+            </span>
+            <button onclick="removeBOQItem('${it.roomId}', '${it.id}')" class="text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity hover:underline">
+              Delete
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      document.getElementById('lblSubtotalAmount').textContent = formatINR(subtotal);
+      updateProjectTotals();
+    }
+
+    function updateProjectTotals() {
+      let masterTotal = 0;
+      Object.keys(ROOMS).forEach(rId => {
+        (ROOMS[rId].items || []).forEach(it => {
+          masterTotal += it.qty * it.rate;
+        });
+      });
+      document.getElementById('bottomMasterProjectEstimate').textContent = formatINR(masterTotal);
+    }
+
+    // ----------------------------------------------------
+    // QUICK ADD & DRAG-AND-DROP HANDLERS
+    // ----------------------------------------------------
+    function handleQuickAdd(itemKey) {
+      const template = CATALOG[itemKey];
+      if (!template) return;
+
+      let qty = 1;
+      let desc = template.desc;
+
+      if (template.unit === 'sq ft' && template.type === 'finishes') {
+        const room = ROOMS[activeRoomId];
+        if (itemKey === 'vitrified_tile') {
+          qty = Number((room.sqft * 1.07).toFixed(2));
+          desc = 'Floor area + 7% wastage';
+        } else if (itemKey === 'wall_paint_royal') {
+          const perimeter = 2 * (room.length_ft + room.depth_ft);
+          qty = Number((perimeter * 10 - 45).toFixed(2)); // net wall area
+          desc = 'Wall plaster net area';
+        }
+      } else if (template.defaultQty) {
+        qty = template.defaultQty;
+      }
+
+      const newItem = {
+        id: 'item_' + Date.now(),
+        key: itemKey,
+        code: template.code,
+        name: template.name,
+        type: template.type,
+        qty: qty,
+        unit: template.unit,
+        rate: template.rate,
+        desc: desc
+      };
+
+      ROOMS[activeRoomId].items.push(newItem);
+      renderLiveBOQ();
+      showToast(`Added ${template.name} to ${ROOMS[activeRoomId].name}.`);
+    }
+
+    function handleDragStart(ev, itemKey) {
+      draggedKey = itemKey;
+      ev.dataTransfer.setData('text/plain', itemKey);
+    }
+
+    function handleCanvasDragOver(ev) {
+      ev.preventDefault();
+    }
+
+    function handleCanvasDrop(ev) {
+      ev.preventDefault();
+      if (!draggedKey) return;
+      handleQuickAdd(draggedKey);
+      draggedKey = null;
+    }
+
+    function removeBOQItem(roomId, itemId) {
+      const room = ROOMS[roomId];
+      if (!room) return;
+      room.items = room.items.filter(i => i.id !== itemId);
+      renderLiveBOQ();
+      showToast('Line item removed.');
+    }
+
+    // ----------------------------------------------------
+    // ROOM ASSEMBLY PACKAGES
+    // ----------------------------------------------------
+    function applyRoomAssemblyPackage() {
+      const room = ROOMS[activeRoomId];
+      if (!room) return;
+
+      // 1. Vitrified Tile Flooring (107% of floor area)
+      const tileQty = Number((room.sqft * 1.07).toFixed(2));
+      const tileItem = {
+        id: 'pkg_tile_' + Date.now(),
+        key: 'vitrified_tile',
+        code: 'FL-001',
+        name: 'Vitrified tile',
+        type: 'finishes',
+        qty: tileQty,
+        unit: 'sq ft',
+        rate: 125,
+        desc: 'Floor area + 7% wastage'
+      };
+
+      // 2. Royale Wall Paint
+      const perimeter = 2 * (room.length_ft + room.depth_ft);
+      const paintQty = Number((perimeter * 10 - 45).toFixed(2));
+      const paintItem = {
+        id: 'pkg_paint_' + Date.now(),
+        key: 'wall_paint_royal',
+        code: 'PT-001',
+        name: 'Royale wall emulsion',
+        type: 'finishes',
+        qty: paintQty,
+        unit: 'sq ft',
+        rate: 38,
+        desc: 'Net wall plaster area'
+      };
+
+      // 3. 4 COB Downlights
+      const lightsItem = {
+        id: 'pkg_lights_' + Date.now(),
+        key: 'led_downlights_set',
+        code: 'EL-001',
+        name: 'COB LED downlight (9W)',
+        type: 'objects',
+        qty: 4,
+        unit: 'nos',
+        rate: 1250,
+        desc: 'Placed item • 4 count'
+      };
+
+      // Clear existing finishes and append new bundle
+      room.items = room.items.filter(i => i.type !== 'finishes');
+      room.items.push(tileItem, paintItem, lightsItem);
+
+      renderLiveBOQ();
+      showToast(`Package applied: flooring, wall paint and 4 downlights to ${room.name}.`);
+    }
+
+    // ----------------------------------------------------
+    // DIMENSION TOGGLE
+    // ----------------------------------------------------
+    function toggleDimensions(show) {
+      const g = document.getElementById('dimensionLayerGroup');
+      if (g) {
+        g.style.opacity = show ? '1' : '0';
+      }
+    }
+
+    // ----------------------------------------------------
+    // EDIT ROOM DIMENSIONS MODAL (ft)
+    // ----------------------------------------------------
+    function openEditDimensionsModal() {
+      const room = ROOMS[activeRoomId];
+      document.getElementById('modalRoomTitle').textContent = `Edit Dimensions: ${room.name}`;
+      document.getElementById('dimWidthFt').value = room.length_ft;
+      document.getElementById('dimHeightFt').value = room.depth_ft;
+      updateModalSqftPreview();
+
+      document.getElementById('modalEditDimensions').classList.remove('hidden');
+    }
+
+    function closeEditDimensionsModal() {
+      document.getElementById('modalEditDimensions').classList.add('hidden');
+    }
+
+    document.getElementById('dimWidthFt').addEventListener('input', updateModalSqftPreview);
+    document.getElementById('dimHeightFt').addEventListener('input', updateModalSqftPreview);
+
+    function updateModalSqftPreview() {
+      const w = parseFloat(document.getElementById('dimWidthFt').value) || 0;
+      const h = parseFloat(document.getElementById('dimHeightFt').value) || 0;
+      const sqft = Math.round(w * h);
+      document.getElementById('modalPreviewSqft').textContent = sqft + ' sq ft';
+    }
+
+    function saveRoomDimensions() {
+      const room = ROOMS[activeRoomId];
+      const w = parseFloat(document.getElementById('dimWidthFt').value) || room.length_ft;
+      const h = parseFloat(document.getElementById('dimHeightFt').value) || room.depth_ft;
+
+      room.length_ft = w;
+      room.depth_ft = h;
+      room.sqft = Number((w * h).toFixed(2));
+
+      // Rescale any finishes in this room
+      room.items.forEach(it => {
+        if (it.key === 'vitrified_tile') {
+          it.qty = Number((room.sqft * 1.07).toFixed(2));
+        } else if (it.key === 'wall_paint_royal') {
+          const perimeter = 2 * (room.length_ft + room.depth_ft);
+          it.qty = Number((perimeter * 10 - 45).toFixed(2));
+        }
+      });
+
+      closeEditDimensionsModal();
+      selectRoom(activeRoomId);
+      showToast(`Updated ${room.name} dimensions to ${w} ft × ${h} ft (${Math.round(room.sqft)} sq ft).`);
+    }
+
+    // ----------------------------------------------------
+    // INSPECT ITEM BUBBLE
+    // ----------------------------------------------------
+    function inspectItem(itemKey, roomId, ev) {
+      if (ev) ev.stopPropagation();
+      selectRoom(roomId);
+
+      const room = ROOMS[roomId];
+      const found = room.items.find(i => i.key === itemKey);
+      if (!found) return;
+
+      inspectedItemObj = { roomId, item: found };
+
+      document.getElementById('inspectTitle').textContent = found.name;
+      document.getElementById('inspectCode').textContent = 'CODE: ' + found.code;
+      document.getElementById('inspectQtyBox').textContent = found.qty + ' ' + found.unit;
+      document.getElementById('inspectQtyDisplay').textContent = found.qty + ' ' + found.unit;
+      document.getElementById('inspectTotalDisplay').textContent = formatINR(found.qty * found.rate);
+
+      const bubble = document.getElementById('canvasInspectorBubble');
+      bubble.classList.remove('hidden');
+
+      // Position bubble near click or center
+      bubble.style.top = '140px';
+      bubble.style.left = '280px';
+    }
+
+    function closeInspector() {
+      document.getElementById('canvasInspectorBubble').classList.add('hidden');
+      inspectedItemObj = null;
+    }
+
+    function adjustInspectQty(delta) {
+      if (!inspectedItemObj) return;
+      const { roomId, item } = inspectedItemObj;
+      const newQty = Math.max(1, item.qty + delta);
+      item.qty = newQty;
+
+      document.getElementById('inspectQtyBox').textContent = newQty + ' ' + item.unit;
+      document.getElementById('inspectQtyDisplay').textContent = newQty + ' ' + item.unit;
+      document.getElementById('inspectTotalDisplay').textContent = formatINR(newQty * item.rate);
+
+      renderLiveBOQ();
+    }
+
+    function removeInspectedItem() {
+      if (!inspectedItemObj) return;
+      const { roomId, item } = inspectedItemObj;
+      removeBOQItem(roomId, item.id);
+      closeInspector();
+    }
+
+    // ----------------------------------------------------
+    // FILTERING ITEM LIBRARY
+    // ----------------------------------------------------
+    function setItemFilter(type) {
+      const pills = {
+        all: document.getElementById('pillFilterAll'),
+        objects: document.getElementById('pillFilterObjects'),
+        finishes: document.getElementById('pillFilterFinishes')
+      };
+
+      Object.keys(pills).forEach(k => {
+        if (k === type) {
+          pills[k].className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm transition-all';
+        } else {
+          pills[k].className = 'px-3 py-1 rounded-full text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all';
+        }
+      });
+
+      const cards = document.querySelectorAll('.item-library-card');
+      let visible = 0;
+      cards.forEach(c => {
+        const itemType = c.getAttribute('data-type');
+        if (type === 'all' || itemType === type) {
+          c.style.display = 'block';
+          visible++;
+        } else {
+          c.style.display = 'none';
+        }
+      });
+      document.getElementById('itemBankCountBadge').textContent = visible + ' items';
+    }
+
+    function filterItemsBySearch(query) {
+      const q = query.toLowerCase().trim();
+      const cards = document.querySelectorAll('.item-library-card');
+      let visible = 0;
+      cards.forEach(c => {
+        const text = c.textContent.toLowerCase();
+        if (!q || text.includes(q)) {
+          c.style.display = 'block';
+          visible++;
+        } else {
+          c.style.display = 'none';
+        }
+      });
+      document.getElementById('itemBankCountBadge').textContent = visible + ' items';
+    }
+
+    // ----------------------------------------------------
+    // UTILITY: TOAST NOTIFICATIONS & EXPORT
+    // ----------------------------------------------------
+    function showToast(msg) {
+      const el = document.getElementById('bottomToastMessage');
+      el.textContent = msg;
+    }
+
+    function handleExportBOQ() {
+      const exportData = {
+        project: 'APARTMENT 04 (#FFDS-8092)',
+        rooms: ROOMS,
+        totalEstimate: document.getElementById('bottomMasterProjectEstimate').textContent
+      };
+      const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", jsonStr);
+      downloadAnchor.setAttribute("download", "FFDS_BOQ_Apartment_04.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast('Exported complete BOQ JSON specification.');
+    }
+
+    function undoAction() {
+      showToast('Undo previous action.');
+    }
+
+    function redoAction() {
+      showToast('Redo previous action.');
+    }
+  </script>
+
+</body>
+</html>
