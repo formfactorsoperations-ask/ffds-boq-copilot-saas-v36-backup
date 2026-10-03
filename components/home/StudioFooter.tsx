@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { formatCompactINR } from "../../lib/utils";
 import { useOrg } from "../../contexts/OrgContext";
+import { TervaroMark } from "../brand/StudioDeskLogo";
 
 /**
  * STUDIO FOOTER.
@@ -102,10 +103,6 @@ interface Props {
   variant?: "full" | "slim";
   onNavigate?: (tab: string) => void;
   studioName?: string;
-  /** Real figures, from the same hook the home page reads. `full` only. */
-  activeCount?: number;
-  clientsCount?: number;
-  openValue?: number;
 }
 
 const COLUMNS: Column[] = [
@@ -145,9 +142,6 @@ const StudioFooter: React.FC<Props> = ({
   variant = "full",
   onNavigate,
   studioName = "Form Factors Design Studio",
-  activeCount = 0,
-  clientsCount = 0,
-  openValue = 0,
 }) => {
   const { orgData } = useOrg();
   const plate = usePlateLight();
@@ -186,7 +180,7 @@ const StudioFooter: React.FC<Props> = ({
         className="text-[10.5px] font-bold uppercase tracking-[0.28em]"
         style={{ color: BRAND }}
       >
-        Form Factors Studio OS
+        TheStudioDesk
       </motion.p>
 
       <motion.h2
@@ -206,7 +200,10 @@ const StudioFooter: React.FC<Props> = ({
       </motion.p>
 
       {/* ── Capabilities ──────────────────────────────────────────────── */}
-      <div className="mt-12 pt-10 border-t border-slate-200/70 grid grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-10">
+      {/* Three columns, not four. The fourth held the vitals; leaving the grid
+          at four would strand a column of empty space on the right rather than
+          letting the capabilities breathe across the width. */}
+      <div className="mt-12 pt-10 border-t border-slate-200/70 grid grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-10">
         {COLUMNS.map((col, i) => (
           <motion.div key={col.heading} {...rise(3 + i)}>
             {col.tab ? (
@@ -246,45 +243,21 @@ const StudioFooter: React.FC<Props> = ({
           </motion.div>
         ))}
 
-        {/* Studio vitals -- real numbers, labelled as what they actually are.
-            The reference ran "Live Projects" straight into "42 Accounts",
-            which reads as one figure and is two different things. */}
-        <motion.div {...rise(6)}>
-          <p
-            className="text-[11px] font-bold uppercase tracking-[0.14em]"
-            style={{ color: BRAND }}
-          >
-            Studio vitals
-          </p>
-          <dl className="mt-5 space-y-4">
-            <div>
-              <dt className="text-[12.5px] text-slate-400 flex items-center gap-1.5"><Activity className="w-3 h-3 shrink-0" strokeWidth={2.2} />Live projects</dt>
-              <dd className="text-[19px] font-bold tabular-nums mt-0.5" style={{ color: INK }}>
-                {activeCount}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[12.5px] text-slate-400 flex items-center gap-1.5"><Users className="w-3 h-3 shrink-0" strokeWidth={2.2} />Client accounts</dt>
-              <dd className="text-[19px] font-bold tabular-nums mt-0.5" style={{ color: INK }}>
-                {clientsCount}
-              </dd>
-            </div>
-            <div>
-              {/* "Open value", not "under management".
+        {/*
+          The vitals column stood here: Live projects / Client accounts / Open
+          value. Removed, and not because a footer cannot hold numbers.
 
-                  openValue is active + pipeline. The Clients screen already
-                  uses the words "under management" for a different scope --
-                  every client-attributable project, 3.01Cr against this 3.81Cr
-                  -- so borrowing the label here would have put two screens in
-                  contradiction over one phrase. "Open value" is this app's own
-                  existing term for exactly this figure. */}
-              <dt className="text-[12.5px] text-slate-400 flex items-center gap-1.5"><IndianRupee className="w-3 h-3 shrink-0" strokeWidth={2.2} />Open value</dt>
-              <dd className="text-[19px] font-bold tabular-nums mt-0.5" style={{ color: INK }}>
-                {formatCompactINR(openValue)}
-              </dd>
-            </div>
-          </dl>
-        </motion.div>
+          It read 7 live projects and 3.81Cr of open value against 1 and 0.45Cr
+          of real work, because it counted every project in the system including
+          twenty-nine test records. Projects, Clients and Reports all carry these
+          figures already, with the scope control that says which projects are
+          being counted -- a footer has nowhere to put that qualification, so the
+          number could only ever be stated without it.
+
+          NOTE: the Home header line above is fed by the same unfiltered hook and
+          still says "7 projects are active, 24 opportunities are in the
+          pipeline". Removing this column did not fix that.
+        */}
       </div>
 
       </>
@@ -363,7 +336,12 @@ const StudioFooter: React.FC<Props> = ({
               <Copyright className="w-3 h-3 shrink-0" strokeWidth={2.2} />
               <span>{new Date().getFullYear()}</span>
               <span aria-hidden className="text-slate-300">&bull;</span>
-              <span>All rights reserved. Proprietary enterprise OS.</span>
+              <span>All rights reserved.</span>
+              <span aria-hidden className="text-slate-300">&bull;</span>
+              <span className="inline-flex items-center gap-1.5">
+                Runs on TheStudioDesk by Tervaro
+                <TervaroMark className="w-3.5 h-3.5" />
+              </span>
             </p>
           </div>
 

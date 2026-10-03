@@ -760,7 +760,7 @@ export default function AgreementSignoffPage({ token: initialToken }: AgreementS
 
         {/* Footer */}
         <div className="text-center text-xs text-slate-400 pt-4 pb-8 space-y-1">
-          <p>Powered by BOQ Copilot Enterprise • Multi-Tenant Studio Suite</p>
+          <p>Powered by TheStudioDesk by Tervaro</p>
           <p>© {new Date().getFullYear()} {studioName}. All Rights Reserved.</p>
         </div>
 

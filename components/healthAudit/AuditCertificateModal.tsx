@@ -183,7 +183,7 @@ export const AuditCertificateModal: React.FC<AuditCertificateModalProps> = ({
               <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Solutions Architect / Studio Lead</p>
             </div>
             <div className="text-right text-[10px] font-mono text-slate-400">
-              <div>BOQ Copilot · Enterprise Health Engine</div>
+              <div>TheStudioDesk · Health Engine</div>
               <div>Audit Docket ID: {auditRef}</div>
             </div>
           </div>

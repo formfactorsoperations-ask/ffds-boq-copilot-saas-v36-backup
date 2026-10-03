@@ -3839,7 +3839,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             <div className="p-4 bg-[#EDE8F5]/40 rounded-2xl border border-[#DDE3F5]/60 space-y-3">
                                 <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
                                     <Sparkles className="w-4 h-4 text-[#3D52A0] animate-pulse" />
-                                    <span>Studio Copilot Smart Billing Insights</span>
+                                    <span>Smart Billing Insights</span>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {billingInsights.map((insight, index) => (

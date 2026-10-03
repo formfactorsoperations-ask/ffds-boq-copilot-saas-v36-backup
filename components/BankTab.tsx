@@ -510,7 +510,7 @@ const BankTab: React.FC<BankTabProps> = ({
     setAiLogMessages([]);
 
     const logs = [
-      '🤖 AI Studio Copilot: Initializing room-level bundle synthesis...',
+      '🤖 StudioDesk AI: Initializing room-level bundle synthesis...',
       '📂 Scanning historical delivery records and project scopes...',
       '🔍 Reconciling standard items for carpentry, plumbing, civil work & electrical...',
       '📈 Aggregating item frequencies across Living, Kitchen, Bedroom, and Bathroom projects...',

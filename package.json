@@ -7,9 +7,6 @@
     "build": "vite build",
     "lint": "tsc --noEmit"
   },
-  "engines": {
-    "node": ">=20.0.0"
-  },
   "dependencies": {
     "@google/genai": "^2.11.0",
     "@supabase/supabase-js": "^2.90.1",

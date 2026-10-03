@@ -84,7 +84,7 @@ const TermsOfUsePage: React.FC = () => {
         How we use this system
       </motion.p>
       <motion.p {...rise(1)} className="mt-3 text-[14px] leading-relaxed text-slate-600 max-w-[64ch]">
-        Four things the studio expects of anyone working in Studio Copilot.
+        Four things the studio expects of anyone working in TheStudioDesk.
         Short, because the point is that people read it.
       </motion.p>
 

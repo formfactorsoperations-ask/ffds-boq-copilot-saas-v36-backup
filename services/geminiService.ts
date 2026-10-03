@@ -1308,7 +1308,7 @@ export async function generateComprehensiveWeeklyReport(
     const ai = getAi();
 
     const prompt = `
-    You are the Principal Design & Ops Director for BOQ Copilot, a multi-tenant B2B platform for premium interior design studios.
+    You are the Principal Design & Ops Director for TheStudioDesk, a multi-tenant B2B platform for premium interior design studios.
     Write a highly professional, sophisticated, and reassuring executive commentary for the Client Progress Report of Week ${weekNumber} (${dateRange}).
     This report is shared directly with the client to build deep trust, show architectural precision, and keep them fully aligned on project progress.
 
@@ -1556,7 +1556,7 @@ export async function generateTimelineDelayPlan(
         const delayedTitles = delayedPhases.map(d => `${d.title} (Duration: ${d.durationDays} days)`).join(', ');
 
         const prompt = `
-You are a Principal Ops Director for BOQ Copilot, a multi-tenant B2B platform for premium interior design studios.
+You are a Principal Ops Director for TheStudioDesk, a multi-tenant B2B platform for premium interior design studios.
 The following project is experiencing delays in these phases: ${delayedTitles}.
 Project: ${projectContext?.name || 'Your Premium Interior Project'}.
 
@@ -1658,7 +1658,7 @@ export async function analyzeTimelineHandoverRisks(
         }
 
         const prompt = `
-You are the Principal Operations Director and Risk Officer for BOQ Copilot, a multi-tenant B2B interior design SaaS.
+You are the Principal Operations Director and Risk Officer for TheStudioDesk, a multi-tenant B2B interior design SaaS.
 Perform a predictive, high-fidelity timeline analysis for the project "${projectContext?.name || 'Your Project'}" to identify potential handover delays and generate actionable "Risk Alerts".
 
 PROJECT BASICS:

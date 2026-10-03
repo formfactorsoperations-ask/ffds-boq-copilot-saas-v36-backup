@@ -1,7 +1,7 @@
 /**
  * Centralized Application Design Tokens & UI Constants
  *
- * Defines the application's premium design tokens for BOQ Copilot:
+ * Defines the application's premium design tokens for TheStudioDesk:
  * - Milky White palette (#FDFDFB, #FAFAFA, #F5F5F0)
  * - Muted Gold accents (#C5A85C, #B4964B)
  * - Deep Navy / Slate text & headers (#0F172A, #1E293B, #334155)

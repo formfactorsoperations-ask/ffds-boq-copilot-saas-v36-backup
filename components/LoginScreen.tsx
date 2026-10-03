@@ -7,6 +7,8 @@ import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, User, 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { syncStudioAccess, NO_STUDIO_MESSAGE } from '../services/studioAccess';
 import { setCachedAccessToken } from '../services/authService';
+import { StudioDeskLogo, TervaroMark } from './brand/StudioDeskLogo';
+import { BRAND } from '../lib/brand';
 
 interface LoginScreenProps {
     onLoginOps: () => void;
@@ -261,22 +263,18 @@ export default function LoginScreen({ onLoginOps, mustSetPasswordFor, onPassword
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1, duration: 0.6, ease: EASE }}
-                    className="relative z-10 flex items-center gap-3"
+                    className="relative z-10"
                 >
-                    <span className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 backdrop-blur-md grid place-items-center text-white font-black text-sm">
-                        FF
-                    </span>
-                    <span className="text-white/70 text-[13px] font-bold tracking-[0.16em] uppercase">
-                        Studio Copilot
-                    </span>
+                    <StudioDeskLogo tone="dark" byline />
                 </motion.div>
 
                 <div className="relative z-10 max-w-lg">
                     {/* Line by line, each rising out of its own overflow box —
                         the type arrives as writing rather than as a block
-                        fading in. */}
-                    <h1 className="text-[44px] xl:text-[52px] font-black text-white leading-[1.04] tracking-tight">
-                        {['The execution layer', 'for interior studios.'].map((line, i) => (
+                        fading in. The lines are BRAND.descriptor, broken by
+                        hand so the break falls where the sense does. */}
+                    <h1 className="text-[40px] xl:text-[48px] font-black text-white leading-[1.06] tracking-tight">
+                        {['The operating system', 'for design and build', 'studios.'].map((line, i) => (
                             <span key={line} className="block overflow-hidden">
                                 <motion.span
                                     className="block"
@@ -320,14 +318,25 @@ export default function LoginScreen({ onLoginOps, mustSetPasswordFor, onPassword
                         ))}
                     </div>
                 </div>
+
+                {/* The company's line, signed. */}
+                <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.95, duration: 0.8, ease: EASE }}
+                    className="relative z-10 flex items-center text-[12px] font-semibold text-white/45 tracking-wide"
+                >
+                    <TervaroMark className="w-6 h-6 mr-2.5" />
+                    <span className="text-white/80">{BRAND.tagline}</span>
+                    <span className="mx-2 text-white/25">—</span>
+                    {BRAND.company}
+                </motion.p>
             </div>
 
             {/* Right: the form, and nothing competing with it. */}
             <div className="w-full lg:w-[54%] xl:w-1/2 flex items-center justify-center p-6 sm:p-10 bg-white relative">
-                <div className="absolute top-7 right-7 lg:hidden">
-                    <div className="w-11 h-11 bg-[#3D52A0] rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-lg shadow-[#3D52A0]/25">
-                        FF
-                    </div>
+                <div className="absolute top-7 left-6 sm:left-10 lg:hidden">
+                    <StudioDeskLogo size="sm" />
                 </div>
 
                 {mustSetPasswordFor !== undefined ? (

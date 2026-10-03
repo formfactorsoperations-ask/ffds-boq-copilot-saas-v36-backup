@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, process.cwd(), '');
+    const env = loadEnv(mode, '.', '');
     return {
       server: {
         port: 3000,
@@ -23,27 +23,8 @@ export default defineConfig(({ mode }) => {
         outDir: 'dist',
         emptyOutDir: true,
         reportCompressedSize: false,
-        chunkSizeWarningLimit: 2000,
-        target: 'esnext',
-        minify: false,
-        rollupOptions: {
-          maxParallelFileOps: 1,
-          output: {
-            manualChunks(id) {
-              if (id.includes('node_modules/exceljs/')) return 'vendor-exceljs';
-              if (id.includes('node_modules/xlsx/')) return 'vendor-xlsx';
-              if (id.includes('node_modules/jspdf/')) return 'vendor-jspdf';
-              if (id.includes('node_modules/html2pdf.js/') || id.includes('node_modules/html2canvas/')) return 'vendor-html2pdf';
-              if (id.includes('node_modules/firebase/') || id.includes('node_modules/@firebase/')) return 'vendor-firebase';
-              if (id.includes('node_modules/lucide-react/')) return 'vendor-lucide';
-              if (id.includes('node_modules/framer-motion/')) return 'vendor-framer';
-              if (id.includes('node_modules/recharts/')) return 'vendor-recharts';
-              if (id.includes('node_modules/d3') || id.includes('node_modules/d3-')) return 'vendor-d3';
-              if (id.includes('node_modules/@google/genai/')) return 'vendor-genai';
-              if (id.includes('node_modules/date-fns/')) return 'vendor-datefns';
-            }
-          }
-        }
+        chunkSizeWarningLimit: 5000,
+        target: 'esnext'
       },
       optimizeDeps: {
         include: [
@@ -73,14 +54,13 @@ export default defineConfig(({ mode }) => {
         tailwindcss(),
         react(),
         VitePWA({
-          disable: true,
           registerType: 'autoUpdate',
-          includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
+          includeAssets: ['favicon.svg', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
           manifest: {
             id: '/',
-            name: 'FFDS Studio & Client Portal',
-            short_name: 'FFDS Portal',
-            description: 'Interior design studio operating system and live client approval portal.',
+            name: 'TheStudioDesk',
+            short_name: 'StudioDesk',
+            description: 'The operating system for design and build studios. By Tervaro.',
             theme_color: '#3D52A0',
             background_color: '#F8FAFC',
             display: 'standalone',
@@ -100,7 +80,7 @@ export default defineConfig(({ mode }) => {
                 purpose: 'any'
               },
               {
-                src: '/pwa-512x512.png',
+                src: '/pwa-maskable-512x512.png',
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'maskable'
@@ -108,8 +88,8 @@ export default defineConfig(({ mode }) => {
             ]
           },
           workbox: {
-            maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-            globPatterns: ['**/*.{css,html,ico,png,svg,woff,woff2}'],
+            maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+            globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
             runtimeCaching: [
               {
                 urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -161,8 +141,11 @@ export default defineConfig(({ mode }) => {
         })
       ],
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || '')
+        /* The two `process.env.*_API_KEY` defines that used to live here
+           substituted the studio's Gemini key into the client bundle as a
+           string literal. It was recoverable from the shipped JS. AI now goes
+           through the aiGenerate / aiCountTokens callables and the key never
+           leaves the server -- see functions/src/ai.ts. */
       },
       resolve: {
         alias: {

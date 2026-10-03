@@ -137,7 +137,7 @@ const SupportDeskPage: React.FC = () => {
 
           {orgData?.contactEmail ? (
             <a
-              href={`mailto:${orgData.contactEmail}?subject=${encodeURIComponent("Studio Copilot — issue report")}&body=${encodeURIComponent("What happened:\n\n\nWhat I expected:\n\n\n--- diagnostics ---\n" + diagnostics)}`}
+              href={`mailto:${orgData.contactEmail}?subject=${encodeURIComponent("TheStudioDesk — issue report")}&body=${encodeURIComponent("What happened:\n\n\nWhat I expected:\n\n\n--- diagnostics ---\n" + diagnostics)}`}
               className="mt-5 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white transition-colors"
               style={{ background: BRAND }}
             >

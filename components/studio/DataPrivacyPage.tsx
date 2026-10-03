@@ -85,7 +85,7 @@ const Page: React.FC = () => {
         How this system handles data
       </motion.p>
       <motion.p {...rise(1)} className="mt-3 text-[14px] leading-relaxed text-slate-600 max-w-[62ch]">
-        A plain account of what Studio Copilot stores, where it is kept and what
+        A plain account of what TheStudioDesk stores, where it is kept and what
         leaves the studio. This describes how the system is built. It is not a
         legal policy and makes no commitments on the studio&rsquo;s behalf.
       </motion.p>

@@ -2160,7 +2160,7 @@ function ScheduleAnalysisReportModal({ projectContext, schedule, result, varianc
         <div id="timeline-analysis-report-print" className="space-y-6 text-slate-800 font-sans text-sm">
           {/* Cover / Header */}
           <div className="text-center pb-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">BOQ Copilot · Timeline Audit</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">TheStudioDesk · Timeline Audit</p>
             <h2 className="text-2xl font-semibold text-slate-900 mt-1 uppercase tracking-wide">
               Timeline Analysis Report
             </h2>

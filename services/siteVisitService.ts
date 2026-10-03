@@ -166,7 +166,7 @@ Phase: ${visit.phaseTitle}
 Type: ${visit.type}
 Notes: ${visit.notes || ''}
 
-Logged via BOQ Copilot`;
+Logged via TheStudioDesk`;
 
   const conferenceData = visit.isVirtual ? {
     createRequest: {
