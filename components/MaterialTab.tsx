@@ -21,6 +21,7 @@ import {
     getConsolidatedPendingSelectionsEmailHtml
 } from '../services/emailService';
 import { EmailPreviewModal } from './EmailPreviewModal';
+import { publicAppOrigin } from '../lib/publicUrl';
 
 const formatINR = (value: number | undefined | null) => {
     if (value == null) return '';
@@ -123,7 +124,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
         lines.push(`Hi ${projectContext.clientName || 'Client'}, just a reminder — the following selections are awaiting your confirmation for *${projectContext.name || 'your project'}*:`);
         lines.push('');
         pendingSelections.forEach(item => {
-            lines.push(`▪ ${item.itemName}${item.brand ? ' — ' + item.brand : ''}${item.quotedPrice ? ' — ₹' + item.quotedPrice.toLocaleString('en-IN') : ''}: ${window.location.origin}/selection-confirm/${item.confirmationToken}`);
+            lines.push(`▪ ${item.itemName}${item.brand ? ' — ' + item.brand : ''}${item.quotedPrice ? ' — ₹' + item.quotedPrice.toLocaleString('en-IN') : ''}: ${publicAppOrigin()}/selection-confirm/${item.confirmationToken}`);
         });
         lines.push('');
         lines.push('Please review and confirm at your earliest convenience.');
@@ -852,7 +853,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
             
             lines.push('');
             lines.push(`Please tap the link below to confirm this selection:`);
-            const appUrl = window.location.origin;
+            const appUrl = publicAppOrigin();
             lines.push(`${appUrl}/selection-confirm/${finalSelectionToSave.confirmationToken}`);
             lines.push('');
             lines.push(`If you have any concerns, you can note them on that page.`);
@@ -2775,7 +2776,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                                                     lines.push(`Hi ${projectContext.clientName || 'Client'}, just a reminder — the following selections are awaiting your confirmation for *${projectContext.name || 'your project'}*:`);
                                                     lines.push('');
                                                     pendingSelections.forEach(item => {
-                                                        lines.push(`▪ ${item.itemName}${item.brand ? ' — ' + item.brand : ''}${item.quotedPrice ? ' — ₹' + item.quotedPrice.toLocaleString('en-IN') : ''}: ${window.location.origin}/selection-confirm/${item.confirmationToken}`);
+                                                        lines.push(`▪ ${item.itemName}${item.brand ? ' — ' + item.brand : ''}${item.quotedPrice ? ' — ₹' + item.quotedPrice.toLocaleString('en-IN') : ''}: ${publicAppOrigin()}/selection-confirm/${item.confirmationToken}`);
                                                     });
                                                     lines.push('');
                                                     lines.push('Please review and confirm at your earliest convenience.');

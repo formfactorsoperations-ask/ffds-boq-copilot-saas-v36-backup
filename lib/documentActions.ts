@@ -10,6 +10,7 @@ import {
   Calendar,
   LucideIcon 
 } from 'lucide-react';
+import { publicAppOrigin } from './publicUrl';
 
 export interface DocMeta {
   id: string;                     // route id — matches the workspace tab
@@ -179,10 +180,7 @@ export function projectDocumentsFor(ctx: ProjectContext | null | undefined): Doc
 export const docRoute = (d: DocMeta): string => d.route || d.id;
 
 export function buildSigningUrl(token: string): string {
-  let origin = typeof window !== 'undefined' ? window.location.origin : '';
-  if (!origin) {
-    origin = 'https://ais-pre-oemogartnmwkt2jc2dlqrb-489259392227.asia-southeast1.run.app';
-  }
+  let origin = publicAppOrigin();
   if (origin.includes('ais-dev-')) {
     origin = origin.replace('ais-dev-', 'ais-pre-');
   }

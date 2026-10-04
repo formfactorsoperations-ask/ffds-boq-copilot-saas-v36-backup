@@ -53,8 +53,18 @@ function mergeDocuments(mine: any, theirs: any): any {
   const issues = (mine.issues || []).map((issue: any) => {
     const other = theirIssues.get(issue.id);
     if (!other) return issue;
-    if (issue.clientSignature || !other.clientSignature) return issue;
-    return { ...issue, clientSignature: other.clientSignature };
+    let next = issue;
+    /*
+      The delivery record too: another session that sent this document to the
+      client (the Excel-first email) stamped sentAt on its copy. Without this,
+      a second open session kept its own unsent copy and saved it back, and the
+      studio's "sent to the client" record vanished.
+    */
+    if ((Number(other.sentAt) || 0) > (Number(issue.sentAt) || 0)) {
+      next = { ...next, sentAt: other.sentAt, sentTo: other.sentTo, releasedVia: other.releasedVia ?? next.releasedVia };
+    }
+    if (!next.clientSignature && other.clientSignature) next = { ...next, clientSignature: other.clientSignature };
+    return next;
   });
 
   // An issue the studio's copy has never seen — it can only have come from

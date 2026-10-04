@@ -173,11 +173,13 @@ Return JSON: {"subject": "...", "body": "..."}`;
   const ccList = splitEmails(cc);
   const badEmail = [...toList, ...ccList].find((e) => !EMAIL_RX.test(e));
 
+  /* WhatsApp has no buttons, so the link goes in the text there; the email gets a button. */
   const finalBody = async () => {
     if (!includeLink) return body;
     const link = await getAckLink();
     return `${body.trim()}\n\nTo acknowledge the minutes or ask for a correction: ${link}`;
   };
+  const vendorMeeting = String(mom.meetingType || '').includes('vendor');
 
   const send = async () => {
     if (!toList.length) { setError('Add at least one recipient in To.'); return; }
@@ -187,7 +189,22 @@ Return JSON: {"subject": "...", "body": "..."}`;
     setError(null);
     try {
       const pdf = attachPdf ? await getPdf() : null;
-      const res = await sendMomEmail({ to: toList, cc: ccList, subject: subject.trim(), body: await finalBody(), pdf });
+      const res = await sendMomEmail({
+        to: toList,
+        cc: ccList,
+        subject: subject.trim(),
+        body: body.trim(),
+        pdf,
+        cta: includeLink
+          ? {
+              url: await getAckLink(),
+              heading: mom.rev ? 'Please confirm the revised minutes' : 'Please confirm these minutes',
+              label: 'Review the minutes',
+              note: 'Opens your project portal. Acknowledge them there, or tell us what needs correcting.',
+            }
+          : null,
+        context: `Sent for ${projectName} · ${mom.momRef}${mom.rev ? ` Rev ${mom.rev}` : ''}. You're receiving this as ${vendorMeeting ? 'a participant in this meeting' : `a client of ${studioName}`}.`,
+      });
       if (!res.success) throw new Error(res.error || 'The email service refused the message.');
       await onSent([...toList, ...ccList]);
       setSent([...toList, ...ccList]);

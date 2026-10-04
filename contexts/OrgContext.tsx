@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect } from
 import { OrganizationContext, TeamMember, UserRole } from '../types';
 import { auth, db } from '../services/firebaseClient';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { setStudioEmailBrand } from '../services/emailService';
 
 interface OrgContextType {
     orgData: OrganizationContext;
@@ -55,6 +56,9 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         const saved = localStorage.getItem('ffds_org_context');
         return saved ? JSON.parse(saved) : defaultOrg;
     });
+
+    /* Every email signs off with the studio's real details and logo (services/emailService). */
+    useEffect(() => { setStudioEmailBrand(orgData); }, [orgData]);
 
     useEffect(() => {
         if (!auth) return;

@@ -5,6 +5,7 @@ import { useStudioSettings } from '../hooks/useStudioSettings';
 import { resolveTemplate, stripHtml, EMAIL_TEMPLATE_LIBRARY } from '../lib/templateEngine';
 import { CheckCircle2, Copy, Search, Filter, Mail, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
+import { publicAppOrigin } from '../lib/publicUrl';
 
 interface EmailDraftsTabProps {
     projectContext: ProjectContext & { id?: string };
@@ -68,7 +69,7 @@ const EmailDraftsTab: React.FC<EmailDraftsTabProps> = ({ projectContext, tiers }
             amount: '₹0', // Can be refined later with actual milestones
             invoiceRef: '',
             dueDate: '',
-            portalLink: window.location.origin + '/client?project=' + (projectContext.id || 'new')
+            portalLink: publicAppOrigin() + '/client?project=' + (projectContext.id || 'new')
         };
     };
 

@@ -5,13 +5,92 @@ import { ensureDecisionStudio, markDecisionNotified, markSignoffSent } from './d
 import { format } from 'date-fns';
 import { EMAIL_TEMPLATE_LIBRARY, resolveTemplate } from '../lib/templateEngine';
 import { formatINR } from '../lib/utils';
+import { publicAppOrigin } from '../lib/publicUrl';
 
 const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY;
 const STUDIO_NAME = import.meta.env.VITE_STUDIO_NAME || 'Form Factors Design Studio';
-const STUDIO_PHONE = import.meta.env.VITE_STUDIO_PHONE || '+91 98765 43210';
+// No fallback number: an empty phone prints nothing, where the old
+// placeholder "+91 98765 43210" went to clients as the studio's helpline.
+const STUDIO_PHONE = import.meta.env.VITE_STUDIO_PHONE || '';
 const STUDIO_LOGO_URL = import.meta.env.VITE_STUDIO_LOGO_URL || '';
 const BRAND_COLOR = import.meta.env.VITE_BRAND_COLOR || '#3D52A0';
 const RESEND_SENDER_EMAIL = import.meta.env.VITE_EMAIL_FROM || import.meta.env.VITE_RESEND_SENDER_EMAIL || 'onboarding@resend.dev'; // Default to onboarding for testing
+
+/*
+  THE STUDIO, AS EVERY EMAIL SIGNS OFF.
+
+  The template printed the env name, a placeholder helpline and a claim that
+  the mail was "digitally sealed" under the IT Act. The studio's real details
+  live in Studio Settings (organizations/{tenantId}); OrgContext hands them
+  here once they load, and every email uses them.
+
+  The logo is stored as a data: URI, which Gmail and most clients refuse to
+  show. It is shrunk to email size here and sent as an inline attachment
+  (cid:studio-logo) by sendResendEmail; the template itself keeps the data:
+  URI, so an in-app preview of an email still shows the logo.
+*/
+export interface StudioEmailBrand {
+    name: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+    website?: string;
+    /** A web address, or a shrunk data: URI sent inline. */
+    logoSrc?: string | null;
+}
+
+let studioBrand: StudioEmailBrand | null = null;
+let brandReady: Promise<void> = Promise.resolve();
+
+const shrinkLogo = (src: string): Promise<string | null> => new Promise((resolve) => {
+    if (typeof document === 'undefined') return resolve(null);
+    const img = new Image();
+    img.onload = () => {
+        try {
+            // 120px tall at most (shown at 60px, so sharp on high-density screens), 480px wide at most.
+            const scale = Math.min(1, 120 / (img.naturalHeight || 1), 480 / (img.naturalWidth || 1));
+            const c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+            c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+            c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+            resolve(c.toDataURL('image/png'));
+        } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+});
+
+const prettyPhone = (p: string) => {
+    const digits = p.replace(/\D/g, '');
+    if (digits.length === 10) return `${digits.slice(0, 5)} ${digits.slice(5)}`;
+    if (digits.length === 12 && digits.startsWith('91')) return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`;
+    return p.trim();
+};
+
+/** Called by OrgContext whenever the studio's settings load or change. */
+export const setStudioEmailBrand = (org: any) => {
+    if (!org) return;
+    const rawName = String(org.orgName || '').trim();
+    const name = rawName && rawName !== org.tenantId ? rawName : STUDIO_NAME;
+    const website = String(org.website || '').trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+    const base: StudioEmailBrand = {
+        name,
+        address: String(org.officeAddress || org.cityState || '').trim() || undefined,
+        phone: org.contactPhone ? prettyPhone(String(org.contactPhone)) : (STUDIO_PHONE || undefined),
+        email: String(org.contactEmail || '').trim() || undefined,
+        website: website || undefined,
+        logoSrc: STUDIO_LOGO_URL || null,
+    };
+    studioBrand = base;
+    const logo = String(org.orgLogo || org.logoUrl || '').trim();
+    if (/^https:\/\//i.test(logo)) {
+        studioBrand = { ...base, logoSrc: logo };
+    } else if (/^data:image\//i.test(logo)) {
+        brandReady = shrinkLogo(logo).then((small) => {
+            if (small && studioBrand?.name === name) studioBrand = { ...studioBrand, logoSrc: small };
+        });
+    }
+};
 
 const formatBodyToHtml = (body: string): string => {
     return body
@@ -149,8 +228,17 @@ const getEmailSubjectAndBody = async (studioId: string, key: string, variables: 
  */
 const sendResendEmail = async (to: string, subject: string, html: string, attachments?: any[], cc?: string[]): Promise<{ success: boolean; data?: any; error?: string; message?: string }> => {
     try {
+        /* The template carries the logo as a data: URI; mail clients want it as an inline attachment. */
+        const logo = studioBrand?.logoSrc;
+        if (logo && logo.startsWith('data:') && html.includes(logo)) {
+            html = html.split(logo).join('cid:studio-logo');
+            attachments = [
+                ...(attachments || []),
+                { filename: 'logo.png', content: logo.slice(logo.indexOf(',') + 1), content_id: 'studio-logo' },
+            ];
+        }
         const payload: any = {
-            from: `${STUDIO_NAME} <${RESEND_SENDER_EMAIL}>`, 
+            from: `${studioBrand?.name || STUDIO_NAME} <${RESEND_SENDER_EMAIL}>`,
             to,
             subject,
             html
@@ -200,19 +288,31 @@ const sendResendEmail = async (to: string, subject: string, html: string, attach
     }
 }
 
-const getEmailTemplate = (contentHtml: string) => {
-    const logoBlock = STUDIO_LOGO_URL 
-        ? `<img src="${STUDIO_LOGO_URL}" alt="${STUDIO_NAME}" style="max-height: 44px; margin-bottom: 20px;" />` 
-        : `<h2 style="margin: 0 0 20px 0; color: ${BRAND_COLOR}; font-size: 20px; font-weight: bold; font-family: Georgia, serif;">${STUDIO_NAME}</h2>`;
+const escHtml = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** The studio's letterhead around an email's content. `context` says why the reader got it. */
+const getEmailTemplate = (contentHtml: string, opts?: { context?: string }) => {
+    const b: StudioEmailBrand = studioBrand || { name: STUDIO_NAME, phone: STUDIO_PHONE || undefined, logoSrc: STUDIO_LOGO_URL || null };
+    const name = escHtml(b.name);
+    const logoBlock = b.logoSrc
+        ? `<img src="${b.logoSrc}" alt="${name}" height="60" style="height: 60px; width: auto; max-width: 280px; display: block; margin: 0 0 22px 0; border: 0;" />`
+        : `<h2 style="margin: 0 0 20px 0; color: ${BRAND_COLOR}; font-size: 20px; font-weight: bold; font-family: Georgia, serif;">${name}</h2>`;
+    const link = 'color: #64748b; text-decoration: none;';
+    const contacts = [
+        b.phone ? `<a href="tel:${escHtml(b.phone.replace(/\s/g, ''))}" style="${link}">${escHtml(b.phone)}</a>` : '',
+        b.email ? `<a href="mailto:${escHtml(b.email)}" style="${link}">${escHtml(b.email)}</a>` : '',
+        b.website ? `<a href="https://${escHtml(b.website)}" style="${link}">${escHtml(b.website.replace(/^www\./i, ''))}</a>` : '',
+    ].filter(Boolean).join(' &middot; ');
 
     return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
         ${logoBlock}
         ${contentHtml}
-        <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b; line-height: 1.5;">
-            <p style="margin: 0; font-weight: bold; color: #334155;">${STUDIO_NAME}</p>
-            ${STUDIO_PHONE ? `<p style="margin: 2px 0 0 0;">Official Helpline: ${STUDIO_PHONE}</p>` : ''}
-            <p style="margin: 4px 0 0 0; color: #94a3b8;">This is a digitally sealed communication sent on behalf of ${STUDIO_NAME}. Electronic records protected under the Information Technology Act, 2000.</p>
+        <div style="margin-top: 32px; padding-top: 18px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; line-height: 1.6;">
+            <p style="margin: 0; font-weight: bold; color: #334155;">${name}</p>
+            ${b.address ? `<p style="margin: 0;">${escHtml(b.address)}</p>` : ''}
+            ${contacts ? `<p style="margin: 0;">${contacts}</p>` : ''}
+            <p style="margin: 8px 0 0 0; color: #94a3b8; font-size: 11.5px;">${escHtml(opts?.context || `Sent by ${b.name}.`)}</p>
         </div>
     </div>
     `;
@@ -374,7 +474,7 @@ export const sendAgreementSignoffRequest = async (
         }
         const docketHash = `SHA256:${rawHash.padEnd(32, '0').slice(0, 32).toUpperCase()}`;
 
-        let appDomain = import.meta.env.VITE_APP_DOMAIN || window.location.origin;
+        let appDomain = publicAppOrigin();
         if (appDomain.includes('ais-dev-')) {
             appDomain = appDomain.replace('ais-dev-', 'ais-pre-');
         }
@@ -541,7 +641,7 @@ export const sendSignoffRequest = async (decisionId: string, projectId: string, 
 
         const subjectPlaceholder = `Action Required: Review drawing — ${decision.roomName}, ${decision.projectName}`;
         
-        let appDomain = import.meta.env.VITE_APP_DOMAIN || window.location.origin;
+        let appDomain = publicAppOrigin();
         let isDev = false;
         if (appDomain.includes('ais-dev-')) {
             isDev = true;
@@ -639,7 +739,7 @@ export const getSelectionNotificationEmailHtml = (
 ): { subject: string; html: string } => {
     const clientName = projectContext.clientName || 'Client';
     const projectName = projectContext.name || 'your project';
-    const appUrl = window.location.origin;
+    const appUrl = publicAppOrigin();
     const confirmUrl = `${appUrl}/selection-confirm/${selection.confirmationToken}`;
 
     const subject = customSubject || `Action Required: Confirm selection for ${projectName} — ${selection.itemName}`;
@@ -744,23 +844,53 @@ export const getSelectionNotificationEmailHtml = (
  * text the studio reviewed (paragraphs and "- " bullets), set in the studio's
  * email template, with the MoM PDF attached when one is given.
  */
-export const sendMomEmail = async (args: {
+export interface MomEmailArgs {
     to: string[];
     cc?: string[];
     subject: string;
     body: string;
     pdf?: { filename: string; base64: string } | null;
-}) => {
+    /** The button to the client's portal, under the note. */
+    cta?: { url: string; heading: string; label: string; note?: string } | null;
+    /** Why the reader got this, in the footer. */
+    context?: string;
+}
+
+export const sendMomEmail = async (args: MomEmailArgs) => {
+    const attachments = args.pdf ? [{ filename: args.pdf.filename, content: args.pdf.base64 }] : undefined;
+    return sendResendEmail(args.to.join(','), args.subject, await buildMomEmailHtml(args), attachments, args.cc);
+};
+
+/** The minutes email exactly as it goes out (the logo inline as data: until it is sent). */
+export const buildMomEmailHtml = async (args: Pick<MomEmailArgs, 'body' | 'cta' | 'context'>): Promise<string> => {
+    await brandReady;
     const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const blocks = args.body.trim().split(/\n{2,}/).map((block) => {
         const lines = block.split('\n');
-        if (lines.every((l) => /^\s*[-•]\s+/.test(l))) {
-            return `<ul style="margin: 0 0 14px 18px; padding: 0;">${lines.map((l) => `<li style="margin: 0 0 4px 0;">${esc(l.replace(/^\s*[-•]\s+/, ''))}</li>`).join('')}</ul>`;
+        const isBullet = (l: string) => /^\s*[-•]\s+/.test(l);
+        const list = (items: string[]) => `<ul style="margin: 0 0 14px 18px; padding: 0;">${items.map((l) => `<li style="margin: 0 0 4px 0;">${esc(l.replace(/^\s*[-•]\s+/, ''))}</li>`).join('')}</ul>`;
+        if (lines.every(isBullet)) return list(lines);
+        /* "What we agreed" followed by its bullets: a heading over a list. */
+        if (lines.length > 1 && !isBullet(lines[0]) && lines.slice(1).every(isBullet)) {
+            return `<p style="margin: 0 0 6px 0; font-weight: bold; color: #1e293b;">${esc(lines[0])}</p>${list(lines.slice(1))}`;
         }
         return `<p style="margin: 0 0 14px 0;">${lines.map(esc).join('<br/>')}</p>`;
-    }).join('');
-    const attachments = args.pdf ? [{ filename: args.pdf.filename, content: args.pdf.base64 }] : undefined;
-    return sendResendEmail(args.to.join(','), args.subject, getEmailTemplate(blocks), attachments, args.cc);
+    });
+    /* The button goes just above the sign-off ("Warm regards," ...), or at the end. */
+    const cta = args.cta
+        ? `<div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 18px; margin: 4px 0 18px 0; background-color: #F6F7FC;">
+            <p style="margin: 0 0 10px 0; font-weight: bold; color: #1e293b;">${esc(args.cta.heading)}</p>
+            <a href="${esc(args.cta.url)}" style="display: inline-block; background-color: ${BRAND_COLOR}; color: #ffffff; padding: 10px 18px; border-radius: 8px; font-weight: bold; text-decoration: none;">${esc(args.cta.label)}</a>
+            ${args.cta.note ? `<p style="margin: 10px 0 0 0; font-size: 12.5px; color: #475569;">${esc(args.cta.note)}</p>` : ''}
+          </div>`
+        : '';
+    const raw = args.body.trim().split(/\n{2,}/);
+    let signOff = -1;
+    for (let i = raw.length - 1; i >= 0; i--) {
+        if (/^(warm(est)? regards|kind regards|best regards|regards|warmly|with thanks|many thanks|thanks|thank you|sincerely|yours|best wishes|best|cheers)\b/i.test(raw[i].trim())) { signOff = i; break; }
+    }
+    if (cta) blocks.splice(signOff >= 0 ? signOff : blocks.length, 0, cta);
+    return getEmailTemplate(blocks.join(''), { context: args.context });
 };
 
 export const sendSelectionNotificationEmail = async (
@@ -804,7 +934,7 @@ export const getConsolidatedPendingSelectionsEmailHtml = (
 ): { subject: string; html: string } => {
     const clientName = projectContext.clientName || 'Client';
     const projectName = projectContext.name || 'your project';
-    const appUrl = window.location.origin;
+    const appUrl = publicAppOrigin();
 
     const subject = customSubject || `Action Required: Outstanding material selections for ${projectName}`;
 
@@ -920,4 +1050,64 @@ export const sendPortalAccessLink = async (
         console.warn('Could not send portal link:', error);
         return { success: false, error: error?.message || 'Failed to send portal link.' };
     }
+};
+
+/*
+  A Scope Revision or Detailed BOQ, sent for approval.
+
+  Short on purpose: the amounts that matter, the Excel attached (the document
+  itself), and one button to the portal where the client approves. Anything
+  longer belongs in the workbook.
+*/
+export interface ScopeEmailArgs {
+    to: string[];
+    cc?: string[];
+    subject: string;
+    greeting: string;
+    intro: string;
+    /** [label, value, tone] -- tone 'up' | 'down' | '' colours the value. */
+    figures: [string, string, string][];
+    /** The totals lines under the figures, when the studio chose to show more than execution. */
+    totals?: { label: string; value: string; strong?: boolean }[];
+    note?: string;
+    studioNote?: string;
+    xlsx: { filename: string; base64: string };
+    cta: { url: string; label: string };
+    signOff: string;
+    context?: string;
+}
+
+export const buildScopeEmailHtml = async (a: Omit<ScopeEmailArgs, 'to' | 'cc' | 'subject' | 'xlsx'> & { attachmentName?: string }): Promise<string> => {
+    await brandReady;
+    const esc = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const colour = (t: string) => (t === 'up' ? '#B4232F' : t === 'down' ? '#0F7A55' : '#141A33');
+    const figures = a.figures.map(([k, v, t]) => `
+        <td style="padding: 0 24px 0 0; vertical-align: top;">
+            <div style="font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #5B6382; font-weight: bold;">${esc(k)}</div>
+            <div style="font-size: 20px; font-weight: 800; color: ${colour(t)};">${esc(v)}</div>
+        </td>`).join('');
+    const totals = a.totals?.length
+        ? `<table role="presentation" style="width: 100%; border-collapse: collapse; margin: 10px 0 0 0; font-size: 13px;">${a.totals.map((r) => `
+            <tr><td style="padding: 3px 0; color: ${r.strong ? '#141A33' : '#475569'}; ${r.strong ? 'font-weight: bold; border-top: 1px solid #DCE1EE;' : ''}">${esc(r.label)}</td>
+            <td style="padding: 3px 0; text-align: right; color: ${r.strong ? '#141A33' : '#475569'}; ${r.strong ? 'font-weight: bold; border-top: 1px solid #DCE1EE;' : ''}">${esc(r.value)}</td></tr>`).join('')}</table>`
+        : '';
+    const content = `
+        <p style="margin: 0 0 14px 0;">${esc(a.greeting)}</p>
+        <p style="margin: 0 0 16px 0;">${esc(a.intro)}</p>
+        <div style="background-color: #F5F7FC; border-radius: 10px; padding: 14px 16px; margin: 0 0 8px 0;">
+            <table role="presentation" style="border-collapse: collapse;"><tr>${figures}</tr></table>
+            ${totals}
+        </div>
+        ${a.note ? `<p style="margin: 0 0 16px 0; font-size: 12.5px; color: #5B6382;">${esc(a.note)}</p>` : ''}
+        ${a.studioNote ? `<p style="margin: 0 0 16px 0;">${esc(a.studioNote).replace(/\n/g, '<br/>')}</p>` : ''}
+        ${a.attachmentName ? `<p style="margin: 0 0 16px 0; font-size: 13px;"><span style="display: inline-block; background-color: #107C41; color: #ffffff; font-weight: bold; border-radius: 4px; padding: 1px 6px; font-size: 11px;">X</span>&nbsp; <b>${esc(a.attachmentName)}</b> is attached: the full BOQ with every item's specification.</p>` : ''}
+        <p style="margin: 0 0 18px 0;"><a href="${esc(a.cta.url)}" style="display: inline-block; background-color: ${BRAND_COLOR}; color: #ffffff; padding: 11px 18px; border-radius: 9px; font-weight: bold; text-decoration: none;">${esc(a.cta.label)}</a></p>
+        <p style="margin: 0 0 16px 0; font-size: 12.5px; color: #5B6382;">Questions? Reply to this email, or ask on any item in your portal.</p>
+        <p style="margin: 0;">${esc(a.signOff).replace(/\n/g, '<br/>')}</p>`;
+    return getEmailTemplate(content, { context: a.context });
+};
+
+export const sendScopeEmail = async (a: ScopeEmailArgs) => {
+    const html = await buildScopeEmailHtml({ ...a, attachmentName: a.xlsx.filename });
+    return sendResendEmail(a.to.join(','), a.subject, html, [{ filename: a.xlsx.filename, content: a.xlsx.base64 }], a.cc);
 };

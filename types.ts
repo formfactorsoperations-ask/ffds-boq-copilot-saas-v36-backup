@@ -664,7 +664,8 @@ export interface DigitalSignatureDocket {
     signatoryPhone?: string;
     signatoryRole?: string;
     signedAt: string; // ISO
-    signatureType: 'draw' | 'type' | 'upload' | 'manual_override';
+    /** 'portal_approval': approved with one recorded click in the portal; the server wrote the docket. */
+    signatureType: 'draw' | 'type' | 'upload' | 'manual_override' | 'portal_approval';
     signatureDataUrl?: string; // canvas png or svg string
     typedFont?: string;
     ipAddress: string;
@@ -681,6 +682,8 @@ export interface DigitalSignatureDocket {
     readingEvidence?: import('./types').ReadingEvidence;
     /** Staff member present when signed on a studio device, in person. */
     witnessedBy?: string;
+    /** For a portal approval: the totals the client approved, as stored at that moment. */
+    approvedTotals?: { before: number | null; after: number | null };
 }
 
 export interface SignoffRecord {
@@ -695,7 +698,7 @@ export interface SignoffRecord {
     clientEmail?: string;
     ipAddress?: string;
     refId?: string;
-    signatureType?: 'draw' | 'type' | 'upload' | 'manual_override';
+    signatureType?: 'draw' | 'type' | 'upload' | 'manual_override' | 'portal_approval';
     signatureDataUrl?: string;
     docket?: DigitalSignatureDocket;
     manualOverride?: ManualOverrideMeta;
@@ -2305,6 +2308,9 @@ export interface DocumentIssue {
     // ── Delivery ──────────────────────────────────────────────────────────
     /** How the studio sent it, for the audit trail. */
     releasedVia?: ('portal' | 'email' | 'whatsapp')[];
+    /** When the Excel-first email went to the client, and to whom (Scope Revision, Detailed BOQ). */
+    sentAt?: number | null;
+    sentTo?: string[];
     releaseNote?: string | null;
     /** Nudges the studio has sent since release. */
     reminders?: { at: number; by: string; via: string }[];

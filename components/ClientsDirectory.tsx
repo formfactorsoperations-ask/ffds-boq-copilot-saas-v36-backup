@@ -39,6 +39,7 @@ import {
   RefreshCw,
   AlertTriangle,
 } from "lucide-react";
+import { publicAppOrigin } from "../lib/publicUrl";
 
 interface ClientsDirectoryProps {
   projects: FullProjectData[];
@@ -293,7 +294,7 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
       }
     }
 
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const origin = publicAppOrigin();
     const url = `${origin}/?portal=${token}`;
     try {
       await navigator.clipboard?.writeText(url);

@@ -17,6 +17,7 @@ import { downloadSectionsAsPdf, PDF_CONTENT_WIDTH_PX } from '../../lib/documentP
 import DigitalSignatureDocketView from '../common/DigitalSignatureDocket';
 import DigitalSignaturePad from '../common/DigitalSignaturePad';
 import ManualAcceptanceOverrideModal from '../ops/ManualAcceptanceOverrideModal';
+import { publicAppOrigin } from '../../lib/publicUrl';
 
 /*
   GST comes from the project, per phase.
@@ -1423,7 +1424,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
     const status = currentSignoff?.status || 'pending';
 
     const getSignoffUrl = (token: string) => {
-        let appDomain = import.meta.env.VITE_APP_DOMAIN || window.location.origin;
+        let appDomain = publicAppOrigin();
         if (appDomain.includes('ais-dev-')) {
             appDomain = appDomain.replace('ais-dev-', 'ais-pre-');
         }

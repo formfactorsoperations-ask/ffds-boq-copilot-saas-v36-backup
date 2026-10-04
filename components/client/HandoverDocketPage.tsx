@@ -8,6 +8,7 @@ import { useStudioSettings } from '../../hooks/useStudioSettings';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 import DigitalSignatureDocketView from '../common/DigitalSignatureDocket';
 import ManualAcceptanceOverrideModal from '../ops/ManualAcceptanceOverrideModal';
+import { publicAppOrigin } from '../../lib/publicUrl';
 
 interface HandoverDocketPageProps {
     projectContext: ProjectContext;
@@ -35,7 +36,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
     const currentSignoff = projectContext.handoverSignoff;
     const signoffStatus = currentSignoff?.status || 'pending';
     const getSignoffUrl = (token: string) => {
-        let appDomain = import.meta.env.VITE_APP_DOMAIN || window.location.origin;
+        let appDomain = publicAppOrigin();
         if (appDomain.includes('ais-dev-')) {
             appDomain = appDomain.replace('ais-dev-', 'ais-pre-');
         }

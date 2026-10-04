@@ -9,6 +9,7 @@ import { functions } from '../../services/firebaseClient';
 import { httpsCallable } from 'firebase/functions';
 import { sendAgreementSignoffRequest } from '../../services/emailService';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
+import { publicAppOrigin } from '../../lib/publicUrl';
 
 interface ClientLevel3ContractProps {
     projectId?: string;
@@ -243,7 +244,7 @@ const ExecutionBlock: React.FC<{ clientName: string, location: string, projectId
     const status = currentSignoff?.status || 'pending';
 
     const getSignoffUrl = (token: string) => {
-        let appDomain = import.meta.env.VITE_APP_DOMAIN || window.location.origin;
+        let appDomain = publicAppOrigin();
         if (appDomain.includes('ais-dev-')) {
             appDomain = appDomain.replace('ais-dev-', 'ais-pre-');
         }

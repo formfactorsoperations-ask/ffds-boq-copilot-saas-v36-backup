@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ProjectContext, ProjectSchedule } from '../../types';
-import { writePortalView, probePortalView } from '../../services/portalViewService';
+import { probePortalView } from '../../services/portalViewService';
+import { releasePortal } from '../../services/portalRelease';
 import { db as storageDb } from '../../services/dbService';
 import { collection, getDocs } from 'firebase/firestore';
 import { db as fsDb } from '../../services/firebaseClient';
@@ -112,79 +113,8 @@ export default function PortalPublishControls({ projectContext, setProjectContex
     project — so until the projection is rewritten, a publish has changed
     nothing on their side. Ops should be able to see that difference.
   */
-  /*
-    Scope additions, reduced to what a client should see.
-
-    Read at release time rather than held in state: this control already
-    rebuilds the whole projection on every send precisely so the stored view
-    cannot drift from what is true, and a stale additions list would reintroduce
-    exactly that drift. Cost is one read per send.
-
-    Cost, margin and the internal type code are deliberately dropped here -- the
-    client gets what they asked for, what it costs them, and whether it is
-    settled.
-  */
-  const gatherScopeAdditions = async (): Promise<PortalScopeAddition[] | undefined> => {
-    const tenant = orgData?.tenantId;
-    if (!fsDb || !tenant || !projectId) return undefined;
-    try {
-      const snap = await getDocs(collection(fsDb, scopeAdditionsPath(tenant, projectId)));
-      const rows = snap.docs
-        .map(d => normaliseAddition(d.id, d.data()))
-        .filter(a => a.invoiceStatus !== 'cancelled' && a.invoiceStatus !== 'void' && a.invoiceStatus !== 'draft')
-        .map<PortalScopeAddition>(a => ({
-          ref: a.ref,
-          request: a.clientRequest,
-          nature: a.type === 'TYPE_A' ? 'Finish change' : a.type === 'TYPE_C' ? 'New scope' : 'Alteration',
-          issuedAt: a.createdAt ? new Date(a.createdAt).toISOString() : null,
-          designFeeTotal: a.designFeeTotal,
-          designFeeBase: a.designFeeBase,
-          designFeeGst: a.designFeeGst,
-          executionSubtotal: a.executionSubtotal,
-          executionGst: a.executionGst,
-          executionTotal: a.executionTotal,
-          grandTotal: a.grandTotal,
-          released: a.workAuthorized,
-          designFeePaid: a.designFeePaid,
-          executionPaid: a.executionPaid,
-          /* Description, quantity, unit and amount only -- never baseCost or
-             marginOverride. */
-          lines: (a.miniBoq || [])
-            .map((l: any) => ({
-              description: String(l?.description || 'Item'),
-              qty: Number(l?.qty) || 0,
-              unit: String(l?.unit || ''),
-              amount: Number(l?.baseCost) || 0,
-            }))
-            .filter((l: any) => l.amount > 0 || l.qty > 0),
-        }));
-      return rows.length ? rows : undefined;
-    } catch {
-      /* A failed read must not silently publish "no additions". */
-      return undefined;
-    }
-  };
-
-  /*
-    The programme to publish: the studio's saved schedule where there is one.
-
-    `clientSchedule` is derived from the design phases and the BOQ, which is the
-    right answer for a project nobody has scheduled by hand. Where ops HAS saved
-    a schedule, that is the programme they are looking at on the Timeline, and
-    publishing a freshly derived one instead would send the client a different
-    set of dates from the one on the studio's own screen.
-  */
-  const scheduleToSend = async (): Promise<ProjectSchedule | undefined> => {
-    if (!projectId) return clientSchedule;
-    try {
-      const saved = await storageDb.getSchedule(projectId);
-      if (saved?.tasks?.length) return saved;
-    } catch {
-      /* Fall back to the derived programme rather than publishing none. */
-    }
-    return clientSchedule;
-  };
-
+  /* Scope additions and the saved schedule are gathered in services/portalRelease,
+     which the Scope workspace also uses to send a revision. */
   const release = async (ctx: ProjectContext) => {
     if (!projectId) return;
     setSendError(null);
@@ -192,19 +122,16 @@ export default function PortalPublishControls({ projectContext, setProjectContex
     // The client cannot read studioSettings, so who to pay travels with the
     // projection instead.
     try {
-      const view = await writePortalView(projectId, ctx, {
-        name: (settings as any)?.companyName || orgData?.orgName,
-        logoUrl: (settings as any)?.logoUrl || orgData?.orgLogo,
-        phone: (settings as any)?.phone || orgData?.contactPhone,
-        email: (settings as any)?.email || orgData?.contactEmail,
-        address: (settings as any)?.address || orgData?.officeAddress,
-        bankDetails: (settings as any)?.bankDetails || orgData?.bankDetails,
-        cityState: orgData?.cityState,
-        gstin: orgData?.gstin,
-        legalName: orgData?.legalName,
-        signatoryName: orgData?.signatoryName,
-        signatoryTitle: orgData?.signatoryTitle,
-      }, clientBoq, clientBoqBaseline, await gatherScopeAdditions(), portalMoney, await scheduleToSend());
+      const view = await releasePortal(ctx, {
+        projectId,
+        tenantId: orgData?.tenantId,
+        orgData,
+        settings,
+        clientBoq,
+        clientBoqBaseline,
+        portalMoney,
+        clientSchedule,
+      });
       if (view) {
         setReleasedAt(view.builtAt);
         setEverSent(true);

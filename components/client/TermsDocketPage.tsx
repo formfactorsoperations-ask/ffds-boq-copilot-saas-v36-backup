@@ -11,6 +11,7 @@ import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 import DigitalSignatureDocketView from '../common/DigitalSignatureDocket';
 import ManualAcceptanceOverrideModal from '../ops/ManualAcceptanceOverrideModal';
+import { publicAppOrigin } from '../../lib/publicUrl';
 
 interface TermsDocketPageProps {
     projectContext: ProjectContext;
@@ -169,7 +170,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
     const currentSignoff = projectContext.designAgreementSignoff;
     const signoffStatus = currentSignoff?.status || 'pending';
     const getSignoffUrl = (token: string) => {
-        let appDomain = import.meta.env.VITE_APP_DOMAIN || window.location.origin;
+        let appDomain = publicAppOrigin();
         if (appDomain.includes('ais-dev-')) {
             appDomain = appDomain.replace('ais-dev-', 'ais-pre-');
         }

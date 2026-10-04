@@ -59,6 +59,8 @@ import { INITIAL_BANK } from "../constants";
 import { RevisionExcelImportModal } from "./RevisionExcelImportModal";
 import ScopeFlowPanel from "./scope/ScopeFlowPanel";
 import ScopeWorkspace from "./scope/ScopeWorkspace";
+import MeetingScopeInbox from "./scope/MeetingScopeInbox";
+import { useMomScopeQueue, MomScopeItem } from "../hooks/useMomScopeQueue";
 import { isScopeFlowOn } from "../lib/scopeFlow";
 import { db } from "../services/dbService";
 
@@ -76,6 +78,10 @@ interface RevisionStudioProps {
   setActiveTierId?: (id: string | null) => void;
   /** Saves a rehearsal copy of this project; resolves to its name. */
   onMakeRehearsalCopy?: () => Promise<string | null>;
+  /** The project's id, for the cost and scope items its minutes have queued. */
+  projectId?: string;
+  /** Rewrites the client's portal copy, so a document sent from the Scope workspace is there. */
+  onReleasePortal?: (ctx: ProjectContext) => Promise<any>;
 }
 
 export default function RevisionStudio({
@@ -89,8 +95,13 @@ export default function RevisionStudio({
   setTiers,
   setActiveTierId,
   onMakeRehearsalCopy,
+  projectId,
+  onReleasePortal,
 }: RevisionStudioProps) {
   const { orgData, currentUserAuth } = useOrg();
+  const momQueue = useMomScopeQueue((orgData as any)?.tenantId, projectId);
+  /* The meeting item the Add Item form was last filled from, until it is applied. */
+  const momItemRef = useRef<MomScopeItem | null>(null);
   /* The signed-scope flow replaces Approve & Sync, per project. */
   const scopeFlowOn = isScopeFlowOn(projectContext);
   const currentUserName: string =
@@ -928,6 +939,31 @@ export default function RevisionStudio({
       timestamp: Date.now(),
     };
     setActions([...actions, newAction]);
+    /* Applied from a meeting item: record on the minutes where it went. */
+    const fromMeeting = momItemRef.current;
+    if (fromMeeting && String(action.note || "").includes(fromMeeting.momRef)) {
+      momItemRef.current = null;
+      momQueue.markAdded(fromMeeting, "Revision Studio").catch((e) => console.error("Could not mark the meeting item", e));
+    }
+  };
+
+  /** Fills the Add Item form from a meeting's cost or scope item; the studio sets quantity and rate. */
+  const fillFromMeeting = (it: MomScopeItem, section: string) => {
+    momItemRef.current = it;
+    setManualForm({
+      type: "ADD",
+      targetItemId: "",
+      newItemName: it.text.trim().replace(/\.$/, ""),
+      newSection: section,
+      newUnit: "nos",
+      newQty: 1,
+      newRate: 0,
+      reasonCategory: "Client Preference",
+      note: `From ${it.momRef}${it.momRev ? ` Rev ${it.momRev}` : ""} · ${it.ref} (${new Date(it.meetingDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })})`,
+      inclusions: "",
+      exclusions: "",
+    });
+    showToast("Filled in Add Item from the meeting. Set the quantity and rate, then apply it.");
   };
 
   const handleUndo = () => {
@@ -1272,6 +1308,14 @@ export default function RevisionStudio({
               </div>
             </Card>
           )}
+
+          <MeetingScopeInbox
+            items={momQueue.items}
+            rooms={Array.from(new Set(currentRevisionBoq.map((i: any) => i.section || i.room).filter(Boolean))) as string[]}
+            addLabel="Use"
+            onAdd={fillFromMeeting}
+            onDismiss={(it) => momQueue.dismiss(it, currentUserName)}
+          />
 
           {/* Manual Action Form */}
           <Card className="p-5 border border-slate-200/80 bg-white shadow-sm rounded-2xl">
@@ -4956,6 +5000,9 @@ export default function RevisionStudio({
             onMakeRehearsalCopy={onMakeRehearsalCopy}
             currentUser={currentUserName}
             orgName={orgData?.orgName}
+            studioId={(orgData as any)?.tenantId}
+            projectId={projectId}
+            onReleasePortal={onReleasePortal}
           />
         ) : (
         <div className="w-full space-y-4">

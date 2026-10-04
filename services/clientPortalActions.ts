@@ -20,6 +20,9 @@ export type ClientAction =
   | { type: 'documentView'; kind: string }
   | { type: 'signDocument'; docType: 'terms' | 'contract' | 'handover'; docket: any }
   | { type: 'signIssue'; issueId: string; docket: any }
+  /* Approving a Scope Revision or Detailed BOQ in the portal. The server writes
+     the record (name typed here; login, time, address and fingerprint its own). */
+  | { type: 'approveIssue'; issueId: string; name: string; contentHash?: string }
   | {
       type: 'raiseQuery';
       issueId: string;

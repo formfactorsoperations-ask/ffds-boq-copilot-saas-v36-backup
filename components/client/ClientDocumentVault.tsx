@@ -30,6 +30,8 @@ import { documentStatusLabel } from '../../services/documentReleaseEngine';
 import { getQueries } from '../../services/documentQueryEngine';
 import { getAddenda } from '../../services/documentReleaseEngine';
 import SignatureCertificate, { signoffFromIssue } from './SignatureCertificate';
+import { ExcelDownloadButton } from './ScopeApprovalCard';
+import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
 import { useDocumentDownload, certificateFor } from '../documents/DocumentDownload';
 import {
   FileText,
@@ -294,7 +296,11 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                             </button>
                           )}
 
-                          {row.readable && row.kind && (
+                          {/* Approved in the portal: its record is the one-page approval record, not a signature certificate. */}
+                          {row.readable && (row.issue as any)?.clientSignature?.signatureType === 'portal_approval' && (
+                            <ApprovalRecordButton issue={row.issue as any} studioName={studioName} />
+                          )}
+                          {row.readable && row.kind && (row.issue as any)?.clientSignature?.signatureType !== 'portal_approval' && (
                             <button
                               onClick={() =>
                                 (row.state === 'signed' || row.state === 'executed') && !approvedElsewhere
@@ -318,7 +324,11 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                             </button>
                           )}
 
-                          {row.readable && row.kind && row.issue && (
+                          {/* Scope documents are issued as Excel; the long PDF is not the document any more. */}
+                          {row.readable && row.issue && (row.kind === 'scope_revision' || row.kind === 'detailed_boq') && (
+                            <ExcelDownloadButton issue={row.issue as any} studioName={studioName} label="Excel" />
+                          )}
+                          {row.readable && row.kind && row.issue && row.kind !== 'scope_revision' && row.kind !== 'detailed_boq' && (
                             <button
                               onClick={() => pdf.download({ kind: row.kind!, issue: row.issue as any, agreementRecord: (row.agreement?.record as SignoffRecord) || null })}
                               disabled={pdf.busyKind !== null}

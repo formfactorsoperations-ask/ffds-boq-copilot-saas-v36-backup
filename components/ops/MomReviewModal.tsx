@@ -15,6 +15,7 @@ import { getAi } from "../../services/aiClient";
 import { FLASH_MODEL } from "../../constants/aiModels";
 import { MomEmailComposer } from "./MomEmailComposer";
 import { queueScopeActions } from "../../hooks/useMomScopeQueue";
+import { publicAppOrigin } from "../../lib/publicUrl";
 import {
   X,
   Save,
@@ -297,14 +298,14 @@ export function MomReviewModal({
       } catch (e) {
         console.error("Share failed", e);
         // Fallback to old behavior
-        const link = `${window.location.origin}/mom/${draft.shareToken}`;
+        const link = `${publicAppOrigin()}/mom/${draft.shareToken}`;
         const decisionsCount = draft.decisions?.length || 0;
         const actionsCount = draft.actionItems?.length || 0;
         const txt = `*Minutes of Meeting: ${draft.meetingTitle}*\n\nSummary: ${decisionsCount} decisions, ${actionsCount} action items.\n\nPlease review and acknowledge the minutes here:\n${link}\n\nThank you!`;
         window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
       }
     } else {
-      const link = `${window.location.origin}/mom/${draft.shareToken}`;
+      const link = `${publicAppOrigin()}/mom/${draft.shareToken}`;
       const decisionsCount = draft.decisions?.length || 0;
       const actionsCount = draft.actionItems?.length || 0;
       const txt = `*Minutes of Meeting: ${draft.meetingTitle}*\n\nSummary: ${decisionsCount} decisions, ${actionsCount} action items.\n\nPlease review and acknowledge the minutes here:\n${link}\n\nThank you!`;
@@ -318,7 +319,7 @@ export function MomReviewModal({
     setSaving(true);
     try {
       const token = await getOrCreateShareToken();
-      const link = `${window.location.origin}/mom/${token}`;
+      const link = `${publicAppOrigin()}/mom/${token}`;
       await navigator.clipboard.writeText(link);
       alert("Client signable link copied to clipboard!");
     } catch (e) {
@@ -400,7 +401,8 @@ export function MomReviewModal({
     }
   };
 
-  const ackLink = async () => `${window.location.origin}/mom/${await getOrCreateShareToken()}`;
+  /* The published app, never localhost: this link goes to the client. */
+  const ackLink = async () => `${publicAppOrigin()}/mom/${await getOrCreateShareToken()}`;
 
   const recordEmailed = async (recipients: string[]) => {
     const updates: any = { emailedAt: Date.now(), emailedTo: recipients };

@@ -57,6 +57,7 @@ import DecisionAttentionPanel, { AttentionItem } from './decisions/DecisionAtten
 import { sendDecisionNotification, sendSignoffRequest } from '../../services/emailService';
 import { useOrg } from '../../contexts/OrgContext';
 import { issuePortalAccess } from '../../services/portalAccessService';
+import { publicAppOrigin } from '../../lib/publicUrl';
 
 interface DecisionTrackerProps {
     projectContext: ProjectContext;
@@ -688,7 +689,7 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
           into WhatsApp pointed at the client's own computer, where nothing is
           running. The page was never broken; the address was.
         */
-        const appDomain = import.meta.env.VITE_APP_DOMAIN || window.location.origin;
+        const appDomain = publicAppOrigin();
         /*
           The standalone sign-off page is gone; decisions are approved in the
           portal, so the portal is what gets shared.

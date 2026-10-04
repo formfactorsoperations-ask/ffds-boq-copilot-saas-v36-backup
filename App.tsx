@@ -149,6 +149,8 @@ import { INITIAL_TEMPLATES } from "./lib/standardPackages";
 import { INITIAL_BANK } from "./constants";
 import { SaveIcon, UploadIcon, NewFileIcon } from "./components/Icons";
 import Card from "./components/shared/Card";
+import { publicAppOrigin } from "./lib/publicUrl";
+import { releasePortal } from "./services/portalRelease";
 
 // Default Empty Context
 const DEFAULT_CONTEXT: ProjectContext = {
@@ -1870,7 +1872,7 @@ export default function App() {
       return;
     }
 
-    const link = `${window.location.origin}/?portal=${access.token}`;
+    const link = `${publicAppOrigin()}/?portal=${access.token}`;
     const res = await sendPortalAccessLink(
       project.context?.clientEmail || "",
       project.context?.name || "your project",
@@ -1951,6 +1953,21 @@ export default function App() {
    * the project as it stands, and saved through the ordinary save path. It is
    * not opened: the studio may be mid-way through something here.
    */
+  /* The client's portal copy, rewritten with exactly what the Client Portal
+     tab sends -- so the Scope workspace can send a revision in one step. */
+  const releasePortalNow = async (ctx: ProjectContext) => {
+    if (!activeInternalId) throw new Error("No project is open.");
+    return releasePortal(ctx, {
+      projectId: activeInternalId,
+      tenantId: orgData?.tenantId,
+      orgData,
+      clientBoq: clientBoqRows,
+      clientBoqBaseline,
+      portalMoney,
+      clientSchedule: portalSchedule,
+    });
+  };
+
   const handleMakeRehearsalCopy = async (): Promise<string | null> => {
     if (!activeInternalId) return null;
     const current: FullProjectData = {
@@ -3574,6 +3591,7 @@ export default function App() {
                       {activeTab === "revision-studio" && (
                         <RevisionStudio
                           projectId={activeInternalId || undefined}
+                          onReleasePortal={releasePortalNow}
                           onMakeRehearsalCopy={handleMakeRehearsalCopy}
                           tiers={tiersWithCalculatedSummaries}
                           approvedTierId={projectContext.approvedTierId}
@@ -4308,6 +4326,7 @@ export default function App() {
                       {activeTab === "revision-studio" && (
                         <RevisionStudio
                           projectId={activeInternalId || undefined}
+                          onReleasePortal={releasePortalNow}
                           onMakeRehearsalCopy={handleMakeRehearsalCopy}
                           tiers={tiersWithCalculatedSummaries}
                           approvedTierId={projectContext.approvedTierId}

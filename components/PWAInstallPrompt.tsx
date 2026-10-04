@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, Smartphone, Share2, PlusSquare, X, Check, ExternalLink, QrCode } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { publicAppOrigin } from '../lib/publicUrl';
 
 interface PWAInstallPromptProps {
   className?: string;
@@ -25,7 +26,7 @@ export const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({
   }
 
   const sampleUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/?portal=${sampleProjectToken}`
+    ? `${publicAppOrigin()}/?portal=${sampleProjectToken}`
     : `/?portal=${sampleProjectToken}`;
 
   const copySampleLink = async () => {

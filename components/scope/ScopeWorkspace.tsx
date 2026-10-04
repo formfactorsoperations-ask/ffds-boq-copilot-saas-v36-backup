@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Lock, FileSpreadsheet, Plus, FileText, PenLine, X, Check, AlertTriangle, Search, Repeat2, Trash2, Undo2,
-  Eye, Play, ShieldCheck, Layers, Percent, ListChecks, MessageSquareText, Pencil, Upload, Sparkles,
+  Eye, Play, ShieldCheck, Layers, Percent, ListChecks, MessageSquareText, Pencil, Upload, Sparkles, Mail, Loader2,
 } from 'lucide-react';
 import { DocumentIssue, FinancialConfig, Item, ProjectContext, ProposalTier } from '../../types';
 import { buildBankMap, boqTotal } from '../../lib/boqPricing';
@@ -32,6 +32,12 @@ import { useOrg } from '../../contexts/OrgContext';
 import { seesStudioFinance } from '../../lib/roleAccess';
 import { useMomScopeQueue, MomScopeItem } from '../../hooks/useMomScopeQueue';
 import MeetingScopeInbox from './MeetingScopeInbox';
+import ClientTotalsPicker from './ClientTotalsPicker';
+import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
+import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, totalsNote } from '../../lib/scopeTotals';
+import { workbookForIssue, downloadWorkbook, toBase64, buildRevisionWorkbook, revisionWorkbookName } from '../../lib/scopeWorkbook';
+import { sendScopeEmail } from '../../services/emailService';
+import { publicAppOrigin } from '../../lib/publicUrl';
 
 /**
  * SCOPE REVISION — one screen for changing a signed scope.
@@ -59,6 +65,8 @@ interface Props {
   /** For the cost and scope items finalised minutes have queued. */
   studioId?: string;
   projectId?: string;
+  /** Rewrites the client's portal copy (services/portalRelease), so a sent document is there. */
+  onReleasePortal?: (ctx: ProjectContext) => Promise<any>;
 }
 
 // ── Formatting ─────────────────────────────────────────────────────────────
@@ -204,7 +212,7 @@ const Modal: React.FC<{ onClose: () => void; wide?: boolean; children: React.Rea
 
 export default function ScopeWorkspace({
   tiers, approvedTierId, bank, projectContext: ctx, setProjectContext, setTiers, setActiveTierId,
-  onMakeRehearsalCopy, currentUser, orgName, studioId, projectId,
+  onMakeRehearsalCopy, currentUser, orgName, studioId, projectId, onReleasePortal,
 }: Props) {
   const bankMap = useMemo(() => buildBankMap(bank, ctx.adHocItems), [bank, ctx.adHocItems]);
   const momQueue = useMomScopeQueue(studioId, projectId);
@@ -226,8 +234,89 @@ export default function ScopeWorkspace({
     window.setTimeout(() => setMessage(null), 8000);
   };
 
+  // ── Sending to the client: publish, update their portal, email the Excel ──
+  const [sending, setSending] = useState<string | null>(null);
+  const studioName = orgName || 'Studio';
+  const portalLink = () => {
+    const token = (ctx as any).portalAccess?.token;
+    return token ? `${publicAppOrigin()}/?portal=${token}` : publicAppOrigin();
+  };
+  const publishIssue = (issueId: string) => (prev: ProjectContext): ProjectContext =>
+    prev.documents
+      ? { ...prev, documents: { ...prev.documents, issues: prev.documents.issues.map(i => (i.id === issueId ? { ...i, clientVisibility: publish(currentUser) } : i)) } }
+      : prev;
+  const markSent = (issueId: string, to: string[]) => (prev: ProjectContext): ProjectContext =>
+    prev.documents
+      ? { ...prev, documents: { ...prev.documents, issues: prev.documents.issues.map(i => {
+          if (i.id !== issueId) return i;
+          /* A portal-only resend keeps the record of who was emailed before. */
+          const sentTo = Array.from(new Set([...((i as any).sentTo || []), ...to]));
+          return { ...i, sentAt: Date.now(), sentTo, releasedVia: (sentTo.length ? ['portal', 'email'] : ['portal']) as ('portal' | 'email')[] };
+        }) } }
+      : prev;
+
+  /* A revision is measured against the Detailed BOQ it revises: the client must be able to see that one too. */
+  const withBase = (issueId: string) => (prev: ProjectContext): ProjectContext => {
+    const issue = prev.documents?.issues.find(i => i.id === issueId);
+    const baseRef = issue?.kind === 'scope_revision' ? (issue.snapshot as any)?.v1?.reference : null;
+    const base = baseRef ? prev.documents!.issues.find(i => i.kind === 'detailed_boq' && i.reference === baseRef && !i.withdrawnAt) : null;
+    const withRev = publishIssue(issueId)(prev);
+    return base && !isVisibleToClient(base as any) ? publishIssue(base.id)(withRev) : withRev;
+  };
+
+  const sendToClient = async (issueId: string, to: string[], cc: string[], base?: ProjectContext): Promise<{ ok: boolean; error?: string }> => {
+    const next = withBase(issueId)(base || ctx);
+    const issue = next.documents?.issues.find(i => i.id === issueId);
+    if (!issue) return { ok: false, error: 'That document could not be found.' };
+    if (!onReleasePortal) return { ok: false, error: "This screen cannot update the client's portal." };
+    setSending(issueId);
+    try {
+      setProjectContext(withBase(issueId));
+      await onReleasePortal(next);
+      if (to.length) {
+        const s: any = issue.snapshot;
+        const revision = issue.kind === 'scope_revision';
+        const before = revision ? Number(s.v1?.total) || 0 : null;
+        const after = revision ? Number(s.v2?.total) || 0 : Number(s.total) || 0;
+        const rows = clientTotals(before ?? after, after, s.clientTotals);
+        const changed = revision ? (s.rooms || []).reduce((n: number, r: any) => n + (r.asSection ? 1 : (r.lines || []).length), 0) : 0;
+        const first = String(ctx.clientName || '').trim().split(/\s+/)[0];
+        const { buf, filename } = await workbookForIssue(issue, studioName);
+        const signer = /@/.test(currentUser) ? studioName : `${currentUser}\n${studioName}`;
+        const res = await sendScopeEmail({
+          to,
+          cc,
+          subject: revision ? `Your revised BOQ is ready: ${s.projectName}` : `Your BOQ for approval: ${s.projectName}`,
+          greeting: first ? `Dear ${first},` : 'Hello,',
+          intro: revision
+            ? `We have updated your BOQ for ${s.projectName}. ${changed} item${changed === 1 ? '' : 's'} changed, and the full revised BOQ is attached as an Excel file.`
+            : `Your detailed BOQ for ${s.projectName} is ready for your approval. It is attached as an Excel file, with every item and its specification.`,
+          figures: revision
+            ? [['Signed', inr(before || 0), ''], ['Revised', inr(after), ''], ['Change', sgn(after - (before || 0)), after - (before || 0) > 0.5 ? 'up' : after - (before || 0) < -0.5 ? 'down' : '']]
+            : [['Your BOQ', inr(after), ''], ['Items', String(s.lineCount ?? ''), '']],
+          totals: rows.length > 1 ? rows.map(r => ({ label: r.label, value: revision ? `${inr(r.after)} (${sgn(r.change)})` : inr(r.after), strong: r.key === 'total' })) : undefined,
+          note: totalsNote(s.clientTotals, revision),
+          studioNote: revision ? s.summary || undefined : undefined,
+          xlsx: { filename, base64: toBase64(buf) },
+          cta: { url: portalLink(), label: 'Review and approve in your portal' },
+          signOff: `Warm regards,\n${signer}`,
+          context: `Sent for ${s.projectName} · ${issue.reference}. You're receiving this as a client of ${studioName}.`,
+        });
+        if (!res.success) throw new Error(`The portal is updated, but the email was not sent: ${res.error || 'refused'}.`);
+      }
+      setProjectContext(markSent(issueId, to));
+      flash('ok', `${issue.reference} is in the client's portal${to.length ? ` and emailed to ${to.join(', ')}` : ''}. It is approved there in one step.`);
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || String(e) };
+    } finally {
+      setSending(null);
+    }
+  };
+
   // ── Record the scope in force ─────────────────────────────────────────
   const [recordMode, setRecordMode] = useState<'recorded' | 'for_signature'>('recorded');
+  const [v1Totals, setV1Totals] = useState<ClientTotalsOptions>(() => defaultTotalsOptions(ctx));
   const [approvedOn, setApprovedOn] = useState(isoDay(ctx.proposalAcceptance?.at || ctx.designApprovedAt || Date.now()));
   const [approvalNote, setApprovalNote] = useState('Approved as part of the accepted proposal package.');
   const [checksAccepted, setChecksAccepted] = useState(false);
@@ -266,19 +355,26 @@ export default function ScopeWorkspace({
       return;
     }
     setTiers(prev => prev.map(t => (t.id === baseTier.id ? { ...t, boq: frozenBoq } : t)));
+    /* For the client's approval, the totals they will see are part of the issued document. */
+    const issued = recordMode === 'recorded' ? snapshot : { ...snapshot, clientTotals: v1Totals };
     setProjectContext(prev => {
-      const next = issueDocument('detailed_boq', snapshot, {
+      const next = issueDocument('detailed_boq', issued, {
         issuedBy: currentUser,
         reference,
-        materialSections: recordMode === 'recorded' ? [] : buildMaterialSections('detailed_boq', snapshot),
+        materialSections: recordMode === 'recorded' ? [] : buildMaterialSections('detailed_boq', issued),
       })(prev);
       if (recordMode !== 'recorded') return next;
+      /* Approved already, so it is the client's scope: published with the record. */
       const issues = next.documents!.issues.map((i, idx, all) =>
-        idx === all.length - 1 ? { ...i, recordedApproval: { approvedAt, recordedBy: currentUser, recordedAt: at, note: approvalNote.trim() } } : i
+        idx === all.length - 1 ? { ...i, recordedApproval: { approvedAt, recordedBy: currentUser, recordedAt: at, note: approvalNote.trim() }, clientVisibility: publish(currentUser) } : i
       );
-      return { ...next, documents: { ...next.documents!, issues } };
+      const recorded = { ...next, documents: { ...next.documents!, issues } };
+      if (onReleasePortal) {
+        onReleasePortal(recorded).catch(e => flash('block', `Recorded, but the client's portal was not updated: ${e?.message || e}. Send it from Client Portal.`));
+      }
+      return recorded;
     });
-    flash('ok', `${reference} ${recordMode === 'recorded' ? 'recorded' : 'staged for signature'} at ${inr2(snapshot.total)}. Its rates are frozen and the version is now read-only.`);
+    flash('ok', `${reference} ${recordMode === 'recorded' ? 'recorded' : 'staged for the client\'s approval'} at ${inr2(snapshot.total)}. Its rates are frozen and the version is now read-only.${recordMode === 'recorded' ? '' : ' Send it to the client below.'}`);
   };
 
   // ── Revisions ─────────────────────────────────────────────────────────
@@ -477,6 +573,8 @@ export default function ScopeWorkspace({
           onOpenIssue={setPreviewIssue}
           stateOf={stateOf}
           momQueue={momQueue}
+          onSendToClient={sendToClient}
+          sendingId={sending}
         /></React.Fragment>
       ) : (
         <>
@@ -514,7 +612,7 @@ export default function ScopeWorkspace({
                     <div className="grid sm:grid-cols-2 gap-2">
                       {([
                         ['recorded', 'The client already approved it', 'Recorded as approved on a date, without asking them to sign again.'],
-                        ['for_signature', 'Ask the client to sign it', 'Staged for the portal; it is the scope in force once signed.'],
+                        ['for_signature', 'Ask the client to approve it', 'Sent as an Excel with a portal link; it is the scope in force once they approve it there.'],
                       ] as const).map(([k, t, d]) => (
                         <label key={k} className={`rounded-xl border px-3.5 py-2.5 cursor-pointer transition-colors ${recordMode === k ? 'border-[#3D52A0] bg-[#3D52A0]/[0.05]' : 'border-slate-200 hover:border-slate-300'}`}>
                           <div className="flex items-center gap-2 text-[13px] font-bold text-slate-900"><input type="radio" checked={recordMode === k} onChange={() => setRecordMode(k)} /> {t}</div>
@@ -522,6 +620,9 @@ export default function ScopeWorkspace({
                         </label>
                       ))}
                     </div>
+                    {recordMode === 'for_signature' && (
+                      <ClientTotalsPicker value={v1Totals} onChange={setV1Totals} before={null} after={baseTotal} />
+                    )}
                     {recordMode === 'recorded' && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <input type="date" value={approvedOn} onChange={e => setApprovedOn(e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-[13px]" />
@@ -543,7 +644,7 @@ export default function ScopeWorkspace({
                 </div>
                 <div className="flex lg:flex-col gap-2 lg:items-end shrink-0">
                   <button onClick={recordV1} disabled={!setTiers || recordBlocked} className="px-4 py-2.5 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:bg-slate-300 text-white text-[12.5px] font-bold cursor-pointer flex items-center gap-1.5 shadow-sm">
-                    <Lock className="w-4 h-4" /> {recordMode === 'recorded' ? 'Freeze rates & record' : 'Freeze rates & stage for signature'}
+                    <Lock className="w-4 h-4" /> {recordMode === 'recorded' ? 'Freeze rates & record' : 'Freeze rates & stage for approval'}
                   </button>
                   {!revisions.length && <button onClick={switchOff} className="px-3 py-2 rounded-xl text-[12px] font-bold text-slate-500 hover:bg-slate-100 cursor-pointer">Switch signed scope off</button>}
                 </div>
@@ -568,6 +669,24 @@ export default function ScopeWorkspace({
                       <button onClick={() => setPreviewIssue(v1)} className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11.5px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> Open v{vOf(v1)}</button>
                       {!v1Approved && <button onClick={() => setSignFor({ id: v1.id, kind: 'detailed_boq' })} className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11.5px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-1"><PenLine className="w-3.5 h-3.5" /> Client signing on this device</button>}
                     </div>
+                    {v1.recordedApproval && !isVisibleToClient(v1 as any) && (
+                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3.5 py-2.5 flex flex-wrap items-center gap-3 text-[12.5px] text-amber-900">
+                        <span className="flex-1 min-w-[220px]">The client cannot see v{vOf(v1)} in their portal yet, so their scope there reads as not frozen.</span>
+                        <button
+                          onClick={async () => {
+                            const next = publishIssue(v1.id)(ctx);
+                            setProjectContext(publishIssue(v1.id));
+                            try { if (onReleasePortal) await onReleasePortal(next); flash('ok', `${v1.reference} is in the client's portal as their approved scope.`); }
+                            catch (e: any) { flash('block', `Published, but the portal was not updated: ${e?.message || e}.`); }
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-[#3D52A0] hover:bg-[#334486] text-white text-[12px] font-bold cursor-pointer"
+                        >Publish to client portal</button>
+                      </div>
+                    )}
+                    {(!v1Approved || (v1.clientSignature as any)?.signatureType === 'portal_approval') && !v1.recordedApproval && (
+                      <ClientSendPanel issue={v1} defaultTo={ctx.clientEmail || ''} studioName={studioName} sending={sending === v1.id}
+                        onSend={(to, cc) => sendToClient(v1.id, to, cc)} />
+                    )}
                   </div>
                 </div>
                 <button
@@ -664,12 +783,20 @@ interface EditorProps {
   onOpenIssue: (i: DocumentIssue) => void;
   stateOf: (i: DocumentIssue | null) => string;
   momQueue?: ReturnType<typeof useMomScopeQueue>;
+  onSendToClient?: (issueId: string, to: string[], cc: string[], base?: ProjectContext) => Promise<{ ok: boolean; error?: string }>;
+  sendingId?: string | null;
 }
 
 function RevisionEditor({
   rec, base, v1, issue, bank, bankMap, ctx, setProjectContext, saveRecord, currentUser, orgName,
-  onApply, onWithdraw, onDiscard, onSign, onOpenIssue, stateOf, momQueue,
+  onApply, onWithdraw, onDiscard, onSign, onOpenIssue, stateOf, momQueue, onSendToClient, sendingId,
 }: EditorProps) {
+  const [totalsOpts, setTotalsOpts] = useState<ClientTotalsOptions>(() => defaultTotalsOptions(ctx));
+  const [issueTo, setIssueTo] = useState(ctx.clientEmail || '');
+  const [issueCc, setIssueCc] = useState('');
+  const [issueError, setIssueError] = useState<string | null>(null);
+  const [issuing, setIssuing] = useState(false);
+  const [previewXl, setPreviewXl] = useState(false);
   const signed: SignedLine[] = useMemo(() => signedLinesFrom(base.boq, bankMap), [base.boq, bankMap]);
   const draft: ScopeDraft = useMemo(() => draftOfRecord(rec, signed, base.boq, bankMap), [rec, signed, base.boq, bankMap]);
   const result = useMemo(() => revisionFromDraft(signed, draft), [signed, draft]);
@@ -791,12 +918,19 @@ function RevisionEditor({
     return { reference, v2TierId, snapshot, drift: Math.abs(v2.total - result.v2Total) };
   };
 
-  const doIssue = () => {
+  const doIssue = async (send: boolean) => {
     const built = buildDocs();
     if (built.drift > 0.01 || blocked) return;
-    const materialSections = buildMaterialSections('scope_revision', built.snapshot);
-    setProjectContext(prev => {
-      const withIssue = issueDocument('scope_revision', built.snapshot, { issuedBy: currentUser, reference: built.reference, materialSections })(prev);
+    const toList = splitEmails(issueTo);
+    const ccList = splitEmails(issueCc);
+    const bad = [...toList, ...ccList].find(e => !EMAIL_RX.test(e));
+    if (send && bad) { setIssueError(`"${bad}" is not an email address.`); return; }
+    /* The totals the client will see are part of the issued document, so they share its fingerprint. */
+    const snapshot = { ...built.snapshot, clientTotals: totalsOpts };
+    const materialSections = buildMaterialSections('scope_revision', snapshot);
+    const issueUpd = issueDocument('scope_revision', snapshot, { issuedBy: currentUser, reference: built.reference, materialSections });
+    const full = (prev: ProjectContext): ProjectContext => {
+      const withIssue = issueUpd(prev);
       const issued = withIssue.documents!.issues[withIssue.documents!.issues.length - 1];
       const nextRecord: ScopeRevisionRecord = {
         ...rec,
@@ -811,8 +945,16 @@ function RevisionEditor({
         v2TierId: built.v2TierId,
       };
       return { ...withIssue, scopeRevisions: (withIssue.scopeRevisions || []).map(r => (r.id === rec.id ? nextRecord : r)) };
-    });
-    setIssueOpen(false);
+    };
+    const issuedId = issueUpd(ctx).documents!.issues.slice(-1)[0].id;
+    setProjectContext(full);
+    if (!send || !onSendToClient) { setIssueOpen(false); return; }
+    setIssuing(true);
+    setIssueError(null);
+    const r = await onSendToClient(issuedId, toList, ccList, full(ctx));
+    setIssuing(false);
+    if (r.ok) setIssueOpen(false);
+    else setIssueError(`Issued, but not sent: ${r.error}. You can send it again from the revision.`);
   };
 
   // ── Rooms, in order, plus rooms the studio has just added ────────────
@@ -896,7 +1038,7 @@ function RevisionEditor({
               ? <button onClick={() => setPreview(buildDocs().snapshot)} className="px-3.5 py-2 rounded-xl border border-slate-200 text-[12.5px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-1.5"><FileText className="w-4 h-4" /> Preview document</button>
               : issue && <button onClick={() => onOpenIssue(issue)} className="px-3.5 py-2 rounded-xl border border-slate-200 text-[12.5px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-1.5"><Eye className="w-4 h-4" /> Open document</button>}
             {editable && (
-              <button onClick={() => setIssueOpen(true)} disabled={blocked} title={blocked ? checks.find(c => c.level === 'block')?.text : ''} className="px-4 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:bg-slate-300 text-white text-[12.5px] font-bold cursor-pointer flex items-center gap-1.5 shadow-sm"><PenLine className="w-4 h-4" /> Issue for signature</button>
+              <button onClick={() => setIssueOpen(true)} disabled={blocked} title={blocked ? checks.find(c => c.level === 'block')?.text : ''} className="px-4 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:bg-slate-300 text-white text-[12.5px] font-bold cursor-pointer flex items-center gap-1.5 shadow-sm"><PenLine className="w-4 h-4" /> Issue to client</button>
             )}
             {rec.status === 'issued' && !signedByClient && issue && (
               <>
@@ -918,6 +1060,10 @@ function RevisionEditor({
                 : <>Issued as {rec.reference} · {stateOf(issue)}. The draft is locked while it is with the client. Withdraw it to change anything.</>}
             </span>
           </div>
+        )}
+        {!editable && issue && onSendToClient && (
+          <ClientSendPanel issue={issue} defaultTo={ctx.clientEmail || ''} studioName={orgName || 'Studio'} sending={sendingId === issue.id}
+            onSend={(to, cc) => onSendToClient(issue.id, to, cc)} />
         )}
       </div>
 
@@ -1222,7 +1368,7 @@ function RevisionEditor({
               return (
                 <>
                   <div className="px-6 pt-6 pb-4 border-b border-slate-100">
-                    <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">Issue for signature</div>
+                    <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">Issue to client</div>
                     <h3 className="text-[20px] font-bold tracking-tight text-slate-900 mt-0.5">Scope Revision {rec.number} · {built.reference}</h3>
                     <button onClick={() => setIssueOpen(false)} className="absolute right-4 top-4 p-2 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 cursor-pointer"><X className="w-5 h-5" /></button>
                   </div>
@@ -1240,20 +1386,44 @@ function RevisionEditor({
                     {built.drift > 0.01
                       ? <Note tone="block">The revised BOQ prices to {inr2(built.snapshot.v2.total)} but the draft says {inr2(result.v2Total)}. Issuing is blocked until they agree.</Note>
                       : <Note tone="ok">The revised BOQ prices to this total exactly, and the six parts add up to the change.</Note>}
+                    <ClientTotalsPicker value={totalsOpts} onChange={setTotalsOpts} before={result.v1Total} after={built.snapshot.v2.total} />
                     <div>
                       <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-1.5">What the client gets</div>
                       <ul className="list-disc pl-5 text-[12.5px] text-slate-700 space-y-1">
-                        <li>The Scope Revision document — effect, breakdown, rooms, every changed item — with Detailed BOQ v{vOf(v1) + 1} attached in full.</li>
-                        <li>“What changed” in their portal, and a Review & sign button.</li>
-                        <li>Nothing about costs or margins.</li>
+                        <li>A short email with these totals, the Excel attached (Summary, What changed, Revised BOQ v{vOf(v1) + 1} in full with specifications, Not included), and a button to their portal.</li>
+                        <li>In the portal: the same totals, the changed items, the Excel, and one Approve for the whole revision.</li>
+                        <li>Nothing about costs or margins. The Excel is locked.</li>
                       </ul>
+                      <button
+                        onClick={async () => {
+                          setPreviewXl(true);
+                          try {
+                            const snap: any = { ...built.snapshot, clientTotals: totalsOpts };
+                            const buf = await buildRevisionWorkbook(snap, { studioName: orgName || 'Studio', fingerprint: 'added when issued', issuedOn: Date.now() });
+                            downloadWorkbook(buf, `PREVIEW ${revisionWorkbookName(snap)}`);
+                          } finally { setPreviewXl(false); }
+                        }}
+                        className="mt-2 px-3 py-1.5 rounded-lg border border-slate-200 text-[12px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-1.5"
+                      >
+                        {previewXl ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />} Preview the Excel
+                      </button>
                     </div>
-                    <Note tone="warn">Issuing stages it. It reaches the portal when you publish it. The scope changes only when they sign and you apply it — then the Payment Schedule’s next version is staged for them to confirm.</Note>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <label className="text-[11.5px] font-bold text-slate-500">Send to
+                        <input value={issueTo} onChange={e => setIssueTo(e.target.value)} placeholder="client@email.com" className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12.5px] font-normal text-slate-800" />
+                      </label>
+                      <label className="text-[11.5px] font-bold text-slate-500">CC (optional)
+                        <input value={issueCc} onChange={e => setIssueCc(e.target.value)} className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12.5px] font-normal text-slate-800" />
+                      </label>
+                    </div>
+                    <Note tone="warn">The scope changes only when they approve and you apply it; then the Payment Schedule's next version is staged for them to confirm.</Note>
+                    {issueError && <Note tone="block">{issueError}</Note>}
                   </div>
                   <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
                     <button onClick={() => { setIssueOpen(false); setPreview(built.snapshot); }} className="px-3.5 py-2 rounded-xl text-[12.5px] font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Preview first</button>
                     <button onClick={() => setIssueOpen(false)} className="px-3.5 py-2 rounded-xl text-[12.5px] font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Back to the draft</button>
-                    <button onClick={doIssue} disabled={built.drift > 0.01 || blocked} className="px-4 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:bg-slate-300 text-white text-[12.5px] font-bold cursor-pointer flex items-center gap-1.5"><PenLine className="w-4 h-4" /> Issue for signature</button>
+                    <button onClick={() => doIssue(false)} disabled={built.drift > 0.01 || blocked || issuing} className="px-3.5 py-2 rounded-xl border border-slate-200 text-[12.5px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 cursor-pointer">Issue only, send later</button>
+                    <button onClick={() => doIssue(true)} disabled={built.drift > 0.01 || blocked || issuing} className="px-4 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:bg-slate-300 text-white text-[12.5px] font-bold cursor-pointer flex items-center gap-1.5">{issuing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />} Issue &amp; send to client</button>
                   </div>
                 </>
               );
@@ -1270,6 +1440,95 @@ function RevisionEditor({
     </div>
   );
 }
+
+
+// ── Sending a scope document to the client ─────────────────────────────────
+
+const splitEmails = (s: string) => s.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean);
+const EMAIL_RX = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+
+/** The Excel, as the client will get it. */
+const ExcelButton: React.FC<{ issue: DocumentIssue; studioName: string; label?: string }> = ({ issue, studioName, label = 'Download Excel' }) => {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        setBusy(true);
+        try { const { buf, filename } = await workbookForIssue(issue, studioName); downloadWorkbook(buf, filename); }
+        catch (e) { console.error(e); alert('The Excel could not be made just now.'); }
+        finally { setBusy(false); }
+      }}
+      className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-[12px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-1.5"
+    >
+      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span className="w-4 h-4 rounded-[3px] bg-[#107C41] text-white text-[9px] font-extrabold grid place-items-center">X</span>}
+      {label}
+    </button>
+  );
+};
+
+/*
+  Where a staged or issued document stands with the client, and how to send it.
+
+  Sending is one step on purpose: publish the document, rewrite the client's
+  portal copy, then email the Excel with the portal link -- in that order, so
+  the email never points at a portal that does not have the document yet.
+*/
+const ClientSendPanel: React.FC<{
+  issue: DocumentIssue;
+  defaultTo: string;
+  studioName: string;
+  sending: boolean;
+  onSend: (to: string[], cc: string[]) => Promise<{ ok: boolean; error?: string }>;
+}> = ({ issue, defaultTo, studioName, sending, onSend }) => {
+  const [to, setTo] = useState(defaultTo);
+  const [cc, setCc] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const d: any = issue.clientSignature;
+  const sentAt = (issue as any).sentAt as number | undefined;
+  const sentTo = ((issue as any).sentTo || []) as string[];
+  if (d) {
+    return (
+      <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-3 flex flex-wrap items-center gap-3">
+        <Check className="w-4 h-4 text-emerald-700 shrink-0" />
+        <div className="flex-1 min-w-[220px] text-[12.5px] text-emerald-950">
+          <b>{d.witnessedBy ? 'Approved in person' : d.signatureType === 'portal_approval' ? 'Approved in the portal' : 'Signed'}</b> by {d.signatoryName || 'the client'}
+          {d.signatoryEmail ? ` (${d.signatoryEmail})` : ''} on {new Date(d.signedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          {d.witnessedBy ? ` · on a studio device` : ''}
+        </div>
+        <ExcelButton issue={issue} studioName={studioName} label="Approved Excel" />
+        <ApprovalRecordButton issue={issue} studioName={studioName} />
+      </div>
+    );
+  }
+  const send = async () => {
+    const toList = splitEmails(to);
+    const ccList = splitEmails(cc);
+    const bad = [...toList, ...ccList].find(e => !EMAIL_RX.test(e));
+    if (bad) { setError(`"${bad}" is not an email address.`); return; }
+    setError(null);
+    const r = await onSend(toList, ccList);
+    if (!r.ok) setError(r.error || 'It could not be sent.');
+  };
+  return (
+    <div className="mt-4 rounded-xl border border-[#3D52A0]/20 bg-[#3D52A0]/[0.04] px-3.5 py-3 space-y-2.5">
+      <div className="text-[12.5px] text-slate-700">
+        {sentAt
+          ? <>Sent to the client {new Date(sentAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}{sentTo.length ? ` (${sentTo.join(', ')})` : ' (portal only)'} · waiting for their approval in the portal.</>
+          : <>Not sent yet. Sending publishes it to the client's portal and emails them the Excel with a link to approve it there.</>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <input value={to} onChange={e => setTo(e.target.value)} placeholder="client@email.com" aria-label="Send to" className="flex-1 min-w-[200px] border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12.5px] bg-white" />
+        <input value={cc} onChange={e => setCc(e.target.value)} placeholder="CC (optional)" aria-label="CC" className="w-[180px] border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12.5px] bg-white" />
+        <ExcelButton issue={issue} studioName={studioName} />
+        <button onClick={send} disabled={sending} className="px-3.5 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-60 text-white text-[12px] font-bold cursor-pointer flex items-center gap-1.5">
+          {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />} {sentAt ? 'Send again' : 'Send to client'}
+        </button>
+      </div>
+      {!splitEmails(to).length && <p className="text-[11.5px] text-slate-500">{sentAt ? 'With no email, sending again only refreshes their portal.' : 'With no email, it is published to the portal only.'}</p>}
+      {error && <Note tone="block">{error}</Note>}
+    </div>
+  );
+};
 
 // ── One line ────────────────────────────────────────────────────────────────
 

@@ -49,6 +49,7 @@ import {
 import { Icon, Ring, UiProvider, useUi, useCountUp, useArmed, tipProps, Glyph, GlyphName } from './bits';
 import InsightsCard, { InsightTab } from './InsightsCard';
 import { seesStudioFinance } from '../../lib/roleAccess';
+import { publicAppOrigin } from '../../lib/publicUrl';
 import './projectHome.css';
 
 export interface ProjectHomeProps {
@@ -304,7 +305,7 @@ function Home(p: ProjectHomeProps) {
     const existing = ctx.portalAccess;
     const live = existing?.token && (!existing.expiresAt || anyMs(existing.expiresAt) > Date.now());
     const token = live ? existing.token : issueLink().token;
-    const link = `${window.location.origin}/?portal=${token}`;
+    const link = `${publicAppOrigin()}/?portal=${token}`;
     const copied = await copyText(link);
     if (copied) ui.say(live ? 'Client link copied' : 'New client link copied — any earlier link has stopped working');
     else ui.say(live ? 'The browser blocked copying. Try again, or copy it from the Client portal screen.'

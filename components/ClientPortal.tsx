@@ -150,6 +150,7 @@ import ScheduleGantt from './ScheduleGantt';
 import { buildScheduleFromProject } from '../lib/scheduleBuilder';
 import { db as storageDb } from '../services/dbService';
 import { ProjectSchedule } from '../types';
+import { publicAppOrigin } from '../lib/publicUrl';
 
 /** How an offline signature was actually captured, in the client's words. */
 const MEDIUM_LABEL: Record<string, string> = {
@@ -252,7 +253,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             } as any);
         }
 
-        const link = `${window.location.origin}/?portal=${token}`;
+        const link = `${publicAppOrigin()}/?portal=${token}`;
         try {
             await navigator.clipboard?.writeText(link);
             setSignSuccessMessage(
@@ -264,7 +265,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         setTimeout(() => setSignSuccessMessage(null), 6000);
     };
 
-    const { orgData } = useOrg();
+    const { orgData, currentUserAuth } = useOrg() as any;
     const { settings } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
     const studioCompanyName = settings?.companyName || orgData?.orgName || 'Form Factors Design Studio';
     /*
@@ -380,6 +381,20 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
 
     /** Opens a document for reading, and stamps that the client saw it. */
     const openDocument = (kind: ClientDocumentKind, issueId?: string) => {
+        /*
+          Scope documents are reviewed as Excel and approved in "Your scope",
+          not read and signed in the reading room: wherever they are opened
+          from (the Documents tab included), they land there.
+        */
+        if (kind === 'scope_revision' || kind === 'detailed_boq') {
+            setActiveTab('designScope');
+            setDesignScopeTab('scope');
+            setTimeout(() => {
+                (document.getElementById(issueId ? `approve-${issueId}` : '') || document.getElementById('your-scope'))
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 350);
+            return;
+        }
         setReadingRoomKind(kind);
         setReadingRoomIssueId(issueId);
         /*
@@ -578,6 +593,31 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
       rather than logged. The studio preview persists the old way: it is the
       studio's own session, writing their own project.
     */
+    /*
+      Approving a Scope Revision or Detailed BOQ in the portal.
+
+      From the client's own portal this waits for the server, which writes the
+      record itself (login, time, address, fingerprint) -- so an approval that
+      was refused is never shown as given. From the studio's preview it is an
+      approval taken in person on a studio device, saved with the project.
+    */
+    const approveScopeIssue = async (issueId: string, name: string, contentHash: string) => {
+        if (source === 'client') {
+            await submitClientAction(projectData.id, { type: 'approveIssue', issueId, name, contentHash });
+        }
+        setProjectContext(signIssue(issueId, {
+            signatoryName: name,
+            signedAt: new Date().toISOString(),
+            signatureType: 'portal_approval',
+            ipAddress: source === 'client' ? 'recorded by server' : 'studio device',
+            issueId,
+            contentHash,
+            legalAffirmation: true,
+            verified: source === 'client',
+            ...(source !== 'client' ? { witnessedBy: currentUserAuth?.displayName || currentUserAuth?.email || 'studio staff' } : {}),
+        }));
+    };
+
     const persistClientAction = (action: ClientAction) => {
         if (source !== 'client') return;
         submitClientAction(projectData.id, action).catch((err: any) => {
@@ -696,6 +736,37 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         something assembled a second way.
     */
     const boqByCategory = useMemo(() => {
+        /*
+          On a signed-scope project the scope is the Detailed BOQ in force:
+          frozen, approved, and the figure the agreement and every revision are
+          measured against. The studio's working BOQ can differ from it, so
+          showing that here put a third number in front of the client.
+        */
+        if ((context as any).scopeFlow?.enabled) {
+            const inForce = (context.documents?.issues || [])
+                .filter((i: any) => i.kind === 'detailed_boq' && !i.withdrawnAt && i.clientVisibility?.state === 'published'
+                    && !!(i.clientSignature || i.recordedApproval || i.signedVia))
+                .sort((a: any, b: any) => b.version - a.version)[0];
+            const snap: any = inForce?.snapshot;
+            if (snap?.rooms?.length) {
+                return groupClientBoq(snap.rooms.flatMap((r: any, ri: number) => (r.lines || []).map((l: any, li: number) => ({
+                    id: l.id || `dbq-${ri}-${li}`,
+                    roomId: r.name,
+                    room: r.name,
+                    roomName: r.name,
+                    item: l.name,
+                    cat: 'Scope',
+                    unit: l.unit,
+                    qty: l.qty,
+                    rate: l.rate,
+                    total: l.amount,
+                    description: l.description,
+                    inclusions: l.inclusions,
+                    exclusions: l.exclusions,
+                    status: 'Approved',
+                } as any))));
+            }
+        }
         // The client's own session: exactly what was sent, nothing derived.
         const stored = (context as any).clientBoq as ClientBoqRow[] | undefined;
         if (stored?.length) return groupClientBoq(stored);
@@ -711,7 +782,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             rooms: projectData.context.rooms as any,
             revisions: boqRevisions,
         }));
-    }, [activeTier, bank, projectData.context.rooms, boqRevisions, displayBoq, (context as any).clientBoq, clientBoq]);
+    }, [activeTier, bank, projectData.context.rooms, boqRevisions, displayBoq, (context as any).clientBoq, clientBoq, context.documents, (context as any).scopeFlow]);
 
     // Flat list and categorization helpers for Focus Scope View
     const flatBoqList = useMemo(() => {
@@ -3824,7 +3895,14 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                             >
                                 {/* The scope as signed documents, where the studio
                                     has issued them. Renders nothing otherwise. */}
-                                <PortalScopePanel context={context} onOpenDocument={openDocument} />
+                                <PortalScopePanel
+                                    context={context}
+                                    onOpenDocument={openDocument}
+                                    onApproveIssue={approveScopeIssue}
+                                    studioName={studioCompanyName}
+                                    studioAddress={(projectData?.context as any)?.portalStudio?.address || orgData?.officeAddress || null}
+                                    clientName={context.clientName}
+                                />
                                 {/*
                                   The scope header.
 
