@@ -929,10 +929,56 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                 date: m.revisedAt || m.sharedAt || m.meetingDate,
                 statusBadge: 'To acknowledge',
             }));
-        return momActions.length
-            ? { ...clientActionSummary, clientActions: [...clientActionSummary.clientActions, ...momActions] }
+        /*
+          A Scope Revision or a first Detailed BOQ waiting for the client's
+          approval. It was only in "Your scope" under Design & Scope, so a client
+          who came in through the overview never saw that anything needed them.
+        */
+        const scopeActions = (context.documents?.issues || [])
+            .filter((i: any) => !i.withdrawnAt && !i.clientSignature && !i.recordedApproval && i.clientVisibility?.state === 'published'
+                && (i.kind === 'scope_revision' || (i.kind === 'detailed_boq' && i.snapshot?.approval?.mode === 'for_signature')))
+            .map((i: any) => {
+                const s: any = i.snapshot || {};
+                const revision = i.kind === 'scope_revision';
+                const change = revision ? (Number(s.v2?.total) || 0) - (Number(s.v1?.total) || 0) : 0;
+                const amount = `₹${Math.round(Math.abs(change)).toLocaleString('en-IN')}`;
+                return {
+                    id: `scope-${i.id}`,
+                    category: 'scope' as const,
+                    severity: 'high' as const,
+                    owner: 'client' as const,
+                    title: revision ? `Approve Scope Revision ${s.number ?? i.version}` : `Approve your Detailed BOQ v${s.version ?? i.version}`,
+                    subtitle: revision
+                        ? `${change >= 0 ? '+' : '−'}${amount} on your approved scope · ${i.reference}`
+                        : `₹${Math.round(Number(s.total) || 0).toLocaleString('en-IN')} · ${i.reference}`,
+                    description: s.summary || '',
+                    targetTab: 'overview' as const,
+                    actionLabel: 'Review & approve',
+                    actionType: 'review_scope' as const,
+                    actionPayload: { issueId: i.id, kind: i.kind },
+                    date: i.issuedAt,
+                    statusBadge: 'To approve',
+                    consequence: revision ? 'Nothing in the revised BOQ is built until you approve it.' : undefined,
+                };
+            });
+        const extra = [...scopeActions, ...momActions];
+        return extra.length
+            ? { ...clientActionSummary, clientActions: [...clientActionSummary.clientActions, ...extra] }
             : clientActionSummary;
-    }, [clientActionSummary, syncedMoms]);
+    }, [clientActionSummary, syncedMoms, context.documents]);
+
+    /* Downloads from "Your scope", reported for the studio's trail. Only the client's own portal counts. */
+    useEffect(() => {
+        if (source !== 'client') return;
+        const onDownload = (e: any) => {
+            const d = e?.detail || {};
+            if (!d.issueId) return;
+            submitClientAction(projectData.id, { type: 'documentDownload', issueId: d.issueId, format: d.format === 'record' ? 'record' : 'excel' })
+                .catch((err: any) => console.warn('Download not recorded', err));
+        };
+        window.addEventListener('scope-document-downloaded', onDownload);
+        return () => window.removeEventListener('scope-document-downloaded', onDownload);
+    }, [source, projectData.id]);
 
     const upcomingSteps = useMemo(() => {
         return getUpcomingStudioSteps(lifecycleInfo.currentStageNumber, context);
@@ -1725,6 +1771,9 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                 setActiveTab('decisions');
                 break;
             case 'review_variation': setActiveTab('designScope'); break;
+            case 'review_scope':
+                openDocument(item.actionPayload?.kind, item.actionPayload?.issueId);
+                break;
             case 'review_minutes': {
                 const m = syncedMoms.find((x: any) => x.id === item.actionPayload?.momId);
                 if (m) setSelectedMomForViewer(m);

@@ -1473,6 +1473,30 @@ const ExcelButton: React.FC<{ issue: DocumentIssue; studioName: string; label?: 
   portal copy, then email the Excel with the portal link -- in that order, so
   the email never points at a portal that does not have the document yet.
 */
+/* What has happened to a sent document: sent, Excel downloaded, approved. */
+const Trail: React.FC<{ issue: DocumentIssue }> = ({ issue }) => {
+  const i: any = issue;
+  const dl: { at: number; format: string }[] = (i.clientDownloads || []).filter((x: any) => x.format === 'excel');
+  const d: any = issue.clientSignature;
+  const when = (t?: number | string | null) => (t ? new Date(t).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+  const rows: { done: boolean; label: string; sub?: string; at?: string }[] = [
+    { done: !!i.sentAt, label: 'Sent to the client', sub: (i.sentTo || []).length ? (i.sentTo || []).join(', ') : 'Portal only', at: when(i.sentAt) },
+    { done: dl.length > 0, label: 'Excel downloaded', sub: dl.length ? `From the portal, ${dl.length} time${dl.length === 1 ? '' : 's'}` : undefined, at: when(dl[dl.length - 1]?.at) },
+    { done: !!d, label: d?.witnessedBy ? 'Approved in person' : 'Approved in the portal', sub: d ? d.signatoryName : undefined, at: when(d?.signedAt) },
+  ];
+  return (
+    <ol className="mt-3 border-t border-slate-200/70 pt-2.5 space-y-1.5">
+      {rows.map((r, k) => (
+        <li key={k} className="grid grid-cols-[14px_minmax(0,1fr)_auto] gap-2.5 items-start text-[12px]">
+          <span className={`mt-1 w-2.5 h-2.5 rounded-full ${r.done ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+          <span className={r.done ? 'text-slate-800' : 'text-slate-400'}>{r.label}{r.sub ? <span className="text-slate-500"> · {r.sub}</span> : null}</span>
+          <span className="text-slate-400 tabular-nums">{r.done ? r.at : 'not yet'}</span>
+        </li>
+      ))}
+    </ol>
+  );
+};
+
 const ClientSendPanel: React.FC<{
   issue: DocumentIssue;
   defaultTo: string;
@@ -1497,6 +1521,7 @@ const ClientSendPanel: React.FC<{
         </div>
         <ExcelButton issue={issue} studioName={studioName} label="Approved Excel" />
         <ApprovalRecordButton issue={issue} studioName={studioName} />
+        {(issue as any).sentAt && <div className="basis-full"><Trail issue={issue} /></div>}
       </div>
     );
   }
@@ -1526,6 +1551,7 @@ const ClientSendPanel: React.FC<{
       </div>
       {!splitEmails(to).length && <p className="text-[11.5px] text-slate-500">{sentAt ? 'With no email, sending again only refreshes their portal.' : 'With no email, it is published to the portal only.'}</p>}
       {error && <Note tone="block">{error}</Note>}
+      {sentAt && <Trail issue={issue} />}
     </div>
   );
 };

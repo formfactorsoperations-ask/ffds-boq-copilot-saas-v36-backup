@@ -2311,6 +2311,8 @@ export interface DocumentIssue {
     /** When the Excel-first email went to the client, and to whom (Scope Revision, Detailed BOQ). */
     sentAt?: number | null;
     sentTo?: string[];
+    /** Each time the client downloaded the Excel (or the approval record) from their portal. */
+    clientDownloads?: { at: number; format: 'excel' | 'record' }[];
     releaseNote?: string | null;
     /** Nudges the studio has sent since release. */
     reminders?: { at: number; by: string; via: string }[];

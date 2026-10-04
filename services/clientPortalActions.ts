@@ -23,6 +23,8 @@ export type ClientAction =
   /* Approving a Scope Revision or Detailed BOQ in the portal. The server writes
      the record (name typed here; login, time, address and fingerprint its own). */
   | { type: 'approveIssue'; issueId: string; name: string; contentHash?: string }
+  /* The client downloaded a scope document's Excel or approval record. */
+  | { type: 'documentDownload'; issueId: string; format: 'excel' | 'record' }
   | {
       type: 'raiseQuery';
       issueId: string;

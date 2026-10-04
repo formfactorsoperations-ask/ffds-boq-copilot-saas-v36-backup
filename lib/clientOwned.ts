@@ -64,6 +64,8 @@ function mergeDocuments(mine: any, theirs: any): any {
       next = { ...next, sentAt: other.sentAt, sentTo: other.sentTo, releasedVia: other.releasedVia ?? next.releasedVia };
     }
     if (!next.clientSignature && other.clientSignature) next = { ...next, clientSignature: other.clientSignature };
+    /* Excel downloads are written by the server: the fuller record wins. */
+    if ((other.clientDownloads?.length || 0) > (next.clientDownloads?.length || 0)) next = { ...next, clientDownloads: other.clientDownloads };
     return next;
   });
 
