@@ -845,7 +845,8 @@ export default function ScheduleGantt({
                       >
                         <span className={`w-3.5 h-3.5 rounded-full grid place-items-center text-[8px] font-black text-white shrink-0 ${
                           lead.kind === 'mom' ? 'bg-emerald-500'
-                            : lead.kind === 'client_meeting' ? 'bg-amber-500' : 'bg-sky-500'}`}>
+                            : lead.kind === 'client_meeting' ? 'bg-amber-500'
+                            : lead.kind === 'internal_meeting' || lead.kind === 'vendor_meeting' ? 'bg-violet-500' : 'bg-sky-500'}`}>
                           {group.length > 1 ? group.length : <Users className="w-2 h-2" />}
                         </span>
                         <span className="text-[9px] font-bold text-slate-600 group-hover:text-slate-900 hidden sm:inline whitespace-nowrap">

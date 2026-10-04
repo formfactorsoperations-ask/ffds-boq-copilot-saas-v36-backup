@@ -1,5 +1,6 @@
 import { ScheduleMarker, MOM, SiteVisit } from '../types';
 import { toISO } from './schedule';
+import { meetingKind, meetingTypeLabel } from './meetingTypes';
 
 // ============================================================================
 // scheduleMarkers — meetings and site visits, placed on the schedule.
@@ -41,6 +42,11 @@ export function markerDateISO(v: any): string | null {
   return toISO(Math.floor(ms / MS_DAY));
 }
 
+const markerKind = (type: unknown): ScheduleMarker['kind'] => {
+  const k = meetingKind(type);
+  return k === 'client' ? 'client_meeting' : k === 'internal' ? 'internal_meeting' : k === 'vendor' ? 'vendor_meeting' : 'site_visit';
+};
+
 export function siteVisitMarkers(visits: SiteVisit[] = []): ScheduleMarker[] {
   return visits.reduce<ScheduleMarker[]>((acc, v) => {
     const atISO = markerDateISO(v.date);
@@ -49,8 +55,9 @@ export function siteVisitMarkers(visits: SiteVisit[] = []): ScheduleMarker[] {
     acc.push({
       id: `visit-${v.id}`,
       atISO,
-      kind: v.type === 'client_meeting' ? 'client_meeting' : 'site_visit',
-      title: v.title || (v.type === 'client_meeting' ? 'Client meeting' : 'Site visit'),
+      // Internal and vendor meetings used to fall through to 'site_visit'.
+      kind: markerKind(v.type),
+      title: v.title || meetingTypeLabel(v.type),
       detail: [
         people ? `${people} attendee${people === 1 ? '' : 's'}` : null,
         v.durationMinutes ? `${v.durationMinutes} min` : null,
@@ -107,6 +114,8 @@ export function markersByDay(markers: ScheduleMarker[] = []): Map<string, Schedu
 export const MARKER_LABEL: Record<ScheduleMarker['kind'], string> = {
   site_visit: 'Site visit',
   client_meeting: 'Client meeting',
+  internal_meeting: 'Internal meeting',
+  vendor_meeting: 'Vendor meeting',
   mom: 'Meeting minutes',
   decision: 'Decision',
 };

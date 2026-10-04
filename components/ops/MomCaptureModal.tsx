@@ -3,6 +3,7 @@ import { Loader2, Sparkles, FileText, CheckCircle2 } from 'lucide-react';
 import { createMoMFromNotes, createEmptyMoM } from '../../services/momService';
 import { SiteVisit, MOM } from '../../types';
 import { auth } from '../../services/firebaseClient';
+import { useOrg } from '../../contexts/OrgContext';
 
 interface MomCaptureModalProps {
   visit: SiteVisit;
@@ -14,6 +15,7 @@ interface MomCaptureModalProps {
 }
 
 export function MomCaptureModal({ visit, projectId, studioId, projectContextName, onClose, onSuccess }: MomCaptureModalProps) {
+  const { teamMembers, orgData } = useOrg() as any;
   const [notes, setNotes] = useState(visit.notes || '');
   const [loading, setLoading] = useState(false);
 
@@ -23,6 +25,25 @@ export function MomCaptureModal({ visit, projectId, studioId, projectContextName
     if (typeof visit.date === 'object' && 'toDate' in visit.date) return visit.date.toDate().getTime();
     const parsed = new Date(visit.date as string).getTime();
     return isNaN(parsed) ? Date.now() : parsed;
+  };
+
+  /*
+    Who was there, and on which side. The AI used to get the client names only,
+    so every studio member it read in the notes came back as "client".
+  */
+  const knownAttendees = () => {
+    const listed = (visit.attendees || []).filter(Boolean).join(', ');
+    const team = [
+      ...((teamMembers || []) as any[]).filter((t) => String(t?.role || '').toLowerCase() !== 'client'),
+      ...(orgData?.signatoryName ? [{ name: orgData.signatoryName, title: orgData.signatoryTitle || 'Principal' }] : []),
+    ]
+      .map((t) => `${t.name}${t.title ? ` (${t.title})` : ''}`)
+      .filter(Boolean)
+      .join(', ');
+    return [
+      listed && `Listed for this meeting: ${listed}`,
+      team && `Studio team, side "ffds" (only include those named in the notes): ${team}`,
+    ].filter(Boolean).join('. ');
   };
 
   const handleStructureWithAI = async () => {
@@ -38,7 +59,7 @@ export function MomCaptureModal({ visit, projectId, studioId, projectContextName
         visit.title,
         safeDate(),
         notes,
-        visit.attendees?.join(', ') || '',
+        knownAttendees(),
         auth.currentUser?.uid || 'unknown'
       );
       onSuccess(momId);

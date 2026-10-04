@@ -40,7 +40,8 @@ import { DecisionsTable } from './client/PortalTables';
 import PortalPayments from './client/PortalPayments';
 import { PortalMoney } from '../lib/portalMoney';
 import { issuePortalAccess } from '../services/portalAccessService';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { CLIENT_VISIT_TYPES, CLIENT_MOM_TYPES, toMillis } from '../lib/meetingTypes';
 import { httpsCallable } from 'firebase/functions';
 import { 
     calculateClientLifecycleStages, 
@@ -487,11 +488,15 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         try {
             const q = query(
                 collection(db, `organizations/${studioId}/projects/${projectData.id}/siteVisits`),
-                orderBy('date', 'desc')
+                // The rules refuse any query that could include an internal or
+                // vendor meeting, so the client-facing types are asked for by name.
+                // Sorted here: `in` plus orderBy on another field needs an index.
+                where('type', 'in', CLIENT_VISIT_TYPES)
             );
             const unsubscribe = onSnapshot(q, (snap) => {
                 const list: any[] = [];
                 snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+                list.sort((a, b) => toMillis(b.date) - toMillis(a.date));
                 // Strict filter: never expose cancelled, internal, vendor, or private meetings/logs to client
                 setSyncedVisits(list.filter(v => {
                     if (v.status === 'cancelled') return false;
@@ -519,11 +524,12 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         try {
             const q = query(
                 collection(db, `organizations/${studioId}/projects/${projectData.id}/moms`),
-                orderBy('meetingDate', 'desc')
+                where('meetingType', 'in', CLIENT_MOM_TYPES)
             );
             const unsubscribe = onSnapshot(q, (snap) => {
                 const list: any[] = [];
                 snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+                list.sort((a, b) => toMillis(b.meetingDate) - toMillis(a.meetingDate));
                 setSyncedMoms(list.filter(m => {
                     if (m.status === 'draft' && !m.sharedAt) return false;
                     if (!isVisibleToClient(m)) return false;

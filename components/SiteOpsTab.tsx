@@ -166,9 +166,10 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
             projectId={projectId}
             studioId={orgData?.tenantId || "demo-tenant-01"}
             projectContextName={
-              projectContext?.projectName ||
+              projectContext?.name ||
+              (projectContext as any)?.projectName ||
               projectContext?.clientName ||
-              "N/A"
+              "Project"
             }
           />
         )}
@@ -299,9 +300,10 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
                   projectId={projectId}
                   studioId={orgData?.tenantId || "demo-tenant-01"}
                   projectContextName={
-                    projectContext?.projectName ||
+                    projectContext?.name ||
+                    (projectContext as any)?.projectName ||
                     projectContext?.clientName ||
-                    "N/A"
+                    "Project"
                   }
                 />
               )}

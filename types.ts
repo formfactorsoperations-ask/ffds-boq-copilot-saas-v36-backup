@@ -822,6 +822,8 @@ export interface ProjectContext {
     activeProposalMode?: ProposalType;
     electricalPointsPlan?: { id: string; roomId: string; roomName: string; item: string; qty: number; notes: string }[];
     assignedSupervisors?: string[]; // Array of team member IDs or emails
+    /** Lower-cased emails of the Designers who work on this project; a Designer sees only these projects. */
+    assignedDesigners?: string[];
     qualityChecklist?: QualityChecklistState;
     
     // Project tagging & classification
@@ -1212,7 +1214,7 @@ export interface ScheduleHold {
 export interface ScheduleMarker {
     id: string;
     atISO: string;
-    kind: 'site_visit' | 'client_meeting' | 'mom' | 'decision';
+    kind: 'site_visit' | 'client_meeting' | 'internal_meeting' | 'vendor_meeting' | 'mom' | 'decision';
     title: string;
     detail?: string;
     /** MOM-004, or the visit's phase title. */
@@ -1306,12 +1308,12 @@ export interface DrawingTrackerItem {
         clientApprovalRef: any | null;
     };
     comments?: DrawingComment[];
-    pendingReview?: {
-        roundNumber: number;
-        submittedAt: number;
-        submittedBy?: string;
-        note?: string;
-    } | null;
+    /**
+     * A Designer has prepared this round and handed it to the studio to check.
+     * The studio issues it to the client from here; nothing reaches the client
+     * straight from a Designer. Cleared when the round is issued or revised.
+     */
+    pendingReview?: { roundNumber: number; submittedAt: number; submittedBy: string } | null;
 }
 
 export interface AggregatedCategory {

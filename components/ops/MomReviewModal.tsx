@@ -1,4 +1,5 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
+import { meetingTypeLabel } from "../../lib/meetingTypes";
 import { prepareClonedDocForPdf } from "../../lib/pdfUtils";
 import {
   MOM,
@@ -49,18 +50,86 @@ export function MomReviewModal({
   projectContextName,
   onClose,
 }: MomReviewModalProps) {
-  const { currentRole, orgData } = useOrg();
+  const { currentRole, orgData, teamMembers } = useOrg() as any;
   const isOwner = currentRole === "Admin" || currentRole === "Ops Director";
   const studioName = orgData?.orgName || "Studio";
+
+  /*
+    The studio's own people, by name.
+
+    The meeting form only ever offered client attendees, so the AI was never
+    told who was on the studio's side and tagged everyone it read in the notes
+    as "client" -- the PDF then listed the principal architect and the ops lead
+    as CLIENT. An attendee whose name matches a team member (full name, or a
+    first name only one member has) is the studio's, unless someone already
+    marked them as a vendor.
+  */
+  /* The team list, less anyone listed with the Client role, plus the studio's
+     signatory (the principal), who is often not on the list. */
+  const team: any[] = [
+    ...(((teamMembers?.length ? teamMembers : (orgData as any)?.team) || []) as any[])
+      .filter((t: any) => String(t?.role || "").toLowerCase() !== "client"),
+    ...((orgData as any)?.signatoryName
+      ? [{ name: (orgData as any).signatoryName, title: (orgData as any).signatoryTitle || "Principal" }]
+      : []),
+  ];
+  const teamMatch = useMemo(() => {
+    const full = new Map<string, any>();
+    const first = new Map<string, any[]>();
+    team.forEach((t: any) => {
+      const n = String(t?.name || "").trim().toLowerCase();
+      if (!n) return;
+      full.set(n, t);
+      const f = n.replace(/^(ar|mr|mrs|ms|dr)\.?\s+/, "").split(/\s+/)[0];
+      first.set(f, [...(first.get(f) || []), t]);
+    });
+    return (name: string) => {
+      const n = String(name || "").trim().toLowerCase();
+      if (!n) return null;
+      if (full.has(n)) return full.get(n);
+      const f = n.replace(/^(ar|mr|mrs|ms|dr)\.?\s+/, "").split(/\s+/)[0];
+      const hits = first.get(f) || [];
+      return hits.length === 1 ? hits[0] : null;
+    };
+  }, [team]);
+
+  const withStudioSides = (m: MOM): MOM => ({
+    ...m,
+    attendees: (m.attendees || []).map((a) => {
+      const member = a.side !== "vendor" ? teamMatch(a.name) : null;
+      return member
+        ? { ...a, side: "ffds", role: a.role || member.title || member.role || undefined }
+        : a;
+    }),
+  });
 
   const [draft, setDraft] = useState<MOM>(() => {
     if (!mom) return {} as MOM;
     try {
-      return JSON.parse(JSON.stringify(mom));
+      return withStudioSides(JSON.parse(JSON.stringify(mom)));
     } catch (e) {
       return {} as MOM;
     }
   });
+
+  /** What an attendee is, as the document says it. */
+  const attendeeLabel = (a: MOMAttendee) =>
+    a.side === "ffds" ? (a.role || "Studio team")
+      : a.side === "client" ? "Client"
+      : a.side === "vendor" ? (a.role || "Vendor")
+      : (a.role || "");
+
+  /** A person where one was named; the side only when nobody was. */
+  const GENERIC_OWNERS = new Set(["ffds", "client", "vendor", "unknown", ""]);
+  const ownerLabel = (a: MOMActionItem) => {
+    const n = String(a.ownerName || "").trim();
+    if (n && !GENERIC_OWNERS.has(n.toLowerCase()) && n !== studioName) return n;
+    return a.owner === "ffds" ? "Studio" : a.owner === "client" ? "Client" : a.owner === "vendor" ? "Vendor" : "—";
+  };
+  const ownerValue = (a: MOMActionItem) => {
+    const n = String(a.ownerName || "").trim();
+    return `${a.owner || "unknown"}|${n && !GENERIC_OWNERS.has(n.toLowerCase()) && n !== studioName ? n : ""}`;
+  };
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<
     "attendees" | "decisions" | "actions" | "notes" | null
@@ -555,18 +624,28 @@ export function MomReviewModal({
                       <div className="flex flex-wrap gap-2.5 items-center">
                         <select
                           disabled={isFinalised}
-                          value={a.owner}
+                          value={ownerValue(a)}
+                          aria-label="Owner"
                           onChange={(e) => {
+                            const [side, ...rest] = e.target.value.split("|");
                             const nx = [...draft.actionItems];
-                            nx[idx].owner = e.target.value;
-                            nx[idx].ownerName = e.target.value;
+                            nx[idx] = { ...nx[idx], owner: side as any, ownerName: rest.join("|") || null } as any;
                             updateDraft({ actionItems: nx });
                           }}
-                          className="text-xs bg-white border border-slate-200 rounded-lg py-2 px-3.5 font-bold uppercase tracking-wider text-slate-700 outline-none"
+                          className="text-xs bg-white border border-slate-200 rounded-lg py-2 px-3.5 font-bold text-slate-700 outline-none max-w-[220px]"
                         >
-                          <option value="client">Client</option>
-                          <option value="ffds">{studioName}</option>
-                          <option value="vendor">Vendor</option>
+                          {(draft.attendees || []).filter((p) => p.name?.trim()).map((p, pi) => (
+                            <option key={`p-${pi}`} value={`${p.side}|${p.name.trim()}`}>
+                              {p.name.trim()} · {p.side === "ffds" ? "Studio" : p.side === "client" ? "Client" : p.side === "vendor" ? "Vendor" : "Other"}
+                            </option>
+                          ))}
+                          {!(draft.attendees || []).some((p) => `${p.side}|${p.name?.trim()}` === ownerValue(a)) &&
+                            ownerValue(a).split("|")[1] && (
+                              <option value={ownerValue(a)}>{ownerLabel(a)}</option>
+                            )}
+                          <option value="ffds|">Studio (no one named)</option>
+                          <option value="client|">Client (no one named)</option>
+                          <option value="vendor|">Vendor (no one named)</option>
                         </select>
 
                         <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2.5 py-1">
@@ -804,8 +883,8 @@ export function MomReviewModal({
           {orgData && (
             <StudioDocumentShell
               orgData={orgData}
-              docHeaderType={`Minutes of Meeting\nRef: ${mom.momRef}`}
-              docHeaderTitle={mom.meetingTitle || "Minutes of Meeting"}
+              docHeaderType={`Minutes of Meeting\nRef: ${draft.momRef}`}
+              docHeaderTitle={draft.meetingTitle || "Minutes of Meeting"}
             >
               <div className="space-y-8 text-sm text-slate-900 pt-4 font-sans pb-12">
                 {/* 1. Protocol Metadata Box */}
@@ -813,12 +892,12 @@ export function MomReviewModal({
                   <div className="grid grid-cols-2 gap-y-4 text-xs">
                     <div>
                       <span className="text-[#666666] font-semibold block uppercase tracking-wider text-[10px]">Reference Number</span>
-                      <span className="font-extrabold text-[#1E1B4B] text-sm">{mom.momRef}</span>
+                      <span className="font-extrabold text-[#1E1B4B] text-sm">{draft.momRef}</span>
                     </div>
                     <div>
                       <span className="text-[#666666] font-semibold block uppercase tracking-wider text-[10px]">Meeting Date</span>
                       <span className="font-extrabold text-[#1E1B4B] text-sm">
-                        {mom.meetingDate ? new Date(mom.meetingDate).toLocaleDateString("en-GB", {
+                        {draft.meetingDate ? new Date(draft.meetingDate).toLocaleDateString("en-GB", {
                           day: "numeric",
                           month: "long",
                           year: "numeric",
@@ -832,13 +911,7 @@ export function MomReviewModal({
                     <div>
                       <span className="text-[#666666] font-semibold block uppercase tracking-wider text-[10px]">Meeting Type</span>
                       <span className="font-extrabold text-[#1E1B4B] text-sm uppercase tracking-wider">
-                        {(mom.meetingType as string) === "internal" 
-                          ? "Internal Team Review" 
-                          : (mom.meetingType as string) === "vendor" 
-                            ? "Vendor Coordination" 
-                            : (mom.meetingType as string) === "client" 
-                              ? "Client Alignment" 
-                              : "Site Coordination"}
+                        {meetingTypeLabel(draft.meetingType)}
                       </span>
                     </div>
                   </div>
@@ -854,11 +927,11 @@ export function MomReviewModal({
                     Attendees
                   </h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-2 border-t border-slate-100 pt-3">
-                    {mom.attendees?.map((a, i) => (
+                    {draft.attendees?.map((a, i) => (
                       <div key={i} className="flex justify-between text-xs py-1 border-b border-slate-100/60">
                         <span className="font-bold text-slate-800">{a.name}</span>
-                        <span className="text-[#666666] font-bold uppercase tracking-wider">
-                          {a.side === "ffds" ? studioName : "Client"}
+                        <span className="text-[#666666] font-bold uppercase tracking-wider text-right">
+                          {attendeeLabel(a)}
                         </span>
                       </div>
                     ))}
@@ -866,14 +939,14 @@ export function MomReviewModal({
                 </div>
 
                 {/* 3. Decisions Section */}
-                {mom.decisions && mom.decisions.length > 0 && (
+                {draft.decisions && draft.decisions.length > 0 && (
                   <div>
                     <h3 className="text-xs uppercase font-extrabold tracking-widest text-[#B89047] mb-3 flex items-center gap-2">
                       <Gavel size={14} className="text-[#B89047]" />
                       Decisions Logged
                     </h3>
                     <div className="border-t border-slate-100 pt-3 space-y-3">
-                      {mom.decisions.map((d, i) => (
+                      {draft.decisions.map((d, i) => (
                         <div key={i} className="flex gap-3 items-start text-xs leading-relaxed text-[#1E1B4B]">
                           <span className="text-[#B89047] font-extrabold select-none mt-0.5">▪</span>
                           <span className="font-medium text-slate-800">{d.text}</span>
@@ -884,7 +957,7 @@ export function MomReviewModal({
                 )}
 
                 {/* 4. Action Items Section */}
-                {mom.actionItems && mom.actionItems.length > 0 && (
+                {draft.actionItems && draft.actionItems.length > 0 && (
                   <div>
                     <h3 className="text-xs uppercase font-extrabold tracking-widest text-[#B89047] mb-3 flex items-center gap-2">
                       <ListTodo size={14} className="text-[#B89047]" />
@@ -909,7 +982,7 @@ export function MomReviewModal({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {mom.actionItems.map((a, i) => (
+                          {draft.actionItems.map((a, i) => (
                             <tr key={a.id} className="text-xs">
                               <td className="py-3 px-3 font-bold text-slate-400 text-center">
                                 A-{String(i + 1).padStart(2, "0")}
@@ -937,8 +1010,8 @@ export function MomReviewModal({
                                   </span>
                                 )}
                               </td>
-                              <td className="py-3 px-3 text-center text-slate-600 font-bold uppercase tracking-wider">
-                                {a.owner === "ffds" ? studioName : "Client"}
+                              <td className="py-3 px-3 text-center text-slate-700 font-bold">
+                                {ownerLabel(a)}
                               </td>
                               <td className="py-3 px-3 text-right font-medium text-slate-600">
                                 {a.dueDate ? (
@@ -960,14 +1033,14 @@ export function MomReviewModal({
                 )}
 
                 {/* 5. Discussion Notes Section */}
-                {mom.notes && mom.notes.length > 0 && (
+                {draft.notes && draft.notes.length > 0 && (
                   <div>
                     <h3 className="text-xs uppercase font-extrabold tracking-widest text-[#B89047] mb-3 flex items-center gap-2">
                       <StickyNote size={14} className="text-[#B89047]" />
                       Discussion Notes
                     </h3>
                     <div className="border-t border-slate-100 pt-3 space-y-2">
-                      {mom.notes.map((n, i) => (
+                      {draft.notes.map((n, i) => (
                         <div key={n.id} className="flex gap-3 items-start text-xs leading-relaxed text-slate-700">
                           <span className="text-slate-300 font-bold select-none mt-0.5">•</span>
                           <span className="font-medium">{n.text}</span>
@@ -994,18 +1067,18 @@ export function MomReviewModal({
                     <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block">
                       CLIENT APPROVAL
                     </span>
-                    {mom.status === "acknowledged" ? (
+                    {draft.status === "acknowledged" ? (
                       <div className="text-xs">
                         <p className="font-bold text-emerald-800">✓ Approved & Signed</p>
-                        <p className="text-slate-600 mt-1">By {mom.acknowledgedBy}</p>
+                        <p className="text-slate-600 mt-1">By {draft.acknowledgedBy}</p>
                         <p className="text-slate-500 text-[10px] mt-0.5">
-                          {new Date(mom.acknowledgedAt!).toLocaleString("en-GB", {
+                          {new Date(draft.acknowledgedAt!).toLocaleString("en-GB", {
                             day: "2-digit",
                             month: "short",
                             year: "numeric",
                             hour: "2-digit",
                             minute: "2-digit",
-                          })} ({mom.ackChannel})
+                          })} ({draft.ackChannel})
                         </p>
                       </div>
                     ) : (
