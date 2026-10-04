@@ -1759,6 +1759,21 @@ export interface MOMActionItem {
     linkedScopeAdditionId?: string;
     linkedDrawingId?: string;
     linkedDecisionId?: string;
+    /** A cost or scope action on its way into a Scope Revision (hooks/useMomScopeQueue). */
+    scopeRequest?: MOMScopeRequest;
+}
+
+export interface MOMScopeRequest {
+    status: "queued" | "added" | "dismissed";
+    queuedAt?: number;
+    queuedBy?: string | null;
+    addedAt?: number;
+    /** Where it went: "Scope Revision 2", or "Revision Studio". */
+    addedTo?: string;
+    revisionId?: string;
+    lineId?: string;
+    dismissedAt?: number;
+    dismissedBy?: string | null;
 }
 
 export interface MOMNote {
@@ -1775,7 +1790,7 @@ export interface MOM {
     meetingDate: number; // timestamp
     createdBy: string;
     createdAt: number;
-    status: "draft" | "finalised" | "shared" | "acknowledged";
+    status: "draft" | "finalised" | "shared" | "acknowledged" | "correction_requested";
     attendees: MOMAttendee[];
     rawNotes: string;
     decisions: MOMDecision[];
@@ -1791,6 +1806,26 @@ export interface MOM {
     acknowledgedAt?: number;
     ackChannel?: "link"|"whatsapp";
     pdfPath?: string;
+    /** Two or three sentences a client would understand. */
+    summary?: string | null;
+    nextMeeting?: { date?: string; time?: string; purpose?: string } | null;
+    /** Open actions from earlier minutes, restated here. */
+    carriedForward?: { text: string; ref: string; owner?: string | null }[];
+    emailedAt?: number | null;
+    emailedTo?: string[];
+    /** What the client asked to change, from the portal. Open until a revision is issued. */
+    correctionRequest?: { text: string; by: string; at: number } | null;
+    /** 0 for the minutes as first issued; each revision issued adds one. */
+    rev?: number;
+    revisedAt?: number | null;
+    /** Who issued this revision. */
+    revisedBy?: string | null;
+    /** What changed in this revision, in the studio's words. */
+    revisionNote?: string | null;
+    /** The studio's edits while a revision is being prepared; the issued minutes stay as they are until it is issued. */
+    pendingRevision?: Partial<MOM> | null;
+    /** Every earlier issue of these minutes, exactly as it was. */
+    previousRevisions?: Partial<MOM>[];
 }
 
 export interface SiteVisit {
@@ -1819,6 +1854,13 @@ export interface SiteVisit {
     cancelledAt?: any;
     cancelReason?: string;
     momData?: any;
+    /** Everyone invited, with their side. `attendees` / `attendeeEmails` hold the same people, in the same order. */
+    people?: { name: string; email: string; side: 'client' | 'ffds' | 'vendor'; role?: string | null }[];
+    /** Open items carried in from earlier minutes. */
+    agenda?: string[];
+    meetingMode?: 'in_person' | 'google_meet' | 'link' | 'phone';
+    /** A Zoom / Teams link, when meetingMode is 'link'. */
+    meetingLink?: string | null;
 }
 
 export interface MaterialLogItem {

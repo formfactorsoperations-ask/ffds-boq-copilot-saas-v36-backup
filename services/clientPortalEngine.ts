@@ -67,7 +67,7 @@ export type ActionOwner = 'client' | 'studio';
 
 export interface ClientActionItem {
   id: string;
-  category: 'agreement' | 'payment' | 'material' | 'decision' | 'variation';
+  category: 'agreement' | 'payment' | 'material' | 'decision' | 'variation' | 'minutes';
   severity: 'critical' | 'high' | 'medium';
   /** Whose court the ball is in. Only `client` items are tasks for the client. */
   owner: ActionOwner;
@@ -84,7 +84,8 @@ export interface ClientActionItem {
     | 'pay_milestone'
     | 'approve_material'
     | 'confirm_decision'
-    | 'review_variation';
+    | 'review_variation'
+    | 'review_minutes';
   actionPayload?: any;
   date?: string | number;
   statusBadge: string;

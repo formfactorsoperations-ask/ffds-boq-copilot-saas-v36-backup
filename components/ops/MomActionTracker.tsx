@@ -530,6 +530,7 @@ export function MomActionTracker({
                     <div>
                       <h3 className="font-extrabold text-slate-900 tracking-tight text-base group-hover:text-[#B89047] transition-colors flex items-center gap-2">
                         {mom.momRef}
+                        {mom.rev ? <span className="text-slate-400 font-bold text-sm">Rev {mom.rev}</span> : null}
                         {mom.status === "draft" && (
                           <span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded text-xs font-bold uppercase tracking-wider">
                             Draft
@@ -546,6 +547,8 @@ export function MomActionTracker({
                       className={`px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider border ${
                         mom.status === "acknowledged"
                           ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          : mom.status === "correction_requested"
+                            ? "bg-amber-50 text-amber-800 border-amber-300"
                           : mom.status === "shared"
                             ? "bg-sky-50 text-slate-900 border-sky-200"
                             : mom.status === "finalised"
@@ -553,7 +556,7 @@ export function MomActionTracker({
                               : "bg-slate-50 text-slate-500 border-slate-200"
                       }`}
                     >
-                      {mom.status}
+                      {mom.status === "correction_requested" ? "correction asked" : mom.status}
                     </span>
                   </div>
 

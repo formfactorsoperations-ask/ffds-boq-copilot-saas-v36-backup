@@ -17,18 +17,65 @@ service cloud.firestore {
     }
     
     // Check if user is Super Admin
+    //
+    // The address must be verified. The role branch can no longer be written
+    // from a browser -- see users/{userId} below -- so it is only ever set by
+    // the Admin SDK.
     function isSuperAdmin() {
-      return (request.auth != null && request.auth.token.email == 'formfactors.operations@gmail.com') || getUserData().role == 'Super Admin';
+      return (request.auth != null && request.auth.token.email == 'formfactors.operations@gmail.com' && request.auth.token.email_verified == true) || getUserData().get('role', '') == 'Super Admin';
     }
 
-    // Get the tenant ID associated with the current user
+    /*
+      The studio the caller works for -- and only if they work for it.
+
+      A client's profile carries their studio's tenantId too, because
+      createClientLogin records who issued the login. Every tenant check below
+      used to compare that field alone, so a signed-in client passed all of
+      them: they could list the studio's projects, its item bank with rates,
+      its settings and every subcollection under organizations/{tenant}.
+      A client is contained by projectIds and portalView, never by tenant.
+    */
+    /*
+      A Designer is left out too. They may read their studio's projects and
+      change drawings, nothing else, so they are granted exactly that further
+      down (isTenantDesigner) instead of every write the tenant check allows.
+    */
     function getUserTenantId() {
-      return getUserData().tenantId;
+      let u = getUserData();
+      return !(u.get('role', '') in ['Client', 'Designer']) ? u.get('tenantId', null) : null;
+    }
+
+    // A Designer of this studio: reads its projects, writes only drawings.
+    function isTenantDesigner(tenantId) {
+      let u = getUserData();
+      return isAuthenticated() && u.get('role', '') == 'Designer'
+        && tenantId != null && u.get('tenantId', '') == tenantId;
+    }
+
+    /*
+      A drawing change a Designer may make: rounds, links, dates, comments and
+      submitting for review. Never an approval, never a GFC release, and never
+      the drawing's own definition -- those are the studio's.
+    */
+    function isDesignerDrawingChange() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return !changed.hasAny(['name', 'boqTriggers', 'isMandatory', 'isGapFlagged', 'companionOf', 'roomName'])
+        && (!changed.hasAny(['approvedAt']) || request.resource.data.approvedAt == null)
+        && (!changed.hasAny(['gfc']) || request.resource.data.gfc.status != 'issued');
     }
 
     // Check if the user's tenant ID matches the document's tenant ID
     function isSameTenant(docTenantId) {
-      return getUserTenantId() == docTenantId;
+      let t = getUserTenantId();
+      return t != null && t == docTenantId;
+    }
+
+    // A portal client, on one of their own projects.
+    function isProjectClient(orgId, projectId) {
+      let u = getUserData();
+      return isAuthenticated() && u.get('role', '') == 'Client'
+        && u.get('tenantId', '') == orgId
+        && projectId in u.get('projectIds', []);
     }
 
     // Compatibility for legacy FFDS workflow (demo-tenant-01)
@@ -50,8 +97,19 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
 
-      // Bootstrap on first sign-in still writes the profile.
-      allow create: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+      /*
+        A profile may be started from the browser, but never with privilege.
+
+        This used to accept any fields, and the studio sign-in wrote
+        `tenantId: 'demo-tenant-01', role: 'Admin'` for anyone who had never
+        signed in before -- so a Google account was enough to be an Admin, and
+        a console was enough to name any tenant at all. Studio membership is now
+        settled by the syncStudioAccess function from the studio's own team
+        list, and client logins by createClientLogin; both use the Admin SDK.
+      */
+      allow create: if isSuperAdmin() ||
+        (isAuthenticated() && request.auth.uid == userId &&
+         !request.resource.data.keys().hasAny(['role', 'tenantId', 'projectIds']));
 
       /*
         Self-service updates may not touch privilege.
@@ -65,37 +123,45 @@ service cloud.firestore {
       allow update: if isSuperAdmin() ||
         (isAuthenticated() && request.auth.uid == userId &&
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['mustChangePassword', 'updatedAt', 'displayName', 'lastSeenAt', 'email', 'lastProjectTabs', 'attentionState'])) ||
+           .hasOnly(['mustChangePassword', 'updatedAt', 'displayName', 'lastSeenAt', 'email', 'lastProjectTabs', 'attentionState']));
         /*
-          Studio sign-in syncs the signed-in user's role from the organisation's
-          team list, and has always done so from the browser. That is left
-          working -- a studio user is already inside their own tenant, so being
-          able to name their own role changes nothing they could not already do.
-
-          What must never happen is a CLIENT doing it: their whole containment
-          is the role on this document, so a client editing it would walk
-          straight into the studio app. Hence the check on the role they
-          currently hold, not the one they are asking for.
+          There used to be a third branch here letting any non-client write
+          their own `role`, so the studio sign-in could copy it from the team
+          list. It also let them write "Super Admin", which isSuperAdmin()
+          honours in every tenant. The copy is made by syncStudioAccess now.
         */
-        (isAuthenticated() && request.auth.uid == userId &&
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']) &&
-         resource.data.role != 'Client');
 
       allow delete: if isSuperAdmin();
     }
 
     match /organizations/{orgId} {
-      // Any user can read organizations (public info minimal risk)
-      allow read: if true;
-      // Allow creation/updates if the user belongs to this org (or is creating it), or is Super Admin
-      allow write: if isAuthenticated() && (
-          !exists(/databases/$(database)/documents/organizations/$(orgId)) || 
-          isSameTenant(orgId) ||
-          isSuperAdmin()
+      /*
+        The studio profile carries its team list -- names, emails, roles -- and
+        was readable by anyone. Its members and its own clients read it; the
+        portal link's sign-in door gets only the name and logo, through the
+        portalDoor function.
+      */
+      allow read: if isAuthenticated() && (
+          getUserData().get('tenantId', '') == orgId || isSuperAdmin()
       );
+      /*
+        A new studio is created by the platform owner. "Create it if it does
+        not exist yet" let anyone mint a tenant and name themselves its team.
+
+        The team list decides who syncStudioAccess lets in and as what, and
+        projectDesigners decides which projects each Designer sees, so only a
+        studio's senior roles may change either.
+      */
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin() || (
+          isSameTenant(orgId) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['team', 'projectDesigners']) ||
+           getUserData().get('role', '') in ['Owner', 'Admin', 'Ops Director'])
+      );
+      allow delete: if isSuperAdmin();
       
       match /settings/{settingId} {
-         allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+         allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin() || isTenantDesigner(orgId));
          allow write: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
             && (getUserData().role == 'Owner' || isSuperAdmin());
       }
@@ -130,14 +196,22 @@ service cloud.firestore {
          }
 
          match /bookingPacks/{packId} {
-            // Allow unauthenticated reading and restricted updates for public token approval page
-           allow read: if true;
-           allow create, delete: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
-           allow update: if (isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())) ||
-                         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'viewedAt', 'approvalEvidence', 'approvedAt']));
+           /*
+             Studio only. This was readable by anyone, and anyone could mark a
+             pack approved, for a public approval page that no longer exists --
+             nothing in the app renders /booking-approval/ any more.
+           */
+           allow read, create, update, delete: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
          }
 
          match /drawingTracker/{drawingId} {
+           /* The Designer's one place to work: see isDesignerDrawingChange. */
+           allow read: if isTenantDesigner(orgId);
+           allow update: if isTenantDesigner(orgId) && isDesignerDrawingChange();
+           match /revisions/{revisionId} {
+             allow read, create: if isTenantDesigner(orgId);
+           }
+
            allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
            allow create: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
            allow delete: if false;
@@ -158,6 +232,16 @@ service cloud.firestore {
            allow update, delete: if false; // Immutability
          }
 
+         /*
+           A Designer reads the studio's copy of the project and its records --
+           except the priced BOQ lines, BOQ versions and booking packs -- and
+           writes none of it. Drawings are granted above.
+         */
+         allow read: if isTenantDesigner(orgId);
+         match /{designerSub}/{designerDoc=**} {
+           allow read: if isTenantDesigner(orgId) && !(designerSub in ['boqItems', 'boqVersions', 'bookingPacks']);
+         }
+
          allow read, create, delete: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
          allow update: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
            && (getUserData().role != 'Viewer')
@@ -174,6 +258,54 @@ service cloud.firestore {
            );
       }
       
+      /*
+        What a portal client reads beneath the studio's copy of their project.
+
+        The portal listens to these two directly. It used to get through on the
+        tenant check above, which a client passed for every project the studio
+        had; this names the one project, from their own profile.
+      */
+      /*
+        Only the meetings the client was part of.
+
+        Internal and vendor meetings are the studio's own: their notes, MoMs
+        and decisions were readable by the client straight from the database,
+        hidden only by the portal screen's guess from the title. Now the rule
+        decides, by the meeting's type. A meeting with no type, or any type
+        not listed here, stays with the studio. The portal asks for these types
+        by name -- a rule that reads the document cannot filter a query, so an
+        open query is refused outright.
+      */
+      function isClientMeetingType(t) {
+        return t in ['client_meeting', 'site_visit', 'measurement_survey', 'client'];
+      }
+      match /projects/{projectId}/siteVisits/{visitId} {
+        allow read: if isProjectClient(orgId, projectId) &&
+          isClientMeetingType(resource.data.get('type', ''));
+      }
+      match /projects/{projectId}/moms/{momId} {
+        allow read: if isProjectClient(orgId, projectId) &&
+          isClientMeetingType(resource.data.get('meetingType', ''));
+        // From the portal a client may do one of two things to issued
+        // minutes: acknowledge them (these four fields only), or ask for a
+        // correction (the request and the status, nothing else). Neither on a
+        // draft, and not while a correction they asked for is still open.
+        allow update: if isProjectClient(orgId, projectId) &&
+          isClientMeetingType(resource.data.get('meetingType', '')) &&
+          resource.data.get('status', '') in ['finalised', 'shared'] && (
+            (request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'acknowledgedBy', 'acknowledgedAt', 'ackChannel']) &&
+             request.resource.data.status == 'acknowledged') ||
+            (request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'correctionRequest']) &&
+             request.resource.data.status == 'correction_requested' &&
+             request.resource.data.correctionRequest.keys().hasOnly(['text', 'by', 'at']) &&
+             request.resource.data.correctionRequest.text is string &&
+             request.resource.data.correctionRequest.text.size() > 0 &&
+             request.resource.data.correctionRequest.text.size() <= 2000)
+          );
+      }
+
     match /weeklyReports/{reportId} {
       allow read: if (isAuthenticated() && (isSameTenant(resource.data.tenantId) || isSuperAdmin()))
                   || resource.data.status == 'published';
@@ -190,7 +322,16 @@ service cloud.firestore {
                     && resource.data.status != 'published';
     }
 
-    match /{document=**} {
+    /*
+      Everything else beneath the studio, for its own staff.
+
+      `{collectionId}` first, so this needs at least one segment below the
+      studio. A bare `{document=**}` also matches zero segments in rules v2 --
+      that is, organizations/{orgId} itself -- which quietly let every member,
+      and every client, rewrite the studio profile and its team list whatever
+      the rules above said.
+    */
+    match /{collectionId}/{document=**} {
          allow read, write: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
       }
     }
@@ -201,7 +342,30 @@ service cloud.firestore {
     
     // PROJECTS: Main Project Data
     match /projects/{projectId} {
-      allow read: if true;
+      /*
+        This was `allow read: if true` -- every project of every studio, with
+        its rates, margins, client contacts and internal notes, readable by
+        anyone holding the public web config. Nothing needs that any more:
+        clients read the stripped portalView below, and the portal link's
+        sign-in door asks the portalDoor function for the studio's name.
+      */
+      allow read: if isAuthenticated() && (
+        isSameTenant(resource.data.tenantId) ||
+        (isLegacyFFDS() && !('tenantId' in resource.data)) ||
+        isSuperAdmin() ||
+        // A Designer reads the studio's projects and writes none of them.
+        isTenantDesigner(resource.data.tenantId)
+      );
+
+      /*
+        A Designer reads what hangs off a project, apart from the money: the
+        priced tier BOQs, the engagement record, payment requests and margin
+        analytics. The client-side subcollections have their own rules below.
+      */
+      match /{designerSub}/{designerDoc=**} {
+        allow read: if isTenantDesigner(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId)
+          && !(designerSub in ['tierBoq', 'engagement', 'paymentRequests', 'marginAnalytics']);
+      }
 
       /*
         Writes belong to the studio that owns the project.
@@ -408,9 +572,26 @@ service cloud.firestore {
                           isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
                           (isLegacyFFDS() && !('tenantId' in get(/databases/$(database)/documents/projects/$(projectId)).data)) ||
                           isSuperAdmin()
-                        )) || 
-                       (!isAuthenticated() && resource.data.signoffToken != null && resource.data.tokenExpiresAt > request.time);
-                    
+                        )) ||
+                       isDecisionClient();
+
+        /*
+          The portal client approves or queries a decision on their own
+          project (decisionsService.recordClientSignoff). That used to pass the
+          tenant check above, because a client's profile carries the studio's
+          tenantId; clients no longer pass it, so they are named here -- their
+          project only, and only the three fields a response writes.
+        */
+        function isDecisionClient() {
+          let u = getUserData();
+          return isAuthenticated() && u.get('role', '') == 'Client'
+            && projectId in u.get('projectIds', [])
+            && u.get('tenantId', '') == get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId;
+        }
+        allow update: if isDecisionClient()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'discussion', 'signoff'])
+          && request.resource.data.status in ['signed', 'disputed'];
+
         allow create: if isAuthenticated() && (
                           isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
                           (isLegacyFFDS() && !('tenantId' in get(/databases/$(database)/documents/projects/$(projectId)).data)) ||
@@ -421,14 +602,13 @@ service cloud.firestore {
                           isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
                           (isLegacyFFDS() && !('tenantId' in get(/databases/$(database)/documents/projects/$(projectId)).data)) ||
                           isSuperAdmin()
-                        )) ||
-                      (
-                       resource.data.signoffToken != null && 
-                       resource.data.tokenExpiresAt > request.time && 
-                       resource.data.status == 'drawing_sent' &&
-                       request.resource.data.signoffToken == resource.data.signoffToken &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signoff', 'status']));
-                       
+                        ));
+        /*
+          A signed-out branch used to sit on both read and update here, for the
+          emailed decision sign-off page. That page was removed and decisions
+          are answered in the portal, by isDecisionClient above.
+        */
+
         allow delete: if isAuthenticated() && (
                           isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
                           (isLegacyFFDS() && !('tenantId' in get(/databases/$(database)/documents/projects/$(projectId)).data)) ||
@@ -464,7 +644,7 @@ service cloud.firestore {
       allow write: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
       
       match /settings/{docId} {
-        allow read: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
+        allow read: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin() || isTenantDesigner(studioId));
         allow write: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
       }
       match /projects/{projectId} {
@@ -519,9 +699,13 @@ service cloud.firestore {
     match /{document=**} {
       allow read, write: if false; 
     }
-    // DECISIONS (Collection Group for unstructured access, e.g. token-based reads)
-    match /{path=**}/decisions/{decisionId} {
-        allow read: if (resource.data.signoffToken != null && resource.data.tokenExpiresAt > request.time);
-    }
+    /*
+      There was a collection-group rule here letting anyone read any decision
+      with an unexpired sign-off token. A query that asked for exactly that --
+      every decision whose token has not expired -- satisfied it, so the whole
+      platform's open decisions could be listed without signing in. It served
+      the standalone decision sign-off page, which was removed; decisions are
+      approved in the portal, under the per-project rules above.
+    */
   }
 }

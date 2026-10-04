@@ -30,6 +30,8 @@ import ScopeRevisionSheet from '../documents/ScopeRevisionSheet';
 import DocumentReadingRoom from '../client/DocumentReadingRoom';
 import { useOrg } from '../../contexts/OrgContext';
 import { seesStudioFinance } from '../../lib/roleAccess';
+import { useMomScopeQueue, MomScopeItem } from '../../hooks/useMomScopeQueue';
+import MeetingScopeInbox from './MeetingScopeInbox';
 
 /**
  * SCOPE REVISION — one screen for changing a signed scope.
@@ -54,6 +56,9 @@ interface Props {
   onMakeRehearsalCopy?: () => Promise<string | null>;
   currentUser: string;
   orgName?: string;
+  /** For the cost and scope items finalised minutes have queued. */
+  studioId?: string;
+  projectId?: string;
 }
 
 // ── Formatting ─────────────────────────────────────────────────────────────
@@ -199,9 +204,10 @@ const Modal: React.FC<{ onClose: () => void; wide?: boolean; children: React.Rea
 
 export default function ScopeWorkspace({
   tiers, approvedTierId, bank, projectContext: ctx, setProjectContext, setTiers, setActiveTierId,
-  onMakeRehearsalCopy, currentUser, orgName,
+  onMakeRehearsalCopy, currentUser, orgName, studioId, projectId,
 }: Props) {
   const bankMap = useMemo(() => buildBankMap(bank, ctx.adHocItems), [bank, ctx.adHocItems]);
+  const momQueue = useMomScopeQueue(studioId, projectId);
   const isReal = !ctx.isDummy && ctx.projectCategory !== 'dummy';
   const baseTier = tiers.find(t => t.id === approvedTierId) || null;
   const v1 = baseTier ? detailedBoqForTier(ctx, baseTier.id) : null;
@@ -470,9 +476,16 @@ export default function ScopeWorkspace({
           onSign={id => setSignFor({ id, kind: 'scope_revision' })}
           onOpenIssue={setPreviewIssue}
           stateOf={stateOf}
+          momQueue={momQueue}
         /></React.Fragment>
       ) : (
         <>
+          <MeetingScopeInbox
+            items={momQueue.items}
+            hint={v1Approved ? `Start Scope Revision ${nextNumber} to add them.` : 'Record the signed scope first, then start a revision to add them.'}
+            onDismiss={it => momQueue.dismiss(it, currentUser)}
+          />
+
           {/* The scope in force, or recording it */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs p-5 sm:p-6 sw-tilt">
             {!baseTier && (
@@ -650,11 +663,12 @@ interface EditorProps {
   onSign: (issueId: string) => void;
   onOpenIssue: (i: DocumentIssue) => void;
   stateOf: (i: DocumentIssue | null) => string;
+  momQueue?: ReturnType<typeof useMomScopeQueue>;
 }
 
 function RevisionEditor({
   rec, base, v1, issue, bank, bankMap, ctx, setProjectContext, saveRecord, currentUser, orgName,
-  onApply, onWithdraw, onDiscard, onSign, onOpenIssue, stateOf,
+  onApply, onWithdraw, onDiscard, onSign, onOpenIssue, stateOf, momQueue,
 }: EditorProps) {
   const signed: SignedLine[] = useMemo(() => signedLinesFrom(base.boq, bankMap), [base.boq, bankMap]);
   const draft: ScopeDraft = useMemo(() => draftOfRecord(rec, signed, base.boq, bankMap), [rec, signed, base.boq, bankMap]);
@@ -817,8 +831,39 @@ function RevisionEditor({
   const changePct = result.v1Total > 0 ? (result.change / result.v1Total) * 100 : 0;
   const maxBridge = Math.max(1, ...BRIDGE.map(([k]) => Math.abs(result.bridge[k])));
 
+  /*
+    A cost or scope item from a meeting, into this draft: a lump-sum line at
+    no rate, in the room the studio picks. Issuing is blocked while any line
+    has a quantity but no rate, so it cannot reach the client unpriced; Replace
+    names and prices it properly.
+  */
+  const addFromMeeting = async (it: MomScopeItem, room: string) => {
+    const where = room || 'Additional work';
+    const added = addCustom(draft, where, {
+      name: it.text.trim().replace(/\.$/, ''),
+      unit: 'lump sum',
+      qty: 1,
+      rate: 0,
+      description: `Raised at ${it.momRef}${it.momRev ? ` Rev ${it.momRev}` : ''} (${it.ref}).`,
+    });
+    const line = added.lines[added.lines.length - 1];
+    const next = { ...added, lines: added.lines.map(l => (l.id === line.id ? { ...l, editNote: `From ${it.momRef} · ${it.ref} · needs a rate` } : l)) };
+    await momQueue!.markAdded(it, `Scope Revision ${rec.number}`, { revisionId: rec.id, lineId: line.id });
+    save(next);
+  };
+
   return (
     <div className="space-y-4">
+      {momQueue && (
+        <MeetingScopeInbox
+          items={momQueue.items}
+          rooms={editable ? rooms.map(r => r.name) : undefined}
+          addLabel="Add to draft"
+          hint={editable ? 'Each is added at no rate. Price it before issuing.' : `Scope Revision ${rec.number} is with the client. These go into the next one.`}
+          onAdd={editable ? addFromMeeting : undefined}
+          onDismiss={it => momQueue.dismiss(it, currentUser)}
+        />
+      )}
       {/* Header */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs px-5 sm:px-6 py-5">
         <div className="flex flex-col lg:flex-row lg:items-start gap-4">

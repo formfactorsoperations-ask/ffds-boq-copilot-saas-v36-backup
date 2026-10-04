@@ -584,13 +584,21 @@ export default function App() {
           return;
         }
       }
+      /*
+        A minutes link opens the client's own portal, at those minutes.
+
+        It used to render a standalone page that looked the minutes up across
+        every project by token. Since the security lockdown no rule allows that
+        query, so the page answered "Failed to load MoM" to every client who
+        followed the link. In the portal the client is signed in, sees only
+        their own project's minutes, and can acknowledge them or ask for a
+        correction. The token only says which minutes to open.
+      */
       if (path.startsWith("/mom/")) {
-        const token = path.split("/")[2];
+        const token = path.split("/")[2]?.split("?")[0];
         if (token) {
-          setMomToken(token);
-          setAppMode("mom_acknowledge");
-          setIsDataLoaded(true);
-          return;
+          try { sessionStorage.setItem("ffds_focus_mom", token); } catch { /* private mode */ }
+          setClientDoorRequested(true);
         }
       }
       if (path === "/studio-settings") {
@@ -3565,6 +3573,7 @@ export default function App() {
                       )}
                       {activeTab === "revision-studio" && (
                         <RevisionStudio
+                          projectId={activeInternalId || undefined}
                           onMakeRehearsalCopy={handleMakeRehearsalCopy}
                           tiers={tiersWithCalculatedSummaries}
                           approvedTierId={projectContext.approvedTierId}
@@ -4298,6 +4307,7 @@ export default function App() {
                       )}
                       {activeTab === "revision-studio" && (
                         <RevisionStudio
+                          projectId={activeInternalId || undefined}
                           onMakeRehearsalCopy={handleMakeRehearsalCopy}
                           tiers={tiersWithCalculatedSummaries}
                           approvedTierId={projectContext.approvedTierId}

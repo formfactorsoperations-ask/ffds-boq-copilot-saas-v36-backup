@@ -147,7 +147,7 @@ const getEmailSubjectAndBody = async (studioId: string, key: string, variables: 
 /**
  * Helper to send email via server proxy route with resilient 6-second timeout.
  */
-const sendResendEmail = async (to: string, subject: string, html: string, attachments?: any[]): Promise<{ success: boolean; data?: any; error?: string; message?: string }> => {
+const sendResendEmail = async (to: string, subject: string, html: string, attachments?: any[], cc?: string[]): Promise<{ success: boolean; data?: any; error?: string; message?: string }> => {
     try {
         const payload: any = {
             from: `${STUDIO_NAME} <${RESEND_SENDER_EMAIL}>`, 
@@ -155,6 +155,7 @@ const sendResendEmail = async (to: string, subject: string, html: string, attach
             subject,
             html
         };
+        if (cc && cc.length) payload.cc = cc;
         if (attachments && Array.isArray(attachments) && attachments.length > 0) {
             payload.attachments = attachments;
         }
@@ -738,6 +739,30 @@ export const getSelectionNotificationEmailHtml = (
 /**
  * Sends a beautifully styled selection confirmation request email directly to the client.
  */
+/**
+ * Minutes of a meeting, as the studio wrote the covering note: the body is the
+ * text the studio reviewed (paragraphs and "- " bullets), set in the studio's
+ * email template, with the MoM PDF attached when one is given.
+ */
+export const sendMomEmail = async (args: {
+    to: string[];
+    cc?: string[];
+    subject: string;
+    body: string;
+    pdf?: { filename: string; base64: string } | null;
+}) => {
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const blocks = args.body.trim().split(/\n{2,}/).map((block) => {
+        const lines = block.split('\n');
+        if (lines.every((l) => /^\s*[-•]\s+/.test(l))) {
+            return `<ul style="margin: 0 0 14px 18px; padding: 0;">${lines.map((l) => `<li style="margin: 0 0 4px 0;">${esc(l.replace(/^\s*[-•]\s+/, ''))}</li>`).join('')}</ul>`;
+        }
+        return `<p style="margin: 0 0 14px 0;">${lines.map(esc).join('<br/>')}</p>`;
+    }).join('');
+    const attachments = args.pdf ? [{ filename: args.pdf.filename, content: args.pdf.base64 }] : undefined;
+    return sendResendEmail(args.to.join(','), args.subject, getEmailTemplate(blocks), attachments, args.cc);
+};
+
 export const sendSelectionNotificationEmail = async (
     projectId: string,
     selection: any,

@@ -163,12 +163,17 @@ export const syncSiteVisitToCalendar = async (
   const description = `Project: ${projectContext.name || 'N/A'}
 Client: ${projectContext.clientName || 'N/A'}
 Phase: ${visit.phaseTitle}
-Type: ${visit.type}
+Type: ${visit.type}${visit.meetingLink ? `
+Join: ${visit.meetingLink}` : ''}${visit.agenda?.length ? `
+Agenda:
+${visit.agenda.map(a => `- ${a}`).join('\n')}` : ''}
 Notes: ${visit.notes || ''}
 
 Logged via TheStudioDesk`;
 
-  const conferenceData = visit.isVirtual ? {
+  // A Meet link only for Google Meet: a pasted Zoom/Teams link or a phone call needs none.
+  const wantsMeet = visit.isVirtual && (!visit.meetingMode || visit.meetingMode === 'google_meet');
+  const conferenceData = wantsMeet ? {
     createRequest: {
       requestId: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       conferenceSolutionKey: { type: 'hangoutsMeet' }
@@ -178,7 +183,7 @@ Logged via TheStudioDesk`;
   const eventBody: any = {
     summary,
     description,
-    location: visit.isVirtual ? undefined : visit.location,
+    location: visit.isVirtual ? (visit.meetingLink || undefined) : visit.location,
     colorId,
     start: {
       dateTime: isoStartTime,
@@ -200,7 +205,7 @@ Logged via TheStudioDesk`;
   }
 
   try {
-    const url = visit.isVirtual ? '/calendars/primary/events?conferenceDataVersion=1' : '/calendars/primary/events';
+    const url = wantsMeet ? '/calendars/primary/events?conferenceDataVersion=1' : '/calendars/primary/events';
     const mcpData = await callGoogleCalendarAPI('POST', url, eventBody);
     
     const eventId = mcpData.id;

@@ -482,6 +482,17 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const [syncedMoms, setSyncedMoms] = useState<any[]>([]);
     const [selectedMomForViewer, setSelectedMomForViewer] = useState<any | null>(null);
 
+    /* A minutes link (/mom/<token>) lands here after sign-in: open those minutes. */
+    useEffect(() => {
+        let token: string | null = null;
+        try { token = sessionStorage.getItem('ffds_focus_mom'); } catch { /* private mode */ }
+        if (!token) return;
+        const match = syncedMoms.find((m: any) => m.shareToken === token);
+        if (!match) return;
+        try { sessionStorage.removeItem('ffds_focus_mom'); } catch { /* ignore */ }
+        setSelectedMomForViewer(match);
+    }, [syncedMoms]);
+
     // Real-time Firestore sync for logged project meetings & site visits (strictly client-facing only)
     useEffect(() => {
         if (!projectData?.id || !studioId || !db) return;
@@ -820,6 +831,37 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const clientActionSummary = useMemo(() => {
         return calculateClientActionItems(context, projectData, milestoneTotalsMap);
     }, [context, projectData, milestoneTotalsMap]);
+
+    /*
+      Minutes waiting for the client's acknowledgement, in "Waiting on you".
+
+      The minutes cards live on the site feed, which no lens reaches any more,
+      so issued minutes had nowhere to be found except through the emailed
+      link. Minutes the client has asked to correct are with the studio and
+      are not listed.
+    */
+    const overviewActions = useMemo(() => {
+        const momActions = syncedMoms
+            .filter((m: any) => m.status === 'finalised' || m.status === 'shared')
+            .map((m: any) => ({
+                id: `mom-${m.id}`,
+                category: 'minutes' as const,
+                severity: 'medium' as const,
+                owner: 'client' as const,
+                title: `${m.rev ? 'Revised minutes' : 'Minutes'} to confirm: ${m.meetingTitle || 'meeting'}`,
+                subtitle: `${m.momRef || 'Minutes of Meeting'}${m.rev ? ` Rev ${m.rev}` : ''} · acknowledge them, or ask for a correction`,
+                description: m.summary || '',
+                targetTab: 'overview' as const,
+                actionLabel: 'Review minutes',
+                actionType: 'review_minutes' as const,
+                actionPayload: { momId: m.id },
+                date: m.revisedAt || m.sharedAt || m.meetingDate,
+                statusBadge: 'To acknowledge',
+            }));
+        return momActions.length
+            ? { ...clientActionSummary, clientActions: [...clientActionSummary.clientActions, ...momActions] }
+            : clientActionSummary;
+    }, [clientActionSummary, syncedMoms]);
 
     const upcomingSteps = useMemo(() => {
         return getUpcomingStudioSteps(lifecycleInfo.currentStageNumber, context);
@@ -1612,6 +1654,11 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                 setActiveTab('decisions');
                 break;
             case 'review_variation': setActiveTab('designScope'); break;
+            case 'review_minutes': {
+                const m = syncedMoms.find((x: any) => x.id === item.actionPayload?.momId);
+                if (m) setSelectedMomForViewer(m);
+                break;
+            }
         }
     };
 
@@ -2268,7 +2315,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                         pmResponseTime: orgData?.pmResponseTime,
                                     }}
                                     lifecycle={lifecycleInfo}
-                                    actions={clientActionSummary}
+                                    actions={overviewActions}
                                     phases={spinePhases}
                                     filter={spineFilter}
                                     catchOpen={catchOpen}

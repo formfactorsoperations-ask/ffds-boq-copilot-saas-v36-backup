@@ -1,5 +1,6 @@
-import React, { useState, useRef, useMemo } from "react";
-import { meetingTypeLabel } from "../../lib/meetingTypes";
+import React, { useState, useRef, useMemo, useEffect } from "react";
+import { meetingTypeLabel, isClientFacingMeeting } from "../../lib/meetingTypes";
+import { publish, isVisibleToClient } from "../../lib/clientVisibility";
 import { prepareClonedDocForPdf } from "../../lib/pdfUtils";
 import {
   MOM,
@@ -9,7 +10,11 @@ import {
   MOMNote,
 } from "../../types";
 import { db } from "../../services/firebaseClient";
-import { updateDoc, doc } from "firebase/firestore";
+import { updateDoc, doc, getDoc, getDocs, collection, deleteField } from "firebase/firestore";
+import { getAi } from "../../services/aiClient";
+import { FLASH_MODEL } from "../../constants/aiModels";
+import { MomEmailComposer } from "./MomEmailComposer";
+import { queueScopeActions } from "../../hooks/useMomScopeQueue";
 import {
   X,
   Save,
@@ -31,6 +36,11 @@ import {
   Sparkles,
   Send,
   FileText,
+  Mail,
+  Loader2,
+  CornerDownRight,
+  PenLine,
+  History,
 } from "lucide-react";
 import { useOrg } from "../../contexts/OrgContext";
 import { StudioDocumentShell } from "./documents/StudioDocumentShell";
@@ -51,7 +61,8 @@ export function MomReviewModal({
   onClose,
 }: MomReviewModalProps) {
   const { currentRole, orgData, teamMembers } = useOrg() as any;
-  const isOwner = currentRole === "Admin" || currentRole === "Ops Director";
+  /* Super Admin and Owner were missing, so the studio's own principal could not flag scope or send it on. */
+  const isOwner = ["Super Admin", "Owner", "Admin", "Ops Director"].includes(String(currentRole));
   const studioName = orgData?.orgName || "Studio";
 
   /*
@@ -103,10 +114,30 @@ export function MomReviewModal({
     }),
   });
 
+  /*
+    REVISIONS.
+
+    Issued minutes are a record: once the client has them they do not change
+    under the client's feet. A correction (asked for in the portal, or noticed
+    by the studio) is made as a revision. The studio's edits are kept in
+    `pendingRevision` while it works, so the client goes on seeing the issued
+    minutes; issuing the revision files the issued version, unchanged, in
+    `previousRevisions` and puts the new one in its place as Rev 1, Rev 2...
+    It stays one document with one MoM number, so the action tracker and every
+    other list see it once.
+  */
+  const CONTENT_KEYS = ["meetingTitle", "attendees", "decisions", "actionItems", "notes", "summary", "nextMeeting", "carriedForward", "scopeFlagSummary"] as const;
+  const contentOf = (m: Partial<MOM>): Partial<MOM> => {
+    const o: any = {};
+    CONTENT_KEYS.forEach((k) => { if ((m as any)[k] !== undefined) o[k] = (m as any)[k]; });
+    return JSON.parse(JSON.stringify(o));
+  };
+
   const [draft, setDraft] = useState<MOM>(() => {
     if (!mom) return {} as MOM;
     try {
-      return withStudioSides(JSON.parse(JSON.stringify(mom)));
+      const base = JSON.parse(JSON.stringify(mom));
+      return withStudioSides(base.pendingRevision ? { ...base, ...base.pendingRevision } : base);
     } catch (e) {
       return {} as MOM;
     }
@@ -131,6 +162,53 @@ export function MomReviewModal({
     return `${a.owner || "unknown"}|${n && !GENERIC_OWNERS.has(n.toLowerCase()) && n !== studioName ? n : ""}`;
   };
   const [saving, setSaving] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [revising, setRevising] = useState<boolean>(!!mom?.pendingRevision);
+  const [revisionNote, setRevisionNote] = useState<string>(String((mom?.pendingRevision as any)?.revisionNote || ""));
+  const [showEarlier, setShowEarlier] = useState(false);
+  const pdfName = () => `MoM_${draft.momRef}${draft.rev ? `_Rev${draft.rev}` : ""}.pdf`;
+  const [suggesting, setSuggesting] = useState(false);
+  /* The meeting this MoM came from: it holds who was there and their emails. */
+  const [visit, setVisit] = useState<any | null>(null);
+  /* Actions still open on this project's earlier MoMs, offered to carry forward. */
+  const [earlierOpen, setEarlierOpen] = useState<{ text: string; ref: string; owner?: string | null }[]>([]);
+
+  useEffect(() => {
+    let live = true;
+    if (mom?.meetingId) {
+      getDoc(doc(db, `organizations/${studioId}/projects/${projectId}/siteVisits`, mom.meetingId))
+        .then((s) => live && s.exists() && setVisit({ id: s.id, ...s.data() }))
+        .catch(() => {});
+    }
+    getDocs(collection(db, `organizations/${studioId}/projects/${projectId}/moms`))
+      .then((snap) => {
+        if (!live) return;
+        const open: { text: string; ref: string; owner?: string | null }[] = [];
+        snap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as any) }))
+          .filter((m) => m.id !== mom?.id && Number(m.meetingDate || 0) < Number(mom?.meetingDate || Date.now()))
+          .sort((a, b) => Number(b.meetingDate || 0) - Number(a.meetingDate || 0))
+          .forEach((m) =>
+            (m.actionItems || [])
+              .filter((a: any) => a?.text?.trim() && a.status !== "done" && a.status !== "closed")
+              .forEach((a: any) => {
+                if (!open.some((o) => o.text === a.text)) open.push({ text: a.text, ref: m.momRef, owner: a.ownerName || null });
+              }),
+          );
+        setEarlierOpen(open.slice(0, 12));
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [mom?.id, mom?.meetingId, studioId, projectId]);
+
+  /* Who signs the email: the person sending it, as the team list names them. */
+  const { currentUserAuth } = useOrg() as any;
+  const signerName = useMemo(() => {
+    const email = String(currentUserAuth?.email || "").toLowerCase();
+    const me = (teamMembers || []).find((t: any) => email && String(t?.email || "").toLowerCase() === email);
+    return me?.name || currentUserAuth?.displayName || (orgData as any)?.signatoryName || studioName;
+  }, [currentUserAuth, teamMembers, orgData, studioName]);
+
   const [activeSection, setActiveSection] = useState<
     "attendees" | "decisions" | "actions" | "notes" | null
   >("actions");
@@ -152,7 +230,7 @@ export function MomReviewModal({
   };
 
   const markShared = async () => {
-    if (mom.status === "finalised") {
+    if (mom.status === "finalised" || draft.status === "finalised") {
       const updates = { status: "shared", sharedAt: Date.now() };
       setDraft((d) => ({ ...d, ...updates }));
       await updateDoc(
@@ -180,7 +258,7 @@ export function MomReviewModal({
 
         const opt = {
           margin: 0,
-          filename: `MoM_${draft.momRef}.pdf`,
+          filename: pdfName(),
           image: { type: "jpeg", quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true, onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc) },
           jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
@@ -189,7 +267,7 @@ export function MomReviewModal({
           .set(opt)
           .from(pdfContentRef.current)
           .outputPdf("blob");
-        const file = new File([pdfBlob], `MoM_${draft.momRef}.pdf`, {
+        const file = new File([pdfBlob], pdfName(), {
           type: "application/pdf",
         });
 
@@ -274,7 +352,7 @@ export function MomReviewModal({
         }
         const opt = {
           margin: 0,
-          filename: `MoM_${draft.momRef}.pdf`,
+          filename: pdfName(),
           image: { type: "jpeg", quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true, onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc) },
           jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
@@ -298,6 +376,90 @@ export function MomReviewModal({
     (a) => a.flags?.scope,
   ).length;
 
+  /** The same PDF the Download button makes, as base64 for an attachment. */
+  const pdfForEmail = async (): Promise<{ filename: string; base64: string } | null> => {
+    if (!pdfContentRef.current) return null;
+    try {
+      const html2pdfModule = await import("html2pdf.js");
+      let html2pdfObj = (html2pdfModule as any).default || html2pdfModule;
+      if (html2pdfObj && html2pdfObj.default) html2pdfObj = html2pdfObj.default;
+      const uri: string = await html2pdfObj()
+        .set({
+          margin: 0,
+          filename: pdfName(),
+          image: { type: "jpeg", quality: 0.92 },
+          html2canvas: { scale: 2, useCORS: true, onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc) },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        })
+        .from(pdfContentRef.current)
+        .outputPdf("datauristring");
+      return { filename: pdfName(), base64: uri.slice(uri.indexOf(",") + 1) };
+    } catch (e) {
+      console.error("MoM PDF for email failed", e);
+      return null;
+    }
+  };
+
+  const ackLink = async () => `${window.location.origin}/mom/${await getOrCreateShareToken()}`;
+
+  const recordEmailed = async (recipients: string[]) => {
+    const updates: any = { emailedAt: Date.now(), emailedTo: recipients };
+    if (draft.status === "finalised" || mom.status === "finalised") {
+      updates.status = "shared";
+      updates.sharedAt = Date.now();
+    }
+    setDraft((d) => ({ ...d, ...updates }));
+    await updateDoc(doc(db, `organizations/${studioId}/projects/${projectId}/moms`, mom.id), updates);
+  };
+
+  /** A plain summary the client would understand, written from the minutes. */
+  const suggestSummary = async () => {
+    setSuggesting(true);
+    try {
+      const facts = [
+        `Meeting: ${draft.meetingTitle || "Meeting"} (${meetingTypeLabel(draft.meetingType)})`,
+        ...(draft.decisions || []).filter((d) => d.text?.trim()).map((d) => `Decision: ${d.text}`),
+        ...(draft.actionItems || []).filter((a) => a.text?.trim()).map((a) => `Action: ${a.text} (owner ${ownerLabel(a)})`),
+        ...(draft.notes || []).filter((n) => n.text?.trim()).map((n) => `Note: ${n.text}`),
+      ].join("\n");
+      const res = await getAi().models.generateContent({
+        model: FLASH_MODEL,
+        contents: [{ role: "user", parts: [{ text: `Write a summary of these meeting minutes in 2 or 3 plain sentences a homeowner would understand: what was reviewed, what was agreed, what happens next. Use only these facts; no invented dates or amounts. Return only the summary text.\n\n${facts}` }] }],
+        config: { temperature: 0.3 },
+      });
+      const text = String(res.text || "").replace(/^["\s]+|["\s]+$/g, "");
+      if (text) updateDraft({ summary: text });
+    } catch (e) {
+      console.error("Summary suggestion failed", e);
+      alert("The summary could not be drafted just now. You can type one.");
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  /* What to look at before the minutes are final. None of these block it. */
+  const checks: { tone: "warn" | "info"; text: string }[] = [];
+  {
+    const actions = (draft.actionItems || []).filter((a) => a.text?.trim());
+    const noOwner = actions.filter((a) => !a.owner || a.owner === "unknown").length;
+    const noDate = actions.filter((a) => !a.dueDate).length;
+    if (noOwner) checks.push({ tone: "warn", text: `${noOwner} action${noOwner > 1 ? "s have" : " has"} no owner.` });
+    if (noDate) checks.push({ tone: "warn", text: `${noDate} action${noDate > 1 ? "s have" : " has"} no due date.` });
+    const clientWithEmail = ((visit?.people || []) as any[]).some((p) => p?.side === "client" && String(p?.email || "").includes("@"));
+    if (visit && !clientWithEmail && /client|site|measure/.test(String(draft.meetingType || "")))
+      checks.push({ tone: "warn", text: "No client email on this meeting. You can add one when you send." });
+    if (!String(draft.summary || "").trim()) checks.push({ tone: "info", text: "No summary yet. The email and PDF read better with one." });
+    const costScope = actions.filter((a) => a.flags?.scope || a.flags?.cost).length;
+    if (revising && !revisionNote.trim())
+      checks.unshift({ tone: "warn", text: "Say what changed in this revision. The client sees it on the minutes and in the email." });
+    const unqueued = actions.filter((a) => (a.flags?.scope || a.flags?.cost) && !a.scopeRequest).length;
+    if (costScope)
+      checks.push({
+        tone: "info",
+        text: `${costScope} action${costScope > 1 ? "s change" : " changes"} cost or scope.${unqueued ? ` ${revising ? "Issuing" : "Finalising"} sends ${unqueued > 1 ? "them" : "it"} to the Scope Revision, as a draft for the studio to price.` : ""}`,
+      });
+  }
+
   const handleLogDecision = async (idx: number) => {
     const newD = [...draft.decisions];
     newD[idx].linkedDecisionId = `DEC-${Date.now()}`;
@@ -311,22 +473,158 @@ export function MomReviewModal({
     alert("Decision logged to project execution data!");
   };
 
-  const handleCreateSA = async (idx: number) => {
-    const nx = [...draft.actionItems];
-    nx[idx].linkedScopeAdditionId = `SA-${Date.now()}`;
-    await updateDoc(
-      doc(db, `organizations/${studioId}/projects/${projectId}/moms`, mom.id),
-      {
-        actionItems: nx,
-      },
-    );
-    updateDraft({ actionItems: nx });
-    alert("Opened Scope Addition flow prefilled with: " + nx[idx].text);
+  /*
+    Sends one cost or scope action to the Scope Revision queue: for minutes
+    finalised before the queue existed, or an item set aside and wanted after
+    all. (This was "Initiate Scope Addition Draft", which only showed an alert
+    and stamped a made-up id; nothing was ever drafted.) Read fresh, so the
+    action tracker's latest statuses are not written over.
+  */
+  const sendToScope = async (actionId: string) => {
+    setSaving(true);
+    try {
+      const fresh = (await getDoc(momDoc())).data() as MOM;
+      const by = currentUserAuth?.email || currentUserAuth?.uid || null;
+      const nx = (fresh.actionItems || []).map((a) =>
+        a.id === actionId ? { ...a, scopeRequest: { status: "queued" as const, queuedAt: Date.now(), queuedBy: by } } : a,
+      );
+      await updateDoc(momDoc(), { actionItems: nx });
+      setDraft((d) => ({ ...d, actionItems: nx }));
+    } catch (e) {
+      console.error(e);
+      alert("Could not send it to the Scope Revision. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const momDoc = () => doc(db, `organizations/${studioId}/projects/${projectId}/moms`, mom.id);
+
+  /*
+    Issuing client-meeting minutes publishes them to the client's portal.
+
+    The portal shows only what has been published (lib/clientVisibility), and
+    nothing in the minutes flow ever published them -- so no MoM reached a
+    client's portal, and the acknowledge-or-correct step there was never seen.
+    Finalising is the studio's deliberate act of issuing them, so it is stamped
+    then, with who and when. Internal and vendor minutes are never published
+    (the rules refuse them to clients regardless).
+  */
+  const clientFacing = isClientFacingMeeting(draft.meetingType);
+  const inPortal = isVisibleToClient(draft as any);
+  const publishStamp = (): any =>
+    clientFacing ? { clientVisibility: publish(currentUserAuth?.email || currentUserAuth?.uid || undefined) } : {};
+  const publishToPortal = async () => {
+    setSaving(true);
+    try {
+      const stamp = publishStamp();
+      await updateDoc(momDoc(), stamp);
+      setDraft((d) => ({ ...d, ...stamp }));
+    } catch (e) {
+      console.error(e);
+      alert("Could not publish to the client portal. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startRevision = async () => {
+    setSaving(true);
+    try {
+      await updateDoc(momDoc(), { pendingRevision: { ...contentOf(draft), revisionNote: "" } });
+      setRevisionNote("");
+      setRevising(true);
+    } catch (e) {
+      console.error(e);
+      alert("Could not start the revision. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const discardRevision = async () => {
+    if (!confirm("Discard this revision? The issued minutes stay exactly as they are.")) return;
+    setSaving(true);
+    try {
+      const fresh = (await getDoc(momDoc())).data() as MOM;
+      await updateDoc(momDoc(), { pendingRevision: deleteField() });
+      setDraft((d) => withStudioSides({ ...d, ...contentOf(fresh), pendingRevision: null }));
+      setRevising(false);
+    } catch (e) {
+      console.error(e);
+      alert("Could not discard the revision. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Files the issued minutes, unchanged, and puts the revision in their place. */
+  const issueRevision = async () => {
+    const fresh = (await getDoc(momDoc())).data() as MOM;
+    const snapshot = JSON.parse(JSON.stringify({
+      ...contentOf(fresh),
+      rev: Number(fresh.rev || 0),
+      status: fresh.status,
+      issuedAt: fresh.revisedAt || fresh.sharedAt || fresh.createdAt || null,
+      revisionNote: fresh.revisionNote || null,
+      revisedBy: (fresh as any).revisedBy || null,
+      acknowledgedBy: fresh.acknowledgedBy || null,
+      acknowledgedAt: fresh.acknowledgedAt || null,
+      ackChannel: fresh.ackChannel || null,
+      correctionRequest: fresh.correctionRequest || null,
+      emailedAt: fresh.emailedAt || null,
+      emailedTo: fresh.emailedTo || [],
+      supersededAt: Date.now(),
+    }));
+    /* The tracker may have closed actions since the revision began; it owns their status. */
+    const actionItems = (draft.actionItems || []).map((a) => {
+      const was = (fresh.actionItems || []).find((o) => o.id === a.id);
+      return was ? { ...a, status: was.status, ...(was.scopeRequest ? { scopeRequest: was.scopeRequest } : {}) } : a;
+    });
+    const rev = Number(fresh.rev || 0) + 1;
+    const now = Date.now();
+    const content = contentOf({ ...draft, actionItems: queueScopeActions(actionItems, currentUserAuth?.email || currentUserAuth?.uid || null) });
+    const kept = {
+      ...(isVisibleToClient(fresh as any) ? {} : publishStamp()),
+      rev,
+      revisedAt: now,
+      revisedBy: currentUserAuth?.email || currentUserAuth?.uid || null,
+      revisionNote: revisionNote.trim() || null,
+      previousRevisions: [...(fresh.previousRevisions || []), snapshot],
+      correctionRequest: null,
+      status: "finalised" as const,
+      emailedAt: null,
+      emailedTo: [] as string[],
+    };
+    await updateDoc(momDoc(), {
+      ...content,
+      ...kept,
+      pendingRevision: deleteField(),
+      acknowledgedBy: deleteField(),
+      acknowledgedAt: deleteField(),
+      ackChannel: deleteField(),
+    });
+    setDraft((d) => ({
+      ...d,
+      ...content,
+      ...kept,
+      pendingRevision: null,
+      acknowledgedBy: undefined,
+      acknowledgedAt: undefined,
+      ackChannel: undefined,
+    }) as MOM);
+    setRevising(false);
+    setComposerOpen(true);
   };
 
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
+      if (revising) {
+        await updateDoc(momDoc(), { pendingRevision: { ...contentOf(draft), revisionNote } });
+        onClose();
+        return;
+      }
       await updateDoc(
         doc(db, `organizations/${studioId}/projects/${projectId}/moms`, mom.id),
         {
@@ -346,14 +644,24 @@ export function MomReviewModal({
   const handleFinalise = async () => {
     setSaving(true);
     try {
+      if (revising) {
+        await issueRevision();
+        return;
+      }
+      /* Cost and scope actions go to the Scope Revision queue as the minutes are issued. */
+      const queuedActions = queueScopeActions(draft.actionItems, currentUserAuth?.email || currentUserAuth?.uid || null);
       await updateDoc(
         doc(db, `organizations/${studioId}/projects/${projectId}/moms`, mom.id),
         {
           ...draft,
+          actionItems: queuedActions,
+          ...publishStamp(),
           status: "finalised",
         },
       );
-      onClose();
+      // Straight on to the covering email; closing it leaves the MoM open here.
+      setDraft((d) => ({ ...d, actionItems: queuedActions, ...publishStamp(), status: "finalised" }));
+      setComposerOpen(true);
     } catch (e) {
       console.error(e);
       alert("Failed to finalise MoM");
@@ -362,10 +670,12 @@ export function MomReviewModal({
     }
   };
 
-  const isFinalised =
-    mom.status === "finalised" ||
-    mom.status === "shared" ||
-    mom.status === "acknowledged";
+  const isFinalised = !revising && ["finalised", "shared", "acknowledged", "correction_requested"].includes(
+    String(draft.status || mom.status),
+  );
+  const correctionOpen = draft.status === "correction_requested" && !!draft.correctionRequest?.text;
+  const fmtWhen = (ms?: number | null) =>
+    ms ? new Date(ms).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
 
   return (
     <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/40 z-[100] flex items-center justify-center p-0 sm:p-4 backdrop-blur-xs font-sans">
@@ -376,10 +686,18 @@ export function MomReviewModal({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
-                Review Minutes: {draft.momRef}
+                Review Minutes: {draft.momRef}{draft.rev ? ` Rev ${draft.rev}` : ""}
                 <span className="h-1.5 w-1.5 rounded-full bg-[#B89047]"></span>
               </h2>
-              {!isFinalised ? (
+              {revising ? (
+                <span className="bg-indigo-50 text-[#2C3C78] text-xs font-bold px-2.5 py-0.5 border border-indigo-200 rounded-md uppercase tracking-wider">
+                  Revision {(draft.rev || 0) + 1} — not issued yet
+                </span>
+              ) : correctionOpen ? (
+                <span className="bg-amber-50 text-amber-800 text-xs font-bold px-2.5 py-0.5 border border-amber-200 rounded-md uppercase tracking-wider">
+                  Correction requested
+                </span>
+              ) : !isFinalised ? (
                 <span className="bg-amber-50 text-amber-700 text-xs font-bold px-2.5 py-0.5 border border-amber-200 rounded-md uppercase tracking-wider">
                   Draft — Review Phase
                 </span>
@@ -419,6 +737,186 @@ export function MomReviewModal({
 
         {/* Content Section (Streamlined light-grey viewport) */}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 space-y-5">
+
+          {correctionOpen && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-5 py-4 space-y-2">
+              <p className="text-sm font-bold text-amber-950 flex items-center gap-2">
+                <PenLine size={15} className="shrink-0" />
+                {draft.correctionRequest?.by || "The client"} asked for a correction{draft.correctionRequest?.at ? ` on ${fmtWhen(draft.correctionRequest.at)}` : ""}
+              </p>
+              <p className="text-sm text-amber-950/90 whitespace-pre-line leading-relaxed">“{draft.correctionRequest?.text}”</p>
+              {!revising && (
+                <button
+                  type="button"
+                  onClick={startRevision}
+                  disabled={saving}
+                  className="mt-1 px-3.5 py-2 rounded-lg bg-[#3D52A0] hover:bg-[#2C3C78] text-white text-xs font-bold flex items-center gap-1.5"
+                >
+                  <PenLine size={13} /> Revise the minutes
+                </button>
+              )}
+            </div>
+          )}
+
+          {revising && (
+            <div className="rounded-2xl border border-indigo-200 bg-white px-5 py-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="mom-revision-note" className="text-xs font-bold text-slate-500">
+                  What changed in Rev {(draft.rev || 0) + 1}
+                </label>
+                <button type="button" onClick={discardRevision} disabled={saving} className="text-xs font-bold text-slate-400 hover:text-rose-700">
+                  Discard revision
+                </button>
+              </div>
+              <textarea
+                id="mom-revision-note"
+                value={revisionNote}
+                onChange={(e) => setRevisionNote(e.target.value)}
+                rows={2}
+                placeholder="e.g. Handle finish corrected to black, as the client confirmed."
+                className="w-full bg-slate-50/70 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 leading-relaxed outline-none border border-transparent focus:bg-white focus:border-[#3D52A0]/30 focus:ring-4 focus:ring-[#3D52A0]/10 resize-y placeholder-slate-400"
+              />
+              <p className="text-xs text-slate-500">
+                The client keeps seeing the issued minutes until you issue this revision. It then needs their acknowledgement again.
+              </p>
+            </div>
+          )}
+
+          {/* OVERVIEW: what the client reads first, in the email and on the PDF */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <label htmlFor="mom-summary" className="text-xs font-bold text-slate-500">Summary</label>
+                {!isFinalised && (
+                  <button
+                    type="button"
+                    onClick={suggestSummary}
+                    disabled={suggesting}
+                    className="text-xs font-bold text-[#3D52A0] hover:text-[#2C3C78] flex items-center gap-1.5 disabled:opacity-60"
+                  >
+                    {suggesting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                    {draft.summary ? "Rewrite with AI" : "Suggest with AI"}
+                  </button>
+                )}
+              </div>
+              <textarea
+                id="mom-summary"
+                disabled={isFinalised}
+                value={draft.summary || ""}
+                onChange={(e) => updateDraft({ summary: e.target.value })}
+                placeholder="Two or three sentences: what was reviewed, what was agreed, what happens next."
+                rows={3}
+                className="w-full bg-slate-50/70 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 leading-relaxed outline-none border border-transparent focus:bg-white focus:border-[#3D52A0]/30 focus:ring-4 focus:ring-[#3D52A0]/10 resize-y placeholder-slate-400 disabled:bg-transparent disabled:px-0"
+              />
+            </div>
+
+            <div>
+              <span className="text-xs font-bold text-slate-500 block mb-1.5">Next meeting</span>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  type="date"
+                  aria-label="Next meeting date"
+                  disabled={isFinalised}
+                  value={draft.nextMeeting?.date || ""}
+                  onChange={(e) => updateDraft({ nextMeeting: { ...(draft.nextMeeting || {}), date: e.target.value } })}
+                  className="text-sm bg-slate-50/70 rounded-lg px-3 py-2 outline-none border border-transparent focus:border-[#3D52A0]/30 text-slate-800"
+                />
+                <input
+                  type="time"
+                  aria-label="Next meeting time"
+                  disabled={isFinalised}
+                  value={draft.nextMeeting?.time || ""}
+                  onChange={(e) => updateDraft({ nextMeeting: { ...(draft.nextMeeting || {}), time: e.target.value } })}
+                  className="text-sm bg-slate-50/70 rounded-lg px-3 py-2 outline-none border border-transparent focus:border-[#3D52A0]/30 text-slate-800"
+                />
+                <input
+                  type="text"
+                  aria-label="Next meeting purpose"
+                  disabled={isFinalised}
+                  value={draft.nextMeeting?.purpose || ""}
+                  onChange={(e) => updateDraft({ nextMeeting: { ...(draft.nextMeeting || {}), purpose: e.target.value } })}
+                  placeholder="Purpose, e.g. material selection"
+                  className="flex-1 min-w-[180px] text-sm bg-slate-50/70 rounded-lg px-3 py-2 outline-none border border-transparent focus:border-[#3D52A0]/30 text-slate-800 placeholder-slate-400"
+                />
+              </div>
+            </div>
+
+            {(earlierOpen.length > 0 || (draft.carriedForward || []).length > 0) && (
+              <div>
+                <span className="text-xs font-bold text-slate-500 block mb-1.5">
+                  Still open from earlier meetings
+                  <span className="font-medium text-slate-400"> · ticked items print on these minutes</span>
+                </span>
+                <div className="space-y-1">
+                  {[
+                    ...(draft.carriedForward || []),
+                    ...earlierOpen.filter((o) => !(draft.carriedForward || []).some((c) => c.text === o.text)),
+                  ].map((o, i) => {
+                    const on = (draft.carriedForward || []).some((c) => c.text === o.text);
+                    return (
+                      <label key={`${o.ref}-${i}`} className={`flex items-start gap-2.5 text-sm px-2 py-1.5 rounded-lg ${isFinalised ? "" : "cursor-pointer hover:bg-slate-50"}`}>
+                        <input
+                          type="checkbox"
+                          disabled={isFinalised}
+                          checked={on}
+                          onChange={() =>
+                            updateDraft({
+                              carriedForward: on
+                                ? (draft.carriedForward || []).filter((c) => c.text !== o.text)
+                                : [...(draft.carriedForward || []), o],
+                            })
+                          }
+                          className="mt-1 accent-[#3D52A0]"
+                        />
+                        <span className={on ? "text-slate-800" : "text-slate-500"}>
+                          {o.text}
+                          <span className="text-xs text-slate-400"> · {o.ref}{o.owner ? ` · ${o.owner}` : ""}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {(draft.previousRevisions || []).length > 0 && (
+              <div className="border-t border-slate-100 pt-3">
+                <button type="button" onClick={() => setShowEarlier((v) => !v)} className="text-xs font-bold text-slate-500 hover:text-slate-900 flex items-center gap-1.5">
+                  <History size={13} /> Earlier versions ({(draft.previousRevisions || []).length})
+                </button>
+                {showEarlier && (
+                  <ul className="mt-2 space-y-2">
+                    {[...(draft.previousRevisions || [])].reverse().map((p: any, i) => (
+                      <li key={i} className="text-xs text-slate-600 leading-relaxed">
+                        <span className="font-bold text-slate-800">{p.rev ? `Rev ${p.rev}` : "As first issued"}</span>
+                        {p.issuedAt ? ` · issued ${fmtWhen(p.issuedAt)}` : ""}
+                        {p.acknowledgedBy ? ` · acknowledged by ${p.acknowledgedBy}` : ""}
+                        {p.correctionRequest?.text ? <span className="block text-slate-500">Correction asked: “{p.correctionRequest.text}”</span> : null}
+                        {p.revisionNote ? <span className="block text-slate-500">Change made then: {p.revisionNote}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+
+          {!isFinalised && checks.length > 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4">
+              <span className="text-xs font-bold text-slate-500 block mb-2">Before you finalise</span>
+              <ul className="space-y-1.5">
+                {checks.map((c, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                    {c.tone === "warn" ? (
+                      <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <CornerDownRight size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                    )}
+                    {c.text}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           
           {/* 1. ATTENDEES ACCORDION */}
           <AccordionSection
@@ -692,6 +1190,17 @@ export function MomReviewModal({
                             >
                               Scope Impact
                             </button>
+                            <button
+                              onClick={() => {
+                                if (isFinalised) return;
+                                const nx = [...draft.actionItems];
+                                nx[idx] = { ...nx[idx], flags: { ...nx[idx].flags, cost: !nx[idx].flags?.cost } };
+                                updateDraft({ actionItems: nx });
+                              }}
+                              className={`text-xs px-3 py-1.5 rounded-md border font-bold uppercase tracking-wider transition ${a.flags?.cost ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-slate-400 border-slate-200 opacity-60 hover:opacity-100"}`}
+                            >
+                              Cost Impact
+                            </button>
                           </>
                         ) : (
                           <>
@@ -700,26 +1209,41 @@ export function MomReviewModal({
                                 Scope Impact
                               </span>
                             )}
+                            {a.flags?.cost && (
+                              <span className="text-xs px-3 py-1.5 rounded-md font-bold uppercase tracking-wider bg-red-50 text-red-700 border border-red-100">
+                                Cost Impact
+                              </span>
+                            )}
                           </>
                         )}
                       </div>
                     </div>
 
-                    {isFinalised && a.flags?.scope && (
-                      <div className="flex flex-wrap gap-3 border-t border-slate-200/50 pt-3 mt-1">
-                        {a.linkedScopeAdditionId ? (
-                          <span className="text-xs font-bold uppercase tracking-wider text-rose-800 bg-rose-50 border border-rose-100 px-3 py-1.5 rounded">
-                            ✓ Scope Addition Linked
+                    {isFinalised && (a.flags?.scope || a.flags?.cost) && (
+                      <div className="flex flex-wrap items-center gap-3 border-t border-slate-200/50 pt-3 mt-1 text-xs">
+                        {a.scopeRequest?.status === "queued" ? (
+                          <span className="font-bold text-[#2C3C78] bg-[#E8ECFB] px-3 py-1.5 rounded-md">
+                            Waiting in the Scope Revision queue
+                          </span>
+                        ) : a.scopeRequest?.status === "added" ? (
+                          <span className="font-bold text-emerald-800 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-md">
+                            ✓ In {a.scopeRequest.addedTo || "the Scope Revision"}
                           </span>
                         ) : (
-                          isOwner && (
-                            <button
-                              onClick={() => handleCreateSA(idx)}
-                              className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-[#B89047] transition flex items-center gap-1"
-                            >
-                              → Initiate Scope Addition Draft
-                            </button>
-                          )
+                          <>
+                            {a.scopeRequest?.status === "dismissed" && (
+                              <span className="text-slate-500">Set aside in the scope review.</span>
+                            )}
+                            {isOwner && (
+                              <button
+                                onClick={() => sendToScope(a.id)}
+                                disabled={saving}
+                                className="font-bold text-[#3D52A0] hover:text-[#2C3C78] transition flex items-center gap-1"
+                              >
+                                → Send to Scope Revision
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     )}
@@ -826,7 +1350,7 @@ export function MomReviewModal({
               className="flex-1 py-3 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:text-amber-400 rounded-xl font-bold text-sm uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-sm"
             >
               <CheckCircle2 size={14} />
-              Finalise Document
+              {revising ? `Issue Rev ${(draft.rev || 0) + 1} & email` : "Finalise & email"}
             </button>
           </div>
         ) : (
@@ -847,7 +1371,21 @@ export function MomReviewModal({
               )}
             </div>
 
+            {draft.emailedAt ? (
+              <p className="text-xs text-slate-500 -mt-1">
+                Emailed {new Date(draft.emailedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                {draft.emailedTo?.length ? ` to ${draft.emailedTo.join(", ")}` : ""}
+              </p>
+            ) : null}
             <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => setComposerOpen(true)}
+                disabled={saving}
+                className="flex-1 flex justify-center items-center gap-2 py-3.5 bg-[#3D52A0] hover:bg-[#2C3C78] text-white rounded-xl font-bold text-sm uppercase tracking-wider transition shadow-sm"
+              >
+                <Mail size={14} />
+                {draft.emailedAt ? "Email again" : "Email to client"}
+              </button>
               <button
                 onClick={handleShareWhatsApp}
                 disabled={saving}
@@ -873,9 +1411,42 @@ export function MomReviewModal({
                 <Share2 size={14} />
               </button>
             </div>
+            {clientFacing && !inPortal && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-2.5">
+                <span className="text-xs text-amber-900 font-semibold">Not in the client's portal yet, so they cannot acknowledge it there.</span>
+                <button type="button" onClick={publishToPortal} disabled={saving} className="px-3 py-1.5 rounded-lg bg-[#3D52A0] hover:bg-[#2C3C78] text-white text-xs font-bold">
+                  Publish to client portal
+                </button>
+              </div>
+            )}
+            {!correctionOpen && (
+              <button
+                type="button"
+                onClick={startRevision}
+                disabled={saving}
+                className="self-start text-xs font-bold text-slate-500 hover:text-[#3D52A0] flex items-center gap-1.5"
+              >
+                <PenLine size={13} /> Something to correct? Revise the minutes
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {composerOpen && (
+        <MomEmailComposer
+          mom={draft}
+          visit={visit}
+          projectName={projectContextName || "your project"}
+          clientName={((visit?.people || []) as any[]).filter((p) => p?.side === "client").map((p) => String(p.name || "").split(/\s+/)[0]).filter(Boolean).slice(0, 2).join(" and ") || undefined}
+          studioName={studioName}
+          signerName={signerName}
+          getPdf={pdfForEmail}
+          getAckLink={ackLink}
+          onSent={recordEmailed}
+          onClose={() => setComposerOpen(false)}
+        />
+      )}
 
       {/* Hidden printable content for PDF generation (Sober, Print-first Theme) */}
       <div className="absolute left-[-9999px] top-[-9999px]">
@@ -883,7 +1454,7 @@ export function MomReviewModal({
           {orgData && (
             <StudioDocumentShell
               orgData={orgData}
-              docHeaderType={`Minutes of Meeting\nRef: ${draft.momRef}`}
+              docHeaderType={`Minutes of Meeting\nRef: ${draft.momRef}${draft.rev ? ` Rev ${draft.rev}` : ""}`}
               docHeaderTitle={draft.meetingTitle || "Minutes of Meeting"}
             >
               <div className="space-y-8 text-sm text-slate-900 pt-4 font-sans pb-12">
@@ -892,7 +1463,7 @@ export function MomReviewModal({
                   <div className="grid grid-cols-2 gap-y-4 text-xs">
                     <div>
                       <span className="text-[#666666] font-semibold block uppercase tracking-wider text-[10px]">Reference Number</span>
-                      <span className="font-extrabold text-[#1E1B4B] text-sm">{draft.momRef}</span>
+                      <span className="font-extrabold text-[#1E1B4B] text-sm">{draft.momRef}{draft.rev ? ` Rev ${draft.rev}` : ""}</span>
                     </div>
                     <div>
                       <span className="text-[#666666] font-semibold block uppercase tracking-wider text-[10px]">Meeting Date</span>
@@ -916,6 +1487,22 @@ export function MomReviewModal({
                     </div>
                   </div>
                 </div>
+
+                {!!draft.rev && (
+                  <div className="border-l-2 border-[#3D52A0] bg-[#F4F6FC] px-4 py-3 text-xs leading-relaxed text-[#1E1B4B]">
+                    <span className="font-extrabold uppercase tracking-wider text-[10px] text-[#3D52A0] block mb-0.5">
+                      Revision {draft.rev}{draft.revisedAt ? ` · issued ${new Date(draft.revisedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}` : ""}
+                    </span>
+                    {draft.revisionNote ? `What changed: ${draft.revisionNote}` : "These minutes replace the earlier version."}
+                  </div>
+                )}
+
+                {draft.summary && String(draft.summary).trim() && (
+                  <div>
+                    <h3 className="text-xs uppercase font-extrabold tracking-widest text-[#B89047] mb-2">Summary</h3>
+                    <p className="text-[13px] leading-relaxed text-slate-800">{draft.summary}</p>
+                  </div>
+                )}
 
                 {/* Single Gold Hairline Accent divider */}
                 <div className="h-[1px] bg-[#B89047]" />
@@ -1032,6 +1619,23 @@ export function MomReviewModal({
                   </div>
                 )}
 
+                {(draft.carriedForward || []).length > 0 && (
+                  <div>
+                    <h3 className="text-xs uppercase font-extrabold tracking-widest text-[#B89047] mb-3">
+                      Still Open From Earlier Meetings
+                    </h3>
+                    <div className="border-t border-slate-100 pt-3 space-y-2">
+                      {(draft.carriedForward || []).map((c, i) => (
+                        <div key={i} className="flex gap-3 items-start text-xs leading-relaxed">
+                          <span className="text-[#B89047] font-extrabold select-none mt-0.5">▪</span>
+                          <span className="font-medium text-slate-800 flex-1">{c.text}</span>
+                          <span className="text-[#666666] font-bold whitespace-nowrap">{c.ref}{c.owner ? ` · ${c.owner}` : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* 5. Discussion Notes Section */}
                 {draft.notes && draft.notes.length > 0 && (
                   <div>
@@ -1047,6 +1651,17 @@ export function MomReviewModal({
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {draft.nextMeeting?.date && (
+                  <div className="border border-[#d9d6cc] bg-[#FAF9F6] px-5 py-3.5 text-xs flex flex-wrap gap-x-6 gap-y-1">
+                    <span className="text-[#666666] font-semibold uppercase tracking-wider text-[10px] self-center">Next Meeting</span>
+                    <span className="font-extrabold text-[#1E1B4B] text-sm">
+                      {new Date(`${draft.nextMeeting.date}T${draft.nextMeeting.time || "00:00"}`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric" })}
+                      {draft.nextMeeting.time ? `, ${new Date(`${draft.nextMeeting.date}T${draft.nextMeeting.time}`).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}` : ""}
+                    </span>
+                    {draft.nextMeeting.purpose && <span className="text-slate-700 font-medium text-sm">{draft.nextMeeting.purpose}</span>}
                   </div>
                 )}
 

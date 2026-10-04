@@ -65,6 +65,7 @@ Return ONLY JSON, no markdown fences:
 "actionItems": [{"text": "", "owner": "", "ownerName": "", "dueDateText": "", "flags": {"scope": false, "drawing": false, "siteCondition": false, "cost": false}}],
 "notes": [{"text": ""}],
 "scopeFlagSummary": "string|null",
+  "summary": "2-3 plain sentences the client would understand: what was reviewed, what was agreed, what happens next",
 "confidence": 0.9
 }`;
 
