@@ -38,6 +38,7 @@ import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, totalsNote } f
 import { workbookForIssue, downloadWorkbook, toBase64, buildRevisionWorkbook, revisionWorkbookName } from '../../lib/scopeWorkbook';
 import { sendScopeEmail } from '../../services/emailService';
 import { publicAppOrigin } from '../../lib/publicUrl';
+import { AGREED_VIA, AgreedVia, agreedViaPhrase, approvalLabel, approvalOf, recordAgreement } from '../../lib/scopeAgreement';
 
 /**
  * SCOPE REVISION — one screen for changing a signed scope.
@@ -283,29 +284,40 @@ export default function ScopeWorkspace({
         const first = String(ctx.clientName || '').trim().split(/\s+/)[0];
         const { buf, filename } = await workbookForIssue(issue, studioName);
         const signer = /@/.test(currentUser) ? studioName : `${currentUser}\n${studioName}`;
+        /* Agreed already and recorded by the studio: the email is for their records, not a request. */
+        const agreed = issue.recordedApproval;
+        const agreedLine = agreed
+          ? `As agreed${agreedViaPhrase(agreed.how) ? ` ${agreedViaPhrase(agreed.how)}` : ''} on ${new Date(agreed.approvedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}, `
+          : '';
         const res = await sendScopeEmail({
           to,
           cc,
-          subject: revision ? `Your revised BOQ is ready: ${s.projectName}` : `Your BOQ for approval: ${s.projectName}`,
+          subject: agreed
+            ? `Your ${revision ? 'revised ' : ''}BOQ, as agreed: ${s.projectName}`
+            : revision ? `Your revised BOQ is ready: ${s.projectName}` : `Your BOQ for approval: ${s.projectName}`,
           greeting: first ? `Dear ${first},` : 'Hello,',
-          intro: revision
+          intro: agreed
+            ? `${agreedLine}we have updated your BOQ for ${s.projectName}.${revision ? ` ${changed} item${changed === 1 ? '' : 's'} changed.` : ''} The full ${revision ? 'revised ' : ''}BOQ is attached as an Excel file for your records. There is nothing for you to sign.`
+            : revision
             ? `We have updated your BOQ for ${s.projectName}. ${changed} item${changed === 1 ? '' : 's'} changed, and the full revised BOQ is attached as an Excel file.`
             : `Your detailed BOQ for ${s.projectName} is ready for your approval. It is attached as an Excel file, with every item and its specification.`,
           figures: revision
-            ? [['Signed', inr(before || 0), ''], ['Revised', inr(after), ''], ['Change', sgn(after - (before || 0)), after - (before || 0) > 0.5 ? 'up' : after - (before || 0) < -0.5 ? 'down' : '']]
+            ? [['Current', inr(before || 0), ''], ['Revised', inr(after), ''], ['Change', sgn(after - (before || 0)), after - (before || 0) > 0.5 ? 'up' : after - (before || 0) < -0.5 ? 'down' : '']]
             : [['Your BOQ', inr(after), ''], ['Items', String(s.lineCount ?? ''), '']],
           totals: rows.length > 1 ? rows.map(r => ({ label: r.label, value: revision ? `${inr(r.after)} (${sgn(r.change)})` : inr(r.after), strong: r.key === 'total' })) : undefined,
           note: totalsNote(s.clientTotals, revision),
           studioNote: revision ? s.summary || undefined : undefined,
           xlsx: { filename, base64: toBase64(buf) },
-          cta: { url: portalLink(), label: 'Review and approve in your portal' },
+          cta: { url: portalLink(), label: agreed ? 'See it in your portal' : 'Review and approve in your portal' },
           signOff: `Warm regards,\n${signer}`,
           context: `Sent for ${s.projectName} · ${issue.reference}. You're receiving this as a client of ${studioName}.`,
         });
         if (!res.success) throw new Error(`The portal is updated, but the email was not sent: ${res.error || 'refused'}.`);
       }
       setProjectContext(markSent(issueId, to));
-      flash('ok', `${issue.reference} is in the client's portal${to.length ? ` and emailed to ${to.join(', ')}` : ''}. It is approved there in one step.`);
+      flash('ok', issue.recordedApproval
+        ? `${issue.reference} is recorded as agreed and is in the client's portal${to.length ? `; the Excel was emailed to ${to.join(', ')} for their records` : ''}. There is nothing for them to sign. Apply it when ready.`
+        : `${issue.reference} is in the client's portal${to.length ? ` and emailed to ${to.join(', ')}` : ''}. It is approved there in one step.`);
       return { ok: true };
     } catch (e: any) {
       return { ok: false, error: e?.message || String(e) };
@@ -314,8 +326,19 @@ export default function ScopeWorkspace({
     }
   };
 
+  /*
+    The client agreed to an issued revision without approving it in the portal
+    (in a meeting, on a call, on WhatsApp): the studio records it, the portal
+    shows it as agreed, and the Excel can still go to them for their records.
+  */
+  const recordAgreementFor = async (issueId: string, a: { approvedAt: number; how: AgreedVia; note: string }, to: string[], cc: string[], base?: ProjectContext) => {
+    const agreement = recordAgreement(issueId, { ...a, recordedBy: currentUser });
+    setProjectContext(agreement);
+    return sendToClient(issueId, to, cc, agreement(base || ctx));
+  };
+
   // ── Record the scope in force ─────────────────────────────────────────
-  const [recordMode, setRecordMode] = useState<'recorded' | 'for_signature'>('recorded');
+  const [recordMode,setRecordMode] = useState<'recorded' | 'for_signature'>('recorded');
   const [v1Totals, setV1Totals] = useState<ClientTotalsOptions>(() => defaultTotalsOptions(ctx));
   const [approvedOn, setApprovedOn] = useState(isoDay(ctx.proposalAcceptance?.at || ctx.designApprovedAt || Date.now()));
   const [approvalNote, setApprovalNote] = useState('Approved as part of the accepted proposal package.');
@@ -409,7 +432,7 @@ export default function ScopeWorkspace({
   const apply = (rec: ScopeRevisionRecord) => {
     const issue = issueById(rec.issueId);
     const base = tiers.find(t => t.id === rec.baseTierId);
-    if (!issue?.clientSignature || !base || !setTiers) return;
+    if (!(issue?.clientSignature || issue?.recordedApproval) || !base || !setTiers) return;
     const at = Date.now();
     const signed = signedLinesFrom(base.boq, bankMap);
     let result: RevisionResult;
@@ -531,6 +554,7 @@ export default function ScopeWorkspace({
   const stateOf = (issue: DocumentIssue | null): string => {
     if (!issue) return 'Not issued';
     if (issue.clientSignature) return `Signed ${day((issue.clientSignature as any).signedAt)}`;
+    if (issue.recordedApproval) return `Agreed ${day(issue.recordedApproval.approvedAt)} (recorded)`;
     if (!isVisibleToClient(issue as any)) return 'Staged — not in their portal yet';
     const st = resolveDocumentState(ctx, issue.kind);
     return st === 'viewed' ? 'Opened by the client' : st === 'queried' ? 'The client has a question' : 'In the client’s portal';
@@ -574,6 +598,7 @@ export default function ScopeWorkspace({
           stateOf={stateOf}
           momQueue={momQueue}
           onSendToClient={sendToClient}
+          onRecordAgreement={recordAgreementFor}
           sendingId={sending}
         /></React.Fragment>
       ) : (
@@ -658,12 +683,12 @@ export default function ScopeWorkspace({
                   <div className="min-w-0">
                     <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">Scope in force</div>
                     <h2 className="text-[20px] font-bold tracking-tight text-slate-900 mt-0.5">
-                      Detailed BOQ v{vOf(v1)} {v1Approved ? 'is the signed scope, so it is read-only' : 'is waiting for the client’s signature'}
+                      Detailed BOQ v{vOf(v1)} {v1Approved ? 'is the agreed scope, so it is read-only' : 'is waiting for the client’s signature'}
                     </h2>
                     <p className="text-[12.5px] text-slate-600 mt-1">
-                      {v1.recordedApproval ? `Approved ${day(v1.recordedApproval.approvedAt)}` : v1.signedVia ? 'Signed with its scope revision' : stateOf(v1)} · {v1.reference} · <b className="text-slate-800">{inr2(v1.snapshot?.total)}</b>
+                      {v1.recordedApproval ? `Approved ${day(v1.recordedApproval.approvedAt)}` : v1.signedVia ? 'Approved with its scope revision' : stateOf(v1)} · {v1.reference} · <b className="text-slate-800">{inr2(v1.snapshot?.total)}</b>
                       {isFrozen(baseTier.boq, bankMap) ? ' · rates frozen' : ' · some rates still follow the bank'}.
-                      {v1Approved && ' To change it, start a revision: the client signs the change before anything moves, and the payment schedule follows.'}
+                      {v1Approved && ' To change it, start a revision: the client approves the change (or you record that they agreed) before anything moves, and the payment schedule follows.'}
                     </p>
                     <div className="flex flex-wrap gap-2 mt-2.5">
                       <button onClick={() => setPreviewIssue(v1)} className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11.5px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> Open v{vOf(v1)}</button>
@@ -720,7 +745,7 @@ export default function ScopeWorkspace({
                         <div className="text-[13px] font-bold text-slate-900">Scope Revision {rec.number}{rec.reference && <span className="font-medium text-slate-500"> · {rec.reference}</span>}</div>
                         <div className="text-[12px] text-slate-500">
                           {rec.v2Total ? `Revised to ${inr2(rec.v2Total)}` : 'Not issued'}
-                          {applied ? ` · applied ${day(rec.appliedAt)}` : rec.status === 'withdrawn' ? ' · discarded' : ''}
+                          {applied ? ` · applied ${day(rec.appliedAt)}` : rec.status === 'withdrawn' ? ' · discarded' : issue?.recordedApproval ? ' · agreed (recorded), ready to apply' : issue?.clientSignature ? ' · approved, ready to apply' : ''}
                           {rec.source?.fileName ? ` · ${rec.source.fileName}` : ''}
                         </div>
                       </div>
@@ -784,16 +809,22 @@ interface EditorProps {
   stateOf: (i: DocumentIssue | null) => string;
   momQueue?: ReturnType<typeof useMomScopeQueue>;
   onSendToClient?: (issueId: string, to: string[], cc: string[], base?: ProjectContext) => Promise<{ ok: boolean; error?: string }>;
+  onRecordAgreement?: RecordAgreementFn;
   sendingId?: string | null;
 }
 
+type RecordAgreementFn = (issueId: string, a: { approvedAt: number; how: AgreedVia; note: string }, to: string[], cc: string[], base?: ProjectContext) => Promise<{ ok: boolean; error?: string }>;
+
 function RevisionEditor({
   rec, base, v1, issue, bank, bankMap, ctx, setProjectContext, saveRecord, currentUser, orgName,
-  onApply, onWithdraw, onDiscard, onSign, onOpenIssue, stateOf, momQueue, onSendToClient, sendingId,
+  onApply, onWithdraw, onDiscard, onSign, onOpenIssue, stateOf, momQueue, onSendToClient, onRecordAgreement, sendingId,
 }: EditorProps) {
   const [totalsOpts, setTotalsOpts] = useState<ClientTotalsOptions>(() => defaultTotalsOptions(ctx));
   const [issueTo, setIssueTo] = useState(ctx.clientEmail || '');
   const [issueCc, setIssueCc] = useState('');
+  /* Ask for approval in the portal, or record an agreement the client has already given. */
+  const [approvalMode, setApprovalMode] = useState<'portal' | 'recorded'>('portal');
+  const [agreement, setAgreement] = useState<AgreementDraft>(() => newAgreementDraft());
   const [issueError, setIssueError] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [previewXl, setPreviewXl] = useState(false);
@@ -804,7 +835,9 @@ function RevisionEditor({
   // The "Studio only" margin panel is studio finance (lib/roleAccess).
   const finance = seesStudioFinance(useOrg().currentRole);
   const editable = rec.status === 'draft';
-  const signedByClient = !!issue?.clientSignature;
+  /* Approved either way: in the portal, signed, or agreed and recorded by the studio. */
+  const signedByClient = !!(issue?.clientSignature || issue?.recordedApproval);
+  const approval = approvalOf(issue);
   const stage = rec.status === 'draft' ? 0 : signedByClient ? 2 : 1;
 
   const [filter, setFilter] = useState<Filter>('changed');
@@ -924,7 +957,9 @@ function RevisionEditor({
     const toList = splitEmails(issueTo);
     const ccList = splitEmails(issueCc);
     const bad = [...toList, ...ccList].find(e => !EMAIL_RX.test(e));
-    if (send && bad) { setIssueError(`"${bad}" is not an email address.`); return; }
+    const recorded = approvalMode === 'recorded';
+    if ((send || (recorded && agreement.email)) && bad) { setIssueError(`"${bad}" is not an email address.`); return; }
+    if (recorded && !agreementValid(agreement)) { setIssueError('Give the date the client agreed (today or earlier).'); return; }
     /* The totals the client will see are part of the issued document, so they share its fingerprint. */
     const snapshot = { ...built.snapshot, clientTotals: totalsOpts };
     const materialSections = buildMaterialSections('scope_revision', snapshot);
@@ -948,6 +983,15 @@ function RevisionEditor({
     };
     const issuedId = issueUpd(ctx).documents!.issues.slice(-1)[0].id;
     setProjectContext(full);
+    if (recorded && onRecordAgreement) {
+      setIssuing(true);
+      setIssueError(null);
+      const r = await onRecordAgreement(issuedId, agreementOf(agreement), agreement.email ? toList : [], agreement.email ? ccList : [], full(ctx));
+      setIssuing(false);
+      if (r.ok) setIssueOpen(false);
+      else setIssueError(`Issued and recorded as agreed, but: ${r.error}. You can send it again from the revision.`);
+      return;
+    }
     if (!send || !onSendToClient) { setIssueOpen(false); return; }
     setIssuing(true);
     setIssueError(null);
@@ -1010,13 +1054,13 @@ function RevisionEditor({
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs px-5 sm:px-6 py-5">
         <div className="flex flex-col lg:flex-row lg:items-start gap-4">
           <div className="flex-1 min-w-0">
-            <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">Scope revision {rec.number} · {['Draft', 'Issued', 'Signed'][stage]}</div>
+            <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">Scope revision {rec.number} · {['Draft', 'Issued', approval?.kind === 'recorded' ? 'Agreed' : 'Approved'][stage]}</div>
             <h2 className="text-[26px] leading-tight font-bold tracking-tight text-slate-900 mt-1">Revising Detailed BOQ v{vOf(v1)}</h2>
             <p className="text-[12.5px] text-slate-500 mt-1">
-              Signed scope <b className="text-slate-800">{inr2(result.v1Total)}</b> · {v1.recordedApproval ? `approved ${day(v1.recordedApproval.approvedAt)}` : 'signed'} · {v1.reference} · started {day(rec.createdAt)}
+              Scope in force <b className="text-slate-800">{inr2(result.v1Total)}</b> · {v1.recordedApproval ? `approved ${day(v1.recordedApproval.approvedAt)}` : v1.clientSignature ? 'signed' : 'approved with its revision'} · {v1.reference} · started {day(rec.createdAt)}
             </p>
             <div className="flex items-center gap-2 mt-3 flex-wrap">
-              {['Draft', 'Issued', 'Signed', 'Applied'].map((s, i) => (
+              {['Draft', 'Issued', 'Approved', 'Applied'].map((s, i) => (
                 <React.Fragment key={s}>
                   {i > 0 && <span className={`h-px w-7 ${i <= stage ? 'bg-[#3D52A0]' : 'bg-slate-200'}`} />}
                   <span className="flex items-center gap-1.5 text-[12px] font-semibold">
@@ -1047,7 +1091,7 @@ function RevisionEditor({
               </>
             )}
             {signedByClient && rec.status === 'issued' && (
-              <button onClick={onApply} className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px] font-bold cursor-pointer flex items-center gap-1.5 shadow-sm"><Check className="w-4 h-4" /> Apply signed revision</button>
+              <button onClick={onApply} className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px] font-bold cursor-pointer flex items-center gap-1.5 shadow-sm"><Check className="w-4 h-4" /> Apply approved revision</button>
             )}
           </div>
         </div>
@@ -1056,14 +1100,17 @@ function RevisionEditor({
             {signedByClient ? <Check className="w-4 h-4 mt-0.5 shrink-0" /> : <Lock className="w-4 h-4 mt-0.5 shrink-0 text-[#3D52A0]" />}
             <span>
               {signedByClient
-                ? <>Signed by the client {day((issue!.clientSignature as any).signedAt)}. Apply it to make Detailed BOQ v{vOf(v1) + 1} the scope in force; the Payment Schedule’s next version is staged for them to confirm.</>
+                ? <>{approval?.kind === 'recorded'
+                    ? <>{approvalLabel(approval)} on {day(approval.at)}{approval.recordedBy ? `, recorded by ${approval.recordedBy}` : ''}.</>
+                    : <>{approval ? approvalLabel(approval) : 'Signed'} by {approval?.name || 'the client'} {day(approval?.at)}.</>} Apply it to make Detailed BOQ v{vOf(v1) + 1} the scope in force; the Payment Schedule’s next version is staged for them to confirm.</>
                 : <>Issued as {rec.reference} · {stateOf(issue)}. The draft is locked while it is with the client. Withdraw it to change anything.</>}
             </span>
           </div>
         )}
         {!editable && issue && onSendToClient && (
           <ClientSendPanel issue={issue} defaultTo={ctx.clientEmail || ''} studioName={orgName || 'Studio'} sending={sendingId === issue.id}
-            onSend={(to, cc) => onSendToClient(issue.id, to, cc)} />
+            onSend={(to, cc) => onSendToClient(issue.id, to, cc)}
+            onRecord={onRecordAgreement && issue.kind === 'scope_revision' ? (a, to, cc) => onRecordAgreement(issue.id, a, to, cc) : undefined} />
         )}
       </div>
 
@@ -1391,7 +1438,9 @@ function RevisionEditor({
                       <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-1.5">What the client gets</div>
                       <ul className="list-disc pl-5 text-[12.5px] text-slate-700 space-y-1">
                         <li>A short email with these totals, the Excel attached (Summary, What changed, Revised BOQ v{vOf(v1) + 1} in full with specifications, Not included), and a button to their portal.</li>
-                        <li>In the portal: the same totals, the changed items, the Excel, and one Approve for the whole revision.</li>
+                        <li>{approvalMode === 'recorded'
+                          ? 'In the portal: the same totals, the changed items and the Excel, marked as agreed. Nothing for them to sign.'
+                          : 'In the portal: the same totals, the changed items, the Excel, and one Approve for the whole revision.'}</li>
                         <li>Nothing about costs or margins. The Excel is locked.</li>
                       </ul>
                       <button
@@ -1408,22 +1457,50 @@ function RevisionEditor({
                         {previewXl ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />} Preview the Excel
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <label className="text-[11.5px] font-bold text-slate-500">Send to
-                        <input value={issueTo} onChange={e => setIssueTo(e.target.value)} placeholder="client@email.com" className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12.5px] font-normal text-slate-800" />
-                      </label>
-                      <label className="text-[11.5px] font-bold text-slate-500">CC (optional)
-                        <input value={issueCc} onChange={e => setIssueCc(e.target.value)} className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12.5px] font-normal text-slate-800" />
-                      </label>
-                    </div>
-                    <Note tone="warn">The scope changes only when they approve and you apply it; then the Payment Schedule's next version is staged for them to confirm.</Note>
+                    {onRecordAgreement && (
+                      <div>
+                        <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-1.5">How the client approves it</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {([
+                            ['portal', 'They approve it in their portal', 'One tick and their name. Recorded with the time, their login and device.'],
+                            ['recorded', 'They have already agreed', 'In a meeting, on a call or on WhatsApp. You record it; they sign nothing.'],
+                          ] as const).map(([k, t, sub]) => (
+                            <button key={k} type="button" onClick={() => { setApprovalMode(k); setIssueError(null); }}
+                              className={`text-left rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${approvalMode === k ? 'border-[#3D52A0] bg-[#3D52A0]/[0.05] ring-1 ring-[#3D52A0]/30' : 'border-slate-200 hover:bg-slate-50'}`}>
+                              <span className="flex items-center gap-2 text-[12.5px] font-bold text-slate-900">
+                                <span className={`w-3.5 h-3.5 rounded-full border-2 ${approvalMode === k ? 'border-[#3D52A0] bg-[#3D52A0] shadow-[inset_0_0_0_2px_white]' : 'border-slate-300'}`} />{t}
+                              </span>
+                              <span className="block text-[11.5px] text-slate-500 mt-0.5 pl-[22px]">{sub}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {approvalMode === 'recorded' && <AgreementFields value={agreement} onChange={setAgreement} />}
+                    {(approvalMode === 'portal' || agreement.email) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label className="text-[11.5px] font-bold text-slate-500">Send to
+                          <input value={issueTo} onChange={e => setIssueTo(e.target.value)} placeholder="client@email.com" className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12.5px] font-normal text-slate-800" />
+                        </label>
+                        <label className="text-[11.5px] font-bold text-slate-500">CC (optional)
+                          <input value={issueCc} onChange={e => setIssueCc(e.target.value)} className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12.5px] font-normal text-slate-800" />
+                        </label>
+                      </div>
+                    )}
+                    {approvalMode === 'recorded'
+                      ? <Note tone="info">It is recorded as agreed on the date you give, by you. You can apply it straight away; the Payment Schedule's next version is then staged for them to confirm.</Note>
+                      : <Note tone="warn">The scope changes only when they approve and you apply it; then the Payment Schedule's next version is staged for them to confirm.</Note>}
                     {issueError && <Note tone="block">{issueError}</Note>}
                   </div>
-                  <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+                  <div className="px-6 py-4 border-t border-slate-100 flex flex-wrap justify-end gap-2">
                     <button onClick={() => { setIssueOpen(false); setPreview(built.snapshot); }} className="px-3.5 py-2 rounded-xl text-[12.5px] font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Preview first</button>
                     <button onClick={() => setIssueOpen(false)} className="px-3.5 py-2 rounded-xl text-[12.5px] font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Back to the draft</button>
+                    {approvalMode === 'recorded' ? (
+                      <button onClick={() => doIssue(false)} disabled={built.drift > 0.01 || blocked || issuing || !agreementValid(agreement)} className="px-4 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:bg-slate-300 text-white text-[12.5px] font-bold cursor-pointer flex items-center gap-1.5">{issuing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Issue &amp; record as agreed</button>
+                    ) : <>
                     <button onClick={() => doIssue(false)} disabled={built.drift > 0.01 || blocked || issuing} className="px-3.5 py-2 rounded-xl border border-slate-200 text-[12.5px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 cursor-pointer">Issue only, send later</button>
                     <button onClick={() => doIssue(true)} disabled={built.drift > 0.01 || blocked || issuing} className="px-4 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:bg-slate-300 text-white text-[12.5px] font-bold cursor-pointer flex items-center gap-1.5">{issuing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />} Issue &amp; send to client</button>
+                    </>}
                   </div>
                 </>
               );
@@ -1446,6 +1523,42 @@ function RevisionEditor({
 
 const splitEmails = (s: string) => s.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean);
 const EMAIL_RX = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+
+/* The client's agreement as the studio records it: when, how, a note, and whether to email them the Excel. */
+interface AgreementDraft { on: string; how: AgreedVia; note: string; email: boolean }
+const newAgreementDraft = (): AgreementDraft => ({ on: isoDay(Date.now()), how: 'meeting', note: '', email: true });
+const agreementValid = (a: AgreementDraft) => /^\d{4}-\d{2}-\d{2}$/.test(a.on) && a.on <= isoDay(Date.now());
+/* Today means now (never later than the moment it is recorded); an earlier day, midday. */
+const agreementOf = (a: AgreementDraft) => ({
+  approvedAt: a.on === isoDay(Date.now()) ? Date.now() : new Date(`${a.on}T12:00:00`).getTime(),
+  how: a.how,
+  note: a.note.trim(),
+});
+
+const AgreementFields: React.FC<{ value: AgreementDraft; onChange: (a: AgreementDraft) => void }> = ({ value: a, onChange }) => (
+  <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-3 space-y-2.5">
+    <div className="grid grid-cols-1 sm:grid-cols-[150px_minmax(0,1fr)] gap-2">
+      <label className="text-[11.5px] font-bold text-slate-500">Agreed on
+        <input type="date" value={a.on} max={isoDay(Date.now())} onChange={e => onChange({ ...a, on: e.target.value })} className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12.5px] font-normal text-slate-800 bg-white" />
+      </label>
+      <div className="text-[11.5px] font-bold text-slate-500">How
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {AGREED_VIA.map(v => (
+            <button key={v.value} type="button" onClick={() => onChange({ ...a, how: v.value })}
+              className={`px-2.5 py-1.5 rounded-lg border text-[12px] font-semibold cursor-pointer ${a.how === v.value ? 'border-[#3D52A0] bg-[#3D52A0] text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>{v.label}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+    <label className="block text-[11.5px] font-bold text-slate-500">Note (optional, shown on the approval record)
+      <input value={a.note} onChange={e => onChange({ ...a, note: e.target.value })} placeholder="e.g. Agreed at the site visit; confirmed on WhatsApp the same day." className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12.5px] font-normal text-slate-800 bg-white" />
+    </label>
+    <label className="flex items-center gap-2 text-[12.5px] text-slate-700 cursor-pointer select-none">
+      <input type="checkbox" checked={a.email} onChange={e => onChange({ ...a, email: e.target.checked })} className="w-4 h-4 accent-[#3D52A0]" />
+      Email them the Excel for their records
+    </label>
+  </div>
+);
 
 /** The Excel, as the client will get it. */
 const ExcelButton: React.FC<{ issue: DocumentIssue; studioName: string; label?: string }> = ({ issue, studioName, label = 'Download Excel' }) => {
@@ -1477,12 +1590,14 @@ const ExcelButton: React.FC<{ issue: DocumentIssue; studioName: string; label?: 
 const Trail: React.FC<{ issue: DocumentIssue }> = ({ issue }) => {
   const i: any = issue;
   const dl: { at: number; format: string }[] = (i.clientDownloads || []).filter((x: any) => x.format === 'excel');
-  const d: any = issue.clientSignature;
+  const a = approvalOf(issue);
   const when = (t?: number | string | null) => (t ? new Date(t).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
   const rows: { done: boolean; label: string; sub?: string; at?: string }[] = [
     { done: !!i.sentAt, label: 'Sent to the client', sub: (i.sentTo || []).length ? (i.sentTo || []).join(', ') : 'Portal only', at: when(i.sentAt) },
     { done: dl.length > 0, label: 'Excel downloaded', sub: dl.length ? `From the portal, ${dl.length} time${dl.length === 1 ? '' : 's'}` : undefined, at: when(dl[dl.length - 1]?.at) },
-    { done: !!d, label: d?.witnessedBy ? 'Approved in person' : 'Approved in the portal', sub: d ? d.signatoryName : undefined, at: when(d?.signedAt) },
+    a?.kind === 'recorded'
+      ? { done: true, label: approvalLabel(a), sub: a.recordedBy ? `by ${a.recordedBy}` : undefined, at: day(a.at) }
+      : { done: !!a, label: a ? approvalLabel(a) : 'Approved in the portal', sub: a?.name || undefined, at: when(a?.at) },
   ];
   return (
     <ol className="mt-3 border-t border-slate-200/70 pt-2.5 space-y-1.5">
@@ -1503,13 +1618,33 @@ const ClientSendPanel: React.FC<{
   studioName: string;
   sending: boolean;
   onSend: (to: string[], cc: string[]) => Promise<{ ok: boolean; error?: string }>;
-}> = ({ issue, defaultTo, studioName, sending, onSend }) => {
+  /** Record that the client has already agreed, instead of waiting for their approval. */
+  onRecord?: (a: { approvedAt: number; how: AgreedVia; note: string }, to: string[], cc: string[]) => Promise<{ ok: boolean; error?: string }>;
+}> = ({ issue, defaultTo, studioName, sending, onSend, onRecord }) => {
   const [to, setTo] = useState(defaultTo);
   const [cc, setCc] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [agreement, setAgreement] = useState<AgreementDraft>(() => newAgreementDraft());
   const d: any = issue.clientSignature;
+  const rec = issue.recordedApproval;
   const sentAt = (issue as any).sentAt as number | undefined;
   const sentTo = ((issue as any).sentTo || []) as string[];
+  if (rec && !d) {
+    const a = approvalOf(issue)!;
+    return (
+      <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-3 flex flex-wrap items-center gap-3">
+        <Check className="w-4 h-4 text-emerald-700 shrink-0" />
+        <div className="flex-1 min-w-[220px] text-[12.5px] text-emerald-950">
+          <b>{approvalLabel(a)}</b> on {day(a.at)}{a.recordedBy ? ` · recorded by ${a.recordedBy}` : ''}
+          {a.note ? <span className="block text-emerald-900/80 mt-0.5">“{a.note}”</span> : null}
+        </div>
+        <ExcelButton issue={issue} studioName={studioName} label="Agreed Excel" />
+        <ApprovalRecordButton issue={issue} studioName={studioName} />
+        <div className="basis-full"><Trail issue={issue} /></div>
+      </div>
+    );
+  }
   if (d) {
     return (
       <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-3 flex flex-wrap items-center gap-3">
@@ -1534,6 +1669,38 @@ const ClientSendPanel: React.FC<{
     const r = await onSend(toList, ccList);
     if (!r.ok) setError(r.error || 'It could not be sent.');
   };
+  const record = async () => {
+    if (!onRecord) return;
+    const toList = agreement.email ? splitEmails(to) : [];
+    const ccList = agreement.email ? splitEmails(cc) : [];
+    const bad = [...toList, ...ccList].find(e => !EMAIL_RX.test(e));
+    if (bad) { setError(`"${bad}" is not an email address.`); return; }
+    if (!agreementValid(agreement)) { setError('Give the date the client agreed (today or earlier).'); return; }
+    setError(null);
+    const r = await onRecord(agreementOf(agreement), toList, ccList);
+    if (!r.ok) setError(`Recorded as agreed, but: ${r.error || 'the portal was not updated'}.`);
+  };
+  if (recording && onRecord) {
+    return (
+      <div className="mt-4 rounded-xl border border-[#3D52A0]/20 bg-[#3D52A0]/[0.04] px-3.5 py-3 space-y-2.5">
+        <div className="text-[12.5px] text-slate-700"><b>Record the client's agreement.</b> Use this when they agreed to this revision in person, on a call or on WhatsApp and will not approve it in the portal. Their portal shows it as agreed, with nothing to sign.</div>
+        <AgreementFields value={agreement} onChange={setAgreement} />
+        {agreement.email && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input value={to} onChange={e => setTo(e.target.value)} placeholder="client@email.com" aria-label="Send to" className="flex-1 min-w-[200px] border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12.5px] bg-white" />
+            <input value={cc} onChange={e => setCc(e.target.value)} placeholder="CC (optional)" aria-label="CC" className="w-[180px] border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12.5px] bg-white" />
+          </div>
+        )}
+        {error && <Note tone="block">{error}</Note>}
+        <div className="flex flex-wrap justify-end gap-2">
+          <button onClick={() => { setRecording(false); setError(null); }} className="px-3.5 py-2 rounded-xl text-[12px] font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancel</button>
+          <button onClick={record} disabled={sending || !agreementValid(agreement)} className="px-3.5 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-60 text-white text-[12px] font-bold cursor-pointer flex items-center gap-1.5">
+            {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Record as agreed
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="mt-4 rounded-xl border border-[#3D52A0]/20 bg-[#3D52A0]/[0.04] px-3.5 py-3 space-y-2.5">
       <div className="text-[12.5px] text-slate-700">
@@ -1552,6 +1719,11 @@ const ClientSendPanel: React.FC<{
       {!splitEmails(to).length && <p className="text-[11.5px] text-slate-500">{sentAt ? 'With no email, sending again only refreshes their portal.' : 'With no email, it is published to the portal only.'}</p>}
       {error && <Note tone="block">{error}</Note>}
       {sentAt && <Trail issue={issue} />}
+      {onRecord && (
+        <button onClick={() => { setRecording(true); setError(null); }} className="text-[12px] font-bold text-[#3D52A0] hover:underline cursor-pointer">
+          Client already agreed in person or on WhatsApp? Record it instead
+        </button>
+      )}
     </div>
   );
 };

@@ -2356,6 +2356,8 @@ export interface DocumentIssue {
         recordedBy: string;
         recordedAt: number;
         note: string;
+        /** How the client agreed, for a scope revision: meeting, call, whatsapp, email, other. */
+        how?: string;
     } | null;
 
     /**

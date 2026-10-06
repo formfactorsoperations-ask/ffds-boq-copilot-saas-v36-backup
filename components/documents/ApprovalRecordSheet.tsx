@@ -3,6 +3,7 @@ import { Download, Loader2 } from 'lucide-react';
 import type { DocumentIssue } from '../../types';
 import { clientTotals } from '../../lib/scopeTotals';
 import { downloadElementAsPdf, pdfFilename, PDF_CONTENT_WIDTH_PX } from '../../lib/documentPdf';
+import { agreedViaPhrase, approvalOf } from '../../lib/scopeAgreement';
 
 /*
   THE APPROVAL RECORD — one page, after the client approves in the portal.
@@ -18,34 +19,56 @@ const inr = (n?: number | null) =>
 const when = (iso?: string | number | null) =>
   iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }) : '—';
 
+const day = (t?: number | null) => (t ? new Date(t).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '—');
+
 export function approvalTitle(issue: DocumentIssue): string {
   const s: any = issue.snapshot || {};
-  return issue.kind === 'scope_revision' ? `Scope Revision ${s.number ?? issue.version} approved` : `Detailed BOQ v${s.version ?? issue.version} approved`;
+  const verb = !issue.clientSignature && issue.recordedApproval ? 'agreed' : 'approved';
+  return issue.kind === 'scope_revision' ? `Scope Revision ${s.number ?? issue.version} ${verb}` : `Detailed BOQ v${s.version ?? issue.version} ${verb}`;
 }
 
 export function ApprovalRecordSheet({ issue, studioName, studioAddress }: { issue: DocumentIssue; studioName: string; studioAddress?: string | null }) {
   const s: any = issue.snapshot || {};
   const d: any = issue.clientSignature || {};
+  const a = approvalOf(issue);
+  const recorded = a?.kind === 'recorded';
   const revision = issue.kind === 'scope_revision';
   const before = revision ? s.v1?.total : null;
   const after = revision ? s.v2?.total : s.total;
   const rows = clientTotals(before ?? after ?? 0, after ?? 0, s.clientTotals);
-  const kv: [string, React.ReactNode][] = [
-    ['Project', `${s.projectName || ''}${s.location ? `, ${s.location}` : ''}`],
-    ['Client', s.clientName && s.clientName !== 'Client' ? s.clientName : '—'],
-    ['Approved by', `${d.signatoryName || '—'}${d.signatoryEmail ? ` (${d.signatoryEmail})` : ''}`],
-    ['When', when(d.signedAt)],
-    ['How', d.witnessedBy
-      ? `Approved in person on a studio device, taken by ${d.witnessedBy}`
-      : d.signatureType === 'portal_approval'
-        ? 'Approved in the client portal, signed in to the account above'
-        : 'Signed'],
-    ...(revision
-      ? ([['Replaces', `${s.v1?.reference || '—'} · ${inr(s.v1?.total)}`], ['New scope', `${s.v2?.reference || '—'} · ${inr(s.v2?.total)}`]] as [string, React.ReactNode][])
-      : ([['Scope', `${s.reference || issue.reference} · ${inr(s.total)}`]] as [string, React.ReactNode][])),
-    ['Document', `${issue.reference}, issued ${when(issue.issuedAt)}`],
-    ['From', `${d.ipAddress && d.ipAddress !== 'unknown' ? d.ipAddress : 'address not recorded'}${d.userAgent ? ` · ${String(d.userAgent).slice(0, 90)}` : ''}`],
-  ];
+  const client = s.clientName && s.clientName !== 'Client' ? s.clientName : '—';
+  const scope = (revision
+    ? [['Replaces', `${s.v1?.reference || '—'} · ${inr(s.v1?.total)}`], ['New scope', `${s.v2?.reference || '—'} · ${inr(s.v2?.total)}`]]
+    : [['Scope', `${s.reference || issue.reference} · ${inr(s.total)}`]]) as [string, React.ReactNode][];
+  /*
+    A recorded agreement is the studio's statement that the client agreed, not
+    the client's own act: it says so, and names who recorded it and when.
+  */
+  const kv: [string, React.ReactNode][] = recorded
+    ? [
+        ['Project', `${s.projectName || ''}${s.location ? `, ${s.location}` : ''}`],
+        ['Client', client],
+        ['Agreed on', day(a!.at)],
+        ['How', `Agreed with the client${agreedViaPhrase(a!.how) ? ` ${agreedViaPhrase(a!.how)}` : ''}; the client did not sign or approve it in the portal`],
+        ['Recorded by', `${a!.recordedBy || '—'}, ${when(a!.recordedAt)}`],
+        ...(a!.note ? ([['Note', a!.note]] as [string, React.ReactNode][]) : []),
+        ...scope,
+        ['Document', `${issue.reference}, issued ${when(issue.issuedAt)}`],
+      ]
+    : [
+        ['Project', `${s.projectName || ''}${s.location ? `, ${s.location}` : ''}`],
+        ['Client', client],
+        ['Approved by', `${d.signatoryName || '—'}${d.signatoryEmail ? ` (${d.signatoryEmail})` : ''}`],
+        ['When', when(d.signedAt)],
+        ['How', d.witnessedBy
+          ? `Approved in person on a studio device, taken by ${d.witnessedBy}`
+          : d.signatureType === 'portal_approval'
+            ? 'Approved in the client portal, signed in to the account above'
+            : 'Signed'],
+        ...scope,
+        ['Document', `${issue.reference}, issued ${when(issue.issuedAt)}`],
+        ['From', `${d.ipAddress && d.ipAddress !== 'unknown' ? d.ipAddress : 'address not recorded'}${d.userAgent ? ` · ${String(d.userAgent).slice(0, 90)}` : ''}`],
+      ];
   return (
     <div style={{ width: PDF_CONTENT_WIDTH_PX, fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", color: '#141A33', background: '#fff', padding: '8px 4px', fontSize: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #141A33', paddingBottom: 8, gap: 12 }}>
@@ -54,7 +77,7 @@ export function ApprovalRecordSheet({ issue, studioName, studioAddress }: { issu
       </div>
       <h3 style={{ fontSize: 20, fontWeight: 800, margin: '18px 0 10px' }}>{approvalTitle(issue)}</h3>
       <span style={{ display: 'inline-block', border: '2px solid #0F7A55', color: '#0F7A55', borderRadius: 8, padding: '5px 12px', fontWeight: 800, letterSpacing: '0.06em', fontSize: 11.5, textTransform: 'uppercase' }}>
-        {d.witnessedBy ? 'Approved in person' : d.signatureType === 'portal_approval' ? 'Approved in portal' : 'Approved'}
+        {recorded ? 'Agreed · recorded by the studio' : d.witnessedBy ? 'Approved in person' : d.signatureType === 'portal_approval' ? 'Approved in portal' : 'Approved'}
       </span>
       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16 }}>
         <tbody>
@@ -69,9 +92,9 @@ export function ApprovalRecordSheet({ issue, studioName, studioAddress }: { issu
       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16, fontVariantNumeric: 'tabular-nums' }}>
         <thead>
           <tr style={{ background: '#3D52A0', color: '#fff' }}>
-            <th style={{ textAlign: 'left', padding: '6px 8px' }}>Totals approved</th>
+            <th style={{ textAlign: 'left', padding: '6px 8px' }}>{recorded ? 'Totals agreed' : 'Totals approved'}</th>
             {revision && <th style={{ textAlign: 'right', padding: '6px 8px' }}>Before</th>}
-            <th style={{ textAlign: 'right', padding: '6px 8px' }}>{revision ? 'Approved' : 'Amount'}</th>
+            <th style={{ textAlign: 'right', padding: '6px 8px' }}>{revision ? (recorded ? 'Agreed' : 'Approved') : 'Amount'}</th>
             {revision && <th style={{ textAlign: 'right', padding: '6px 8px' }}>Change</th>}
           </tr>
         </thead>
@@ -91,8 +114,10 @@ export function ApprovalRecordSheet({ issue, studioName, studioAddress }: { issu
         {d.docketHash ? <><br />Approval record · {d.docketHash}</> : null}
       </div>
       <p style={{ fontSize: 11, color: '#5B6382', marginTop: 14, lineHeight: 1.5 }}>
-        The Excel workbook issued with this document is the approved scope; its fingerprint is printed on its Summary sheet.
-        This page records the approval and is valid without a signature.{studioAddress ? ` ${studioName}, ${studioAddress}.` : ''}
+        The Excel workbook issued with this document is the {recorded ? 'agreed' : 'approved'} scope; its fingerprint is printed on its Summary sheet.
+        {recorded
+          ? ` This page records the studio's account of the client's agreement.`
+          : ' This page records the approval and is valid without a signature.'}{studioAddress ? ` ${studioName}, ${studioAddress}.` : ''}
       </p>
     </div>
   );
@@ -110,7 +135,7 @@ export function ApprovalRecordButton({ issue, studioName, studioAddress, classNa
         filename: pdfFilename(issue.reference, 'Approval record'),
         title: approvalTitle(issue),
         studioName,
-        ribbon: { label: 'Approved', tone: 'approved' },
+        ribbon: { label: !issue.clientSignature && issue.recordedApproval ? 'Agreed' : 'Approved', tone: 'approved' },
       });
     } catch (e) {
       console.error('Approval record PDF failed', e);

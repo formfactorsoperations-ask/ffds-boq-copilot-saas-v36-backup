@@ -244,13 +244,13 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                               )}
                               {row.issue?.recordedApproval && (
                                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
-                                  Approved{' '}
+                                  {row.kind === 'scope_revision' ? 'Agreed' : 'Approved'}{' '}
                                   {new Date(row.issue.recordedApproval.approvedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                                 </span>
                               )}
                               {row.issue?.signedVia && (
                                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
-                                  Signed with its scope revision
+                                  Approved with its scope revision
                                 </span>
                               )}
                             </div>
@@ -297,7 +297,8 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                           )}
 
                           {/* Approved in the portal: its record is the one-page approval record, not a signature certificate. */}
-                          {row.readable && (row.issue as any)?.clientSignature?.signatureType === 'portal_approval' && (
+                          {row.readable && ((row.issue as any)?.clientSignature?.signatureType === 'portal_approval'
+                            || (row.kind === 'scope_revision' && row.issue?.recordedApproval && !row.issue?.clientSignature)) && (
                             <ApprovalRecordButton issue={row.issue as any} studioName={studioName} />
                           )}
                           {row.readable && row.kind && (row.issue as any)?.clientSignature?.signatureType !== 'portal_approval' && (

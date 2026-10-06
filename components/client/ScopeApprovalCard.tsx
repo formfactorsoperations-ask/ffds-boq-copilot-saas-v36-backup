@@ -4,6 +4,7 @@ import type { DocumentIssue } from '../../types';
 import { clientTotals, totalsNote } from '../../lib/scopeTotals';
 import { workbookForIssue, downloadWorkbook } from '../../lib/scopeWorkbook';
 import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
+import { agreedViaPhrase } from '../../lib/scopeAgreement';
 
 /*
   APPROVE IN THE PORTAL — the whole Scope Revision (or the first Detailed BOQ)
@@ -14,6 +15,11 @@ import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
   approve. The server records the approval against their login (see the
   approveIssue action), so nothing on this card can fake who or when.
 */
+
+/* The portal listens for this and records it for the studio (client sessions only). */
+export const reportDownload = (issueId: string, format: 'excel' | 'record') => {
+  try { window.dispatchEvent(new CustomEvent('scope-document-downloaded', { detail: { issueId, format } })); } catch { /* ignore */ }
+};
 
 const inr = (n: number) => `₹${Math.round(Number(n) || 0).toLocaleString('en-IN')}`;
 const sgn = (n: number) => {
@@ -53,7 +59,9 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
           ? [{ room: r.name, name: 'Whole room, compared as a section', tag: 'SECTION', change: r.change }]
           : (r.lines || []).map((l: any) => ({ room: r.name, name: l.now || l.name, tag: l.tag, change: l.change })))
     : [];
-  const approved = !!issue.clientSignature;
+  /* Agreed with the studio and recorded by them counts too: nothing for the client to do. */
+  const agreed = !issue.clientSignature && issue.recordedApproval ? issue.recordedApproval : null;
+  const approved = !!(issue.clientSignature || agreed);
   const d: any = issue.clientSignature || {};
 
   const [ack, setAck] = useState(false);
@@ -68,6 +76,7 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
     try {
       const { buf, filename } = await workbookForIssue(issue, studioName);
       downloadWorkbook(buf, filename);
+      reportDownload(issue.id, 'excel');
     } catch (e) {
       console.error(e);
       setError('The Excel could not be made just now. Please try again.');
@@ -99,7 +108,7 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
     <section className={`rounded-3xl border bg-white shadow-2xs overflow-hidden ${approved ? 'border-emerald-200' : 'border-[#3D52A0]/30'}`} aria-labelledby={`approve-${issue.id}`}>
       <div className="px-5 sm:px-6 pt-5 pb-4 flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100">
         <div>
-          <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">{approved ? 'Approved' : 'For your approval'}</div>
+          <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">{agreed ? 'Agreed' : approved ? 'Approved' : 'For your approval'}</div>
           <h3 id={`approve-${issue.id}`} className="text-[19px] font-bold tracking-tight text-slate-900 mt-0.5">{title}</h3>
         </div>
         <span className="text-[12px] text-slate-500">{issue.reference} · issued {day(issue.issuedAt)}</span>
@@ -108,7 +117,7 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
       <div className="px-5 sm:px-6 py-5 space-y-5">
         <div className={`grid gap-2.5 ${revision ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
           {(revision
-            ? [['Signed', inr(before || 0), ''], ['Revised', inr(after), ''], ['Change', sgn(after - (before || 0)), after - (before || 0) > 0.5 ? 'text-rose-700' : after - (before || 0) < -0.5 ? 'text-emerald-700' : '']]
+            ? [['Current', inr(before || 0), ''], ['Revised', inr(after), ''], ['Change', sgn(after - (before || 0)), after - (before || 0) > 0.5 ? 'text-rose-700' : after - (before || 0) < -0.5 ? 'text-emerald-700' : '']]
             : [['Your BOQ', inr(after), ''], ['Items', String(s.lineCount ?? ''), '']]
           ).map(([k, v, c]) => (
             <div key={k} className="rounded-2xl bg-slate-50 px-4 py-3">
@@ -176,7 +185,9 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
           <div className="rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3.5 text-[13px] text-emerald-900 flex gap-2.5">
             <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-700" />
             <div>
-              <b>Approved by {d.signatoryName || 'you'}{d.signedAt ? ` on ${new Date(d.signedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}.</b>
+              {agreed
+                ? <b>Agreed with {studioName}{agreedViaPhrase(agreed.how) ? ` ${agreedViaPhrase(agreed.how)}` : ''} on {day(agreed.approvedAt)}. Nothing for you to sign.</b>
+                : <b>Approved by {d.signatoryName || 'you'}{d.signedAt ? ` on ${new Date(d.signedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}.</b>}
               <div className="text-emerald-800 mt-0.5">{revision ? 'The revised BOQ is your scope once the studio applies it, and your payment schedule follows.' : 'This BOQ is your scope.'}</div>
             </div>
           </div>
@@ -215,7 +226,7 @@ export function ExcelDownloadButton({ issue, studioName, label = 'Excel', classN
       type="button"
       onClick={async () => {
         setBusy(true);
-        try { const { buf, filename } = await workbookForIssue(issue, studioName); downloadWorkbook(buf, filename); }
+        try { const { buf, filename } = await workbookForIssue(issue, studioName); downloadWorkbook(buf, filename); reportDownload(issue.id, 'excel'); }
         catch (e) { console.error(e); alert('The Excel could not be made just now. Please try again.'); }
         finally { setBusy(false); }
       }}
