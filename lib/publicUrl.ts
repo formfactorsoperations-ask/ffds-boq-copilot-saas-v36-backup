@@ -11,7 +11,8 @@
 const PUBLISHED_APP_URL: string =
   ((import.meta as any).env?.VITE_PUBLIC_APP_URL as string) ||
   ((import.meta as any).env?.VITE_APP_DOMAIN as string) ||
-  'https://saas-model-ffds-boq-copilot-v36-1.ai.studio';
+  // Moved on 6 Oct 2026; the old saas-model-ffds-boq-copilot-v36-1.ai.studio no longer answers.
+  'https://tervaro-app-studiodesk.ai.studio';
 
 const isPrivateHost = (host: string) =>
   host === 'localhost' ||
