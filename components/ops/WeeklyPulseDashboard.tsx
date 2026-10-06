@@ -22,7 +22,7 @@ import {
   ChevronLeft,
   X,
   MapPin
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { formatINR } from '../../lib/utils';
 
 interface WeeklyPulseDashboardProps {

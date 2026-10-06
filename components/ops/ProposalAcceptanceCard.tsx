@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ProjectContext, ProposalTier } from '../../types';
 import { formatINR } from '../../lib/utils';
-import { CheckCircle2, X } from 'lucide-react';
+import { CheckCircle2, X } from '@/lib/lucide-shim';
 import {
   AcceptanceChannel,
   CHANNEL_LABEL,

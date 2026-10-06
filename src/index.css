@@ -1,5 +1,9 @@
 @import "tailwindcss";
 @import "./typography.css";
+@import "./depth3d.css";
+@import "./print.css";
+@import "../components/projectHeader/projectHeader.css";
+@import "../components/projectHome/projectHome.css";
 
 /* Tailwind v4 reads its theme from CSS, not tailwind.config.js -- there is no
    @config directive here, so the fontFamily block in that file was never being
@@ -279,6 +283,10 @@ body {
     0 0 0 1px rgba(34,211,238,.55),
     0 6px 16px rgba(61, 82, 160,.34),
     0 0 22px rgba(34,211,238,.28);
+}
+.nav-pill {
+  background-color: #334486 !important;
+  background-image: linear-gradient(180deg, #4C65B5 0%, #334486 100%) !important;
 }
 .hud-reticle::before,
 .hud-reticle::after {

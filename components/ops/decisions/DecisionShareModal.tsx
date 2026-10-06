@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Share2, X, Copy, Check } from 'lucide-react';
+import { Share2, X, Copy, Check } from '@/lib/lucide-shim';
 
 interface Props {
   /** Only for the heading — the caller has already formatted everything else. */

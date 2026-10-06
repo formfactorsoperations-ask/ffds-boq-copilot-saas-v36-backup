@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Lock, FileSpreadsheet, Plus, FileText, PenLine, X, Check, AlertTriangle, Search, Repeat2, Trash2, Undo2,
   Eye, Play, ShieldCheck, Layers, Percent, ListChecks, MessageSquareText, Pencil, Upload, Sparkles, Mail, Loader2,
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { DocumentIssue, FinancialConfig, Item, ProjectContext, ProposalTier } from '../../types';
 import { buildBankMap, boqTotal } from '../../lib/boqPricing';
 import {

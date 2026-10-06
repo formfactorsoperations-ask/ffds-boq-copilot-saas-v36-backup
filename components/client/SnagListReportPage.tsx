@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ProjectContext, SnagItem } from '../../types';
 import { useOrg } from '../../contexts/OrgContext';
-import { Download, Printer, ArrowLeft, ClipboardList, CheckCircle } from 'lucide-react';
+import { Download, Printer, ArrowLeft, ClipboardList, CheckCircle } from '@/lib/lucide-shim';
 import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 

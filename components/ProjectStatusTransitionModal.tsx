@@ -22,7 +22,7 @@ import {
   History,
   Info,
   Pin
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { db } from '../services/dbService';
 
 export interface StatusDetail {

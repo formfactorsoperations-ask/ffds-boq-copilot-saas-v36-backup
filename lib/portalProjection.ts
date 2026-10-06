@@ -109,6 +109,10 @@ export interface PortalStudio {
   legalName?: string;
   signatoryName?: string;
   signatoryTitle?: string;
+  /* The portal's header, so a client never reads the studio record (and its team list). */
+  tagline?: string;
+  about?: string;
+  themeColor?: string;
   bankDetails?: {
     accountName?: string;
     bankName?: string;
@@ -352,6 +356,9 @@ export function buildPortalView(
         legalName: studio.legalName,
         signatoryName: studio.signatoryName,
         signatoryTitle: studio.signatoryTitle,
+        tagline: studio.tagline,
+        about: studio.about,
+        themeColor: studio.themeColor,
       } : undefined,
 
       // The scope, sell rates only. See lib/clientBoq for what is stripped.

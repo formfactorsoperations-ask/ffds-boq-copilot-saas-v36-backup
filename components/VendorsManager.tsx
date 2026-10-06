@@ -37,7 +37,7 @@ import {
   Tag,
   Share2,
   RefreshCw
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {

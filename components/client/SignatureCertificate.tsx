@@ -16,7 +16,7 @@
 
 import React, { useRef } from 'react';
 import { DocumentIssue, SignoffRecord, ReadingEvidence } from '../../types';
-import { X, Printer, ShieldCheck, FileCheck, AlertCircle } from 'lucide-react';
+import { X, Printer, ShieldCheck, FileCheck, AlertCircle } from '@/lib/lucide-shim';
 
 /**
  * How a document was approved when this issue carries no signature of its own.

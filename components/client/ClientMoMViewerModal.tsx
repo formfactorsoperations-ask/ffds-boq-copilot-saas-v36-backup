@@ -16,7 +16,7 @@ import {
     AlertCircle,
     Building2,
     Check
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { MOM } from '../../types';
 
 interface ClientMoMViewerModalProps {

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Search, X } from 'lucide-react';
+import { Check, Search, X } from '@/lib/lucide-shim';
 import { useProjectDirectory, useProjectTeam, initialsOf, colourOf } from '../../services/projectTeam';
 import './projectHeader.css';
 

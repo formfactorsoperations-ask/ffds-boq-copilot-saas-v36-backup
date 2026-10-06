@@ -7,7 +7,7 @@ import {
   History, Clock, Database, Download, RefreshCw, CheckCircle2, AlertTriangle,
   HardDriveDownload, HardDriveUpload, Cloud, HardDrive, Search, ShieldCheck, ShieldAlert,
   ChevronDown, X,
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 // ============================================================================
 // ProjectHistory — two views over one idea: "trust what the DB holds".

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Wallet, AlertTriangle, ChevronRight } from '@/lib/lucide-shim';
 import { FullProjectData, PurchaseOrder } from '../../types';
 import { db } from '../../services/dbService';
 import { formatINR } from '../../lib/utils';

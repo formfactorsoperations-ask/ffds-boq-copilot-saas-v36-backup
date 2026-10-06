@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { PurchaseOrder, POPayment, POStatus } from '../types';
 import { db } from '../services/dbService';
 import { generateId } from '../lib/utils';
-import { ChevronDown, Trash2, ShieldAlert, Plus, Landmark, Truck, FileText, Check } from 'lucide-react';
+import { ChevronDown, Trash2, ShieldAlert, Plus, Landmark, Truck, FileText, Check } from '@/lib/lucide-shim';
 import DateField from './ui/DateField';
 
 interface OrdersCardProps {

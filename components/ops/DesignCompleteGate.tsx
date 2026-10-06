@@ -10,7 +10,7 @@ import {
   ArrowRight, RotateCcw, AlertTriangle, X, Zap, Link2, PenLine, FileText,
   Compass, Layers, Sliders, Check, Eye, HelpCircle, HardHat, FileCheck, RefreshCw,
   FolderLock
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface Props {
   projectContext: ProjectContext;

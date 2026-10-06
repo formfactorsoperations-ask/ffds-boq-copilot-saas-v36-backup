@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { Gauge, Dot } from '../ui/HudBits';
-import { Search, X } from 'lucide-react';
+import { Search, X } from '@/lib/lucide-shim';
 
 export interface SettingsHeaderProps {
   title: string;

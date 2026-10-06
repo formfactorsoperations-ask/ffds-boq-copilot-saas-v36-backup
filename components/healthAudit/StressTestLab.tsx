@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { formatCurrency, formatINR } from '../../lib/utils';
-import { Activity, TrendingDown, DollarSign, AlertCircle, Percent, RefreshCw, Sparkles, Scale } from 'lucide-react';
+import { Activity, TrendingDown, DollarSign, AlertCircle, Percent, RefreshCw, Sparkles, Scale } from '@/lib/lucide-shim';
 
 interface StressTestLabProps {
   totalSell: number;

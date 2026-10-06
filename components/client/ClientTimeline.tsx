@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { TimelinePhase, ProposalContent } from '../../types';
-import { Calendar } from 'lucide-react';
+import { Calendar } from '@/lib/lucide-shim';
 
 interface ClientTimelineProps {
     timelinePhases: TimelinePhase[];

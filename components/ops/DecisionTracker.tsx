@@ -26,7 +26,7 @@ import {
     TrendingUp,
     User,
     Mail
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     saveDecision, 

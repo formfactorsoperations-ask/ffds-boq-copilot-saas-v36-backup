@@ -1,0 +1,78 @@
+rules_version = '2';
+
+/*
+  FILES: drawings, site photos, deliverables, floor plans and branding.
+
+  These rules were never in the project, so whatever the console held decided
+  who could read and write the studio's files. Now: the staff of the studio
+  that owns the file, checked against their profile in Firestore -- the same
+  profile every database rule reads, written only by the server. A Viewer
+  looks but does not upload. Signing in with Google is not enough.
+
+  Clients never read through here: the portal shows a file by its download
+  link, which carries its own token, and the studio decides which links reach
+  the portal copy.
+
+  Paths in use:
+    studios/{tenantId}/plans/...                      services/planStorage.ts
+    studios/{tenantId}/branding/...                   services/planStorage.ts
+    studios/{tenantId}/projects/{id}/deliverables/... components/studio/StepDeliverableChecklist.tsx
+    projects/{projectId}/decisions/...                components/ops/DecisionTracker.tsx
+    decisions/{projectId}/...                         components/ops/DecisionTracker.tsx
+*/
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function profilePath() {
+      return /databases/(default)/documents/users/$(request.auth.uid);
+    }
+    function profile() {
+      return firestore.get(profilePath()).data;
+    }
+
+    function isPlatformOwner() {
+      return request.auth != null
+        && request.auth.token.get('email', '') == 'formfactors.operations@gmail.com'
+        && request.auth.token.get('email_verified', false) == true;
+    }
+
+    function isStaffOf(tenantId) {
+      return request.auth != null
+        && tenantId != null
+        && firestore.exists(profilePath())
+        && profile().get('tenantId', '') == tenantId
+        && profile().get('role', '') in ['Super Admin', 'Owner', 'Admin', 'Ops Director', 'Designer', 'Site Supervisor', 'Viewer'];
+    }
+
+    function canUpload(tenantId) {
+      return (isPlatformOwner() || (isStaffOf(tenantId) && profile().get('role', '') != 'Viewer'))
+        // A delete has no new resource; an upload is held to 25 MB.
+        && (request.resource == null || request.resource.size < 25 * 1024 * 1024);
+    }
+
+    function projectTenant(projectId) {
+      let path = /databases/(default)/documents/projects/$(projectId);
+      return firestore.exists(path) ? firestore.get(path).data.get('tenantId', null) : null;
+    }
+
+    match /studios/{tenantId}/{rest=**} {
+      allow read: if isPlatformOwner() || isStaffOf(tenantId);
+      allow write: if canUpload(tenantId);
+    }
+
+    match /projects/{projectId}/{rest=**} {
+      allow read: if isPlatformOwner() || isStaffOf(projectTenant(projectId));
+      allow write: if canUpload(projectTenant(projectId));
+    }
+
+    match /decisions/{projectId}/{rest=**} {
+      allow read: if isPlatformOwner() || isStaffOf(projectTenant(projectId));
+      allow write: if canUpload(projectTenant(projectId));
+    }
+
+    // Anything else: nobody.
+    match /{all=**} {
+      allow read, write: if false;
+    }
+  }
+}

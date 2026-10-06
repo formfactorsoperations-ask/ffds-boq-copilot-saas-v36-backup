@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Globe, AtSign } from 'lucide-react';
+import { Globe, AtSign } from '@/lib/lucide-shim';
 import { COLOR_TOKENS } from '../../lib/UIConstants';
 import { formatINR } from '../../lib/utils';
 import { ClientActionItem, ClientActionSummary, ClientLifecycleSummary } from '../../services/clientPortalEngine';

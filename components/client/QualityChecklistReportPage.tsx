@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { onDownloadIntent } from '../../lib/downloadIntent';
 import { ProjectContext } from '../../types';
 import { useOrg } from '../../contexts/OrgContext';
-import { Download, Printer, ArrowLeft, ClipboardCheck, Check, Bolt } from 'lucide-react';
+import { Download, Printer, ArrowLeft, ClipboardCheck, Check, Bolt } from '@/lib/lucide-shim';
 import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 

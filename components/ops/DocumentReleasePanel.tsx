@@ -55,7 +55,7 @@ import {
   MessageCircleQuestion,
   PenTool,
   ShieldAlert
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface DocumentReleasePanelProps {
   projectContext: ProjectContext;

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, Phone, Ruler, Palette, Flag, Info, X, Mail, Maximize2 } from 'lucide-react';
+import { MapPin, Phone, Ruler, Palette, Flag, Info, X, Mail, Maximize2 } from '@/lib/lucide-shim';
 import { ProjectContext } from '../types';
 import './projectHeader/projectHeader.css';
 

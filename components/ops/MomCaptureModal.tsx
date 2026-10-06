@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Loader2, Sparkles, FileText, CheckCircle2 } from 'lucide-react';
+import { Loader2, Sparkles, FileText, CheckCircle2 } from '@/lib/lucide-shim';
 import { createMoMFromNotes, createEmptyMoM } from '../../services/momService';
 import { SiteVisit, MOM } from '../../types';
 import { auth } from '../../services/firebaseClient';

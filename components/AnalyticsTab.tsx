@@ -15,7 +15,7 @@ import {
   BarChart3,
   Sliders,
   Lock
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface AnalyticsTabProps {
   boq: FullBoqItem[];

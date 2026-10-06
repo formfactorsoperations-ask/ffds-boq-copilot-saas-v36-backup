@@ -14,7 +14,7 @@ import {
   PackageCheck,
   Clock,
   ListFilter
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface Props {
   projectContext: ProjectContext;

@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import {
   Database, Cloud, Sparkles, ShieldCheck, Type as TypeIcon, EyeOff,
   MessageCircle, Image as ImageIcon, KeyRound, Users, FileText,
-} from "lucide-react";
+} from '@/lib/lucide-shim';
 
 /**
  * DATA PRIVACY.

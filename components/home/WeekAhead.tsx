@@ -1,5 +1,5 @@
 import React from "react";
-import { CalendarDays, ArrowRight, Flag } from "lucide-react";
+import { CalendarDays, ArrowRight, Flag } from '@/lib/lucide-shim';
 import { FullProjectData } from "../../types";
 
 /**

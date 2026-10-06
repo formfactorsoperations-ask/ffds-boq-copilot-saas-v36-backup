@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, lazy, Suspense, useCallback } from "react";
 import SuccessWithNextToast from './components/SuccessWithNextToast';
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X } from '@/lib/lucide-shim';
 import Sidebar from "./components/Header";
 import Breadcrumb from "./components/Breadcrumb";
 import { ProjectWorkspace } from "./components/ProjectWorkspace";
@@ -1243,6 +1243,8 @@ export default function App() {
 
   useEffect(() => {
     if (!firestoreDb || !activeInternalId) return;
+    // A Designer reads the project's design copy, not the document (see services/dbService designerProjects).
+    if (isDesignerRole(currentRole)) return;
 
     const unsub = onSnapshot(
       doc(firestoreDb, "projects", activeInternalId),
@@ -1291,7 +1293,7 @@ export default function App() {
     );
 
     return () => unsub();
-  }, [activeInternalId]);
+  }, [activeInternalId, currentRole]);
 
   /*
     Which project this auto-save has already seen.

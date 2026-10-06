@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../services/firebaseClient';
 import { SiteVisitType, SiteVisit, MOM } from '../types';
-import { Calendar, Clock, MapPin, X, Users, Loader2, Video, FileText, CheckCircle2, ChevronRight, Download, Trash2 } from 'lucide-react';
+import { Calendar, Clock, MapPin, X, Users, Loader2, Video, FileText, CheckCircle2, ChevronRight, Download, Trash2 } from '@/lib/lucide-shim';
 import { updateCalendarEventNotes, syncSiteVisitToCalendar } from '../services/siteVisitService';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import { MomCaptureModal } from '../components/ops/MomCaptureModal';

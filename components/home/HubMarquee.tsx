@@ -1,7 +1,7 @@
 import React from "react";
 import {
   Plus, LayoutGrid, Users, BarChart3, Store, FileSignature, Boxes,
-} from "lucide-react";
+} from '@/lib/lucide-shim';
 import { CardContainer, CardBody, CardItem } from "../ui/3d-card";
 
 /**

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle } from '@/lib/lucide-shim';
 
 export interface AttentionItem {
   id: string;

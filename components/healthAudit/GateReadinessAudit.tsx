@@ -1,7 +1,7 @@
 import React from 'react';
 import { ProjectContext, FullBoqItem } from '../../types';
 import { formatCurrency, formatINR } from '../../lib/utils';
-import { ShieldCheck, Lock, Unlock, CheckCircle2, XCircle, AlertTriangle, ArrowRight, DollarSign, Wrench, FileCheck, ClipboardList } from 'lucide-react';
+import { ShieldCheck, Lock, Unlock, CheckCircle2, XCircle, AlertTriangle, ArrowRight, DollarSign, Wrench, FileCheck, ClipboardList } from '@/lib/lucide-shim';
 
 interface GateReadinessAuditProps {
   projectContext?: ProjectContext;

@@ -8,7 +8,7 @@ import {
   describeVersions,
   diffTiers,
 } from '../../lib/boqVersions';
-import { X, Check, Info } from 'lucide-react';
+import { X, Check, Info } from '@/lib/lucide-shim';
 
 /**
  * Your scope, and what changed.

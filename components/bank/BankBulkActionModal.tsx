@@ -15,7 +15,7 @@ import {
   AlertTriangle,
   ArrowRight,
   PackagePlus
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { CustomBundle } from '../../hooks/useStudioSettings';
 
 export type BulkActionType = 'margin' | 'cost' | 'category' | 'uom' | 'multiplier' | 'bundle';

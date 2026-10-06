@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import MilestoneIcon from '../MilestoneIcon';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown } from '@/lib/lucide-shim';
 import { PaymentMilestone, ProjectDecisionRecord } from '../../types';
 import { formatINR } from '../../lib/utils';
 import { toDayNum, toISO } from '../../lib/schedule';

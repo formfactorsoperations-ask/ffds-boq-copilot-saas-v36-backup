@@ -33,7 +33,7 @@ import {
   CheckSquare,
   Square,
   ChevronRight
-} from "lucide-react";
+} from '@/lib/lucide-shim';
 import { motion, AnimatePresence } from "framer-motion";
 import WavyText from "./ui/WavyText";
 import { useOrg } from "../contexts/OrgContext";

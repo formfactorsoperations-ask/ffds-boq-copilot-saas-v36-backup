@@ -1,9 +1,9 @@
 
 import { FullProjectData, Item , ProjectLifecycle, Vendor, PurchaseOrder, Observation, ProjectSchedule } from '../types';
-import { db as firestore, isFirebaseConfigured } from './firebaseClient';
+import { db as firestore, auth as firebaseAuth, isFirebaseConfigured } from './firebaseClient';
 import { mergeClientOwned } from '../lib/clientOwned';
 import { auditDb } from './dbAudit';
-import { collection, getDocs, writeBatch, doc, setDoc, deleteDoc, getDoc, query, where, limit, serverTimestamp } from 'firebase/firestore';
+import { collection, collectionGroup, getDocs, writeBatch, doc, setDoc, deleteDoc, getDoc, query, where, limit, serverTimestamp } from 'firebase/firestore';
 import pako from 'pako';
 
 // Multi-tenant Helper
@@ -728,6 +728,8 @@ async function writeTierBoqs(projectId: string, tiers: any[]): Promise<void> {
  */
 export async function hydrateProjectDetail(project: FullProjectData): Promise<FullProjectData> {
     if (!firestore || !project?.id) return project;
+    // A Designer's copy is complete as it is; the agreement and priced BOQs are not theirs to read.
+    if (viewOnlySession() || (project as any)._designView) return project;
 
     let next = project;
 
@@ -778,12 +780,45 @@ export async function hydrateTierBoqs(project: FullProjectData): Promise<FullPro
     }
 }
 
+/*
+  A Designer's projects: the design copies the server keeps of the projects
+  they are assigned to (functions/src/designView.ts), without the money. The
+  rules give a Designer nothing else of a project, so this never falls back to
+  a copy cached on the device -- that could be a full project from before.
+*/
+async function designerProjects(tenantId: string): Promise<FullProjectData[]> {
+    const email = String(firebaseAuth?.currentUser?.email || '').trim().toLowerCase();
+    if (!firestore || !email) return [];
+    try {
+        const snap = await getDocs(query(
+            collectionGroup(firestore, 'designView'),
+            where('tenantId', '==', tenantId),
+            where('designers', 'array-contains', email),
+        ));
+        return snap.docs
+            .map((d) => {
+                const view = decompressData((d.data() as any).compressedData);
+                if (!view) return null;
+                view.id = view.id || d.ref.parent.parent?.id;
+                view.tiers = view.tiers || [];
+                view._designView = true;
+                return view as FullProjectData;
+            })
+            .filter(Boolean)
+            .sort((a: any, b: any) => (b.lastModified || 0) - (a.lastModified || 0)) as FullProjectData[];
+    } catch (e) {
+        console.warn('Could not load your assigned projects', e);
+        return [];
+    }
+}
+
 const CloudStrategy: DBService = {
     upgradeLegacyProject: LocalStrategy.upgradeLegacyProject,
     isCloud: true,
 
     getProjects: async () => {
         if (!firestore) return LocalStrategy.getProjects();
+        if (viewOnlySession()) return designerProjects(getCurrentTenantId());
         try {
             const tenantId = getCurrentTenantId();
             

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Home, PlusCircle, CheckCircle, Camera, Navigation2, FileText, ArrowLeft, LogOut, Package, AlertTriangle, ListTodo, Activity, Clock, Box } from 'lucide-react';
+import { Home, PlusCircle, CheckCircle, Camera, Navigation2, FileText, ArrowLeft, LogOut, Package, AlertTriangle, ListTodo, Activity, Clock, Box } from '@/lib/lucide-shim';
 import { SiteActivityWidget } from './SiteActivityWidget';
 import { SiteVisitLogModal } from './SiteVisitLogModal';
 import { SiteProgressChart } from './SiteProgressChart';

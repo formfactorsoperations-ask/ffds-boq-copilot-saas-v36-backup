@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ProjectContext, PaymentSchedule, ProjectEngagement } from '../../types';
-import { FileText, Send, Download, AlertTriangle, ArrowRight, History, Eye } from 'lucide-react';
+import { FileText, Send, Download, AlertTriangle, ArrowRight, History, Eye } from '@/lib/lucide-shim';
 import { formatCurrency, id as generateId } from '../../lib/utils';
 import { resolveFinancials } from '../../lib/paymentSchedule';
 import { useOrg } from '../../contexts/OrgContext';

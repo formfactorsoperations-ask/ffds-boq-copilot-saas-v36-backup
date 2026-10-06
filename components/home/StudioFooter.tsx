@@ -5,7 +5,7 @@ import {
   Lock, LifeBuoy, Home,
   Table2, Layers, ReceiptIndianRupee, TrendingUp,
   MonitorSmartphone, Camera, BadgeCheck, Activity, Users, IndianRupee,
-} from "lucide-react";
+} from '@/lib/lucide-shim';
 import { formatCompactINR } from "../../lib/utils";
 import { useOrg } from "../../contexts/OrgContext";
 import { TervaroMark } from "../brand/StudioDeskLogo";

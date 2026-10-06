@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useState } from 'react';
 import {
   BadgeCheck, Eye, AlertCircle, FilePen, FileWarning, Circle, AlertTriangle,
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { ProjectContext } from '../../types';
 import {
   buildDocumentCompleteness,

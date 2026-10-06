@@ -3,7 +3,7 @@ import DateField from './ui/DateField';
 import { ProjectContext, MaterialSelection, PurchaseOrder, POLine, Vendor, POScope, POStatus } from '../types';
 import { db } from '../services/dbService';
 import { generateId } from '../lib/utils';
-import { X, Plus, Trash2, ShieldAlert } from 'lucide-react';
+import { X, Plus, Trash2, ShieldAlert } from '@/lib/lucide-shim';
 
 interface RaisePOModalProps {
   projectId: string;

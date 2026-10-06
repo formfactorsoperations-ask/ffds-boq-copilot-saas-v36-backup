@@ -4,7 +4,7 @@ import ExecutionStamp from '../documents/ExecutionStamp';
 import { buildSignoffPatch } from '../../services/clientApprovalEngine';
 import { ProjectContext, TermsDocket, TermsSettings, DigitalSignatureDocket } from '../../types';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
-import { FileText, Send, CheckCircle2, Download, AlertTriangle, Eye, Check, Edit3, Plus, Trash2, Save, X, Columns, ShieldCheck } from 'lucide-react';
+import { FileText, Send, CheckCircle2, Download, AlertTriangle, Eye, Check, Edit3, Plus, Trash2, Save, X, Columns, ShieldCheck } from '@/lib/lucide-shim';
 import { id as generateId } from '../../lib/utils';
 import { useOrg } from '../../contexts/OrgContext';
 import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';

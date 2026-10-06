@@ -3,7 +3,7 @@ import { ProjectContext } from '../../types';
 import { getTermsSettings, getPaymentStructure } from '../../services/engagementService';
 import { useOrg } from '../../contexts/OrgContext';
 import { stableHash } from '../../lib/stableHash';
-import { Lock } from 'lucide-react';
+import { Lock } from '@/lib/lucide-shim';
 
 export function EngagementLifecycleWidget({ projectContext, setProjectContext }: { projectContext: ProjectContext, setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>> }) {
     const { orgData, currentRole } = useOrg();

@@ -4,7 +4,7 @@ import { FullBoqItem, Room, BoqItem } from '../types';
 import { formatCurrency, calculateSellPrice } from '../lib/utils';
 import { DeleteIcon, LinkIcon, WandIcon } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, Coins, Tag, ChevronDown, ChevronUp, AlignLeft, Info, Sparkles, AlertCircle, Percent } from 'lucide-react';
+import { TrendingUp, Coins, Tag, ChevronDown, ChevronUp, AlignLeft, Info, Sparkles, AlertCircle, Percent } from '@/lib/lucide-shim';
 import { refineItemSpecs, generateLumpsumBreakdown } from '../services/geminiService';
 import { MarginDeviationIndicator } from './MarginDeviationIndicator';
 import { useOrg } from '../contexts/OrgContext';

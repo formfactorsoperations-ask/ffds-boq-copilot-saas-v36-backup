@@ -11,7 +11,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, CheckCircle2, ArrowRight, Layers, Sparkles, AlertCircle } from 'lucide-react';
+import { RefreshCw, CheckCircle2, ArrowRight, Layers, Sparkles, AlertCircle } from '@/lib/lucide-shim';
 import { ProjectContext, Room, ProposalTier, Item } from '../types';
 import {
   computeTakeoff, classifyRoom, defaultCeiling, DEFAULT_CONVENTIONS,

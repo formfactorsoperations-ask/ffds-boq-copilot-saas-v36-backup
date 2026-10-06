@@ -41,7 +41,7 @@ import {
   PackagePlus,
   Building2,
   Filter
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface BankTabProps {
   bank: Item[];

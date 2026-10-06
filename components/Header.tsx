@@ -19,14 +19,13 @@ import {
   ShieldCheck,
   Cloud,
   HardDrive
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { AIStatus } from '../types';
 import AIStatusIndicator from './AIStatusIndicator';
 import { useOrg } from '../contexts/OrgContext';
 import { FFDSLogo } from './FFDSLogo';
 import { db } from '../services/dbService';
 import CloudConfigModal from './CloudConfigModal';
-import { PWAInstallPrompt } from './PWAInstallPrompt';
 
 interface SidebarProps {
   activeTab: string;
@@ -298,19 +297,19 @@ const Sidebar: React.FC<SidebarProps> = ({
                     ${isActive
                       ? 'text-white font-bold'
                       : quiet
-                        ? 'text-slate-400 hover:text-[#334486] font-semibold'
-                        : 'text-slate-500 hover:text-[#334486] font-bold'}`}
+                        ? 'text-slate-500 hover:text-[#334486] font-semibold'
+                        : 'text-slate-600 hover:text-[#334486] font-bold'}`}
       >
         {/* Hover bracket — the reticle's ghost, before you commit. */}
         {!isActive && (
           <span aria-hidden="true"
                 className="absolute inset-0 rounded-lg border border-transparent
-                           group-hover:border-sky-200/90 group-hover:bg-sky-50/60
+                           group-hover:border-sky-200/90 group-hover:bg-sky-50
                            transition-colors duration-200" />
         )}
         <Icon className={`relative w-4 h-4 shrink-0 transition-transform duration-200 ease-out
-                          ${isActive ? 'scale-110 drop-shadow-[0_0_5px_rgba(112,145,230,.85)]'
-                                     : 'group-hover:-translate-y-0.5 group-hover:scale-110'}`} />
+                          ${isActive ? 'scale-110 text-white drop-shadow-[0_0_5px_rgba(112,145,230,.85)]'
+                                     : 'text-slate-600 group-hover:text-[#334486] group-hover:-translate-y-0.5 group-hover:scale-110'}`} />
         <span className={`relative tracking-tight ${quiet ? 'hidden xl:inline' : 'hidden sm:inline'}`}>
           {tab.label}
         </span>
@@ -351,20 +350,26 @@ const Sidebar: React.FC<SidebarProps> = ({
             <span
               key={echo.key}
               aria-hidden="true"
-              className="hud-echo absolute top-1 bottom-1 rounded-lg bg-[#3D52A0]/45 pointer-events-none"
-              style={{ transform: `translateX(${echo.left}px)`, width: `${echo.width}px` }}
+              className="hud-echo absolute top-1 bottom-1 rounded-lg pointer-events-none"
+              style={{
+                transform: `translateX(${echo.left}px)`,
+                width: `${echo.width}px`,
+                backgroundColor: 'rgba(61, 82, 160, 0.45)'
+              }}
             />
           )}
 
           {pill && (
             <span
               aria-hidden="true"
-              className="nav-pill hud-reticle absolute top-1 bottom-1 rounded-lg
-                         bg-gradient-to-b from-[#4C65B5] to-[#334486] pointer-events-none overflow-hidden"
+              className="nav-pill hud-reticle absolute top-1 bottom-1 rounded-lg pointer-events-none overflow-hidden"
               style={{
                 transform: `translateX(${pill.left}px) scaleX(${stretch})`,
                 transformOrigin: `${origin} center`,
                 width: `${pill.width}px`,
+                backgroundColor: '#334486',
+                backgroundImage: 'linear-gradient(180deg, #4C65B5 0%, #334486 100%)',
+                boxShadow: '0 0 0 1px rgba(34,211,238,0.55), 0 6px 16px rgba(61, 82, 160, 0.34), 0 0 22px rgba(34,211,238,0.28)',
                 transition: 'transform .42s cubic-bezier(.34,1.16,.44,1), width .42s cubic-bezier(.34,1.16,.44,1)',
               }}
             >
@@ -382,11 +387,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         </nav>
 
         <div className="flex-1 min-w-[8px]" />
-
-        {/* Mobile App PWA Install Prompt */}
-        <div className="hidden sm:block shrink-0">
-          <PWAInstallPrompt variant="pill" label="Mobile App" />
-        </div>
 
         {/* Telemetry */}
         <button

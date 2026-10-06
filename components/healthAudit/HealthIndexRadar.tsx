@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ProjectHealthReport, PillarScore } from './types';
 import { formatCurrency, formatINR } from '../../lib/utils';
-import { ShieldCheck, AlertTriangle, AlertOctagon, TrendingUp, CheckCircle2, ChevronRight, Zap, Target, Lock, DollarSign, Wrench } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, AlertOctagon, TrendingUp, CheckCircle2, ChevronRight, Zap, Target, Lock, DollarSign, Wrench } from '@/lib/lucide-shim';
 import { scoreTone } from '../../lib/reportPalette';
 
 interface HealthIndexRadarProps {

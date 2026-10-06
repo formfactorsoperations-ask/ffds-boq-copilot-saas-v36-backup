@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronLeft, FileText, PenLine, Check, ArrowRight, Download } from 'lucide-react';
+import { ChevronDown, ChevronLeft, FileText, PenLine, Check, ArrowRight, Download } from '@/lib/lucide-shim';
 import { ClientDocumentKind, DocumentIssue, ProjectContext } from '../../types';
 import { isVisibleToClient } from '../../lib/clientVisibility';
 import { issueIsApproved } from '../../services/documentIssueEngine';

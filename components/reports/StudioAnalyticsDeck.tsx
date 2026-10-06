@@ -16,7 +16,7 @@ import { HudDial, HudDonut, HudTrace } from "./HudCharts";
 import BulkTagPanel from "./BulkTagPanel";
 import {
   Building2, Wallet, Scissors, Target, Info, AlertTriangle, Tags,
-} from "lucide-react";
+} from '@/lib/lucide-shim';
 
 /**
  * THE ANALYTICS DECK.

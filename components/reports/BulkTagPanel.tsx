@@ -4,7 +4,7 @@ import { formatCompactINR } from "../../lib/utils";
 import { getSingleProjectValue } from "../../lib/financialsUtils";
 import { isEmptyShell } from "../../lib/projectClassification";
 import { db } from "../../services/dbService";
-import { X, Check, Sparkles, AlertTriangle, Loader2 } from "lucide-react";
+import { X, Check, Sparkles, AlertTriangle, Loader2 } from '@/lib/lucide-shim';
 
 /**
  * TAG THE UNTAGGED, IN ONE PLACE.

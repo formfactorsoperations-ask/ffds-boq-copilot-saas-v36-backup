@@ -3,7 +3,7 @@ import { ProposalTier, ProjectContext, TimelinePhase, PaymentMilestone, FullBoqI
 import { formatCurrency, calculateSellPrice } from '../../lib/utils';
 import { detectAllScopes, findScopeContradictions } from '../../lib/scopeDetect';
 import { groupPhasesIntoStages } from '../../lib/programmeStages';
-import { CheckIcon, XIcon, ShieldCheckIcon, HelpCircleIcon, Pencil, Save } from 'lucide-react';
+import { CheckIcon, XIcon, ShieldCheckIcon, HelpCircleIcon, Pencil, Save } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 
 /*

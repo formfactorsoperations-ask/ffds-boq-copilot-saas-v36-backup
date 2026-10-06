@@ -22,7 +22,7 @@ import {
   Send,
   ExternalLink,
   Code
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import ConsoleHeader from '../ui/ConsoleHeader';
 

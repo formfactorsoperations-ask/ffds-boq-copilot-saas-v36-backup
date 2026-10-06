@@ -7,14 +7,15 @@ import { EMAIL_TEMPLATE_LIBRARY, resolveTemplate } from '../lib/templateEngine';
 import { formatINR } from '../lib/utils';
 import { publicAppOrigin } from '../lib/publicUrl';
 
-const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY;
-const STUDIO_NAME = import.meta.env.VITE_STUDIO_NAME || 'Form Factors Design Studio';
+const safeEnv = (typeof import.meta !== 'undefined' && (import.meta as any)?.env) || (typeof process !== 'undefined' && process.env) || {};
+const RESEND_API_KEY = safeEnv.VITE_RESEND_API_KEY;
+const STUDIO_NAME = safeEnv.VITE_STUDIO_NAME || 'Form Factors Design Studio';
 // No fallback number: an empty phone prints nothing, where the old
 // placeholder "+91 98765 43210" went to clients as the studio's helpline.
-const STUDIO_PHONE = import.meta.env.VITE_STUDIO_PHONE || '';
-const STUDIO_LOGO_URL = import.meta.env.VITE_STUDIO_LOGO_URL || '';
-const BRAND_COLOR = import.meta.env.VITE_BRAND_COLOR || '#3D52A0';
-const RESEND_SENDER_EMAIL = import.meta.env.VITE_EMAIL_FROM || import.meta.env.VITE_RESEND_SENDER_EMAIL || 'onboarding@resend.dev'; // Default to onboarding for testing
+const STUDIO_PHONE = safeEnv.VITE_STUDIO_PHONE || '';
+const STUDIO_LOGO_URL = safeEnv.VITE_STUDIO_LOGO_URL || '';
+const BRAND_COLOR = safeEnv.VITE_BRAND_COLOR || '#3D52A0';
+const RESEND_SENDER_EMAIL = safeEnv.VITE_EMAIL_FROM || safeEnv.VITE_RESEND_SENDER_EMAIL || 'onboarding@resend.dev'; // Default to onboarding for testing
 
 /*
   THE STUDIO, AS EVERY EMAIL SIGNS OFF.

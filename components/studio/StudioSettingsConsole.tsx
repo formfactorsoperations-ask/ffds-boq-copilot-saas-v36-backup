@@ -33,7 +33,7 @@ import { TeamMember } from '../../types';
 import {
   Save, Building2, Users, CreditCard, Scale, Globe, Palette,
   Database, Check, AlertTriangle, Upload, RotateCcw,
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 const SECTION_ICON: Record<SectionId, React.ComponentType<any>> = {
   identity: Building2,

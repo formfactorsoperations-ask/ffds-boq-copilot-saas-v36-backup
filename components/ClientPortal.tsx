@@ -144,7 +144,7 @@ import {
     FileCheck,
     Edit3,
     Paperclip
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import ScheduleGantt from './ScheduleGantt';
 import { buildScheduleFromProject } from '../lib/scheduleBuilder';

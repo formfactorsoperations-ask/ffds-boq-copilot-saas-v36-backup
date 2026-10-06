@@ -10,7 +10,7 @@ import {
   Clock,
   Globe,
   Fingerprint
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { DigitalSignatureDocket, ManualOverrideMeta } from '../../types';
 
 interface DigitalSignatureDocketProps {

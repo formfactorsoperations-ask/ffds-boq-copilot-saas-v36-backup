@@ -3,7 +3,7 @@ import { ProjectContext, ProposalTier } from '../types';
 import { useOrg } from '../contexts/OrgContext';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import { resolveTemplate, stripHtml, EMAIL_TEMPLATE_LIBRARY } from '../lib/templateEngine';
-import { CheckCircle2, Copy, Search, Filter, Mail, MessageCircle } from 'lucide-react';
+import { CheckCircle2, Copy, Search, Filter, Mail, MessageCircle } from '@/lib/lucide-shim';
 import { format } from 'date-fns';
 import { publicAppOrigin } from '../lib/publicUrl';
 

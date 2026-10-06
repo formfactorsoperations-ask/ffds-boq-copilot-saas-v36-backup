@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Smartphone, Share2, PlusSquare, X, Check, ExternalLink, QrCode } from 'lucide-react';
+import { Download, Smartphone, Share2, PlusSquare, X, Check, ExternalLink, QrCode } from '@/lib/lucide-shim';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { publicAppOrigin } from '../lib/publicUrl';
 

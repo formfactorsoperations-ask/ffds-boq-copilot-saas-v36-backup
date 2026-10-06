@@ -9,7 +9,7 @@ import {
   Key, 
   Calendar,
   LucideIcon 
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { publicAppOrigin } from './publicUrl';
 
 export interface DocMeta {

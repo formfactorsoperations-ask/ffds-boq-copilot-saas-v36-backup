@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { FullProjectData } from "../../types";
-import { Clock, Flag, ArrowRight, Sparkles } from "lucide-react";
+import { Clock, Flag, ArrowRight, Sparkles } from '@/lib/lucide-shim';
 import { motion, AnimatePresence } from "framer-motion";
 import { useTilt } from "./useTilt";
 import MonthCalendar from "./MonthCalendar";

@@ -28,7 +28,7 @@ import {
   FileCheck,
   CheckSquare,
   Download
-} from "lucide-react";
+} from '@/lib/lucide-shim';
 import { formatINR } from "../../lib/utils";
 
 // Trade categories with highly polished pre-set snag items for quick logging

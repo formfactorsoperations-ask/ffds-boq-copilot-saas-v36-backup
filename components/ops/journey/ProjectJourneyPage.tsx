@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { X, Lock, Check, ArrowRight, Activity, CheckCircle2, FastForward, AlertTriangle, Zap, Sparkles } from 'lucide-react';
+import { X, Lock, Check, ArrowRight, Activity, CheckCircle2, FastForward, AlertTriangle, Zap, Sparkles } from '@/lib/lucide-shim';
 import { useProjectJourney, StepWithStatus } from '../../../hooks/useProjectJourney';
 import { PHASES } from '../../../constants/journeyConstants';
 import { ProjectContext } from '../../../types';

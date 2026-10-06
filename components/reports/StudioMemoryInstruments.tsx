@@ -3,7 +3,7 @@ import { formatCompactINR } from "../../lib/utils";
 import { COST_TYPE_LABEL } from "../../lib/studioMemory";
 import { LiveObservationResult } from "../../lib/liveObservations";
 import { HudDial, HudRings, HudDonut, HudTrace } from "./HudCharts";
-import { Database, Radio, Info } from "lucide-react";
+import { Database, Radio, Info } from '@/lib/lucide-shim';
 
 /**
  * STUDIO MEMORY, AS INSTRUMENTS.

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { LayoutGrid } from 'lucide-react';
+import { LayoutGrid } from '@/lib/lucide-shim';
 import './projectHeader.css';
 
 export interface StudioMenuItem {

@@ -1,6 +1,6 @@
 import React from "react";
 import { PortalScopeAddition } from "../../lib/portalProjection";
-import { Layers, Check, Clock, Info, ChevronDown, FileText } from "lucide-react";
+import { Layers, Check, Clock, Info, ChevronDown, FileText } from '@/lib/lucide-shim';
 
 /**
  * SCOPE ADDITIONS, AS THE CLIENT SEES THEM.

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lock, ArrowRight, Play, CheckCircle2 } from 'lucide-react';
+import { Lock, ArrowRight, Play, CheckCircle2 } from '@/lib/lucide-shim';
 
 interface LockedStateProps {
     title?: string;

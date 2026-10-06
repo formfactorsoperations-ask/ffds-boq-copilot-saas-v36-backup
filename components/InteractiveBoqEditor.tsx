@@ -29,7 +29,7 @@ import {
   Layers,
   CheckCircle,
   Info
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MarginDeviationIndicator } from './MarginDeviationIndicator';
 import { useOrg } from '../contexts/OrgContext';

@@ -42,7 +42,7 @@ import {
   CornerDownRight,
   PenLine,
   History,
-} from "lucide-react";
+} from '@/lib/lucide-shim';
 import { useOrg } from "../../contexts/OrgContext";
 import { StudioDocumentShell } from "./documents/StudioDocumentShell";
 

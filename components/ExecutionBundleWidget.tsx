@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ArrowRight, HardHat, CheckCircle2, ShieldAlert, PlayCircle } from 'lucide-react';
+import { ArrowRight, HardHat, CheckCircle2, ShieldAlert, PlayCircle } from '@/lib/lucide-shim';
 import { generateBundlesFromBoq } from './ExecutionWorkspace';
 
 export function ExecutionBundleWidget({ 

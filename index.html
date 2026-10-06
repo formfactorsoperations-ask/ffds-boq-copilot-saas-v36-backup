@@ -4,91 +4,52 @@
   <head>
     <script>
       (function() {
+        if (window.__ffdsConsolePatched) return;
+        window.__ffdsConsolePatched = true;
+
+        const nativeLog = console.log.bind(console);
+        const nativeWarn = console.warn.bind(console);
+        const nativeError = console.error.bind(console);
+        const nativeInfo = console.info.bind(console);
+
         function isViteOrWsNoise(args) {
           try {
             if (!args) return false;
             for (let i = 0; i < args.length; i++) {
               const arg = args[i];
               if (!arg) continue;
-              if (typeof arg === 'string') {
-                if (arg.includes('[vite]') || 
-                    arg.includes('WebSocket') || 
-                    arg.includes('WebChannel') || 
-                    arg.includes('failed to connect to websocket') || 
-                    arg.includes('transport errored') ||
-                    arg.includes('server connection lost')) {
-                  return true;
-                }
-              } else if (typeof arg === 'object') {
-                const msg = (arg.message || '') + ' ' + (arg.reason || '') + ' ' + (arg.stack || '') + ' ' + (arg.name || '');
-                if (msg.includes('[vite]') || 
-                    msg.includes('WebSocket') || 
-                    msg.includes('WebChannel') || 
-                    msg.includes('failed to connect to websocket') || 
-                    msg.includes('transport errored') ||
-                    msg.includes('server connection lost')) {
-                  return true;
-                }
+              const str = typeof arg === 'string' ? arg : (arg?.message || '') + ' ' + (arg?.reason || '') + ' ' + (arg?.stack || '');
+              if (str.includes('[vite]') || 
+                  str.includes('WebSocket') || 
+                  str.includes('WebChannel') || 
+                  str.includes('failed to connect to websocket') || 
+                  str.includes('transport errored') ||
+                  str.includes('server connection lost')) {
+                return true;
               }
             }
           } catch (e) {}
           return false;
         }
 
-        let activeError = console.error;
-        try {
-          Object.defineProperty(console, 'error', {
-            configurable: true,
-            enumerable: true,
-            get() {
-              return function(...args) {
-                if (isViteOrWsNoise(args)) return;
-                activeError.apply(console, args);
-              };
-            },
-            set(fn) {
-              activeError = fn;
-            }
-          });
-        } catch (e) {
-          console.error = function(...args) {
-            if (isViteOrWsNoise(args)) return;
-            activeError.apply(console, args);
-          };
-        }
+        console.error = function(...args) {
+          if (isViteOrWsNoise(args)) return;
+          nativeError(...args);
+        };
 
-        let activeWarn = console.warn;
-        try {
-          Object.defineProperty(console, 'warn', {
-            configurable: true,
-            enumerable: true,
-            get() {
-              return function(...args) {
-                if (isViteOrWsNoise(args)) return;
-                activeWarn.apply(console, args);
-              };
-            },
-            set(fn) {
-              activeWarn = fn;
-            }
-          });
-        } catch (e) {
-          console.warn = function(...args) {
-            if (isViteOrWsNoise(args)) return;
-            activeWarn.apply(console, args);
-          };
-        }
-
-        const origInfo = console.info;
-        const origLog = console.log;
+        console.warn = function(...args) {
+          if (isViteOrWsNoise(args)) return;
+          nativeWarn(...args);
+        };
 
         console.info = function(...args) {
           if (isViteOrWsNoise(args)) return;
-          origInfo.apply(console, args);
+          nativeInfo(...args);
         };
+
         console.log = function(...args) {
           if (isViteOrWsNoise(args)) return;
-          origLog.apply(console, args);
+          nativeLog(...args);
         };
 
         window.addEventListener('error', function(event) {

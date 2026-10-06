@@ -44,7 +44,7 @@ import {
   AlertCircle,
   Eye,
   Lock
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface ClientDocumentVaultProps {
   projectData: FullProjectData;

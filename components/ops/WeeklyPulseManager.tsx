@@ -30,7 +30,7 @@ import {
   Printer,
   BarChart3,
   FileText
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { id as generateId } from '../../lib/utils';
 import { draftWeeklyReportContent } from '../../services/geminiService';
 import WeeklyPulseDashboard from './WeeklyPulseDashboard';

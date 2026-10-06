@@ -3,7 +3,7 @@ import { StepProgress, DeliverableProgress } from '../../hooks/useStepProgress';
 import { useOrg } from '../../contexts/OrgContext';
 import { storage } from '../../services/firebaseClient';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { CheckCircle2, Circle, Paperclip, Download, Loader2 } from 'lucide-react';
+import { CheckCircle2, Circle, Paperclip, Download, Loader2 } from '@/lib/lucide-shim';
 
 interface Props {
     step: StepProgress;

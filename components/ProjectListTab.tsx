@@ -8,7 +8,7 @@ import { BuildingOfficeIcon, PlusIcon, NewFileIcon, DeleteIcon } from "./Icons";
 import { formatClientValue, timeAgo, formatCurrency } from "../lib/utils";
 import { getSingleProjectValue } from "../lib/financialsUtils";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Info, PlayCircle, PauseCircle, CheckCircle, FileText, Send, MessageSquare, Briefcase, Zap, Trophy, LayoutDashboard, SlidersHorizontal, XCircle, Pin } from "lucide-react";
+import { Info, PlayCircle, PauseCircle, CheckCircle, FileText, Send, MessageSquare, Briefcase, Zap, Trophy, LayoutDashboard, SlidersHorizontal, XCircle, Pin } from '@/lib/lucide-shim';
 import { ProjectPaymentBadge } from "./PaymentHealth";
 import DocumentMeter from "./ops/DocumentMeter";
 import { ClockIcon } from "./Icons";
@@ -23,13 +23,13 @@ import {
 } from "./CashFlowForecastDashboard";
 import { useOrg } from "../contexts/OrgContext";
 import { seesStudioFinance, isDesignerRole } from "../lib/roleAccess";
-import { Users } from "lucide-react";
+import { Users } from '@/lib/lucide-shim';
 import ProjectTeamButton from "./projectHeader/ProjectTeamButton";
 import AssignProjectsModal from "./projectHeader/AssignProjectsModal";
 import { useMomActions } from "../hooks/useMomActions";
 import { getNextActions, NextAction } from "../services/nextActionEngine";
 import { buildDocumentCompleteness, DocumentCompleteness } from "../lib/documentCompleteness";
-import { Lock, ArrowRight, CheckSquare, ChevronDown, ChevronUp, Flag, History } from "lucide-react";
+import { Lock, ArrowRight, CheckSquare, ChevronDown, ChevronUp, Flag, History } from '@/lib/lucide-shim';
 import ProjectStatusTransitionModal from "./ProjectStatusTransitionModal";
 import { CardContainer, CardBody, CardItem } from "./ui/3d-card";
 

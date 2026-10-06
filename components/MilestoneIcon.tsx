@@ -1,5 +1,5 @@
 import React from 'react';
-import { DraftingCompass, Stamp, House, KeyRound, Handshake, PackageCheck, Milestone } from 'lucide-react';
+import { DraftingCompass, Stamp, House, KeyRound, Handshake, PackageCheck, Milestone } from '@/lib/lucide-shim';
 
 /**
  * The glyph for a milestone, picked from what the milestone is called.

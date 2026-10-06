@@ -18,7 +18,7 @@ import {
   Filter,
   Info,
   HelpCircle,
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { Item, RevisionAction, ActionType } from '../types';
 import { formatINR } from '../lib/utils';
 

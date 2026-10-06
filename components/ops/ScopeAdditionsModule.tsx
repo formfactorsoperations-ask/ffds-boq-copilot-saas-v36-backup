@@ -25,7 +25,7 @@ import {
     Sparkles, 
     TrendingUp, 
     Info 
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { ScopeAdditionClassification } from '../../services/geminiService';
 import { calculateProjectFinancials } from '../../lib/financialsUtils';
 import { normaliseAddition, summariseScopeAdditions } from '../../lib/scopeAdditions';

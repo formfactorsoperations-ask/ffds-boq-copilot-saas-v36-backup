@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { renderPaymentReminderMessage, buildWhatsAppURL } from '../lib/whatsappUtils';
-import { X, Send } from 'lucide-react';
+import { X, Send } from '@/lib/lucide-shim';
 
 interface WhatsAppReminderModalProps {
   isOpen: boolean;

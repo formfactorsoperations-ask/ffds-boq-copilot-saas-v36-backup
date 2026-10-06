@@ -18,7 +18,7 @@ import {
   ClipboardCheck,
   AlertCircle,
   FolderOpen
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface PreHandoverChecklistProps {
     projectContext: ProjectContext;

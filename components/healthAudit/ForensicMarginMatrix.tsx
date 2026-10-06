@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { FullBoqItem, BoqItem } from '../../types';
 import { calculateSellPrice, calculateGrossMargin, formatCurrency, formatINR } from '../../lib/utils';
 import { BRAND, CAUTION, GOOD, CRITICAL } from '../../lib/reportPalette';
-import { Filter, ArrowUpDown, TrendingUp, AlertTriangle, CheckCircle, Search, SlidersHorizontal, Layers } from 'lucide-react';
+import { Filter, ArrowUpDown, TrendingUp, AlertTriangle, CheckCircle, Search, SlidersHorizontal, Layers } from '@/lib/lucide-shim';
 
 interface ForensicMarginMatrixProps {
   boq: FullBoqItem[];

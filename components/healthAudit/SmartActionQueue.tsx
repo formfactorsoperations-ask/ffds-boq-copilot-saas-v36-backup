@@ -3,7 +3,7 @@ import { SmartActionItem } from './types';
 import { BoqItem, FullBoqItem, Item } from '../../types';
 import { formatCurrency, formatINR } from '../../lib/utils';
 import { generateEssentialTradeItems } from './healthEngine';
-import { Zap, Check, ArrowRight, Sparkles, AlertCircle, ShieldAlert, Layers, Lock } from 'lucide-react';
+import { Zap, Check, ArrowRight, Sparkles, AlertCircle, ShieldAlert, Layers, Lock } from '@/lib/lucide-shim';
 
 interface SmartActionQueueProps {
   smartActions: SmartActionItem[];

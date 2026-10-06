@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { WifiOff } from 'lucide-react';
+import { WifiOff } from '@/lib/lucide-shim';
 
 export const OfflineIndicator: React.FC = () => {
   const [isOnline, setIsOnline] = useState(

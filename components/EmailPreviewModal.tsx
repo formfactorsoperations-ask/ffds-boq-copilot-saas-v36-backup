@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Smartphone, Monitor, Mail, Check, AlertCircle, Edit3, MessageSquare } from 'lucide-react';
+import { X, Send, Smartphone, Monitor, Mail, Check, AlertCircle, Edit3, MessageSquare } from '@/lib/lucide-shim';
 
 interface EmailPreviewModalProps {
   isOpen: boolean;

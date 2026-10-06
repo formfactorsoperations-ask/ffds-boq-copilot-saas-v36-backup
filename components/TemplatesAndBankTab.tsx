@@ -19,7 +19,7 @@ import BankTab from './BankTab';
 import VendorsManager from './VendorsManager';
 import ConsoleHeader from './ui/ConsoleHeader';
 import Tabs from './ui/Tabs';
-import { Layers, Boxes, Store } from 'lucide-react';
+import { Layers, Boxes, Store } from '@/lib/lucide-shim';
 
 type TabId = 'templates' | 'bank' | 'vendors';
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Sparkles, Sun, SunMedium, MoonStar } from "lucide-react";
+import { Sparkles, Sun, SunMedium, MoonStar } from '@/lib/lucide-shim';
 import WavyText from "../ui/WavyText";
 
 interface WavingGreetingProps {

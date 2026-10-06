@@ -38,7 +38,7 @@ import {
   Check,
   RefreshCw,
   AlertTriangle,
-} from "lucide-react";
+} from '@/lib/lucide-shim';
 import { publicAppOrigin } from "../lib/publicUrl";
 
 interface ClientsDirectoryProps {

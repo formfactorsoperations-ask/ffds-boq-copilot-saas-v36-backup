@@ -26,7 +26,7 @@ import {
     Share2,
     Download,
     Camera
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ExtendedDesignDocument extends DesignDocument {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, CalendarDays, Loader2, Plus, X } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Loader2, Plus, X } from '@/lib/lucide-shim';
 import type { MomScopeItem } from '../../hooks/useMomScopeQueue';
 
 /*

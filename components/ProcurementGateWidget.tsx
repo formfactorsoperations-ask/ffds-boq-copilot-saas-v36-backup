@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert, ShieldCheck, Lock, Unlock, ArrowRight, ShoppingBag } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, Lock, Unlock, ArrowRight, ShoppingBag } from '@/lib/lucide-shim';
 
 interface ProcurementGateWidgetProps {
   paymentMilestones: any[];

@@ -1,6 +1,6 @@
 import React from "react";
 import { MaterialSelection } from "../../types";
-import { Check, Clock, MessageSquare, ImageOff } from "lucide-react";
+import { Check, Clock, MessageSquare, ImageOff } from '@/lib/lucide-shim';
 
 /**
  * A FINISH, WITH THE BASIS FOR SAYING YES.

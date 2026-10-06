@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../../services/firebaseClient';
 import { collectionGroup, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { MOM } from '../../types';
-import { CheckCircle2, CheckCircle, Calendar, MessageCircle, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, CheckCircle, Calendar, MessageCircle, AlertTriangle } from '@/lib/lucide-shim';
 import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 

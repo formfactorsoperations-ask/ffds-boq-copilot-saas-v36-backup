@@ -22,8 +22,9 @@ import { createClient } from '@supabase/supabase-js';
   -- or leave open if testing in a secure environment.
 */
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const safeEnv = (typeof import.meta !== 'undefined' && (import.meta as any)?.env) || (typeof process !== 'undefined' && process.env) || {};
+const supabaseUrl = safeEnv.VITE_SUPABASE_URL;
+const supabaseKey = safeEnv.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = (supabaseUrl && supabaseKey) 
   ? createClient(supabaseUrl, supabaseKey) 

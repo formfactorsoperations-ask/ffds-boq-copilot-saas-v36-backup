@@ -13,7 +13,7 @@ import {
     Sparkles, Send, MessageSquare, History, User, FileText, Calendar, Layers, Search, ShieldCheck, 
     Check, Download, Share2, Printer, ExternalLink, Link as LinkIcon, Filter, 
     LayoutGrid, List, AlertTriangle, X, Zap, Edit3, Trash2
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { classifyRevisionCause, RevisionClassification } from '../../services/geminiService';
 import { useOrg } from '../../contexts/OrgContext';
 import { isDesignerRole } from '../../lib/roleAccess';

@@ -51,7 +51,7 @@ import {
   ZoomIn,
   ZoomOut,
   Type
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 const DOC_TITLES: Record<ClientDocumentKind, string> = {
   terms_docket: 'Terms of Engagement Docket',

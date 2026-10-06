@@ -1,7 +1,7 @@
 import React from 'react';
 import { PaymentMilestone } from '../types';
 import { CheckIcon, DeleteIcon } from './Icons';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw } from '@/lib/lucide-shim';
 
 interface MilestoneCardViewProps {
     items: PaymentMilestone[];

@@ -5,7 +5,7 @@ import { calculateSellPrice } from "../lib/utils";
 import { ProjectContext, ProposalTier, PaymentMilestone, FullProjectData, Item, FullBoqItem, PaymentStatus, ProjectDiscount, BoqItem, AIStrategy } from '../types';
 import { formatCurrency, formatINR, id as generateId } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RotateCcw, Coins, CheckCircle, TrendingUp, Info, AlertTriangle, Sparkles, Sliders, History, FileText, Lock } from 'lucide-react';
+import { RotateCcw, Coins, CheckCircle, TrendingUp, Info, AlertTriangle, Sparkles, Sliders, History, FileText, Lock } from '@/lib/lucide-shim';
 import Card from './shared/Card';
 import { CalculatorIcon, ShieldCheckIcon, AlertIcon, CheckIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon, DeleteIcon, PlusIcon, ScissorsIcon, ClockIcon, CalendarIcon } from './Icons';
 import { useOrg } from '../contexts/OrgContext';

@@ -2,7 +2,7 @@ import React from 'react';
 import { showSuccessWithNext } from '../SuccessWithNextToast';
 import LockedState from '../LockedState';
 import { ProjectContext } from '../../types';
-import { Download, Rocket, Edit3 } from 'lucide-react';
+import { Download, Rocket, Edit3 } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';

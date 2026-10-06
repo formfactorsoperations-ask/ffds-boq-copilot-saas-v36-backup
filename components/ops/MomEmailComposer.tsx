@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, Sparkles, Loader2, Send, Copy, Paperclip, Link2, AlertTriangle, Check } from 'lucide-react';
+import { X, Sparkles, Loader2, Send, Copy, Paperclip, Link2, AlertTriangle, Check } from '@/lib/lucide-shim';
 import { MOM } from '../../types';
 import { getAi } from '../../services/aiClient';
 import { FLASH_MODEL } from '../../constants/aiModels';

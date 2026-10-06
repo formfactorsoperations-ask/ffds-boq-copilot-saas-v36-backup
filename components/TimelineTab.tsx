@@ -48,7 +48,7 @@ import {
   MessageCircle,
   ChevronsRight,
   Brain
-} from "lucide-react";
+} from '@/lib/lucide-shim';
 import { motion, AnimatePresence } from "framer-motion";
 import { useTimelinePhases } from "../hooks/useTimelinePhases";
 import { useOrg } from "../contexts/OrgContext";

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Sun, SunMedium, MoonStar } from 'lucide-react';
+import { Sun, SunMedium, MoonStar } from '@/lib/lucide-shim';
 import { LampContainer } from '../ui/lamp';
 import WavyText from '../ui/WavyText';
 

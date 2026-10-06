@@ -1,6 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Calendar, ChevronLeft, ChevronRight, Pin, Flag } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Pin, Flag } from '@/lib/lucide-shim';
 import { FullProjectData } from "../../types";
 import { useTilt } from "./useTilt";
 import {

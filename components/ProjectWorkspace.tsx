@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ProjectContextTier } from './ProjectContextTier';
 import { ProjectContext, ProjectStatus, FullProjectData } from '../types';
 import { STAGE_LABELS, PHASES } from '../constants/journeyConstants';
-import { Lock, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, X, Compass, Activity, Check, Info, Settings, Edit3, AlertTriangle, LayoutGrid, Handshake, Palette, Layers, FileText, Truck, Hammer, Key, Sparkles, SlidersHorizontal, Eye, Pencil } from 'lucide-react';
+import { Lock, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, X, Compass, Activity, Check, Info, Settings, Edit3, AlertTriangle, LayoutGrid, Handshake, Palette, Layers, FileText, Truck, Hammer, Key, Sparkles, SlidersHorizontal, Eye, Pencil } from '@/lib/lucide-shim';
 import { NAV_CONFIG, ALWAYS_ON_BAND } from './navConfig';
 import { useProjectJourney } from '../hooks/useProjectJourney';
 import { useOrg } from '../contexts/OrgContext';
@@ -13,7 +13,7 @@ import ProjectTeamButton from './projectHeader/ProjectTeamButton';
 import StudioMenuButton from './projectHeader/StudioMenuButton';
 import './projectHeader/projectHeader.css';
 import PageTitleBlock from './PageTitleBlock';
-import { LogOut, Home, Building2, Users, BarChart3, Library, CreditCard } from 'lucide-react';
+import { LogOut, Home, Building2, Users, BarChart3, Library, CreditCard } from '@/lib/lucide-shim';
 import ProjectStatusTransitionModal from './ProjectStatusTransitionModal';
 import { FloatingDock, FloatingDockItem } from './ui/floating-dock';
 import HubAlertsBell from './ops/HubAlertsBell';
@@ -45,12 +45,12 @@ function ProgressRing({ pct }: { pct: number }) {
     return () => window.clearTimeout(t);
   }, [pct]);
   return (
-    <span className="phd-ring" aria-label={`${pct}% through the project`}>
-      <svg viewBox="0 0 38 38" aria-hidden="true">
-        <circle className="bg" cx="19" cy="19" r="15" />
-        <circle className="fg" cx="19" cy="19" r="15" strokeDasharray={C} strokeDashoffset={C * (1 - shown / 100)} />
+    <span className="phd-ring relative w-[38px] h-[38px] shrink-0 inline-block" aria-label={`${pct}% through the project`}>
+      <svg viewBox="0 0 38 38" aria-hidden="true" className="w-[38px] h-[38px] -rotate-90">
+        <circle className="bg" cx="19" cy="19" r="15" fill="none" stroke="#E2E5F0" strokeWidth="4" />
+        <circle className="fg" cx="19" cy="19" r="15" fill="none" stroke="#3D52A0" strokeWidth="4" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - shown / 100)} />
       </svg>
-      <span>{pct}%</span>
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold text-[#3D52A0]">{pct}%</span>
     </span>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Check, Copy } from 'lucide-react';
+import { AlertTriangle, Check, Copy } from '@/lib/lucide-shim';
 import { ProjectContext } from '../../types';
 
 /**

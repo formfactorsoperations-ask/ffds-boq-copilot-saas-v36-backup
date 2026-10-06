@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Plus, FileText, Mail, Check, X, Clock } from 'lucide-react';
+import { ShieldCheck, Plus, FileText, Mail, Check, X, Clock } from '@/lib/lucide-shim';
 import type { DecisionData } from '../../../services/decisionsService';
 
 /**

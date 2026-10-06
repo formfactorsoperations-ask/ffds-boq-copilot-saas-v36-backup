@@ -4,7 +4,7 @@ import { useCommunicationLog } from '../../hooks/useCommunicationLog';
 import { updateCommunicationLog } from '../../services/communicationTrackerService';
 import { CommunicationLogItem, CommunicationTemplateItem, TeamMember, ProjectContext } from '../../types';
 import { resolveTemplate, stripHtml } from '../../lib/templateEngine';
-import { CheckCircle, Clock, AlertTriangle, Send, MoreVertical, X, Calendar, User, FileText, Check, AlertCircle, Copy, Search } from 'lucide-react';
+import { CheckCircle, Clock, AlertTriangle, Send, MoreVertical, X, Calendar, User, FileText, Check, AlertCircle, Copy, Search } from '@/lib/lucide-shim';
 import { format } from 'date-fns';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
 

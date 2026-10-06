@@ -5,7 +5,7 @@ import { splitCost, isAiAvailable } from '../services/geminiService';
 import { formatCurrency, calculateSellPrice } from '../lib/utils';
 import { DeleteIcon, WandIcon } from './Icons';
 import { UOM_OPTIONS } from '../constants';
-import { Sparkles, Copy, Trash2, Building2 } from 'lucide-react';
+import { Sparkles, Copy, Trash2, Building2 } from '@/lib/lucide-shim';
 
 interface BankItemCardProps {
   item: Item;

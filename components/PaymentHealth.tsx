@@ -1,7 +1,7 @@
 import React from 'react';
 import { formatCurrency } from '../lib/utils';
 import { PaymentHealth, usePaymentHealthScore } from '../hooks/usePaymentHealthScore';
-import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info } from '@/lib/lucide-shim';
 import { useOrg } from '../contexts/OrgContext';
 
 export function ProjectPaymentBadge({ projectId, size = 'sm' }: { projectId: string, size?: 'sm' | 'md' }) {

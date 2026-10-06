@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   TrendingUp, TrendingDown, Wallet, Ruler, Percent, FileCheck,
   Compass, AlertTriangle, Lock, ShieldCheck, ArrowRight, Activity,
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { FullProjectData, ProjectContext, FullBoqItem, PurchaseOrder } from '../../types';
 import { db } from '../../services/dbService';
 import { formatINR } from '../../lib/utils';

@@ -20,7 +20,7 @@ import {
   X,
   Sparkles,
   Activity
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { parseQuickSiteUpdate, generateWeeklyUpdateSummary } from '../../services/geminiService';
 import { useOrg } from '../../contexts/OrgContext';
 

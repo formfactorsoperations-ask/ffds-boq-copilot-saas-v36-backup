@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Calendar as CalendarIcon, X as XIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, X as XIcon, ChevronLeft, ChevronRight } from '@/lib/lucide-shim';
 import { parseDateInput, describeParsed } from '../../lib/parseDateInput';
 
 /*

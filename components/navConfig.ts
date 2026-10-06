@@ -1,4 +1,4 @@
-import { Compass, FolderOpen, MessageSquare, Wallet, Scale, Clock, Calendar, MonitorSmartphone, BarChart3 } from 'lucide-react';
+import { Compass, FolderOpen, MessageSquare, Wallet, Scale, Clock, Calendar, MonitorSmartphone, BarChart3 } from '@/lib/lucide-shim';
 import { ProjectContext } from '../types';
 import { STAGE_LABELS } from '../constants/journeyConstants';
 import { calculateClientActionItems } from '../services/clientPortalEngine';

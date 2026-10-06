@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, X, Shield, Lock, FileCheck, ClipboardList, Package, Award, ArrowRight } from 'lucide-react';
+import { Check, X, Shield, Lock, FileCheck, ClipboardList, Package, Award, ArrowRight } from '@/lib/lucide-shim';
 
 interface HandoverReadinessWidgetProps {
   paymentMilestones: any[];

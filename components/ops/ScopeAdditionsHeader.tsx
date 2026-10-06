@@ -2,7 +2,7 @@ import React from "react";
 import { formatCurrency } from "../../lib/utils";
 import { ScopeAdditionSummary } from "../../lib/scopeAdditions";
 import { HudDial } from "../reports/HudCharts";
-import { Plus, FileText, TrendingDown, Layers, Gauge, Info, AlertTriangle } from "lucide-react";
+import { Plus, FileText, TrendingDown, Layers, Gauge, Info, AlertTriangle } from '@/lib/lucide-shim';
 
 /**
  * SCOPE ADDITIONS: WHAT THE CHANGES HAVE DONE TO THIS JOB.

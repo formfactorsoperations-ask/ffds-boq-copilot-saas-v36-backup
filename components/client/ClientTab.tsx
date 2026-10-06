@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { ProjectContext, FullBoqItem, ProposalTier, Item, AiComparisonResult, MaterialSuggestion, TimelinePhase, PaymentMilestone, ProposalContent, DecisionBrainOutput, LeadProfile, ProposalLevel, ProposalType } from '../../types';
 import ClientExportView from './ClientExportView';
 import { useOrg } from '../../contexts/OrgContext';
-import { Download } from 'lucide-react';
+import { Download } from '@/lib/lucide-shim';
 import { UI_STYLES, UI_CONSTANTS } from '../../lib/UIConstants';
  
 import { calculateSellPrice, generateDeterministicSchedule, formatINR } from '../../lib/utils';

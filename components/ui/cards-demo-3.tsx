@@ -1,8 +1,7 @@
-"use client";
 import { animate, motion } from "framer-motion";
 import React, { useEffect } from "react";
 import { cn } from "../../lib/utils";
-import { Bot } from "lucide-react";
+import { Bot } from '@/lib/lucide-shim';
 
 export default function CardDemo() {
   return (

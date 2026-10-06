@@ -27,7 +27,7 @@ import {
   ChevronRight,
   CheckCircle2,
   X
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface ClientQueryInboxProps {
   projectContext: ProjectContext;

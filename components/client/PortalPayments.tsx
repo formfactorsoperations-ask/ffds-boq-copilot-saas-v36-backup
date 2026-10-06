@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { PaymentMilestone } from '../../types';
 import { formatINR } from '../../lib/utils';
-import { Check, Clock, MessageSquare, Info } from 'lucide-react';
+import { Check, Clock, MessageSquare, Info } from '@/lib/lucide-shim';
 
 /**
  * PAYMENTS — what has cleared, what is next, and what the whole road costs.

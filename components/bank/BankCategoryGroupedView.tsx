@@ -11,7 +11,7 @@ import {
   TrendingUp, 
   CheckSquare,
   Square
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface BankCategoryGroupedViewProps {
   items: Item[];

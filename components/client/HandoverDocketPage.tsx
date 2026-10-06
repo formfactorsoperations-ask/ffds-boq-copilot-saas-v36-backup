@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { buildSignoffPatch } from '../../services/clientApprovalEngine';
 import { sendAgreementSignoffRequest } from '../../services/emailService';
 import { ProjectContext, DigitalSignatureDocket } from '../../types';
-import { Download, Printer, CheckCircle2, Calendar, ShieldCheck } from 'lucide-react';
+import { Download, Printer, CheckCircle2, Calendar, ShieldCheck } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';

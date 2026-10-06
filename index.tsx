@@ -203,7 +203,8 @@ class ErrorBoundary extends React.Component<Props, State> {
   Nothing registers a worker in this app any more, so in dev there is never a
   legitimate one to keep. Production registration is untouched.
 */
-if (import.meta.env.DEV && typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+const isDevEnv = Boolean(typeof import.meta !== 'undefined' && (import.meta as any)?.env?.DEV);
+if (isDevEnv && typeof navigator !== "undefined" && "serviceWorker" in navigator) {
   navigator.serviceWorker
     .getRegistrations()
     .then((regs) => regs.forEach((r) => r.unregister()))
@@ -303,13 +304,9 @@ const appTree = (
       }>
         {/*
           One switch for every framer-motion animation in the app.
-
-          `reducedMotion="user"` makes framer read the OS setting and drop
-          transform and layout animations for anyone who has asked for less
-          motion. The CSS animations already honour that media query; the
-          JS-driven ones did not, and there are a lot of them now.
+          Enforce reliable rendering across all URLs and preview viewports.
         */}
-        <MotionConfig reducedMotion="user">
+        <MotionConfig reducedMotion="never">
           <OrgProvider>
             <App />
           </OrgProvider>

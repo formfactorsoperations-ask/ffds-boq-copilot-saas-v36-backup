@@ -29,7 +29,7 @@ import {
   CheckSquare,
   HelpCircle,
   AlertTriangle,
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface ProjectContextCardProps {
   projectContext: ProjectContext;

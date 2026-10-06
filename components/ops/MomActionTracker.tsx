@@ -30,7 +30,7 @@ import {
   Gavel,
   CheckCircle,
   Check,
-} from "lucide-react";
+} from '@/lib/lucide-shim';
 import { MomReviewModal } from "./MomReviewModal";
 import { useOrg } from "../../contexts/OrgContext";
 import { createEmptyMoM, createMoMFromNotes } from "../../services/momService";

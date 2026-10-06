@@ -70,7 +70,30 @@ export function OrgProvider({ children }: { children: ReactNode }) {
                     const userDoc = await getDoc(doc(db, "users", user.uid));
                     if (userDoc.exists()) {
                         const data = userDoc.data();
-                        if (data.tenantId) {
+                        /*
+                          A client does not read the studio record: it carries the
+                          studio's team list (names, emails, roles) and which
+                          designer works on which project. Their portal copy
+                          carries the studio's name, logo and contact details, so
+                          the header and letterhead come from there.
+                        */
+                        if (data.role === 'Client') {
+                            const pid = Array.isArray(data.projectIds) ? data.projectIds[0] : null;
+                            const view = pid ? await getDoc(doc(db, "projects", pid, "portalView", "current")) : null;
+                            const s: any = view?.exists() ? (view.data() as any)?.context?.portalStudio || {} : {};
+                            setOrgData(prev => ({
+                                ...prev,
+                                tenantId: data.tenantId,
+                                orgName: s.name || prev.orgName,
+                                orgLogo: s.logoUrl || (prev as any).orgLogo,
+                                contactPhone: s.phone, contactEmail: s.email, officeAddress: s.address,
+                                cityState: s.cityState, gstin: s.gstin, legalName: s.legalName,
+                                signatoryName: s.signatoryName, signatoryTitle: s.signatoryTitle,
+                                tagline: s.tagline, about: s.about, themeColor: s.themeColor,
+                                team: [],
+                            } as any));
+                            setTeamMembers([]);
+                        } else if (data.tenantId) {
                             // If we have a tenant ID in the user doc, fetch the org document
                             const orgDoc = await getDoc(doc(db, "organizations", data.tenantId));
                             if (orgDoc.exists()) {

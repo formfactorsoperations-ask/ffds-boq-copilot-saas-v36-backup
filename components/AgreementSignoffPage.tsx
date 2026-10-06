@@ -21,7 +21,7 @@ import {
   HelpCircle, 
   Clock, 
   Sparkles 
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface AgreementSignoffPageProps {
   token: string;
@@ -349,9 +349,10 @@ export default function AgreementSignoffPage({ token: initialToken }: AgreementS
     }
   };
 
-  const studioName = studioSettings?.companyName || studioSettings?.studioName || import.meta.env.VITE_STUDIO_NAME || 'The Studio';
-  const studioPhone = studioSettings?.phone || import.meta.env.VITE_STUDIO_PHONE || '';
-  const studioLogo = studioSettings?.logoUrl || import.meta.env.VITE_STUDIO_LOGO_URL || '';
+  const safeEnv = (typeof import.meta !== 'undefined' && (import.meta as any)?.env) || (typeof process !== 'undefined' && process.env) || {};
+  const studioName = studioSettings?.companyName || studioSettings?.studioName || safeEnv.VITE_STUDIO_NAME || 'The Studio';
+  const studioPhone = studioSettings?.phone || safeEnv.VITE_STUDIO_PHONE || '';
+  const studioLogo = studioSettings?.logoUrl || safeEnv.VITE_STUDIO_LOGO_URL || '';
 
   const getDocTitle = () => {
     switch (docType) {

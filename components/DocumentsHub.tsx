@@ -32,7 +32,7 @@ import {
   AlertCircle,
   HelpCircle,
   CheckCircle2
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface DocumentsHubProps {
   projectContext: ProjectContext;

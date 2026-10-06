@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BoqItem } from '../types';
 import { id as generateId } from '../lib/utils';
-import { X } from 'lucide-react';
+import { X } from '@/lib/lucide-shim';
 
 interface BulkImportModalProps {
     isOpen: boolean;

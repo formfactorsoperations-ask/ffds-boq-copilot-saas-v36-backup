@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, CheckCircle2, Loader2, AlertTriangle } from 'lucide-react';
+import { Check, CheckCircle2, Loader2, AlertTriangle } from '@/lib/lucide-shim';
 import type { DocumentIssue } from '../../types';
 import { clientTotals, totalsNote } from '../../lib/scopeTotals';
 import { workbookForIssue, downloadWorkbook } from '../../lib/scopeWorkbook';

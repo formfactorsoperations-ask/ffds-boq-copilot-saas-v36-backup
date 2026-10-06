@@ -14,7 +14,7 @@ import {
   ArrowDown,
   Building2,
   ExternalLink
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 interface BankSpreadsheetTableProps {
   items: Item[];

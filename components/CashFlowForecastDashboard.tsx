@@ -12,7 +12,7 @@ import {
   ShieldAlert,
   CheckCircle2,
   TrendingUp as TrendingUpIcon,
-} from "lucide-react";
+} from '@/lib/lucide-shim';
 import { buildWhatsAppURL } from "../lib/whatsappUtils";
 import { useStudioSettings } from "../hooks/useStudioSettings";
 

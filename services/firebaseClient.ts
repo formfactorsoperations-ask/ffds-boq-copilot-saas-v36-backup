@@ -6,8 +6,11 @@ setLogLevel('silent');
 import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { firebaseConfig as fileConfig } from './firebaseConfig';
-import appletConfig from '../firebase-applet-config.json';
+/* firebase-applet-config.json (AI Studio's own project, 'saas-copilot') is not
+   imported: firebaseConfig.ts always wins, so it was never used -- it only
+   shipped a second project's key in every build. */
 
 // --- CONFIGURATION STRATEGY ---
 // 1. firebase-applet-config.json (AI Studio Provisioned)
@@ -34,12 +37,16 @@ const isForceLocalMode = () => {
 };
 
 const getEnvVar = (key: string): string | undefined => {
-  if (typeof import.meta !== 'undefined' && import.meta?.env) {
-    return import.meta.env[key];
-  }
-  if (typeof process !== 'undefined' && process?.env) {
-    return process.env[key];
-  }
+  try {
+    if (typeof import.meta !== 'undefined' && (import.meta as any)?.env) {
+      return (import.meta as any).env[key];
+    }
+  } catch (e) {}
+  try {
+    if (typeof process !== 'undefined' && process?.env) {
+      return process.env[key];
+    }
+  } catch (e) {}
   return undefined;
 };
 
@@ -51,6 +58,9 @@ const envConfig = {
   messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID'),
   appId: getEnvVar('VITE_FIREBASE_APP_ID')
 };
+
+/** reCAPTCHA Enterprise site key for App Check; empty means App Check is off. */
+const APP_CHECK_SITE_KEY = '';
 
 const determineConfig = () => {
     if (isForceLocalMode()) {
@@ -64,19 +74,13 @@ const determineConfig = () => {
         return fileConfig;
     }
 
-    // 2. Check Applet Config
-    if (appletConfig && appletConfig.apiKey && appletConfig.projectId) {
-        console.log("Using configuration from firebase-applet-config.json");
-        return appletConfig;
-    }
-
-    // 3. Check Env
+    // 2. Check Env
     if (envConfig.apiKey && envConfig.projectId) {
         console.log("Using configuration from Environment Variables");
         return envConfig;
     }
 
-    // 4. Check LocalStorage
+    // 3. Check LocalStorage
     const stored = getStoredConfig();
     if (stored) {
         console.log("Using configuration from LocalStorage");
@@ -151,6 +155,25 @@ if (finalConfig) {
                         ? { experimentalForceLongPolling: true }
                         : { experimentalAutoDetectLongPolling: true },
             );
+        }
+        /*
+          App Check: every request carries proof that it came from this app on a
+          real browser, so the database, files and functions can refuse scripts
+          that only copied the public web config. Off until the studio creates a
+          reCAPTCHA Enterprise key for the published domain and puts it in
+          APP_CHECK_SITE_KEY (a site key is public by design). Enforcement is
+          then switched on per service in the Firebase console, once its
+          dashboard shows the app's own traffic arriving verified.
+          On localhost it runs in debug mode: the console prints a debug token
+          to register under App Check > Manage debug tokens.
+        */
+        if (APP_CHECK_SITE_KEY && typeof window !== 'undefined') {
+            try {
+                if (/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)) (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+                initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+            } catch (e) {
+                console.warn('App Check did not start', e);
+            }
         }
         auth = getAuth(app);
         storage = getStorage(app);

@@ -1,8 +1,6 @@
-"use client";
-
 import React, { useState } from "react";
 import { cn } from "../../lib/utils";
-import { ChevronUp } from "lucide-react";
+import { ChevronUp } from '@/lib/lucide-shim';
 
 export interface FloatingDockItem {
   title: string;

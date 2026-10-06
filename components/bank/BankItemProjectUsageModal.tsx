@@ -14,7 +14,7 @@ import {
   FolderKanban,
   Hash,
   Sparkles
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 
 export interface ProjectUsageDetail {
   projectId: string;

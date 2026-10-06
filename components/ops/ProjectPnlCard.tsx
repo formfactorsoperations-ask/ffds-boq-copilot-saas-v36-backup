@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, TrendingDown, Lock, ChevronDown, AlertTriangle, Wallet } from 'lucide-react';
+import { TrendingUp, TrendingDown, Lock, ChevronDown, AlertTriangle, Wallet } from '@/lib/lucide-shim';
 import { ProjectContext, FullBoqItem, PurchaseOrder } from '../../types';
 import { db } from '../../services/dbService';
 import { formatINR } from '../../lib/utils';

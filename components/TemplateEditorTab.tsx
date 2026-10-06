@@ -32,7 +32,7 @@ import {
   Copy,
   Download,
   Upload
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface TemplateEditorTabProps {

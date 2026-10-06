@@ -1,7 +1,7 @@
 import React from "react";
 import { formatCurrency } from "../../lib/utils";
 import { ScopeAdditionSummary } from "../../lib/scopeAdditions";
-import { Layers, ArrowRight, AlertTriangle, Info } from "lucide-react";
+import { Layers, ArrowRight, AlertTriangle, Info } from '@/lib/lucide-shim';
 
 /**
  * SCOPE ADDITIONS, IN THE MONEY TAB.

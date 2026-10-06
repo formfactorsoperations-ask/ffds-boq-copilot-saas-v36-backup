@@ -4,7 +4,7 @@ import ExecutionStamp from '../documents/ExecutionStamp';
 import { ProjectContext, DigitalSignatureDocket } from '../../types';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
-import { FileText, Download, ShieldCheck, CheckCheck, KeyRound, Share2, Copy, ExternalLink, Tablet, Lock, Shield, Check } from 'lucide-react';
+import { FileText, Download, ShieldCheck, CheckCheck, KeyRound, Share2, Copy, ExternalLink, Tablet, Lock, Shield, Check } from '@/lib/lucide-shim';
 import { formatCurrency, calculateSellPrice } from '../../lib/utils';
 import { resolveFinancials } from '../../lib/paymentSchedule';
 import { ShieldCheckIcon, CheckBadgeIcon } from '../Icons';

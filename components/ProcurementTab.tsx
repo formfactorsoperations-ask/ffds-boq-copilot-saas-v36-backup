@@ -4,7 +4,7 @@ import { ProjectContext, FullBoqItem, PurchaseOrder, ProcurementMode } from '../
 import { db } from '../services/dbService';
 import { buildEnvelopes, Envelope, defaultModeFor, envelopeKey } from '../lib/procurement';
 import { formatINR, formatClientValue } from '../lib/utils';
-import { AlertTriangle, PackageCheck, Plus, RefreshCw } from 'lucide-react';
+import { AlertTriangle, PackageCheck, Plus, RefreshCw } from '@/lib/lucide-shim';
 import RaisePOModal from './RaisePOModal';
 
 interface Props {

@@ -10,7 +10,7 @@ import {
   User, 
   MessageSquare,
   AlertTriangle
-} from 'lucide-react';
+} from '@/lib/lucide-shim';
 import { DigitalSignatureDocket, ManualOverrideMeta } from '../../types';
 
 interface ManualAcceptanceOverrideModalProps {
