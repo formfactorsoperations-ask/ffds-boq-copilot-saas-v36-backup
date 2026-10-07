@@ -24,6 +24,7 @@ import { downscalePlanToBase64 } from '../../lib/imageDownscale';
 import { connectGoogleCalendar, isGoogleCalendarConnected } from '../../services/googleCalendarService';
 import { CountUp, Dot } from '../ui/HudBits';
 import StudioTeamSection from './StudioTeamSection';
+import ZohoBooksCard from './ZohoBooksCard';
 import ConsoleHeader from '../ui/ConsoleHeader';
 import {
   SETTINGS_SECTIONS, SETTINGS_FIELDS, SectionId, SettingsField,
@@ -606,6 +607,12 @@ export default function StudioSettingsConsole(props: {
                     </button>
                   )}
                 </div>
+              </div>
+
+              {/* Optional add-in: drafts milestone invoices in the studio's Zoho Books.
+                  Collapsed and off unless a studio connects it. */}
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <ZohoBooksCard />
               </div>
 
               {/* Destructive, and the only thing on this screen that is — kept

@@ -12,7 +12,6 @@ import { renderPaymentReminderMessage } from '../../lib/whatsappUtils';
 import { connectGoogleCalendar, isGoogleCalendarConnected } from '../../services/googleCalendarService';
 import CommunicationTemplatesTab from '../ops/CommunicationTemplatesTab';
 import TermsAndPaymentTab from './TermsAndPaymentTab';
-import ZohoBooksCard from './ZohoBooksCard';
 
 interface StudioSettingsTabProps {
     initialTab?: string;
@@ -681,9 +680,6 @@ export default function StudioSettingsTab({
                             )}
                         </AnimatePresence>
                     </div>
-
-                    {/* OPTIONAL ADD-IN: ZOHO BOOKS. Off unless a studio connects it. */}
-                    <ZohoBooksCard />
 
                     {/* ACCORDION SECTION 4: ⚖️ FEE STRUCTURES & CONTRACT TERMS */}
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden transition-all duration-200">
