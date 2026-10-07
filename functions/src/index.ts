@@ -23,6 +23,8 @@ export { aiGenerate, aiCountTokens } from "./ai";
 export { syncStudioAccess, portalDoor, createStaffLogin, onStudioTeamChange, sweepStaffAccess } from "./access";
 /* Studio email, which used to be server.ts /api/send-email; see email.ts. */
 export { sendStudioEmail } from "./email";
+/* Optional Zoho Books add-in: drafts milestone invoices in the studio's own books; see zohoBooks.ts. */
+export { zohoBooks } from "./zohoBooks";
 export { onProjectWrittenDesignView, onDesignerAssignmentChange, rebuildDesignViews } from "./designView";
 /* Design Review: the only writer of a drawing's review state; see drawingReview.ts. */
 export { drawingReview } from "./drawingReview";

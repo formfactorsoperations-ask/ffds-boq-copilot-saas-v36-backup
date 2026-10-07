@@ -327,3 +327,26 @@ describe('booking packs are studio-only', () => {
     await assertSucceeds(getDoc(doc(member(), `organizations/${STUDIO}/projects/p1/bookingPacks/b1`)));
   });
 });
+
+describe('Zoho Books credentials are server-only', () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, `zohoBooksConnections/${STUDIO}`), { clientSecret: 'secret', refreshToken: 'token' });
+      await setDoc(doc(db, `zohoInvoiceLinks/${STUDIO}__p1__m1`), { invoiceId: 'I1' });
+    });
+  });
+
+  it('refuses everyone, including the studio that owns the connection', async () => {
+    for (const db of [anon(), stranger(), client(), designer(), member(), otherAdmin(), owner()]) {
+      await assertFails(getDoc(doc(db, `zohoBooksConnections/${STUDIO}`)));
+      await assertFails(getDoc(doc(db, `zohoInvoiceLinks/${STUDIO}__p1__m1`)));
+    }
+  });
+
+  it('refuses a write, so a studio cannot point the add-in at someone else\'s books', async () => {
+    await assertFails(setDoc(doc(member(), `zohoBooksConnections/${STUDIO}`), { refreshToken: 'mine' }));
+    await assertFails(setDoc(doc(owner(), `zohoBooksConnections/${OTHER}`), { refreshToken: 'mine' }));
+    await assertFails(setDoc(doc(member(), `zohoInvoiceLinks/${STUDIO}__p1__m9`), { invoiceId: 'X' }));
+  });
+});

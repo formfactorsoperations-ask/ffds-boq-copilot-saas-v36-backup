@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { showSuccessWithNext } from './SuccessWithNextToast';
 import { calculateSellPrice } from "../lib/utils";
-import { ProjectContext, ProposalTier, PaymentMilestone, FullProjectData, Item, FullBoqItem, PaymentStatus, ProjectDiscount, BoqItem, AIStrategy } from '../types';
+import { ProjectContext, ProposalTier, PaymentMilestone, ClientBilling, FullProjectData, Item, FullBoqItem, PaymentStatus, ProjectDiscount, BoqItem, AIStrategy } from '../types';
 import { formatCurrency, formatINR, id as generateId } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RotateCcw, Coins, CheckCircle, TrendingUp, Info, AlertTriangle, Sparkles, Sliders, History, FileText, Lock } from '@/lib/lucide-shim';
@@ -28,6 +28,9 @@ import { db as projectDb } from '../services/dbService';
 import { useTimelinePhases } from '../hooks/useTimelinePhases';
 import TermsAndPaymentTab from './studio/TermsAndPaymentTab';
 import { useScopeAdditions } from './ops/useScopeAdditions';
+import { useZohoBooks } from '../hooks/useZohoBooks';
+import ZohoRaiseInvoiceDialog from './ZohoRaiseInvoiceDialog';
+import type { ZohoRaiseResult } from '../services/zohoBooksService';
 import ScopeAdditionsMoneyPanel from './ops/ScopeAdditionsMoneyPanel';
 
 interface PaymentCalculatorTabProps {
@@ -441,6 +444,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         action: 'generate_invoice' | 'mark_paid';
         lockedTaxableBase?: number;
     } | null>(null);
+
+    /*
+      The optional Zoho Books add-in. A studio that has not connected it never
+      sees any of this: `connected` is false and Raise Invoice behaves exactly
+      as it always did.
+    */
+    const zohoBooks = useZohoBooks();
+    const [zohoRaise, setZohoRaise] = useState<{ milestoneId: string; lockedTaxableBase?: number } | null>(null);
 
     // Payment Schedule Logic
     const paymentSchedules = projectContext.paymentSchedules || [];
@@ -929,13 +940,42 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         }
 
         if (action === 'generate_invoice') {
-            handleUpdateMilestone(index, { 
-                status: 'invoiced', 
-                invoiceNumber: invNumber, 
-                invoiceDate: new Date().toISOString(),
-                lockedTaxableBase: lockedTaxableBase
-            });
-            showSuccessWithNext('Invoice raised successfully');
+            const raiseLocally = () => {
+                handleUpdateMilestone(index, { 
+                    status: 'invoiced', 
+                    invoiceNumber: invNumber, 
+                    invoiceDate: new Date().toISOString(),
+                    lockedTaxableBase: lockedTaxableBase
+                });
+                showSuccessWithNext('Invoice raised successfully');
+            };
+
+            /*
+              With Zoho Books connected, the invoice is drafted there and Zoho's
+              own number comes back, so the app and the books name the same
+              invoice. The local number is only for studios without the add-in,
+              and for a milestone with nothing officially billable (the cash
+              side is never invoiced).
+            */
+            void (async () => {
+                let zs = zohoBooks.status;
+                if (!zs && zohoBooks.tenantId) zs = await zohoBooks.refresh();
+                if (!zs && zohoBooks.tenantId) {
+                    alert('Could not check the Zoho Books connection just now. Please try again in a moment.');
+                    return;
+                }
+                const amt = schedule.byId[milestones[index]?.id];
+                if (!zs?.connected || !amt || !(amt.billable > 0)) { raiseLocally(); return; }
+                if (!zs.canRaise) {
+                    alert('Zoho Books is connected, so invoices are raised there. Ask an Owner, Admin or Ops Director to raise this one.');
+                    return;
+                }
+                if (!projectId) {
+                    alert('Save the project first, then raise the invoice.');
+                    return;
+                }
+                setZohoRaise({ milestoneId: milestones[index].id, lockedTaxableBase });
+            })();
         } else if (action === 'mark_paid') {
             handleUpdateMilestone(index, { status: 'paid' });
         } else if (action === 'revert_payment') {
@@ -958,11 +998,16 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             */
             handleUpdateMilestone(index, { status: 'invoiced' });
         } else if (action === 'revert_invoice') {
+            if (milestones[index]?.zohoInvoiceId &&
+                !window.confirm('This takes the milestone back to pending here. The draft in Zoho Books is not deleted: remove or void it there, or raising again will hand you the same draft.')) {
+                return;
+            }
             handleUpdateMilestone(index, { 
                 status: 'pending', 
                 invoiceNumber: undefined, 
                 invoiceDate: undefined,
-                lockedTaxableBase: undefined
+                lockedTaxableBase: undefined,
+                zohoInvoiceId: undefined
             });
         }
     };
@@ -5093,6 +5138,48 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* ZOHO BOOKS: DRAFT THE INVOICE (only when the add-in is connected) */}
+            {zohoRaise && projectId && (() => {
+                const m = milestones.find(x => x.id === zohoRaise.milestoneId);
+                const amt = m ? schedule.byId[m.id] : undefined;
+                if (!m || !amt) return null;
+                const rate = m.type === 'execution' ? (executionGstEnabled ? gstRate : 0) : (designGstEnabled ? gstRate : 0);
+                return (
+                    <ZohoRaiseInvoiceDialog
+                        milestone={m}
+                        amounts={{
+                            taxable: amt.billable,
+                            gst: amt.gst,
+                            gstRatePct: rate,
+                            retainer: amt.retainerDeducted,
+                            discount: amt.discountApplied,
+                            discountReason: amt.discountReason,
+                            invoiceTotal: amt.invoiceTotal,
+                        }}
+                        projectId={projectId}
+                        projectName={projectContext.name || 'Project'}
+                        client={{ name: projectContext.clientName, email: projectContext.clientEmail, phone: projectContext.clientPhone }}
+                        billing={projectContext.clientBilling}
+                        onClose={() => setZohoRaise(null)}
+                        onRaised={(result: ZohoRaiseResult, billing: ClientBilling) => {
+                            // By id and against the latest state: the request took a moment, and the schedule may have moved.
+                            setProjectContext(prev => ({
+                                ...prev,
+                                clientBilling: { ...(prev.clientBilling || {}), ...billing },
+                                paymentMilestones: (prev.paymentMilestones || []).map(x => x.id === zohoRaise.milestoneId ? {
+                                    ...x,
+                                    status: 'invoiced',
+                                    invoiceNumber: result.invoiceNumber,
+                                    invoiceDate: new Date().toISOString(),
+                                    lockedTaxableBase: zohoRaise.lockedTaxableBase,
+                                    zohoInvoiceId: result.invoiceId,
+                                } : x),
+                            }));
+                        }}
+                    />
+                );
+            })()}
 
             {/* PRE-SIGNOFF PAYMENTS EXCEPTION CONFIRMATION MODAL */}
             <AnimatePresence>
