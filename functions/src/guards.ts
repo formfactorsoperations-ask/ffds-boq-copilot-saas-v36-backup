@@ -14,7 +14,7 @@ import * as admin from "firebase-admin";
 export const PLATFORM_OWNER_EMAILS = ["formfactors.operations@gmail.com"];
 
 /** Studio roles, as syncStudioAccess hands them out. Clients and vendors are not staff. */
-export const STAFF_ROLES = new Set(["Super Admin", "Owner", "Admin", "Ops Director", "Designer", "Site Supervisor", "Viewer"]);
+export const STAFF_ROLES = new Set(["Super Admin", "Owner", "Admin", "Ops Director", "Design Head", "Designer", "Site Supervisor", "Viewer"]);
 
 export interface Staff {
   uid: string;

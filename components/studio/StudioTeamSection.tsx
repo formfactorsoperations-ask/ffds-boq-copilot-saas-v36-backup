@@ -22,13 +22,14 @@ import { createStaffLogin, StaffLogin } from '../../services/studioAccess';
 import { useProjectDirectory, useProjectTeam } from '../../services/projectTeam';
 import AssignProjectsModal from '../projectHeader/AssignProjectsModal';
 
-const ROLES: UserRole[] = ['Super Admin', 'Admin', 'Ops Director', 'Designer', 'Site Supervisor', 'Viewer', 'Client'] as UserRole[];
+const ROLES: UserRole[] = ['Super Admin', 'Admin', 'Ops Director', 'Design Head', 'Designer', 'Site Supervisor', 'Viewer', 'Client'] as UserRole[];
 
 /** What each role can reach, said plainly rather than as a permission matrix. */
 const ROLE_BLURB: Record<string, string> = {
   'Super Admin': 'Everything, across every studio on the platform',
   'Admin': 'Everything in this studio, including settings and money',
   'Ops Director': 'Projects, settings and margins — no platform access',
+  'Design Head': 'Reviews and approves every drawing; all projects, without the money',
   'Designer': 'Projects and BOQs; cannot see studio settings',
   'Site Supervisor': 'Site visits, snags and progress on assigned projects',
   'Viewer': 'Read only',

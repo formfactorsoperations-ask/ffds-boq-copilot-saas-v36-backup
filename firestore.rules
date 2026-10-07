@@ -77,9 +77,29 @@ service cloud.firestore {
     */
     function isDesignerDrawingChange() {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
-      return !changed.hasAny(['name', 'boqTriggers', 'isMandatory', 'isGapFlagged', 'companionOf', 'roomName'])
+      return !changed.hasAny(['name', 'boqTriggers', 'isMandatory', 'isGapFlagged', 'companionOf', 'roomName', 'review'])
         && (!changed.hasAny(['approvedAt']) || request.resource.data.approvedAt == null)
         && (!changed.hasAny(['gfc']) || request.resource.data.gfc.status != 'issued');
+    }
+
+    /*
+      DESIGN REVIEW is written by the drawingReview function and nothing else.
+
+      A drawing's `review` summary and its reviewVersions, reviewRounds,
+      reviewMarks and reviewEvents decide who approved which file. If a browser
+      could write them, an approval would be whatever a console said it was.
+      Rules add up -- any match that allows a write lets it through -- so every
+      match that can reach a drawing asks this as well.
+    */
+    function isReviewRecordPath(p) {
+      return p.matches('.*drawingTracker/[^/]+/review(Versions|Rounds|Marks|Events)/.*');
+    }
+    function keepsReview() {
+      return request.resource == null
+        || request.resource.data.get('review', null) == (resource == null ? null : resource.data.get('review', null));
+    }
+    function reviewUntouched(p) {
+      return !isReviewRecordPath(p) && (!p.matches('.*drawingTracker/[^/]+') || keepsReview());
     }
 
     // Check if the user's tenant ID matches the document's tenant ID
@@ -234,11 +254,17 @@ service cloud.firestore {
            match /revisions/{revisionId} {
              allow read, create: if isAssignedDesigner(orgId, projectId);
            }
+           /* Design Review records: read by the studio (the catch-all below) and the assigned Designer; written by the function only. */
+           match /{reviewSub}/{reviewDoc} {
+             allow read: if reviewSub in ['reviewVersions', 'reviewRounds', 'reviewMarks', 'reviewEvents']
+               && isAssignedDesigner(orgId, projectId);
+           }
 
            allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
-           allow create: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+           allow create: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin()) && !('review' in request.resource.data);
            allow delete: if false;
            allow update: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
+             && keepsReview()
              && (getUserData().role != 'Viewer')
              && (
                // Owner and Designer of the OWNING org may Issue GFC
@@ -352,7 +378,9 @@ service cloud.firestore {
       the rules above said.
     */
     match /{collectionId}/{document=**} {
-         allow read, write: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+         allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+         allow write: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
+           && reviewUntouched(string(document));
       }
     }
 
@@ -742,6 +770,16 @@ service cloud.firestore {
       across projects. The query has to say so (tenantId == their studio,
       designers array-contains their email); one that does not is refused.
     */
+    /*
+      The Design Head's review inbox: every drawing of her studio that has a
+      review, across projects, in one query. The query must name the studio
+      (review.orgId == hers); the function writes that field, never a browser.
+    */
+    match /{path=**}/drawingTracker/{drawingId} {
+      allow read: if isAuthenticated() && resource.data.get('review', null) != null
+        && (isSameTenant(resource.data.review.get('orgId', '')) || isSuperAdmin());
+    }
+
     match /{path=**}/designView/{viewId} {
       allow list: if isAuthenticated() && isTenantDesigner(resource.data.tenantId)
         && request.auth.token.email is string

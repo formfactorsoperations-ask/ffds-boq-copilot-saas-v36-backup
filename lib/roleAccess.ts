@@ -34,7 +34,7 @@ export const DESIGNER_EDITABLE_TABS = new Set(['drawing-tracker']);
  * Mirrors the list App.tsx uses to decide `isProjectTab`.
  */
 export const STUDIO_TABS = new Set([
-  'home', 'reports', 'projects', 'clients', 'bank', 'templates', 'ai-settings', 'setup-wizard',
+  'home', 'reports', 'projects', 'clients', 'bank', 'templates', 'ai-settings', 'setup-wizard', 'design-review',
   'studio-settings', 'terms-and-payment', 'communication-templates', 'saas-dashboard',
   'admin-templates-bank', 'data-privacy', 'support', 'terms-of-use',
 ]);
@@ -51,7 +51,7 @@ export const STUDIO_TABS = new Set([
 export const DESIGNER_PROJECT_TABS = new Set([
   'drawing-tracker', 'design-gate', 'leadiq', 'record-decision', 'timeline',
 ]);
-export const DESIGNER_STUDIO_TABS = new Set(['projects', 'data-privacy', 'support', 'terms-of-use']);
+export const DESIGNER_STUDIO_TABS = new Set(['projects', 'design-review', 'data-privacy', 'support', 'terms-of-use']);
 
 /** Where a Designer lands inside a project. */
 export const DESIGNER_HOME_TAB = 'drawing-tracker';

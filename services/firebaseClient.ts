@@ -4,7 +4,7 @@ import { getFirestore, initializeFirestore, Firestore, setLogLevel, connectFires
 
 setLogLevel('silent');
 import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
-import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { firebaseConfig as fileConfig } from './firebaseConfig';
@@ -90,7 +90,22 @@ const determineConfig = () => {
     return null;
 };
 
-const finalConfig = determineConfig();
+/*
+  In emulator mode the app also takes a throwaway "demo-" project id, so a
+  local session cannot reach a live service by accident: the emulators treat
+  demo projects as offline-only. Set ffds_emulator_project to use another.
+*/
+const emulatorProject = (() => {
+    try {
+        const on = (import.meta as any).env?.VITE_USE_FIREBASE_EMULATOR === 'true' || localStorage.getItem('ffds_use_emulator') === 'true';
+        return on ? (localStorage.getItem('ffds_emulator_project') || 'demo-studiodesk') : null;
+    } catch { return null; }
+})();
+const finalConfig = (() => {
+    const c = determineConfig();
+    if (!c || !emulatorProject) return c;
+    return { ...c, projectId: emulatorProject, authDomain: `${emulatorProject}.firebaseapp.com`, storageBucket: `${emulatorProject}.appspot.com` };
+})();
 let db: Firestore | null = null;
 let auth: Auth | null = null;
 let storage: FirebaseStorage | null = null;
@@ -200,6 +215,7 @@ if (finalConfig) {
             connectFirestoreEmulator(db, 'localhost', 8080);
             connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
             connectFunctionsEmulator(functions, 'localhost', 5001);
+            if (storage) connectStorageEmulator(storage, 'localhost', 9199);
             console.warn('Firebase EMULATOR mode — not talking to the live project.');
         }
 

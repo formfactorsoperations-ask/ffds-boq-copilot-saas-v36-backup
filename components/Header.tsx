@@ -18,7 +18,8 @@ import {
   Sparkles,
   ShieldCheck,
   Cloud,
-  HardDrive
+  HardDrive,
+  PenTool
 } from '@/lib/lucide-shim';
 import { AIStatus } from '../types';
 import AIStatusIndicator from './AIStatusIndicator';
@@ -43,11 +44,13 @@ interface SidebarProps {
 const TABS = [
   // Not for Designers: the studio home is the studio's worklist. They go
   // straight to Projects, which lists only the projects assigned to them.
-  { id: 'home', label: 'Home', icon: Home, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor'] },
-  { id: 'projects', label: 'Projects', icon: Building2, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor', 'Designer'] },
+  { id: 'home', label: 'Home', icon: Home, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Site Supervisor'] },
+  { id: 'projects', label: 'Projects', icon: Building2, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Site Supervisor', 'Designer'] },
+  /* Design Review: a Designer's Drawing Desk, the Design Head's review inbox. */
+  { id: 'design-review', label: 'Design Review', icon: PenTool, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Designer', 'Owner'] },
   // Not for Designers: the client list carries account values, and a Designer's
   // work is reached through their assigned projects.
-  { id: 'clients', label: 'Clients', icon: Users, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Site Supervisor'] },
+  { id: 'clients', label: 'Clients', icon: Users, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Site Supervisor'] },
   { id: 'reports', label: 'Reports', icon: BarChart3, section: 'STUDIO', roles: ['Admin', 'Ops Director'] },
   
   { id: 'studio-settings', label: 'Studio Settings', icon: Settings, section: 'STUDIO ADMIN', roles: ['Admin', 'Ops Director'] },
@@ -58,6 +61,7 @@ const TABS = [
 
 const TAB_THEMES: Record<string, { iconColor: string; bgLight: string; borderColor: string; activeGradient: string }> = {
   'home': { iconColor: 'text-sky-600', bgLight: 'bg-sky-50', borderColor: 'border-sky-100', activeGradient: 'from-sky-500 to-sky-600' },
+  'design-review': { iconColor: 'text-[#5B5BD6]', bgLight: 'bg-indigo-50', borderColor: 'border-indigo-100', activeGradient: 'from-indigo-500 to-[#5B5BD6]' },
   'projects': { iconColor: 'text-[#3D52A0]', bgLight: 'bg-sky-50', borderColor: 'border-sky-100', activeGradient: 'from-sky-500 to-[#3D52A0]' },
   'clients': { iconColor: 'text-blue-500', bgLight: 'bg-blue-50', borderColor: 'border-blue-100', activeGradient: 'from-blue-500 to-blue-600' },
   'reports': { iconColor: 'text-cyan-600', bgLight: 'bg-cyan-50', borderColor: 'border-cyan-100', activeGradient: 'from-cyan-500 to-cyan-600' },

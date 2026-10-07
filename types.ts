@@ -58,7 +58,7 @@ export interface OrganizationContext {
     poApprovalThreshold?: number;
 }
 
-export type UserRole = 'Super Admin' | 'Admin' | 'Ops Director' | 'Site Supervisor' | 'Vendor';
+export type UserRole = 'Super Admin' | 'Admin' | 'Ops Director' | 'Design Head' | 'Site Supervisor' | 'Vendor';
 
 export interface TeamMember {
     id: string;
@@ -1317,6 +1317,8 @@ export interface DrawingTrackerItem {
      * straight from a Designer. Cleared when the round is issued or revised.
      */
     pendingReview?: { roundNumber: number; submittedAt: number; submittedBy: string } | null;
+    /** Design Review's summary, written only by the drawingReview function (lib/drawingReview.ts). */
+    review?: import('./lib/drawingReview').ReviewSummary;
 }
 
 export interface AggregatedCategory {

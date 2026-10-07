@@ -41,7 +41,7 @@ service firebase.storage {
         && tenantId != null
         && firestore.exists(profilePath())
         && profile().get('tenantId', '') == tenantId
-        && profile().get('role', '') in ['Super Admin', 'Owner', 'Admin', 'Ops Director', 'Designer', 'Site Supervisor', 'Viewer'];
+        && profile().get('role', '') in ['Super Admin', 'Owner', 'Admin', 'Ops Director', 'Design Head', 'Designer', 'Site Supervisor', 'Viewer'];
     }
 
     function canUpload(tenantId) {
@@ -68,6 +68,44 @@ service firebase.storage {
     match /decisions/{projectId}/{rest=**} {
       allow read: if isPlatformOwner() || isStaffOf(projectTenant(projectId));
       allow write: if canUpload(projectTenant(projectId));
+    }
+
+    /*
+      DESIGN REVIEW files.
+
+      A designer uploads into their own folder for one drawing; the
+      drawingReview function reads it, checks it really is a PDF, and copies
+      it into versions/, which no browser may write -- so a reviewed file can
+      never be swapped underneath an approval. Designers reach only the
+      projects they are assigned to, read from the project's designView.
+    */
+    function projectDesignerOf(tenantId, projectId) {
+      let view = /databases/(default)/documents/projects/$(projectId)/designView/current;
+      return request.auth != null
+        && firestore.exists(profilePath())
+        && profile().get('role', '') == 'Designer'
+        && profile().get('tenantId', '') == tenantId
+        && firestore.exists(view)
+        && firestore.get(view).data.get('tenantId', '') == tenantId
+        && request.auth.token.get('email', '').lower() in firestore.get(view).data.get('designers', []);
+    }
+    function reviewStaff(tenantId) {
+      return isStaffOf(tenantId) && profile().get('role', '') != 'Designer';
+    }
+
+    match /drawingReview/{tenantId}/{projectId}/{drawingId}/uploads/{uid}/{file} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && projectTenant(projectId) == tenantId
+        && ((reviewStaff(tenantId) && profile().get('role', '') != 'Viewer') || projectDesignerOf(tenantId, projectId))
+        && request.resource.size < 25 * 1024 * 1024
+        && request.resource.contentType in ['application/pdf', 'image/png'];
+    }
+
+    match /drawingReview/{tenantId}/{projectId}/{drawingId}/versions/{file} {
+      allow read: if projectTenant(projectId) == tenantId
+        && (isPlatformOwner() || reviewStaff(tenantId) || projectDesignerOf(tenantId, projectId));
+      allow write: if false;
     }
 
     // Anything else: nobody.

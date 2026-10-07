@@ -24,6 +24,8 @@ export { syncStudioAccess, portalDoor, createStaffLogin, onStudioTeamChange, swe
 /* Studio email, which used to be server.ts /api/send-email; see email.ts. */
 export { sendStudioEmail } from "./email";
 export { onProjectWrittenDesignView, onDesignerAssignmentChange, rebuildDesignViews } from "./designView";
+/* Design Review: the only writer of a drawing's review state; see drawingReview.ts. */
+export { drawingReview } from "./drawingReview";
 import * as pako from "pako";
 import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";
 import { recordDocumentView, signIssue } from "../../services/documentIssueEngine";
