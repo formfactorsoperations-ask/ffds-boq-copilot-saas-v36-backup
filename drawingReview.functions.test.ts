@@ -132,8 +132,11 @@ describe('a sheet through review', () => {
   it('the Design Head pins notes; a must-fix note blocks approval', async () => {
     await users.head.call({ drawingId: 'd1', action: 'mark', op: 'create', page: 0, shape: { t: 'pin', x: 0.5, y: 0.35 }, text: 'Hob on the window centre line' });
     await users.head.call({ drawingId: 'd1', action: 'mark', op: 'create', page: 0, shape: { t: 'rect', x: 0.4, y: 0.1, w: 0.2, h: 0.15 }, text: 'Chimney height above the counter?', blocking: true });
+    await users.head.call({ drawingId: 'd1', action: 'mark', op: 'create', page: 0, shape: { t: 'pen', pts: [[0.1, 0.5], [0.15, 0.52], [0.2, 0.55], [0.25, 0.5]] }, text: 'Round off this corner' });
+    const sketch = (await list(`${DT}/d1/reviewMarks`)).find((m) => m.shape.t === 'pen');
+    expect(sketch.shape.xy).toHaveLength(8);
     const d = await read(`${DT}/d1`);
-    expect(d.review.marksOpen).toBe(2);
+    expect(d.review.marksOpen).toBe(3);
     expect(await code(users.head.call({ drawingId: 'd1', action: 'approve', expectedRev: d.review.rev }))).toBe('functions/failed-precondition');
     expect(await code(users.designer.call({ drawingId: 'd1', action: 'mark', op: 'create', page: 0, shape: { t: 'pin', x: 0.1, y: 0.1 }, text: 'x' }))).toBe('functions/permission-denied');
   });
@@ -196,6 +199,21 @@ describe('a sheet through review', () => {
     expect(sent.review.versionNo).toBe(3);
     const back = await users.designer.call({ drawingId: 'd1', action: 'withdraw', expectedRev: sent.review.rev });
     expect(back.review.state).toBe('DRAFT');
+  });
+
+  it('a wrong PDF nobody reviewed can be taken back; the sheet returns to the approved v2', async () => {
+    const d = await read(`${DT}/d1`);
+    expect(d.review.versionNo).toBe(3);
+    const res = await users.designer.call({ drawingId: 'd1', action: 'remove', expectedRev: d.review.rev, versionId: d.review.versionId });
+    expect(res.review.versionNo).toBe(2);
+    expect(res.review.state).toBe('APPROVED');
+    expect((await list(`${DT}/d1/reviewVersions`)).map((v) => v.n).sort()).toEqual([1, 2]);
+    expect((await list(`${DT}/d1/reviewEvents`)).some((e) => e.type === 'removed')).toBe(true);
+  });
+
+  it('a reviewed version stays: approved v2 cannot be removed', async () => {
+    const d = await read(`${DT}/d1`);
+    expect(await code(users.designer.call({ drawingId: 'd1', action: 'remove', expectedRev: d.review.rev, versionId: d.review.versionId }))).toBe('functions/failed-precondition');
   });
 });
 

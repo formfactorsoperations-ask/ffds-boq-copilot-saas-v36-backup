@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, Send, Loader2, Check, X, FileUp, PenTool } from 'lucide-react';
+import { Upload, Send, Loader2, Check, X, FileUp, PenTool, ArrowRight } from 'lucide-react';
 import { watchProjectDrawings, uploadSheet, submitSheet, type ReviewDrawing } from '../../services/drawingReviewService';
-import { laneOf, stateOf, matchFile, allowed, type DeskLane, type FileMatch } from '../../lib/drawingReview';
+import { laneOf, stateOf, matchFile, allowed, guessAudience, type DeskLane, type FileMatch } from '../../lib/drawingReview';
 import { thumbnailOf } from '../../lib/pdfRender';
-import { SheetCard, Thumb, LANE, roomLabel, firstName, useToast } from './ui';
+import { SheetCard, Thumb, LANE, roomLabel, useToast, DueChip, dueOf, dueRank, roundWarnText } from './ui';
 import type { Me } from './SheetStudio';
+import ProjectPicker, { type PickerProject } from './ProjectPicker';
 
 /*
   THE DRAWING DESK: a designer's own board.
@@ -18,9 +19,11 @@ import type { Me } from './SheetStudio';
 
 interface Props {
   orgId: string;
-  projects: { id: string; name: string }[];
+  projects: PickerProject[];
   projectId: string | null;
   setProjectId: (id: string) => void;
+  counts?: Record<string, number>;
+  activeId?: string | null;
   role: string;
   me: Me;
   onOpen: (projectId: string, drawingId: string) => void;
@@ -38,7 +41,7 @@ type Placing = {
 
 const ORDER: Record<string, number> = { CHANGES_REQUESTED: 0, DRAFT: 1, NONE: 2 };
 
-export default function DeskView({ orgId, projects, projectId, setProjectId, role, me, onOpen }: Props) {
+export default function DeskView({ orgId, projects, projectId, setProjectId, counts, activeId, role, me, onOpen }: Props) {
   const toast = useToast();
   const [drawings, setDrawings] = useState<ReviewDrawing[] | null>(null);
   const [room, setRoom] = useState<string | null>(null);
@@ -80,10 +83,12 @@ export default function DeskView({ orgId, projects, projectId, setProjectId, rol
     list.forEach((d) => { const k = d.roomName || 'General / Project-Wide'; m.set(k, [...(m.get(k) || []), d]); });
     return [...m.entries()].sort((a, b) => (a[0] === 'General / Project-Wide' ? 1 : b[0] === 'General / Project-Wide' ? -1 : a[0].localeCompare(b[0])));
   }, [drawings]);
+  const readyRooms = useMemo(() => new Set(rooms.filter(([, ds]) => {
+    const client = ds.filter((d) => (d.review?.audience || guessAudience(d.name)) === 'client');
+    return client.length > 0 && client.every((d) => stateOf(d.review) === 'APPROVED');
+  }).map(([name]) => name)), [rooms]);
   const byLane = (k: DeskLane) => list.filter((d) => laneOf(d.review) === k);
-  const desk = byLane('desk').sort((a, b) => ORDER[stateOf(a.review)] - ORDER[stateOf(b.review)]);
-  const returned = desk.filter((d) => stateOf(d.review) === 'CHANGES_REQUESTED').length;
-  const ready = desk.filter((d) => stateOf(d.review) === 'DRAFT').length;
+  const desk = byLane('desk').sort((a, b) => ORDER[stateOf(a.review)] - ORDER[stateOf(b.review)] || dueRank(a) - dueRank(b));
   const withHead = byLane('review').length;
 
   function start(files: File[]) {
@@ -139,6 +144,46 @@ export default function DeskView({ orgId, projects, projectId, setProjectId, rol
     }
   }
 
+  /*
+    START HERE: the one thing most worth doing next. Notes to fix come
+    first, then a sheet about to be late, then sheets ready to send, then a
+    room with nothing drawn yet.
+  */
+  const nextUp = useMemo(() => {
+    if (!drawings) return null;
+    const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+    const ret = desk.filter((d) => stateOf(d.review) === 'CHANGES_REQUESTED');
+    const late = desk.filter((d) => stateOf(d.review) !== 'CHANGES_REQUESTED' && dueRank(d) <= 1);
+    const ready = desk.filter((d) => stateOf(d.review) === 'DRAFT');
+    const bare = rooms.filter(([, ds]) => ds.every((d) => stateOf(d.review) === 'NONE'));
+    const rest = (skip: string) => [
+      skip !== 'ret' && ret.length ? `${plural(ret.length, 'sheet')} to fix` : '',
+      skip !== 'ready' && ready.length ? `${ready.length} ready to send` : '',
+    ].filter(Boolean).join(', ');
+    if (ret.length) {
+      const d = ret[0]; const open = d.review?.marksOpen || 0;
+      return { text: <><b>{d.name}</b> came back{open ? ` with ${plural(open, 'open note')}` : ''}.{roundWarnText(d.review) && <b className="text-[#C2416A]"> {roundWarnText(d.review)}: check every note before sending.</b>}</>, cta: open ? 'Fix the notes' : 'Drop the fixed sheet', due: dueOf(d.targetDate) ? d.targetDate : undefined, go: () => onOpen(d.projectId, d.id), more: ret.length > 1 ? `${ret.length - 1} more to fix` : rest('ret') };
+    }
+    if (late.length) {
+      const d = late[0]; const draft = stateOf(d.review) === 'DRAFT';
+      return { text: <><b>{d.name}</b> is {dueOf(d.targetDate)!.label.toLowerCase()}{draft ? ' and ready to send.' : ', with no PDF yet.'}</>, cta: draft ? `Send v${d.review!.versionNo}` : 'Upload it', due: undefined, go: () => (draft ? sendCard(d) : onOpen(d.projectId, d.id)), more: rest('') };
+    }
+    if (ready.length) {
+      const d = ready[0];
+      return { text: <>{ready.length === 1 ? <><b>{d.name}</b> is ready to send.</> : <><b>{ready.length} sheets</b> are ready to send, starting with {d.name}.</>}</>, cta: `Send v${d.review!.versionNo}`, due: d.targetDate, go: () => sendCard(d), more: '' };
+    }
+    if (bare.length) {
+      const [name, ds] = bare[0];
+      return { text: <><b>{roomLabel(name)}</b> has {plural(ds.length, 'sheet')} with no PDF yet.</>, cta: 'Upload PDFs', due: undefined, go: () => picker.current?.click(), more: bare.length > 1 ? `${bare.length - 1} more room${bare.length === 2 ? '' : 's'} to start` : '' };
+    }
+    const present = rooms.find(([name]) => readyRooms.has(name));
+    if (present) {
+      const n = readyRooms.size;
+      return { text: <><b>{roomLabel(present[0])}</b> is ready to present: every client sheet is approved.</>, cta: 'See the room', due: undefined, go: () => setRoom(present[0]), more: n > 1 ? `${n - 1} more room${n === 2 ? '' : 's'} ready` : '' };
+    }
+    return null;
+  }, [drawings, rooms, readyRooms]);
+
   const card = (d: ReviewDrawing) => {
     const s = stateOf(d.review);
     const action = s === 'DRAFT' ? (
@@ -176,7 +221,7 @@ export default function DeskView({ orgId, projects, projectId, setProjectId, rol
         <span className="min-w-0 flex-1 text-[13px] font-extrabold text-[#14211E]">{LANE[k].label}<small className="block text-[11.5px] font-semibold text-[#66786F]">{sub}</small></span>
         <span className="font-display text-[15px] font-semibold" style={{ color: LANE[k].ink }}>{rows.length}</span>
       </div>
-      {rows.length ? <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))' }}>{rows.map(card)}</div>
+      {rows.length ? <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(215px, 1fr))' }}>{rows.map(card)}</div>
         : <div className="rounded-xl border-[1.5px] border-dashed px-2 py-6 text-center text-[12.5px] text-[#66786F]" style={{ borderColor: `${LANE[k].ink}4D` }}>{k === 'review' ? 'Drag a ready sheet here to send it' : 'Nothing here yet'}</div>}
     </section>
   );
@@ -187,56 +232,55 @@ export default function DeskView({ orgId, projects, projectId, setProjectId, rol
 
   return (
     <div>
-      <section className="mb-6 grid items-stretch gap-6 lg:grid-cols-2">
-        <div className="flex flex-col justify-center gap-3.5 px-1 py-2">
-          <p className="text-[10.5px] font-extrabold uppercase tracking-[.1em] text-[#66786F]">Drawing Desk</p>
-          <h1 className="font-display font-medium leading-[1.1] tracking-tight text-[#14211E]" style={{ fontSize: 'clamp(28px, 3.2vw, 40px)' }}>
-            Hello, {firstName(me.name)}.<br /><em className="not-italic text-[#3D52A0]">{desk.length} sheet{desk.length === 1 ? '' : 's'}</em> on your desk.
-          </h1>
-          <p className="max-w-[48ch] text-base text-[#2A3B37]">
-            {[returned && `${returned} came back with notes.`, ready && `${ready} ready to send.`, withHead && `${withHead} with the Design Head.`].filter(Boolean).join(' ') || 'Drop a PDF on any drawing to start.'}
-          </p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <button type="button" onClick={() => picker.current?.click()} className="inline-flex items-center gap-2 rounded-[10px] bg-[#14211E] px-4 py-2.5 text-[13px] font-bold text-white"><FileUp size={15} />Upload PDFs</button>
-            <span className="text-xs text-[#98A79F]">or drag them anywhere on this page</span>
-            <input ref={picker} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ''; start(fs); }} />
-          </div>
+      <div className="mb-3.5 flex flex-wrap items-center gap-x-3 gap-y-2.5">
+        <div className="min-w-0 flex-1 basis-[320px]">
+          <ProjectPicker projects={projects} projectId={projectId} onPick={setProjectId} counts={counts} activeId={activeId} />
         </div>
-        <div className="relative flex flex-col gap-3 overflow-hidden rounded-[18px] border border-[#E1E7E3] bg-white p-4" style={{ boxShadow: '0 1px 2px rgba(20,33,30,.06)' }}>
-          <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: 'radial-gradient(rgba(61,82,160,.07) 1.2px, transparent 1.2px)', backgroundSize: '14px 14px' }} />
-          <div className="relative flex flex-wrap items-center gap-2.5">
-            <h3 className="min-w-0 flex-1 font-display text-[15px] font-semibold text-[#14211E]">{project?.name || 'Project'}</h3>
-            {projects.length > 1 && (
-              <select value={projectId || ''} onChange={(e) => setProjectId(e.target.value)} className="max-w-[60%] rounded-full border border-[#E1E7E3] bg-[#F3F6F4] px-3 py-1 text-xs font-bold text-[#2A3B37]" aria-label="Project">
-                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            )}
-          </div>
-          <div className="relative grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
-            {drawings === null ? <div className="col-span-full py-8 text-center"><Loader2 className="mx-auto animate-spin text-slate-400" /></div>
-              : !rooms.length ? <p className="col-span-full py-6 text-center text-sm text-[#66786F]">No drawings in this project’s tracker yet.</p>
-              : rooms.map(([name, ds]) => {
-                const lanes = ds.map((d) => laneOf(d.review));
-                const worst = lanes.includes('desk') ? 'desk' : lanes.includes('review') ? 'review' : 'approved';
-                const on = room === name;
-                return (
-                  <button key={name} type="button" onClick={() => setRoom(on ? null : name)} aria-pressed={on}
-                    className="flex min-h-[64px] flex-col justify-between rounded-xl border px-3 py-2 text-left transition"
-                    style={{ background: on ? `${LANE[worst].ink}22` : `${LANE[worst].soft}`, borderColor: on ? LANE[worst].ink : 'transparent' }}>
-                    <span className="truncate text-[12.5px] font-bold text-[#2A3B37]">{roomLabel(name)}</span>
-                    <span className="flex items-center gap-1">
-                      {ds.map((d) => <i key={d.id} title={d.name} className="h-2 w-2 rounded-full" style={{ background: stateOf(d.review) === 'NONE' ? '#C9D2CE' : LANE[laneOf(d.review)].ink }} />)}
-                      <span className="ml-auto text-[10.5px] font-semibold text-[#66786F]">{ds.length} sheet{ds.length === 1 ? '' : 's'}</span>
-                    </span>
-                  </button>
-                );
-              })}
-          </div>
-          <div className="relative flex flex-wrap gap-x-3 gap-y-1 text-[11.5px] text-[#66786F]">
-            {(Object.keys(LANE) as DeskLane[]).map((k) => <span key={k} className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px]" style={{ background: LANE[k].ink }} />{k === 'desk' ? 'Your desk' : LANE[k].label}</span>)}
-          </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {([['desk', desk.length, 'on your desk'], ['review', withHead, 'with the Design Head'], ['approved', byLane('approved').length, 'approved']] as const).map(([k, n, label]) => (
+            <span key={k} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-bold" style={{ background: LANE[k].soft, color: LANE[k].ink }}>
+              <b className="font-display text-[15px]">{n}</b>{label}
+            </span>
+          ))}
         </div>
-      </section>
+        <button type="button" onClick={() => picker.current?.click()} title="Or drag PDFs anywhere on this page" className="inline-flex items-center gap-2 rounded-[10px] bg-[#14211E] px-4 py-2.5 text-[13px] font-bold text-white"><FileUp size={15} />Upload PDFs</button>
+        <input ref={picker} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ''; start(fs); }} />
+      </div>
+
+      <div className="mb-3.5 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Rooms">
+        {drawings === null ? <div className="py-3"><Loader2 className="animate-spin text-slate-400" size={18} /></div>
+          : !rooms.length ? <p className="py-2 text-sm text-[#66786F]">No drawings in this project’s tracker yet.</p>
+          : rooms.map(([name, ds]) => {
+            const lanes = ds.map((d) => laneOf(d.review));
+            const worst = lanes.includes('desk') ? 'desk' : lanes.includes('review') ? 'review' : 'approved';
+            const done = lanes.filter((l) => l === 'approved').length;
+            const on = room === name;
+            const present = readyRooms.has(name);
+            return (
+              <button key={name} type="button" onClick={() => setRoom(on ? null : name)} aria-pressed={on}
+                title={present ? 'Every client sheet in this room is approved: ready to present in the design meeting' : undefined}
+                className="flex min-w-[150px] shrink-0 flex-col gap-1 rounded-xl border px-3 py-2 text-left transition"
+                style={{ background: on ? `${LANE[worst].ink}22` : LANE[worst].soft, borderColor: on ? LANE[worst].ink : present ? LANE.approved.ink : 'transparent' }}>
+                <span className="flex items-center gap-1.5 truncate text-[12.5px] font-bold text-[#2A3B37]">{roomLabel(name)}
+                  {present && <span className="rounded-full px-1.5 text-[10px] font-extrabold text-white" style={{ background: LANE.approved.ink }}>Ready to present</span>}
+                </span>
+                <span className="flex items-center gap-1">
+                  {ds.map((d) => <i key={d.id} title={d.name} className="h-2 w-2 rounded-full" style={{ background: stateOf(d.review) === 'NONE' ? '#C9D2CE' : LANE[laneOf(d.review)].ink }} />)}
+                  <span className="ml-auto pl-2 text-[10.5px] font-semibold text-[#66786F]">{done}/{ds.length} approved</span>
+                </span>
+              </button>
+            );
+          })}
+      </div>
+
+      {nextUp && (
+        <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-[#CFE6DC] bg-[#EEF7F2] px-4 py-2.5">
+          <span className="text-[11px] font-extrabold uppercase tracking-[.1em] text-[#2E8B6F]">Start here</span>
+          <span className="min-w-0 flex-1 text-[13.5px] text-[#14211E]">{nextUp.text}{nextUp.more ? <span className="text-[#66786F]"> · then {nextUp.more}</span> : null}</span>
+          {nextUp.due && <DueChip targetDate={nextUp.due} />}
+          <button type="button" onClick={nextUp.go} className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#2E8B6F] px-3.5 py-1.5 text-[12.5px] font-bold text-white">{nextUp.cta}<ArrowRight size={14} /></button>
+        </div>
+      )}
 
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
         <h2 className="font-display text-[19px] font-semibold text-[#14211E]">Sheets</h2>
@@ -244,7 +288,7 @@ export default function DeskView({ orgId, projects, projectId, setProjectId, rol
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#14211E] py-1 pl-3 pr-1.5 text-xs font-bold text-white">{roomLabel(room)}
             <button type="button" onClick={() => setRoom(null)} aria-label="Show every room" className="grid h-[18px] w-[18px] place-items-center rounded-full bg-white/20"><X size={10} /></button>
           </span>
-        ) : <span className="text-[12.5px] text-[#98A79F]">Tap a room to focus on it</span>}
+        ) : <span className="text-[12.5px] text-[#98A79F]">Tap a room above to focus on it · drop PDFs anywhere on the page</span>}
       </div>
 
       <section className="flex flex-col gap-2.5 rounded-[18px] p-2.5" style={{ background: `${LANE.desk.soft}AA` }} aria-label="On your desk">
@@ -253,7 +297,7 @@ export default function DeskView({ orgId, projects, projectId, setProjectId, rol
           <span className="font-display text-[15px] font-semibold" style={{ color: LANE.desk.ink }}>{desk.length}</span>
         </div>
         {drawings === null ? <div className="py-10 text-center"><Loader2 className="mx-auto animate-spin text-slate-400" /></div>
-          : desk.length ? <div className="grid items-start gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>{desk.map(card)}</div>
+          : desk.length ? <div className="grid items-start gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(215px, 1fr))' }}>{desk.map(card)}</div>
           : <div className="rounded-xl border-[1.5px] border-dashed px-2 py-6 text-center text-[12.5px] text-[#66786F]" style={{ borderColor: `${LANE.desk.ink}4D` }}>Your desk is clear.</div>}
       </section>
       <div className="mt-3.5 grid items-start gap-3.5 md:grid-cols-2">

@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { fileBlob } from '../../services/drawingReviewService';
 import { loadPdf, renderPage } from '../../lib/pdfRender';
-import type { MarkShape, ReviewMark } from '../../lib/drawingReview';
+import { turnShape, type MarkShape, type ReviewMark, type Turn } from '../../lib/drawingReview';
 import { MARK, FIXED } from './ui';
 
 /*
@@ -27,13 +27,15 @@ interface Props {
   selectedId?: string | null;
   tool: Tool;
   canMark: boolean;
+  /** The viewer's own rotation of the sheet; marks are drawn turned and saved unturned. */
+  turn?: Turn;
   onPageCount?: (n: number) => void;
   onSelect?: (id: string) => void;
   onShape?: (shape: MarkShape, anchor: { x: number; y: number }) => void;
 }
 
 /* `mode` changes when the canvas element is swapped (compare on or off), so the page is drawn again into the new one. */
-function useCanvasPage(path: string | null | undefined, page: number, width: number, mode: string) {
+function useCanvasPage(path: string | null | undefined, page: number, width: number, mode: string, turn: Turn) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,12 +48,12 @@ function useCanvasPage(path: string | null | undefined, page: number, width: num
       .then(async (doc) => {
         if (!live) return;
         setPages(doc.numPages);
-        const s = await renderPage(doc, page, canvas.current!, width);
+        const s = await renderPage(doc, page, canvas.current!, width, turn);
         if (live) setSize(s);
       })
       .catch((e) => live && setError(/unauthori|permission/i.test(String(e?.code || e?.message)) ? 'You cannot open this drawing.' : 'This drawing could not be opened. Check the connection and try again.'));
     return () => { live = false; };
-  }, [path, page, width, mode]);
+  }, [path, page, width, mode, turn]);
   return { canvas, size, error, pages };
 }
 
@@ -83,6 +85,7 @@ export function MarkShapeSvg({ m, n, color, selected, H }: { m: MarkShape; n: nu
 
 export default function PdfStage(props: Props) {
   const { pdfPath, comparePath, compareLabel, page, zoom, marks, draft, selectedId, tool, canMark, onPageCount, onSelect, onShape } = props;
+  const turn: Turn = props.turn || 0;
   const wrap = useRef<HTMLDivElement>(null);
   const [boxWidth, setBoxWidth] = useState(0);
   useLayoutEffect(() => {
@@ -93,8 +96,8 @@ export default function PdfStage(props: Props) {
   }, []);
   const width = Math.max(200, Math.min(boxWidth, 1100) * zoom);
   const mode = comparePath ? 'compare' : 'single';
-  const main = useCanvasPage(pdfPath, page, width, mode);
-  const other = useCanvasPage(comparePath || null, page, width, mode);
+  const main = useCanvasPage(pdfPath, page, width, mode, turn);
+  const other = useCanvasPage(comparePath || null, page, width, mode, turn);
   const [cmpX, setCmpX] = useState(50);
   useEffect(() => { if (main.pages) onPageCount?.(main.pages); }, [main.pages]);
 
@@ -113,7 +116,7 @@ export default function PdfStage(props: Props) {
     e.preventDefault();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     const p = point(e);
-    if (tool === 'pin') { onShape?.({ t: 'pin', x: p[0], y: p[1] }, { x: p[0], y: p[1] }); return; }
+    if (tool === 'pin') { onShape?.(turnShape({ t: 'pin', x: p[0], y: p[1] }, turn, 'page'), { x: p[0], y: p[1] }); return; }
     start.current = p;
     setLive(tool === 'rect' ? { t: 'rect', x: p[0], y: p[1], w: 0, h: 0 } : tool === 'arrow' ? { t: 'arrow', x: p[0], y: p[1], x2: p[0], y2: p[1] } : { t: 'pen', pts: [p] });
   };
@@ -130,7 +133,7 @@ export default function PdfStage(props: Props) {
     const big = s.t === 'rect' ? s.w > 0.01 && s.h > 0.01 : s.t === 'arrow' ? Math.hypot(s.x2 - s.x, s.y2 - s.y) > 0.02 : s.t === 'pen' ? s.pts.length > 4 : true;
     if (!big) return;
     const anchor = s.t === 'rect' ? { x: s.x + s.w, y: s.y } : s.t === 'arrow' ? { x: s.x, y: s.y } : s.t === 'pen' ? { x: s.pts[0][0], y: s.pts[0][1] } : { x: 0, y: 0 };
-    onShape?.(s, anchor);
+    onShape?.(turnShape(s, turn, 'page'), anchor);
   };
 
   const error = main.error || other.error;
@@ -158,10 +161,10 @@ export default function PdfStage(props: Props) {
                   onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { start.current = null; setLive(null); }}>
                   {marks.map((m) => (
                     <g key={m.id} style={{ cursor: 'pointer' }} onPointerDown={(e) => { if (!drawing) { e.stopPropagation(); onSelect?.(m.id); } }}>
-                      <MarkShapeSvg m={m.shape} n={m.n} H={H} color={m.status === 'FIXED' ? FIXED : MARK} selected={selectedId === m.id} />
+                      <MarkShapeSvg m={turnShape(m.shape, turn, 'view')} n={m.n} H={H} color={m.status === 'FIXED' ? FIXED : MARK} selected={selectedId === m.id} />
                     </g>
                   ))}
-                  {draft && <MarkShapeSvg m={draft} n="+" H={H} color={MARK} selected />}
+                  {draft && <MarkShapeSvg m={turnShape(draft, turn, 'view')} n="+" H={H} color={MARK} selected />}
                   {live && <MarkShapeSvg m={live} n="+" H={H} color={MARK} selected />}
                 </svg>
               )}

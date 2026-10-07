@@ -314,7 +314,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <Icon className={`relative w-4 h-4 shrink-0 transition-transform duration-200 ease-out
                           ${isActive ? 'scale-110 text-white drop-shadow-[0_0_5px_rgba(112,145,230,.85)]'
                                      : 'text-slate-600 group-hover:text-[#334486] group-hover:-translate-y-0.5 group-hover:scale-110'}`} />
-        <span className={`relative tracking-tight ${quiet ? 'hidden xl:inline' : 'hidden sm:inline'}`}>
+        <span className={`relative tracking-tight ${quiet ? 'hidden 2xl:inline' : 'hidden sm:inline'}`}>
           {tab.label}
         </span>
       </button>
@@ -392,29 +392,31 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         <div className="flex-1 min-w-[8px]" />
 
-        {/* Telemetry */}
-        <button
-          onClick={() => setIsConfigOpen(true)}
-          title={isCloud ? 'Cloud sync active — configure' : 'Local storage — configure'}
-          className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer
-                      font-mono text-[9.5px] font-bold uppercase tracking-[0.14em] border
-                      transition-all duration-200 hover:-translate-y-px ${
-            isCloud
-              ? 'bg-emerald-50/80 text-emerald-700 border-emerald-200 hover:border-emerald-300 hover:shadow-[0_0_12px_rgba(16,185,129,.22)]'
-              : 'bg-amber-50/80 text-amber-700 border-amber-200 hover:border-amber-300 hover:shadow-[0_0_12px_rgba(245,158,11,.22)]'
-          }`}
-        >
-          <span className="relative flex w-1.5 h-1.5 shrink-0">
-            {isCloud && <span className="absolute inline-flex w-full h-full rounded-full bg-emerald-500 opacity-60 animate-ping" />}
-            <span className={`relative inline-flex w-1.5 h-1.5 rounded-full ${isCloud ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-          </span>
-          {isCloud ? <Cloud className="w-3 h-3" /> : <HardDrive className="w-3 h-3" />}
-          <span>{isCloud ? 'CLOUD' : 'LOCAL'}</span>
-        </button>
-
-        <div className="hidden lg:block scale-90 origin-right shrink-0">
-          <AIStatusIndicator status={aiStatus} />
-        </div>
+        {/* Telemetry: storage and AI in one quiet light. Green when both are
+            live; the tooltip and the configure dialog carry the detail. */}
+        {(() => {
+          const ai = { checking: 'AI connecting', online: 'AI online', error: 'AI error, check the key', unavailable: 'AI off, no key' }[aiStatus] || 'AI';
+          const bad = aiStatus === 'error';
+          const warn = !isCloud || aiStatus === 'unavailable';
+          const tone = bad ? 'bg-rose-50/80 text-rose-700 border-rose-200' : warn ? 'bg-amber-50/80 text-amber-700 border-amber-200' : 'bg-emerald-50/80 text-emerald-700 border-emerald-200';
+          const dot = bad ? 'bg-rose-500' : warn ? 'bg-amber-500' : 'bg-emerald-500';
+          return (
+            <button
+              onClick={() => setIsConfigOpen(true)}
+              title={`${isCloud ? 'Cloud sync active' : 'Local storage only'} · ${ai}. Click to configure.`}
+              aria-label={`${isCloud ? 'Cloud sync active' : 'Local storage only'}, ${ai}`}
+              className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer border
+                          text-[11.5px] font-bold transition-all duration-200 hover:-translate-y-px ${tone}`}
+            >
+              <span className="relative flex w-2 h-2 shrink-0">
+                {!warn && aiStatus === 'online' && <span className="absolute inline-flex w-full h-full rounded-full bg-emerald-500 opacity-60 animate-ping" />}
+                <span className={`relative inline-flex w-2 h-2 rounded-full ${dot} ${aiStatus === 'checking' ? 'animate-pulse' : ''}`} />
+              </span>
+              {isCloud ? <Cloud className="w-3.5 h-3.5" /> : <HardDrive className="w-3.5 h-3.5" />}
+              <span className="hidden xl:inline">{!isCloud ? 'Local' : bad ? 'AI error' : warn ? 'Live · AI off' : 'Live'}</span>
+            </button>
+          );
+        })()}
 
         {/* Account — the second reactor */}
         <div className="relative shrink-0" onClick={e => e.stopPropagation()}>

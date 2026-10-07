@@ -2,7 +2,7 @@ import { collection, collectionGroup, doc, onSnapshot, query, where, orderBy } f
 import { ref, uploadBytesResumable, getBlob } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import { db, storage, functions } from './firebaseClient';
-import { uploadPrefix, type ReviewSummary, type ReviewVersion, type ReviewMark, type ReviewRound, type ReviewEvent, type MarkShape } from '../lib/drawingReview';
+import { uploadPrefix, readShape, type ReviewSummary, type ReviewVersion, type ReviewMark, type ReviewRound, type ReviewEvent, type MarkShape } from '../lib/drawingReview';
 
 /*
   The browser's side of Design Review: it listens, uploads into its own
@@ -72,7 +72,9 @@ function watchSub<T>(orgId: string, projectId: string, drawingId: string, sub: s
   return onSnapshot(order ? query(c, orderBy(order)) : c, (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }) as T)), () => onChange([]));
 }
 export const watchVersions = (o: string, p: string, d: string, cb: (v: ReviewVersion[]) => void) => watchSub<ReviewVersion>(o, p, d, 'reviewVersions', 'n', cb);
-export const watchMarks = (o: string, p: string, d: string, cb: (v: ReviewMark[]) => void) => watchSub<ReviewMark>(o, p, d, 'reviewMarks', 'n', cb);
+/* A sketch's points come back from storage flattened; turn them into pairs for drawing. */
+export const watchMarks = (o: string, p: string, d: string, cb: (v: ReviewMark[]) => void) =>
+  watchSub<ReviewMark>(o, p, d, 'reviewMarks', 'n', (rows) => cb(rows.map((m) => ({ ...m, shape: readShape(m.shape) }))));
 export const watchRounds = (o: string, p: string, d: string, cb: (v: ReviewRound[]) => void) => watchSub<ReviewRound>(o, p, d, 'reviewRounds', 'attempt', cb);
 export const watchEvents = (o: string, p: string, d: string, cb: (v: ReviewEvent[]) => void) => watchSub<ReviewEvent>(o, p, d, 'reviewEvents', 'at', cb);
 
@@ -100,6 +102,8 @@ export const withdrawSheet = (t: Target, expectedRev?: number) => call({ ...t, a
 export const approveSheet = (t: Target, expectedRev: number, reason?: string) => call({ ...t, action: 'approve', expectedRev, reason });
 export const returnSheet = (t: Target, expectedRev: number, reason: string) => call({ ...t, action: 'return', expectedRev, reason });
 export const setAudience = (t: Target, audience: 'client' | 'studio') => call({ ...t, action: 'audience', audience });
+/** Take back a PDF nobody has reviewed yet; the sheet returns to the version before it. */
+export const removeVersion = (t: Target, expectedRev: number, versionId: string) => call({ ...t, action: 'remove', expectedRev, versionId });
 export const createMark = (t: Target, page: number, shape: MarkShape, text: string, blocking = false) => call({ ...t, action: 'mark', op: 'create', page, shape, text, blocking });
 export const updateMark = (t: Target, markId: string, patch: { text?: string; blocking?: boolean }) => call({ ...t, action: 'mark', op: 'update', markId, ...patch });
 export const deleteMark = (t: Target, markId: string) => call({ ...t, action: 'mark', op: 'delete', markId });

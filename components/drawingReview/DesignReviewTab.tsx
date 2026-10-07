@@ -3,7 +3,7 @@ import { useOrg } from '../../contexts/OrgContext';
 import { canReview } from '../../lib/drawingReview';
 import { watchStudioReviews, takeOpenRequest, type ReviewDrawing } from '../../services/drawingReviewService';
 import DeskView from './DeskView';
-import ReviewInbox, { queueOf } from './ReviewInbox';
+import ReviewInbox, { queueOf, type InboxFilter } from './ReviewInbox';
 import SheetStudio, { type Me } from './SheetStudio';
 import { ToastHost, ReviewStyles } from './ui';
 
@@ -18,11 +18,13 @@ import { ToastHost, ReviewStyles } from './ui';
 
 interface Props {
   projects: any[];
+  /** The project open elsewhere in the app; the desk starts there. */
+  activeProjectId?: string | null;
 }
 
 const PREF = 'ffds_design_review_project';
 
-export default function DesignReviewTab({ projects }: Props) {
+export default function DesignReviewTab({ projects, activeProjectId }: Props) {
   const { orgData, currentRole, currentUserAuth } = useOrg();
   const orgId = orgData?.tenantId || 'demo-tenant-01';
   const role = String(currentRole || '');
@@ -34,13 +36,26 @@ export default function DesignReviewTab({ projects }: Props) {
   };
 
   const list = useMemo(() => (projects || [])
-    .map((p: any) => ({ id: String(p.id), name: String(p.context?.name || p.name || p.context?.clientName || 'Project') }))
+    .map((p: any) => ({
+      id: String(p.id),
+      name: String(p.context?.name || p.name || p.context?.clientName || 'Untitled project'),
+      client: p.context?.clientName ? String(p.context.clientName) : undefined,
+    }))
+    /* A name that already carries the client ("New Project · ABC") does not repeat it. */
+    .map((p) => ({ ...p, client: p.client && !p.name.toLowerCase().includes(p.client.toLowerCase()) ? p.client : undefined,
+    }))
     .filter((p) => p.id), [projects]);
   const [inboxNames, setInboxNames] = useState<Record<string, string>>({});
-  const nameOf = (id: string) => list.find((p) => p.id === id)?.name || inboxNames[id] || '';
+  /* Projects often share a working name, so the client goes alongside it. */
+  const nameOf = (id: string) => {
+    const p = list.find((x) => x.id === id);
+    return p ? (p.client ? `${p.name} · ${p.client}` : p.name) : inboxNames[id] || '';
+  };
 
   const [view, setView] = useState<'review' | 'desk'>(reviewer ? 'review' : 'desk');
+  /* Start on the project already open in the app, then the one last used here. */
   const [projectId, setProjectIdRaw] = useState<string | null>(() => {
+    if (activeProjectId) return activeProjectId;
     try { const saved = localStorage.getItem(PREF); if (saved) return saved; } catch { /* storage off */ }
     return null;
   });
@@ -62,7 +77,15 @@ export default function DesignReviewTab({ projects }: Props) {
     }, (e) => setInboxError(/index/i.test(String(e?.message)) ? 'The inbox index is still building. Try again in a few minutes.' : 'Check the connection and try again.'));
   }, [orgId, reviewer]);
 
-  const queue = useMemo(() => queueOf(inbox).map((d) => ({ projectId: d.projectId, drawingId: d.id })), [inbox]);
+  const [filter, setFilter] = useState<InboxFilter>({ project: null, designer: null });
+  const queue = useMemo(() => queueOf(inbox, filter).map((d) => ({ projectId: d.projectId, drawingId: d.id })), [inbox, filter]);
+  const waiting = useMemo(() => queueOf(inbox).length, [inbox]);
+  /* Sheets waiting for review in each project, so a lead sees where the work is. */
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    (inbox || []).forEach((d) => { if (d.review?.state === 'IN_REVIEW') c[d.projectId] = (c[d.projectId] || 0) + 1; });
+    return c;
+  }, [inbox]);
   const openSheet = (pid: string, did: string) => { setOpen({ projectId: pid, drawingId: did }); window.scrollTo({ top: 0 }); };
 
   return (
@@ -84,14 +107,14 @@ export default function DesignReviewTab({ projects }: Props) {
                 {(['review', 'desk'] as const).map((v) => (
                   <button key={v} type="button" onClick={() => setView(v)} aria-pressed={view === v}
                     className={`rounded-full px-4 py-1.5 text-[13px] font-bold ${view === v ? 'bg-white text-[#14211E] shadow-sm' : 'text-[#66786F]'}`}>
-                    {v === 'review' ? `Review${queue.length ? ` · ${queue.length}` : ''}` : 'My desk'}
+                    {v === 'review' ? `Review${waiting ? ` · ${waiting}` : ''}` : 'My desk'}
                   </button>
                 ))}
               </div>
             )}
             {reviewer && view === 'review'
-              ? <ReviewInbox rows={inbox} error={inboxError} projectName={nameOf} me={me} onOpen={openSheet} />
-              : <DeskView orgId={orgId} projects={list} projectId={projectId} setProjectId={setProjectId} role={role} me={me} onOpen={openSheet} />}
+              ? <ReviewInbox rows={inbox} error={inboxError} projectName={nameOf} me={me} onOpen={openSheet} filter={filter} setFilter={setFilter} />
+              : <DeskView orgId={orgId} projects={list} projectId={projectId} setProjectId={setProjectId} counts={counts} activeId={activeProjectId} role={role} me={me} onOpen={openSheet} />}
           </>
         )}
       </div>

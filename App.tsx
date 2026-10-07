@@ -3038,7 +3038,7 @@ export default function App() {
                     />
                   )}
                   {activeTab === "design-review" && (
-                    <DesignReviewTab projects={visibleProjects} />
+                    <DesignReviewTab projects={visibleProjects} activeProjectId={activeInternalId} />
                   )}
                   {activeTab === "reports" && (
                     <StudioReports
@@ -3778,7 +3778,7 @@ export default function App() {
                     />
                   )}
                   {activeTab === "design-review" && (
-                    <DesignReviewTab projects={visibleProjects} />
+                    <DesignReviewTab projects={visibleProjects} activeProjectId={activeInternalId} />
                   )}
                   {activeTab === "reports" && (
                     <StudioReports

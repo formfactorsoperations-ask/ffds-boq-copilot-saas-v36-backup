@@ -125,7 +125,7 @@ export interface ReviewMark {
 }
 
 export interface ReviewEvent {
-  type: 'uploaded' | 'submitted' | 'withdrawn' | 'returned' | 'approved' | 'audience';
+  type: 'uploaded' | 'submitted' | 'withdrawn' | 'returned' | 'approved' | 'audience' | 'removed';
   at: number;
   by: ReviewPerson;
   versionNo?: number;
@@ -154,7 +154,7 @@ export const canSetAudience = (role?: string | null) => AUDIENCE_ROLES.has(Strin
 
 /* ------------------------------------------------------------ transitions */
 
-export type ReviewAction = 'finalize' | 'submit' | 'withdraw' | 'approve' | 'return' | 'mark' | 'fix';
+export type ReviewAction = 'finalize' | 'submit' | 'withdraw' | 'approve' | 'return' | 'mark' | 'fix' | 'remove';
 
 /**
  * Which states each action may start from.
@@ -166,6 +166,8 @@ export type ReviewAction = 'finalize' | 'submit' | 'withdraw' | 'approve' | 'ret
  */
 const FROM: Record<Exclude<ReviewAction, 'mark' | 'fix'>, (ReviewState | 'NONE')[]> = {
   finalize: ['NONE', 'DRAFT', 'CHANGES_REQUESTED', 'APPROVED'],
+  /* Taking back a wrong PDF: only while nobody has reviewed it (see the function for the rest). */
+  remove: ['DRAFT'],
   submit: ['DRAFT'],
   withdraw: ['IN_REVIEW'],
   approve: ['IN_REVIEW'],
@@ -210,8 +212,29 @@ export function laneOf(summary?: Partial<ReviewSummary> | null): DeskLane {
 
 const clamp01 = (n: unknown) => typeof n === 'number' && Number.isFinite(n) && n >= -0.05 && n <= 1.05;
 
+/*
+  Firestore cannot hold a list inside a list, so a freehand sketch is stored
+  with its points flattened (`xy: [x0, y0, x1, y1, ...]`) and turned back into
+  pairs when read. Every other shape is stored as it is.
+*/
+export type StoredShape = Exclude<MarkShape, { t: 'pen' }> | { t: 'pen'; xy: number[] };
+
+export function storeShape(s: MarkShape): StoredShape {
+  return s.t === 'pen' ? { t: 'pen', xy: s.pts.flatMap(([x, y]) => [x, y]) } : s;
+}
+
+export function readShape(raw: any): MarkShape {
+  if (raw && raw.t === 'pen' && Array.isArray(raw.xy) && !Array.isArray(raw.pts)) {
+    const pts: [number, number][] = [];
+    for (let i = 0; i + 1 < raw.xy.length; i += 2) pts.push([Number(raw.xy[i]), Number(raw.xy[i + 1])]);
+    return { t: 'pen', pts };
+  }
+  return raw as MarkShape;
+}
+
 /** A mark's shape, checked and rounded; null when it is not a shape we draw. */
-export function cleanShape(raw: any): MarkShape | null {
+export function cleanShape(input: any): MarkShape | null {
+  const raw = readShape(input);
   if (!raw || typeof raw !== 'object') return null;
   const r = (n: number) => Math.round(Math.min(1, Math.max(0, n)) * 10000) / 10000;
   switch (raw.t) {
@@ -230,6 +253,46 @@ export function cleanShape(raw: any): MarkShape | null {
     }
     default:
       return null;
+  }
+}
+
+/* ------------------------------------------------------------ rotation */
+
+/**
+ * The sheet can be turned on screen 90° at a time. Marks are always stored
+ * against the unturned page, so they land in the same place for everybody,
+ * however each person has the sheet turned. These move a point (as fractions
+ * of the page) between the stored page and the turned view.
+ */
+export type Turn = 0 | 90 | 180 | 270;
+
+export function toView([x, y]: [number, number], turn: Turn): [number, number] {
+  if (turn === 90) return [1 - y, x];
+  if (turn === 180) return [1 - x, 1 - y];
+  if (turn === 270) return [y, 1 - x];
+  return [x, y];
+}
+
+export function toPage([x, y]: [number, number], turn: Turn): [number, number] {
+  if (turn === 90) return [y, 1 - x];
+  if (turn === 180) return [1 - x, 1 - y];
+  if (turn === 270) return [1 - y, x];
+  return [x, y];
+}
+
+/** A whole mark, turned with the sheet (`toView`) or back to the stored page (`toPage`). */
+export function turnShape(s: MarkShape, turn: Turn, dir: 'view' | 'page'): MarkShape {
+  if (!turn) return s;
+  const f = dir === 'view' ? toView : toPage;
+  switch (s.t) {
+    case 'pin': { const [x, y] = f([s.x, s.y], turn); return { t: 'pin', x, y }; }
+    case 'arrow': { const [x, y] = f([s.x, s.y], turn); const [x2, y2] = f([s.x2, s.y2], turn); return { t: 'arrow', x, y, x2, y2 }; }
+    case 'pen': return { t: 'pen', pts: s.pts.map((p) => f(p, turn)) };
+    case 'rect': {
+      const [ax, ay] = f([s.x, s.y], turn);
+      const [bx, by] = f([s.x + s.w, s.y + s.h], turn);
+      return { t: 'rect', x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) };
+    }
   }
 }
 

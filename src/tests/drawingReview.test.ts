@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchFile, cleanShape, allowed, laneOf, canReview, canUpload, guessAudience, safeId, uploadPrefix } from '../../lib/drawingReview';
+import { matchFile, cleanShape, allowed, laneOf, canReview, canUpload, guessAudience, safeId, uploadPrefix, toView, toPage, turnShape } from '../../lib/drawingReview';
 
 const drawings = [
   { id: 'k1', name: 'Kitchen Elevation', roomName: 'Kitchen' },
@@ -50,6 +50,29 @@ describe('the steps a sheet can take', () => {
     expect(canReview('Designer')).toBe(false);
     expect(canUpload('Designer')).toBe(true);
     expect(canUpload('Viewer')).toBe(false);
+  });
+});
+
+describe('turning the sheet', () => {
+  const turns = [0, 90, 180, 270] as const;
+  it('puts a point back exactly where it was', () => {
+    for (const t of turns) {
+      const [x, y] = toPage(toView([0.2, 0.7], t), t);
+      expect(x).toBeCloseTo(0.2); expect(y).toBeCloseTo(0.7);
+    }
+  });
+  it('turns clockwise: the page’s top-left corner goes to the top-right at 90°', () => {
+    expect(toView([0, 0], 90)).toEqual([1, 0]);
+    expect(toView([1, 0], 90)).toEqual([1, 1]);
+    expect(toView([0, 0], 180)).toEqual([1, 1]);
+    expect(toView([0, 0], 270)).toEqual([0, 1]);
+  });
+  it('keeps a box a box, the same size', () => {
+    const box = { t: 'rect' as const, x: 0.1, y: 0.2, w: 0.3, h: 0.1 };
+    const v = turnShape(box, 90, 'view');
+    expect(v.t === 'rect' && [v.w, v.h].map((n) => +n.toFixed(4))).toEqual([0.1, 0.3]);
+    const back = turnShape(v, 90, 'page');
+    expect(back.t === 'rect' && [back.x, back.y, back.w, back.h].map((n) => +n.toFixed(4))).toEqual([0.1, 0.2, 0.3, 0.1]);
   });
 });
 

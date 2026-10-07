@@ -47,12 +47,14 @@ export interface Rendered { width: number; height: number }
  * high-density screens. Returns the page's displayed size, which the overlay
  * uses to turn pointer positions into fractions of the page.
  */
-export async function renderPage(doc: PDFDocumentProxy, pageIndex: number, canvas: HTMLCanvasElement, cssWidth: number): Promise<Rendered> {
+export async function renderPage(doc: PDFDocumentProxy, pageIndex: number, canvas: HTMLCanvasElement, cssWidth: number, turn = 0): Promise<Rendered> {
   const page = await doc.getPage(Math.min(doc.numPages, Math.max(1, pageIndex + 1)));
-  const base = page.getViewport({ scale: 1 });
+  /* `turn` is the viewer's own rotation (0, 90, 180, 270), on top of any the PDF carries. */
+  const rotation = (((page.rotate || 0) + turn) % 360 + 360) % 360;
+  const base = page.getViewport({ scale: 1, rotation });
   const scale = cssWidth / base.width;
   const dpr = Math.min(3, window.devicePixelRatio || 1);
-  const viewport = page.getViewport({ scale: scale * dpr });
+  const viewport = page.getViewport({ scale: scale * dpr, rotation });
   canvas.width = Math.floor(viewport.width);
   canvas.height = Math.floor(viewport.height);
   canvas.style.width = `${Math.floor(viewport.width / dpr)}px`;

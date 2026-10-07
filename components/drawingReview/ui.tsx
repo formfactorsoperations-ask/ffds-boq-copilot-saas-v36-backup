@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Check, MessageSquare } from 'lucide-react';
 import { fileUrl, type ReviewDrawing } from '../../services/drawingReviewService';
-import { laneOf, stateOf, guessAudience, type DeskLane } from '../../lib/drawingReview';
+import { laneOf, stateOf, guessAudience, type DeskLane, type ReviewSummary } from '../../lib/drawingReview';
 
 /*
   Shared pieces of the Design Review screens: the lane colours, the sheet
@@ -33,6 +33,58 @@ export const ago = (t?: number | null) => {
 };
 export const shortDate = (t?: number | null) => (t ? new Date(t).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '');
 export const firstName = (n?: string | null) => String(n || '').split(/[\s@]/)[0] || 'Someone';
+
+/*
+  How close a drawing is to its target date. `rank` sorts the urgent first:
+  0 overdue, 1 due within 3 days, 2 within a week, 3 later, 4 no date.
+*/
+export type Due = { rank: number; label: string; tone: 'late' | 'soon' | 'week' | 'later' } | null;
+export function dueOf(targetDate?: string | null): Due {
+  if (!targetDate) return null;
+  const t = new Date(targetDate);
+  if (Number.isNaN(t.getTime())) return null;
+  const day = (x: Date) => Date.UTC(x.getFullYear(), x.getMonth(), x.getDate());
+  const days = Math.round((day(t) - day(new Date())) / 86_400_000);
+  const date = t.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  if (days < 0) return { rank: 0, tone: 'late', label: `Overdue ${-days} d` };
+  if (days === 0) return { rank: 1, tone: 'soon', label: 'Due today' };
+  if (days === 1) return { rank: 1, tone: 'soon', label: 'Due tomorrow' };
+  if (days <= 3) return { rank: 1, tone: 'soon', label: `Due ${t.toLocaleDateString('en-IN', { weekday: 'short' })}` };
+  if (days <= 7) return { rank: 2, tone: 'week', label: `Due ${t.toLocaleDateString('en-IN', { weekday: 'short' })} ${date}` };
+  return { rank: 3, tone: 'later', label: `Due ${date}` };
+}
+export const dueRank = (d: { targetDate?: string }) => dueOf(d.targetDate)?.rank ?? 4;
+const DUE_TONE = { late: 'bg-[#FBE9EF] text-[#C2416A]', soon: 'bg-[#FBF0E1] text-[#B4690E]', week: 'bg-[#ECECFC] text-[#3D52A0]', later: 'bg-[#ECF0ED] text-[#66786F]' };
+/*
+  REVISION WATCH. Each send to the Design Head opens a review round; the
+  studio's terms include two, so a sheet on its third round or later is
+  flagged before the extra rounds turn into chargeable revisions. A sheet
+  that came back is about to start its next round, so it counts that one.
+*/
+export const INCLUDED_ROUNDS = 2;
+export function roundWarn(r?: ReviewSummary | null): number {
+  if (!r || r.state === 'APPROVED') return 0;
+  const round = (r.attempts || 0) + (r.state === 'CHANGES_REQUESTED' ? 1 : 0);
+  return round > INCLUDED_ROUNDS ? round : 0;
+}
+const nth = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`;
+export function roundWarnText(r?: ReviewSummary | null): string {
+  const round = roundWarn(r);
+  if (!round) return '';
+  return r!.state === 'CHANGES_REQUESTED' ? `Heading into ${nth(round)} round` : `${nth(round)} round`;
+}
+export function RoundChip({ r }: { r?: ReviewSummary | null }) {
+  const text = roundWarnText(r);
+  return text ? (
+    <span title={`${INCLUDED_ROUNDS} review rounds are included. Further rounds may count as chargeable revisions.`}
+      className="inline-flex rounded-full bg-[#FBE9EF] px-2 py-0.5 text-[11px] font-bold text-[#C2416A]">{text}</span>
+  ) : null;
+}
+
+export function DueChip({ targetDate }: { targetDate?: string | null }) {
+  const due = dueOf(targetDate);
+  return due ? <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${DUE_TONE[due.tone]}`}>{due.label}</span> : null;
+}
 
 export function Initials({ name, color = '#5B5BD6', size = 24 }: { name?: string | null; color?: string; size?: number }) {
   const ini = String(name || '?').split(/[\s@._]+/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('');
@@ -99,7 +151,6 @@ export const SheetCard: React.FC<CardProps> = ({ d, me, projectName, dim, dragga
   const versions = r?.versionNo || 0;
   const audience = r?.audience || guessAudience(d.name);
   const returned = stateOf(r) === 'CHANGES_REQUESTED';
-  const late = d.targetDate && lane === 'desk' && new Date(d.targetDate).getTime() < Date.now();
   return (
     <article
       className={`group relative flex flex-col rounded-2xl border bg-white text-left transition duration-300 hover:-translate-y-0.5 ${dim ? 'opacity-35 hover:opacity-80' : ''} ${draggable ? 'cursor-grab' : ''}`}
@@ -140,8 +191,8 @@ export const SheetCard: React.FC<CardProps> = ({ d, me, projectName, dim, dragga
         <div className="text-[12.5px] text-[#2A3B37]">{storyOf(d, me)}</div>
         {extra}
         <Journey lane={lane} />
-        {d.targetDate && lane === 'desk' && (
-          <div className={`text-[11px] font-bold ${late ? 'text-[#C2416A]' : 'text-[#66786F]'}`}>{late ? 'Overdue · was due ' : 'Due '}{new Date(d.targetDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div>
+        {lane !== 'approved' && (d.targetDate || roundWarn(r)) && (
+          <div className="flex flex-wrap gap-1.5"><DueChip targetDate={d.targetDate} /><RoundChip r={r} /></div>
         )}
         {action && <div className="mt-1">{action}</div>}
       </div>

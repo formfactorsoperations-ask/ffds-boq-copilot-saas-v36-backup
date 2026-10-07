@@ -4,7 +4,7 @@ import * as logger from "firebase-functions/logger";
 import { createHash } from "crypto";
 import { PLATFORM_OWNER_EMAILS } from "./guards";
 import {
-  allowed, refusal, canReview, canUpload, canSetAudience, cleanShape, cleanText, guessAudience,
+  allowed, refusal, canReview, canUpload, canSetAudience, cleanShape, cleanText, guessAudience, storeShape,
   uploadPrefix, versionsPrefix, safeId, MAX_PDF_BYTES, MAX_THUMB_BYTES,
   type ReviewSummary, type ReviewPerson, type ReviewVersion, type ReviewRound, type ReviewMark, type ReviewEvent,
 } from "../../lib/drawingReview";
@@ -323,7 +323,7 @@ async function mark(actor: Actor, drawingRef: FirebaseFirestore.DocumentReferenc
       const ref = drawingRef.collection("reviewMarks").doc();
       const n = (s.marksSeq || 0) + 1;
       const m: ReviewMark = { id: ref.id, versionId: s.versionId, n, page, shape, text, blocking: input.blocking === true, status: "OPEN", by: person(actor), at: now, updatedAt: now };
-      tx.set(ref, m);
+      tx.set(ref, { ...m, shape: storeShape(m.shape) });
       tx.update(drawingRef, { review: { ...s, marksSeq: n, marksTotal: (s.marksTotal || 0) + 1, marksOpen: (s.marksOpen || 0) + 1, updatedAt: now } });
       return { mark: m };
     }
@@ -353,7 +353,7 @@ async function mark(actor: Actor, drawingRef: FirebaseFirestore.DocumentReferenc
       if (input.shape !== undefined) {
         const shape = cleanShape(input.shape);
         if (!shape) throw new HttpsError("invalid-argument", "That mark is not on the sheet.");
-        patch.shape = shape;
+        patch.shape = storeShape(shape);
       }
       tx.update(ref, patch);
       return { mark: { ...m, ...patch } };
@@ -370,6 +370,86 @@ async function mark(actor: Actor, drawingRef: FirebaseFirestore.DocumentReferenc
     }
     throw new HttpsError("invalid-argument", "Unknown note action.");
   });
+}
+
+/*
+  Taking back a wrong upload.
+
+  Only a version nobody has reviewed: still on the desk, or pulled back before
+  the Design Head decided, and without her notes on it. Anything reviewed is
+  history and stays. The sheet returns to the version before, in the state
+  that version was left in, or to having no sheet at all.
+*/
+async function removeVersion(actor: Actor, drawingRef: FirebaseFirestore.DocumentReference, input: Input) {
+  if (!canUpload(actor.role)) throw new HttpsError("permission-denied", "This account cannot remove drawings.");
+  const result = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(drawingRef);
+    if (!snap.exists) throw new HttpsError("not-found", "That drawing is no longer in the tracker.");
+    const s: ReviewSummary | undefined = snap.data()?.review;
+    if (!s?.versionId || !allowed("remove", s)) {
+      throw new HttpsError("failed-precondition", s?.state === "IN_REVIEW"
+        ? "This PDF is with the Design Head. Pull it back first, then remove it."
+        : "Only a PDF that has not been reviewed can be removed. Reviewed versions stay in the history.");
+    }
+    checkRev(s, input.expectedRev, true);
+    if (input.versionId && input.versionId !== s.versionId) throw new HttpsError("aborted", "A newer PDF arrived a moment ago. Refresh to see it.");
+
+    const verRef = drawingRef.collection("reviewVersions").doc(s.versionId);
+    const verSnap = await tx.get(verRef);
+    if (!verSnap.exists) throw new HttpsError("not-found", "That version is already gone.");
+    const v = verSnap.data() as ReviewVersion;
+    if (v.by?.uid !== actor.uid && !canSetAudience(actor.role)) {
+      throw new HttpsError("permission-denied", "Only the person who uploaded this PDF, or the Design Head, can remove it.");
+    }
+    const roundsHere = await tx.get(drawingRef.collection("reviewRounds").where("versionId", "==", s.versionId));
+    if (roundsHere.docs.some((r) => ["APPROVED", "CHANGES_REQUESTED"].includes(r.data().status))) {
+      throw new HttpsError("failed-precondition", "This version has been reviewed, so it stays in the history.");
+    }
+    const marksHere = await tx.get(drawingRef.collection("reviewMarks").where("versionId", "==", s.versionId).limit(1));
+    if (!marksHere.empty) throw new HttpsError("failed-precondition", "The Design Head has left notes on this version, so it stays in the history.");
+
+    const before = await tx.get(drawingRef.collection("reviewVersions").where("n", "<", v.n).orderBy("n", "desc").limit(1));
+    const prev = before.empty ? null : (before.docs[0].data() as ReviewVersion);
+    const prevRounds = prev ? await tx.get(drawingRef.collection("reviewRounds").where("versionId", "==", prev.id)) : null;
+    const prevMarks = prev ? await tx.get(drawingRef.collection("reviewMarks").where("versionId", "==", prev.id)) : null;
+
+    const now = Date.now();
+    let next: any;
+    if (!prev) {
+      next = {
+        ...s, versionId: null, versionNo: 0, pdfPath: null, thumbPath: null, pageCount: null, openRoundId: null,
+        submittedAt: null, decidedBy: null, decidedAt: null, reason: null, selfApproved: false,
+        marksTotal: 0, marksOpen: 0, marksSeq: 0, rev: s.rev + 1, updatedAt: now,
+      };
+      delete next.state;
+    } else {
+      const decided = (prevRounds?.docs.map((d) => d.data() as ReviewRound) || [])
+        .filter((r) => r.status === "APPROVED" || r.status === "CHANGES_REQUESTED")
+        .sort((a, b) => b.attempt - a.attempt)[0];
+      const marks = prevMarks?.docs.map((d) => d.data() as ReviewMark) || [];
+      next = {
+        ...s,
+        state: decided?.status === "APPROVED" ? "APPROVED" : decided?.status === "CHANGES_REQUESTED" ? "CHANGES_REQUESTED" : "DRAFT",
+        versionId: prev.id, versionNo: prev.n, pdfPath: prev.pdfPath, thumbPath: prev.thumbPath, pageCount: prev.pageCount,
+        openRoundId: null, submittedAt: null,
+        decidedBy: decided?.decidedBy || null, decidedAt: decided?.decidedAt || null, reason: decided?.reason || null,
+        selfApproved: decided?.status === "APPROVED" && !!decided?.selfApproved,
+        marksTotal: marks.length, marksOpen: marks.filter((m) => m.status === "OPEN").length,
+        marksSeq: marks.reduce((mx, m) => Math.max(mx, m.n || 0), 0),
+        rev: s.rev + 1, updatedAt: now,
+      };
+      prevMarks?.docs.forEach((d) => {
+        if (d.data().fixedInVersionNo === v.n) tx.update(d.ref, { fixedInVersionNo: admin.firestore.FieldValue.delete() });
+      });
+    }
+    tx.delete(verRef);
+    tx.update(drawingRef, { review: next });
+    tx.set(drawingRef.collection("reviewEvents").doc(), { type: "removed", at: now, by: person(actor), versionNo: v.n, text: v.fileName } as ReviewEvent);
+    return { review: next, files: [v.pdfPath, v.thumbPath].filter(Boolean) as string[] };
+  });
+  /* The file goes after the record: a failed delete leaves an unreferenced object, never a record without its file. */
+  for (const f of result.files) await bucket().file(f).delete().catch(() => undefined);
+  return { review: result.review };
 }
 
 async function setAudience(actor: Actor, orgId: string, projectId: string, drawingId: string, drawingRef: FirebaseFirestore.DocumentReference, input: Input) {
@@ -416,6 +496,7 @@ export const drawingReview = onCall({ cors: true, memory: "1GiB", timeoutSeconds
       case "return": return await decide(actor, drawingRef, input, "return");
       case "mark": return await mark(actor, drawingRef, input);
       case "audience": return await setAudience(actor, orgId, projectId, drawingId, drawingRef, input);
+      case "remove": return await removeVersion(actor, drawingRef, input);
       default: throw new HttpsError("invalid-argument", "Unknown action.");
     }
   } catch (e: any) {

@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronLeft, ChevronRight, Columns2, Minus, Plus, MousePointer2, MapPin, Square, MoveUpRight, PenLine,
-  Send, Check, Undo2, Info, MessageSquare, Loader2, RotateCcw,
+  Send, Check, Undo2, Info, MessageSquare, Loader2, RotateCcw, RotateCw, Trash2,
 } from 'lucide-react';
 import {
   watchDrawing, watchVersions, watchMarks, watchRounds, watchEvents, uploadSheet, submitSheet, withdrawSheet,
-  approveSheet, returnSheet, createMark, deleteMark, updateMark, fixMark, setAudience, ReviewError, type ReviewDrawing,
+  approveSheet, returnSheet, createMark, deleteMark, updateMark, fixMark, setAudience, removeVersion, ReviewError, type ReviewDrawing,
 } from '../../services/drawingReviewService';
-import { canReview, canUpload, canSetAudience, allowed, stateOf, STATE_LABEL, refusal, guessAudience, type MarkShape, type ReviewMark, type ReviewVersion, type ReviewRound, type ReviewEvent } from '../../lib/drawingReview';
+import { canReview, canUpload, canSetAudience, allowed, stateOf, STATE_LABEL, refusal, guessAudience, type Turn, type MarkShape, type ReviewMark, type ReviewVersion, type ReviewRound, type ReviewEvent } from '../../lib/drawingReview';
 import { thumbnailOf } from '../../lib/pdfRender';
 import PdfStage, { type Tool } from './PdfStage';
 import { MARK, FIXED, TABLE, roomLabel, ago, shortDate, firstName, useToast } from './ui';
@@ -31,7 +31,7 @@ const TOOLS: [Tool, string, string, React.ComponentType<any>][] = [
   ['arrow', 'A', 'Arrow', MoveUpRight], ['pen', 'D', 'Draw', PenLine],
 ];
 const SHAPE_WORD: Record<string, string> = { pin: 'pin', rect: 'box', arrow: 'arrow', pen: 'sketch' };
-const EVENT_WORD: Record<string, string> = { uploaded: 'uploaded', submitted: 'sent for review', withdrawn: 'pulled back', returned: 'returned', approved: 'approved', audience: 'changed who it is for' };
+const EVENT_WORD: Record<string, string> = { uploaded: 'uploaded', submitted: 'sent for review', withdrawn: 'pulled back', returned: 'returned', approved: 'approved', audience: 'changed who it is for', removed: 'removed the PDF' };
 
 function Ring({ done, total }: { done: number; total: number }) {
   const r = 17, c = 2 * Math.PI * r;
@@ -57,6 +57,10 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
   const [page, setPage] = useState(0);
   const [pages, setPages] = useState(1);
   const [zoom, setZoom] = useState(1);
+  /* How this person has the sheet turned; remembered per drawing on this device, never shared. */
+  const turnKey = `ffds_dr_turn_${projectId}_${drawingId}`;
+  const [turn, setTurnRaw] = useState<Turn>(() => { try { const v = Number(localStorage.getItem(turnKey)); return ([0, 90, 180, 270].includes(v) ? v : 0) as Turn; } catch { return 0; } });
+  const rotate = () => setTurnRaw((t) => { const n = (((t + 90) % 360) as Turn); try { localStorage.setItem(turnKey, String(n)); } catch { /* storage off */ } return n; });
   const [compare, setCompare] = useState(false);
   const [tool, setTool] = useState<Tool>('select');
   const [selected, setSelected] = useState<string | null>(null);
@@ -65,6 +69,7 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
   const [busy, setBusy] = useState<string | null>(null);
   const [railTab, setRailTab] = useState<'notes' | 'history'>('notes');
   const [upload, setUpload] = useState<{ stage: string; fraction?: number } | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const draftBox = useRef<HTMLTextAreaElement>(null);
 
@@ -96,6 +101,10 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
   const canSend = canUpload(role) && state === 'DRAFT' && !!r?.versionId;
   const canPullBack = canUpload(role) && state === 'IN_REVIEW' && (!reviewer || r?.designer?.email === me.email);
   const blockingOpen = onSheet.filter((m) => m.blocking && m.status === 'OPEN').length;
+  /* A wrong PDF can be taken back while nobody has reviewed it: by whoever uploaded it, or a lead. */
+  const canRemove = canUpload(role) && state === 'DRAFT' && isCurrent && !!current && onSheet.length === 0
+    && !rounds.some((x) => x.versionId === current.id && (x.status === 'APPROVED' || x.status === 'CHANGES_REQUESTED'))
+    && (current.by?.uid === me.uid || canSetAudience(role));
   const lastReturn = [...rounds].reverse().find((x) => x.status === 'CHANGES_REQUESTED');
   const qIndex = queue.findIndex((q) => q.drawingId === drawingId && q.projectId === projectId);
   const self = r?.designer?.email === me.email;
@@ -112,6 +121,7 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
       const t = ({ v: 'select', p: 'pin', b: 'rect', a: 'arrow', d: 'pen' } as Record<string, Tool>)[e.key.toLowerCase()];
       if (t && canMark) setTool(t);
       if (e.key.toLowerCase() === 'c' && prev) setCompare((c) => !c);
+      if (e.key.toLowerCase() === 'r') rotate();
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
@@ -232,6 +242,7 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
             )}
             <span className="flex-1" />
             {viewing && <>
+              <button type="button" className={`${titleBtn} bg-[#2E3936]`} onClick={rotate} title="Rotate the sheet (R)" aria-label="Rotate the sheet"><RotateCw size={15} />{turn ? `${turn}°` : 'Rotate'}</button>
               <button type="button" className={`${titleBtn} bg-[#2E3936]`} onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))} aria-label="Zoom out"><Minus size={15} /></button>
               <span className="min-w-[38px] text-center font-mono">{Math.round(zoom * 100)}%</span>
               <button type="button" className={`${titleBtn} bg-[#2E3936]`} onClick={() => setZoom((z) => Math.min(2.5, +(z + 0.25).toFixed(2)))} aria-label="Zoom in"><Plus size={15} /></button>
@@ -251,7 +262,7 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
             {viewing ? (
               <PdfStage
                 pdfPath={viewing.pdfPath} comparePath={compare && prev ? prev.pdfPath : null} compareLabel={prev ? [`v${prev.n}`, `v${viewing.n}`] : undefined}
-                page={page} zoom={zoom} marks={onSheet.filter((m) => m.page === page)} draft={draft?.shape || null} selectedId={selected}
+                page={page} zoom={zoom} turn={turn} marks={onSheet.filter((m) => m.page === page)} draft={draft?.shape || null} selectedId={selected}
                 tool={tool} canMark={canMark && !draft} onPageCount={setPages}
                 onSelect={(id) => { setSelected(id); setRailTab('notes'); }}
                 onShape={(shape) => { setDraft({ shape, text: '', blocking: false }); setRailTab('notes'); }}
@@ -428,10 +439,28 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
             ) : canSend ? (
               <>
                 <span className="mr-1.5 text-[12.5px] text-[#66786F]"><b className="text-[#14211E]">v{r?.versionNo}</b> is ready. The Design Head gets it in her inbox.</span>
-                <button type="button" disabled={!!busy} onClick={() => act('send', () => submitSheet(target, r!.rev), { title: `${d.name} is with the Design Head`, sub: 'Nothing goes to the client from here.' })}
-                  className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#5B5BD6] px-3.5 py-2 text-[13px] font-bold text-white disabled:opacity-40">
-                  {busy === 'send' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}Send v{r?.versionNo} for review
-                </button>
+                {canRemove && (confirmRemove ? (
+                  <>
+                    <span className="text-[12.5px] font-bold text-[#C2416A]">Remove v{r?.versionNo}?{(r?.versionNo || 0) > 1 ? ` The sheet goes back to v${(r?.versionNo || 0) - 1}.` : ''}</span>
+                    <button type="button" disabled={!!busy} onClick={() => setConfirmRemove(false)} className="rounded-[10px] px-3 py-2 text-[13px] font-bold text-[#66786F]">Keep it</button>
+                    <button type="button" disabled={!!busy}
+                      onClick={async () => { const res = await act('remove', () => removeVersion(target, r!.rev, current!.id), { title: `v${r?.versionNo} removed`, sub: (r?.versionNo || 0) > 1 ? `Back to v${(r?.versionNo || 0) - 1}.` : 'Drop the right PDF when you have it.' }); setConfirmRemove(false); if (res) { setViewId(null); setCompare(false); } }}
+                      className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#C2416A] px-3.5 py-2 text-[13px] font-bold text-white disabled:opacity-40">
+                      {busy === 'remove' ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}Yes, remove
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" disabled={!!busy} onClick={() => setConfirmRemove(true)} title="Remove this PDF if it is the wrong file"
+                    className="inline-flex items-center gap-1.5 rounded-[10px] border border-[#E1E7E3] bg-white px-3 py-2 text-[13px] font-bold text-[#66786F] hover:text-[#C2416A] disabled:opacity-40">
+                    <Trash2 size={15} />Wrong file? Remove
+                  </button>
+                ))}
+                {!confirmRemove && (
+                  <button type="button" disabled={!!busy} onClick={() => act('send', () => submitSheet(target, r!.rev), { title: `${d.name} is with the Design Head`, sub: 'Nothing goes to the client from here.' })}
+                    className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#5B5BD6] px-3.5 py-2 text-[13px] font-bold text-white disabled:opacity-40">
+                    {busy === 'send' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}Send v{r?.versionNo} for review
+                  </button>
+                )}
               </>
             ) : (
               <>
