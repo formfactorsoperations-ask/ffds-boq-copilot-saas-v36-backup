@@ -31,11 +31,11 @@ describe('Zoho Books settings card', () => {
     expect(screen.getByRole('button', { name: 'Connect Zoho Books' })).toBeTruthy();
   });
 
-  it('says the service is not deployed, rather than blaming the role', () => {
+  it('says the service is unreachable or not deployed, rather than blaming the role', () => {
     hook.value = { ...base, status: { connected: false, canManage: false, canRaise: false, unavailable: true } };
     render(<ZohoBooksCard />);
     open();
-    expect(screen.getByText(/not deployed for this project/)).toBeTruthy();
+    expect(screen.getByText(/could not be reached/)).toBeTruthy();
     expect(screen.getByText(/firebase deploy --only functions:zohoBooks/)).toBeTruthy();
     expect(screen.queryByText(/Only an Owner or Admin/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Connect Zoho Books' })).toBeNull();

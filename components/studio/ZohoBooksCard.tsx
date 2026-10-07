@@ -136,9 +136,9 @@ const ZohoBooksCard: React.FC = () => {
             <div className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-xl p-3">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
               <span>
-                The Zoho Books service is not deployed for this project yet, so it cannot be connected. Deploy it once
-                with <code className="font-mono text-xs bg-white/70 px-1 rounded">firebase deploy --only functions:zohoBooks,firestore:rules</code>,
-                then reopen this page.
+                The Zoho Books service could not be reached. If it has not been deployed for this project yet, deploy it once
+                with <code className="font-mono text-xs bg-white/70 px-1 rounded">firebase deploy --only functions:zohoBooks</code>,
+                then <button className="underline font-semibold" onClick={() => void refresh()}>try again</button>.
               </span>
             </div>
           )}
