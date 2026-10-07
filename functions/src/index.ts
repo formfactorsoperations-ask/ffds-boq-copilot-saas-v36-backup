@@ -16,10 +16,19 @@ import * as logger from "firebase-functions/logger";
   functions that read across every tenant, and that is worth being able to see
   at a glance rather than buried in this file.
 */
-export { platformRepairDocuments } from "./platformAdmin";
+export { platformOverview, platformIntegritySweep } from "./platformAdmin";
+export { platformRepairDocuments } from "./platformRepair";
+export { aiGenerate, aiCountTokens } from "./ai";
+/* Studio membership and the portal door; see access.ts for why the browser no longer decides either. */
+export { syncStudioAccess, portalDoor, createStaffLogin, onStudioTeamChange, sweepStaffAccess } from "./access";
+/* Studio email, which used to be server.ts /api/send-email; see email.ts. */
+export { sendStudioEmail } from "./email";
+export { onProjectWrittenDesignView, onDesignerAssignmentChange, rebuildDesignViews } from "./designView";
 import * as pako from "pako";
 import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";
 import { recordDocumentView, signIssue } from "../../services/documentIssueEngine";
+import { approveIssuePatch } from "./approveIssue";
+import { downloadPatch } from "./scopeTrail";
 import { raiseQuery } from "../../services/documentQueryEngine";
 import { buildPortalView } from "../../lib/portalProjection";
 
@@ -45,88 +54,13 @@ const withDiagnostics = (functionName: string, handler: (request: any) => Promis
     };
 };
 
-// TASK 4: MIGRATION SCRIPT (one-time, reversible)
-export const migrateBoqItemsToContractualFormat = onCall(withDiagnostics("migrateBoqItemsToContractualFormat", async (request) => {
-    const orgId = request.data.orgId;
-    if (!orgId) {
-        throw new HttpsError("invalid-argument", "orgId is required.");
-    }
-
-    const migrationLogRef = db.collection(`organizations/${orgId}/migrations`).doc('boq_contractual_v2');
-    await migrationLogRef.set({
-        startedAt: admin.firestore.FieldValue.serverTimestamp(),
-        status: 'running',
-    });
-
-    let itemsMigrated = 0;
-    let projectsTouched = 0;
-    const errors: any[] = [];
-
-    try {
-        const projectsSnapshot = await db.collection(`organizations/${orgId}/projects`).get();
-        for (const projectDoc of projectsSnapshot.docs) {
-            projectsTouched++;
-            const boqItemsRef = projectDoc.ref.collection('boqItems');
-            const snapshot = await boqItemsRef.get();
-            
-            let batch = db.batch();
-            let countInBatch = 0;
-
-            for (const itemDoc of snapshot.docs) {
-                const data = itemDoc.data();
-                if (!data.boqStatus) { // Idempotent check
-                    
-                    batch.update(itemDoc.ref, {
-                        boqStatus: "included_ffds_scope",
-                        linkage: { type: "direct_execution", refId: null, label: "Migrated — pre-contractual item" },
-                        changeOrderRef: null,
-                        statusHistory: [{ 
-                            from: null, 
-                            to: "included_ffds_scope", 
-                            changedBy: "system_migration",
-                            changedAt: admin.firestore.Timestamp.now(), 
-                            changeOrderRef: null, 
-                            reason: "Schema migration v2" 
-                        }],
-                        rateSnapshotAt: null,
-                        commercialNote: data.notes || ""
-                    });
-
-                    countInBatch++;
-                    itemsMigrated++;
-
-                    if (countInBatch >= 400) {
-                        await batch.commit();
-                        batch = db.batch();
-                        countInBatch = 0;
-                    }
-                }
-            }
-            
-            if (countInBatch > 0) {
-                await batch.commit();
-            }
-        }
-
-        await migrationLogRef.update({
-            completedAt: admin.firestore.FieldValue.serverTimestamp(),
-            status: 'completed',
-            itemsMigrated,
-            projectsTouched,
-            errors
-        });
-
-        return { success: true, itemsMigrated, projectsTouched, errors };
-
-    } catch (e: any) {
-        await migrationLogRef.update({
-            completedAt: admin.firestore.FieldValue.serverTimestamp(),
-            status: 'failed',
-            error: e.message
-        });
-        throw new HttpsError("internal", e.message);
-    }
-}));
+/*
+  migrateBoqItemsToContractualFormat used to live here: a one-time migration
+  with no sign-in check, so anyone on the internet could call it with any
+  studio id and rewrite that studio's BOQ items. It had done its job; it is
+  gone, and the deployed copy is removed with
+  `firebase functions:delete migrateBoqItemsToContractualFormat`.
+*/
 
 // TASK 2 & 3: BOQ CALCULATION & STATUS TRANSITION RULES
 export const calculateBoqTotalsAndValidateRules = onDocumentWritten("organizations/{orgId}/projects/{projectId}/boqItems/{itemId}", async (event) => {
@@ -770,7 +704,14 @@ async function assertPortalClient(request: any, projectId: string) {
  * client sends that is not one of these is refused: the action name is a closed
  * set, not a path into the document.
  */
-function patchFor(action: any, actor: string): (prev: any) => any {
+/** Who is acting, as the server sees it -- never as the browser says. */
+interface ActorMeta {
+    email?: string | null;
+    ip?: string | null;
+    userAgent?: string | null;
+}
+
+function patchFor(action: any, actor: string, meta: ActorMeta = {}): (prev: any) => any {
     switch (action?.type) {
         case "documentView":
             return recordDocumentView(action.kind);
@@ -810,10 +751,100 @@ function patchFor(action: any, actor: string): (prev: any) => any {
                 ),
             });
 
+        case "querySelection": {
+            /*
+              A question about one finish, written onto that finish.
+
+              The portal offered an "Ask" button that opened a modal whose
+              handler discarded the text and told the client it had been sent.
+              This lands where the studio already works: the selection moves to
+              change_requested with the client's words in changeReason, which is
+              the same shape the studio's own change requests take and which
+              MaterialTab already routes into the decisions ledger.
+
+              Only these four fields, and only on a selection that was actually
+              sent to them -- a client cannot rename a finish, reprice it, or
+              raise a question against one they were never shown.
+            */
+            const question = String(action.question || "").trim().slice(0, 2000);
+            if (!question) throw new HttpsError("invalid-argument", "A question is required.");
+            return (prev: any) => {
+                const all = prev?.materialSelections || [];
+                const target = all.find((m: any) => m.id === action.selectionId);
+                /*
+                  Refused loudly, never silently.
+
+                  This used to apply only when the selection was already out for
+                  approval and quietly do NOTHING otherwise -- so a client asking
+                  about a finish at any other stage saw their question appear on
+                  screen while the server discarded it. The portal shows what it
+                  has just written, so a silent no-op is a lie with extra steps.
+
+                  A settled finish is the one case worth blocking: it has been
+                  ordered, and a question is not the way to unwind that.
+                */
+                if (!target) throw new HttpsError("not-found", "That finish is no longer on this project.");
+                if (["locked", "ordered"].includes(String(target.status))) {
+                    throw new HttpsError(
+                        "failed-precondition",
+                        "This finish is already confirmed and on order. Please message the studio directly.",
+                    );
+                }
+                return {
+                    ...prev,
+                    materialSelections: all.map((m: any) =>
+                        m.id === action.selectionId
+                            ? {
+                                  ...m,
+                                  status: "change_requested",
+                                  changeReason: question,
+                                  changeRequestedAt: new Date().toISOString(),
+                                  changeRequestedBy: actor,
+                                  /* A new question supersedes the last answer. */
+                                  studioReply: null,
+                                  studioReplyAt: null,
+                              }
+                            : m,
+                    ),
+                };
+            };
+        }
+
+        case "sendMessage": {
+            const text = String(action.text || "").trim().slice(0, 4000);
+            if (!text) throw new HttpsError("invalid-argument", "A message is required.");
+            return (prev: any) => ({
+                ...prev,
+                clientMessages: [
+                    ...(prev?.clientMessages || []),
+                    {
+                        id: `cm-${Date.now()}`,
+                        text,
+                        sentAt: new Date().toISOString(),
+                        sentBy: actor,
+                        readAt: null,
+                        readBy: null,
+                        aboutKind: action.aboutKind || "general",
+                        aboutId: action.aboutId || null,
+                        aboutLabel: action.aboutLabel || null,
+                    },
+                ],
+            });
+        }
+
+        case "documentDownload":
+            /* The client downloaded a scope document's Excel; see scopeTrail.ts. */
+            return downloadPatch(action.issueId, action.format);
+
+        case "approveIssue":
+            /* The server writes the approval record itself; see approveIssue.ts. */
+            return approveIssuePatch(action.issueId, action.name, action.contentHash, meta);
+
         default:
             throw new HttpsError("invalid-argument", `Unknown action: ${String(action?.type)}`);
     }
 }
+
 
 export const submitClientAction = onCall({ cors: true }, async (request) => {
     const projectId: string = request.data?.projectId;
@@ -840,9 +871,33 @@ export const submitClientAction = onCall({ cors: true }, async (request) => {
 
         const stored = snap.data() as any;
         const { project, wasCompressed } = readStoredProject(stored);
-        const nextContext = patchFor(action, actor)(project.context || {});
+        const headers = request.rawRequest?.headers || {};
+        const forwarded = String(headers["x-forwarded-for"] || "").split(",")[0].trim();
+        const nextContext = patchFor(action, actor, {
+            email: email || null,
+            ip: forwarded || request.rawRequest?.ip || null,
+            userAgent: String(headers["user-agent"] || ""),
+        })(project.context || {});
 
-        tx.set(ref, writeableProject({ ...project, context: nextContext }, wasCompressed, stored));
+        const payload = writeableProject({ ...project, context: nextContext }, wasCompressed, stored);
+        tx.set(ref, payload);
+
+        /*
+          Both stored copies, because the browser writes both.
+
+          db.saveProject fans a project out to projects/{id} and to
+          organizations/{tenantId}/projects/{id}. Writing only the first left
+          the tenant copy one client action behind on every call, and the
+          studio's loader merges the two -- so the copy that never heard about
+          the action was the one deciding what the studio saw.
+
+          Same payload to both, which is exactly what saveProject does, so the
+          two cannot drift apart here.
+        */
+        const tenantId: string | undefined = stored?.tenantId || project?.tenantId;
+        if (tenantId) {
+            tx.set(db.collection(`organizations/${tenantId}/projects`).doc(projectId), payload);
+        }
 
         /*
           Rebuild the client's own copy, so their action is there when they come
@@ -872,6 +927,15 @@ export const submitClientAction = onCall({ cors: true }, async (request) => {
                 previous.portalStudio,
                 previous.clientBoq,
                 previous.clientBoqBaseline,
+                /*
+                  Scope additions and the money are carried, not recomputed, for
+                  the same reason as the three above: both are assembled by the
+                  studio's session from a tier and billing rules this function
+                  does not have. Rebuilding without them would empty the client's
+                  payments tab the moment they confirmed anything.
+                */
+                (viewSnap.data() as any)?.scopeAdditions,
+                previous.portalMoney,
             );
             tx.set(viewRef, rebuilt as any);
         }

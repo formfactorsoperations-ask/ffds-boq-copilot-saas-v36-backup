@@ -1,324 +1,274 @@
 /*
-  Shrink project documents that are close to Firestore's 1 MiB limit.
+  Platform admin: the questions only a privileged, server-side caller can answer.
 
-  The write paths that caused the bloat are fixed, but a fix to a write path
-  only helps the next write. The documents that are already large stay large
-  until something rewrites them, and several are close enough to the cap that
-  the next floor plan or proposal version is the one that fails.
+  The admin screen used to count two collections in the browser and print a
+  hardcoded "99.9%" for platform health. Anything genuinely useful about the
+  platform — how close a project is to Firestore's document limit, which
+  studios have gone quiet, whether a tenant's records are internally
+  consistent — needs to read across every tenant, which no browser client is
+  allowed to do and none should be.
 
-  Three things account for nearly all of it, measured across the ten projects
-  the platform console flagged:
-
-    settingsHash   `JSON.stringify({termsSettings, paymentStructure, orgData,
-                   projectContext})` stored in a field named "hash" -- up to
-                   509KB, kept again in every history entry, and never read.
-    tier contexts  Each proposal version snapshotting the whole project context,
-                   images included, when six fields of it are ever read.
-    inline media   Floor plans, logos and one 706KB PDF held as base64.
-
-  Nothing here deletes anything. Media moves to Storage and the document keeps
-  the URL; the settings blob becomes a real hash of itself. A project that is
-  already small is left alone.
+  So these run with admin credentials and are gated on the caller's own
+  `users/{uid}.role` being Super Admin. They only ever read; nothing here
+  mutates a tenant's data.
 */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
-import * as crypto from "crypto";
-import * as pako from "pako";
 
+/*
+  Resolved per call, not at import time. `admin.initializeApp()` runs in the
+  body of index.ts while this module is evaluated by its import, so a handle
+  taken here would be built before the default app exists the moment anyone
+  moves the export above the init line — and the failure is a deploy-time
+  "default Firebase app does not exist" that points at the wrong file.
+*/
 const db = () => admin.firestore();
 
+/** Firestore refuses a document over 1 MiB. Everything here is measured against it. */
 const DOC_LIMIT_BYTES = 1048576;
 
-/** Only touch documents above this share of the limit. */
-const REPAIR_ABOVE_RATIO = 0.5;
+/** Warn well before the wall — a project this size is one upload from failing. */
+const DOC_WARN_RATIO = 0.6;
 
-/** Anything longer than this in a *Hash field is the old whole-object form. */
-const LEGACY_HASH_MIN = 128;
+/** A studio with no project touched in this long is treated as dormant. */
+const DORMANT_DAYS = 60;
 
-/** Base64 payloads at least this large are worth moving to Storage. */
-const MEDIA_MIN_CHARS = 20000;
+/*
+  Who counts as the platform owner.
 
-/** Cap the work per call so a run cannot outlive the function timeout. */
-const MAX_PROJECTS_PER_RUN = 25;
+  Deliberately not `users/{uid}.role`. firestore.rules lets any non-Client user
+  write the `role` field on their own document -- a documented decision, on the
+  grounds that a studio user naming their own role inside their own tenant
+  changes nothing they could not already do. That reasoning holds for the app.
+  It does not hold here: these two functions are the only things in the system
+  that read across every tenant, so a self-written role would have been a way
+  for one studio's user to read every other studio's figures.
 
+  The token email is signed by Firebase Auth and cannot be set by the caller,
+  which is why firestore.rules uses exactly this check for isSuperAdmin(). To
+  add an owner, add the address here and redeploy -- a deliberate, reviewable
+  act rather than a document anyone can edit.
+*/
 const PLATFORM_OWNER_EMAILS = ["formfactors.operations@gmail.com"];
 
 async function assertSuperAdmin(request: any): Promise<string> {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign in first.");
+  }
+  /*
+    Not gated on email_verified. Firebase Auth holds one account per email
+    address, and the owner's account already exists, so nobody else can
+    register this address to reach the check. Requiring verification would
+    instead lock out a password-provider owner who never clicked the link.
+  */
   const email = String(request.auth.token?.email || "").toLowerCase();
   if (!PLATFORM_OWNER_EMAILS.includes(email)) {
-    logger.warn("platformRepair: refused", { uid: request.auth.uid, email });
+    logger.warn("platformAdmin: refused", { uid: request.auth.uid, email });
     throw new HttpsError("permission-denied", "Platform admin access only.");
   }
   return request.auth.uid;
 }
 
-function bytesOf(value: any): number {
+/**
+ * Serialised size of a document, as Firestore would count it.
+ *
+ * Close enough for a warning threshold: the exact rule counts field names and
+ * type overhead too, so this under-reports slightly, which is the safe
+ * direction for a limit you do not want to hit.
+ */
+function approximateBytes(data: any): number {
   try {
-    return Buffer.byteLength(JSON.stringify(value ?? {}), "utf8");
+    return Buffer.byteLength(JSON.stringify(data ?? {}), "utf8");
   } catch {
     return 0;
   }
 }
 
-/** The six fields anything actually reads off a version's context snapshot. */
-function leanTierContext(ctx: any): any {
-  if (!ctx || typeof ctx !== "object") return ctx;
-  return {
-    name: ctx.name,
-    clientName: ctx.clientName,
-    area: ctx.area,
-    config: ctx.config,
-    rooms: ctx.rooms,
-    approvedTierId: ctx.approvedTierId,
-    gstRate: ctx.gstRate,
-  };
-}
-
 /**
- * Replace whole-object "hashes" with a hash of themselves.
- *
- * Recursive because the same blob sits in the live snapshot, in every history
- * entry, and inside each tier's copy of the context. Returns how many bytes it
- * reclaimed so a dry run can report honestly.
+ * One read of the whole platform: tenants, people, projects, and the numbers
+ * the old screen either faked or could not see.
  */
-function rehashSettings(node: any): number {
-  if (!node || typeof node !== "object") return 0;
-  let saved = 0;
-  for (const key of Object.keys(node)) {
-    const value = node[key];
-    if (key === "settingsHash" && typeof value === "string" && value.length >= LEGACY_HASH_MIN) {
-      const digest = crypto.createHash("sha256").update(value).digest("hex");
-      saved += value.length - digest.length;
-      node[key] = digest;
-    } else if (value && typeof value === "object") {
-      saved += rehashSettings(value);
+export const platformOverview = onCall(async (request) => {
+  await assertSuperAdmin(request);
+
+  const [orgsSnap, usersSnap, projectsSnap] = await Promise.all([
+    db().collection("organizations").get(),
+    db().collection("users").get(),
+    db().collection("projects").get(),
+  ]);
+
+  const orgs = orgsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+  const users = usersSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+
+  const now = Date.now();
+  const perTenant: Record<string, any> = {};
+  const oversized: any[] = [];
+  let totalBytes = 0;
+  let compressedCount = 0;
+
+  projectsSnap.docs.forEach((d) => {
+    const data = d.data() as any;
+    const tenantId = data.tenantId || "(none)";
+    const bytes = approximateBytes(data);
+    totalBytes += bytes;
+    if (data.isCompressed) compressedCount++;
+
+    const t = (perTenant[tenantId] ||= {
+      tenantId,
+      projects: 0,
+      bytes: 0,
+      lastModified: 0,
+      largestProjectKB: 0,
+    });
+    t.projects++;
+    t.bytes += bytes;
+    t.largestProjectKB = Math.max(t.largestProjectKB, Math.round(bytes / 1024));
+    const lm = Number(data.lastModified) || 0;
+    if (lm > t.lastModified) t.lastModified = lm;
+
+    if (bytes >= DOC_LIMIT_BYTES * DOC_WARN_RATIO) {
+      oversized.push({
+        id: d.id,
+        name: data.name || "(unnamed)",
+        tenantId,
+        kb: Math.round(bytes / 1024),
+        pctOfLimit: Math.round((bytes / DOC_LIMIT_BYTES) * 100),
+        compressed: !!data.isCompressed,
+        lastModified: lm || null,
+      });
     }
-  }
-  return saved;
-}
-
-function sniffContentType(base64: string): string {
-  if (base64.startsWith("/9j/")) return "image/jpeg";
-  if (base64.startsWith("iVBORw0KGgo")) return "image/png";
-  if (base64.startsWith("JVBERi0")) return "application/pdf";
-  if (base64.startsWith("R0lGODdh") || base64.startsWith("R0lGODlh")) return "image/gif";
-  if (base64.startsWith("UklGR")) return "image/webp";
-  return "application/octet-stream";
-}
-
-const EXT: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "application/pdf": "pdf",
-  "image/gif": "gif",
-  "image/webp": "webp",
-  "application/octet-stream": "bin",
-};
-
-/**
- * Put a base64 payload in Storage and return a URL the app can read.
- *
- * The admin SDK has no `getDownloadURL`, so the download token is written
- * directly into the object's metadata — that is what the client SDK's URLs
- * carry, so the result is the same kind of link, readable without a signed
- * request or a public bucket.
- */
-async function moveToStorage(
-  tenantId: string,
-  projectId: string,
-  field: string,
-  base64: string,
-): Promise<string> {
-  const bucket = admin.storage().bucket();
-  const contentType = sniffContentType(base64);
-  const token = crypto.randomUUID();
-  const path = `studios/${tenantId || "unknown"}/plans/${projectId}-${field}-${Date.now()}.${EXT[contentType] || "bin"}`;
-
-  await bucket.file(path).save(Buffer.from(base64, "base64"), {
-    contentType,
-    metadata: { metadata: { firebaseStorageDownloadTokens: token } },
   });
 
-  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media&token=${token}`;
-}
+  oversized.sort((a, b) => b.kb - a.kb);
 
-/**
- * One project, repaired in memory.
- *
- * Returns the actions taken so both modes report the same thing — a dry run is
- * only trustworthy if it runs the identical code.
- */
-async function repairProject(
-  projectId: string,
-  tenantId: string,
-  project: any,
-  apply: boolean,
-): Promise<{ actions: string[]; savedKB: number }> {
-  const actions: string[] = [];
-  const before = bytesOf(project);
-
-  if (Array.isArray(project.tiers)) {
-    let trimmed = 0;
-    project.tiers = project.tiers.map((tier: any) => {
-      const next = { ...tier };
-      delete next.fullBoq;
-      delete next.groupedBoq;
-      if (next.projectContext && bytesOf(next.projectContext) > 4096) {
-        next.projectContext = leanTierContext(next.projectContext);
-        trimmed++;
-      }
-      return next;
-    });
-    if (trimmed) actions.push(`lean context on ${trimmed} version${trimmed === 1 ? "" : "s"}`);
-  }
-
-  const rehashed = rehashSettings(project);
-  if (rehashed > 0) actions.push(`hashed settings blob (${Math.round(rehashed / 1024)}KB)`);
-
-  const ctx = project.context;
-  if (ctx && typeof ctx === "object") {
-    /*
-      The two fields are not interchangeable, and getting it wrong breaks the
-      client proposal.
-
-      `logoImage` is read in ten places as `<img src={ctx.logoImage}>`, holding a
-      full data: URI. An https URL works in exactly the same expression, so it
-      is replaced where it stands and no reader changes.
-
-      `floorplanImage` holds raw base64 and its one reader builds the data: URI
-      itself, so a URL cannot go in the same field — it moves to
-      `floorplanImageUrl`, which the setup wizard reads.
-    */
-    for (const field of ["floorplanImage", "logoImage"]) {
-      const value = ctx[field];
-      if (typeof value !== "string" || value.length < MEDIA_MIN_CHARS) continue;
-      if (value.startsWith("http")) continue;   // already moved
-
-      // Either shape: a bare base64 payload, or a data: URI carrying one.
-      const raw = value.startsWith("data:") ? value.slice(value.indexOf(",") + 1) : value;
-      const kb = Math.round((raw.length * 3) / 4 / 1024);
-
-      if (field === "logoImage") {
-        if (apply) ctx[field] = await moveToStorage(tenantId, projectId, field, raw);
-        else ctx[field] = "https://storage/…";
-      } else {
-        if (apply) ctx.floorplanImageUrl = await moveToStorage(tenantId, projectId, field, raw);
-        delete ctx[field];
-      }
-      actions.push(`${field} → Storage (${kb}KB)`);
-    }
-
-    // Legacy shape: nothing in the current app writes or reads floorPlanData,
-    // but one project holds a 706KB PDF plan there and it is the client's.
-    const planData = ctx.floorPlanData;
-    if (planData && typeof planData.fileUrl === "string" && planData.fileUrl.startsWith("data:")) {
-      const raw = planData.fileUrl.slice(planData.fileUrl.indexOf(",") + 1);
-      const kb = Math.round((raw.length * 3) / 4 / 1024);
-      if (apply) {
-        planData.fileUrl = await moveToStorage(tenantId, projectId, "floorPlanData", raw);
-      } else {
-        planData.fileUrl = "";
-      }
-      actions.push(`floorPlanData → Storage (${kb}KB)`);
-    }
-  }
-
-  return { actions, savedKB: Math.round((before - bytesOf(project)) / 1024) };
-}
-
-/**
- * Repair the documents closest to the limit.
- *
- * Dry by default. `apply: true` is the only thing that writes, and it writes a
- * project back in the same shape it was found — compressed if it was
- * compressed, so nothing downstream has to learn a new format.
- */
-export const platformRepairDocuments = onCall(
-  { timeoutSeconds: 540, memory: "1GiB" },
-  async (request) => {
-    await assertSuperAdmin(request);
-
-    const apply = request.data?.apply === true;
-    const onlyProjectId: string | null = request.data?.projectId || null;
-
-    const snap = await db().collection("projects").get();
-    const candidates = snap.docs
-      .filter((d) => (onlyProjectId ? d.id === onlyProjectId : bytesOf(d.data()) >= DOC_LIMIT_BYTES * REPAIR_ABOVE_RATIO))
-      .sort((a, b) => bytesOf(b.data()) - bytesOf(a.data()))
-      .slice(0, MAX_PROJECTS_PER_RUN);
-
-    const results: any[] = [];
-
-    for (const docSnap of candidates) {
-      const raw = docSnap.data() as any;
-      const beforeKB = Math.round(bytesOf(raw) / 1024);
-      const wasCompressed = !!(raw.isCompressed && raw.compressedData);
-
-      let project: any;
-      try {
-        project = wasCompressed
-          ? JSON.parse(Buffer.from(pako.inflate(Buffer.from(raw.compressedData, "base64"))).toString("utf-8"))
-          : raw;
-      } catch (e: any) {
-        results.push({ id: docSnap.id, name: raw.name || "(unnamed)", beforeKB, error: `could not decode: ${e?.message || e}` });
-        continue;
-      }
-
-      const tenantId = raw.tenantId || project.tenantId || "unknown";
-
-      try {
-        const { actions } = await repairProject(docSnap.id, tenantId, project, apply);
-        if (!actions.length) {
-          results.push({ id: docSnap.id, name: raw.name || project?.context?.name || "(unnamed)", beforeKB, afterKB: beforeKB, actions: [], applied: false });
-          continue;
-        }
-
-        let payload: any;
-        if (wasCompressed) {
-          const deflated = pako.deflate(JSON.stringify({ ...project, lastModified: Date.now() }));
-          payload = {
-            id: docSnap.id,
-            tenantId,
-            name: project?.context?.name || raw.name || "(unnamed)",
-            lastModified: Date.now(),
-            isCompressed: true,
-            compressedData: Buffer.from(deflated).toString("base64"),
-          };
-        } else {
-          payload = { ...project, tenantId, lastModified: Date.now() };
-        }
-
-        const afterKB = Math.round(bytesOf(payload) / 1024);
-        if (apply) await docSnap.ref.set(payload);
-
-        results.push({
-          id: docSnap.id,
-          name: project?.context?.name || raw.name || "(unnamed)",
-          beforeKB,
-          afterKB,
-          pctOfLimitBefore: Math.round((beforeKB * 1024 * 100) / DOC_LIMIT_BYTES),
-          pctOfLimitAfter: Math.round((afterKB * 1024 * 100) / DOC_LIMIT_BYTES),
-          actions,
-          applied: apply,
-        });
-      } catch (e: any) {
-        results.push({ id: docSnap.id, name: raw.name || "(unnamed)", beforeKB, error: e?.message || String(e) });
-      }
-    }
-
-    const reclaimedKB = results.reduce((sum, r) => sum + (r.afterKB != null ? r.beforeKB - r.afterKB : 0), 0);
-    logger.info("platformRepairDocuments", { apply, examined: candidates.length, reclaimedKB });
-
+  const tenants = orgs.map((o) => {
+    const stats = perTenant[o.tenantId] || { projects: 0, bytes: 0, lastModified: 0, largestProjectKB: 0 };
+    const seats = users.filter((u) => u.tenantId === o.tenantId);
+    const daysSince = stats.lastModified
+      ? Math.floor((now - stats.lastModified) / 86400000)
+      : null;
     return {
-      generatedAt: Date.now(),
-      apply,
-      examined: candidates.length,
-      totalProjects: snap.size,
-      reclaimedKB,
-      results,
+      tenantId: o.tenantId,
+      orgName: o.orgName || "(unnamed)",
+      tierPlan: o.tierPlan || null,
+      adminEmail: o.adminEmail || null,
+      createdAt: o.createdAt || null,
+      projects: stats.projects,
+      storageKB: Math.round(stats.bytes / 1024),
+      largestProjectKB: stats.largestProjectKB,
+      seats: seats.length,
+      roles: seats.reduce((acc: Record<string, number>, u: any) => {
+        const r = u.role || "(none)";
+        acc[r] = (acc[r] || 0) + 1;
+        return acc;
+      }, {}),
+      lastActivity: stats.lastModified || null,
+      daysSinceActivity: daysSince,
+      dormant: stats.projects === 0 || (daysSince !== null && daysSince > DORMANT_DAYS),
     };
-  },
-);
+  });
+
+  // Projects whose tenant has no matching organization document.
+  const knownTenants = new Set(orgs.map((o) => o.tenantId));
+  const orphanTenants = Object.keys(perTenant).filter((t) => t !== "(none)" && !knownTenants.has(t));
+
+  return {
+    generatedAt: now,
+    totals: {
+      organizations: orgs.length,
+      users: users.length,
+      projects: projectsSnap.size,
+      storageKB: Math.round(totalBytes / 1024),
+      compressedProjects: compressedCount,
+    },
+    tenants,
+    documentWatch: {
+      limitKB: Math.round(DOC_LIMIT_BYTES / 1024),
+      warnAtPct: Math.round(DOC_WARN_RATIO * 100),
+      atRisk: oversized.slice(0, 25),
+      atRiskCount: oversized.length,
+    },
+    orphanTenants,
+  };
+});
+
+/**
+ * The quiet breakage: records that point at nothing, or carry nothing.
+ *
+ * None of this stops the app today, which is the problem — it surfaces months
+ * later as a project nobody can open or a user who sees an empty studio.
+ */
+export const platformIntegritySweep = onCall(async (request) => {
+  await assertSuperAdmin(request);
+
+  const [orgsSnap, usersSnap, projectsSnap] = await Promise.all([
+    db().collection("organizations").get(),
+    db().collection("users").get(),
+    db().collection("projects").get(),
+  ]);
+
+  const orgs = orgsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+  const tenantIds = new Set(orgs.map((o) => o.tenantId).filter(Boolean));
+  const findings: any[] = [];
+
+  const add = (severity: string, kind: string, detail: string, ref?: string) =>
+    findings.push({ severity, kind, detail, ref: ref || null });
+
+  // Organizations
+  orgs.forEach((o) => {
+    if (!o.tenantId) add("high", "org-missing-tenantId", `Organization ${o.id} has no tenantId`, o.id);
+    if (o.tenantId && o.tenantId !== o.id) {
+      add("low", "org-id-mismatch", `Organization doc id ${o.id} differs from tenantId ${o.tenantId}`, o.id);
+    }
+    if (!o.orgName) add("low", "org-unnamed", `Organization ${o.id} has no name`, o.id);
+  });
+
+  // Users
+  usersSnap.docs.forEach((d) => {
+    const u = d.data() as any;
+    if (!u.tenantId) {
+      add("high", "user-no-tenant", `User ${u.email || d.id} has no tenantId`, d.id);
+    } else if (!tenantIds.has(u.tenantId)) {
+      add("high", "user-orphan-tenant", `User ${u.email || d.id} points at unknown tenant ${u.tenantId}`, d.id);
+    }
+    if (!u.role) add("medium", "user-no-role", `User ${u.email || d.id} has no role`, d.id);
+  });
+
+  // Projects
+  projectsSnap.docs.forEach((d) => {
+    const p = d.data() as any;
+    if (!p.tenantId) {
+      add("high", "project-no-tenant", `Project ${p.name || d.id} has no tenantId — invisible to every studio`, d.id);
+    } else if (!tenantIds.has(p.tenantId)) {
+      add("high", "project-orphan-tenant", `Project ${p.name || d.id} points at unknown tenant ${p.tenantId}`, d.id);
+    }
+    if (p.isCompressed && !p.compressedData) {
+      add("high", "project-compressed-empty", `Project ${p.name || d.id} is marked compressed but carries no data`, d.id);
+    }
+    if (!p.isCompressed && !p.context) {
+      add("medium", "project-no-context", `Project ${p.name || d.id} has no context`, d.id);
+    }
+    if (!p.lastModified) add("low", "project-no-timestamp", `Project ${p.name || d.id} has no lastModified`, d.id);
+  });
+
+  const bySeverity = findings.reduce((acc: Record<string, number>, f) => {
+    acc[f.severity] = (acc[f.severity] || 0) + 1;
+    return acc;
+  }, {});
+
+  logger.info("platformIntegritySweep", { findings: findings.length, bySeverity });
+
+  return {
+    generatedAt: Date.now(),
+    scanned: {
+      organizations: orgs.length,
+      users: usersSnap.size,
+      projects: projectsSnap.size,
+    },
+    bySeverity,
+    findings: findings.slice(0, 200),
+    truncated: findings.length > 200,
+  };
+});

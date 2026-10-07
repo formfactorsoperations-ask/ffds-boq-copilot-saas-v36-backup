@@ -53,6 +53,24 @@ service cloud.firestore {
     }
 
     /*
+      A Designer on THIS project. Assignment is read from the project's
+      designView, which the server keeps in step with the studio's
+      projectDesigners map (functions/src/designView.ts). A Designer used to
+      read every project of the studio, assigned or not, the screens choosing
+      which to show.
+    */
+    function designViewPath(projectId) {
+      return /databases/$(database)/documents/projects/$(projectId)/designView/current;
+    }
+    function isAssignedDesigner(tenantId, projectId) {
+      return isTenantDesigner(tenantId)
+        && request.auth.token.email is string
+        && exists(designViewPath(projectId))
+        && get(designViewPath(projectId)).data.tenantId == tenantId
+        && request.auth.token.email.lower() in get(designViewPath(projectId)).data.get('designers', []);
+    }
+
+    /*
       A drawing change a Designer may make: rounds, links, dates, comments and
       submitting for review. Never an approval, never a GFC release, and never
       the drawing's own definition -- those are the studio's.
@@ -141,8 +159,13 @@ service cloud.firestore {
         portal link's sign-in door gets only the name and logo, through the
         portalDoor function.
       */
+      /*
+        Not its clients any more: the record carries the team list (names,
+        emails, roles) and which Designer works on which project. A client's
+        portal copy carries the studio's name, logo and contact details.
+      */
       allow read: if isAuthenticated() && (
-          getUserData().get('tenantId', '') == orgId || isSuperAdmin()
+          (getUserData().get('tenantId', '') == orgId && getUserData().get('role', '') != 'Client') || isSuperAdmin()
       );
       /*
         A new studio is created by the platform owner. "Create it if it does
@@ -205,11 +228,11 @@ service cloud.firestore {
          }
 
          match /drawingTracker/{drawingId} {
-           /* The Designer's one place to work: see isDesignerDrawingChange. */
-           allow read: if isTenantDesigner(orgId);
-           allow update: if isTenantDesigner(orgId) && isDesignerDrawingChange();
+           /* The Designer's one place to work: see isDesignerDrawingChange. On their own projects only. */
+           allow read: if isAssignedDesigner(orgId, projectId);
+           allow update: if isAssignedDesigner(orgId, projectId) && isDesignerDrawingChange();
            match /revisions/{revisionId} {
-             allow read, create: if isTenantDesigner(orgId);
+             allow read, create: if isAssignedDesigner(orgId, projectId);
            }
 
            allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
@@ -226,6 +249,7 @@ service cloud.firestore {
          }
 
          match /drawingVersions/{versionId} {
+           allow read: if isAssignedDesigner(orgId, projectId);
            allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
            allow create: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
              && (getUserData().role in ['Owner', 'Designer', 'Admin', 'Ops Director', 'Super Admin'] || isSuperAdmin() || isLegacyFFDS());
@@ -233,14 +257,10 @@ service cloud.firestore {
          }
 
          /*
-           A Designer reads the studio's copy of the project and its records --
-           except the priced BOQ lines, BOQ versions and booking packs -- and
-           writes none of it. Drawings are granted above.
+           A Designer used to read this -- the studio's copy of the whole
+           project, money included -- and everything under it. They read the
+           project's designView instead; drawings are granted above.
          */
-         allow read: if isTenantDesigner(orgId);
-         match /{designerSub}/{designerDoc=**} {
-           allow read: if isTenantDesigner(orgId) && !(designerSub in ['boqItems', 'boqVersions', 'bookingPacks']);
-         }
 
          allow read, create, delete: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
          allow update: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
@@ -307,8 +327,8 @@ service cloud.firestore {
       }
 
     match /weeklyReports/{reportId} {
-      allow read: if (isAuthenticated() && (isSameTenant(resource.data.tenantId) || isSuperAdmin()))
-                  || resource.data.status == 'published';
+      /* A published report used to be readable by anyone, signed in or not. Clients get theirs in the portal. */
+      allow read: if isAuthenticated() && (isSameTenant(resource.data.tenantId) || isSuperAdmin());
       allow create: if isAuthenticated() && (isSameTenant(request.resource.data.tenantId) || isSuperAdmin())
                     && (getUserData().role in ['Owner', 'Admin', 'Super Admin']);
       allow update: if isAuthenticated() && (isSameTenant(resource.data.tenantId) || isSuperAdmin())
@@ -349,22 +369,37 @@ service cloud.firestore {
         clients read the stripped portalView below, and the portal link's
         sign-in door asks the portalDoor function for the studio's name.
       */
+      /* Not a Designer: the document is the whole project, money included. See designView below. */
       allow read: if isAuthenticated() && (
         isSameTenant(resource.data.tenantId) ||
         (isLegacyFFDS() && !('tenantId' in resource.data)) ||
-        isSuperAdmin() ||
-        // A Designer reads the studio's projects and writes none of them.
-        isTenantDesigner(resource.data.tenantId)
+        isSuperAdmin()
       );
 
       /*
-        A Designer reads what hangs off a project, apart from the money: the
-        priced tier BOQs, the engagement record, payment requests and margin
-        analytics. The client-side subcollections have their own rules below.
+        THE DESIGNER'S COPY: the project without its money, written only by
+        the server (functions/src/designView.ts), readable by the studio and
+        by the Designers assigned to the project -- one at a time, or as a
+        list of exactly their own.
+      */
+      match /designView/{viewId} {
+        allow read: if isAuthenticated() && (
+          isSameTenant(resource.data.tenantId) || isSuperAdmin() ||
+          (isTenantDesigner(resource.data.tenantId) && request.auth.token.email is string
+            && request.auth.token.email.lower() in resource.data.designers)
+        );
+        allow write: if false;
+      }
+
+      /*
+        What a Designer reads beneath an assigned project, by name: the design
+        gate, decisions and the programme. Everything else under a project --
+        the priced tier BOQs, the agreement, payment requests, margins, scope
+        additions, the client's portal copy -- stays with the studio.
       */
       match /{designerSub}/{designerDoc=**} {
-        allow read: if isTenantDesigner(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId)
-          && !(designerSub in ['tierBoq', 'engagement', 'paymentRequests', 'marginAnalytics']);
+        allow read: if designerSub in ['designGate', 'decisions', 'timelinePhases', 'tasks', 'deliverables', 'journeySteps', 'stepProgress']
+          && isAssignedDesigner(get(designViewPath(projectId)).data.tenantId, projectId);
       }
 
       /*
@@ -387,7 +422,17 @@ service cloud.firestore {
         checks the caller's own users/{uid} record and applies one action from a
         closed set. The client never writes this document.
       */
-      allow update: if isAuthenticated() && (isSameTenant(request.resource.data.tenantId) || isSuperAdmin());
+      /*
+        The project must already be the caller's studio's, as well as stay so.
+        Only the new value was checked, so another studio's admin who knew a
+        project's id -- and ids are in every portal link -- could rewrite it
+        and claim it by setting tenantId to their own.
+      */
+      allow update: if isAuthenticated() && (
+        (isSameTenant(request.resource.data.tenantId) &&
+          (isSameTenant(resource.data.tenantId) || (isLegacyFFDS() && !('tenantId' in resource.data)))) ||
+        isSuperAdmin()
+      );
 
       // CREATE: Document payload must match user's tenantId
       allow create: if isAuthenticated() && (isSameTenant(request.resource.data.tenantId) || isSuperAdmin());
@@ -630,12 +675,13 @@ service cloud.firestore {
       );
     }
     
-    match /publicProposals/{tokenId} {
-      allow read: if true;
-    }
-
+    /*
+      publicProposals was readable by anyone and nothing uses it now: it falls
+      to the deny-all at the end. studioSettings was readable by anyone too;
+      only the studio's own screens read it.
+    */
     match /studioSettings/{settingId} {
-      allow read: if true;
+      allow read: if isAuthenticated() && (settingId == getUserTenantId() || isSuperAdmin());
       allow write: if isAuthenticated() && (settingId == getUserTenantId() || isSuperAdmin());
     }
 
@@ -689,6 +735,17 @@ service cloud.firestore {
       allow read: if isAuthenticated() && isSameTenant(resource.data.tenantId);
       allow write: if isAuthenticated() && isSameTenant(request.resource.data.tenantId);
       allow delete: if isAuthenticated() && isSameTenant(resource.data.tenantId);
+    }
+
+    /*
+      A Designer's list of their own projects: every designView naming them,
+      across projects. The query has to say so (tenantId == their studio,
+      designers array-contains their email); one that does not is refused.
+    */
+    match /{path=**}/designView/{viewId} {
+      allow list: if isAuthenticated() && isTenantDesigner(resource.data.tenantId)
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() in resource.data.designers;
     }
 
     // ========================================================================
