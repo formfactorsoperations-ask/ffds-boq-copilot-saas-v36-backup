@@ -713,6 +713,24 @@ service cloud.firestore {
       allow write: if isAuthenticated() && (settingId == getUserTenantId() || isSuperAdmin());
     }
 
+    /*
+      Zoho Books add-in (optional; see functions/src/zohoBooks.ts).
+
+      A studio's Zoho client secret and refresh token live in
+      zohoBooksConnections, and zohoInvoiceLinks records which Zoho draft
+      belongs to which milestone. Only the zohoBooks function reads or writes
+      either, through the Admin SDK, which bypasses these rules. No browser
+      gets in, including the studio's own Owner: a credential that can reach
+      their books must not be readable from a console. Closed by name rather
+      than left to the deny-all below, so a later broad rule cannot open them.
+    */
+    match /zohoBooksConnections/{tenantId} {
+      allow read, write: if false;
+    }
+    match /zohoInvoiceLinks/{linkId} {
+      allow read, write: if false;
+    }
+
     match /studios/{studioId} {
       allow read: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
       allow write: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());

@@ -296,6 +296,12 @@ export interface PaymentMilestone {
     invoiceNumber?: string;
     invoiceDate?: string;
     lockedTaxableBase?: number; // The taxable base amount at the time of invoicing
+    /**
+     * Set only when the studio uses the optional Zoho Books add-in and this
+     * invoice was drafted there. `invoiceNumber` then holds Zoho's own number.
+     * The draft is never sent from here; the studio sends it from Zoho.
+     */
+    zohoInvoiceId?: string;
 
     /**
      * A concession against THIS invoice, in rupees off the payable total.
@@ -704,6 +710,21 @@ export interface SignoffRecord {
     manualOverride?: ManualOverrideMeta;
 }
 
+/**
+ * Who a project's invoices are billed to, for studios using the Zoho Books
+ * add-in. A project has one client, so this lives on the project; the Zoho
+ * customer is linked once, the first time an invoice is raised, and reused.
+ */
+export interface ClientBilling {
+    /** The customer in the studio's Zoho Books. */
+    zohoContactId?: string;
+    zohoContactName?: string;
+    /** The client's GSTIN, when they have one. */
+    gstin?: string;
+    /** Place of supply, as a Zoho state code ("MH"). Decides CGST+SGST versus IGST. */
+    placeOfSupply?: string;
+}
+
 export interface ProjectContext {
     name: string;
     location: string;
@@ -745,6 +766,8 @@ export interface ProjectContext {
     clientName?: string;
     clientEmail?: string;
     clientPhone?: string;
+    /** Billing identity for this project's client; see ClientBilling. */
+    clientBilling?: ClientBilling;
     activeProposalFormat?: 'classic' | 'booklet';
     showScopePricing?: boolean;
     coverStyle?: 'minimal' | 'bold' | 'photo'; // Newly added property
