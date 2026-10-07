@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle, AlertTriangle, ExternalLink, X } from '@/lib/lucide-shim';
+import { CheckCircle, AlertTriangle, ExternalLink, X } from '../lib/lucide-shim';
 import { useOrg } from '../contexts/OrgContext';
 import { ClientBilling, PaymentMilestone } from '../types';
 import { formatINR } from '../lib/utils';

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle, AlertTriangle, ChevronDown, ChevronUp, ExternalLink, Plug, Copy } from '@/lib/lucide-shim';
+import { CheckCircle, AlertTriangle, ChevronDown, ChevronUp, ExternalLink, Plug, Copy } from '../../lib/lucide-shim';
 import { useZohoBooks } from '../../hooks/useZohoBooks';
 import { ZohoRegionCode, ZohoSettingsView, ZohoStatus, zohoCall } from '../../services/zohoBooksService';
 import { ZOHO_REGIONS, ZOHO_SCOPES, nextInvoiceNumber, validateNumberTemplate } from '../../lib/zohoBooks';
