@@ -27,6 +27,8 @@ export interface ZohoStatus {
   settings?: ZohoSettingsView;
   canManage: boolean;
   canRaise: boolean;
+  /** Set client-side when the zohoBooks function is not deployed (or there is no backend), so the UI can say so. */
+  unavailable?: boolean;
 }
 
 export interface ZohoContactHit { id: string; name: string; company: string }

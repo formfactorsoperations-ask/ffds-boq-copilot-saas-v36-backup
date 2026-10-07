@@ -20,7 +20,7 @@ import { ZohoCallError, ZohoStatus, zohoCall } from '../services/zohoBooksServic
  */
 
 const cache = new Map<string, ZohoStatus>();
-const OFF: ZohoStatus = { connected: false, canManage: false, canRaise: false };
+const OFF: ZohoStatus = { connected: false, canManage: false, canRaise: false, unavailable: true };
 
 export function useZohoBooks() {
   const { orgData } = useOrg();
