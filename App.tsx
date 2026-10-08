@@ -133,7 +133,7 @@ import { readPortalView } from "./services/portalViewService";
 import { syncStudioAccess, portalDoor } from "./services/studioAccess";
 import { publishProjectDirectory } from "./services/projectTeam";
 import { seesStudioFinance, FINANCE_TABS, isDesignerRole, designerMayOpen, STUDIO_TABS, DESIGNER_HOME_TAB, visibleToRole } from "./lib/roleAccess";
-import DesignReviewTab from "./components/drawingReview/DesignReviewTab";
+import DesignDeskTab from "./components/drawingReview/DesignDeskTab";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth as firebaseAuth } from "./services/firebaseClient";
 import PortalPublishControls from "./components/ops/PortalPublishControls";
@@ -3038,7 +3038,7 @@ export default function App() {
                     />
                   )}
                   {activeTab === "design-review" && (
-                    <DesignReviewTab projects={visibleProjects} activeProjectId={activeInternalId} />
+                    <DesignDeskTab projects={visibleProjects} activeProjectId={activeInternalId} />
                   )}
                   {activeTab === "reports" && (
                     <StudioReports
@@ -3778,7 +3778,7 @@ export default function App() {
                     />
                   )}
                   {activeTab === "design-review" && (
-                    <DesignReviewTab projects={visibleProjects} activeProjectId={activeInternalId} />
+                    <DesignDeskTab projects={visibleProjects} activeProjectId={activeInternalId} />
                   )}
                   {activeTab === "reports" && (
                     <StudioReports

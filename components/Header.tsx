@@ -46,8 +46,8 @@ const TABS = [
   // straight to Projects, which lists only the projects assigned to them.
   { id: 'home', label: 'Home', icon: Home, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Site Supervisor'] },
   { id: 'projects', label: 'Projects', icon: Building2, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Site Supervisor', 'Designer'] },
-  /* Design Review: a Designer's Drawing Desk, the Design Head's review inbox. */
-  { id: 'design-review', label: 'Design Review', icon: PenTool, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Designer', 'Owner'] },
+  /* Design Desk: where drawings are reviewed. The id stays 'design-review' so saved tabs and links keep working. */
+  { id: 'design-review', label: 'Design Desk', icon: PenTool, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Designer', 'Owner'] },
   // Not for Designers: the client list carries account values, and a Designer's
   // work is reached through their assigned projects.
   { id: 'clients', label: 'Clients', icon: Users, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Site Supervisor'] },
