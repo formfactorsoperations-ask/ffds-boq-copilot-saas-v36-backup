@@ -55,7 +55,8 @@ import { buildSignoffPatch, buildDisputePatch, resolveApprovals, AgreementKind }
 import DocumentReadingRoom from './client/DocumentReadingRoom';
 import PortalScopePanel from './client/PortalScopePanel';
 import PortalDesignRecord from './client/PortalDesignRecord';
-import type { PortalDesignMeeting } from '../lib/designMeeting';
+import { portalDesignRecord, type PortalDesignMeeting } from '../lib/designMeeting';
+import { watchMeetings } from '../services/designMeetingService';
 import { FFDSLogo } from './FFDSLogo';
 import BoqVersionCompare from './client/BoqVersionCompare';
 import { describeVersions } from '../lib/boqVersions';
@@ -350,6 +351,11 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     /* The design meetings held, from the projection; updated in place when the client confirms one. */
     const [designRecord, setDesignRecord] = useState<PortalDesignMeeting[]>(() => (projectData as any).designRecord || []);
     useEffect(() => { setDesignRecord((projectData as any).designRecord || []); }, [(projectData as any).designRecord]);
+    /* The studio's preview has no published copy to read from, so it follows the meetings themselves. */
+    useEffect(() => {
+        if (source === 'client' || !studioId || !projectData.id) return;
+        return watchMeetings(studioId, projectData.id, (list) => setDesignRecord(portalDesignRecord(list)), () => undefined);
+    }, [source, studioId, projectData.id]);
     const recordWaiting = designRecord.filter((m) => !m.confirmation).length;
 
     /** The scope revision history, and whether the compare modal is open. */
