@@ -15,6 +15,8 @@ export const INK = '#14211E';
 export const TABLE = '#1A2120';
 export const MARK = '#F0506E';
 export const FIXED = '#3FBF94';
+/** The client's own changes, from a design meeting. */
+export const CLIENT = '#C77A1A';
 
 export const roomLabel = (r?: string | null) => (!r || r === 'General / Project-Wide' ? 'Whole home' : r);
 

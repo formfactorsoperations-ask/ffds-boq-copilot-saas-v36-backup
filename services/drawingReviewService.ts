@@ -84,10 +84,10 @@ export class ReviewError extends Error {
   constructor(message: string, public code: string) { super(message); }
 }
 
-async function call(data: Record<string, any>): Promise<any> {
+export async function call(data: Record<string, any>, fn = 'drawingReview'): Promise<any> {
   if (!functions) throw new ReviewError('Not connected to the studio.', 'unavailable');
   try {
-    const res = await httpsCallable(functions, 'drawingReview', { timeout: 120000 })(data);
+    const res = await httpsCallable(functions, fn, { timeout: 120000 })(data);
     return res.data;
   } catch (e: any) {
     const code = String(e?.code || '').replace('functions/', '');
@@ -108,6 +108,9 @@ export const createMark = (t: Target, page: number, shape: MarkShape, text: stri
 export const updateMark = (t: Target, markId: string, patch: { text?: string; blocking?: boolean }) => call({ ...t, action: 'mark', op: 'update', markId, ...patch });
 export const deleteMark = (t: Target, markId: string) => call({ ...t, action: 'mark', op: 'delete', markId });
 export const fixMark = (t: Target, markId: string, fixed: boolean) => call({ ...t, action: 'mark', op: fixed ? 'fix' : 'unfix', markId });
+/* The client's changes from a design meeting: send them on to the designer, or keep the sheet approved. */
+export const clientReturn = (t: Target, expectedRev: number, reason?: string) => call({ ...t, action: 'clientReturn', expectedRev, reason });
+export const clientKeep = (t: Target, expectedRev: number, reason?: string) => call({ ...t, action: 'clientKeep', expectedRev, reason });
 
 /* ------------------------------------------------------------- uploads */
 

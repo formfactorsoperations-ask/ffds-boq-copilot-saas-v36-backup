@@ -1,18 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check, ChevronDown, ChevronLeft, ChevronRight, Columns2, History, Info, Layers, ListChecks, Loader2, MapPin, MessageSquare,
-  Minus, MousePointer2, MoveUpRight, PenLine, Plus, RotateCcw, RotateCw, Send, Sparkles, Square, Trash2, Undo2, Upload,
+  Minus, MousePointer2, MoveUpRight, PenLine, Plus, Presentation, RotateCcw, RotateCw, Send, Sparkles, Square, Trash2, Undo2, Upload,
 } from 'lucide-react';
 import {
   watchDrawing, watchVersions, watchMarks, watchRounds, watchEvents, uploadSheet, submitSheet, withdrawSheet,
-  approveSheet, returnSheet, createMark, deleteMark, updateMark, fixMark, setAudience, removeVersion, ReviewError, type ReviewDrawing,
+  approveSheet, returnSheet, clientReturn, clientKeep, createMark, deleteMark, updateMark, fixMark, setAudience, removeVersion, ReviewError, type ReviewDrawing,
 } from '../../services/drawingReviewService';
-import { canReview, canUpload, canSetAudience, allowed, stateOf, refusal, guessAudience, turnShape, type Turn, type MarkShape, type ReviewMark, type ReviewVersion, type ReviewRound, type ReviewEvent } from '../../lib/drawingReview';
+import { canReview, canUpload, canSetAudience, allowed, clientPending, stateOf, refusal, guessAudience, turnShape, type Turn, type MarkShape, type ReviewMark, type ReviewVersion, type ReviewRound, type ReviewEvent } from '../../lib/drawingReview';
 import { roundWarn, INCLUDED_ROUNDS } from '../../lib/designDesk';
 import { thumbnailOf } from '../../lib/pdfRender';
 import PdfStage, { type Tool } from './PdfStage';
 import { useSheetChanges } from './useSheetChanges';
-import { MARK, FIXED, roomLabel, ago, shortDate, firstName, useToast, Initials } from './ui';
+import { MARK, FIXED, CLIENT, roomLabel, ago, shortDate, firstName, useToast, Initials } from './ui';
 import { Chip, ProjectMark, StatusPill } from './DeskParts';
 
 export interface Me { uid: string; email: string; name: string }
@@ -47,7 +47,7 @@ const TOOLS: [Tool, string, string, string, React.ComponentType<any>][] = [
   ['pen', 'D', 'Draw', 'Sketch freehand on the sheet', PenLine],
 ];
 const SHAPE_WORD: Record<string, string> = { pin: 'Pin', rect: 'Box', arrow: 'Arrow', pen: 'Sketch' };
-const EVENT_WORD: Record<string, string> = { uploaded: 'uploaded', submitted: 'sent for review', withdrawn: 'pulled back', returned: 'returned', approved: 'approved', audience: 'changed who it is for', removed: 'removed the PDF' };
+const EVENT_WORD: Record<string, string> = { uploaded: 'uploaded', submitted: 'sent for review', withdrawn: 'pulled back', returned: 'returned', approved: 'approved', audience: 'changed who it is for', removed: 'removed the PDF', client: 'presented it to the client', clientKept: 'kept it approved after the meeting' };
 const QUICK = ['Check this dimension', 'Line this up with the ceiling plan', 'Match the material schedule', 'Show the hinge side', 'Add a section through here'];
 
 /* Small per-person memory on this device: phrases used in notes, fixes already checked, the change outline on or off. */
@@ -80,6 +80,7 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
   const [draft, setDraft] = useState<{ shape: MarkShape; anchor: { x: number; y: number }; text: string; blocking: boolean } | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
   const [retMsg, setRetMsg] = useState('');
+  const [clientStep, setClientStep] = useState<'send' | 'keep' | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [railTab, setRailTab] = useState<'notes' | 'history'>('notes');
   const [upload, setUpload] = useState<{ stage: string; fraction?: number } | null>(null);
@@ -115,7 +116,9 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
   const onSheet = marks.filter((m) => m.versionId === viewing?.id);
   const fixedFromPrev = isCurrent && prev ? marks.filter((m) => m.versionId === prev.id && m.status === 'FIXED') : [];
   const reviewer = canReview(role);
-  const canMark = reviewer && state === 'IN_REVIEW' && isCurrent && !compare;
+  /* The client asked for changes at the design meeting; the Design Head decides what reaches the designer. */
+  const fromClient = clientPending(r) && isCurrent;
+  const canMark = reviewer && (state === 'IN_REVIEW' || fromClient) && isCurrent && !compare;
   const canDecide = reviewer && state === 'IN_REVIEW' && isCurrent;
   const canFix = canUpload(role) && state === 'CHANGES_REQUESTED' && isCurrent;
   const canUploadNew = canUpload(role) && allowed('finalize', r);
@@ -205,6 +208,15 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
         ? { title: `v${r.versionNo} approved${self ? ' (self-approved)' : ''}`, sub: rest ? `${rest} more waiting. Opening the next one.` : audience === 'client' ? 'Ready for the client meeting. Your queue is clear.' : 'Final, and it stays inside the studio.' }
         : { title: `Back with ${self ? 'you' : firstName(r.designer?.name)}`, sub: `${onSheet.length ? `${onSheet.length} note${onSheet.length === 1 ? '' : 's'} to fix` : 'With your message'}${rest ? ' · opening the next one' : ''}.` });
     if (res) goNext();
+  }
+
+  async function decideClient(kind: 'send' | 'keep') {
+    if (!r) return;
+    const res = await act(kind, () => (kind === 'send' ? clientReturn(target, r.rev, retMsg.trim() || undefined) : clientKeep(target, r.rev, retMsg.trim() || undefined)),
+      kind === 'send'
+        ? { title: `Back with ${self ? 'you' : firstName(r.designer?.name)}`, sub: `${onSheet.filter((m) => m.status === 'OPEN').length} client change${onSheet.filter((m) => m.status === 'OPEN').length === 1 ? '' : 's'} to make.` }
+        : { title: `v${r.versionNo} stays approved`, sub: "The client's notes are cleared; the history keeps them." });
+    if (res) { setClientStep(null); setRetMsg(''); goNext(); }
   }
 
   async function saveDraft() {
@@ -374,6 +386,10 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
       <div className="flex flex-wrap items-stretch gap-4">
         <div className="relative flex min-h-[620px] min-w-0 flex-[999_1_620px] flex-col overflow-hidden rounded-[22px]"
           style={{ backgroundColor: '#E8E8E2', backgroundImage: 'radial-gradient(#D3D3CB 1px, transparent 1px)', backgroundSize: '18px 18px' }}>
+          {fromClient && banner('amber', <Presentation size={16} />,
+            reviewer
+              ? <>The client asked for <b>{r?.clientChanges?.count || onSheet.length} change{(r?.clientChanges?.count || onSheet.length) === 1 ? '' : 's'}</b> at the design meeting{r?.clientChanges?.at ? ` on ${shortDate(r.clientChanges.at)}` : ''}. Edit or add notes, then send them to {self ? 'yourself' : firstName(r?.designer?.name)}, or keep the sheet approved.</>
+              : <>The client asked for changes at the design meeting. The Design Head looks at them first, then sends them to you.</>)}
           {!isCurrent && viewing && banner('amber', <History size={16} />, <>You are looking at <b>v{viewing.n}</b>, an older version. Its notes stay with it.</>,
             <button type="button" onClick={() => setViewId(null)} className="min-h-[34px] rounded-[10px] border border-[#DCDCD5] bg-white px-3 text-[13px] font-bold text-[#17191E]">Back to v{current?.n}</button>)}
           {isCurrent && prev && reviewer && fixedFromPrev.length > 0 && !compare && banner('green', <Check size={16} strokeWidth={2.4} />,
@@ -508,9 +524,9 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
                 return (
                   <div key={m.id} className="dd-rise flex gap-2.5 rounded-[14px] border bg-white p-3 transition" style={{ animationDelay: `${Math.min(i, 8) * 30}ms`, borderColor: sel ? MARK : '#E4E4DE', boxShadow: sel ? '0 0 0 3px rgba(217,53,75,.14)' : undefined }}>
                     <button type="button" onClick={() => { setSelected(m.id); if (m.page !== page) setPage(m.page); }} aria-label={`Show note ${m.n} on the sheet`}
-                      className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-extrabold text-white transition-colors" style={{ background: done ? FIXED : MARK }}>{m.n}</button>
+                      className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-extrabold text-white transition-colors" style={{ background: done ? FIXED : m.source === 'client' ? CLIENT : MARK }}>{m.n}</button>
                     <div className="min-w-0 flex-1">
-                      <div className="text-[11.5px] font-bold text-[#5F636D]">{m.by?.email === me.email ? 'You' : firstName(m.by?.name)} · {SHAPE_WORD[m.shape.t]}{pages > 1 ? ` · sheet ${m.page + 1}` : ''}</div>
+                      <div className="text-[11.5px] font-bold text-[#5F636D]">{m.source === 'client' ? <span style={{ color: CLIENT }}>Client</span> : m.by?.email === me.email ? 'You' : firstName(m.by?.name)} · {SHAPE_WORD[m.shape.t]}{pages > 1 ? ` · sheet ${m.page + 1}` : ''}</div>
                       <div className={`mt-0.5 text-[13.5px] ${done ? 'text-[#6B6F78] line-through decoration-[#3FBF94]' : 'text-[#17191E]'}`}>{m.text}</div>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {canFix && (
@@ -605,6 +621,41 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
                   <button type="button" onClick={() => setRequestOpen(false)} className="min-h-[44px] rounded-xl px-4 text-[14px] font-bold text-[#4F535C] hover:bg-[#EBEBE5]">Cancel</button>
                   <button type="button" disabled={!!busy} onClick={() => decide('return')} className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-[#4146C8] px-4 text-[14px] font-bold text-white hover:bg-[#3439AD] disabled:opacity-45">
                     {busy === 'return' ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}{self ? 'Return to your desk' : `Send back to ${firstName(r?.designer?.name)}`}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {reviewer && fromClient && !clientStep && (
+              <>
+                <div className="text-[12.5px] text-[#5F636D]">The client's notes stay with this sheet until you decide. Nothing changes for the designer yet.</div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={!!busy || !!draft} onClick={() => { setClientStep('keep'); setDraft(null); }}
+                    className="inline-flex min-h-[44px] flex-[1_1_140px] items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-[#DCDCD5] bg-white px-4 text-[14px] font-bold hover:border-[#A9AAA2] disabled:opacity-45">
+                    <Check size={16} strokeWidth={2.6} />Keep it approved
+                  </button>
+                  <button type="button" disabled={!!busy || !!draft || !onSheet.some((m) => m.status === 'OPEN')} onClick={() => { setClientStep('send'); setDraft(null); }}
+                    title={onSheet.some((m) => m.status === 'OPEN') ? undefined : 'Add a note first'}
+                    className="inline-flex min-h-[44px] flex-[1_1_140px] items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#4146C8] px-4 text-[14px] font-bold text-white hover:bg-[#3439AD] disabled:opacity-45">
+                    <Send size={16} />Send to {self ? 'yourself' : firstName(r?.designer?.name)}
+                  </button>
+                </div>
+              </>
+            )}
+            {reviewer && fromClient && clientStep && (
+              <div className="dd-rise flex flex-col gap-2">
+                {clientStep === 'keep' && <div className="text-[12.5px] font-bold text-[#6E3B05]">v{r?.versionNo} stays approved as it is. The client's notes are cleared from the sheet; the history keeps what they asked.</div>}
+                <label htmlFor="dd-client" className="text-[13px] font-bold">{clientStep === 'send' ? `A line for ${self ? 'yourself' : firstName(r?.designer?.name)}` : 'Why it stays as it is'} <span className="font-medium text-[#8A8E97]">(optional)</span></label>
+                <textarea id="dd-client" autoFocus value={retMsg} onChange={(e) => setRetMsg(e.target.value)} rows={2}
+                  placeholder={clientStep === 'send' ? 'Changes the client asked for at the design meeting.' : 'For example: agreed with the client to keep the current finish'}
+                  className="w-full rounded-[10px] border border-[#DCDCD5] px-3 py-2.5 text-[13.5px] outline-none focus:border-[#4146C8] focus:shadow-[0_0_0_3px_rgba(65,70,200,0.15)]" />
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setClientStep(null)} className="min-h-[44px] rounded-xl px-4 text-[14px] font-bold text-[#4F535C] hover:bg-[#EBEBE5]">Cancel</button>
+                  <button type="button" disabled={!!busy} onClick={() => decideClient(clientStep)}
+                    className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl px-4 text-[14px] font-bold text-white disabled:opacity-45"
+                    style={{ background: clientStep === 'send' ? '#4146C8' : '#1F7A57' }}>
+                    {busy === clientStep ? <Loader2 size={16} className="animate-spin" /> : clientStep === 'send' ? <Send size={16} /> : <Check size={16} strokeWidth={2.6} />}
+                    {clientStep === 'send' ? `Send to ${self ? 'yourself' : firstName(r?.designer?.name)}` : `Keep v${r?.versionNo} approved`}
                   </button>
                 </div>
               </div>

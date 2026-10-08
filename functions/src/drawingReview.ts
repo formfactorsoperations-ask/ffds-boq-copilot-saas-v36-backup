@@ -4,7 +4,7 @@ import * as logger from "firebase-functions/logger";
 import { createHash } from "crypto";
 import { PLATFORM_OWNER_EMAILS } from "./guards";
 import {
-  allowed, refusal, canReview, canUpload, canSetAudience, cleanShape, cleanText, guessAudience, storeShape,
+  allowed, refusal, canReview, canUpload, canSetAudience, cleanShape, cleanText, guessAudience, storeShape, clientPending,
   uploadPrefix, versionsPrefix, safeId, MAX_PDF_BYTES, MAX_THUMB_BYTES,
   type ReviewSummary, type ReviewPerson, type ReviewVersion, type ReviewRound, type ReviewMark, type ReviewEvent,
 } from "../../lib/drawingReview";
@@ -27,7 +27,7 @@ import {
 const db = () => admin.firestore();
 const bucket = () => admin.storage().bucket();
 
-interface Actor extends ReviewPerson {
+export interface Actor extends ReviewPerson {
   role: string;
   platformOwner: boolean;
   projectName: string | null;
@@ -36,7 +36,7 @@ interface Actor extends ReviewPerson {
 const STAFF_WITH_PROJECTS = new Set(["Owner", "Admin", "Ops Director", "Design Head", "Site Supervisor", "Viewer", "Super Admin"]);
 
 /** Who is calling, and whether they may touch this project at all. */
-async function resolveActor(request: any, orgId: string, projectId: string): Promise<Actor> {
+export async function resolveActor(request: any, orgId: string, projectId: string): Promise<Actor> {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
   const uid = String(request.auth.uid);
   const email = String(request.auth.token?.email || "").trim().toLowerCase();
@@ -67,7 +67,7 @@ async function resolveActor(request: any, orgId: string, projectId: string): Pro
   return { uid, email, name, role, platformOwner: false, projectName };
 }
 
-const person = (a: Actor): ReviewPerson => ({ uid: a.uid, email: a.email, name: a.name });
+export const person = (a: Actor): ReviewPerson => ({ uid: a.uid, email: a.email, name: a.name });
 
 function blankSummary(orgId: string, projectId: string, drawingId: string, name: string): ReviewSummary {
   return {
@@ -197,7 +197,7 @@ async function finalize(actor: Actor, orgId: string, projectId: string, drawingI
         versionId, versionNo: n, pdfPath: finalPdf, thumbPath: finalThumb, pageCount: checked.pageCount,
         openRoundId: null, designer: person(actor), submittedAt: null,
         decidedBy: null, decidedAt: null, reason: null, selfApproved: false,
-        marksTotal: 0, marksOpen: 0, marksSeq: 0, updatedAt: now,
+        marksTotal: 0, marksOpen: 0, marksSeq: 0, clientChanges: null, updatedAt: now,
       };
       const events: ReviewEvent[] = [{ type: "uploaded", at: now, by: person(actor), versionNo: n, text: note || fileName }];
       const patch: any = {};
@@ -314,7 +314,7 @@ async function mark(actor: Actor, drawingRef: FirebaseFirestore.DocumentReferenc
 
     if (op === "create") {
       if (!canReview(actor.role)) throw new HttpsError("permission-denied", "Only the Design Head marks sheets.");
-      if (s.state !== "IN_REVIEW") throw new HttpsError("failed-precondition", "Notes go on a sheet while it is being reviewed.");
+      if (s.state !== "IN_REVIEW" && !clientPending(s)) throw new HttpsError("failed-precondition", "Notes go on a sheet while it is being reviewed.");
       const shape = cleanShape(input.shape);
       const text = cleanText(input.text);
       const page = Math.max(0, Math.min(500, Math.floor(Number(input.page) || 0)));
@@ -337,7 +337,7 @@ async function mark(actor: Actor, drawingRef: FirebaseFirestore.DocumentReferenc
 
     if (op === "update" || op === "delete") {
       if (!canReview(actor.role)) throw new HttpsError("permission-denied", "Only the Design Head changes notes.");
-      if (s.state !== "IN_REVIEW") throw new HttpsError("failed-precondition", "Notes can only be changed while the sheet is being reviewed.");
+      if (s.state !== "IN_REVIEW" && !clientPending(s)) throw new HttpsError("failed-precondition", "Notes can only be changed while the sheet is being reviewed.");
       if (op === "delete") {
         tx.delete(ref);
         tx.update(drawingRef, { review: { ...s, marksTotal: Math.max(0, (s.marksTotal || 0) - 1), marksOpen: Math.max(0, (s.marksOpen || 0) - (m.status === "OPEN" ? 1 : 0)), updatedAt: now } });
@@ -452,6 +452,52 @@ async function removeVersion(actor: Actor, drawingRef: FirebaseFirestore.Documen
   return { review: result.review };
 }
 
+/*
+  The client's changes from a design meeting wait on the approved sheet for
+  the Design Head. She edits them like her own notes, then either sends the
+  sheet back to the designer with them, or keeps it approved (the client's
+  notes are then set aside, and the history says what they were).
+*/
+async function clientDecide(actor: Actor, drawingRef: FirebaseFirestore.DocumentReference, input: Input, kind: "clientReturn" | "clientKeep") {
+  if (!canReview(actor.role)) throw new HttpsError("permission-denied", "Only the Design Head decides on the client's changes.");
+  return db().runTransaction(async (tx) => {
+    const snap = await tx.get(drawingRef);
+    if (!snap.exists) throw new HttpsError("not-found", "That drawing is no longer in the tracker.");
+    const s: ReviewSummary | undefined = snap.data()?.review;
+    if (!s || !allowed(kind, s) || !s.clientChanges) throw new HttpsError("failed-precondition", refusal(kind, s));
+    checkRev(s, input.expectedRev, true);
+    const marks = await tx.get(drawingRef.collection("reviewMarks").where("versionId", "==", s.versionId));
+    const open = marks.docs.filter((d) => (d.data() as ReviewMark).status === "OPEN");
+    const now = Date.now();
+    const reason = cleanText(input.reason, 1000);
+    if (kind === "clientReturn") {
+      if (!open.length) throw new HttpsError("failed-precondition", "There are no notes left to send. Keep the sheet approved instead.");
+      const next: ReviewSummary = {
+        ...s, state: "CHANGES_REQUESTED", rev: s.rev + 1, openRoundId: null,
+        decidedBy: person(actor), decidedAt: now, reason: reason || "Changes the client asked for at the design meeting.", selfApproved: false,
+        clientChanges: { ...s.clientChanges, pending: false }, updatedAt: now,
+      };
+      tx.update(drawingRef, { review: next, pendingReview: null });
+      tx.set(drawingRef.collection("reviewEvents").doc(), { type: "returned", at: now, by: person(actor), versionNo: s.versionNo, text: reason || `${open.length} change${open.length === 1 ? "" : "s"} from the design meeting` } as ReviewEvent);
+      return { review: next };
+    }
+    /* The sheet stays approved, so no note on it stays open: the client's, and any the Design Head added while deciding. */
+    const client = open;
+    client.forEach((d) => tx.delete(d.ref));
+    const left = marks.docs.filter((d) => (d.data() as ReviewMark).status !== "OPEN").map((d) => d.data() as ReviewMark);
+    const next: ReviewSummary = {
+      ...s, rev: s.rev + 1, marksTotal: left.length, marksOpen: left.filter((m) => m.status === "OPEN").length,
+      clientChanges: { ...s.clientChanges, pending: false }, updatedAt: now,
+    };
+    tx.update(drawingRef, { review: next });
+    tx.set(drawingRef.collection("reviewEvents").doc(), {
+      type: "clientKept", at: now, by: person(actor), versionNo: s.versionNo,
+      text: (reason ? `${reason} · ` : "") + client.map((d) => `“${(d.data() as ReviewMark).text}”`).join(", ").slice(0, 900),
+    } as ReviewEvent);
+    return { review: next };
+  });
+}
+
 async function setAudience(actor: Actor, orgId: string, projectId: string, drawingId: string, drawingRef: FirebaseFirestore.DocumentReference, input: Input) {
   if (!canSetAudience(actor.role)) throw new HttpsError("permission-denied", "Only the Design Head or the studio's leads decide who a drawing is for.");
   const audience = input.audience === "studio" ? "studio" : input.audience === "client" ? "client" : null;
@@ -497,6 +543,8 @@ export const drawingReview = onCall({ cors: true, memory: "1GiB", timeoutSeconds
       case "mark": return await mark(actor, drawingRef, input);
       case "audience": return await setAudience(actor, orgId, projectId, drawingId, drawingRef, input);
       case "remove": return await removeVersion(actor, drawingRef, input);
+      case "clientReturn": return await clientDecide(actor, drawingRef, input, "clientReturn");
+      case "clientKeep": return await clientDecide(actor, drawingRef, input, "clientKeep");
       default: throw new HttpsError("invalid-argument", "Unknown action.");
     }
   } catch (e: any) {

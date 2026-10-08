@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { fileBlob } from '../../services/drawingReviewService';
 import { loadPdf, renderPage } from '../../lib/pdfRender';
 import { turnShape, type MarkShape, type ReviewMark, type Turn } from '../../lib/drawingReview';
-import { MARK, FIXED } from './ui';
+import { MARK, FIXED, CLIENT } from './ui';
 
 /*
   One page of a drawing, with the review marks drawn over it.
@@ -36,6 +36,8 @@ interface Props {
   changes?: { x: number; y: number; w: number; h: number }[] | null;
   /** Drawn over the page, positioned in fractions of the page as displayed (the note box). */
   overlay?: React.ReactNode;
+  /** The colour of open notes; the client's changes in a meeting are drawn in their own. */
+  markColor?: string;
 }
 
 /* `mode` changes when the canvas element is swapped (compare on or off), so the page is drawn again into the new one. */
@@ -89,6 +91,7 @@ export function MarkShapeSvg({ m, n, color, selected, H }: { m: MarkShape; n: nu
 
 export default function PdfStage(props: Props) {
   const { pdfPath, comparePath, compareLabel, page, zoom, marks, draft, selectedId, tool, canMark, onPageCount, onSelect, onShape, changes, overlay } = props;
+  const ink = props.markColor || MARK;
   const turn: Turn = props.turn || 0;
   const wrap = useRef<HTMLDivElement>(null);
   const [boxWidth, setBoxWidth] = useState(0);
@@ -175,11 +178,11 @@ export default function PdfStage(props: Props) {
                   })}
                   {marks.map((m) => (
                     <g key={m.id} style={{ cursor: 'pointer' }} onPointerDown={(e) => { if (!drawing) { e.stopPropagation(); onSelect?.(m.id); } }}>
-                      <MarkShapeSvg m={turnShape(m.shape, turn, 'view')} n={m.n} H={H} color={m.status === 'FIXED' ? FIXED : MARK} selected={selectedId === m.id} />
+                      <MarkShapeSvg m={turnShape(m.shape, turn, 'view')} n={m.n} H={H} color={m.status === 'FIXED' ? FIXED : m.source === 'client' ? CLIENT : ink} selected={selectedId === m.id} />
                     </g>
                   ))}
-                  {draft && <MarkShapeSvg m={turnShape(draft, turn, 'view')} n="+" H={H} color={MARK} selected />}
-                  {live && <MarkShapeSvg m={live} n="+" H={H} color={MARK} selected />}
+                  {draft && <MarkShapeSvg m={turnShape(draft, turn, 'view')} n="+" H={H} color={ink} selected />}
+                  {live && <MarkShapeSvg m={live} n="+" H={H} color={ink} selected />}
                 </svg>
               )}
             </>

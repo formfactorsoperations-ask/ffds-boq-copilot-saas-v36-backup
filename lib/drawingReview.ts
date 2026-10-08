@@ -60,7 +60,21 @@ export interface ReviewSummary {
   marksTotal: number;
   marksOpen: number;
   marksSeq: number;
+  /**
+   * The client asked for changes at a design meeting. They wait on the
+   * approved sheet for the Design Head, who edits them and sends the sheet
+   * back to the designer, or keeps it approved.
+   */
+  clientChanges?: ClientChanges | null;
   updatedAt: number;
+}
+
+export interface ClientChanges {
+  meetingId: string;
+  at: number;
+  count: number;
+  pending: boolean;
+  by: ReviewPerson;
 }
 
 export interface ReviewVersion {
@@ -122,10 +136,13 @@ export interface ReviewMark {
   fixedAt?: number | null;
   /** Set when the next version arrives: the version that carries the fix. */
   fixedInVersionNo?: number;
+  /** A change the client asked for at a design meeting, rather than the Design Head's own note. */
+  source?: 'client';
+  meetingId?: string;
 }
 
 export interface ReviewEvent {
-  type: 'uploaded' | 'submitted' | 'withdrawn' | 'returned' | 'approved' | 'audience' | 'removed';
+  type: 'uploaded' | 'submitted' | 'withdrawn' | 'returned' | 'approved' | 'audience' | 'removed' | 'client' | 'clientKept';
   at: number;
   by: ReviewPerson;
   versionNo?: number;
@@ -151,10 +168,12 @@ export const AUDIENCE_ROLES = new Set(['Design Head', 'Owner', 'Admin', 'Ops Dir
 export const canReview = (role?: string | null) => REVIEWER_ROLES.has(String(role || ''));
 export const canUpload = (role?: string | null) => UPLOADER_ROLES.has(String(role || ''));
 export const canSetAudience = (role?: string | null) => AUDIENCE_ROLES.has(String(role || ''));
+/** Who presents to the client and records what they agreed: the Design Head, or the studio's Owner and Admins. */
+export const canRunMeeting = canReview;
 
 /* ------------------------------------------------------------ transitions */
 
-export type ReviewAction = 'finalize' | 'submit' | 'withdraw' | 'approve' | 'return' | 'mark' | 'fix' | 'remove';
+export type ReviewAction = 'finalize' | 'submit' | 'withdraw' | 'approve' | 'return' | 'mark' | 'fix' | 'remove' | 'clientReturn' | 'clientKeep';
 
 /**
  * Which states each action may start from.
@@ -172,12 +191,21 @@ const FROM: Record<Exclude<ReviewAction, 'mark' | 'fix'>, (ReviewState | 'NONE')
   withdraw: ['IN_REVIEW'],
   approve: ['IN_REVIEW'],
   return: ['IN_REVIEW'],
+  /* The client's changes from a design meeting, waiting on an approved sheet. */
+  clientReturn: ['APPROVED'],
+  clientKeep: ['APPROVED'],
 };
+
+/** The client's changes from a meeting are waiting for the Design Head on this sheet. */
+export const clientPending = (summary?: Partial<ReviewSummary> | null) => stateOf(summary) === 'APPROVED' && !!summary?.clientChanges?.pending;
 
 export const stateOf = (summary?: Partial<ReviewSummary> | null): ReviewState | 'NONE' =>
   (summary?.state as ReviewState) || 'NONE';
 
 export function allowed(action: Exclude<ReviewAction, 'mark' | 'fix'>, summary?: Partial<ReviewSummary> | null): boolean {
+  if (action === 'clientReturn' || action === 'clientKeep') return clientPending(summary);
+  /* A new PDF waits until the Design Head has dealt with the client's changes. */
+  if (action === 'finalize' && clientPending(summary)) return false;
   return FROM[action].includes(stateOf(summary));
 }
 
@@ -185,6 +213,8 @@ export function allowed(action: Exclude<ReviewAction, 'mark' | 'fix'>, summary?:
 export function refusal(action: Exclude<ReviewAction, 'mark' | 'fix'>, summary?: Partial<ReviewSummary> | null): string {
   const s = stateOf(summary);
   if (action === 'finalize' && s === 'IN_REVIEW') return 'This sheet is with the Design Head. Pull it back first, then upload the new PDF.';
+  if (action === 'finalize' && clientPending(summary)) return 'The client asked for changes at the design meeting. The Design Head sends them to you first.';
+  if (action === 'clientReturn' || action === 'clientKeep') return 'There are no client changes waiting on this sheet. Refresh to see where it is.';
   if (action === 'submit' && s === 'NONE') return 'Upload a PDF first.';
   if (action === 'submit' && s !== 'DRAFT') return `This sheet is ${STATE_LABEL[s as ReviewState]?.toLowerCase() || 'not ready'}. Upload a new PDF to send it again.`;
   if (['approve', 'return', 'withdraw'].includes(action)) return 'This sheet is no longer waiting for review. Refresh to see where it is.';

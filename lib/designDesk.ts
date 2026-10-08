@@ -69,6 +69,8 @@ const mine = (d: DeskRow, v: Viewer) => !!v.email && d.review?.designer?.email =
 export function needsMe(d: DeskRow, v: Viewer): boolean {
   const s = stateOf(d.review);
   if (v.reviewer && s === 'IN_REVIEW') return true;
+  /* The client's changes from a design meeting wait for the Design Head before they go to the designer. */
+  if (v.reviewer && s === 'APPROVED' && d.review?.clientChanges?.pending) return true;
   return mine(d, v) && (s === 'CHANGES_REQUESTED' || s === 'DRAFT');
 }
 
