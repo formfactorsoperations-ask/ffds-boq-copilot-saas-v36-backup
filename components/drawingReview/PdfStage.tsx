@@ -32,6 +32,10 @@ interface Props {
   onPageCount?: (n: number) => void;
   onSelect?: (id: string) => void;
   onShape?: (shape: MarkShape, anchor: { x: number; y: number }) => void;
+  /** Areas that changed since the last version, as fractions of the unturned page. */
+  changes?: { x: number; y: number; w: number; h: number }[] | null;
+  /** Drawn over the page, positioned in fractions of the page as displayed (the note box). */
+  overlay?: React.ReactNode;
 }
 
 /* `mode` changes when the canvas element is swapped (compare on or off), so the page is drawn again into the new one. */
@@ -84,7 +88,7 @@ export function MarkShapeSvg({ m, n, color, selected, H }: { m: MarkShape; n: nu
 }
 
 export default function PdfStage(props: Props) {
-  const { pdfPath, comparePath, compareLabel, page, zoom, marks, draft, selectedId, tool, canMark, onPageCount, onSelect, onShape } = props;
+  const { pdfPath, comparePath, compareLabel, page, zoom, marks, draft, selectedId, tool, canMark, onPageCount, onSelect, onShape, changes, overlay } = props;
   const turn: Turn = props.turn || 0;
   const wrap = useRef<HTMLDivElement>(null);
   const [boxWidth, setBoxWidth] = useState(0);
@@ -140,7 +144,7 @@ export default function PdfStage(props: Props) {
   return (
     <div ref={wrap} className="flex w-full justify-center">
       <div className="relative" style={{ width: main.size?.width || width, minHeight: main.size ? undefined : width * 0.7 }}>
-        <div className="relative overflow-hidden rounded-[3px] bg-white" style={{ boxShadow: '0 30px 60px -20px rgba(0,0,0,.7), 0 0 0 1px rgba(0,0,0,.2)' }}>
+        <div className="relative overflow-hidden rounded-[3px] bg-white" style={{ boxShadow: '0 1px 2px rgba(23,25,30,.08), 0 24px 50px -26px rgba(23,25,30,.45), 0 0 0 1px rgba(23,25,30,.08)' }}>
           {comparePath ? (
             <>
               <canvas ref={other.canvas} className="block" />
@@ -159,6 +163,16 @@ export default function PdfStage(props: Props) {
               {main.size && (
                 <svg ref={svg} viewBox={`0 0 1000 ${H}`} className="absolute inset-0 h-full w-full" style={{ cursor: drawing ? 'crosshair' : 'default', touchAction: 'none' }}
                   onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { start.current = null; setLive(null); }}>
+                  {(changes || []).map((c, i) => {
+                    const t = turnShape({ t: 'rect', ...c }, turn, 'view') as { x: number; y: number; w: number; h: number };
+                    return (
+                      <g key={`chg-${i}`} pointerEvents="none">
+                        <rect x={t.x * 1000} y={t.y * H} width={t.w * 1000} height={t.h * H} rx={6} fill="#E09600" fillOpacity={0.09} stroke="#D08A00" strokeWidth={2.5} strokeDasharray="10 6" />
+                        <rect x={t.x * 1000} y={Math.max(0, t.y * H - 26)} width={92} height={22} rx={11} fill="#D08A00" />
+                        <text x={t.x * 1000 + 46} y={Math.max(0, t.y * H - 26) + 15.5} fontSize={13} fontWeight={800} fill="#fff" textAnchor="middle" fontFamily="Plus Jakarta Sans, sans-serif">Change {i + 1}</text>
+                      </g>
+                    );
+                  })}
                   {marks.map((m) => (
                     <g key={m.id} style={{ cursor: 'pointer' }} onPointerDown={(e) => { if (!drawing) { e.stopPropagation(); onSelect?.(m.id); } }}>
                       <MarkShapeSvg m={turnShape(m.shape, turn, 'view')} n={m.n} H={H} color={m.status === 'FIXED' ? FIXED : MARK} selected={selectedId === m.id} />
@@ -175,6 +189,7 @@ export default function PdfStage(props: Props) {
           )}
           {error && <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-slate-600">{error}</div>}
         </div>
+        {overlay}
       </div>
     </div>
   );

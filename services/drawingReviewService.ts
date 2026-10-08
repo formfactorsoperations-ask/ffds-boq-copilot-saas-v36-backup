@@ -143,7 +143,7 @@ export async function uploadSheet(t: Target, uid: string, file: File, opts: {
     await call({ ...t, action: 'check' });
   } catch (e: any) {
     if (e instanceof ReviewError && ['internal', 'not-found', 'unavailable'].includes(e.code) && !/drawing|project/i.test(e.message)) {
-      throw new ReviewError('Could not reach Design Review on the server. If it has not been deployed yet, uploads cannot start. Nothing was uploaded.', 'not-deployed');
+      throw new ReviewError('Could not reach Design Desk on the server. If it has not been deployed yet, uploads cannot start. Nothing was uploaded.', 'not-deployed');
     }
     throw e;
   }

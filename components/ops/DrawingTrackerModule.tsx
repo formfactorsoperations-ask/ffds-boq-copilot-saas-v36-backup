@@ -1563,7 +1563,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                             <button
                                 type="button"
                                 onClick={e => { e.stopPropagation(); openInDesignReview(projectId, d.id); }}
-                                title="Open in Design Review"
+                                title="Open in Design Desk"
                                 className="mt-0.5 block max-w-full truncate text-left text-[10.5px] font-semibold text-[#5B5BD6] hover:underline"
                             >
                                 v{d.review.versionNo} · {STATE_LABEL[d.review.state]}{d.review.state === 'CHANGES_REQUESTED' && d.review.marksOpen ? ` · ${d.review.marksOpen} open` : ''}
@@ -1612,7 +1612,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                             <button
                                 type="button"
-                                title={d.review?.state ? 'Open in Design Review' : 'Upload the PDF in Design Review'}
+                                title={d.review?.state ? 'Open in Design Desk' : 'Upload the PDF in Design Desk'}
                                 onClick={e => { e.stopPropagation(); openInDesignReview(projectId, d.id); }}
                                 className="p-1.5 text-[#5B5BD6] hover:bg-indigo-50 rounded-lg transition-colors"
                             >
