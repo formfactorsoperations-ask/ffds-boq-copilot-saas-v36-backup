@@ -28,6 +28,8 @@ export { zohoBooks } from "./zohoBooks";
 export { onProjectWrittenDesignView, onDesignerAssignmentChange, rebuildDesignViews } from "./designView";
 /* Design Review: the only writer of a drawing's review state; see drawingReview.ts. */
 export { drawingReview } from "./drawingReview";
+/* Design meetings: presenting approved rooms to the client; see designMeeting.ts. */
+export { designMeeting } from "./designMeeting";
 import * as pako from "pako";
 import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";
 import { recordDocumentView, signIssue } from "../../services/documentIssueEngine";

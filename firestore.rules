@@ -92,7 +92,9 @@ service cloud.firestore {
       match that can reach a drawing asks this as well.
     */
     function isReviewRecordPath(p) {
-      return p.matches('.*drawingTracker/[^/]+/review(Versions|Rounds|Marks|Events)/.*');
+      return p.matches('.*drawingTracker/[^/]+/review(Versions|Rounds|Marks|Events)/.*')
+        /* A design meeting: what the client was shown and asked for. Written by the designMeeting function only. */
+        || p.matches('.*/designMeetings/.*');
     }
     function keepsReview() {
       return request.resource == null

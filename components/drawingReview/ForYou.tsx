@@ -3,7 +3,7 @@ import {
   AlertTriangle, ArrowRight, Bell, CalendarDays, Check, Circle, Clock, Eye, Flame, LayoutGrid, ListChecks, Mail,
   PenLine, Presentation, Send, Sparkles, Undo2, Upload, Users, X, type LucideIcon,
 } from 'lucide-react';
-import { stateOf } from '../../lib/drawingReview';
+import { clientPending, stateOf } from '../../lib/drawingReview';
 import { dueOf, reviewQueue, roundWarn, type Suggestion, type Viewer } from '../../lib/designDesk';
 import type { ReviewDrawing } from '../../services/drawingReviewService';
 import { roomLabel, ago, shortDate, firstName, Initials } from './ui';
@@ -57,11 +57,12 @@ export default function ForYou(props: Props) {
   const mine = (d: ReviewDrawing) => !!viewer.email && d.review?.designer?.email === viewer.email;
   const by = (list: ReviewDrawing[], s: string) => list.filter((d) => stateOf(d.review) === s);
 
-  const row = (d: ReviewDrawing, i: number, o: { who?: boolean; detail?: 'due' | 'sent' | 'progress' | 'approved'; action?: RowProps['action'] } = {}): React.ReactNode => {
+  const row = (d: ReviewDrawing, i: number, o: { who?: boolean; detail?: 'due' | 'sent' | 'progress' | 'approved' | 'client'; action?: RowProps['action'] } = {}): React.ReactNode => {
     const r = d.review;
     let detail: RowProps['detail'] = null;
     if (o.detail === 'progress') detail = r?.marksTotal ? { text: `${r.marksTotal - r.marksOpen} of ${r.marksTotal} fixed`, tone: 'amber', icon: ListChecks } : { text: 'Returned', tone: 'amber', icon: Undo2 };
     else if (o.detail === 'sent') detail = { text: `Sent ${ago(r?.submittedAt)}`, tone: 'grey', icon: Send };
+    else if (o.detail === 'client') detail = { text: `${plural(r?.clientChanges?.count || 0, 'client change')} · ${shortDate(r?.clientChanges?.at)}`, tone: 'amber', icon: Presentation };
     else if (o.detail === 'approved') detail = { text: `${r?.selfApproved ? 'Self-approved' : 'Approved'} ${shortDate(r?.decidedAt)}`, tone: 'green', icon: Check };
     else {
       const due = dueOf(d.targetDate);
@@ -95,7 +96,10 @@ export default function ForYou(props: Props) {
   if (viewer.reviewer) {
     const back = scope.filter((d) => !mine(d) && ['CHANGES_REQUESTED', 'DRAFT'].includes(stateOf(d.review)))
       .sort((a, b) => (a.review?.decidedAt || a.review?.updatedAt || 0) - (b.review?.decidedAt || b.review?.updatedAt || 0));
+    const client = scope.filter((d) => clientPending(d.review)).sort((a, b) => (a.review?.clientChanges?.at || 0) - (b.review?.clientChanges?.at || 0));
     sections = [
+      ...(client.length ? [{ key: 'client', icon: Presentation, tone: 'amber' as Tone, title: 'Client changes to review', sub: 'Asked for at the design meeting. Send them to the designer, or keep the sheet as approved.',
+        rows: client.map((d, i) => row(d, i, { who: true, detail: 'client', action: { label: 'Review', icon: Eye, run: () => onOpen(d) } })) }] : []),
       { key: 'queue', icon: Eye, tone: 'indigo', title: 'Waiting for your review', sub: 'Most urgent first', rows: queue.map((d, i) => row(d, i, { who: true })), empty: `Nothing waiting ${where}. New sheets appear the moment a designer sends them.` },
       ...(myFix.length || myReady.length ? [{ key: 'own', icon: PenLine, tone: 'amber' as Tone, title: 'Your own sheets', sub: 'Returned to you, or ready to send', hint: myReady.length ? dragHint : undefined,
         rows: [...myFix.map((d, i) => row(d, i, { detail: 'progress', action: fixAction(d) })), ...myReady.map((d, i) => row(d, i + myFix.length, { action: sendAction(d) }))] }] : []),
@@ -108,7 +112,9 @@ export default function ForYou(props: Props) {
     const due = q0 && dueOf(q0.targetDate);
     headline = q0
       ? { count: queue.length, title: `${queue.length === 1 ? 'sheet' : 'sheets'} waiting for your review`, sub: `${isAll ? 'Across all projects. ' : ''}Most urgent: ${q0.name}${due ? ` · ${due.label.replace(/^\w/, (c) => c.toLowerCase())}` : ''}`, cta: 'Start reviewing', go: () => onOpen(q0) }
-      : { title: 'You are all caught up', sub: `Nothing is waiting ${where}.` };
+      : client.length
+        ? { count: client.length, title: `${client.length === 1 ? 'sheet has' : 'sheets have'} client changes to review`, sub: `From the design meeting. First: ${client[0].name}.`, cta: 'Review the changes', go: () => onOpen(client[0]) }
+        : { title: 'You are all caught up', sub: `Nothing is waiting ${where}.` };
   } else {
     const notStarted = by(scope, 'NONE');
     const withHead = by(scope, 'IN_REVIEW').filter(mine);
