@@ -30,6 +30,7 @@ export { onProjectWrittenDesignView, onDesignerAssignmentChange, rebuildDesignVi
 export { drawingReview } from "./drawingReview";
 /* Design meetings: presenting approved rooms to the client; see designMeeting.ts. */
 export { designMeeting } from "./designMeeting";
+import { confirmMeetingByClient } from "./designMeeting";
 import * as pako from "pako";
 import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";
 import { recordDocumentView, signIssue } from "../../services/documentIssueEngine";
@@ -856,8 +857,24 @@ export const submitClientAction = onCall({ cors: true }, async (request) => {
     const projectId: string = request.data?.projectId;
     const action = request.data?.action;
 
-    const { email, profile } = await assertPortalClient(request, projectId);
+    const { uid, email, profile } = await assertPortalClient(request, projectId);
     const actor = profile.displayName || email || "Client";
+
+    /*
+      Confirming a design meeting writes the meeting, not the project: the
+      record lives with the studio's meetings, and the client's portal copy is
+      refreshed from it. So it does not go through the project transaction.
+    */
+    if (action?.type === "confirmMeeting") {
+        const headers = request.rawRequest?.headers || {};
+        const forwarded = String(headers["x-forwarded-for"] || "").split(",")[0].trim();
+        const designRecord = await confirmMeetingByClient({
+            tenantId: profile.tenantId, projectId, meetingId: action.meetingId, name: action.name,
+            uid, email: email || null, ip: forwarded || request.rawRequest?.ip || null, userAgent: String(headers["user-agent"] || ""),
+        });
+        logger.info("Client confirmed a design meeting", { projectId, meetingId: action.meetingId });
+        return { ok: true, designRecord };
+    }
 
     const ref = db.collection("projects").doc(projectId);
 
@@ -942,6 +959,9 @@ export const submitClientAction = onCall({ cors: true }, async (request) => {
                 */
                 (viewSnap.data() as any)?.scopeAdditions,
                 previous.portalMoney,
+                undefined,
+                /* The design meetings, kept current by the designMeeting function. */
+                (viewSnap.data() as any)?.designRecord,
             );
             tx.set(viewRef, rebuilt as any);
         }

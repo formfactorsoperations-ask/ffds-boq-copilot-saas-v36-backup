@@ -1,10 +1,11 @@
-import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db as fsDb } from './firebaseClient';
 import { db as storageDb } from './dbService';
 import { writePortalView } from './portalViewService';
 import { normaliseAddition, scopeAdditionsPath } from '../lib/scopeAdditions';
 import type { PortalScopeAddition, PortalView } from '../lib/portalProjection';
 import type { ClientBoqRow } from '../lib/clientBoq';
+import { portalDesignRecord, type DesignMeeting, type PortalDesignMeeting } from '../lib/designMeeting';
 import type { PortalMoney } from '../lib/portalMoney';
 import type { ProjectContext, ProjectSchedule } from '../types';
 
@@ -75,6 +76,22 @@ export async function gatherPortalScopeAdditions(tenantId?: string | null, proje
   }
 }
 
+/*
+  The design meetings held, as the client sees them. The designMeeting function
+  keeps this current between releases; a release sends it too, so a re-send
+  never wipes it. A failed read sends nothing rather than "none".
+*/
+export async function gatherPortalDesignRecord(tenantId?: string | null, projectId?: string): Promise<PortalDesignMeeting[] | undefined> {
+  if (!fsDb || !tenantId || !projectId) return undefined;
+  try {
+    const snap = await getDocs(query(collection(fsDb, `organizations/${tenantId}/projects/${projectId}/designMeetings`), where('state', '==', 'CLOSED')));
+    const rows = portalDesignRecord(snap.docs.map((d) => ({ ...(d.data() as DesignMeeting), id: d.id })));
+    return rows.length ? rows : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /* The studio's saved schedule where there is one, so the client gets the dates
    on the studio's own Timeline; otherwise the derived programme. */
 export async function portalScheduleToSend(projectId: string | undefined, fallback?: ProjectSchedule): Promise<ProjectSchedule | undefined> {
@@ -127,5 +144,6 @@ export async function releasePortal(ctx: ProjectContext, inputs: PortalReleaseIn
     await gatherPortalScopeAdditions(inputs.tenantId || orgData?.tenantId, inputs.projectId),
     inputs.portalMoney,
     await portalScheduleToSend(inputs.projectId, inputs.clientSchedule),
+    await gatherPortalDesignRecord(inputs.tenantId || orgData?.tenantId, inputs.projectId),
   );
 }

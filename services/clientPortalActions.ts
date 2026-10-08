@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './firebaseClient';
+import type { PortalDesignMeeting } from '../lib/designMeeting';
 
 /**
  * The client's write path.
@@ -44,7 +45,11 @@ export type ClientAction =
   | { type: 'querySelection'; selectionId: string; question: string }
   /* A general note. Lands in the project's client messages, which Client Comms
      shows. Before this it landed nowhere at all. */
-  | { type: 'sendMessage'; text: string; aboutKind?: 'selection' | 'document' | 'general'; aboutId?: string | null; aboutLabel?: string | null };
+  | { type: 'sendMessage'; text: string; aboutKind?: 'selection' | 'document' | 'general'; aboutId?: string | null; aboutLabel?: string | null }
+  /* Confirming a design meeting's record: what was shown and what was agreed or
+     asked to change, room by room. The name is typed here; the server records
+     the login, address and time. */
+  | { type: 'confirmMeeting'; meetingId: string; name: string };
 
 /**
  * Send one action. Resolves when the server has applied it.
@@ -57,4 +62,12 @@ export async function submitClientAction(projectId: string, action: ClientAction
   if (!functions) throw new Error('Cannot reach the studio right now.');
   const call = httpsCallable(functions, 'submitClientAction');
   await call({ projectId, action });
+}
+
+/** Confirm a design meeting; resolves to the client's refreshed design record. */
+export async function confirmDesignMeeting(projectId: string, meetingId: string, name: string): Promise<PortalDesignMeeting[] | null> {
+  if (!functions) throw new Error('Cannot reach the studio right now.');
+  const call = httpsCallable(functions, 'submitClientAction');
+  const res: any = await call({ projectId, action: { type: 'confirmMeeting', meetingId, name } });
+  return res?.data?.designRecord || null;
 }

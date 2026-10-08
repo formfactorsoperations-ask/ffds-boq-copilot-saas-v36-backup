@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarCheck, Check, ChevronRight, History, IndianRupee, Loader2, Presentation, ReceiptText, Undo2, Users, X } from 'lucide-react';
-import { presentableRooms, revisionCharges, meetingSummary, plural, type DesignMeeting, type MeetingRoom } from '../../lib/designMeeting';
+import { BadgeCheck, CalendarCheck, Check, ChevronRight, Clock, History, IndianRupee, Loader2, PenLine, Presentation, ReceiptText, Undo2, Users, X } from 'lucide-react';
+import { presentableRooms, revisionCharges, meetingSummary, plural, confirmationLine, isConfirmed, type DesignMeeting, type MeetingRoom } from '../../lib/designMeeting';
 import { startMeeting, cancelMeeting, updateCharge } from '../../services/designMeetingService';
 import type { ReviewDrawing } from '../../services/drawingReviewService';
 import { roomLabel, shortDate, firstName, useToast } from './ui';
 import { Chip, ProjectMark, SectionHead, TONE } from './DeskParts';
+import ClientSign from './ClientSign';
 
 /*
   MEETINGS: presenting approved rooms to the client.
@@ -42,6 +43,7 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
   const [attendees, setAttendees] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [openPast, setOpenPast] = useState<string | null>(null);
+  const [signing, setSigning] = useState<DesignMeeting | null>(null);
   useEffect(() => { setPicked(Object.fromEntries(ready.map((r) => [r.room, true]))); }, [projectId, ready.map((r) => r.room).join('|')]);
 
   if (!projectId) {
@@ -161,17 +163,38 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
                     <span className="block font-bold">{shortDate(m.closedAt || m.startedAt)} · {meetingSummary(m)}</span>
                     <span className="block truncate text-[12.5px] text-[#5F636D]">{[m.attendees, `presented by ${firstName(m.startedBy?.name)}`].filter(Boolean).join(' · ')}</span>
                   </span>
+                  {isConfirmed(m)
+                    ? <Chip tone="green" icon={BadgeCheck} small>{m.confirmation!.via === 'portal' ? 'Confirmed in portal' : 'Signed'}</Chip>
+                    : <Chip tone="amber" icon={Clock} small>Awaiting client</Chip>}
                   <ChevronRight size={16} className="shrink-0 text-[#8A8E97] transition-transform" style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }} />
                 </button>
                 {isOpen && (
                   <div className="dd-rise flex flex-col gap-2 px-4 pb-4 pt-1">
                     {m.rooms.map((r) => <RoomRecord key={r.room} r={r} included={m.includedRounds} />)}
+                    <div className="flex flex-wrap items-center gap-3 rounded-[14px] border border-[#E4E4DE] px-3.5 py-3 text-[13px]">
+                      {isConfirmed(m) ? <BadgeCheck size={18} className="shrink-0 text-[#1B6E4F]" /> : <Clock size={18} className="shrink-0 text-[#8F4C07]" />}
+                      <span className="min-w-0 flex-[1_1_240px]">
+                        <b>{confirmationLine(m.confirmation, shortDate)}</b>
+                        <span className="block text-[12.5px] text-[#5F636D]">
+                          {isConfirmed(m)
+                            ? (m.confirmation!.via === 'studio' ? `Taken on the studio's screen by ${firstName(m.confirmation!.recordedBy?.name)}.` : 'Signed in to their portal; their login, address and the time are recorded.')
+                            : 'The client sees this meeting in their portal and can confirm it there, or sign here if they are with you.'}
+                        </span>
+                      </span>
+                      {m.confirmation?.signature && <img src={m.confirmation.signature} alt={`Signature of ${m.confirmation.name}`} className="h-12 max-w-[180px] rounded-lg border border-[#EEEEEA] bg-white object-contain" />}
+                      {!isConfirmed(m) && canRun && (
+                        <button type="button" onClick={() => setSigning(m)} className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-[#DCDCD5] bg-white px-3.5 text-[13px] font-bold hover:border-[#A9AAA2]">
+                          <PenLine size={15} />Client signs here
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
             );
           })}
       </section>
+      {signing && <ClientSign orgId={orgId} projectId={projectId} meeting={signing} onClose={() => setSigning(null)} />}
     </div>
   );
 }

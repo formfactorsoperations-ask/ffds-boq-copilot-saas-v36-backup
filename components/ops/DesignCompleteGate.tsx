@@ -1,10 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ProjectContext, FullBoqItem, DesignGateState } from '../../types';
 import {
   migrateGate, computeItems, gateReadiness, EffectiveItem,
 } from '../../lib/designGate';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
+import { useOrg } from '../../contexts/OrgContext';
+import { watchMeetings } from '../../services/designMeetingService';
+import { confirmationLine, isConfirmed, meetingSummary, type DesignMeeting } from '../../lib/designMeeting';
 import {
   CheckCircle2, Circle, Lock, Sparkles, ShieldCheck, Snowflake, ReceiptText,
   ArrowRight, RotateCcw, AlertTriangle, X, Zap, Link2, PenLine, FileText,
@@ -17,6 +20,8 @@ interface Props {
   setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
   fullBoq?: FullBoqItem[];
   currentRole?: string;
+  /** The project, so its design meetings can back the client sign-off. */
+  projectId?: string;
 }
 
 const OWNER_ROLES = ['Super Admin', 'Admin', 'Ops Director', 'Principal Architect'];
@@ -26,7 +31,19 @@ export default function DesignCompleteGate({
   setProjectContext,
   fullBoq = [],
   currentRole = 'Admin',
+  projectId,
 }: Props) {
+  const { orgData } = useOrg();
+  const tenantId: string | undefined = orgData?.tenantId;
+  /* Design meetings the client confirmed: the strongest evidence for the client sign-off. */
+  const [meetings, setMeetings] = useState<DesignMeeting[]>([]);
+  useEffect(() => {
+    if (!tenantId || !projectId) { setMeetings([]); return; }
+    return watchMeetings(tenantId, projectId, setMeetings, () => setMeetings([]));
+  }, [tenantId, projectId]);
+  const heldMeetings = meetings.filter((m) => m.state === 'CLOSED');
+  const confirmedMeetings = heldMeetings.filter(isConfirmed);
+  const meetingDay = (t: number) => new Date(t).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   const isOwner = OWNER_ROLES.includes(currentRole);
   const gate: DesignGateState = useMemo(() => migrateGate(projectContext), [projectContext]);
   const items = useMemo(() => computeItems(gate, projectContext), [gate, projectContext]);
@@ -146,6 +163,28 @@ export default function DesignCompleteGate({
             ...i,
             done: true,
             reference: signoffRef.trim(),
+            manualOverride: 'checked' as const,
+            confirmedAt: Date.now(),
+            confirmedBy: currentRole,
+          }
+        : i),
+    }));
+    setSignoffFor(null);
+    setSignoffRef('');
+  };
+
+  /* The client confirmed a design meeting: that meeting becomes the sign-off and its reference. */
+  const saveFromMeeting = (m: DesignMeeting) => {
+    if (!signoffFor || !m.confirmation?.at) return;
+    const reference = `Design meeting ${meetingDay(m.closedAt || m.startedAt)} · ${confirmationLine(m.confirmation, meetingDay)}`;
+    patchGate(g => ({
+      ...g,
+      items: g.items.map(i => i.key === signoffFor
+        ? {
+            ...i,
+            done: true,
+            reference,
+            meetingId: m.id,
             manualOverride: 'checked' as const,
             confirmedAt: Date.now(),
             confirmedBy: currentRole,
@@ -585,8 +624,39 @@ export default function DesignCompleteGate({
                 <p className="text-xs text-slate-500">Capture supporting evidence for final drawing approval</p>
               </div>
             </div>
+            {heldMeetings.length > 0 && (
+              <div className="my-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">From a design meeting</p>
+                {confirmedMeetings.length ? (
+                  <div className="space-y-1.5 max-h-56 overflow-auto">
+                    {confirmedMeetings.map(m => {
+                      const withChanges = m.rooms.filter(r => r.outcome === 'changes').map(r => r.room);
+                      return (
+                        <div key={m.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-900">{meetingDay(m.closedAt || m.startedAt)} · {meetingSummary(m)}</p>
+                            <p className="text-[11px] text-slate-500">{confirmationLine(m.confirmation, meetingDay)}</p>
+                            {withChanges.length > 0 && <p className="text-[11px] font-semibold text-amber-700 mt-0.5">The client asked for changes on {withChanges.join(', ')}.</p>}
+                          </div>
+                          <button
+                            onClick={() => saveFromMeeting(m)}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold rounded-lg cursor-pointer shrink-0"
+                          >
+                            Use this meeting
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 rounded-xl border border-dashed border-slate-200 p-3">
+                    {heldMeetings.length === 1 ? 'The design meeting is' : `${heldMeetings.length} design meetings are`} waiting for the client to confirm, in their portal or by signing in the studio.
+                  </p>
+                )}
+              </div>
+            )}
             <p className="text-xs text-slate-600 my-3 leading-relaxed">
-              Enter the email thread subject, WhatsApp date/timestamp, or shared drive link where the client approved the final drawings:
+              {heldMeetings.length > 0 ? 'Or enter' : 'Enter'} the email thread subject, WhatsApp date/timestamp, or shared drive link where the client approved the final drawings:
             </p>
             <input
               autoFocus

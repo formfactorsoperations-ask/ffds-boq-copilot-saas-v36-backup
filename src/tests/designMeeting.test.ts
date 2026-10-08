@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { presentableRooms, clientRoundsByRoom, includedRoundsFrom, isOverIncluded, cleanChanges, cleanFee, meetingSummary, revisionCharges, type DesignMeeting, type MeetingRoom } from '../../lib/designMeeting';
+import { presentableRooms, clientRoundsByRoom, includedRoundsFrom, isOverIncluded, cleanChanges, cleanFee, meetingSummary, revisionCharges, portalDesignRecord, cleanSignerName, cleanSignature, confirmationLine, type DesignMeeting, type MeetingRoom } from '../../lib/designMeeting';
+import { buildPortalView } from '../../lib/portalProjection';
 import { allowed, clientPending, refusal } from '../../lib/drawingReview';
 
 const sheet = (id: string, room: string, state: string | null, extra: any = {}) => ({
@@ -109,5 +110,54 @@ describe('client changes on an approved sheet', () => {
     expect(allowed('clientReturn', done)).toBe(false);
     expect(allowed('finalize', done)).toBe(true);
     expect(allowed('clientReturn', { state: 'IN_REVIEW' })).toBe(false);
+  });
+});
+
+describe('the client\'s design record', () => {
+  const by = { uid: 'u', email: 'e', name: 'Mayuri' };
+  const sheetOf = (id: string) => ({ drawingId: id, name: `Sheet ${id}`, versionId: `${id}v2`, versionNo: 2, pdfPath: `x/${id}.pdf`, thumbPath: null, pageCount: 1 });
+  const charge = { status: 'to_bill' as const, fee: 15000, note: 'internal', ref: 'INV-1', decidedBy: by, decidedAt: 1, updatedBy: by, updatedAt: 1 };
+  const held = { ...meeting('m1', 'CLOSED', [
+    room('Kitchen', 'changes', { sheets: [sheetOf('k1')], round: 3, charge, changes: [{ n: 1, drawingId: 'k1', page: 0, shape: { t: 'pin', x: 0.1, y: 0.1 }, text: 'Lighter shutters' }] }),
+    room('Living', 'agreed', { sheets: [sheetOf('l1')] }),
+    room('Foyer', null),
+  ], 20), attendees: 'Mr Mehta', startedBy: by };
+
+  it('shows held meetings only, newest first, room by room, with nothing about billing or files', () => {
+    const rec = portalDesignRecord([meeting('open', 'OPEN', []), { ...meeting('old', 'CLOSED', [room('Bath', 'agreed')], 5), startedBy: by }, held]);
+    expect(rec.map((m) => m.id)).toEqual(['m1', 'old']);
+    expect(rec[0]).toEqual({
+      id: 'm1', heldAt: 20, attendees: 'Mr Mehta', presentedBy: 'Mayuri', confirmation: null,
+      rooms: [
+        { room: 'Kitchen', outcome: 'changes', sheets: [{ name: 'Sheet k1', versionNo: 2 }], changes: ['Lighter shutters'] },
+        { room: 'Living', outcome: 'agreed', sheets: [{ name: 'Sheet l1', versionNo: 2 }], changes: [] },
+      ],
+    });
+    expect(JSON.stringify(rec)).not.toMatch(/15000|INV-1|internal|pdf/);
+  });
+
+  it('carries the confirmation, but never the signature image', () => {
+    const signed = { ...held, confirmation: { via: 'studio' as const, name: 'Rahul Mehta', email: null, uid: null, at: 30, signature: 'data:image/png;base64,AAAA' } };
+    const [r] = portalDesignRecord([signed]);
+    expect(r.confirmation).toEqual({ via: 'studio', name: 'Rahul Mehta', at: 30 });
+    expect(confirmationLine(r.confirmation, () => '8 Oct')).toBe('Signed by Rahul Mehta in the studio, 8 Oct');
+    expect(confirmationLine({ via: 'portal', name: 'Rahul', at: 1 }, () => '8 Oct')).toBe('Confirmed by Rahul in the portal, 8 Oct');
+    expect(confirmationLine(null, () => '')).toBe('Waiting for the client to confirm');
+  });
+
+  it('rides on the portal view, and is left out when there is none', () => {
+    const rec = portalDesignRecord([held]);
+    expect(buildPortalView('p', { name: 'P' } as any, undefined, undefined, undefined, undefined, undefined, undefined, rec).designRecord).toEqual(rec);
+    expect('designRecord' in buildPortalView('p', { name: 'P' } as any, undefined, undefined, undefined, undefined, undefined, undefined, [])).toBe(false);
+  });
+
+  it('accepts a typed name and a drawn PNG, nothing else', () => {
+    expect(cleanSignerName('  Rahul   Mehta ')).toBe('Rahul Mehta');
+    expect(cleanSignerName('R')).toBeNull();
+    expect(cleanSignerName('<b>Rahul</b>')).toBe('bRahul/b');
+    expect(cleanSignature(`data:image/png;base64,${'A'.repeat(300)}`)).toBeTruthy();
+    expect(cleanSignature('data:image/png;base64,AAA')).toBeNull();
+    expect(cleanSignature(`data:image/svg+xml;base64,${'A'.repeat(300)}`)).toBeNull();
+    expect(cleanSignature(`javascript:${'A'.repeat(300)}`)).toBeNull();
   });
 });

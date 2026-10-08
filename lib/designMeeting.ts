@@ -85,7 +85,31 @@ export interface DesignMeeting {
   startedBy: ReviewPerson;
   closedAt: number | null;
   closedBy: ReviewPerson | null;
+  /** The client's confirmation of the record, once given. */
+  confirmation?: MeetingConfirmation | null;
 }
+
+/*
+  The client confirms what the meeting recorded: in their portal (signed in,
+  so the login is the proof), or by signing on the studio's screen. The time,
+  and for the portal the address it came from, are the server's.
+*/
+export interface MeetingConfirmation {
+  via: 'portal' | 'studio';
+  /** The name the client gave, as they typed it. */
+  name: string;
+  email: string | null;
+  uid: string | null;
+  at: number;
+  ip?: string | null;
+  userAgent?: string | null;
+  /** A PNG data URL; only for a signature taken in the studio. */
+  signature?: string | null;
+  /** Who held the screen for a studio signature. */
+  recordedBy?: ReviewPerson | null;
+}
+
+export const isConfirmed = (m: Pick<DesignMeeting, 'confirmation'>) => !!m.confirmation?.at;
 
 /* ------------------------------------------------------------ rooms ready to present */
 
@@ -198,4 +222,71 @@ export function revisionCharges(meetings: DesignMeeting[]): { meeting: DesignMee
     .filter((m) => m.state === 'CLOSED')
     .flatMap((m) => m.rooms.filter((r) => r.charge).map((room) => ({ meeting: m, room })))
     .sort((a, b) => (b.meeting.closedAt || 0) - (a.meeting.closedAt || 0));
+}
+
+/* ------------------------------------------------------------ confirmation */
+
+/** A typed name, as the client would sign it: 2 to 80 characters, no markup. */
+export function cleanSignerName(raw: unknown): string | null {
+  const name = String(raw ?? '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
+  return name.length >= 2 && name.length <= 80 ? name : null;
+}
+
+export const MAX_SIGNATURE_CHARS = 400_000;
+
+/** A drawn signature: a PNG data URL of a sensible size, or nothing. */
+export function cleanSignature(raw: unknown): string | null {
+  const s = String(raw ?? '');
+  return /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(s) && s.length > 200 && s.length <= MAX_SIGNATURE_CHARS ? s : null;
+}
+
+/* ------------------------------------------------------------ the client's record */
+
+/*
+  A held meeting as the client sees it in the portal: the rooms, the versions
+  shown, what they agreed and what they asked to change, and whether they have
+  confirmed it. Nothing about billing, the drawings' storage, or who in the
+  studio did what beyond the presenter's name crosses.
+*/
+export interface PortalDesignMeeting {
+  id: string;
+  heldAt: number;
+  attendees: string;
+  presentedBy: string;
+  rooms: {
+    room: string;
+    outcome: RoomOutcome;
+    sheets: { name: string; versionNo: number }[];
+    changes: string[];
+  }[];
+  confirmation: { via: 'portal' | 'studio'; name: string; at: number } | null;
+}
+
+export const MAX_PORTAL_MEETINGS = 40;
+
+/** Closed meetings, newest first, reduced to what the client may see. */
+export function portalDesignRecord(meetings: DesignMeeting[]): PortalDesignMeeting[] {
+  return meetings
+    .filter((m) => m.state === 'CLOSED')
+    .sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0))
+    .slice(0, MAX_PORTAL_MEETINGS)
+    .map((m) => ({
+      id: m.id,
+      heldAt: m.closedAt || m.startedAt,
+      attendees: m.attendees || '',
+      presentedBy: m.startedBy?.name || '',
+      rooms: m.rooms.filter((r) => r.outcome).map((r) => ({
+        room: r.room,
+        outcome: r.outcome as RoomOutcome,
+        sheets: r.sheets.map((s) => ({ name: s.name, versionNo: s.versionNo })),
+        changes: r.outcome === 'changes' ? r.changes.map((c) => c.text) : [],
+      })),
+      confirmation: m.confirmation?.at ? { via: m.confirmation.via, name: m.confirmation.name, at: m.confirmation.at } : null,
+    }));
+}
+
+/** How a meeting's confirmation reads in the studio. */
+export function confirmationLine(c: MeetingConfirmation | PortalDesignMeeting['confirmation'] | null | undefined, when: (t: number) => string): string {
+  if (!c?.at) return 'Waiting for the client to confirm';
+  return c.via === 'portal' ? `Confirmed by ${c.name} in the portal, ${when(c.at)}` : `Signed by ${c.name} in the studio, ${when(c.at)}`;
 }

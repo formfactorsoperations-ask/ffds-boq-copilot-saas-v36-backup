@@ -924,6 +924,8 @@ export default function App() {
            project as the client may see it, these are invoices raised against
            it. Absent on any view published before scope additions existed. */
         scopeAdditions: (view as any).scopeAdditions,
+        /* The design meetings held, for the client to read and confirm. */
+        designRecord: (view as any).designRecord,
       } as any);
       setAppMode("client");
     })();
@@ -3488,6 +3490,7 @@ export default function App() {
                       )}
                       {activeTab === "design-gate" && (
                         <DesignCompleteGate
+                          projectId={activeInternalId || undefined}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           fullBoq={
@@ -4226,6 +4229,7 @@ export default function App() {
                       )}
                       {activeTab === "design-gate" && (
                         <DesignCompleteGate
+                          projectId={activeInternalId || undefined}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           fullBoq={
