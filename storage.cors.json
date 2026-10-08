@@ -1,0 +1,17 @@
+[
+  {
+    "origin": [
+      "https://tervaro-app-studiodesk.ai.studio",
+      "https://gen-lang-client-0431334259.web.app",
+      "https://gen-lang-client-0431334259.firebaseapp.com",
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:3002",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:3001"
+    ],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type", "Content-Length", "Content-Disposition", "Authorization", "X-Firebase-Storage-Version"],
+    "maxAgeSeconds": 3600
+  }
+]
