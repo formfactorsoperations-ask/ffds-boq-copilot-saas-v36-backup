@@ -8,7 +8,8 @@ import {
 } from "../../lib/drawingReview";
 import {
   presentableRooms, clientRoundsByRoom, includedRoundsFrom, isOverIncluded, cleanChanges, cleanFee,
-  type DesignMeeting, type MeetingRoom, type MeetingSheet, type RoomCharge, type ChargeStatus, type RoomDrawing,
+  cleanSignerName, cleanSignature, portalDesignRecord,
+  type DesignMeeting, type MeetingConfirmation, type PortalDesignMeeting, type MeetingRoom, type MeetingSheet, type RoomCharge, type ChargeStatus, type RoomDrawing,
 } from "../../lib/designMeeting";
 
 /*
@@ -27,6 +28,11 @@ import {
       the sheet approved (clientKeep);
     - counts a revision round for each room with changes, and records a
       chargeable round past the studio's included rounds as to bill or waived.
+
+  The client then confirms the record: by signing on the studio's screen
+  (sign, below), or in their portal (submitClientAction: confirmMeeting, which
+  calls confirmMeetingByClient). Held meetings are copied, reduced, into the
+  client's portal view so they can see and confirm them.
 */
 
 const db = () => admin.firestore();
@@ -102,7 +108,7 @@ async function close(actor: Actor, orgId: string, projectId: string, input: Inpu
   const ref = meetingRef(orgId, projectId, input.meetingId);
   const base = projectPath(orgId, projectId);
   const charges: Record<string, unknown> = input.charges && typeof input.charges === "object" ? input.charges : {};
-  return db().runTransaction(async (tx) => {
+  const out = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError("not-found", "That meeting could not be found.");
     const m = snap.data() as DesignMeeting;
@@ -169,6 +175,83 @@ async function close(actor: Actor, orgId: string, projectId: string, input: Inpu
     tx.update(ref, { state: "CLOSED", rooms: stored, closedAt: now, closedBy: by, rev: m.rev + 1 });
     return { meeting: { ...m, state: "CLOSED", rooms, closedAt: now, closedBy: by, rev: m.rev + 1 } as DesignMeeting };
   });
+  await refreshPortalRecord(orgId, projectId);
+  return out;
+}
+
+/*
+  The client's portal copy (projects/{p}/portalView/current) carries the held
+  meetings, so a meeting reaches the client without waiting for the studio to
+  re-send the portal. Only ever updated, never created: publishing the portal
+  stays the studio's decision. A failure here never undoes the meeting itself.
+*/
+export async function refreshPortalRecord(orgId: string, projectId: string): Promise<PortalDesignMeeting[] | null> {
+  const viewRef = db().doc(`projects/${projectId}/portalView/current`);
+  const held = db().collection(`${projectPath(orgId, projectId)}/designMeetings`).where("state", "==", "CLOSED");
+  try {
+    return await db().runTransaction(async (tx) => {
+      const view = await tx.get(viewRef);
+      const snap = await tx.get(held);
+      const record = portalDesignRecord(snap.docs.map((d) => ({ ...(d.data() as DesignMeeting), id: d.id })));
+      if (!view.exists) return record;
+      tx.update(viewRef, { designRecord: record.length ? record : admin.firestore.FieldValue.delete() });
+      return record;
+    });
+  } catch (e: any) {
+    logger.warn("Portal design record not refreshed", { orgId, projectId, message: e?.message });
+    return null;
+  }
+}
+
+/* The client signs the record on the studio's screen, with the studio's login holding it. */
+async function sign(actor: Actor, orgId: string, projectId: string, input: Input) {
+  mustRun(actor);
+  const name = cleanSignerName(input.name);
+  if (!name) throw new HttpsError("invalid-argument", "Type the client's name as they would sign it.");
+  const signature = cleanSignature(input.signature);
+  if (!signature) throw new HttpsError("invalid-argument", "Ask the client to sign in the box first.");
+  const ref = meetingRef(orgId, projectId, input.meetingId);
+  const out = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "That meeting could not be found.");
+    const m = snap.data() as DesignMeeting;
+    if (m.state !== "CLOSED") throw new HttpsError("failed-precondition", "Save the meeting before the client confirms it.");
+    if (m.confirmation?.at) throw new HttpsError("failed-precondition", "The client has already confirmed this meeting.");
+    const confirmation: MeetingConfirmation = { via: "studio", name, email: null, uid: null, at: Date.now(), signature, recordedBy: person(actor) };
+    tx.update(ref, { confirmation, rev: m.rev + 1 });
+    return { meeting: { ...m, confirmation, rev: m.rev + 1 } };
+  });
+  await refreshPortalRecord(orgId, projectId);
+  return out;
+}
+
+/*
+  The client confirms a held meeting from their portal. The caller has already
+  been checked as this project's client (assertPortalClient); the meeting must
+  be held and unconfirmed. Their login, address and the server's time are the
+  record; the name is theirs to type, as on any other approval in the portal.
+*/
+export async function confirmMeetingByClient(p: {
+  tenantId: unknown; projectId: string; meetingId: unknown; name: unknown;
+  uid: string; email: string | null; ip: string | null; userAgent: string;
+}): Promise<PortalDesignMeeting[] | null> {
+  if (!safeId(p.tenantId) || !safeId(p.projectId)) throw new HttpsError("permission-denied", "This project is not open to you.");
+  const name = cleanSignerName(p.name);
+  if (!name) throw new HttpsError("invalid-argument", "Type your full name to confirm.");
+  const orgId = String(p.tenantId);
+  const ref = meetingRef(orgId, p.projectId, p.meetingId);
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const m = snap.data() as DesignMeeting | undefined;
+    if (!m || m.state !== "CLOSED") throw new HttpsError("not-found", "That meeting is not in your design record.");
+    if (m.confirmation?.at) throw new HttpsError("failed-precondition", "This meeting is already confirmed.");
+    const confirmation: MeetingConfirmation = {
+      via: "portal", name, email: p.email, uid: p.uid, at: Date.now(),
+      ip: p.ip, userAgent: String(p.userAgent || "").slice(0, 300),
+    };
+    tx.update(ref, { confirmation, rev: m.rev + 1 });
+  });
+  return refreshPortalRecord(orgId, p.projectId);
 }
 
 async function cancel(actor: Actor, orgId: string, projectId: string, input: Input) {
@@ -223,6 +306,7 @@ export const designMeeting = onCall({ cors: true, timeoutSeconds: 60 }, async (r
       case "close": return await close(actor, orgId, projectId, input);
       case "cancel": return await cancel(actor, orgId, projectId, input);
       case "charge": return await charge(actor, orgId, projectId, input);
+      case "sign": return await sign(actor, orgId, projectId, input);
       default: throw new HttpsError("invalid-argument", "Unknown action.");
     }
   } catch (e: any) {

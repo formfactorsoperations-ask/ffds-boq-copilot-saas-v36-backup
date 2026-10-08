@@ -24,7 +24,7 @@ const DT = `${P}/drawingTracker`;
 
 let env: RulesTestEnvironment;
 const apps: FirebaseApp[] = [];
-type User = { uid: string; email: string; review: (data: any) => Promise<any>; meet: (data: any) => Promise<any>; upload: (path: string, bytes: Uint8Array) => Promise<void> };
+type User = { uid: string; email: string; review: (data: any) => Promise<any>; meet: (data: any) => Promise<any>; act: (action: any) => Promise<any>; upload: (path: string, bytes: Uint8Array) => Promise<void> };
 const users: Record<string, User> = {};
 
 function pdf(label: string): Uint8Array {
@@ -44,10 +44,12 @@ async function makeUser(key: string, email: string, profile: any) {
   await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `users/${cred.user.uid}`), { email, ...profile }); });
   const review = httpsCallable(fns, 'drawingReview', { timeout: 60000 });
   const meet = httpsCallable(fns, 'designMeeting', { timeout: 60000 });
+  const act = httpsCallable(fns, 'submitClientAction', { timeout: 60000 });
   users[key] = {
     uid: cred.user.uid, email,
     review: async (data) => (await review({ orgId: STUDIO, projectId: 'p1', ...data })).data,
     meet: async (data) => (await meet({ orgId: STUDIO, projectId: 'p1', ...data })).data,
+    act: async (action) => (await act({ projectId: 'p1', action })).data,
     upload: async (path, bytes) => { await uploadBytes(ref(st, path), bytes, { contentType: 'application/pdf' }); },
   };
 }
@@ -79,6 +81,7 @@ beforeAll(async () => {
     await setDoc(doc(db, 'projects/p1'), { tenantId: STUDIO, context: { name: 'Harmony 704' } });
     await setDoc(doc(db, 'projects/p1/designView/current'), { tenantId: STUDIO, designers: ['riya@m.com'] });
     await setDoc(doc(db, P), { tenantId: STUDIO });
+    await setDoc(doc(db, 'projects/p1/portalView/current'), { v: 1, builtAt: 'x', projectId: 'p1', context: { name: 'Harmony 704' } });
     await setDoc(doc(db, `${DT}/k1`), { id: 'k1', name: 'Kitchen Elevation A', roomName: 'Kitchen' });
     await setDoc(doc(db, `${DT}/k2`), { id: 'k2', name: 'Kitchen Layout', roomName: 'Kitchen' });
     await setDoc(doc(db, `${DT}/k3`), { id: 'k3', name: 'Kitchen Carpentry Details', roomName: 'Kitchen' });
@@ -87,6 +90,8 @@ beforeAll(async () => {
   await makeUser('designer', 'riya@m.com', { tenantId: STUDIO, role: 'Designer', displayName: 'Riya' });
   await makeUser('head', 'mayuri@m.com', { tenantId: STUDIO, role: 'Design Head', displayName: 'Mayuri' });
   await makeUser('ops', 'neha@m.com', { tenantId: STUDIO, role: 'Ops Director', displayName: 'Neha' });
+  await makeUser('client', 'mehta@gmail.com', { tenantId: STUDIO, role: 'Client', projectIds: ['p1'], displayName: 'Rahul Mehta' });
+  await makeUser('stranger', 'shah@gmail.com', { tenantId: STUDIO, role: 'Client', projectIds: ['p2'], displayName: 'A Shah' });
   await new Promise((r) => setTimeout(r, 3000));
 }, 120000);
 
@@ -199,5 +204,46 @@ describe('a design meeting', { timeout: 60000 }, () => {
     expect((await read(`${P}/designMeetings/${m.meeting.id}`)).state).toBe('CANCELLED');
     const again = await users.head.meet({ action: 'start', rooms: ['Living Room'] });
     expect(again.meeting.state).toBe('OPEN');
+  });
+
+  const SIGNATURE = `data:image/png;base64,${'iVBORw0KGgo'.padEnd(400, 'A')}`;
+
+  it('a held meeting reaches the client\'s portal copy, room by room, without the billing', async () => {
+    const view = await read('projects/p1/portalView/current');
+    const mine = view.designRecord.find((m: any) => m.id === meetingId);
+    expect(mine.rooms[0]).toMatchObject({ room: 'Kitchen', outcome: 'changes' });
+    expect(mine.rooms[0].changes.length).toBeGreaterThan(0);
+    expect(mine.confirmation).toBeNull();
+    expect(JSON.stringify(view.designRecord)).not.toMatch(/charge|fee|pdfPath|INV-2026/);
+  });
+
+  it('the client confirms it in their portal: only their own project, with their name, once', async () => {
+    expect(await code(users.stranger.act({ type: 'confirmMeeting', meetingId, name: 'A Shah' }))).toBe('functions/permission-denied');
+    expect(await code(users.client.act({ type: 'confirmMeeting', meetingId, name: ' ' }))).toBe('functions/invalid-argument');
+    expect(await code(users.client.act({ type: 'confirmMeeting', meetingId: 'nope', name: 'Rahul Mehta' }))).toBe('functions/not-found');
+    const res = await users.client.act({ type: 'confirmMeeting', meetingId, name: 'Rahul Mehta' });
+    expect(res.designRecord.find((m: any) => m.id === meetingId).confirmation).toMatchObject({ via: 'portal', name: 'Rahul Mehta' });
+    const m = await read(`${P}/designMeetings/${meetingId}`);
+    expect(m.confirmation).toMatchObject({ via: 'portal', name: 'Rahul Mehta', uid: users.client.uid, email: 'mehta@gmail.com' });
+    expect((await read('projects/p1/portalView/current')).designRecord.find((x: any) => x.id === meetingId).confirmation.via).toBe('portal');
+    expect(await code(users.client.act({ type: 'confirmMeeting', meetingId, name: 'Rahul Mehta' }))).toBe('functions/failed-precondition');
+    expect(await code(users.head.meet({ action: 'sign', meetingId, name: 'Rahul Mehta', signature: SIGNATURE }))).toBe('functions/failed-precondition');
+  });
+
+  it('the studio can take the client\'s signature on screen instead', async () => {
+    const held = (await list(`${P}/designMeetings`)).find((m) => m.state === 'CLOSED' && !m.confirmation);
+    expect(held).toBeTruthy();
+    expect(await code(users.designer.meet({ action: 'sign', meetingId: held.id, name: 'Rahul Mehta', signature: SIGNATURE }))).toBe('functions/permission-denied');
+    expect(await code(users.head.meet({ action: 'sign', meetingId: held.id, name: 'Rahul Mehta', signature: 'data:image/png;base64,abc' }))).toBe('functions/invalid-argument');
+    const res = await users.head.meet({ action: 'sign', meetingId: held.id, name: 'Rahul Mehta', signature: SIGNATURE });
+    expect(res.meeting.confirmation).toMatchObject({ via: 'studio', name: 'Rahul Mehta', signature: SIGNATURE });
+    const rec = (await read('projects/p1/portalView/current')).designRecord.find((m: any) => m.id === held.id);
+    expect(rec.confirmation).toMatchObject({ via: 'studio', name: 'Rahul Mehta' });
+    expect(JSON.stringify(rec)).not.toMatch(/base64/);
+  });
+
+  it('another client action keeps the design record in the client\'s copy', async () => {
+    await users.client.act({ type: 'sendMessage', text: 'Thanks for the meeting' });
+    expect((await read('projects/p1/portalView/current')).designRecord.length).toBeGreaterThan(0);
   });
 });

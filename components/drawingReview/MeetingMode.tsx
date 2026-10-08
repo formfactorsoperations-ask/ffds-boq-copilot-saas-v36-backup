@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, Loader2, MapPin, Minus, Plus, Presentation, ReceiptText, RotateCw, Trash2, Undo2 } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Check, ChevronLeft, ChevronRight, Download, Loader2, MapPin, Minus, PenLine, Plus, Presentation, ReceiptText, RotateCw, Trash2, Undo2 } from 'lucide-react';
 import { clientRoundsByRoom, isOverIncluded, plural, type DesignMeeting, type MeetingChange, type RoomOutcome } from '../../lib/designMeeting';
 import type { MarkShape, ReviewMark, Turn } from '../../lib/drawingReview';
 import { decideRoom, closeMeeting } from '../../services/designMeetingService';
@@ -8,6 +8,7 @@ import PdfStage from './PdfStage';
 import { CLIENT, roomLabel, useToast } from './ui';
 import { Chip, ProjectMark } from './DeskParts';
 import { RoomRecord } from './Meetings';
+import ClientSign from './ClientSign';
 
 /*
   MEETING MODE: one room at a time, full width, on the versions the Design
@@ -55,6 +56,7 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
   const [charges, setCharges] = useState<Record<string, 'to_bill' | 'waived'>>({});
   const [turns, setTurns] = useState<Record<string, Turn>>({});
   const [saving, setSaving] = useState(false);
+  const [signing, setSigning] = useState(false);
 
   const used = useMemo(() => clientRoundsByRoom(meetings, m.id), [meetings, m.id]);
   const room = m.rooms[at] || m.rooms[0];
@@ -205,13 +207,18 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
                 {totalChanges ? ` ${plural(totalChanges, 'change')} are waiting for the Design Head under For you.` : ''}
                 {needCharge.some((r) => charges[r.room] === 'to_bill' || r.charge?.status === 'to_bill') ? ' Chargeable rounds are on the list to bill in Meetings.' : ''}
               </p>
+              {m.confirmation?.at
+                ? <p className="mx-auto mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#E3F2EA] px-3 py-1.5 text-[13px] font-bold text-[#134F38]"><BadgeCheck size={15} />Signed by {m.confirmation.name}</p>
+                : <p className="mx-auto mt-2 max-w-[520px] text-[13px] text-[#5F636D]">The client can confirm this record in their portal, or sign it here now.</p>}
               <div className="mt-5 flex flex-wrap justify-center gap-2">
+                {!m.confirmation?.at && <button type="button" onClick={() => setSigning(true)} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#1F7A57] px-[18px] text-[14px] font-bold text-white hover:bg-[#196649]"><PenLine size={16} />Client signs now</button>}
                 <button type="button" onClick={() => onExit()} className="min-h-[44px] rounded-xl border border-[#DCDCD5] bg-white px-[18px] text-[14px] font-bold hover:border-[#A9AAA2]">Back to Meetings</button>
                 {totalChanges > 0 && <button type="button" onClick={() => onExit('foryou')} className="min-h-[44px] rounded-xl bg-[#4146C8] px-[18px] text-[14px] font-bold text-white hover:bg-[#3439AD]">Review the client's changes</button>}
               </div>
             </div>
           )}
         </div>
+        {signing && <ClientSign orgId={orgId} projectId={projectId} meeting={m} onClose={() => setSigning(false)} onSigned={(x) => setLocal(x)} />}
       </div>
     );
   }

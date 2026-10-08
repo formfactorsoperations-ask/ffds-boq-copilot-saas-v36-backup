@@ -38,5 +38,7 @@ export const decideRoom = (t: Target, meetingId: string, room: string, outcome: 
 export const closeMeeting = (t: Target, meetingId: string, expectedRev: number, charges: Record<string, 'to_bill' | 'waived'>) =>
   meet(t, { action: 'close', meetingId, expectedRev, charges });
 export const cancelMeeting = (t: Target, meetingId: string) => meet(t, { action: 'cancel', meetingId });
+/** The client signs the meeting's record on the studio's screen. */
+export const signMeeting = (t: Target, meetingId: string, name: string, signature: string) => meet(t, { action: 'sign', meetingId, name, signature });
 export const updateCharge = (t: Target, meetingId: string, room: string, patch: { status?: ChargeStatus; fee?: number | string | null; note?: string; ref?: string }) =>
   meet(t, { action: 'charge', meetingId, room, ...patch });

@@ -54,6 +54,8 @@ import {
 import { buildSignoffPatch, buildDisputePatch, resolveApprovals, AgreementKind } from '../services/clientApprovalEngine';
 import DocumentReadingRoom from './client/DocumentReadingRoom';
 import PortalScopePanel from './client/PortalScopePanel';
+import PortalDesignRecord from './client/PortalDesignRecord';
+import type { PortalDesignMeeting } from '../lib/designMeeting';
 import { FFDSLogo } from './FFDSLogo';
 import BoqVersionCompare from './client/BoqVersionCompare';
 import { describeVersions } from '../lib/boqVersions';
@@ -343,7 +345,12 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
      * look like" and "what am I getting" — so they get two sub-tabs rather than
      * a scroll.
      */
-    const [designScopeTab, setDesignScopeTab] = useState<'drawings' | 'scope'>('drawings');
+    const [designScopeTab, setDesignScopeTab] = useState<'drawings' | 'scope' | 'record'>('drawings');
+
+    /* The design meetings held, from the projection; updated in place when the client confirms one. */
+    const [designRecord, setDesignRecord] = useState<PortalDesignMeeting[]>(() => (projectData as any).designRecord || []);
+    useEffect(() => { setDesignRecord((projectData as any).designRecord || []); }, [(projectData as any).designRecord]);
+    const recordWaiting = designRecord.filter((m) => !m.confirmation).length;
 
     /** The scope revision history, and whether the compare modal is open. */
     const [showBoqVersions, setShowBoqVersions] = useState(false);
@@ -961,11 +968,28 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                     consequence: revision ? 'Nothing in the revised BOQ is built until you approve it.' : undefined,
                 };
             });
-        const extra = [...scopeActions, ...momActions];
+        /* A design meeting the client has not confirmed yet. */
+        const meetingActions = source === 'client' ? designRecord.filter((m) => !m.confirmation).map((m) => ({
+            id: `meeting-${m.id}`,
+            category: 'meeting' as const,
+            severity: 'high' as const,
+            owner: 'client' as const,
+            title: `Confirm the design meeting of ${new Date(m.heldAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`,
+            subtitle: m.rooms.map((r) => `${r.room}: ${r.outcome === 'agreed' ? 'agreed' : `${r.changes.length} change${r.changes.length === 1 ? '' : 's'}`}`).join(' · '),
+            description: '',
+            targetTab: 'designs' as const,
+            actionLabel: 'Review & confirm',
+            actionType: 'confirm_meeting' as const,
+            actionPayload: { meetingId: m.id },
+            date: m.heldAt,
+            statusBadge: 'To confirm',
+            consequence: 'Your designer goes ahead once you confirm what was agreed.',
+        })) : [];
+        const extra = [...meetingActions, ...scopeActions, ...momActions];
         return extra.length
             ? { ...clientActionSummary, clientActions: [...clientActionSummary.clientActions, ...extra] }
             : clientActionSummary;
-    }, [clientActionSummary, syncedMoms, context.documents]);
+    }, [clientActionSummary, syncedMoms, context.documents, designRecord, source]);
 
     /* Downloads from "Your scope", reported for the studio's trail. Only the client's own portal counts. */
     useEffect(() => {
@@ -1773,6 +1797,10 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             case 'review_variation': setActiveTab('designScope'); break;
             case 'review_scope':
                 openDocument(item.actionPayload?.kind, item.actionPayload?.issueId);
+                break;
+            case 'confirm_meeting':
+                setActiveTab('designScope');
+                setDesignScopeTab('record');
                 break;
             case 'review_minutes': {
                 const m = syncedMoms.find((x: any) => x.id === item.actionPayload?.momId);
@@ -2950,6 +2978,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                             {([
                               { id: 'drawings' as const, label: 'Drawings & renders', n: drawingSets.length },
                               { id: 'scope' as const, label: 'Scope & BOQ', n: 0 },
+                              ...(designRecord.length ? [{ id: 'record' as const, label: 'Design record', n: recordWaiting }] : []),
                             ]).map(t => {
                               const on = designScopeTab === t.id;
                               return (
@@ -2972,6 +3001,10 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                               );
                             })}
                           </div>
+                        )}
+
+                        {activeTab === 'designScope' && designScopeTab === 'record' && (
+                            <PortalDesignRecord projectId={projectData.id} record={designRecord} canConfirm={source === 'client'} onRecord={setDesignRecord} />
                         )}
 
                         {activeTab === 'designScope' && designScopeTab === 'drawings' && (

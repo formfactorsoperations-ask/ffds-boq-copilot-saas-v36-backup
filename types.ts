@@ -1555,6 +1555,8 @@ export interface DesignGateItem {
     reference?: string | null;
     /** Manual override state if user explicitly forced checked or unchecked */
     manualOverride?: 'checked' | 'unchecked' | null;
+    /** The design meeting the client confirmed, when the sign-off rests on one. */
+    meetingId?: string | null;
 }
 
 export interface DesignGateState {

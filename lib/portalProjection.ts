@@ -1,4 +1,5 @@
 import { ProjectContext, ProjectSchedule } from '../types';
+import type { PortalDesignMeeting } from './designMeeting';
 import { isVisibleToClient } from './clientVisibility';
 import { ClientBoqRow } from './clientBoq';
 import { PortalMoney } from './portalMoney';
@@ -36,6 +37,8 @@ export interface PortalView {
   context: Record<string, any>;
   /** Work added after the BOQ was frozen. Absent when there is none. */
   scopeAdditions?: PortalScopeAddition[];
+  /** The design meetings held, room by room, for the client to confirm. Absent when there are none. */
+  designRecord?: PortalDesignMeeting[];
 }
 
 /**
@@ -224,6 +227,12 @@ export function buildPortalView(
     reach the client without a release.
   */
   schedule?: ProjectSchedule,
+  /*
+    The design meetings held, already reduced by portalDesignRecord. Kept
+    current by the designMeeting function between releases; sent here so a
+    release does not wipe it. Last, so every positional call keeps working.
+  */
+  designRecord?: PortalDesignMeeting[],
 ): PortalView {
   const c = ctx as any;
 
@@ -234,6 +243,7 @@ export function buildPortalView(
     /* Absent rather than empty when there are none, so the portal can tell
        "no additions" from "this projection predates the feature". */
     scopeAdditions: scopeAdditions && scopeAdditions.length ? scopeAdditions : undefined,
+    designRecord: designRecord && designRecord.length ? designRecord : undefined,
     context: {
       // Identity the portal header needs.
       name: ctx.name,
