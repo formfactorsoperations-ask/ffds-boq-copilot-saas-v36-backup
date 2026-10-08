@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Loader2, MapPin, Minus, Plus, Presentation, ReceiptText, Trash2, Undo2 } from 'lucide-react';
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, Loader2, MapPin, Minus, Plus, Presentation, ReceiptText, RotateCw, Trash2, Undo2 } from 'lucide-react';
 import { clientRoundsByRoom, isOverIncluded, plural, type DesignMeeting, type MeetingChange, type RoomOutcome } from '../../lib/designMeeting';
-import type { MarkShape, ReviewMark } from '../../lib/drawingReview';
+import type { MarkShape, ReviewMark, Turn } from '../../lib/drawingReview';
 import { decideRoom, closeMeeting } from '../../services/designMeetingService';
+import { fileUrl } from '../../services/drawingReviewService';
 import PdfStage from './PdfStage';
 import { CLIENT, roomLabel, useToast } from './ui';
 import { Chip, ProjectMark } from './DeskParts';
@@ -29,6 +30,12 @@ interface Props {
 
 type Draft = { shape: MarkShape; page: number; text: string };
 
+/* The same per-drawing rotation the review screen remembers, so a sheet turned there is turned here too. */
+const turnKey = (projectId: string, drawingId: string) => `ffds_dr_turn_${projectId}_${drawingId}`;
+const savedTurn = (projectId: string, drawingId: string): Turn => {
+  try { const v = Number(JSON.parse(localStorage.getItem(turnKey(projectId, drawingId)) || '0')); return ([0, 90, 180, 270].includes(v) ? v : 0) as Turn; } catch { return 0; }
+};
+
 const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, meeting, meetings, onExit }) => {
   const toast = useToast();
   const target = { orgId, projectId };
@@ -46,6 +53,8 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
   const [changes, setChanges] = useState<Record<string, MeetingChange[]>>(() => Object.fromEntries(m.rooms.map((r) => [r.room, r.changes])));
   const [busy, setBusy] = useState(false);
   const [charges, setCharges] = useState<Record<string, 'to_bill' | 'waived'>>({});
+  const [turns, setTurns] = useState<Record<string, Turn>>({});
+  const [saving, setSaving] = useState(false);
 
   const used = useMemo(() => clientRoundsByRoom(meetings, m.id), [meetings, m.id]);
   const room = m.rooms[at] || m.rooms[0];
@@ -54,6 +63,35 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
   const nextRound = (used[room.room] || 0) + 1;
   const over = isOverIncluded(nextRound, m.includedRounds);
   const done = m.rooms.filter((r) => r.outcome).length;
+
+  const turn = turns[sh.drawingId] ?? savedTurn(projectId, sh.drawingId);
+  const rotate = () => {
+    const n = ((turn + 90) % 360) as Turn;
+    setTurns((t) => ({ ...t, [sh.drawingId]: n }));
+    try { localStorage.setItem(turnKey(projectId, sh.drawingId), JSON.stringify(n)); } catch { /* storage off */ }
+  };
+  async function download() {
+    if (!sh.pdfPath) return;
+    setSaving(true);
+    try {
+      const a = document.createElement('a');
+      a.href = await fileUrl(sh.pdfPath);
+      a.download = `${sh.name.replace(/[\\/:*?"<>|]+/g, '-')} v${sh.versionNo}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (e: any) {
+      toast({ title: 'The PDF did not download', sub: e?.message });
+    } finally { setSaving(false); }
+  }
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      if (el && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key.toLowerCase() === 'r' && step === 'present') rotate();
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  });
 
   const go = (i: number) => { setAt(i); setSheet(0); setPage(0); setPinning(false); setDraft(null); };
   const marks = mine.filter((c) => c.drawingId === sh.drawingId && c.page === page)
@@ -218,7 +256,7 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
           </div>
           <div className="flex-1 overflow-auto pb-16">
             {sh.pdfPath ? (
-              <React.Fragment key={`${sh.drawingId}/${sh.versionId}`}><PdfStage pdfPath={sh.pdfPath} page={page} zoom={zoom} marks={marks} draft={draft?.shape || null}
+              <React.Fragment key={`${sh.drawingId}/${sh.versionId}`}><PdfStage pdfPath={sh.pdfPath} page={page} zoom={zoom} turn={turn} marks={marks} draft={draft?.shape || null}
                 tool={pinning ? 'pin' : 'select'} canMark={pinning && !draft && !room.outcome} markColor={CLIENT} onPageCount={setPages}
                 onShape={(shape) => setDraft({ shape, page, text: '' })} /></React.Fragment>
             ) : <div className="grid h-60 place-items-center text-[#5F636D]">This sheet has no PDF.</div>}
@@ -235,6 +273,9 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
               <button type="button" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))} aria-label="Zoom out" className="grid min-h-[40px] min-w-[40px] place-items-center rounded-[11px] text-[#4F535C] hover:bg-[#F1F1EC]"><Minus size={17} /></button>
               <span className="min-w-[42px] text-center text-[12.5px] font-bold text-[#4F535C]">{Math.round(zoom * 100)}%</span>
               <button type="button" onClick={() => setZoom((z) => Math.min(2.5, +(z + 0.25).toFixed(2)))} aria-label="Zoom in" className="grid min-h-[40px] min-w-[40px] place-items-center rounded-[11px] text-[#4F535C] hover:bg-[#F1F1EC]"><Plus size={17} /></button>
+              <span className="mx-1 h-6 w-px bg-[#E4E4DE]" />
+              <button type="button" onClick={rotate} aria-label="Rotate the sheet" title="Rotate (R). Only on your screen; pins stay where they are on the drawing." className="grid min-h-[40px] min-w-[40px] place-items-center rounded-[11px] text-[#4F535C] hover:bg-[#F1F1EC]"><RotateCw size={17} /></button>
+              <button type="button" onClick={download} disabled={saving || !sh.pdfPath} aria-label={`Download ${sh.name} v${sh.versionNo}`} title={`Download ${sh.name} v${sh.versionNo} (the approved PDF)`} className="grid min-h-[40px] min-w-[40px] place-items-center rounded-[11px] text-[#4F535C] hover:bg-[#F1F1EC] disabled:opacity-40">{saving ? <Loader2 size={17} className="animate-spin" /> : <Download size={17} />}</button>
             </div>
           </div>
         </div>
