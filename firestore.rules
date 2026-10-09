@@ -94,7 +94,8 @@ service cloud.firestore {
     function isReviewRecordPath(p) {
       return p.matches('.*drawingTracker/[^/]+/review(Versions|Rounds|Marks|Events)/.*')
         /* A design meeting: what the client was shown and asked for. Written by the designMeeting function only. */
-        || p.matches('.*/designMeetings/.*');
+        || p.matches('.*/designMeetings/.*')
+        || p.matches('.*/designLayout/.*');
     }
     function keepsReview() {
       return request.resource == null

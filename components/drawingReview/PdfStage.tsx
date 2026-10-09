@@ -38,10 +38,17 @@ interface Props {
   overlay?: React.ReactNode;
   /** The colour of open notes; the client's changes in a meeting are drawn in their own. */
   markColor?: string;
+  /** Where the bytes come from when they are not the studio's own file (the client's portal). `pdfPath` is then only the cache key. */
+  loader?: () => Promise<ArrayBuffer>;
+  /** The widest the page is drawn (default 1100 px), and the tallest it may be, so a presentation fills the screen. */
+  maxWidth?: number;
+  fitHeight?: number;
+  /** Named areas on the page (a room on the layout plan), as fractions of the unturned page. */
+  areas?: { x: number; y: number; w: number; h: number; label?: string; active?: boolean }[] | null;
 }
 
 /* `mode` changes when the canvas element is swapped (compare on or off), so the page is drawn again into the new one. */
-function useCanvasPage(path: string | null | undefined, page: number, width: number, mode: string, turn: Turn) {
+function useCanvasPage(path: string | null | undefined, page: number, width: number, mode: string, turn: Turn, loader?: () => Promise<ArrayBuffer>) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +57,7 @@ function useCanvasPage(path: string | null | undefined, page: number, width: num
     let live = true;
     if (!path || !canvas.current || width < 50) return;
     setError(null);
-    loadPdf(path, async () => (await fileBlob(path)).arrayBuffer())
+    loadPdf(path, loader || (async () => (await fileBlob(path)).arrayBuffer()))
       .then(async (doc) => {
         if (!live) return;
         setPages(doc.numPages);
@@ -90,7 +97,7 @@ export function MarkShapeSvg({ m, n, color, selected, H }: { m: MarkShape; n: nu
 }
 
 export default function PdfStage(props: Props) {
-  const { pdfPath, comparePath, compareLabel, page, zoom, marks, draft, selectedId, tool, canMark, onPageCount, onSelect, onShape, changes, overlay } = props;
+  const { pdfPath, comparePath, compareLabel, page, zoom, marks, draft, selectedId, tool, canMark, onPageCount, onSelect, onShape, changes, overlay, areas } = props;
   const ink = props.markColor || MARK;
   const turn: Turn = props.turn || 0;
   const wrap = useRef<HTMLDivElement>(null);
@@ -101,9 +108,13 @@ export default function PdfStage(props: Props) {
     ro.observe(wrap.current);
     return () => ro.disconnect();
   }, []);
-  const width = Math.max(200, Math.min(boxWidth, 1100) * zoom);
+  /* The page's height for its width, once drawn, so a fixed height can be fitted. */
+  const [aspect, setAspect] = useState<number | null>(null);
+  const fitted = props.fitHeight && aspect ? Math.min(boxWidth, props.fitHeight / aspect) : boxWidth;
+  const width = Math.max(200, Math.min(fitted, props.maxWidth || 1100) * zoom);
   const mode = comparePath ? 'compare' : 'single';
-  const main = useCanvasPage(pdfPath, page, width, mode, turn);
+  const main = useCanvasPage(pdfPath, page, width, mode, turn, props.loader);
+  useEffect(() => { if (main.size) setAspect(main.size.height / main.size.width); }, [main.size?.width, main.size?.height]);
   const other = useCanvasPage(comparePath || null, page, width, mode, turn);
   const [cmpX, setCmpX] = useState(50);
   useEffect(() => { if (main.pages) onPageCount?.(main.pages); }, [main.pages]);
@@ -173,6 +184,16 @@ export default function PdfStage(props: Props) {
                         <rect x={t.x * 1000} y={t.y * H} width={t.w * 1000} height={t.h * H} rx={6} fill="#E09600" fillOpacity={0.09} stroke="#D08A00" strokeWidth={2.5} strokeDasharray="10 6" />
                         <rect x={t.x * 1000} y={Math.max(0, t.y * H - 26)} width={92} height={22} rx={11} fill="#D08A00" />
                         <text x={t.x * 1000 + 46} y={Math.max(0, t.y * H - 26) + 15.5} fontSize={13} fontWeight={800} fill="#fff" textAnchor="middle" fontFamily="Plus Jakarta Sans, sans-serif">Change {i + 1}</text>
+                      </g>
+                    );
+                  })}
+                  {(areas || []).map((a, i) => {
+                    const t = turnShape({ t: 'rect', x: a.x, y: a.y, w: a.w, h: a.h }, turn, 'view') as { x: number; y: number; w: number; h: number };
+                    const c = a.active ? CLIENT : '#4146C8';
+                    return (
+                      <g key={`area-${i}`} pointerEvents="none">
+                        <rect x={t.x * 1000} y={t.y * H} width={t.w * 1000} height={t.h * H} rx={6} fill={c} fillOpacity={a.active ? 0.2 : 0.06} stroke={c} strokeWidth={a.active ? 4 : 2.5} strokeDasharray={a.active ? undefined : '10 6'} />
+                        {a.label && <text x={(t.x + t.w / 2) * 1000} y={(t.y + t.h / 2) * H + 7} fontSize={a.active ? 26 : 20} fontWeight={800} fill={c} textAnchor="middle" fontFamily="Plus Jakarta Sans, sans-serif" stroke="#fff" strokeWidth={5} paintOrder="stroke">{a.label}</text>}
                       </g>
                     );
                   })}

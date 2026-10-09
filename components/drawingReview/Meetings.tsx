@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BadgeCheck, CalendarCheck, Check, ChevronRight, Clock, History, IndianRupee, Loader2, PenLine, Presentation, ReceiptText, Undo2, Users, X } from 'lucide-react';
-import { presentableRooms, revisionCharges, meetingSummary, plural, confirmationLine, isConfirmed, type DesignMeeting, type MeetingRoom } from '../../lib/designMeeting';
-import { startMeeting, cancelMeeting, updateCharge } from '../../services/designMeetingService';
+import { BadgeCheck, CalendarCheck, Check, ChevronRight, Clock, History, IndianRupee, Loader2, MapPinned, PenLine, Presentation, ReceiptText, Undo2, Users, X } from 'lucide-react';
+import { presentableRooms, revisionCharges, meetingSummary, plural, confirmationLine, isConfirmed, guessLayout, GENERAL_ROOM, type DesignMeeting, type LayoutSetup, type MeetingRoom } from '../../lib/designMeeting';
+import { LayoutRooms } from './LayoutPlan';
+import { startMeeting, cancelMeeting, updateCharge, watchLayoutSetup } from '../../services/designMeetingService';
 import type { ReviewDrawing } from '../../services/drawingReviewService';
 import { roomLabel, shortDate, firstName, useToast } from './ui';
 import { Chip, ProjectMark, SectionHead, TONE } from './DeskParts';
@@ -46,6 +47,17 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
   const [signing, setSigning] = useState<DesignMeeting | null>(null);
   useEffect(() => { setPicked(Object.fromEntries(ready.map((r) => [r.room, true]))); }, [projectId, ready.map((r) => r.room).join('|')]);
 
+  /* The layout plan shown beside each room: any approved sheet, the project's last choice first. */
+  const [setup, setSetup] = useState<LayoutSetup | null>(null);
+  useEffect(() => { setSetup(null); if (projectId) return watchLayoutSetup(orgId, projectId, setSetup); }, [orgId, projectId]);
+  const plans = useMemo(() => drawings.filter((d) => d.review?.state === 'APPROVED' && d.review?.versionId && d.review?.pdfPath), [drawings]);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const defaultPlan = (setup && plans.find((d) => d.id === setup.drawingId)) || guessLayout(plans);
+  const plan = planId === '' ? null : plans.find((d) => d.id === planId) || defaultPlan || null;
+  const allRooms = useMemo(() => [...new Set(drawings.map((d) => d.roomName || GENERAL_ROOM))].filter((r) => r !== GENERAL_ROOM).sort(), [drawings]);
+  const marks = setup && plan && setup.drawingId === plan.id ? setup.rooms : {};
+  const [marking, setMarking] = useState(false);
+
   if (!projectId) {
     return (
       <div className="dd-rise rounded-[18px] border border-[#E4E4DE] bg-white px-6 py-6">
@@ -73,7 +85,7 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
   const start = async () => {
     setBusy('start');
     try {
-      const m = await startMeeting(target, chosen, attendees.trim());
+      const m = await startMeeting(target, chosen, attendees.trim(), plan?.id || null);
       if (m) onResume(m);
     } catch (e: any) {
       toast({ title: 'The meeting did not start', sub: e?.message });
@@ -119,6 +131,29 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
                 <Chip tone={r.ready ? 'indigo' : 'grey'}>{r.ready ? 'Ready to present' : 'Not ready'}</Chip>
               </label>
             ))}
+          </div>
+        )}
+        {canRun && !open && ready.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-[#EEEEEA] bg-[#FBF8F1] px-3 py-3">
+            <MapPinned size={20} className="shrink-0 text-[#8F4C07]" />
+            <span className="min-w-0 flex-[1_1_240px]">
+              <b className="block">Show the layout plan alongside</b>
+              <span className="block text-[12.5px] text-[#5F636D]">
+                {plan ? `${Object.keys(marks).length} of ${allRooms.length} rooms marked on it. The room you present is outlined.` : 'The client sees where each room is while you present it.'}
+              </span>
+            </span>
+            <label className="flex flex-col text-[11px] font-extrabold uppercase tracking-[.06em] text-[#5F636D]">Layout plan
+              <select value={plan?.id || ''} onChange={(e) => setPlanId(e.target.value)}
+                className="mt-1 min-h-[40px] max-w-[300px] rounded-[10px] border border-[#DCDCD5] bg-white px-2.5 text-[13.5px] font-semibold normal-case tracking-normal text-[#17191E]">
+                {plans.map((d) => <option key={d.id} value={d.id}>{d.name} · v{d.review?.versionNo}</option>)}
+                <option value="">Don’t show a plan</option>
+              </select>
+            </label>
+            {plan && (
+              <button type="button" onClick={() => setMarking(true)} className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-[#DCDCD5] bg-white px-3.5 text-[13px] font-bold hover:border-[#A9AAA2]">
+                {Object.keys(marks).length ? 'Edit room marks' : 'Mark rooms on the plan'}
+              </button>
+            )}
           </div>
         )}
         {canRun && !open && ready.length > 0 && (
@@ -195,6 +230,10 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
           })}
       </section>
       {signing && <ClientSign orgId={orgId} projectId={projectId} meeting={signing} onClose={() => setSigning(null)} />}
+      {marking && plan && (
+        <LayoutRooms orgId={orgId} projectId={projectId} rooms={allRooms} initial={marks} onClose={() => setMarking(false)}
+          sheet={{ drawingId: plan.id, name: plan.name, versionNo: plan.review?.versionNo || 1, pdfPath: plan.review?.pdfPath || null }} />
+      )}
     </div>
   );
 }

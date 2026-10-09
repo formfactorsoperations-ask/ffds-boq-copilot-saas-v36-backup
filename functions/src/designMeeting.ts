@@ -8,8 +8,8 @@ import {
 } from "../../lib/drawingReview";
 import {
   presentableRooms, clientRoundsByRoom, includedRoundsFrom, isOverIncluded, cleanChanges, cleanFee,
-  cleanSignerName, cleanSignature, portalDesignRecord,
-  type DesignMeeting, type MeetingConfirmation, type PortalDesignMeeting, type MeetingRoom, type MeetingSheet, type RoomCharge, type ChargeStatus, type RoomDrawing,
+  cleanSignerName, cleanSignature, portalDesignRecord, cleanRoomBoxes,
+  type DesignMeeting, type MeetingConfirmation, type PortalDesignMeeting, type MeetingLayout, type LayoutSetup, type MeetingRoom, type MeetingSheet, type RoomCharge, type ChargeStatus, type RoomDrawing,
 } from "../../lib/designMeeting";
 
 /*
@@ -36,6 +36,7 @@ import {
 */
 
 const db = () => admin.firestore();
+const bucket = () => admin.storage().bucket();
 const projectPath = (orgId: string, projectId: string) => `organizations/${orgId}/projects/${projectId}`;
 type Input = Record<string, any>;
 
@@ -70,6 +71,19 @@ async function start(actor: Actor, orgId: string, projectId: string, input: Inpu
     return { room: name, sheets, outcome: null, changes: [], round: 0, charge: null };
   });
 
+  /* The layout plan shown beside each room: an approved sheet, on its approved version. */
+  let layout: MeetingLayout | null = null;
+  if (input.layoutDrawingId) {
+    const d = tracker.docs.find((x) => x.id === String(input.layoutDrawingId));
+    const s = d?.data().review as ReviewSummary | undefined;
+    if (!d || !s || s.state !== "APPROVED" || !s.versionId) throw new HttpsError("failed-precondition", "The layout plan must be an approved sheet.");
+    const setup = (await db().doc(`${base}/designLayout/current`).get()).data() as LayoutSetup | undefined;
+    layout = {
+      drawingId: d.id, name: String(d.data().name || "Layout plan"), versionId: s.versionId, versionNo: s.versionNo,
+      pdfPath: s.pdfPath, pageCount: s.pageCount ?? null, rooms: setup?.drawingId === d.id ? cleanRoomBoxes(setup.rooms) : {},
+    };
+  }
+
   const [projectSnap, termsSnap] = await Promise.all([db().doc(base).get(), db().doc(`organizations/${orgId}/settings/terms`).get()]);
   const ref = db().collection(`${base}/designMeetings`).doc();
   const now = Date.now();
@@ -77,7 +91,7 @@ async function start(actor: Actor, orgId: string, projectId: string, input: Inpu
     id: ref.id, orgId, projectId, projectName: actor.projectName, state: "OPEN", rev: 1,
     attendees: cleanText(input.attendees, 300),
     includedRounds: includedRoundsFrom(projectSnap.data(), termsSnap.data()),
-    rooms: chosen, startedAt: now, startedBy: person(actor), closedAt: null, closedBy: null,
+    rooms: chosen, startedAt: now, startedBy: person(actor), closedAt: null, closedBy: null, layout,
   };
   await ref.set(meeting);
   return { meeting };
@@ -254,6 +268,60 @@ export async function confirmMeetingByClient(p: {
   return refreshPortalRecord(orgId, p.projectId);
 }
 
+/*
+  Where each room is on the layout plan, marked once per project. An open
+  meeting on the same plan picks the boxes up straight away.
+*/
+async function layoutRooms(actor: Actor, orgId: string, projectId: string, input: Input) {
+  mustRun(actor);
+  if (!safeId(input.drawingId)) throw new HttpsError("invalid-argument", "Which layout plan?");
+  const base = projectPath(orgId, projectId);
+  const d = await db().doc(`${base}/drawingTracker/${input.drawingId}`).get();
+  if (!d.exists || !d.data()?.review?.versionId) throw new HttpsError("failed-precondition", "That drawing has no PDF to mark.");
+  const setup: LayoutSetup = { drawingId: d.id, rooms: cleanRoomBoxes(input.rooms), updatedAt: Date.now(), updatedBy: person(actor) };
+  await db().doc(`${base}/designLayout/current`).set(setup);
+  const open = await db().collection(`${base}/designMeetings`).where("state", "==", "OPEN").get();
+  for (const o of open.docs) {
+    const m = o.data() as DesignMeeting;
+    if (m.layout?.drawingId === d.id) await o.ref.update({ "layout.rooms": setup.rooms, rev: m.rev + 1 });
+  }
+  return { layout: setup };
+}
+
+/*
+  A drawing from a held meeting, for the client's portal. Only a sheet the
+  meeting showed, or its layout plan, on the version it was shown at. The
+  client's portal shows it with their name across it and offers no download;
+  each opening is recorded on the meeting (one per ten minutes), so the
+  studio can say when they looked.
+*/
+export const MAX_PORTAL_PDF_BYTES = 18 * 1024 * 1024;
+export async function portalSheetFor(p: { tenantId: unknown; projectId: string; meetingId: unknown; drawingId: unknown; uid: string }) {
+  if (!safeId(p.tenantId) || !safeId(p.projectId)) throw new HttpsError("permission-denied", "This project is not open to you.");
+  const ref = meetingRef(String(p.tenantId), p.projectId, p.meetingId);
+  const snap = await ref.get();
+  const m = snap.data() as DesignMeeting | undefined;
+  if (!m || m.state !== "CLOSED") throw new HttpsError("not-found", "That meeting is not in your design record.");
+  const id = String(p.drawingId || "");
+  const sheet = m.rooms.filter((r) => r.outcome).flatMap((r) => r.sheets).find((s) => s.drawingId === id)
+    || (m.layout?.drawingId === id ? m.layout : null);
+  if (!sheet || !sheet.pdfPath) throw new HttpsError("not-found", "That drawing is not in this meeting.");
+  const file = bucket().file(sheet.pdfPath);
+  const [meta] = await file.getMetadata();
+  if (Number(meta.size) > MAX_PORTAL_PDF_BYTES) throw new HttpsError("failed-precondition", "This drawing is too large to show here. Ask your designer for a copy.");
+  const [bytes] = await file.download();
+
+  const now = Date.now();
+  const views = Array.isArray(m.views) ? m.views : [];
+  const last = [...views].reverse().find((v) => v.uid === p.uid);
+  const next = !last || now - last.at > 10 * 60 * 1000 ? [...views, { at: now, uid: p.uid }].slice(-100) : views;
+  if (next !== views) await ref.update({ views: next });
+  return {
+    name: sheet.name, versionNo: sheet.versionNo, data: bytes.toString("base64"),
+    views: next.filter((v) => v.uid === p.uid).map((v) => v.at),
+  };
+}
+
 async function cancel(actor: Actor, orgId: string, projectId: string, input: Input) {
   mustRun(actor);
   const ref = meetingRef(orgId, projectId, input.meetingId);
@@ -307,6 +375,7 @@ export const designMeeting = onCall({ cors: true, timeoutSeconds: 60 }, async (r
       case "cancel": return await cancel(actor, orgId, projectId, input);
       case "charge": return await charge(actor, orgId, projectId, input);
       case "sign": return await sign(actor, orgId, projectId, input);
+      case "layoutRooms": return await layoutRooms(actor, orgId, projectId, input);
       default: throw new HttpsError("invalid-argument", "Unknown action.");
     }
   } catch (e: any) {

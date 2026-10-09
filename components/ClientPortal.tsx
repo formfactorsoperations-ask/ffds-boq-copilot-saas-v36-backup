@@ -3010,7 +3010,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         )}
 
                         {activeTab === 'designScope' && designScopeTab === 'record' && (
-                            <PortalDesignRecord projectId={projectData.id} record={designRecord} canConfirm={source === 'client'} onRecord={setDesignRecord} />
+                            <PortalDesignRecord projectId={projectData.id} record={designRecord} canConfirm={source === 'client'} onRecord={setDesignRecord} clientName={(context as any).clientName} />
                         )}
 
                         {activeTab === 'designScope' && designScopeTab === 'drawings' && (
