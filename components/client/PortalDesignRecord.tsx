@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { BadgeCheck, CalendarDays, Check, Clock, Loader2, PenLine, Presentation, Undo2 } from '@/lib/lucide-shim';
+import { BadgeCheck, CalendarDays, Check, Clock, Eye, Loader2, PenLine, Presentation, Undo2 } from '@/lib/lucide-shim';
 import { cleanSignerName, plural, type PortalDesignMeeting } from '../../lib/designMeeting';
 import { confirmDesignMeeting } from '../../services/clientPortalActions';
+import PortalMeetingViewer from './PortalMeetingViewer';
 
 /*
   THE CLIENT'S DESIGN RECORD.
@@ -19,12 +20,14 @@ interface Props {
   /** Only in the client's own session; the studio's preview shows the record without the button. */
   canConfirm: boolean;
   onRecord: (next: PortalDesignMeeting[]) => void;
+  /** The client's name, run across the drawings when they open them. */
+  clientName?: string;
 }
 
 const day = (t: number) => new Date(t).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 const room = (r: string) => (/^general/i.test(r) ? 'Whole home' : r);
 
-export default function PortalDesignRecord({ projectId, record, canConfirm, onRecord }: Props) {
+export default function PortalDesignRecord({ projectId, record, canConfirm, onRecord, clientName }: Props) {
   const waiting = record.filter((m) => !m.confirmation);
 
   if (!record.length) {
@@ -47,15 +50,16 @@ export default function PortalDesignRecord({ projectId, record, canConfirm, onRe
             : 'Every meeting is confirmed. This is what was agreed, room by room.'}
         </p>
       </div>
-      {record.map((m) => <MeetingCard key={m.id} m={m} projectId={projectId} canConfirm={canConfirm} onRecord={onRecord} />)}
+      {record.map((m) => <MeetingCard key={m.id} m={m} projectId={projectId} canConfirm={canConfirm} onRecord={onRecord} clientName={clientName || 'you'} />)}
     </motion.div>
   );
 }
 
-type CardProps = { m: PortalDesignMeeting; projectId: string; canConfirm: boolean; onRecord: (r: PortalDesignMeeting[]) => void };
+type CardProps = { m: PortalDesignMeeting; projectId: string; canConfirm: boolean; onRecord: (r: PortalDesignMeeting[]) => void; clientName: string };
 
-const MeetingCard: React.FC<CardProps> = ({ m, projectId, canConfirm, onRecord }) => {
+const MeetingCard: React.FC<CardProps> = ({ m, projectId, canConfirm, onRecord, clientName }) => {
   const [name, setName] = useState('');
+  const [viewing, setViewing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const agreed = m.rooms.filter((r) => r.outcome === 'agreed').length;
@@ -88,6 +92,15 @@ const MeetingCard: React.FC<CardProps> = ({ m, projectId, canConfirm, onRecord }
           ? <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-800"><BadgeCheck className="w-3.5 h-3.5" />Confirmed</span>
           : <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-800"><Clock className="w-3.5 h-3.5" />Waiting for you</span>}
       </div>
+      {canConfirm ? (
+        <button type="button" onClick={() => setViewing(true)}
+          className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-[#334486] hover:border-[#3D52A0] cursor-pointer">
+          <Eye className="w-4 h-4" />See the drawings with your changes
+        </button>
+      ) : (
+        <p className="mt-3 text-xs text-slate-500">The client sees the drawings from this meeting here, with their changes pinned. View only, with their name across every page.</p>
+      )}
+      {viewing && <PortalMeetingViewer projectId={projectId} meeting={m} clientName={clientName} onClose={() => setViewing(false)} />}
 
       <div className="mt-5 space-y-3">
         {m.rooms.map((r) => (

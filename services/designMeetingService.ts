@@ -1,7 +1,7 @@
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from './firebaseClient';
 import { readShape } from '../lib/drawingReview';
-import type { ChargeStatus, DesignMeeting, MeetingChange, RoomOutcome } from '../lib/designMeeting';
+import type { ChargeStatus, DesignMeeting, LayoutSetup, MeetingChange, PlanBox, RoomOutcome } from '../lib/designMeeting';
 import { call } from './drawingReviewService';
 
 /*
@@ -32,7 +32,20 @@ const meet = async (t: Target, data: Record<string, any>) => {
   return res?.meeting ? toMeeting(res.meeting.id, res.meeting) : null;
 };
 
-export const startMeeting = (t: Target, rooms: string[], attendees: string) => meet(t, { action: 'start', rooms, attendees });
+export const startMeeting = (t: Target, rooms: string[], attendees: string, layoutDrawingId?: string | null) =>
+  meet(t, { action: 'start', rooms, attendees, layoutDrawingId: layoutDrawingId || null });
+
+/** The project's layout plan and where each room is on it, live; null until someone marks it. */
+export function watchLayoutSetup(orgId: string, projectId: string, onChange: (s: LayoutSetup | null) => void) {
+  if (!db) return () => undefined;
+  return onSnapshot(doc(db, `organizations/${orgId}/projects/${projectId}/designLayout/current`),
+    (snap) => onChange(snap.exists() ? (snap.data() as LayoutSetup) : null), () => onChange(null));
+}
+
+/** Saves where each room is on the layout plan. */
+export async function saveLayoutRooms(t: Target, drawingId: string, rooms: Record<string, PlanBox>) {
+  return call({ ...t, action: 'layoutRooms', drawingId, rooms }, 'designMeeting');
+}
 export const decideRoom = (t: Target, meetingId: string, room: string, outcome: RoomOutcome | null, changes: MeetingChange[] = []) =>
   meet(t, { action: 'room', meetingId, room, outcome, changes });
 export const closeMeeting = (t: Target, meetingId: string, expectedRev: number, charges: Record<string, 'to_bill' | 'waived'>) =>

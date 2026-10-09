@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, BadgeCheck, Check, ChevronLeft, ChevronRight, Download, Loader2, MapPin, Minus, PenLine, Plus, Presentation, ReceiptText, RotateCw, Trash2, Undo2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, BadgeCheck, Check, ChevronLeft, ChevronRight, Download, ListChecks, Loader2, MapPin, MapPinned, Maximize2, Minimize2, Minus, PenLine, Plus, Presentation, ReceiptText, RotateCw, Trash2, Undo2 } from 'lucide-react';
 import { clientRoundsByRoom, isOverIncluded, plural, type DesignMeeting, type MeetingChange, type RoomOutcome } from '../../lib/designMeeting';
 import type { MarkShape, ReviewMark, Turn } from '../../lib/drawingReview';
 import { decideRoom, closeMeeting } from '../../services/designMeetingService';
@@ -9,6 +9,7 @@ import { CLIENT, roomLabel, useToast } from './ui';
 import { Chip, ProjectMark } from './DeskParts';
 import { RoomRecord } from './Meetings';
 import ClientSign from './ClientSign';
+import { LayoutPanel } from './LayoutPlan';
 
 /*
   MEETING MODE: one room at a time, full width, on the versions the Design
@@ -37,6 +38,11 @@ const savedTurn = (projectId: string, drawingId: string): Turn => {
   try { const v = Number(JSON.parse(localStorage.getItem(turnKey(projectId, drawingId)) || '0')); return ([0, 90, 180, 270].includes(v) ? v : 0) as Turn; } catch { return 0; }
 };
 
+/* How the layout plan sits beside the drawing, remembered on this device. */
+type PlanMode = 'inset' | 'side' | 'off';
+const PLAN_KEY = 'ffds_meeting_plan';
+const savedPlanMode = (): PlanMode => { try { const v = localStorage.getItem(PLAN_KEY); return v === 'side' || v === 'off' ? v : 'inset'; } catch { return 'inset'; } };
+
 const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, meeting, meetings, onExit }) => {
   const toast = useToast();
   const target = { orgId, projectId };
@@ -57,6 +63,29 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
   const [turns, setTurns] = useState<Record<string, Turn>>({});
   const [saving, setSaving] = useState(false);
   const [signing, setSigning] = useState(false);
+
+  /* Full-screen presentation, for sharing the screen with the client. */
+  const [full, setFull] = useState(false);
+  const fullRef = useRef<HTMLDivElement>(null);
+  const [vh, setVh] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 900));
+  const [planMode, setPlanModeRaw] = useState<PlanMode>(savedPlanMode);
+  const setPlanMode = (p: PlanMode) => { setPlanModeRaw(p); try { localStorage.setItem(PLAN_KEY, p); } catch { /* storage off */ } };
+  const [drawer, setDrawer] = useState(true);
+  useEffect(() => {
+    const onResize = () => setVh(window.innerHeight);
+    const onFs = () => { if (!document.fullscreenElement) setFull(false); };
+    window.addEventListener('resize', onResize);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => { window.removeEventListener('resize', onResize); document.removeEventListener('fullscreenchange', onFs); };
+  }, []);
+  const enterFull = () => {
+    setFull(true);
+    setTimeout(() => { fullRef.current?.requestFullscreen?.().catch(() => undefined); }, 0);
+  };
+  const exitFull = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
+    setFull(false);
+  };
 
   const used = useMemo(() => clientRoundsByRoom(meetings, m.id), [meetings, m.id]);
   const room = m.rooms[at] || m.rooms[0];
@@ -89,7 +118,14 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
       const el = document.activeElement as HTMLElement | null;
       if (el && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key.toLowerCase() === 'r' && step === 'present') rotate();
+      if (step !== 'present') return;
+      const k = e.key.toLowerCase();
+      if (k === 'r') rotate();
+      if (k === 'c' && !room.outcome) { setPinning((p) => !p); setDraft(null); }
+      if (k === 'l' && m.layout) setPlanMode(planMode === 'inset' ? 'side' : planMode === 'side' ? 'off' : 'inset');
+      if (e.key === 'ArrowRight' && room.sheets.length > 1) { setSheet((x) => (x + 1) % room.sheets.length); setPage(0); setDraft(null); }
+      if (e.key === 'ArrowLeft' && room.sheets.length > 1) { setSheet((x) => (x - 1 + room.sheets.length) % room.sheets.length); setPage(0); setDraft(null); }
+      if (e.key === 'Escape' && full && !document.fullscreenElement) exitFull();
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
@@ -149,6 +185,9 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
         <span className="h-1.5 min-w-[80px] flex-1 overflow-hidden rounded-full bg-[#EEEEEA]"><i className="block h-full rounded-full transition-[width] duration-500" style={{ width: `${(done / m.rooms.length) * 100}%`, background: look.color }} /></span>
       </div>
       {step === 'present' && <>
+        <button type="button" onClick={enterFull} className="inline-flex min-h-[38px] items-center gap-1.5 rounded-[10px] bg-[#17191E] px-3.5 text-[13px] font-bold text-white hover:bg-black" title="For sharing your screen with the client">
+          <Maximize2 size={15} />Present full screen
+        </button>
         <button type="button" onClick={() => onExit()} className="min-h-[38px] rounded-[10px] px-3 text-[13px] font-bold text-[#4F535C] hover:bg-[#EBEBE5]" title="The meeting stays open; resume it from Meetings">Leave for now</button>
         <button type="button" onClick={() => setStep('wrap')} disabled={!done} className="inline-flex min-h-[38px] items-center gap-1.5 rounded-[10px] border border-[#DCDCD5] bg-white px-3.5 text-[13px] font-bold hover:border-[#A9AAA2] disabled:opacity-45">
           {done === m.rooms.length ? 'Finish the meeting' : 'End meeting'}<ChevronRight size={15} />
@@ -219,6 +258,121 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
           )}
         </div>
         {signing && <ClientSign orgId={orgId} projectId={projectId} meeting={m} onClose={() => setSigning(false)} onSigned={(x) => setLocal(x)} />}
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------ presenting full screen */
+  if (full) {
+    const box = m.layout?.rooms?.[room.room] || null;
+    const side = !!m.layout && planMode === 'side';
+    const inset = !!m.layout && planMode === 'inset';
+    const right = drawer ? 384 : 24;
+    /* Centred over the drawing, not the drawer. */
+    const mid = { left: `calc(50% + ${(24 - right) / 2}px)` };
+    const tb = (on: boolean) => `inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[12px] px-3 text-[13px] font-bold transition ${on ? 'bg-[#17191E] text-white' : 'text-[#4F535C] hover:bg-[#F1F1EC]'}`;
+    return (
+      <div ref={fullRef} className="fixed inset-0 z-[150] overflow-hidden text-[#17191E]"
+        style={{ backgroundColor: '#EDEDE7', backgroundImage: 'radial-gradient(#D6D6CE 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
+        <div className="absolute left-6 top-3.5 z-10 flex items-center gap-2 rounded-[12px] border border-[#E4E4DE] bg-white/90 px-3 py-2 shadow-[0_4px_14px_-8px_rgba(23,25,30,.3)] backdrop-blur">
+          <b className="font-display text-[16px]">{roomLabel(room.room)}</b>
+          <span className="text-[13px] text-[#5F636D]">{sh.name} · v{sh.versionNo} · approved{room.sheets.length > 1 ? ` · ${sheet + 1} of ${room.sheets.length} sheets` : ''}</span>
+        </div>
+        <div className="absolute top-3.5 z-10 flex items-center gap-2" style={{ right }}>
+          <span className="flex items-center gap-2 rounded-[12px] border border-[#E4E4DE] bg-white/90 px-3 py-2 text-[13px] text-[#4F535C]"><span className="h-2 w-2 rounded-full bg-[#E5484D]" />Presenting · {projectName}</span>
+          <button type="button" onClick={exitFull} className="inline-flex min-h-[40px] items-center gap-1.5 rounded-[12px] border border-[#E4E4DE] bg-white px-3 text-[13px] font-bold hover:border-[#A9AAA2]"><Minimize2 size={15} />Exit · Esc</button>
+        </div>
+
+        <div className="absolute inset-0 flex gap-4" style={{ padding: `66px ${right}px 96px 24px` }}>
+          <div className="relative min-w-0 flex-1 overflow-auto">
+            {sh.pdfPath ? (
+              <React.Fragment key={`${sh.drawingId}/${sh.versionId}`}><PdfStage pdfPath={sh.pdfPath} page={page} zoom={zoom} turn={turn} marks={marks} draft={draft?.shape || null}
+                tool={pinning ? 'pin' : 'select'} canMark={pinning && !draft && !room.outcome} markColor={CLIENT} onPageCount={setPages}
+                maxWidth={4000} fitHeight={vh - 180} onShape={(shape) => setDraft({ shape, page, text: '' })} /></React.Fragment>
+            ) : <div className="grid h-60 place-items-center text-[#5F636D]">This sheet has no PDF.</div>}
+          </div>
+          {side && m.layout && (
+            <div className="w-[34%] min-w-[280px] max-w-[620px] self-start rounded-[16px] border border-[#E4E4DE] bg-white p-3 shadow-[0_20px_40px_-24px_rgba(23,25,30,.45)]">
+              <LayoutPanel sheet={m.layout} room={room.room} box={box} fitHeight={vh - 240} maxWidth={1200} />
+            </div>
+          )}
+        </div>
+
+        {inset && m.layout && (
+          <div className="absolute bottom-24 left-6 z-10 w-[320px] rounded-[16px] border border-[#E4E4DE] bg-white p-2.5 shadow-[0_20px_40px_-20px_rgba(23,25,30,.45)]">
+            <LayoutPanel sheet={m.layout} room={room.room} box={box} maxWidth={300} compact />
+          </div>
+        )}
+
+        {pinning && !draft && <div style={mid} className="absolute bottom-[92px] z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-[rgba(23,25,30,0.86)] px-4 py-2 text-[14px] font-semibold text-white">Tap the drawing where the client wants a change</div>}
+
+        {draft && (
+          <div className="dd-pop absolute bottom-[96px] z-20 w-[min(560px,calc(100vw-48px))] -translate-x-1/2 rounded-[18px] border-2 bg-white p-4 shadow-[0_24px_50px_-20px_rgba(23,25,30,.55)]" style={{ ...mid, borderColor: CLIENT }}>
+            <label htmlFor="mm-full-note" className="mb-2 block text-[12px] font-extrabold uppercase tracking-[.08em]" style={{ color: CLIENT }}>Change {mine.length + 1}: what does the client want?</label>
+            <textarea id="mm-full-note" autoFocus rows={2} value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addDraft(); } if (e.key === 'Escape') { e.stopPropagation(); setDraft(null); } }}
+              placeholder="For example: walnut shutters instead of white"
+              className="w-full resize-none rounded-[12px] border border-[#DCDCD5] px-3 py-2.5 text-[19px] font-semibold outline-none focus:border-[#C77A1A]" />
+            <div className="mt-2 flex justify-end gap-2">
+              <button type="button" onClick={() => setDraft(null)} className="min-h-[42px] rounded-[10px] px-4 text-[14px] font-bold text-[#4F535C] hover:bg-[#EBEBE5]">Cancel</button>
+              <button type="button" onClick={addDraft} disabled={!draft.text.trim()} className="min-h-[42px] rounded-[10px] px-4 text-[14px] font-bold text-white disabled:opacity-45" style={{ background: CLIENT }}>Add change · Enter</button>
+            </div>
+          </div>
+        )}
+
+        {drawer && (
+          <aside className="absolute bottom-0 right-0 top-0 z-10 flex w-[360px] flex-col gap-3 border-l border-[#E4E4DE] bg-white/95 px-5 pb-5 pt-[70px] backdrop-blur" aria-label="The client's changes">
+            <div className="text-[12px] font-extrabold uppercase tracking-[.1em] text-[#5F636D]">The client’s changes · {roomLabel(room.room)}</div>
+            <div className="flex flex-1 flex-col gap-2 overflow-auto">
+              {mine.map((c) => (
+                <div key={c.n} className="flex items-start gap-3 rounded-[14px] bg-[#F6F6F2] p-3">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full font-extrabold text-white" style={{ background: CLIENT }}>{c.n}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[17px] font-semibold leading-snug">{c.text}</div>
+                    <div className="text-[12px] text-[#5F636D]">{room.sheets.find((s) => s.drawingId === c.drawingId)?.name}</div>
+                  </div>
+                  {!room.outcome && <button type="button" onClick={() => removeChange(c.n)} aria-label={`Remove change ${c.n}`} className="grid h-8 w-8 place-items-center rounded-[10px] text-[#6B6F78] hover:bg-[#EBEBE5]"><Trash2 size={14} /></button>}
+                </div>
+              ))}
+              {!mine.length && <div className="rounded-[14px] border-[1.5px] border-dashed border-[#DCDCD5] px-3 py-4 text-center text-[14px] text-[#5F636D]">{room.outcome === 'agreed' ? 'Agreed as shown.' : 'None yet. Press Add change, or C, and tap the drawing.'}</div>}
+            </div>
+            {room.outcome ? (
+              <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { const res = await decideRoom(target, m.id, room.room, null); if (res) setLocal(res); } catch (e: any) { toast({ title: 'Not saved', sub: e?.message }); } finally { setBusy(false); } }}
+                className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-[14px] border border-[#DCDCD5] bg-white text-[14px] font-bold"><Undo2 size={16} />Reopen this room</button>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <button type="button" disabled={busy || !!draft} onClick={() => decide(mine.length ? 'changes' : 'agreed')}
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-[14px] bg-[#1F7A57] text-[15px] font-extrabold text-white hover:bg-[#196649] disabled:opacity-45">
+                  {busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={2.6} />}{mine.length ? `Done: ${plural(mine.length, 'change')}${at < m.rooms.length - 1 ? ' · next room' : ''}` : 'Client agrees as shown'}
+                </button>
+              </div>
+            )}
+            <div className="text-[12px] text-[#5F636D]">Keys: C add a change · L layout plan · ← → sheets · Esc exit</div>
+          </aside>
+        )}
+
+        <div style={{ ...mid, maxWidth: `calc(100vw - ${right + 24}px)` }} className="absolute bottom-5 z-10 flex -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-[18px] border border-[#E4E4DE] bg-white p-1.5 shadow-[0_20px_40px_-16px_rgba(23,25,30,.4)]" role="toolbar" aria-label="Presentation controls">
+          <button type="button" className={tb(false)} onClick={() => go(Math.max(0, at - 1))} disabled={at === 0} aria-label="Previous room"><ChevronLeft size={18} /></button>
+          <span className="px-1 text-[13px] font-bold whitespace-nowrap">Room {at + 1} of {m.rooms.length}</span>
+          <button type="button" className={tb(false)} onClick={() => go(Math.min(m.rooms.length - 1, at + 1))} disabled={at >= m.rooms.length - 1} aria-label="Next room"><ChevronRight size={18} /></button>
+          <span className="mx-1 h-6 w-px bg-[#E4E4DE]" />
+          <button type="button" onClick={() => { setPinning((p) => !p); setDraft(null); }} disabled={!!room.outcome}
+            className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[12px] px-3.5 text-[13px] font-bold text-white disabled:opacity-45" style={{ background: pinning ? '#8F4C07' : CLIENT }}>
+            <MapPin size={16} />{pinning ? 'Stop pinning' : 'Add change · C'}
+          </button>
+          {m.layout && <>
+            <span className="mx-1 h-6 w-px bg-[#E4E4DE]" />
+            <button type="button" className={tb(planMode === 'inset')} onClick={() => setPlanMode('inset')}><MapPinned size={15} />Plan inset</button>
+            <button type="button" className={tb(planMode === 'side')} onClick={() => setPlanMode('side')}>Side by side</button>
+            <button type="button" className={tb(planMode === 'off')} onClick={() => setPlanMode('off')}>Hide plan</button>
+          </>}
+          <span className="mx-1 h-6 w-px bg-[#E4E4DE]" />
+          <button type="button" className={tb(drawer)} onClick={() => setDrawer((d) => !d)}><ListChecks size={15} />Changes</button>
+          <button type="button" className={tb(false)} onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))} aria-label="Zoom out"><Minus size={16} /></button>
+          <span className="min-w-[40px] text-center text-[12.5px] font-bold text-[#4F535C]">{Math.round(zoom * 100)}%</span>
+          <button type="button" className={tb(false)} onClick={() => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))} aria-label="Zoom in"><Plus size={16} /></button>
+          <button type="button" className={tb(false)} onClick={rotate} aria-label="Rotate the sheet"><RotateCw size={16} /></button>
+        </div>
       </div>
     );
   }
@@ -294,6 +448,11 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
               <Chip tone={over ? 'red' : 'grey'}>{over ? `Changes start round ${nextRound} · ${m.includedRounds} included` : `Round ${used[room.room] || 0} of ${m.includedRounds} used`}</Chip>
             </div>
             <div className="text-[12.5px] text-[#5F636D]">Showing the approved versions: {room.sheets.map((s) => `${s.name} v${s.versionNo}`).join(' · ')}.</div>
+            {m.layout && planMode !== 'off' && (
+              <div className="mt-3 rounded-[12px] bg-[#F6F6F2] p-2">
+                <LayoutPanel sheet={m.layout} room={room.room} box={m.layout.rooms?.[room.room] || null} maxWidth={300} compact />
+              </div>
+            )}
           </div>
           <div className="flex flex-1 flex-col gap-2 overflow-auto p-3.5">
             <div className="text-[11px] font-extrabold uppercase tracking-[.09em] text-[#5F636D]">The client's changes</div>

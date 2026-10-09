@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { presentableRooms, clientRoundsByRoom, includedRoundsFrom, isOverIncluded, cleanChanges, cleanFee, meetingSummary, revisionCharges, portalDesignRecord, cleanSignerName, cleanSignature, confirmationLine, type DesignMeeting, type MeetingRoom } from '../../lib/designMeeting';
 import { buildPortalView } from '../../lib/portalProjection';
+import { cleanBox, cleanRoomBoxes, guessLayout } from '../../lib/designMeeting';
 import { allowed, clientPending, refusal } from '../../lib/drawingReview';
 
 const sheet = (id: string, room: string, state: string | null, extra: any = {}) => ({
@@ -127,10 +128,10 @@ describe('the client\'s design record', () => {
     const rec = portalDesignRecord([meeting('open', 'OPEN', []), { ...meeting('old', 'CLOSED', [room('Bath', 'agreed')], 5), startedBy: by }, held]);
     expect(rec.map((m) => m.id)).toEqual(['m1', 'old']);
     expect(rec[0]).toEqual({
-      id: 'm1', heldAt: 20, attendees: 'Mr Mehta', presentedBy: 'Mayuri', confirmation: null,
+      id: 'm1', heldAt: 20, attendees: 'Mr Mehta', presentedBy: 'Mayuri', confirmation: null, layout: null,
       rooms: [
-        { room: 'Kitchen', outcome: 'changes', sheets: [{ name: 'Sheet k1', versionNo: 2 }], changes: ['Lighter shutters'] },
-        { room: 'Living', outcome: 'agreed', sheets: [{ name: 'Sheet l1', versionNo: 2 }], changes: [] },
+        { room: 'Kitchen', outcome: 'changes', sheets: [{ drawingId: 'k1', name: 'Sheet k1', versionNo: 2, pageCount: 1 }], changes: ['Lighter shutters'], pins: [{ n: 1, drawingId: 'k1', page: 0, shape: { t: 'pin', x: 0.1, y: 0.1 } }], box: null },
+        { room: 'Living', outcome: 'agreed', sheets: [{ drawingId: 'l1', name: 'Sheet l1', versionNo: 2, pageCount: 1 }], changes: [], pins: [], box: null },
       ],
     });
     expect(JSON.stringify(rec)).not.toMatch(/15000|INV-1|internal|pdf/);
@@ -159,5 +160,19 @@ describe('the client\'s design record', () => {
     expect(cleanSignature('data:image/png;base64,AAA')).toBeNull();
     expect(cleanSignature(`data:image/svg+xml;base64,${'A'.repeat(300)}`)).toBeNull();
     expect(cleanSignature(`javascript:${'A'.repeat(300)}`)).toBeNull();
+  });
+});
+
+describe('the layout plan', () => {
+  it('keeps boxes that are on the page and big enough to see', () => {
+    expect(cleanBox({ page: 0, x: 0.2, y: 0.3, w: 0.9, h: 0.1 })).toEqual({ page: 0, x: 0.2, y: 0.3, w: 0.8, h: 0.1 });
+    expect(cleanBox({ x: 0.2, y: 0.3, w: 0.001, h: 0.1 })).toBeNull();
+    expect(cleanBox({ x: 'a', y: 0, w: 0.1, h: 0.1 })).toBeNull();
+    expect(cleanRoomBoxes({ Kitchen: { x: 0, y: 0, w: 0.5, h: 0.5 }, '<b>': { x: 0, y: 0, w: 0.5, h: 0.5 }, Bad: null })).toEqual({ Kitchen: { page: 0, x: 0, y: 0, w: 0.5, h: 0.5 }, b: { page: 0, x: 0, y: 0, w: 0.5, h: 0.5 } });
+  });
+  it('guesses the furniture layout first, and nothing when no sheet looks like a plan', () => {
+    const s = (name: string, roomName = 'Kitchen') => ({ name, roomName });
+    expect(guessLayout([s('Kitchen Elevation'), s('Civil Plan', 'General / Project-Wide'), s('Furniture Layout', 'General / Project-Wide')])?.name).toBe('Furniture Layout');
+    expect(guessLayout([s('Kitchen Elevation')])).toBeNull();
   });
 });

@@ -24,7 +24,7 @@ const DT = `${P}/drawingTracker`;
 
 let env: RulesTestEnvironment;
 const apps: FirebaseApp[] = [];
-type User = { uid: string; email: string; review: (data: any) => Promise<any>; meet: (data: any) => Promise<any>; act: (action: any) => Promise<any>; upload: (path: string, bytes: Uint8Array) => Promise<void> };
+type User = { uid: string; email: string; review: (data: any) => Promise<any>; meet: (data: any) => Promise<any>; act: (action: any) => Promise<any>; sheet: (data: any) => Promise<any>; upload: (path: string, bytes: Uint8Array) => Promise<void> };
 const users: Record<string, User> = {};
 
 function pdf(label: string): Uint8Array {
@@ -45,11 +45,13 @@ async function makeUser(key: string, email: string, profile: any) {
   const review = httpsCallable(fns, 'drawingReview', { timeout: 60000 });
   const meet = httpsCallable(fns, 'designMeeting', { timeout: 60000 });
   const act = httpsCallable(fns, 'submitClientAction', { timeout: 60000 });
+  const sheet = httpsCallable(fns, 'portalSheet', { timeout: 60000 });
   users[key] = {
     uid: cred.user.uid, email,
     review: async (data) => (await review({ orgId: STUDIO, projectId: 'p1', ...data })).data,
     meet: async (data) => (await meet({ orgId: STUDIO, projectId: 'p1', ...data })).data,
     act: async (action) => (await act({ projectId: 'p1', action })).data,
+    sheet: async (data) => (await sheet({ projectId: 'p1', ...data })).data,
     upload: async (path, bytes) => { await uploadBytes(ref(st, path), bytes, { contentType: 'application/pdf' }); },
   };
 }
@@ -86,6 +88,8 @@ beforeAll(async () => {
     await setDoc(doc(db, `${DT}/k2`), { id: 'k2', name: 'Kitchen Layout', roomName: 'Kitchen' });
     await setDoc(doc(db, `${DT}/k3`), { id: 'k3', name: 'Kitchen Carpentry Details', roomName: 'Kitchen' });
     await setDoc(doc(db, `${DT}/l1`), { id: 'l1', name: 'Living Room Layout', roomName: 'Living Room' });
+    await setDoc(doc(db, `${DT}/lp`), { id: 'lp', name: 'Furniture Layout', roomName: 'General / Project-Wide' });
+    await setDoc(doc(db, `${DT}/d1`), { id: 'd1', name: 'Dining Crockery Unit', roomName: 'Dining' });
   });
   await makeUser('designer', 'riya@m.com', { tenantId: STUDIO, role: 'Designer', displayName: 'Riya' });
   await makeUser('head', 'mayuri@m.com', { tenantId: STUDIO, role: 'Design Head', displayName: 'Mayuri' });
@@ -245,5 +249,45 @@ describe('a design meeting', { timeout: 60000 }, () => {
   it('another client action keeps the design record in the client\'s copy', async () => {
     await users.client.act({ type: 'sendMessage', text: 'Thanks for the meeting' });
     expect((await read('projects/p1/portalView/current')).designRecord.length).toBeGreaterThan(0);
+  });
+
+  describe('the layout plan, and the drawings in the client\'s portal', () => {
+    let held = '';
+    it('the layout plan is an approved sheet; the rooms are marked once and travel with the meeting', async () => {
+      for (const o of (await list(`${P}/designMeetings`)).filter((x) => x.state === 'OPEN')) await users.head.meet({ action: 'cancel', meetingId: o.id });
+      await approved('lp', 'lp');
+      await approved('d1', 'd1');
+      expect(await code(users.designer.meet({ action: 'layoutRooms', drawingId: 'lp', rooms: {} }))).toBe('functions/permission-denied');
+      await users.head.meet({ action: 'layoutRooms', drawingId: 'lp', rooms: { Dining: { page: 0, x: 0.6, y: 0.1, w: 0.3, h: 0.25 }, Bad: { x: 'no' } } });
+      expect((await read(`${P}/designLayout/current`)).rooms).toEqual({ Dining: { page: 0, x: 0.6, y: 0.1, w: 0.3, h: 0.25 } });
+      expect(await code(users.head.meet({ action: 'start', rooms: ['Dining'], layoutDrawingId: 'k3' }))).toBe('functions/failed-precondition');
+      const start = await users.head.meet({ action: 'start', rooms: ['Dining'], layoutDrawingId: 'lp' });
+      expect(start.meeting.layout).toMatchObject({ drawingId: 'lp', name: 'Furniture Layout', versionNo: 1, rooms: { Dining: { x: 0.6 } } });
+      held = start.meeting.id;
+      await users.head.meet({ action: 'room', meetingId: held, room: 'Dining', outcome: 'changes', changes: [{ drawingId: 'd1', page: 0, shape: { t: 'pin', x: 0.3, y: 0.4 }, text: 'Glass shutters' }] });
+      await users.head.meet({ action: 'close', meetingId: held, charges: { Dining: 'waived' } });
+      const head = env.authenticatedContext(users.head.uid).firestore();
+      await assertFails(setDoc(doc(head, `${P}/designLayout/current`), { drawingId: 'lp', rooms: {} }));
+    });
+
+    it('the client\'s record carries the pins and where the room is, still without file paths', async () => {
+      const rec = (await read('projects/p1/portalView/current')).designRecord.find((m: any) => m.id === held);
+      expect(rec.layout).toEqual({ drawingId: 'lp', name: 'Furniture Layout', versionNo: 1 });
+      expect(rec.rooms[0]).toMatchObject({ room: 'Dining', box: { x: 0.6 }, pins: [{ n: 1, drawingId: 'd1', page: 0, shape: { t: 'pin', x: 0.3, y: 0.4 } }] });
+      expect(JSON.stringify(rec)).not.toMatch(/pdfPath|drawingReview\//);
+    });
+
+    it('only the project\'s client can open a meeting\'s drawings, and each opening is recorded', async () => {
+      expect(await code(users.stranger.sheet({ meetingId: held, drawingId: 'd1' }))).toBe('functions/permission-denied');
+      expect(await code(users.client.sheet({ meetingId: held, drawingId: 'k1' }))).toBe('functions/not-found');
+      const res = await users.client.sheet({ meetingId: held, drawingId: 'd1' });
+      expect(Buffer.from(res.data, 'base64').toString('latin1').startsWith('%PDF')).toBe(true);
+      expect(res).toMatchObject({ name: 'Dining Crockery Unit', versionNo: 1 });
+      expect(res.views).toHaveLength(1);
+      const plan = await users.client.sheet({ meetingId: held, drawingId: 'lp' });
+      expect(plan.name).toBe('Furniture Layout');
+      expect(plan.views).toHaveLength(1);
+      expect((await read(`${P}/designMeetings/${held}`)).views).toEqual([expect.objectContaining({ uid: users.client.uid })]);
+    });
   });
 });

@@ -71,3 +71,13 @@ export async function confirmDesignMeeting(projectId: string, meetingId: string,
   const res: any = await call({ projectId, action: { type: 'confirmMeeting', meetingId, name } });
   return res?.data?.designRecord || null;
 }
+
+/** A drawing from a held design meeting: its bytes (view only, never a link) and when this client has opened them. */
+export async function fetchMeetingSheet(projectId: string, meetingId: string, drawingId: string): Promise<{ name: string; versionNo: number; bytes: ArrayBuffer; views: number[] }> {
+  if (!functions) throw new Error('Cannot reach the studio right now.');
+  const res: any = await httpsCallable(functions, 'portalSheet', { timeout: 60000 })({ projectId, meetingId, drawingId });
+  const bin = atob(String(res?.data?.data || ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { name: res.data.name, versionNo: res.data.versionNo, bytes: bytes.buffer, views: res.data.views || [] };
+}

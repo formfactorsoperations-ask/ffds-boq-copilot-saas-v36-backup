@@ -87,6 +87,67 @@ export interface DesignMeeting {
   closedBy: ReviewPerson | null;
   /** The client's confirmation of the record, once given. */
   confirmation?: MeetingConfirmation | null;
+  /** The approved layout plan shown alongside each room, fixed at the start. */
+  layout?: MeetingLayout | null;
+  /** When the client opened the meeting's drawings in their portal (server time). */
+  views?: { at: number; uid: string }[];
+}
+
+/* ------------------------------------------------------------ the layout plan */
+
+/** A room's area on the layout plan, as fractions of the unturned page. */
+export interface PlanBox { page: number; x: number; y: number; w: number; h: number }
+
+/** The layout plan a meeting shows beside every room, on the version approved when it started. */
+export interface MeetingLayout {
+  drawingId: string;
+  name: string;
+  versionId: string;
+  versionNo: number;
+  pdfPath: string | null;
+  pageCount: number | null;
+  /** Where each room is on it, marked once per project. */
+  rooms: Record<string, PlanBox>;
+}
+
+/** The project's marked rooms: organizations/{org}/projects/{p}/designLayout/current. */
+export interface LayoutSetup {
+  drawingId: string;
+  rooms: Record<string, PlanBox>;
+  updatedAt: number;
+  updatedBy: ReviewPerson;
+}
+
+export const MAX_LAYOUT_ROOMS = 60;
+
+const unit = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? Math.min(1, Math.max(0, Math.round(n * 10000) / 10000)) : NaN; };
+
+/** A box that can be drawn: on the page, and big enough to see. */
+export function cleanBox(raw: any): PlanBox | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const x = unit(raw.x), y = unit(raw.y), w = unit(raw.w), h = unit(raw.h);
+  const page = Math.floor(Number(raw.page) || 0);
+  if ([x, y, w, h].some(Number.isNaN) || w < 0.005 || h < 0.005 || page < 0 || page > 500) return null;
+  return { page, x, y, w: Math.min(w, 1 - x), h: Math.min(h, 1 - y) };
+}
+
+/** Rooms and their boxes, as the studio marked them; anything unreadable is left out. */
+export function cleanRoomBoxes(raw: unknown): Record<string, PlanBox> {
+  const out: Record<string, PlanBox> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [name, box] of Object.entries(raw as Record<string, unknown>)) {
+    const room = cleanText(name, 80);
+    const b = cleanBox(box);
+    if (room && b && Object.keys(out).length < MAX_LAYOUT_ROOMS) out[room] = b;
+  }
+  return out;
+}
+
+/** The sheet most likely to be the layout plan, for the picker's first choice. */
+export function guessLayout<T extends { name: string; roomName?: string | null }>(sheets: T[]): T | null {
+  const score = (d: T) => (/furniture\s*layout|layout\s*plan/i.test(d.name) ? 3 : /layout/i.test(d.name) ? 2 : /\bplan\b/i.test(d.name) && (!d.roomName || /general|project/i.test(d.roomName)) ? 1 : 0);
+  const best = [...sheets].sort((a, b) => score(b) - score(a))[0];
+  return best && score(best) > 0 ? best : null;
 }
 
 /*
@@ -256,9 +317,14 @@ export interface PortalDesignMeeting {
   rooms: {
     room: string;
     outcome: RoomOutcome;
-    sheets: { name: string; versionNo: number }[];
+    sheets: { drawingId: string; name: string; versionNo: number; pageCount: number | null }[];
     changes: string[];
+    /** The client's changes where they asked for them, to pin on the drawing. */
+    pins: { n: number; drawingId: string; page: number; shape: MarkShape }[];
+    /** Where the room is on the layout plan, when it was marked. */
+    box: PlanBox | null;
   }[];
+  layout: { drawingId: string; name: string; versionNo: number } | null;
   confirmation: { via: 'portal' | 'studio'; name: string; at: number } | null;
 }
 
@@ -278,9 +344,12 @@ export function portalDesignRecord(meetings: DesignMeeting[]): PortalDesignMeeti
       rooms: m.rooms.filter((r) => r.outcome).map((r) => ({
         room: r.room,
         outcome: r.outcome as RoomOutcome,
-        sheets: r.sheets.map((s) => ({ name: s.name, versionNo: s.versionNo })),
+        sheets: r.sheets.map((s) => ({ drawingId: s.drawingId, name: s.name, versionNo: s.versionNo, pageCount: s.pageCount ?? null })),
         changes: r.outcome === 'changes' ? r.changes.map((c) => c.text) : [],
+        pins: r.outcome === 'changes' ? r.changes.map((c) => ({ n: c.n, drawingId: c.drawingId, page: c.page, shape: c.shape })) : [],
+        box: m.layout?.rooms?.[r.room] || null,
       })),
+      layout: m.layout ? { drawingId: m.layout.drawingId, name: m.layout.name, versionNo: m.layout.versionNo } : null,
       confirmation: m.confirmation?.at ? { via: m.confirmation.via, name: m.confirmation.name, at: m.confirmation.at } : null,
     }));
 }

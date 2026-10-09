@@ -30,7 +30,7 @@ export { onProjectWrittenDesignView, onDesignerAssignmentChange, rebuildDesignVi
 export { drawingReview } from "./drawingReview";
 /* Design meetings: presenting approved rooms to the client; see designMeeting.ts. */
 export { designMeeting } from "./designMeeting";
-import { confirmMeetingByClient } from "./designMeeting";
+import { confirmMeetingByClient, portalSheetFor } from "./designMeeting";
 import * as pako from "pako";
 import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";
 import { recordDocumentView, signIssue } from "../../services/documentIssueEngine";
@@ -852,6 +852,16 @@ function patchFor(action: any, actor: string, meta: ActorMeta = {}): (prev: any)
     }
 }
 
+
+/*
+  A drawing shown at a design meeting, for the project's client to view in
+  their portal. The bytes go only to that client's login, never as a link.
+*/
+export const portalSheet = onCall({ cors: true, memory: "512MiB", timeoutSeconds: 60 }, async (request) => {
+    const projectId: string = request.data?.projectId;
+    const { uid, profile } = await assertPortalClient(request, projectId);
+    return portalSheetFor({ tenantId: profile.tenantId, projectId, meetingId: request.data?.meetingId, drawingId: request.data?.drawingId, uid });
+});
 
 export const submitClientAction = onCall({ cors: true }, async (request) => {
     const projectId: string = request.data?.projectId;
