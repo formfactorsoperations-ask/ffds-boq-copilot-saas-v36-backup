@@ -105,7 +105,7 @@ export default function ClientSign({ orgId, projectId, meeting, onClose, onSigne
     setBusy(true);
     try {
       const m = await signMeeting({ orgId, projectId }, meeting.id, name.trim(), pad.image());
-      toast({ ok: true, title: `Signed by ${name.trim()}`, sub: 'The record is confirmed. The client sees it in their portal too.' });
+      toast({ ok: true, celebrate: true, title: `Signed by ${name.trim()}`, sub: 'The record is confirmed. The client sees it in their portal too.' });
       if (m) onSigned?.(m);
       onClose();
     } catch (e: any) {

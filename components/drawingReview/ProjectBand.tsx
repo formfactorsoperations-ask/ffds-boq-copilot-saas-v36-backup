@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Check, ChevronDown, Circle, Eye, History, Layers, LayoutGrid, Search, Star, Undo2 } from 'lucide-react';
 import { switcherGroups, type Stats } from '../../lib/designDesk';
 import { ProjectMark, TONE, type Tone } from './DeskParts';
+import { Bar, CountUp } from './motion';
 
 /*
   WHICH PROJECT AM I IN.
@@ -85,16 +86,18 @@ export default function ProjectBand({ current, projects, allStats, allNeed, revi
   ] : [];
 
   return (
-    <div ref={box} className="relative z-20 mb-[18px] rounded-[18px] border bg-white" style={{ borderColor: isAll || !p ? '#E4E4DE' : `${color}40` }}>
-      <div className="h-[5px] rounded-t-[17px]" style={{ background: color }} />
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3.5 px-5 py-4" style={{ background: soft, borderRadius: jump.length ? 0 : '0 0 17px 17px' }}>
+    <div ref={box} className="relative z-20 mb-[18px] rounded-[18px] border bg-white transition-colors duration-500" style={{ borderColor: isAll || !p ? '#E4E4DE' : `${color}40` }}>
+      <div className="h-[5px] rounded-t-[17px] transition-colors duration-500" style={{ background: color }} />
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3.5 px-5 py-4 transition-colors duration-500" style={{ background: soft, borderRadius: jump.length ? 0 : '0 0 17px 17px' }}>
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog"
           aria-label={`Switch project. Now ${isAll ? 'all projects' : p?.name || ''}`}
           className="-my-1.5 -ml-1.5 flex min-w-0 flex-[1_1_300px] items-center gap-3.5 rounded-2xl py-1.5 pl-1.5 pr-3 text-left transition hover:bg-black/5">
-          {isAll || !p
-            ? <span className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[14px] text-white" style={{ background: color }} aria-hidden><LayoutGrid size={24} /></span>
-            : <ProjectMark code={p.code} color={p.color} size={52} />}
-          <span className="block min-w-0">
+          <span key={current} className="dd-spin-in shrink-0">
+            {isAll || !p
+              ? <span className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[14px] text-white" style={{ background: color }} aria-hidden><LayoutGrid size={24} /></span>
+              : <ProjectMark code={p.code} color={p.color} size={52} />}
+          </span>
+          <span key={`t-${current}`} className="dd-swap block min-w-0">
             <span className="block text-[11px] font-extrabold uppercase tracking-[.09em]" style={{ color }}>{isAll ? 'Looking across' : 'Working in'}</span>
             <span className="flex min-w-0 items-center gap-2.5">
               <span className="truncate font-display text-[26px] font-semibold leading-tight text-[#17191E]">{isAll ? 'All projects' : p?.name || 'Choose a project'}</span>
@@ -112,11 +115,9 @@ export default function ProjectBand({ current, projects, allStats, allNeed, revi
           <div className="min-w-[200px] flex-[0_1_260px]">
             <div className="mb-1.5 flex justify-between text-[12.5px] font-bold text-[#17191E]">
               <span>{stats.approved} of {stats.total} {isAll && partial ? 'uploaded ' : ''}sheets approved</span>
-              <span className="text-[#5F636D]">{pct(stats)}%</span>
+              <span className="text-[#5F636D]"><CountUp value={pct(stats)} />%</span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full" style={{ background: isAll ? '#EEEEEA' : '#fff' }}>
-              <i className="block h-full rounded-full transition-[width] duration-500" style={{ width: `${pct(stats)}%`, background: color }} />
-            </div>
+            <Bar pct={pct(stats)} color={color} track={isAll ? '#EEEEEA' : '#fff'} shine />
           </div>
         )}
 
@@ -124,7 +125,7 @@ export default function ProjectBand({ current, projects, allStats, allNeed, revi
           {statChips.map(([label, n, tone, Icon]) => (
             <span key={label} className="inline-flex min-h-[36px] items-center gap-2 rounded-xl bg-white py-0 pl-1.5 pr-3 text-[12.5px] font-bold shadow-[0_0_0_1px_rgba(23,25,30,0.06)]" title={label}>
               <span className="grid h-[26px] w-[26px] place-items-center rounded-lg" style={{ background: TONE[tone].bg, color: TONE[tone].ink }}><Icon size={14} strokeWidth={2.2} /></span>
-              <span className="text-[14px] text-[#17191E]">{n}</span><span className="font-semibold text-[#5F636D]">{label}</span>
+              <CountUp value={n} className="text-[14px] tabular-nums text-[#17191E]" /><span className="font-semibold text-[#5F636D]">{label}</span>
             </span>
           ))}
         </div>
@@ -133,9 +134,9 @@ export default function ProjectBand({ current, projects, allStats, allNeed, revi
       {jump.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-b-[17px] border-t border-[#EEEEEA] bg-white px-5 pb-3 pt-2.5">
           <span className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#5F636D]"><History size={14} />Jump back to</span>
-          {jump.map((x) => (
+          {jump.map((x, i) => (
             <button key={x.id} type="button" onClick={() => pick(x.id)} title={`${x.client ? `${x.client} · ` : ''}${x.need ? `${x.need} ${waitWord}` : 'nothing waiting'}`}
-              className="inline-flex min-h-[36px] max-w-[240px] items-center gap-2 rounded-full border border-[#DCDCD5] bg-white py-0 pl-1 pr-3 text-[12.5px] font-bold text-[#17191E] transition hover:border-[#A9AAA2]">
+              className="dd-rise inline-flex min-h-[36px] max-w-[240px] items-center gap-2 rounded-full border border-[#DCDCD5] bg-white py-0 pl-1 pr-3 text-[12.5px] font-bold text-[#17191E] transition hover:border-[#A9AAA2] hover:shadow-[0_6px_14px_-8px_rgba(23,25,30,0.4)]" style={{ animationDelay: `${120 + i * 60}ms` }}>
               <ProjectMark code={x.code} color={x.color} size={26} round />
               <span className="truncate">{x.name}</span>
               {x.need > 0 && <span className="rounded-full bg-[#ECEDFB] px-1.5 text-[11px] text-[#3A3FB8]">{x.need}</span>}
@@ -162,15 +163,15 @@ export default function ProjectBand({ current, projects, allStats, allNeed, revi
             </label>
           </div>
           <div className="max-h-[360px] overflow-y-auto px-2 pb-2">
-            {groups.map((g) => (
+            {groups.map((g, gi) => (
               <div key={g.title} className="pt-1.5">
                 <div className="flex items-center gap-1.5 px-2 pb-1 pt-1.5 text-[11px] font-extrabold uppercase tracking-[.09em] text-[#5F636D]"><g.icon size={13} strokeWidth={2.4} />{g.title}</div>
-                {g.ids.map((id) => {
+                {g.ids.map((id, ii) => {
                   const x = byId.get(id)!;
                   const on = id === current;
                   const pinnedNow = pinned.includes(id);
                   return (
-                    <div key={id} className={`flex items-center gap-0.5 rounded-xl transition ${on ? 'bg-[#F1F1EC]' : 'hover:bg-[#F6F6F2]'}`}>
+                    <div key={id} className={`dd-rise flex items-center gap-0.5 rounded-xl transition ${on ? 'bg-[#F1F1EC]' : 'hover:bg-[#F6F6F2]'}`} style={{ animationDelay: `${Math.min(gi * 3 + ii, 12) * 25}ms` }}>
                       <button type="button" onClick={() => pick(id)} aria-current={on} className="flex min-h-[52px] min-w-0 flex-1 items-center gap-3 rounded-xl p-2 text-left">
                         <ProjectMark code={x.code} color={x.color} size={36} />
                         <span className="min-w-0 flex-1">
@@ -178,7 +179,7 @@ export default function ProjectBand({ current, projects, allStats, allNeed, revi
                           {x.client && <span className="block truncate text-[12px] text-[#5F636D]">{x.client}</span>}
                         </span>
                         <span className="w-14 shrink-0" title={`${x.stats.approved} of ${x.stats.total} approved`}>
-                          <span className="block h-[5px] overflow-hidden rounded-full bg-[#EEEEEA]"><i className="block h-full" style={{ width: `${pct(x.stats)}%`, background: x.color }} /></span>
+                          <Bar pct={pct(x.stats)} color={x.color} height={5} />
                           <span className="mt-0.5 block text-right text-[11px] font-bold text-[#5F636D]">{x.stats.approved}/{x.stats.total}</span>
                         </span>
                         <span className="flex w-9 shrink-0 justify-end">{x.need > 0 && <span className="rounded-full bg-[#ECEDFB] px-2 py-0.5 text-[12px] font-bold text-[#3A3FB8]" title={waitWord}>{x.need}</span>}</span>

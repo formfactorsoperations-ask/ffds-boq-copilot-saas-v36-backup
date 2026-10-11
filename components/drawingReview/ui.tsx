@@ -3,6 +3,7 @@ import { Check } from 'lucide-react';
 import { fileUrl } from '../../services/drawingReviewService';
 import type { ReviewSummary } from '../../lib/drawingReview';
 import { dueOf, roundWarn, INCLUDED_ROUNDS } from '../../lib/designDesk';
+import { Burst } from './motion';
 
 /*
   Shared pieces of the Design Desk screens: the mark colours, dates and
@@ -75,7 +76,8 @@ export function Thumb({ path, className = '' }: { path?: string | null; classNam
 
 /* ------------------------------------------------------------- toasts */
 
-type Toast = { id: number; title: string; sub?: string; ok?: boolean };
+/** `celebrate` adds a burst of confetti, for a sign-off. */
+type Toast = { id: number; title: string; sub?: string; ok?: boolean; celebrate?: boolean };
 const ToastCtx = createContext<(t: Omit<Toast, 'id'>) => void>(() => undefined);
 export const useToast = () => useContext(ToastCtx);
 
@@ -91,8 +93,9 @@ export function ToastHost({ children }: { children: React.ReactNode }) {
       {children}
       <div className="pointer-events-none fixed bottom-5 left-1/2 z-[120] flex -translate-x-1/2 flex-col items-center gap-2" style={{ width: 'min(440px, calc(100vw - 32px))' }} aria-live="polite">
         {list.map((t) => (
-          <div key={t.id} className="dr-pop flex w-full items-start gap-2.5 rounded-2xl bg-[#14211E] px-4 py-3 text-[13px] font-bold text-white" style={{ boxShadow: '0 20px 40px -16px rgba(0,0,0,.5)' }}>
-            {t.ok && <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#3FBF94]"><Check size={12} /></span>}
+          <div key={t.id} className="dr-pop relative flex w-full items-start gap-2.5 rounded-2xl bg-[#14211E] px-4 py-3 text-[13px] font-bold text-white" style={{ boxShadow: '0 20px 40px -16px rgba(0,0,0,.5)' }}>
+            {t.celebrate && <Burst x={26} y={22} count={22} spread={90} />}
+            {t.ok && <span className="dr-tick grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#3FBF94]"><Check size={12} /></span>}
             <div>{t.title}{t.sub && <small className="mt-0.5 block font-medium opacity-75">{t.sub}</small>}</div>
           </div>
         ))}
@@ -110,9 +113,11 @@ export const ReviewStyles = () => (
     .dr-pop { animation: drPop .35s cubic-bezier(.2,.9,.25,1.15) both }
     .dr-slide { animation: drSlide .35s cubic-bezier(.2,.7,.2,1) both }
     .dr-breathe { animation: drBreathe 1.6s ease-in-out infinite }
+    @keyframes drTick { 0% { transform: scale(0) rotate(-45deg) } 60% { transform: scale(1.25) } 100% { transform: none } }
+    .dr-tick { animation: drTick .5s cubic-bezier(.2,.9,.25,1.2) .1s both }
     .dr-studio { display: grid; grid-template-columns: minmax(0, 1fr) }
     @media (min-width: 1024px) { .dr-studio { grid-template-columns: minmax(0, 1fr) 360px } }
     .dr-note { display: grid; grid-template-columns: 24px minmax(0, 1fr) }
-    @media (prefers-reduced-motion: reduce) { .dr-pop, .dr-slide, .dr-breathe { animation: none } }
+    @media (prefers-reduced-motion: reduce) { .dr-pop, .dr-slide, .dr-breathe, .dr-tick { animation: none } }
   `}</style>
 );

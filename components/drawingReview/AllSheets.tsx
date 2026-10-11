@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { LayoutGroup, motion } from 'framer-motion';
 import { Check, Circle, Eye, LayoutGrid, Presentation, Search, Send, Undo2, X, type LucideIcon } from 'lucide-react';
 import { stateOf, guessAudience } from '../../lib/drawingReview';
 import { matchesQuery, readyRooms, roomOf, GENERAL_ROOM, type DeskState } from '../../lib/designDesk';
@@ -7,6 +8,7 @@ import { roomLabel, firstName } from './ui';
 import { ProjectMark, SheetTile, TONE } from './DeskParts';
 import type { ProjectInfo } from './ProjectBand';
 import type { DragKit } from './ForYou';
+import { Bar, Tilt } from './motion';
 
 /*
   ALL SHEETS: where everything stands. Across every project it starts as one
@@ -63,7 +65,12 @@ export default function AllSheets(props: Props) {
     return [...m.entries()].map(([id, list]) => ({ id, list })).sort((a, b) => projectOf(a.id).name.localeCompare(projectOf(b.id).name));
   }, [shown, isAll]);
 
-  const chip = (on: boolean) => (on ? 'border-[#17191E] bg-[#17191E] text-white' : 'border-[#DCDCD5] bg-white text-[#17191E] hover:border-[#A9AAA2]');
+  /* The dark pill slides to the chosen chip instead of jumping. */
+  const chip = (on: boolean) => `relative ${on ? 'border-[#17191E] text-white' : 'border-[#DCDCD5] bg-white text-[#17191E] hover:border-[#A9AAA2]'}`;
+  const pill = (on: boolean, id: string) => on && <motion.span layoutId={id} className="absolute -inset-px rounded-full bg-[#17191E]" transition={{ type: 'spring', stiffness: 520, damping: 40 }} />;
+  const inner = 'relative z-[1] inline-flex items-center gap-1.5';
+  /* Tiles glide to their new places when a filter or search changes the grid; past a few hundred, they just appear. */
+  const glide = shown.length <= 150;
 
   return (
     <div className="dd-rise">
@@ -75,33 +82,37 @@ export default function AllSheets(props: Props) {
             className="min-w-0 flex-1 bg-transparent text-[14px] text-[#17191E] outline-none placeholder:text-[#8A8E97]" />
           {q && <button type="button" onClick={() => setQ('')} aria-label="Clear search" className="grid h-7 w-7 place-items-center rounded-lg hover:bg-[#EBEBE5]"><X size={13} strokeWidth={2.6} /></button>}
         </label>
+        <LayoutGroup id="dd-filters">
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
           {filters.map(([k, label, Icon]) => {
             const n = k === 'all' ? base.length : base.filter((d) => stateOf(d.review) === k).length;
             return (
               <button key={k} type="button" onClick={() => setFilter(k)} aria-pressed={filter === k}
-                className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-full border px-3 text-[13px] font-bold transition ${chip(filter === k)}`}>
-                <Icon size={14} strokeWidth={2.2} />{label}<span className="font-semibold opacity-70">{n}</span>
+                className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-full border px-3 text-[13px] font-bold transition-colors ${chip(filter === k)}`}>
+                {pill(filter === k, 'dd-filter-pill')}<span className={inner}><Icon size={14} strokeWidth={2.2} />{label}<span className="font-semibold opacity-70">{n}</span></span>
               </button>
             );
           })}
         </div>
+        </LayoutGroup>
       </div>
 
       {!isAll && rooms.length > 1 && (
+        <LayoutGroup id="dd-rooms">
         <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Rooms">
-          <button type="button" onClick={() => setRoom(null)} aria-pressed={!room} className={`inline-flex min-h-[38px] items-center gap-2 rounded-full border px-3.5 text-[13px] font-bold transition ${chip(!room)}`}>
-            All rooms<span className="text-[12px] font-semibold opacity-80">{scope.length}</span>
+          <button type="button" onClick={() => setRoom(null)} aria-pressed={!room} className={`inline-flex min-h-[38px] items-center gap-2 rounded-full border px-3.5 text-[13px] font-bold transition-colors ${chip(!room)}`}>
+            {pill(!room, 'dd-room-pill')}<span className={`${inner} gap-2`}>All rooms<span className="text-[12px] font-semibold opacity-80">{scope.length}</span></span>
           </button>
           {rooms.map((r) => (
             <button key={r.name} type="button" onClick={() => setRoom(room === r.name ? null : r.name)} aria-pressed={room === r.name}
               title={r.present ? 'Every client sheet in this room is approved: ready to present' : undefined}
-              className={`inline-flex min-h-[38px] items-center gap-2 rounded-full border px-3.5 text-[13px] font-bold transition ${chip(room === r.name)}`}>
-              {roomLabel(r.name)}<span className="text-[12px] font-semibold opacity-80">{r.approved}/{r.total}</span>
-              {r.present && <span className="inline-flex h-5 items-center gap-1 rounded-full bg-[#1F7A57] px-1.5 text-[10.5px] text-white"><Presentation size={11} />Ready to present</span>}
+              className={`inline-flex min-h-[38px] items-center gap-2 rounded-full border px-3.5 text-[13px] font-bold transition-colors ${chip(room === r.name)}`}>
+              {pill(room === r.name, 'dd-room-pill')}<span className={`${inner} gap-2`}>{roomLabel(r.name)}<span className="text-[12px] font-semibold opacity-80">{r.approved}/{r.total}</span>
+              {r.present && <span className="inline-flex h-5 items-center gap-1 rounded-full bg-[#1F7A57] px-1.5 text-[10.5px] text-white"><Presentation size={11} />Ready to present</span>}</span>
             </button>
           ))}
         </div>
+        </LayoutGroup>
       )}
 
       {showTiles ? (
@@ -110,9 +121,10 @@ export default function AllSheets(props: Props) {
             const pctN = p.stats.total ? Math.round((p.stats.approved / p.stats.total) * 100) : 0;
             const bits: [number, string, keyof typeof TONE, LucideIcon][] = [[p.stats.review, 'in review', 'indigo', Eye], [p.stats.changes, 'returned', 'amber', Undo2], [p.stats.draft, 'ready to send', 'grey', Send]];
             return (
-              <button key={p.id} type="button" onClick={() => onPickProject(p.id)} aria-label={`Open ${p.name}`}
-                className="dd-rise flex flex-col overflow-hidden rounded-[18px] border border-[#E4E4DE] bg-white text-left transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-18px_rgba(23,25,30,0.45)]"
-                style={{ animationDelay: `${i * 40}ms` }}>
+              <div key={p.id} className="dd-rise" style={{ animationDelay: `${i * 40}ms` }}>
+              <Tilt className="h-full" glow={`${p.color}1F`}>
+              <button type="button" onClick={() => onPickProject(p.id)} aria-label={`Open ${p.name}`}
+                className="flex h-full w-full flex-col overflow-hidden rounded-[18px] border border-[#E4E4DE] bg-white text-left">
                 <span className="block h-[5px] w-full" style={{ background: p.color }} />
                 <span className="flex w-full items-center gap-3 px-4 pt-3.5">
                   <ProjectMark code={p.code} color={p.color} size={40} />
@@ -124,7 +136,7 @@ export default function AllSheets(props: Props) {
                 </span>
                 <span className="block w-full px-4 pt-3">
                   <span className="mb-1 flex justify-between text-[12px] font-bold text-[#17191E]"><span>{p.stats.approved} of {p.stats.total} {partial ? 'uploaded ' : ''}approved</span><span className="text-[#5F636D]">{pctN}%</span></span>
-                  <span className="block h-1.5 overflow-hidden rounded-full bg-[#EEEEEA]"><i className="block h-full rounded-full" style={{ width: `${pctN}%`, background: p.color }} /></span>
+                  <Bar pct={pctN} color={p.color} />
                 </span>
                 <span className="flex flex-wrap gap-1.5 px-4 pb-4 pt-3">
                   {bits.filter(([n]) => n > 0).map(([n, label, tone, Icon]) => (
@@ -133,6 +145,8 @@ export default function AllSheets(props: Props) {
                   {!bits.some(([n]) => n > 0) && <span className="text-[12px] text-[#8A8E97]">{p.stats.total ? 'Nothing open' : 'No sheets uploaded yet'}</span>}
                 </span>
               </button>
+              </Tilt>
+              </div>
             );
           })}
           {!tiles.length && <div className="col-span-full rounded-[18px] border border-dashed border-[#D5D5CE] px-4 py-14 text-center text-[13px] text-[#5F636D]">No projects yet. When the studio assigns you to a project, it appears here.</div>}
@@ -154,7 +168,7 @@ export default function AllSheets(props: Props) {
                 const can = drag.can(d);
                 const r = d.review;
                 return (
-                  <SheetTile key={`${d.projectId}/${d.id}`} d={d} delay={Math.min(i, 10) * 35}
+                  <SheetTile key={`${d.projectId}/${d.id}`} d={d} delay={Math.min(i, 10) * 35} glide={glide}
                     meta={[roomLabel(d.roomName), r?.versionNo ? `v${r.versionNo}` : null, r?.designer ? firstName(r.designer.name) : null].filter(Boolean).join(' · ')}
                     studio={(r?.audience || guessAudience(d.name)) === 'studio'}
                     draggable={can} dragging={drag.dragging === `${d.projectId}/${d.id}`} onDragStart={can ? drag.start(d) : undefined} onDragEnd={drag.end}
