@@ -88,7 +88,7 @@ service cloud.firestore {
     function teamMayRead(kind, sub) {
       return (kind == 'ops' && sub in ['designGate', 'decisions', 'timelinePhases', 'tasks', 'deliverables', 'journeySteps',
                                        'stepProgress', 'moms', 'siteVisits', 'communicationLog', 'drawingTracker', 'drawingVersions',
-                                       'followUps', 'escalations'])
+                                       'followUps', 'escalations', 'checklists', 'visitRequests'])
         || (kind == 'site' && sub in ['decisions', 'timelinePhases', 'tasks', 'siteVisits', 'drawingTracker', 'drawingVersions']);
     }
 
@@ -716,6 +716,69 @@ service cloud.firestore {
             && resource.data.status == 'decided' && request.resource.data.status == 'closed'
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closedAt'])
           );
+        allow delete: if false;
+      }
+
+      /*
+        CLIENT CARE (lib/clientCare.ts).
+
+        Checklists -- onboarding, handover, and the documents the studio needs
+        from the client -- are worked by the same people as the follow-up
+        log, each change in their own name. Only a lead marks one complete,
+        or reopens it; once complete, only a lead changes it.
+      */
+      match /checklists/{kind} {
+        allow read: if ownsParentProject();
+        allow create, update: if mayWriteOps()
+          && kind in ['onboarding', 'handover', 'documents']
+          && request.resource.data.keys().hasOnly(['tenantId', 'projectId', 'projectName', 'kind', 'items',
+               'completedAt', 'completedBy', 'completedByName', 'updatedAt', 'updatedBy'])
+          && request.resource.data.tenantId == parentTenant()
+          && request.resource.data.projectId == projectId
+          && request.resource.data.kind == kind
+          && request.resource.data.items is list && request.resource.data.items.size() <= 60
+          && request.resource.data.updatedBy == myEmail()
+          && (resource == null
+                ? (request.resource.data.get('completedAt', null) == null || isStudioLead())
+                : ((resource.data.get('completedAt', null) == null || isStudioLead())
+                   && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['completedAt', 'completedBy', 'completedByName'])
+                       || (isStudioLead() && request.resource.data.get('completedBy', null) in [myEmail(), null]))));
+        allow delete: if false;
+      }
+
+      /*
+        Meeting and site visit requests: requested, confirmed, rescheduled
+        (a new time put to the client), then done or cancelled. Each change
+        adds one line to the history, which is never rewritten.
+      */
+      function visitMove(a, b) {
+        return (a == 'requested' && b in ['requested', 'confirmed', 'cancelled'])
+          || (a == 'confirmed' && b in ['rescheduled', 'done', 'cancelled'])
+          || (a == 'rescheduled' && b in ['rescheduled', 'confirmed', 'cancelled']);
+      }
+      match /visitRequests/{vid} {
+        allow read: if ownsParentProject();
+        allow create: if mayWriteOps()
+          && request.resource.data.keys().hasOnly(['tenantId', 'projectId', 'projectName', 'kind', 'mode', 'purpose', 'requestedBy',
+               'status', 'slot', 'reschedules', 'history', 'createdAt', 'createdBy', 'createdByName', 'updatedAt', 'updatedBy'])
+          && request.resource.data.tenantId == parentTenant()
+          && request.resource.data.projectId == projectId
+          && request.resource.data.createdBy == myEmail()
+          && request.resource.data.updatedBy == myEmail()
+          && request.resource.data.kind in ['meeting', 'site_visit', 'measurement']
+          && request.resource.data.mode in ['in_person', 'video', 'call']
+          && request.resource.data.requestedBy in ['client', 'studio']
+          && request.resource.data.status in ['requested', 'confirmed']
+          && request.resource.data.reschedules == 0
+          && request.resource.data.purpose is string && request.resource.data.purpose.size() <= 300
+          && request.resource.data.history is list && request.resource.data.history.size() == 1;
+        allow update: if mayWriteOps()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'slot', 'reschedules', 'history', 'updatedAt', 'updatedBy'])
+          && request.resource.data.updatedBy == myEmail()
+          && visitMove(resource.data.status, request.resource.data.status)
+          && request.resource.data.reschedules >= resource.data.reschedules
+          && request.resource.data.history is list
+          && request.resource.data.history.size() == resource.data.history.size() + 1;
         allow delete: if false;
       }
 

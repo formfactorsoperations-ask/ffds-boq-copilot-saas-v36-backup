@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Inbox, Clock, IndianRupee, ListChecks, Flag, FileText, Plus, RefreshCw, Check, Phone, MessageCircle, Mail, Users, Mic, Search, CalendarClock,
+  Activity, CalendarCheck, ClipboardCheck, FolderOpen, Star,
 } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { hasRole, primaryRole } from '../../lib/roles';
@@ -17,6 +18,8 @@ import { MomReviewModal } from '../ops/MomReviewModal';
 import { MomCaptureModal } from '../ops/MomCaptureModal';
 import { handoverSlip } from '../../lib/opsAssist';
 import { CapturePanel, AskProjectPanel, MeetingPrepPanel } from './OpsAssist';
+import { clientPulse, askPrompts, careQueue, type AskKind, type Checklist, type ChecklistKind, type VisitRequest, type VisitStatus } from '../../lib/clientCare';
+import { PulseList, AskSheet, ChecklistsView, VisitsView, VisitSheet, askReasonOf, type PulseRow } from './ClientCare';
 
 /*
   THE OPS DESK (lib/opsDesk.ts).
@@ -26,10 +29,13 @@ import { CapturePanel, AskProjectPanel, MeetingPrepPanel } from './OpsAssist';
   and the decisions coming back from escalations. For the studio's leads it
   is where escalations are decided and minutes approved. The smart assist
   (OpsAssist.tsx) captures chats and calls, answers questions about a
-  project and prepares client meetings.
+  project and prepares client meetings. Client care (ClientCare.tsx) reads
+  each client's pulse, works the checklists and documents, books meetings
+  and visits, and asks for reviews and referrals.
 */
 
-type Section = 'today' | 'waiting' | 'payments' | 'log' | 'escalations' | 'minutes' | 'ask' | 'prep';
+interface ProjectCare { checklists: Partial<Record<ChecklistKind, Checklist>>; visits: VisitRequest[] }
+type Section = 'today' | 'pulse' | 'waiting' | 'payments' | 'visits' | 'checklists' | 'log' | 'escalations' | 'minutes' | 'ask' | 'prep';
 const LEADS = ['Super Admin', 'Owner', 'Admin', 'Ops Director'];
 /* Projects with nothing left to chase. */
 const QUIET = new Set(['lost', 'lead', 'draft']);
@@ -46,6 +52,10 @@ const KIND: Record<QueueItem['kind'], { icon: React.ComponentType<any>; label: s
   mom_review: { icon: FileText, label: 'Minutes' },
   escalation_open: { icon: Flag, label: 'Escalation' },
   escalation_decided: { icon: Flag, label: 'Decision back' },
+  visit: { icon: CalendarCheck, label: 'Meeting or visit' },
+  documents: { icon: FolderOpen, label: 'Documents' },
+  checklist: { icon: ClipboardCheck, label: 'Checklist' },
+  ask: { icon: Star, label: 'Client care' },
 };
 const GROUP_TONE: Record<QueueItem['group'], 'bad' | 'warn' | 'ok'> = { overdue: 'bad', today: 'warn', week: 'ok', later: 'ok' };
 const GROUP_LABEL: Record<QueueItem['group'], string> = { overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later' };
@@ -83,6 +93,7 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [decisions, setDecisions] = useState<Record<string, any[]>>({});
   const [moms, setMoms] = useState<OpsMom[]>([]);
+  const [care, setCare] = useState<Record<string, ProjectCare>>({});
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
 
@@ -93,7 +104,9 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
     try {
       const per = await Promise.all(deskProjects.map((p) => loadProjectOps(tenantId, p, isLead)));
       const decs: Record<string, any[]> = {};
-      deskProjects.forEach((p, i) => { decs[p.id] = per[i].decisions; });
+      const cared: Record<string, ProjectCare> = {};
+      deskProjects.forEach((p, i) => { decs[p.id] = per[i].decisions; cared[p.id] = { checklists: per[i].checklists, visits: per[i].visits }; });
+      setCare(cared);
       if (isLead) {
         const studio = await loadStudioOps(tenantId);
         setFollowUps(studio.followUps);
@@ -120,7 +133,27 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
     ...decisionWaiting(p, decisions[p.id] || [], now),
   ]), followUps), [deskProjects, decisions, followUps, settings, now]);
 
-  const queue = useMemo(() => buildQueue({ now, me: myEmail, isLead, followUps, waiting, moms, escalations }), [now, myEmail, isLead, followUps, waiting, moms, escalations]);
+  /* Client care: each project's pulse and whether to ask for a review or referral (lib/clientCare). */
+  const pulseRows: PulseRow[] = useMemo(() => deskProjects.map((p) => {
+    const w = waiting.filter((x) => x.projectId === p.id);
+    const f = followUps.filter((x) => x.projectId === p.id);
+    const e = escalations.filter((x) => x.projectId === p.id);
+    const pulse = clientPulse({
+      waiting: w, followUps: f, escalations: e, moms: moms.filter((x) => x.projectId === p.id), visits: care[p.id]?.visits || [], money: p.money, targetHandover: p.targetHandover, now,
+    });
+    const handedOver = p.status === 'completed' || !!care[p.id]?.checklists.handover?.completedAt;
+    const prompts = askPrompts({ followUps: f, handedOver, pulse, latePayment: w.some((x) => (x.overdueDays || 0) > 0), openEscalation: e.some((x) => x.status === 'open'), now });
+    return { project: p, pulse, prompts };
+  }), [deskProjects, waiting, followUps, escalations, moms, care, now]);
+
+  const careItems = useMemo(() => careQueue(deskProjects.map((p) => ({
+    id: p.id, name: p.name, status: p.status, targetHandover: p.targetHandover,
+    checklists: care[p.id]?.checklists || {}, visits: care[p.id]?.visits || [],
+    prompts: pulseRows.find((r) => r.project.id === p.id)?.prompts || [],
+  })), followUps, isLead, now), [deskProjects, care, pulseRows, followUps, isLead, now]);
+
+  const queue = useMemo(() => buildQueue({ now, me: myEmail, isLead, followUps, waiting, moms, escalations, extra: careItems }), [now, myEmail, isLead, followUps, waiting, moms, escalations, careItems]);
+  const allVisits = useMemo(() => Object.values(care).flatMap((c: ProjectCare) => c.visits), [care]);
 
   /* Panels */
   const [logFor, setLogFor] = useState<LogPrefill | null>(null);
@@ -129,6 +162,9 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
   const [reviewing, setReviewing] = useState<OpsMom | null>(null);
   const [writingFor, setWritingFor] = useState<{ projectId: string; notes: string } | null>(null);
   const [capturing, setCapturing] = useState(false);
+  const [askFor, setAskFor] = useState<{ projectId: string; kind: AskKind } | null>(null);
+  const [visitAct, setVisitAct] = useState<{ visit: VisitRequest | null; to: VisitStatus | null; projectId?: string } | null>(null);
+  const [careFocus, setCareFocus] = useState<{ projectId: string; kind: ChecklistKind }>({ projectId: '', kind: 'onboarding' });
   const [busy, setBusy] = useState<string | null>(null);
 
   const done = async (f: FollowUp) => {
@@ -146,7 +182,19 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
     if (q.kind === 'escalation_open') return setDeciding(escalations.find((e) => e.id === q.ref) || null);
     if (q.kind === 'escalation_decided') return setSection('escalations');
     if (q.kind === 'next') return setSection('log');
+    if (q.kind === 'visit') {
+      const v = allVisits.find((x) => x.id === q.ref);
+      if (!v) return setSection('visits');
+      const today = dayKey(now);
+      return setVisitAct({ visit: v, to: v.status === 'confirmed' ? (v.slot && v.slot.date < today ? 'done' : 'confirmed') : 'confirmed' });
+    }
+    if (q.kind === 'documents' || q.kind === 'checklist') {
+      setCareFocus({ projectId: q.projectId, kind: q.ref as ChecklistKind });
+      return setSection('checklists');
+    }
+    if (q.kind === 'ask') return setAskFor({ projectId: q.projectId, kind: q.ref as AskKind });
   };
+  const atRisk = pulseRows.filter((r) => r.pulse.band === 'at_risk').length;
 
   const counts = {
     today: queue.filter((q) => q.group === 'overdue' || q.group === 'today').length,
@@ -157,11 +205,17 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
     minutes: isLead ? moms.filter((m) => m.status === 'pending_review').length : moms.filter((m) => m.status === 'draft' || m.status === 'pending_review').length,
     ask: 0,
     prep: 0,
+    pulse: atRisk,
+    visits: allVisits.filter((v) => v.status === 'requested' || v.status === 'rescheduled').length,
+    checklists: careItems.filter((q) => q.kind === 'documents' || q.kind === 'checklist').length,
   };
   const SECTIONS: { id: Section; label: string; icon: React.ComponentType<any> }[] = [
     { id: 'today', label: 'Today', icon: Inbox },
+    { id: 'pulse', label: 'Client pulse', icon: Activity },
     { id: 'waiting', label: 'Waiting on client', icon: Clock },
     { id: 'payments', label: 'Payments', icon: IndianRupee },
+    { id: 'visits', label: 'Meetings & visits', icon: CalendarCheck },
+    { id: 'checklists', label: 'Checklists', icon: ClipboardCheck },
     { id: 'log', label: 'Follow-up log', icon: ListChecks },
     { id: 'escalations', label: 'Escalations', icon: Flag },
     { id: 'minutes', label: isLead ? 'Minutes to approve' : 'Minutes', icon: FileText },
@@ -202,6 +256,7 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
                 ['Overdue', overdue, 'today', 'bad'],
                 ['Due today', dueToday, 'today', 'warn'],
                 ['Waiting on client', waiting.length, 'waiting', 'ok'],
+                ['Clients at risk', atRisk, 'pulse', 'bad'],
                 [isLead ? 'Escalations to decide' : 'Open escalations', counts.escalations, 'escalations', counts.escalations ? 'bad' : 'ok'],
               ] as [string, number, Section, 'bad' | 'warn' | 'ok'][]).map(([label, n, target, tone], i) => (
                 <button key={label} type="button" onClick={() => setSection(target)}
@@ -233,7 +288,7 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
                 <Icon className={`w-4 h-4 shrink-0 ${on ? 'text-white' : 'text-slate-400'}`} />
                 <span className="text-sm font-semibold flex-1 min-w-0 truncate">{x.label}</span>
                 {n > 0 && (
-                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${on ? 'bg-white/20 text-white' : x.id === 'escalations' || (x.id === 'today' && overdue) ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{n}</span>
+                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${on ? 'bg-white/20 text-white' : x.id === 'escalations' || x.id === 'pulse' || (x.id === 'today' && overdue) ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{n}</span>
                 )}
               </button>
             );
@@ -269,6 +324,9 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
                                 {fu && <button type="button" className={btnSm} disabled={busy === fu.id} onClick={() => done(fu)}><Check className="w-3.5 h-3.5" />Done</button>}
                                 {(q.kind === 'payment' || q.kind === 'decision') && canWrite && <button type="button" className={btnSm} onClick={() => setLogFor({ projectId: q.projectId, subjectKey: q.ref })}>Remind</button>}
                                 {(q.kind === 'escalation_open' || q.kind === 'mom_review') && <button type="button" className={btnSm} onClick={() => onItem(q)}>{q.kind === 'mom_review' ? 'Review' : 'Decide'}</button>}
+                                {(q.kind === 'visit' || q.kind === 'documents' || q.kind === 'checklist' || q.kind === 'ask') && canWrite && (
+                                  <button type="button" className={btnSm} onClick={() => onItem(q)}>{q.kind === 'ask' ? 'Ask' : q.kind === 'documents' ? 'Chase' : 'Open'}</button>
+                                )}
                               </div>
                             );
                           })}
@@ -429,6 +487,33 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
             </Panel>
           )}
 
+          {section === 'pulse' && (
+            <Panel icon={Activity} title="Client pulse" blurb="How each client relationship stands, out of 100, lowest first, with every point it gained or lost. Ask for a review or a referral when a client is happy.">
+              {loading && !followUps.length ? <Loading /> : (
+                <PulseList rows={pulseRows} onAsk={(projectId, kind) => setAskFor({ projectId, kind })}
+                  onOpenProject={(id) => { setCareFocus({ projectId: id, kind: careFocus.kind }); setSection('checklists'); }} />
+              )}
+            </Panel>
+          )}
+
+          {section === 'visits' && (
+            <Panel icon={CalendarCheck} title="Meetings & visits" blurb="Every meeting and site visit a client asked for, or the studio needs: agree a time, confirm it, move it, and close it out with the minutes.">
+              <div className="space-y-4">
+                {canWrite && <button type="button" className={btnSec} onClick={() => setVisitAct({ visit: null, to: null })}><Plus className="w-4 h-4" />Log a request</button>}
+                {loading && !allVisits.length ? <Loading /> : <VisitsView visits={allVisits} projects={deskProjects as DeskProject[]} canWrite={canWrite} now={now} onAct={(visit, to) => setVisitAct({ visit, to })} />}
+              </div>
+            </Panel>
+          )}
+
+          {section === 'checklists' && (
+            <Panel icon={ClipboardCheck} title="Checklists" blurb="Onboarding, the documents the studio needs from the client, and handover. Client Relations works them; a lead marks each one complete.">
+              <ChecklistsView projects={deskProjects as DeskProject[]} care={Object.fromEntries(Object.entries(care).map(([k, v]: [string, ProjectCare]) => [k, v.checklists]))}
+                money={Object.fromEntries(deskProjects.map((p) => [p.id, p.money]))}
+                focus={{ projectId: careFocus.projectId || deskProjects[0]?.id || '', kind: careFocus.kind }} onFocus={setCareFocus}
+                me={me} isLead={isLead} canWrite={canWrite} tenantId={tenantId} studioName={orgData?.orgName || ''} onChanged={load} />
+            </Panel>
+          )}
+
           {section === 'ask' && (
             <Panel icon={Search} title="Ask a project" blurb="Answers about one project from its payments, decisions, minutes and follow-ups, with where each came from. Costs and margins are never part of it.">
               <AskProjectPanel projects={deskProjects as DeskProject[]} rawProjects={projects} waiting={waiting} tenantId={tenantId} />
@@ -456,6 +541,25 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
       {capturing && (
         <CapturePanel projects={deskProjects as DeskProject[]} waiting={waiting} me={me} tenantId={tenantId}
           onClose={() => setCapturing(false)} onSaved={(escalated) => { setCapturing(false); setSection(escalated ? 'escalations' : 'log'); load(); }} />
+      )}
+      {askFor && (() => {
+        const p = deskProjects.find((x) => x.id === askFor.projectId);
+        return p ? (
+          <AskSheet project={p as DeskProject} kind={askFor.kind} reason={askReasonOf(pulseRows.find((r) => r.project.id === p.id)?.prompts || [], askFor.kind)}
+            me={me} tenantId={tenantId} studioName={orgData?.orgName || ''} reviewLink={settings.reviewLink}
+            onClose={() => setAskFor(null)} onSaved={() => { setAskFor(null); load(); }} />
+        ) : null;
+      })()}
+      {visitAct && (
+        <VisitSheet projects={deskProjects as DeskProject[]} visit={visitAct.visit} to={visitAct.to} prefillProjectId={visitAct.projectId}
+          me={me} tenantId={tenantId} studioName={orgData?.orgName || ''}
+          onClose={() => setVisitAct(null)}
+          onSaved={(r) => {
+            setVisitAct(null);
+            setSection('visits');
+            load();
+            if (r.status === 'done' && canWrite) setWritingFor({ projectId: r.projectId, notes: r.notes });
+          }} />
       )}
       {deciding && <DecideEscalationPanel escalation={deciding} me={me} onClose={() => setDeciding(null)} onSaved={() => { setDeciding(null); load(); }} />}
       {reviewing && (

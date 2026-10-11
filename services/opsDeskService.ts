@@ -12,6 +12,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebaseClient';
 import type { Escalation, EscalationCategory, FollowUp, NextStep, Outcome, Channel, Subject } from '../lib/opsDesk';
+import { materialise, type Checklist, type ChecklistKind, type VisitRequest } from '../lib/clientCare';
 
 const DAY = 86400000;
 const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -23,27 +24,43 @@ export interface ProjectOps {
   escalations: Escalation[];
   decisions: any[];
   moms: OpsMom[];
+  /** Client care (lib/clientCare.ts): the project's checklists, as saved, and its meeting and visit requests. */
+  checklists: Partial<Record<ChecklistKind, Checklist>>;
+  visits: VisitRequest[];
 }
+
+const KINDS: ChecklistKind[] = ['onboarding', 'handover', 'documents'];
+const careOf = (checkRows: any[], visitRows: any[]) => {
+  const checklists: Partial<Record<ChecklistKind, Checklist>> = {};
+  for (const r of checkRows) if (KINDS.includes(r.id)) checklists[r.id as ChecklistKind] = materialise(r.id, r);
+  return { checklists, visits: visitRows as VisitRequest[] };
+};
 
 const rows = (snap: any) => snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
 
 /** One project's follow-ups, escalations, client decisions and minutes. */
 export async function loadProjectOps(tenantId: string, project: { id: string; name: string }, decisionsOnly = false): Promise<ProjectOps> {
-  if (!db) return { followUps: [], escalations: [], decisions: [], moms: [] };
+  if (!db) return { followUps: [], escalations: [], decisions: [], moms: [], checklists: {}, visits: [] };
   const pid = project.id;
   const safe = async <T,>(p: Promise<T>, fallback: T): Promise<T> => p.catch((e) => { console.warn(`Ops Desk: ${pid}`, e?.code || e); return fallback; });
-  /* A lead reads the rest studio-wide (loadStudioOps); only the decisions are per project. */
+  const care = Promise.all([
+    safe(getDocs(collection(db, `projects/${pid}/checklists`)).then(rows), []),
+    safe(getDocs(collection(db, `projects/${pid}/visitRequests`)).then(rows), []),
+  ]).then(([c, v]) => careOf(c, v));
+  /* A lead reads the rest studio-wide (loadStudioOps); decisions and client care are per project. */
   if (decisionsOnly) {
-    const decisions = await safe(getDocs(collection(db, `projects/${pid}/decisions`)).then(rows), []);
-    return { followUps: [], escalations: [], decisions, moms: [] };
+    const [decisions, cared] = await Promise.all([safe(getDocs(collection(db, `projects/${pid}/decisions`)).then(rows), []), care]);
+    return { followUps: [], escalations: [], decisions, moms: [], ...cared };
   }
-  const [followUps, escalations, decisions, moms] = await Promise.all([
+  const [followUps, escalations, decisions, moms, cared] = await Promise.all([
     safe(getDocs(query(collection(db, `projects/${pid}/followUps`), orderBy('at', 'desc'), limit(200))).then(rows), []),
     safe(getDocs(collection(db, `projects/${pid}/escalations`)).then(rows), []),
     safe(getDocs(collection(db, `projects/${pid}/decisions`)).then(rows), []),
     safe(getDocs(collection(db, `organizations/${tenantId}/projects/${pid}/moms`)).then(rows), []),
+    care,
   ]);
   return {
+    ...cared,
     followUps: followUps as FollowUp[],
     escalations: escalations as Escalation[],
     decisions,
@@ -130,4 +147,26 @@ export async function runDailyCheckNow(): Promise<number> {
   if (!functions) throw new Error('Cloud functions are not configured.');
   const res: any = await httpsCallable(functions, 'opsDeskCheckNow', { timeout: 120000 })({});
   return Number(res?.data?.raised || 0);
+}
+
+/* ── Client care (lib/clientCare.ts) ─────────────────────────────────────── */
+
+/** Save a checklist as it now stands, in this person's name. Only a lead may change its completion (firestore.rules). */
+export async function saveChecklist(tenantId: string, project: { id: string; name: string }, c: Checklist, me: { email: string }): Promise<void> {
+  await setDoc(doc(db!, `projects/${project.id}/checklists`, c.kind), {
+    tenantId, projectId: project.id, projectName: project.name, kind: c.kind,
+    items: c.items.map((x) => ({ id: x.id, label: x.label, state: x.state, at: x.at, by: x.by, byName: x.byName, note: x.note, custom: x.custom })),
+    completedAt: c.completedAt, completedBy: c.completedBy, completedByName: c.completedByName,
+    updatedAt: Date.now(), updatedBy: me.email.toLowerCase(),
+  });
+}
+
+export type NewVisit = Omit<VisitRequest, 'id'>;
+export async function createVisit(v: NewVisit): Promise<string> {
+  const id = newId();
+  await setDoc(doc(db!, `projects/${v.projectId}/visitRequests`, id), v);
+  return id;
+}
+export async function updateVisit(projectId: string, id: string, patch: Pick<VisitRequest, 'status' | 'slot' | 'reschedules' | 'history' | 'updatedAt' | 'updatedBy'>): Promise<void> {
+  await updateDoc(doc(db!, `projects/${projectId}/visitRequests`, id), patch);
 }

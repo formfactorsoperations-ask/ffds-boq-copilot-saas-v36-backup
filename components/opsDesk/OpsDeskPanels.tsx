@@ -40,7 +40,7 @@ export const btnPri = 'inline-flex items-center justify-center gap-1.5 px-4 py-2
 export const btnSec = 'inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors disabled:opacity-50';
 export const btnSm = 'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50';
 
-const Seg: React.FC<{ value: string; options: { id: string; label: string }[]; onChange: (v: any) => void; label: string }> = ({ value, options, onChange, label }) => (
+export const Seg: React.FC<{ value: string; options: { id: string; label: string }[]; onChange: (v: any) => void; label: string }> = ({ value, options, onChange, label }) => (
   <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap gap-0.5 p-1 rounded-xl bg-slate-100">
     {options.map((o) => (
       <button key={o.id} type="button" role="radio" aria-checked={value === o.id} onClick={() => onChange(o.id)}

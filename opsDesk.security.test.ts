@@ -154,3 +154,78 @@ describe('the Ops Desk settings', () => {
     await assertSucceeds(getDoc(doc(cr(), `organizations/${STUDIO}`)));
   });
 });
+
+function checklist(by: string, over: any = {}) {
+  return {
+    tenantId: STUDIO, projectId: 'p1', projectName: 'Kapoor Villa', kind: 'onboarding',
+    items: [{ id: 'welcome', label: 'Welcome message sent', state: 'done', at: 1, by, byName: 'Riya', note: '', custom: false }],
+    completedAt: null, completedBy: null, completedByName: null, updatedAt: 1, updatedBy: by, ...over,
+  };
+}
+function visitReq(by: string, over: any = {}) {
+  return {
+    tenantId: STUDIO, projectId: 'p1', projectName: 'Kapoor Villa', kind: 'site_visit', mode: 'in_person', purpose: 'Check the kitchen cut-outs',
+    requestedBy: 'client', status: 'requested', slot: null, reschedules: 0,
+    history: [{ at: 1, by, byName: 'Riya', status: 'requested', slot: null, note: '' }],
+    createdAt: 1, createdBy: by, createdByName: 'Riya', updatedAt: 1, updatedBy: by, ...over,
+  };
+}
+const slot = { date: '2026-10-14', time: '11:00' };
+const ev = (status: string) => ({ at: 2, by: 'cr@a.com', byName: 'Riya', status, slot, note: '' });
+
+describe('client care checklists', () => {
+  it('are worked by Client Relations on an assigned project, in their own name', async () => {
+    await assertSucceeds(setDoc(doc(cr(), 'projects/p1/checklists/onboarding'), checklist('cr@a.com')));
+    await assertFails(setDoc(doc(cr(), 'projects/p1/checklists/onboarding'), checklist('admin@a.com')));
+    await assertFails(setDoc(doc(cr(), 'projects/p2/checklists/onboarding'), checklist('cr@a.com', { projectId: 'p2' })));
+    await assertFails(setDoc(doc(cr(), 'projects/p1/checklists/payments'), checklist('cr@a.com', { kind: 'payments' })));
+    await assertFails(setDoc(doc(cr(), 'projects/p1/checklists/onboarding'), checklist('cr@a.com', { margin: 0.3 })));
+    await assertFails(setDoc(doc(viewer(), 'projects/p1/checklists/onboarding'), checklist('viewer@a.com')));
+    await assertSucceeds(getDoc(doc(cr(), 'projects/p1/checklists/onboarding')));
+    await assertFails(getDoc(doc(cr(), 'projects/p2/checklists/onboarding')));
+  });
+
+  it('are marked complete, and reopened, by a lead only; once complete only a lead changes them', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'projects/p1/checklists/handover'), checklist('cr@a.com', { kind: 'handover' })); });
+    const done = { completedAt: 5, completedBy: 'cr@a.com', completedByName: 'Riya', updatedBy: 'cr@a.com' };
+    await assertFails(updateDoc(doc(cr(), 'projects/p1/checklists/handover'), done));
+    await assertFails(setDoc(doc(cr(), 'projects/p1/checklists/documents'), checklist('cr@a.com', { kind: 'documents', completedAt: 5, completedBy: 'cr@a.com' })));
+    await assertFails(updateDoc(doc(admin(), 'projects/p1/checklists/handover'), { ...done, completedBy: 'cr@a.com', updatedBy: 'admin@a.com' }));
+    await assertSucceeds(updateDoc(doc(admin(), 'projects/p1/checklists/handover'), { completedAt: 5, completedBy: 'admin@a.com', completedByName: 'Anish', updatedBy: 'admin@a.com' }));
+    await assertFails(updateDoc(doc(cr(), 'projects/p1/checklists/handover'), { items: [], updatedBy: 'cr@a.com' }));
+    await assertSucceeds(updateDoc(doc(admin(), 'projects/p1/checklists/handover'), { completedAt: null, completedBy: null, completedByName: null, updatedBy: 'admin@a.com' }));
+    await assertSucceeds(updateDoc(doc(cr(), 'projects/p1/checklists/handover'), { items: [], updatedBy: 'cr@a.com' }));
+    await assertFails(deleteDoc(doc(admin(), 'projects/p1/checklists/handover')));
+  });
+});
+
+describe('meeting and site visit requests', () => {
+  it('are logged by Client Relations on an assigned project, requested or confirmed', async () => {
+    await assertSucceeds(setDoc(doc(cr(), 'projects/p1/visitRequests/v1'), visitReq('cr@a.com')));
+    await assertFails(setDoc(doc(cr(), 'projects/p1/visitRequests/v2'), visitReq('cr@a.com', { status: 'done' })));
+    await assertFails(setDoc(doc(cr(), 'projects/p1/visitRequests/v3'), visitReq('admin@a.com')));
+    await assertFails(setDoc(doc(cr(), 'projects/p2/visitRequests/v4'), visitReq('cr@a.com', { projectId: 'p2' })));
+    await assertFails(setDoc(doc(designer(), 'projects/p1/visitRequests/v5'), visitReq('d@a.com')));
+    await assertSucceeds(getDoc(doc(cr(), 'projects/p1/visitRequests/v1')));
+  });
+
+  it('move only along requested → confirmed → rescheduled → done, the history only growing', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'projects/p1/visitRequests/v1'), visitReq('cr@a.com')); });
+    const ref = () => doc(cr(), 'projects/p1/visitRequests/v1');
+    const h1 = visitReq('cr@a.com').history;
+    await assertFails(updateDoc(ref(), { status: 'done', slot, history: [...h1, ev('done')], updatedAt: 2, updatedBy: 'cr@a.com' }));
+    await assertFails(updateDoc(ref(), { status: 'confirmed', slot, history: h1, updatedAt: 2, updatedBy: 'cr@a.com' }));
+    await assertFails(updateDoc(ref(), { status: 'confirmed', slot, purpose: 'x', history: [...h1, ev('confirmed')], updatedAt: 2, updatedBy: 'cr@a.com' }));
+    await assertSucceeds(updateDoc(ref(), { status: 'confirmed', slot, history: [...h1, ev('confirmed')], updatedAt: 2, updatedBy: 'cr@a.com' }));
+    const h2 = [...h1, ev('confirmed')];
+    await assertSucceeds(updateDoc(ref(), { status: 'rescheduled', reschedules: 1, history: [...h2, ev('rescheduled')], updatedAt: 3, updatedBy: 'cr@a.com' }));
+    const h3 = [...h2, ev('rescheduled')];
+    await assertFails(updateDoc(ref(), { status: 'done', history: [...h3, ev('done')], updatedAt: 4, updatedBy: 'cr@a.com' }));
+    await assertSucceeds(updateDoc(ref(), { status: 'confirmed', history: [...h3, ev('confirmed')], updatedAt: 4, updatedBy: 'cr@a.com' }));
+    const h4 = [...h3, ev('confirmed')];
+    await assertFails(updateDoc(ref(), { status: 'done', reschedules: 0, history: [...h4, ev('done')], updatedAt: 5, updatedBy: 'cr@a.com' }));
+    await assertSucceeds(updateDoc(ref(), { status: 'done', history: [...h4, ev('done')], updatedAt: 5, updatedBy: 'cr@a.com' }));
+    await assertFails(updateDoc(ref(), { status: 'cancelled', history: [...h4, ev('done'), ev('cancelled')], updatedAt: 6, updatedBy: 'cr@a.com' }));
+    await assertFails(deleteDoc(doc(admin(), 'projects/p1/visitRequests/v1')));
+  });
+});
