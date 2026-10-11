@@ -19,7 +19,8 @@ import {
   ShieldCheck,
   Cloud,
   HardDrive,
-  PenTool
+  PenTool,
+  Inbox
 } from '@/lib/lucide-shim';
 import { AIStatus } from '../types';
 import AIStatusIndicator from './AIStatusIndicator';
@@ -49,6 +50,7 @@ const TABS = [
   { id: 'projects', label: 'Projects', icon: Building2, section: 'STUDIO' },
   /* Design Desk: where drawings are reviewed. The id stays 'design-review' so saved tabs and links keep working. */
   { id: 'design-review', label: 'Design Desk', icon: PenTool, section: 'STUDIO' },
+  { id: 'ops-desk', label: 'Ops Desk', icon: Inbox, section: 'STUDIO' },
   { id: 'clients', label: 'Clients', icon: Users, section: 'STUDIO' },
   { id: 'reports', label: 'Reports', icon: BarChart3, section: 'STUDIO' },
   
@@ -61,6 +63,7 @@ const TABS = [
 const TAB_THEMES: Record<string, { iconColor: string; bgLight: string; borderColor: string; activeGradient: string }> = {
   'home': { iconColor: 'text-sky-600', bgLight: 'bg-sky-50', borderColor: 'border-sky-100', activeGradient: 'from-sky-500 to-sky-600' },
   'design-review': { iconColor: 'text-[#5B5BD6]', bgLight: 'bg-indigo-50', borderColor: 'border-indigo-100', activeGradient: 'from-indigo-500 to-[#5B5BD6]' },
+  'ops-desk': { iconColor: 'text-[#0F766E]', bgLight: 'bg-teal-50', borderColor: 'border-teal-100', activeGradient: 'from-teal-500 to-[#0F766E]' },
   'projects': { iconColor: 'text-[#3D52A0]', bgLight: 'bg-sky-50', borderColor: 'border-sky-100', activeGradient: 'from-sky-500 to-[#3D52A0]' },
   'clients': { iconColor: 'text-blue-500', bgLight: 'bg-blue-50', borderColor: 'border-blue-100', activeGradient: 'from-blue-500 to-blue-600' },
   'reports': { iconColor: 'text-cyan-600', bgLight: 'bg-cyan-50', borderColor: 'border-cyan-100', activeGradient: 'from-cyan-500 to-cyan-600' },

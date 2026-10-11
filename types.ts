@@ -1822,7 +1822,8 @@ export interface MOM {
     meetingDate: number; // timestamp
     createdBy: string;
     createdAt: number;
-    status: "draft" | "finalised" | "shared" | "acknowledged" | "correction_requested";
+    /** pending_review: written by Client Relations and waiting for a lead to approve (lib/opsDesk). */
+    status: "draft" | "pending_review" | "finalised" | "shared" | "acknowledged" | "correction_requested";
     attendees: MOMAttendee[];
     rawNotes: string;
     decisions: MOMDecision[];

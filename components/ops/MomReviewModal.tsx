@@ -44,6 +44,7 @@ import {
   History,
 } from '@/lib/lucide-shim';
 import { useOrg } from "../../contexts/OrgContext";
+import { isClientRelationsRole } from "../../lib/roleAccess";
 import { StudioDocumentShell } from "./documents/StudioDocumentShell";
 
 interface MomReviewModalProps {
@@ -672,6 +673,35 @@ export function MomReviewModal({
     }
   };
 
+  /*
+    Client Relations drafts minutes and sends them for approval; a lead
+    finalises and shares them (the database holds their minutes at draft or
+    pending_review, firestore.rules). The Ops Desk lists those waiting.
+  */
+  const needsApproval = isClientRelationsRole(currentRole);
+  const awaitingApproval = draft.status === "pending_review";
+  const handleSendForApproval = async () => {
+    setSaving(true);
+    try {
+      const stamp = {
+        status: "pending_review" as const,
+        reviewTenantId: studioId,
+        reviewProjectId: projectId,
+        reviewProjectName: projectContextName || "",
+        reviewRequestedBy: currentUserAuth?.email || null,
+        reviewRequestedAt: Date.now(),
+      };
+      await updateDoc(doc(db, `organizations/${studioId}/projects/${projectId}/moms`, mom.id), { ...draft, ...stamp } as any);
+      setDraft((d) => ({ ...d, ...stamp }) as any);
+      onClose();
+    } catch (e) {
+      console.error(e);
+      alert("Could not send the minutes for approval. Check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const isFinalised = !revising && ["finalised", "shared", "acknowledged", "correction_requested"].includes(
     String(draft.status || mom.status),
   );
@@ -698,6 +728,10 @@ export function MomReviewModal({
               ) : correctionOpen ? (
                 <span className="bg-amber-50 text-amber-800 text-xs font-bold px-2.5 py-0.5 border border-amber-200 rounded-md uppercase tracking-wider">
                   Correction requested
+                </span>
+              ) : awaitingApproval ? (
+                <span className="bg-indigo-50 text-[#2C3C78] text-xs font-bold px-2.5 py-0.5 border border-indigo-200 rounded-md uppercase tracking-wider">
+                  Awaiting approval
                 </span>
               ) : !isFinalised ? (
                 <span className="bg-amber-50 text-amber-700 text-xs font-bold px-2.5 py-0.5 border border-amber-200 rounded-md uppercase tracking-wider">
@@ -1346,14 +1380,25 @@ export function MomReviewModal({
             >
               Save Progress
             </button>
+            {needsApproval ? (
+            <button
+              onClick={handleSendForApproval}
+              disabled={saving}
+              className="flex-1 py-3 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:text-amber-400 rounded-xl font-bold text-sm uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-sm"
+            >
+              <CheckCircle2 size={14} />
+              {awaitingApproval ? "Send the changes for approval" : "Send for approval"}
+            </button>
+            ) : (
             <button
               onClick={handleFinalise}
               disabled={saving}
               className="flex-1 py-3 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:text-amber-400 rounded-xl font-bold text-sm uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-sm"
             >
               <CheckCircle2 size={14} />
-              {revising ? `Issue Rev ${(draft.rev || 0) + 1} & email` : "Finalise & email"}
+              {revising ? `Issue Rev ${(draft.rev || 0) + 1} & email` : awaitingApproval ? "Approve, finalise & email" : "Finalise & email"}
             </button>
+            )}
           </div>
         ) : (
           <div className="p-6 border-t border-slate-200 bg-[#FAF9F6] flex flex-col gap-4">

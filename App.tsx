@@ -101,6 +101,7 @@ const ProjectReportsTab = lazyWithRetry(() => import("./components/ops/ProjectRe
 const DrawingTrackerModule = lazyWithRetry(() => import("./components/ops/DrawingTrackerModule"));
 const ScopeAdditionsModule = lazyWithRetry(() => import("./components/ops/ScopeAdditionsModule"));
 const SupervisorMobileApp = lazyWithRetry(() => import("./components/SupervisorMobileApp"));
+const OpsDeskPage = lazyWithRetry(() => import("./components/opsDesk/OpsDeskPage"));
 
 import {
   FullProjectData,
@@ -2622,6 +2623,7 @@ export default function App() {
     "home",
     "reports",
     "design-review",
+    "ops-desk",
     "projects",
     "clients",
     "bank",
@@ -3099,6 +3101,15 @@ export default function App() {
                   )}
                   {activeTab === "design-review" && (
                     <DesignDeskTab projects={visibleProjects} activeProjectId={activeInternalId} />
+                  )}
+                  {activeTab === "ops-desk" && (
+                    <OpsDeskPage
+                      projects={visibleProjects}
+                      onOpenProject={(id, tab) => {
+                        const p = projectLibrary.find((x) => x.id === id);
+                        if (p) handleOpenProject(p, tab);
+                      }}
+                    />
                   )}
                   {activeTab === "reports" && (
                     <StudioReports
@@ -3841,6 +3852,15 @@ export default function App() {
                   )}
                   {activeTab === "design-review" && (
                     <DesignDeskTab projects={visibleProjects} activeProjectId={activeInternalId} />
+                  )}
+                  {activeTab === "ops-desk" && (
+                    <OpsDeskPage
+                      projects={visibleProjects}
+                      onOpenProject={(id, tab) => {
+                        const p = projectLibrary.find((x) => x.id === id);
+                        if (p) handleOpenProject(p, tab);
+                      }}
+                    />
                   )}
                   {activeTab === "reports" && (
                     <StudioReports

@@ -61,7 +61,7 @@ export function teamViewKindOf(role?: RoleSet): TeamViewKind | null {
 export const CLIENT_RELATIONS_PROJECT_TABS = new Set([
   'comms-tracker', 'timeline', 'record-decision', 'drawing-tracker', 'design-gate', 'leadiq',
 ]);
-export const CLIENT_RELATIONS_STUDIO_TABS = new Set(['home', 'projects', 'data-privacy', 'support', 'terms-of-use']);
+export const CLIENT_RELATIONS_STUDIO_TABS = new Set(['home', 'ops-desk', 'projects', 'data-privacy', 'support', 'terms-of-use']);
 export const CLIENT_RELATIONS_HOME_TAB = 'comms-tracker';
 
 /** Whether a limited role may open this tab; a broad role may open anything (subject to the finance check). */
@@ -86,7 +86,7 @@ export const DESIGNER_EDITABLE_TABS = new Set(['drawing-tracker']);
  * Mirrors the list App.tsx uses to decide `isProjectTab`.
  */
 export const STUDIO_TABS = new Set([
-  'home', 'reports', 'projects', 'clients', 'bank', 'templates', 'ai-settings', 'setup-wizard', 'design-review',
+  'home', 'reports', 'projects', 'clients', 'bank', 'templates', 'ai-settings', 'setup-wizard', 'design-review', 'ops-desk',
   'studio-settings', 'terms-and-payment', 'communication-templates', 'saas-dashboard',
   'admin-templates-bank', 'data-privacy', 'support', 'terms-of-use',
 ]);
@@ -115,6 +115,8 @@ export const STUDIO_TAB_ROLES: Record<string, string[]> = {
   home: [...LEADS, 'Design Head', 'Site Supervisor', 'Designer', 'Client Relations'],
   projects: [...LEADS, 'Design Head', 'Site Supervisor', 'Designer', 'Client Relations'],
   'design-review': [...LEADS, 'Design Head', 'Designer'],
+  /* The Ops Desk (lib/opsDesk): Client Relations works from it; the leads decide escalations and approve minutes there. */
+  'ops-desk': [...LEADS, 'Client Relations'],
   // Not for Designers: the client list carries account values, and a Designer's
   // work is reached through their assigned projects.
   clients: [...LEADS, 'Design Head', 'Site Supervisor'],

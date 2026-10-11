@@ -25,6 +25,7 @@ import { connectGoogleCalendar, isGoogleCalendarConnected } from '../../services
 import { CountUp, Dot } from '../ui/HudBits';
 import StudioTeamSection from './StudioTeamSection';
 import ZohoBooksCard from './ZohoBooksCard';
+import OpsDeskSettings from './OpsDeskSettings';
 import ConsoleHeader from '../ui/ConsoleHeader';
 import {
   SETTINGS_SECTIONS, SETTINGS_FIELDS, SectionId, SettingsField,
@@ -33,7 +34,7 @@ import {
 import { TeamMember } from '../../types';
 import {
   Save, Building2, Users, CreditCard, Scale, Globe, Palette,
-  Database, Check, AlertTriangle, Upload, RotateCcw,
+  Database, Check, AlertTriangle, Upload, RotateCcw, Inbox,
 } from '@/lib/lucide-shim';
 
 const SECTION_ICON: Record<SectionId, React.ComponentType<any>> = {
@@ -44,6 +45,7 @@ const SECTION_ICON: Record<SectionId, React.ComponentType<any>> = {
   portal: Globe,
   appearance: Palette,
   system: Database,
+  opsdesk: Inbox,
 };
 
 /** Personalization lives in localStorage, not the org document — it is per device. */
@@ -560,6 +562,17 @@ export default function StudioSettingsConsole(props: {
                   <Field {...bind('themeColor')} type="color" />
                 </div>
               </div>
+            </Panel>
+          )}
+
+          {activeSection === 'opsdesk' && (
+            <Panel id="opsdesk" title="Ops Desk" blurb={SETTINGS_SECTIONS[7].blurb} missing={0}>
+              <OpsDeskSettings
+                org={draft}
+                team={(draft.team as TeamMember[]) || []}
+                canEdit={canEdit}
+                onChange={(v) => setField('opsDesk', v)}
+              />
             </Panel>
           )}
 
