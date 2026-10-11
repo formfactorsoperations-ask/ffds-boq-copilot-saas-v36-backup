@@ -248,7 +248,7 @@ service cloud.firestore {
       allow create: if isSuperAdmin();
       allow update: if isSuperAdmin() || (
           isSameTenant(orgId) &&
-          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['team', 'projectDesigners', 'opsDesk']) ||
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['team', 'projectDesigners', 'opsDesk', 'peopleDesk']) ||
            getUserData().get('role', '') in ['Owner', 'Admin', 'Ops Director'])
       );
       allow delete: if isSuperAdmin();
@@ -1056,6 +1056,15 @@ service cloud.firestore {
     // ========================================================================
     // FALLBACK
     // ========================================================================
+
+    /*
+      People (lib/peopleDesk.ts): attendance, leave requests and the journal of
+      every change. Read and written only by the Cloud Functions
+      (functions/src/peopleDesk.ts), which scope what each person sees.
+    */
+    match /peopleDesk/{document=**} {
+      allow read, write: if false;
+    }
 
     // Catch-all to deny unspecified collections to prevent accidental data leaks
     match /{document=**} {
