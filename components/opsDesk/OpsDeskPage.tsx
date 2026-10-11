@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Inbox, Clock, IndianRupee, ListChecks, Flag, FileText, Plus, RefreshCw, Check, ChevronRight, Phone, MessageCircle, Mail, Users,
+  Inbox, Clock, IndianRupee, ListChecks, Flag, FileText, Plus, RefreshCw, Check, Phone, MessageCircle, Mail, Users, Mic, Search, CalendarClock,
 } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { hasRole, primaryRole } from '../../lib/roles';
@@ -15,6 +15,8 @@ import ConsoleHeader from '../ui/ConsoleHeader';
 import { CountUp, Dot } from '../ui/HudBits';
 import { MomReviewModal } from '../ops/MomReviewModal';
 import { MomCaptureModal } from '../ops/MomCaptureModal';
+import { handoverSlip } from '../../lib/opsAssist';
+import { CapturePanel, AskProjectPanel, MeetingPrepPanel } from './OpsAssist';
 
 /*
   THE OPS DESK (lib/opsDesk.ts).
@@ -22,10 +24,12 @@ import { MomCaptureModal } from '../ops/MomCaptureModal';
   For Client Relations it is the working day: one list, overdue first, of
   their own next steps, late payments and decisions waiting on the client,
   and the decisions coming back from escalations. For the studio's leads it
-  is where escalations are decided and minutes approved.
+  is where escalations are decided and minutes approved. The smart assist
+  (OpsAssist.tsx) captures chats and calls, answers questions about a
+  project and prepares client meetings.
 */
 
-type Section = 'today' | 'waiting' | 'payments' | 'log' | 'escalations' | 'minutes';
+type Section = 'today' | 'waiting' | 'payments' | 'log' | 'escalations' | 'minutes' | 'ask' | 'prep';
 const LEADS = ['Super Admin', 'Owner', 'Admin', 'Ops Director'];
 /* Projects with nothing left to chase. */
 const QUIET = new Set(['lost', 'lead', 'draft']);
@@ -69,6 +73,7 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
       name: String(p.context?.name || 'Project'),
       clientName: String(p.context?.clientName || p.context?.client?.name || ''),
       status: String(p.context?.status || ''),
+      targetHandover: (p.context?.targetHandoverDate as string | undefined) || null,
       money: ((p as any).clientMoney !== undefined ? (p as any).clientMoney : clientMoneyOf(p)) as ClientMoney | null,
     })), [projects]);
 
@@ -122,7 +127,8 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
   const [escFor, setEscFor] = useState<LogPrefill | null>(null);
   const [deciding, setDeciding] = useState<Escalation | null>(null);
   const [reviewing, setReviewing] = useState<OpsMom | null>(null);
-  const [writingFor, setWritingFor] = useState<string | null>(null);
+  const [writingFor, setWritingFor] = useState<{ projectId: string; notes: string } | null>(null);
+  const [capturing, setCapturing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
   const done = async (f: FollowUp) => {
@@ -149,6 +155,8 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
     log: followUps.length,
     escalations: escalations.filter((e) => e.status !== 'closed').length,
     minutes: isLead ? moms.filter((m) => m.status === 'pending_review').length : moms.filter((m) => m.status === 'draft' || m.status === 'pending_review').length,
+    ask: 0,
+    prep: 0,
   };
   const SECTIONS: { id: Section; label: string; icon: React.ComponentType<any> }[] = [
     { id: 'today', label: 'Today', icon: Inbox },
@@ -157,6 +165,8 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
     { id: 'log', label: 'Follow-up log', icon: ListChecks },
     { id: 'escalations', label: 'Escalations', icon: Flag },
     { id: 'minutes', label: isLead ? 'Minutes to approve' : 'Minutes', icon: FileText },
+    { id: 'ask', label: 'Ask a project', icon: Search },
+    { id: 'prep', label: 'Meeting prep', icon: CalendarClock },
   ];
 
   const canWrite = isLead || isCR || !['Viewer', 'Designer', 'Site Supervisor', 'Vendor'].includes(primaryRole(roles));
@@ -179,6 +189,7 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
         actions={canWrite ? (
           <>
             <button type="button" className={btnPri} onClick={() => setLogFor({})}><Plus className="w-4 h-4" />Log a follow-up</button>
+            <button type="button" className={btnSec} onClick={() => setCapturing(true)}><Mic className="w-4 h-4" />Capture a chat or call</button>
             <button type="button" className={btnSec} onClick={() => setEscFor({})}><Flag className="w-4 h-4" />Raise an escalation</button>
             <button type="button" className={btnSec} onClick={load} disabled={loading} aria-label="Refresh"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh</button>
           </>
@@ -271,10 +282,12 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
           )}
 
           {section === 'waiting' && (
-            <Panel icon={Clock} title="Waiting on client" blurb="Every payment and decision the studio is waiting for, how long it has waited, and when it was last chased.">
+            <Panel icon={Clock} title="Waiting on client" blurb="Every payment and decision the studio is waiting for, how long it has waited, when it was last chased, and how far it can push the handover.">
               {loading && !waiting.length ? <Loading /> : waiting.length === 0 ? <Empty text="Nothing is waiting on a client." /> : (
                 <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
-                  {[...waiting].sort((a, b) => b.days - a.days).map((w, i) => (
+                  {[...waiting].sort((a, b) => b.days - a.days).map((w, i) => {
+                    const slip = handoverSlip(w, deskProjects.find((p) => p.id === w.projectId)?.targetHandover);
+                    return (
                     <div key={`${w.projectId}:${w.key}`} className="flex flex-wrap items-center gap-3 px-3 py-2.5 hud-row-in" style={{ animationDelay: `${i * 30}ms` }}>
                       <Dot tone={w.overdueDays || w.days >= 7 ? 'bad' : w.days >= 3 ? 'warn' : 'ok'} />
                       <div className="min-w-0 flex-1">
@@ -283,10 +296,17 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
                           {w.kind === 'payment' && w.amount ? ` · ${inr(w.amount)}` : ''}{w.overdueDays ? ` · ${w.overdueDays} day${w.overdueDays === 1 ? '' : 's'} late` : ''}</p>
                         <p className="text-[11px] text-slate-500">{w.lastChaseAt ? `Last chased ${fmtWhen(w.lastChaseAt)} · ${w.reminders} reminder${w.reminders === 1 ? '' : 's'}` : 'Not chased yet'}</p>
                       </div>
+                      {slip.days > 0 && (
+                        <span className={`${chip} ${slip.days >= 7 ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}
+                          title="An estimate: a late payment holds the next stage by the days it is late; a decision, by the days past a three-day grace period.">
+                          Handover +{slip.days}d{slip.newHandoverKey ? ` · ${fmtDay(slip.newHandoverKey)}` : ''}
+                        </span>
+                      )}
                       {canWrite && <button type="button" className={btnSm} onClick={() => setEscFor({ projectId: w.projectId, subjectKey: w.key })}><Flag className="w-3.5 h-3.5" />Escalate</button>}
                       {canWrite && <button type="button" className={btnSm} onClick={() => setLogFor({ projectId: w.projectId, subjectKey: w.key })}><MessageCircle className="w-3.5 h-3.5" />Remind</button>}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </Panel>
@@ -380,7 +400,7 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
                 {!isLead && canWrite && (
                   <div className="max-w-sm">
                     <label htmlFor="mom-project" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Write minutes for</label>
-                    <select id="mom-project" className={input} value={writingFor || ''} onChange={(e) => setWritingFor(e.target.value || null)}>
+                    <select id="mom-project" className={input} value={writingFor?.projectId || ''} onChange={(e) => setWritingFor(e.target.value ? { projectId: e.target.value, notes: '' } : null)}>
                       <option value="">Choose a project</option>
                       {deskProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
@@ -408,6 +428,19 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
               </div>
             </Panel>
           )}
+
+          {section === 'ask' && (
+            <Panel icon={Search} title="Ask a project" blurb="Answers about one project from its payments, decisions, minutes and follow-ups, with where each came from. Costs and margins are never part of it.">
+              <AskProjectPanel projects={deskProjects as DeskProject[]} rawProjects={projects} waiting={waiting} tenantId={tenantId} />
+            </Panel>
+          )}
+
+          {section === 'prep' && (
+            <Panel icon={CalendarClock} title="Meeting prep" blurb="Before a client meeting: what each side owes, the money, what was said last time, and an agenda to send or to start the minutes from.">
+              <MeetingPrepPanel projects={deskProjects as DeskProject[]} rawProjects={projects} waiting={waiting} tenantId={tenantId} canWrite={canWrite && !isLead}
+                onStartMinutes={(projectId, notes) => setWritingFor({ projectId, notes })} />
+            </Panel>
+          )}
         </div>
       </div>
       )}
@@ -420,6 +453,10 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
         <RaiseEscalationPanel projects={deskProjects as DeskProject[]} waiting={waiting} me={me} tenantId={tenantId}
           prefill={escFor} onClose={() => setEscFor(null)} onSaved={() => { setEscFor(null); setSection('escalations'); load(); }} />
       )}
+      {capturing && (
+        <CapturePanel projects={deskProjects as DeskProject[]} waiting={waiting} me={me} tenantId={tenantId}
+          onClose={() => setCapturing(false)} onSaved={(escalated) => { setCapturing(false); setSection(escalated ? 'escalations' : 'log'); load(); }} />
+      )}
       {deciding && <DecideEscalationPanel escalation={deciding} me={me} onClose={() => setDeciding(null)} onSaved={() => { setDeciding(null); load(); }} />}
       {reviewing && (
         <MomReviewModal mom={reviewing.raw} projectId={reviewing.projectId} studioId={tenantId}
@@ -427,11 +464,11 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
       )}
       {writingFor && (
         <MomCaptureModal
-          visit={{ id: `ops-${Date.now()}`, type: 'client_meeting', title: 'Client meeting', date: Date.now(), notes: '', attendees: [] } as any}
-          projectId={writingFor} studioId={tenantId} projectContextName={projectName(writingFor)}
+          visit={{ id: `ops-${Date.now()}`, type: 'client_meeting', title: 'Client meeting', date: Date.now(), notes: writingFor.notes, attendees: [] } as any}
+          projectId={writingFor.projectId} studioId={tenantId} projectContextName={projectName(writingFor.projectId)}
           onClose={() => setWritingFor(null)}
           onSuccess={async (momId) => {
-            const pid = writingFor;
+            const pid = writingFor.projectId;
             setWritingFor(null);
             await load();
             const p = deskProjects.find((x) => x.id === pid);

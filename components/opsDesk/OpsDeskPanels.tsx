@@ -6,8 +6,9 @@ import {
   type Channel, type Outcome, type Tone, type WaitingItem, type Subject, type EscalationCategory, type Escalation,
 } from '../../lib/opsDesk';
 import { logFollowUp, raiseEscalation, decideEscalation } from '../../services/opsDeskService';
+import { handoverSlip } from '../../lib/opsAssist';
 
-export interface DeskProject { id: string; name: string; clientName: string }
+export interface DeskProject { id: string; name: string; clientName: string; targetHandover?: string | null }
 export interface Person { email: string; name: string }
 
 /* ── The app's modal and controls (DESIGN.md) ──────────────────────────── */
@@ -72,10 +73,13 @@ export function LogFollowUpPanel({ projects, waiting, team, me, tenantId, studio
 
   const [tone, setTone] = useState<Tone>(item && item.reminders >= 1 ? 'clear' : 'gentle');
   const [topic, setTopic] = useState('');
+  /* How long the wait can hold handover up, said in the firmer tones (lib/opsAssist). */
+  const slip = item ? handoverSlip(item, project?.targetHandover) : null;
   const draft = useMemo(() => draftMessage(kind, tone, {
     clientName: project?.clientName || '', projectName: project?.name || '', label: item?.label || topic || 'a quick update',
     amount: item?.amount, dueKey: item?.dueKey, days: item?.days, senderName: me.name, studioName,
-  }), [kind, tone, project?.clientName, project?.name, item, topic, me.name, studioName]);
+    slipDays: slip?.days, newHandoverKey: slip?.newHandoverKey,
+  }), [kind, tone, project?.clientName, project?.name, item, topic, me.name, studioName, slip?.days, slip?.newHandoverKey]);
   const [message, setMessage] = useState<string | null>(null);
   const shown = message ?? draft;
   const [copied, setCopied] = useState(false);

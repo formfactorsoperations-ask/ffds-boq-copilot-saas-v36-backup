@@ -380,6 +380,9 @@ export interface DraftContext {
   days?: number;
   senderName: string;
   studioName: string;
+  /** How long the wait can hold handover up (lib/opsAssist handoverSlip), and where handover lands. */
+  slipDays?: number;
+  newHandoverKey?: string | null;
 }
 
 /**
@@ -389,18 +392,22 @@ export interface DraftContext {
  */
 export function draftMessage(kind: SubjectKind, tone: Tone, c: DraftContext): string {
   const hi = `Hi ${c.clientName || 'there'},`;
+  /* Said plainly in the firmer tones, never in the gentle one: it is a fact about their own dates. */
+  const slip = c.slipDays && c.slipDays > 0
+    ? ` As things stand it could move the handover by about ${c.slipDays} day${c.slipDays === 1 ? '' : 's'}${c.newHandoverKey ? `, to around ${niceDate(c.newHandoverKey)}` : ''}.`
+    : '';
   const sign = `\n\nRegards,\n${c.senderName}${c.studioName ? `\n${c.studioName}` : ''}`;
   if (kind === 'payment') {
     const amt = c.amount ? ` of ${inr(c.amount)}` : '';
     const due = c.dueKey ? ` (due ${niceDate(c.dueKey)})` : '';
     if (tone === 'gentle') return `${hi}\n\nA gentle reminder about the payment${amt} for ${c.label}${due} on ${c.projectName}. Please let us know once it is done, or if you need the invoice again.${sign}`;
-    if (tone === 'clear') return `${hi}\n\nThe payment${amt} for ${c.label} on ${c.projectName} was due${c.dueKey ? ` on ${niceDate(c.dueKey)}` : ''} and is still pending. Could you share when we can expect it? The next stage of work is planned around it.${sign}`;
-    return `${hi}\n\nThe payment${amt} for ${c.label} on ${c.projectName} has been pending for ${c.days ?? 'several'} days${c.dueKey ? ` since it fell due on ${niceDate(c.dueKey)}` : ''}. We will need it cleared to keep the next stage on schedule. Please confirm a date for the transfer this week.${sign}`;
+    if (tone === 'clear') return `${hi}\n\nThe payment${amt} for ${c.label} on ${c.projectName} was due${c.dueKey ? ` on ${niceDate(c.dueKey)}` : ''} and is still pending. Could you share when we can expect it? The next stage of work is planned around it.${slip}${sign}`;
+    return `${hi}\n\nThe payment${amt} for ${c.label} on ${c.projectName} has been pending for ${c.days ?? 'several'} days${c.dueKey ? ` since it fell due on ${niceDate(c.dueKey)}` : ''}. We will need it cleared to keep the next stage on schedule.${slip} Please confirm a date for the transfer this week.${sign}`;
   }
   if (kind === 'decision') {
     if (tone === 'gentle') return `${hi}\n\nJust checking in on ${c.label} for ${c.projectName}. Whenever you are ready, please share your go-ahead, or tell us if you would like to go over it once more.${sign}`;
-    if (tone === 'clear') return `${hi}\n\nWe are waiting for your approval on ${c.label} for ${c.projectName}${c.days ? ` (sent ${c.days} days ago)` : ''}. The next steps on site depend on it. Could you confirm, or let us know what you would like changed?${sign}`;
-    return `${hi}\n\n${c.label} for ${c.projectName} has been waiting for your approval for ${c.days ?? 'several'} days, and the work that follows it is now on hold. Please confirm this week so we can keep to the dates agreed.${sign}`;
+    if (tone === 'clear') return `${hi}\n\nWe are waiting for your approval on ${c.label} for ${c.projectName}${c.days ? ` (sent ${c.days} days ago)` : ''}. The next steps on site depend on it.${slip} Could you confirm, or let us know what you would like changed?${sign}`;
+    return `${hi}\n\n${c.label} for ${c.projectName} has been waiting for your approval for ${c.days ?? 'several'} days, and the work that follows it is now on hold.${slip} Please confirm this week so we can keep to the dates agreed.${sign}`;
   }
   if (tone === 'gentle') return `${hi}\n\nHope you are doing well. A quick update from us on ${c.projectName}: ${c.label}. Do let us know if you have any questions.${sign}`;
   if (tone === 'clear') return `${hi}\n\nAbout ${c.projectName}: ${c.label}. Could you get back to us on this when you can?${sign}`;
