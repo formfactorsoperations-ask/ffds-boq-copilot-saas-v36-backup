@@ -102,6 +102,7 @@ const DrawingTrackerModule = lazyWithRetry(() => import("./components/ops/Drawin
 const ScopeAdditionsModule = lazyWithRetry(() => import("./components/ops/ScopeAdditionsModule"));
 const SupervisorMobileApp = lazyWithRetry(() => import("./components/SupervisorMobileApp"));
 const OpsDeskPage = lazyWithRetry(() => import("./components/opsDesk/OpsDeskPage"));
+const PeoplePage = lazyWithRetry(() => import("./components/people/PeoplePage"));
 
 import {
   FullProjectData,
@@ -2624,6 +2625,7 @@ export default function App() {
     "reports",
     "design-review",
     "ops-desk",
+    "people",
     "projects",
     "clients",
     "bank",
@@ -3111,6 +3113,7 @@ export default function App() {
                       }}
                     />
                   )}
+                  {activeTab === "people" && <PeoplePage projects={visibleProjects} />}
                   {activeTab === "reports" && (
                     <StudioReports
                       projects={visibleProjects}
@@ -3862,6 +3865,7 @@ export default function App() {
                       }}
                     />
                   )}
+                  {activeTab === "people" && <PeoplePage projects={visibleProjects} />}
                   {activeTab === "reports" && (
                     <StudioReports
                       projects={visibleProjects}

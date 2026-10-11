@@ -10,10 +10,11 @@ import {
   AttentionState, isHidden, writeAttentionEntry, TOMORROW_9AM, NEXT_WEEK,
 } from "../services/attentionState";
 import StudioFooter from "./home/StudioFooter";
+import MyDayCard from "./people/MyDayCard";
 import { isLimitedRole, seesStudioFinance, mayOpenStudioTab } from "../lib/roleAccess";
 import {
   ArrowRight, CheckCircle2, ChevronDown, Plus, Sparkles, Clock, Wallet, Zap, Layers3, Check, BellOff,
-  LayoutGrid, Users, BarChart3, Store, FileSignature, Boxes, PenTool, Inbox,
+  LayoutGrid, Users, BarChart3, Store, FileSignature, Boxes, PenTool, Inbox, UserCheck,
 } from "lucide-react";
 
 /**
@@ -114,6 +115,7 @@ export default function StudioHomeOrbit({
     { key: "templates", label: "Templates", icon: FileSignature, accent: "#6D28D9", tab: "admin-templates-bank", ring: 1 },
     { key: "setup", label: "Studio setup", icon: Boxes, accent: "#0F766E", tab: "studio-settings", ring: 1 },
     { key: "ops", label: "Ops Desk", icon: Inbox, accent: "#0F766E", tab: "ops-desk", ring: 0 },
+    { key: "people", label: "People", icon: UserCheck, accent: "#3D52A0", tab: "people", ring: 1 },
     /* For the roles without the studio's setup screens, Design Desk takes the outer ring. */
     { key: "desk", label: "Design Desk", icon: PenTool, accent: "#6D5BD0", tab: "design-review", ring: 1 },
   ].filter((h) => {
@@ -521,6 +523,13 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
       {/* Clock, calendar and pulse as one strip directly under the hero --
           today's context before today's work. Same component design A uses, so
           the two pages cannot drift apart. */}
+      {/* My day: check in and out, and leave at a glance (People). */}
+      {mayOpenStudioTab("people", roles?.length ? roles : role) && (
+        <div className="max-w-[1400px] mx-auto w-full">
+          <MyDayCard variant="compact" sites={projects.map((p: any) => String(p?.context?.name || "")).filter(Boolean)} onOpenPeople={() => onNavigate?.("people")} />
+        </div>
+      )}
+
       <div className="max-w-[1400px] mx-auto w-full">
         <ClockCalendar projects={projects} />
       </div>
