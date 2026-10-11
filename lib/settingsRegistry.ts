@@ -23,7 +23,8 @@ export type SectionId =
   | 'portal'
   | 'appearance'
   | 'system'
-  | 'opsdesk';
+  | 'opsdesk'
+  | 'people';
 
 export interface SettingsSection {
   id: SectionId;
@@ -41,6 +42,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'appearance', label: 'Appearance', blurb: 'Typeface, palette and table density' },
   { id: 'system', label: 'Data & integrations', blurb: 'Calendar sync, backups and the audit trail' },
   { id: 'opsdesk', label: 'Ops Desk', blurb: 'When a payment is late, and who decides escalations' },
+  { id: 'people', label: 'People', blurb: 'Working hours, leave, holidays, check-in location and who reports to whom' },
 ];
 
 /** How badly a missing value hurts. */
