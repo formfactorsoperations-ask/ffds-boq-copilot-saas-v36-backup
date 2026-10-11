@@ -70,6 +70,13 @@ export default function OpsDeskSettings({ org, team, canEdit, onChange }: {
         <p className="text-[11px] text-slate-500 mt-2">Only an Owner, Admin or Ops Director can record the decision, whoever is emailed.</p>
       </div>
 
+      <label className="flex flex-col gap-1.5 max-w-xl">
+        <span className={label}>Google review link</span>
+        <input type="url" className={num.replace('w-24', 'w-full')} disabled={!canEdit} maxLength={300} placeholder="https://g.page/r/…/review"
+          value={String(org?.opsDesk?.reviewLink ?? '')} onChange={(e) => set({ reviewLink: e.target.value.trim() })} />
+        <span className="text-[11px] text-slate-500">Put in the message when Client Relations asks a happy client for a review. From your Google Business Profile → Ask for reviews.</span>
+      </label>
+
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-slate-800">The daily check</p>

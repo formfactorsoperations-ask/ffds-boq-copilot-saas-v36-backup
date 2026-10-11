@@ -92,10 +92,12 @@ export interface OpsSettings {
   escalateAfterDays: number;
   /** Who is told of an escalation. Empty means the studio's Owners and Admins. */
   escalationRecipients: string[];
+  /** The studio's Google review link, put in the message asking a client for a review. */
+  reviewLink: string;
 }
 
 export const DEFAULT_OPS_SETTINGS: OpsSettings = {
-  paymentDueDays: 7, escalateAfterReminders: 2, escalateAfterDays: 7, escalationRecipients: [],
+  paymentDueDays: 7, escalateAfterReminders: 2, escalateAfterDays: 7, escalationRecipients: [], reviewLink: '',
 };
 
 const clampInt = (v: unknown, lo: number, hi: number, dflt: number) => {
@@ -111,6 +113,7 @@ export function opsSettingsOf(org: any): OpsSettings {
     escalateAfterDays: clampInt(s.escalateAfterDays, 1, 60, DEFAULT_OPS_SETTINGS.escalateAfterDays),
     escalationRecipients: (Array.isArray(s.escalationRecipients) ? s.escalationRecipients : [])
       .map((e: any) => String(e || '').trim().toLowerCase()).filter(Boolean),
+    reviewLink: /^https:\/\/\S{4,300}$/.test(String(s.reviewLink || '').trim()) ? String(s.reviewLink).trim() : '',
   };
 }
 
@@ -258,7 +261,9 @@ export function withChases(items: WaitingItem[], followUps: FollowUp[]): Waiting
 /* ── The queue ───────────────────────────────────────────────────────────── */
 
 export type QueueGroup = 'overdue' | 'today' | 'week' | 'later';
-export type QueueKind = 'next' | 'payment' | 'decision' | 'mom_review' | 'escalation_open' | 'escalation_decided';
+export type QueueKind = 'next' | 'payment' | 'decision' | 'mom_review' | 'escalation_open' | 'escalation_decided'
+  /* Client care (lib/clientCare.ts). */
+  | 'visit' | 'documents' | 'checklist' | 'ask';
 
 export interface QueueItem {
   id: string;
@@ -289,6 +294,8 @@ export interface QueueInput {
   waiting: WaitingItem[];
   moms: { id: string; projectId: string; projectName: string; status: string; meetingTitle?: string; momRef?: string }[];
   escalations: Escalation[];
+  /** Items worked out elsewhere (lib/clientCare careQueue), sorted in with the rest. */
+  extra?: QueueItem[];
 }
 
 /**
@@ -356,9 +363,13 @@ export function buildQueue(input: QueueInput): QueueItem[] {
     }
   }
 
+  items.push(...(input.extra || []));
+
   const order: Record<QueueGroup, number> = { overdue: 0, today: 1, week: 2, later: 3 };
   /* Within a day: what needs a decision, then money, then the rest. */
-  const weight: Record<QueueKind, number> = { escalation_open: 0, escalation_decided: 1, payment: 2, decision: 3, mom_review: 4, next: 5 };
+  const weight: Record<QueueKind, number> = {
+    escalation_open: 0, escalation_decided: 1, payment: 2, decision: 3, visit: 4, mom_review: 5, next: 6, documents: 7, checklist: 8, ask: 9,
+  };
   return items.sort((a, b) => order[a.group] - order[b.group] || String(a.due || '').localeCompare(String(b.due || ''))
     || weight[a.kind] - weight[b.kind] || a.title.localeCompare(b.title));
 }
