@@ -60,7 +60,7 @@ export const DESIGNER_STUDIO_TABS = new Set(['home', 'projects', 'design-review'
   page's dial offers the same ones, so it never shows a screen the top bar
   would not.
 */
-const LEADS = ['Owner', 'Admin', 'Ops Director'];
+const LEADS = ['Super Admin', 'Owner', 'Admin', 'Ops Director'];
 export const STUDIO_TAB_ROLES: Record<string, string[]> = {
   home: [...LEADS, 'Design Head', 'Site Supervisor', 'Designer'],
   projects: [...LEADS, 'Design Head', 'Site Supervisor', 'Designer'],
