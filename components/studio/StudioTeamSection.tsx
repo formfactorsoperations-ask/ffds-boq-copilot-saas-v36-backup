@@ -17,6 +17,7 @@ import React, { useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../services/firebaseClient';
 import { TeamMember, UserRole } from '../../types';
+import { memberRoles, rolesOf } from '../../lib/roles';
 import { Plus, Trash2, UserPlus, Users, Download, AlertTriangle, Check } from 'lucide-react';
 import { createStaffLogin, StaffLogin } from '../../services/studioAccess';
 import { useProjectDirectory, useProjectTeam } from '../../services/projectTeam';
@@ -30,11 +31,18 @@ const ROLE_BLURB: Record<string, string> = {
   'Admin': 'Everything in this studio, including settings and money',
   'Ops Director': 'Projects, settings and margins — no platform access',
   'Design Head': 'Reviews and approves every drawing; all projects, without the money',
-  'Designer': 'Projects and BOQs; cannot see studio settings',
+  'Designer': 'Drawings on the projects assigned to them; no money, no settings',
   'Site Supervisor': 'Site visits, snags and progress on assigned projects',
   'Viewer': 'Read only',
   'Client': 'Their own project portal, nothing else',
 };
+
+/*
+  Roles a person may hold on top of their main one: the principal architect
+  is an Admin and the Design Head. What they may do is everything any of
+  their roles may do (lib/roles).
+*/
+const EXTRA_ROLES = ['Admin', 'Ops Director', 'Design Head', 'Site Supervisor', 'Designer'];
 
 const blank = (): TeamMember => ({
   id: `tm-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -104,6 +112,16 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
     onChange(team.map((m) => (m.id === id ? { ...m, ...patch } : m)));
 
   const add = () => onChange([...team, blank()]);
+
+  /* `roles` keeps the main role and every extra one; `role` stays the main one, as chosen. */
+  const extrasOf = (m: TeamMember) => memberRoles(m).filter((r) => r !== m.role);
+  const setMainRole = (m: TeamMember, role: UserRole) =>
+    update(m.id, { role, roles: role === ('Client' as UserRole) ? [] : rolesOf([role, ...extrasOf(m).filter((r) => r !== role)]) });
+  const toggleExtra = (m: TeamMember, role: string) => {
+    const extras = extrasOf(m);
+    const next = extras.includes(role) ? extras.filter((r) => r !== role) : [...extras, role];
+    update(m.id, { roles: rolesOf([m.role, ...next]) });
+  };
 
   const remove = (id: string) => {
     onChange(team.filter((m) => m.id !== id));
@@ -251,11 +269,31 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
                     <select
                       value={m.role as string}
                       disabled={!canEdit}
-                      onChange={(e) => update(m.id, { role: e.target.value as UserRole })}
+                      onChange={(e) => setMainRole(m, e.target.value as UserRole)}
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] outline-none disabled:bg-slate-50"
                     >
                       {ROLES.map((r) => <option key={r as string} value={r as string}>{r as string}</option>)}
                     </select>
+                    {m.role !== ('Client' as UserRole) && (canEdit || extrasOf(m).length > 0) && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1" role="group" aria-label={`Other roles for ${m.name || 'this person'}`}>
+                        <span className="mr-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Also</span>
+                        {EXTRA_ROLES.filter((r) => r !== m.role && (canEdit || extrasOf(m).includes(r))).map((r) => {
+                          const on = extrasOf(m).includes(r);
+                          return (
+                            <button
+                              key={r}
+                              type="button"
+                              disabled={!canEdit}
+                              aria-pressed={on}
+                              onClick={() => toggleExtra(m, r)}
+                              className={`px-2 py-0.5 rounded-full border text-[11px] font-bold transition ${on ? 'border-[#3D52A0] bg-[#3D52A0] text-white' : 'border-slate-300 bg-white text-slate-500 hover:border-[#3D52A0] hover:text-[#3D52A0]'} disabled:cursor-default`}
+                            >
+                              {on ? '✓ ' : '+ '}{r}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                   <div className="md:col-span-3">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
@@ -292,7 +330,7 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
                 </div>
 
                 <div className="flex items-center gap-3 mt-3 flex-wrap text-[11px]">
-                  <span className="text-slate-500">{ROLE_BLURB[m.role as string] || ''}</span>
+                  <span className="text-slate-500">{memberRoles(m).map((r) => ROLE_BLURB[r]).filter(Boolean).join(' · ')}</span>
                   {isYou && <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-bold">You</span>}
                   {m.loginIssuedAt
                     ? <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold">

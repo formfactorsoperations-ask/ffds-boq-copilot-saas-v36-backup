@@ -64,9 +64,10 @@ export default function DesignDeskTab(props: Props) {
 
 function Desk({ projects, activeProjectId }: Props) {
   const toast = useToast();
-  const { orgData, currentRole, currentUserAuth } = useOrg();
+  const { orgData, currentRole, currentRoles, currentUserAuth } = useOrg();
   const orgId = orgData?.tenantId || 'demo-tenant-01';
-  const role = String(currentRole || '');
+  /* Every role they hold (lib/roles): an Admin who is also the Design Head reviews as either. */
+  const role: string[] = currentRoles?.length ? currentRoles : [String(currentRole || '')];
   const reviewer = canReview(role);
   const uploader = canUpload(role);
   const canRun = canRunMeeting(role);

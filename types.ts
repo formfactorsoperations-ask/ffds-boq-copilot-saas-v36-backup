@@ -65,6 +65,8 @@ export interface TeamMember {
     name: string;
     email: string;
     role: UserRole;
+    /** Further roles this person also holds (lib/roles): the principal architect is an Admin and the Design Head. */
+    roles?: string[];
     status: 'Active' | 'Pending';
     /**
      * What this person is called on a document — "Principal Architect", not

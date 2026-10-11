@@ -24,6 +24,8 @@ import {
 import { AIStatus } from '../types';
 import AIStatusIndicator from './AIStatusIndicator';
 import { useOrg } from '../contexts/OrgContext';
+import { mayOpenStudioTab } from '../lib/roleAccess';
+import { roleLabel } from '../lib/roles';
 import { FFDSLogo } from './FFDSLogo';
 import { db } from '../services/dbService';
 import CloudConfigModal from './CloudConfigModal';
@@ -41,22 +43,19 @@ interface SidebarProps {
   isHidden?: boolean;
 }
 
+/* Who opens each studio screen is decided once, in lib/roleAccess (STUDIO_TAB_ROLES); the home dial reads the same list. */
 const TABS = [
-  // Not for Designers: the studio home is the studio's worklist. They go
-  // straight to Projects, which lists only the projects assigned to them.
-  { id: 'home', label: 'Home', icon: Home, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Site Supervisor'] },
-  { id: 'projects', label: 'Projects', icon: Building2, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Site Supervisor', 'Designer'] },
+  { id: 'home', label: 'Home', icon: Home, section: 'STUDIO' },
+  { id: 'projects', label: 'Projects', icon: Building2, section: 'STUDIO' },
   /* Design Desk: where drawings are reviewed. The id stays 'design-review' so saved tabs and links keep working. */
-  { id: 'design-review', label: 'Design Desk', icon: PenTool, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Designer', 'Owner'] },
-  // Not for Designers: the client list carries account values, and a Designer's
-  // work is reached through their assigned projects.
-  { id: 'clients', label: 'Clients', icon: Users, section: 'STUDIO', roles: ['Admin', 'Ops Director', 'Design Head', 'Site Supervisor'] },
-  { id: 'reports', label: 'Reports', icon: BarChart3, section: 'STUDIO', roles: ['Admin', 'Ops Director'] },
+  { id: 'design-review', label: 'Design Desk', icon: PenTool, section: 'STUDIO' },
+  { id: 'clients', label: 'Clients', icon: Users, section: 'STUDIO' },
+  { id: 'reports', label: 'Reports', icon: BarChart3, section: 'STUDIO' },
   
-  { id: 'studio-settings', label: 'Studio Settings', icon: Settings, section: 'STUDIO ADMIN', roles: ['Admin', 'Ops Director'] },
-  { id: 'admin-templates-bank', label: 'Templates & Bank', icon: Library, section: 'STUDIO ADMIN', roles: ['Admin', 'Ops Director'] },
+  { id: 'studio-settings', label: 'Studio Settings', icon: Settings, section: 'STUDIO ADMIN' },
+  { id: 'admin-templates-bank', label: 'Templates & Bank', icon: Library, section: 'STUDIO ADMIN' },
   
-  { id: 'saas-dashboard', label: 'Platform Admin', icon: Globe, section: 'PLATFORM', roles: ['Super Admin'] },
+  { id: 'saas-dashboard', label: 'Platform Admin', icon: Globe, section: 'PLATFORM' },
 ];
 
 const TAB_THEMES: Record<string, { iconColor: string; bgLight: string; borderColor: string; activeGradient: string }> = {
@@ -126,7 +125,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [adminMenu, userMenu]);
 
-  const { orgData, currentRole, currentUserAuth } = useOrg();
+  const { orgData, currentRole, currentRoles, currentUserAuth } = useOrg();
+  /* "Admin + Design Head" when they hold several roles. */
+  const roleText = currentRoles?.length ? roleLabel(currentRoles) : String(currentRole || '');
   
   const isCloud = db.isCloud;
   const activeLogo = logo || orgData?.orgLogo || orgData?.customLogo || (orgData as any)?.logoUrl;
@@ -218,14 +219,11 @@ const Sidebar: React.FC<SidebarProps> = ({
       if (tab.id === 'saas-dashboard') {
         return currentUserAuth?.email === 'formfactors.operations@gmail.com';
       }
-      if (tab.roles) {
-        if (currentRole === 'Super Admin' && currentUserAuth?.email === 'formfactors.operations@gmail.com') return true;
-        if (currentRole === 'Super Admin' && currentUserAuth?.email !== 'formfactors.operations@gmail.com') return false;
-        return tab.roles.includes(currentRole as any);
-      }
-      return true;
+      if (currentRole === 'Super Admin') return currentUserAuth?.email === 'formfactors.operations@gmail.com';
+      // Any of their roles opens it (lib/roles): an Admin who is also the Design Head gets both sets.
+      return mayOpenStudioTab(tab.id, currentRoles?.length ? currentRoles : currentRole);
     });
-  }, [currentRole, currentUserAuth?.email]);
+  }, [currentRole, roleText, currentUserAuth?.email]);
 
   // Group tabs by section
   const sections = React.useMemo(() => {
@@ -424,7 +422,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => { setUserMenu(v => !v); setAdminMenu(false); }}
             aria-expanded={userMenu}
             aria-haspopup="menu"
-            title={`${userName} (${currentRole})`}
+            title={`${userName} (${roleText})`}
             className="group flex items-center gap-2 pl-1 pr-1.5 py-1 rounded-xl hover:bg-sky-50/80
                        transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7091E6]/60"
           >
@@ -433,7 +431,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <span className="hidden md:flex items-center gap-2 min-w-0 pl-1">
               <span className="text-[12.5px] font-extrabold text-slate-800 truncate max-w-[140px]">{userName}</span>
               <span className="text-[9.5px] font-extrabold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full bg-[#E8ECFB] text-[#3D52A0] whitespace-nowrap">
-                {currentRole}
+                {roleText}
               </span>
             </span>
             <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#4C65B5] to-[#3D52A0] text-white
@@ -470,7 +468,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       <p className="text-[11px] text-slate-500 truncate leading-tight mt-0.5" title={currentUserAuth.email}>{currentUserAuth.email}</p>
                     )}
                     <p className="text-[9.5px] font-mono font-bold text-[#3D52A0] uppercase tracking-[0.14em] mt-0.5">
-                      {currentRole}
+                      {roleText}
                     </p>
                   </div>
                 </div>

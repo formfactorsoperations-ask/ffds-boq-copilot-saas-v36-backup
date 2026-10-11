@@ -8,7 +8,8 @@ import { functions } from './firebaseClient';
  * account that found the sign-in page. They get nothing.
  */
 export type StudioAccess =
-  | { access: 'studio'; tenantId: string | null; role: string }
+  /** `role` is the most senior of `roles` (all of them; older servers send only `role`). */
+  | { access: 'studio'; tenantId: string | null; role: string; roles?: string[] }
   | { access: 'client'; tenantId: string | null; role: 'Client'; projectIds: string[] }
   | { access: 'none' };
 

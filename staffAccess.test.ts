@@ -112,6 +112,37 @@ describe('leaving the team', () => {
   });
 });
 
+describe('several roles', () => {
+  const mayuri = { email: 'may@s.com', name: 'Mayuri', role: 'Design Head', roles: ['Design Head', 'Admin'] };
+
+  it('settles every role at sign-in, with the most senior as the main one', async () => {
+    store.docs.set('organizations/studio', { team: [mayuri] });
+    const r = await call(syncStudioAccess, 'u-may', 'may@s.com');
+    expect(r).toMatchObject({ access: 'studio', role: 'Admin', roles: ['Admin', 'Design Head'] });
+    expect(store.docs.get('users/u-may')).toMatchObject({ role: 'Admin', roles: ['Admin', 'Design Head'] });
+  });
+
+  it('copies an added role onto the profile and signs them out', async () => {
+    store.authUsers.set('u-may', { uid: 'u-may', email: 'may@s.com' });
+    store.docs.set('users/u-may', { tenantId: 'studio', role: 'Design Head', email: 'may@s.com' });
+    await teamChange([{ ...mayuri, roles: undefined }], [mayuri]);
+    expect(store.docs.get('users/u-may')).toMatchObject({ role: 'Admin', roles: ['Admin', 'Design Head'] });
+    expect(store.revoked).toContain('u-may');
+  });
+
+  it('a row with only the older single role works as before', async () => {
+    const r = await call(syncStudioAccess, 'u-dev', 'dev@s.com');
+    expect(r).toMatchObject({ role: 'Designer', roles: ['Designer'] });
+  });
+
+  it('cannot turn a role it does not know, or Client, into anything', async () => {
+    store.docs.set('organizations/studio', { team: [{ email: 'x@s.com', role: 'Designer', roles: ['Designer', 'Client', 'Super Admin', 'Wizard'] }] });
+    const r = await call(syncStudioAccess, 'u-x', 'x@s.com');
+    // Super Admin is the platform's alone: a studio choosing it gets Admin. Client and unknown roles give Viewer.
+    expect(r).toMatchObject({ role: 'Admin', roles: ['Admin', 'Viewer', 'Designer'] });
+  });
+});
+
 describe('sweep', () => {
   it('lists strays on a dry run and changes nothing; revokes them when applied', async () => {
     store.docs.set('organizations/studio', { team: team([['ana@s.com', 'Admin']]) });

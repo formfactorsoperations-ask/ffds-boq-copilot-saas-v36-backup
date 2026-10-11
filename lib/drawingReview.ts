@@ -20,6 +20,8 @@
  *            drawingReview/{org}/{p}/{d}/versions/...        finalised by the function
  */
 
+import { hasRole, type RoleSet } from './roles';
+
 export type ReviewState = 'DRAFT' | 'IN_REVIEW' | 'CHANGES_REQUESTED' | 'APPROVED';
 
 /** Who a drawing is for: the client sees room designs; carpentry details and services stay in the studio. */
@@ -165,9 +167,10 @@ export const UPLOADER_ROLES = new Set(['Designer', 'Design Head', 'Owner', 'Admi
 /** Who may say whether a drawing is for the client or stays in the studio. */
 export const AUDIENCE_ROLES = new Set(['Design Head', 'Owner', 'Admin', 'Ops Director', 'Super Admin']);
 
-export const canReview = (role?: string | null) => REVIEWER_ROLES.has(String(role || ''));
-export const canUpload = (role?: string | null) => UPLOADER_ROLES.has(String(role || ''));
-export const canSetAudience = (role?: string | null) => AUDIENCE_ROLES.has(String(role || ''));
+/* Each takes one role or all of a person's roles (lib/roles): any one of them is enough. */
+export const canReview = (role?: RoleSet) => hasRole(role, REVIEWER_ROLES);
+export const canUpload = (role?: RoleSet) => hasRole(role, UPLOADER_ROLES);
+export const canSetAudience = (role?: RoleSet) => hasRole(role, AUDIENCE_ROLES);
 /** Who presents to the client and records what they agreed: the Design Head, or the studio's Owner and Admins. */
 export const canRunMeeting = canReview;
 

@@ -14,17 +14,19 @@
  * This decides what is SHOWN. A studio member's browser still receives the
  * project as stored; separating the numbers themselves is a larger change.
  */
+import { hasRole, primaryRole, type RoleSet } from './roles';
+
 const FINANCE_ROLES = new Set(['Super Admin', 'Admin', 'Ops Director', 'Owner']);
 
-export const seesStudioFinance = (role?: string | null): boolean =>
-  FINANCE_ROLES.has(String(role || ''));
+/* Every check here takes one role or all of a person's roles (lib/roles). */
+export const seesStudioFinance = (role?: RoleSet): boolean => hasRole(role, FINANCE_ROLES);
 
 /**
  * A Designer works drawings on the projects they are assigned to, and only
  * that. Every other screen they can reach is view-only, and the screens about
  * pricing, contracts and money are not offered at all.
  */
-export const isDesignerRole = (role?: string | null): boolean => role === 'Designer';
+export const isDesignerRole = (role?: RoleSet): boolean => primaryRole(role) === 'Designer';
 
 /** The one workspace a Designer may change. */
 export const DESIGNER_EDITABLE_TABS = new Set(['drawing-tracker']);
@@ -51,7 +53,29 @@ export const STUDIO_TABS = new Set([
 export const DESIGNER_PROJECT_TABS = new Set([
   'drawing-tracker', 'design-gate', 'leadiq', 'record-decision', 'timeline',
 ]);
-export const DESIGNER_STUDIO_TABS = new Set(['projects', 'design-review', 'data-privacy', 'support', 'terms-of-use']);
+export const DESIGNER_STUDIO_TABS = new Set(['home', 'projects', 'design-review', 'data-privacy', 'support', 'terms-of-use']);
+
+/*
+  The studio screens in the top bar, and the roles that open each. The home
+  page's dial offers the same ones, so it never shows a screen the top bar
+  would not.
+*/
+const LEADS = ['Owner', 'Admin', 'Ops Director'];
+export const STUDIO_TAB_ROLES: Record<string, string[]> = {
+  home: [...LEADS, 'Design Head', 'Site Supervisor', 'Designer'],
+  projects: [...LEADS, 'Design Head', 'Site Supervisor', 'Designer'],
+  'design-review': [...LEADS, 'Design Head', 'Designer'],
+  // Not for Designers: the client list carries account values, and a Designer's
+  // work is reached through their assigned projects.
+  clients: [...LEADS, 'Design Head', 'Site Supervisor'],
+  reports: LEADS,
+  'studio-settings': LEADS,
+  'admin-templates-bank': LEADS,
+};
+
+/** Whether any of these roles opens this studio screen. Screens not listed are not role-gated here. */
+export const mayOpenStudioTab = (tab: string, role?: RoleSet): boolean =>
+  !STUDIO_TAB_ROLES[tab] || hasRole(role, STUDIO_TAB_ROLES[tab]);
 
 /** Where a Designer lands inside a project. */
 export const DESIGNER_HOME_TAB = 'drawing-tracker';
