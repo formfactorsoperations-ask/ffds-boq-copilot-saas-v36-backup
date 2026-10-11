@@ -76,10 +76,19 @@ service cloud.firestore {
       let r = getUserData().get('role', '');
       return r == 'Client Relations' ? 'ops' : (r == 'Site Supervisor' ? 'site' : '');
     }
+    /* The studio's leads: they decide escalations (lib/opsDesk). */
+    function isStudioLead() {
+      return isSuperAdmin() || getUserData().get('role', '') in ['Owner', 'Admin', 'Ops Director'];
+    }
+    function myEmail() {
+      return request.auth.token.email is string ? request.auth.token.email.lower() : '';
+    }
+
     /* The project records each of these roles reads, beneath either of the project's two parents. */
     function teamMayRead(kind, sub) {
       return (kind == 'ops' && sub in ['designGate', 'decisions', 'timelinePhases', 'tasks', 'deliverables', 'journeySteps',
-                                       'stepProgress', 'moms', 'siteVisits', 'communicationLog', 'drawingTracker', 'drawingVersions'])
+                                       'stepProgress', 'moms', 'siteVisits', 'communicationLog', 'drawingTracker', 'drawingVersions',
+                                       'followUps', 'escalations'])
         || (kind == 'site' && sub in ['decisions', 'timelinePhases', 'tasks', 'siteVisits', 'drawingTracker', 'drawingVersions']);
     }
 
@@ -239,7 +248,7 @@ service cloud.firestore {
       allow create: if isSuperAdmin();
       allow update: if isSuperAdmin() || (
           isSameTenant(orgId) &&
-          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['team', 'projectDesigners']) ||
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['team', 'projectDesigners', 'opsDesk']) ||
            getUserData().get('role', '') in ['Owner', 'Admin', 'Ops Director'])
       );
       allow delete: if isSuperAdmin();
@@ -408,6 +417,24 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (isSameTenant(resource.data.tenantId) || isSuperAdmin())
                     && (getUserData().role in ['Owner', 'Admin', 'Super Admin'])
                     && resource.data.status != 'published';
+    }
+
+    /*
+      THE MINUTES REVIEW STEP. Client Relations writes minutes on an assigned
+      project and sends them for approval; they never finalise or share them,
+      so nothing they write reaches a client until a lead has approved it.
+      The studio's own staff are unchanged (the catch-all below).
+    */
+    match /projects/{projectId}/moms/{momId} {
+      allow create: if isAssignedTeam(orgId, projectId, 'ops')
+        && request.resource.data.get('status', '') in ['draft', 'pending_review'];
+      allow update: if isAssignedTeam(orgId, projectId, 'ops')
+        && resource.data.get('status', '') in ['draft', 'pending_review']
+        && request.resource.data.get('status', '') in ['draft', 'pending_review'];
+    }
+    /* The numbering the minutes take (services/momService). */
+    match /sequences/{seqId} {
+      allow read, write: if seqId == 'moms' && getUserData().get('tenantId', '') == orgId && myTeamKind() == 'ops';
     }
 
     /* Client Relations and Site Supervisors, on an assigned project: the records teamMayRead names. */
@@ -626,6 +653,70 @@ service cloud.firestore {
           (isLegacyFFDS() && !('tenantId' in get(/databases/$(database)/documents/projects/$(projectId)).data)) ||
           isSuperAdmin()
         );
+      }
+
+      /*
+        THE FOLLOW-UP LOG AND ESCALATIONS (lib/opsDesk.ts).
+
+        Written by the studio's staff and by Client Relations on an assigned
+        project, each line in their own name and marked as written by hand.
+        A line is never edited or deleted, only its next step ticked off: it
+        is the record of who told the client what, and when.
+
+        An escalation is raised the same way and decided by a lead; the one
+        who raised it closes it once acted on. The daily check raises some by
+        itself, through the server.
+      */
+      function parentTenant() {
+        return get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId;
+      }
+      function mayWriteOps() {
+        return (ownsParentProject() && getUserData().get('role', '') != 'Viewer')
+          || isAssignedTeam(parentTenant(), projectId, 'ops');
+      }
+      match /followUps/{fid} {
+        allow read: if ownsParentProject();
+        allow create: if mayWriteOps()
+          && request.resource.data.keys().hasOnly(['tenantId', 'projectId', 'projectName', 'at', 'by', 'byName', 'channel',
+               'note', 'subject', 'outcome', 'next', 'nextDone', 'manual'])
+          && request.resource.data.tenantId == parentTenant()
+          && request.resource.data.projectId == projectId
+          && request.resource.data.by == myEmail()
+          && request.resource.data.manual == true
+          && request.resource.data.nextDone == false
+          && request.resource.data.channel in ['call', 'whatsapp', 'email', 'meeting', 'other']
+          && request.resource.data.outcome in ['reminded', 'no_answer', 'replied', 'promised', 'info']
+          && request.resource.data.note is string && request.resource.data.note.size() <= 2000;
+        allow update: if mayWriteOps()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nextDone', 'nextDoneAt', 'nextDoneBy'])
+          && request.resource.data.nextDoneBy == myEmail();
+        allow delete: if false;
+      }
+      match /escalations/{eid} {
+        allow read: if ownsParentProject();
+        allow create: if mayWriteOps()
+          && request.resource.data.keys().hasOnly(['tenantId', 'projectId', 'projectName', 'title', 'detail', 'category',
+               'subjectKey', 'raisedBy', 'raisedByName', 'raisedAt', 'auto', 'status'])
+          && request.resource.data.tenantId == parentTenant()
+          && request.resource.data.projectId == projectId
+          && request.resource.data.raisedBy == myEmail()
+          && request.resource.data.auto == false
+          && request.resource.data.status == 'open'
+          && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 200
+          && request.resource.data.detail is string && request.resource.data.detail.size() <= 2000;
+        allow update: if (
+            ownsParentProject() && isStudioLead()
+            && resource.data.status == 'open' && request.resource.data.status == 'decided'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decision', 'decidedBy', 'decidedByName', 'decidedAt'])
+            && request.resource.data.decidedBy == myEmail()
+            && request.resource.data.decision is string && request.resource.data.decision.size() > 0 && request.resource.data.decision.size() <= 2000
+          ) || (
+            (resource.data.raisedBy == myEmail() || resource.data.get('auto', false) == true || (ownsParentProject() && isStudioLead()))
+            && mayWriteOps()
+            && resource.data.status == 'decided' && request.resource.data.status == 'closed'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closedAt'])
+          );
+        allow delete: if false;
       }
 
       match /communicationLog/{docId} {
@@ -875,6 +966,22 @@ service cloud.firestore {
         && getUserData().get('tenantId', '') == resource.data.tenantId
         && request.auth.token.email is string
         && request.auth.token.email.lower() in resource.data.members;
+    }
+
+    /*
+      The Ops Desk for the studio's own staff: every follow-up and escalation
+      of their studio, and the minutes waiting for approval, in one query each.
+      The query must name the studio.
+    */
+    match /{path=**}/followUps/{fid} {
+      allow list: if isAuthenticated() && isSameTenant(resource.data.tenantId);
+    }
+    match /{path=**}/escalations/{eid} {
+      allow list: if isAuthenticated() && (isSameTenant(resource.data.tenantId) || isSuperAdmin());
+    }
+    match /{path=**}/moms/{momId} {
+      allow list: if isAuthenticated() && resource.data.get('status', '') == 'pending_review'
+        && isSameTenant(resource.data.get('reviewTenantId', ''));
     }
 
     match /{path=**}/designView/{viewId} {

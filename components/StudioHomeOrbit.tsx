@@ -13,7 +13,7 @@ import StudioFooter from "./home/StudioFooter";
 import { isLimitedRole, seesStudioFinance, mayOpenStudioTab } from "../lib/roleAccess";
 import {
   ArrowRight, CheckCircle2, ChevronDown, Plus, Sparkles, Clock, Wallet, Zap, Layers3, Check, BellOff,
-  LayoutGrid, Users, BarChart3, Store, FileSignature, Boxes, PenTool,
+  LayoutGrid, Users, BarChart3, Store, FileSignature, Boxes, PenTool, Inbox,
 } from "lucide-react";
 
 /**
@@ -113,6 +113,7 @@ export default function StudioHomeOrbit({
     { key: "ratebank", label: "Rate bank", icon: Store, accent: "#C77700", tab: "admin-templates-bank", ring: 1 },
     { key: "templates", label: "Templates", icon: FileSignature, accent: "#6D28D9", tab: "admin-templates-bank", ring: 1 },
     { key: "setup", label: "Studio setup", icon: Boxes, accent: "#0F766E", tab: "studio-settings", ring: 1 },
+    { key: "ops", label: "Ops Desk", icon: Inbox, accent: "#0F766E", tab: "ops-desk", ring: 0 },
     /* For the roles without the studio's setup screens, Design Desk takes the outer ring. */
     { key: "desk", label: "Design Desk", icon: PenTool, accent: "#6D5BD0", tab: "design-review", ring: 1 },
   ].filter((h) => {

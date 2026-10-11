@@ -22,7 +22,8 @@ export type SectionId =
   | 'contract'
   | 'portal'
   | 'appearance'
-  | 'system';
+  | 'system'
+  | 'opsdesk';
 
 export interface SettingsSection {
   id: SectionId;
@@ -39,6 +40,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'portal', label: 'Client portal', blurb: 'What clients see and how they are nudged' },
   { id: 'appearance', label: 'Appearance', blurb: 'Typeface, palette and table density' },
   { id: 'system', label: 'Data & integrations', blurb: 'Calendar sync, backups and the audit trail' },
+  { id: 'opsdesk', label: 'Ops Desk', blurb: 'When a payment is late, and who decides escalations' },
 ];
 
 /** How badly a missing value hurts. */

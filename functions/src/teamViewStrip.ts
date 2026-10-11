@@ -8,68 +8,9 @@
   adds back only what its own work needs.
 */
 import { designViewOf, scrub } from "./designViewStrip";
-import { computeSchedule } from "../../lib/paymentSchedule";
-import { buildPortalMoney } from "../../lib/portalMoney";
+import { clientMoneyOf } from "../../lib/clientMoney";
 
-/** One payment milestone, as the client is quoted it. */
-export interface ClientMilestone {
-  id: string;
-  type: "design" | "execution";
-  name: string;
-  percentage: number | null;
-  status: string;
-  /** What the client owes at this milestone, to the rupee, as their portal shows it. */
-  owed: number;
-  invoiceNumber: string | null;
-  invoiceDate: string | null;
-  /** The planned date, when the studio set one. */
-  date: string | null;
-}
-
-/** The client's side of the money: what they were quoted, have paid and still owe. Nothing of the studio's side. */
-export interface ClientMoney {
-  projectValue: number;
-  totalPaid: number;
-  balanceDue: number;
-  milestones: ClientMilestone[];
-}
-
-const num = (v: any) => (typeof v === "number" && isFinite(v) ? v : 0);
-
-/*
-  Worked out the way the client's portal is: lib/paymentSchedule over the
-  saved context and the active version's summary, reduced by lib/portalMoney
-  to the figures a client is shown. The billable and cash split, the discount
-  structure and the version totals stay behind.
-*/
-export function clientMoneyOf(project: any): ClientMoney | null {
-  const ctx = project?.context || {};
-  const milestones: any[] = Array.isArray(ctx.paymentMilestones) ? ctx.paymentMilestones : [];
-  if (!milestones.length) return null;
-  try {
-    const tier = (project?.tiers || []).find((t: any) => t?.id === project?.activeTierId) || null;
-    const schedule = computeSchedule({ context: ctx, tierSummary: tier?.summary });
-    const money = buildPortalMoney(schedule);
-    return {
-      projectValue: num(money.projectValue),
-      totalPaid: num(money.totalPaid),
-      balanceDue: num(money.balanceDue),
-      milestones: milestones.map((m: any) => ({
-        id: String(m.id),
-        type: m.type === "execution" ? "execution" : "design",
-        name: String(m.name || ""),
-        percentage: typeof m.percentage === "number" ? m.percentage : null,
-        status: String(m.status || "pending"),
-        owed: num(money.milestoneAmounts?.[m.id]),
-        invoiceNumber: m.invoiceNumber ? String(m.invoiceNumber) : null,
-        invoiceDate: m.invoiceDate ? String(m.invoiceDate) : null,
-        date: m.date ? String(m.date) : null,
-      })),
-    };
-  } catch {
-    return null;
-  }
-}
+export { clientMoneyOf };
 
 /**
  * What Client Relations may see: the Designer's copy, plus the client's own

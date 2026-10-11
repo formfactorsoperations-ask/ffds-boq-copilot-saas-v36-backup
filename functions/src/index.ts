@@ -30,6 +30,8 @@ export { onProjectWrittenDesignView, onDesignerAssignmentChange, rebuildDesignVi
 export { drawingReview } from "./drawingReview";
 /* Design meetings: presenting approved rooms to the client; see designMeeting.ts. */
 export { designMeeting } from "./designMeeting";
+/* The Ops Desk: escalation emails and the daily check; see opsDesk.ts. */
+export { onEscalationWritten, opsDeskDailyCheck, opsDeskCheckNow } from "./opsDesk";
 import { confirmMeetingByClient, portalSheetFor } from "./designMeeting";
 import * as pako from "pako";
 import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";
