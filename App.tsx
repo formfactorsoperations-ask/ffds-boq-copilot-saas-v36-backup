@@ -2859,6 +2859,9 @@ export default function App() {
           return false;
         })}
         onLogout={() => {
+          // End the session too: with it still open, the sign-in state put
+          // them straight back in, so signing out took two clicks.
+          firebaseAuth?.signOut().catch(() => {});
           localStorage.removeItem("ffds_app_mode");
           setAppMode("login");
         }}
@@ -2934,6 +2937,9 @@ export default function App() {
             aiStatus={aiStatus}
             logo={projectContext.logoImage}
             onLogout={() => {
+              // End the session too: with it still open, the sign-in state put
+              // them straight back in, so signing out took two clicks.
+              firebaseAuth?.signOut().catch(() => {});
               localStorage.removeItem("ffds_app_mode");
               localStorage.removeItem("ffds_client_project_id");
               setAppMode("login");

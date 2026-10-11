@@ -48,6 +48,12 @@ describe('studio screens by role', () => {
     }
   });
 
+  it('gives the platform owner (Super Admin) every studio screen, so the home dial is full', () => {
+    for (const tab of ['home', 'projects', 'design-review', 'clients', 'reports', 'studio-settings', 'admin-templates-bank']) {
+      expect(mayOpenStudioTab(tab, 'Super Admin')).toBe(true);
+    }
+  });
+
   it('gives a Designer the home page, their projects and Design Desk, but not Clients', () => {
     expect(mayOpenStudioTab('home', 'Designer')).toBe(true);
     expect(designerMayOpen('home')).toBe(true);
