@@ -10,6 +10,7 @@ import { Chip, ProjectMark } from './DeskParts';
 import { RoomRecord } from './Meetings';
 import ClientSign from './ClientSign';
 import { LayoutPanel } from './LayoutPlan';
+import { Bar } from './motion';
 
 /*
   MEETING MODE: one room at a time, full width, on the versions the Design
@@ -143,7 +144,7 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
       const rooms = res?.rooms || m.rooms;
       const next = rooms.findIndex((r, i) => i > at && !r.outcome);
       const any = rooms.findIndex((r) => !r.outcome);
-      toast({ ok: true, title: outcome === 'agreed' ? `${roomLabel(room.room)} agreed` : `${roomLabel(room.room)}: ${plural(mine.length, 'change')} noted`,
+      toast({ ok: true, celebrate: outcome === 'agreed', title: outcome === 'agreed' ? `${roomLabel(room.room)} agreed` : `${roomLabel(room.room)}: ${plural(mine.length, 'change')} noted`,
         sub: next >= 0 ? `Next: ${roomLabel(rooms[next].room)}` : any >= 0 ? 'One room is still open.' : 'Every room is done. Finish the meeting when you are ready.' });
       if (outcome === 'agreed') setChanges((c) => ({ ...c, [room.room]: [] }));
       const to = next >= 0 ? next : any;
@@ -182,7 +183,7 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
       <span className="flex-1" />
       <div className="flex min-w-[200px] items-center gap-2">
         <span className="whitespace-nowrap text-[12.5px] font-bold">{done} of {m.rooms.length} rooms</span>
-        <span className="h-1.5 min-w-[80px] flex-1 overflow-hidden rounded-full bg-[#EEEEEA]"><i className="block h-full rounded-full transition-[width] duration-500" style={{ width: `${(done / m.rooms.length) * 100}%`, background: look.color }} /></span>
+        <span className="min-w-[80px] flex-1"><Bar pct={(done / m.rooms.length) * 100} color={look.color} shine /></span>
       </div>
       {step === 'present' && <>
         <button type="button" onClick={enterFull} className="inline-flex min-h-[38px] items-center gap-1.5 rounded-[10px] bg-[#17191E] px-3.5 text-[13px] font-bold text-white hover:bg-black" title="For sharing your screen with the client">
@@ -284,7 +285,7 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
         </div>
 
         <div className="absolute inset-0 flex gap-4" style={{ padding: `66px ${right}px 96px 24px` }}>
-          <div className="relative min-w-0 flex-1 overflow-auto">
+          <div key={at} className="dd-slide relative min-w-0 flex-1 overflow-auto">
             {sh.pdfPath ? (
               <React.Fragment key={`${sh.drawingId}/${sh.versionId}`}><PdfStage pdfPath={sh.pdfPath} page={page} zoom={zoom} turn={turn} marks={marks} draft={draft?.shape || null}
                 tool={pinning ? 'pin' : 'select'} canMark={pinning && !draft && !room.outcome} markColor={CLIENT} onPageCount={setPages}
@@ -407,7 +408,7 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
         <div className="relative flex min-h-[560px] min-w-0 flex-[999_1_520px] flex-col gap-3 rounded-[22px] p-4"
           style={{ backgroundColor: '#E8E8E2', backgroundImage: 'radial-gradient(#D3D3CB 1px, transparent 1px)', backgroundSize: '18px 18px' }}>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="flex-auto font-display text-[24px] font-semibold">{roomLabel(room.room)}</h1>
+            <h1 key={at} className="dd-swap flex-auto font-display text-[24px] font-semibold">{roomLabel(room.room)}</h1>
             {room.sheets.map((s, i) => (
               <button key={s.drawingId} type="button" onClick={() => { setSheet(i); setPage(0); setDraft(null); }} aria-pressed={i === sheet}
                 className={`min-h-[36px] rounded-full border px-3 text-[12.5px] font-bold transition ${i === sheet ? 'border-[#17191E] bg-[#17191E] text-white' : 'border-[#DCDCD5] bg-white hover:border-[#A9AAA2]'}`}>
@@ -415,7 +416,7 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
               </button>
             ))}
           </div>
-          <div className="flex-1 overflow-auto pb-16">
+          <div key={at} className="dd-slide flex-1 overflow-auto pb-16">
             {sh.pdfPath ? (
               <React.Fragment key={`${sh.drawingId}/${sh.versionId}`}><PdfStage pdfPath={sh.pdfPath} page={page} zoom={zoom} turn={turn} marks={marks} draft={draft?.shape || null}
                 tool={pinning ? 'pin' : 'select'} canMark={pinning && !draft && !room.outcome} markColor={CLIENT} onPageCount={setPages}

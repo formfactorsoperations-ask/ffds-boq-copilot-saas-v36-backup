@@ -176,7 +176,7 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
     return () => { window.removeEventListener('dragenter', enter); window.removeEventListener('dragleave', leave); window.removeEventListener('dragover', over); window.removeEventListener('drop', drop); };
   }, [role, r?.rev, r?.state]);
 
-  async function act(label: string, fn: () => Promise<any>, ok?: { title: string; sub?: string }) {
+  async function act(label: string, fn: () => Promise<any>, ok?: { title: string; sub?: string; celebrate?: boolean }) {
     setBusy(label);
     try {
       const res = await fn();
@@ -205,7 +205,7 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
     const rest = queue.filter((q) => !(q.drawingId === drawingId && q.projectId === projectId)).length;
     const res = await act(kind, () => (kind === 'approve' ? approveSheet(target, r.rev) : returnSheet(target, r.rev, retMsg.trim())),
       kind === 'approve'
-        ? { title: `v${r.versionNo} approved${self ? ' (self-approved)' : ''}`, sub: rest ? `${rest} more waiting. Opening the next one.` : audience === 'client' ? 'Ready for the client meeting. Your queue is clear.' : 'Final, and it stays inside the studio.' }
+        ? { celebrate: true, title: `v${r.versionNo} approved${self ? ' (self-approved)' : ''}`, sub: rest ? `${rest} more waiting. Opening the next one.` : audience === 'client' ? 'Ready for the client meeting. Your queue is clear.' : 'Final, and it stays inside the studio.' }
         : { title: `Back with ${self ? 'you' : firstName(r.designer?.name)}`, sub: `${onSheet.length ? `${onSheet.length} note${onSheet.length === 1 ? '' : 's'} to fix` : 'With your message'}${rest ? ' · opening the next one' : ''}.` });
     if (res) goNext();
   }

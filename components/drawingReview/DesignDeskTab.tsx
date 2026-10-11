@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileUp, Inbox, LayoutGrid, Loader2, PenTool, Presentation, Send } from 'lucide-react';
+import { LayoutGroup, motion } from 'framer-motion';
 import { useOrg } from '../../contexts/OrgContext';
 import { canReview, canRunMeeting, canSetAudience, canUpload, stateOf } from '../../lib/drawingReview';
 import type { DesignMeeting } from '../../lib/designMeeting';
@@ -15,6 +16,7 @@ import MeetingMode from './MeetingMode';
 import { watchMeetings } from '../../services/designMeetingService';
 import { ToastHost, ReviewStyles, useToast, firstName, roomLabel } from './ui';
 import { DeskStyles } from './DeskParts';
+import { MotionStyles } from './motion';
 
 /*
   DESIGN DESK, the studio tab where drawings are reviewed.
@@ -54,6 +56,7 @@ export default function DesignDeskTab(props: Props) {
     <ToastHost>
       <ReviewStyles />
       <DeskStyles />
+      <MotionStyles />
       <Desk {...props} />
     </ToastHost>
   );
@@ -283,7 +286,10 @@ function Desk({ projects, activeProjectId }: Props) {
   const current = infos.find((p) => p.id === project);
   const forYouCount = attention(scope, viewer);
   const openMeeting = (meetings || []).some((m) => m.state === 'OPEN');
-  const segBtn = (on: boolean) => `inline-flex min-h-[38px] items-center gap-1.5 rounded-[9px] px-4 text-[13.5px] font-bold transition ${on ? 'bg-white text-[#17191E] shadow-[0_1px_2px_rgba(23,25,30,0.12)]' : 'text-[#4F535C] hover:text-[#17191E]'}`;
+  const segBtn = (on: boolean) => `relative inline-flex min-h-[38px] items-center gap-1.5 rounded-[9px] px-4 text-[13.5px] font-bold transition-colors ${on ? 'text-[#17191E]' : 'text-[#4F535C] hover:text-[#17191E]'}`;
+  /* The white pill glides to the chosen view. */
+  const pill = (on: boolean) => on && <motion.span layoutId="dd-view-pill" className="absolute inset-0 rounded-[9px] bg-white shadow-[0_1px_2px_rgba(23,25,30,0.12)]" transition={{ type: 'spring', stiffness: 520, damping: 40 }} />;
+  const segIn = 'relative z-[1] inline-flex items-center gap-1.5';
 
   return (
     <div className="mx-auto w-full max-w-[1360px] px-4 pb-36 pt-6 text-[#17191E] md:px-5">
@@ -304,19 +310,21 @@ function Desk({ projects, activeProjectId }: Props) {
         <>
           <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-3">
             <h1 className="flex-auto font-display text-[30px] font-semibold tracking-tight">Design Desk</h1>
-            <div className="inline-flex gap-0.5 rounded-xl bg-[#EBEBE5] p-[3px]" role="tablist" aria-label="Design Desk views">
-              <button type="button" role="tab" aria-selected={tab === 'foryou'} onClick={() => setTab('foryou')} className={segBtn(tab === 'foryou')}>
-                <Inbox size={16} />For you{forYouCount > 0 && <span className="text-[12px] text-[#3A3FB8]">{forYouCount}</span>}
-              </button>
-              <button type="button" role="tab" aria-selected={tab === 'all'} onClick={() => setTab('all')} className={segBtn(tab === 'all')}>
-                <LayoutGrid size={16} />All sheets
-              </button>
-              {meetsTab && (
-                <button type="button" role="tab" aria-selected={tab === 'meetings'} onClick={() => setTab('meetings')} className={segBtn(tab === 'meetings')}>
-                  <Presentation size={16} />Meetings{openMeeting && <span className="h-2 w-2 rounded-full bg-[#C77A1A]" title="A meeting is open" />}
+            <LayoutGroup id="dd-views">
+              <div className="inline-flex gap-0.5 rounded-xl bg-[#EBEBE5] p-[3px]" role="tablist" aria-label="Design Desk views">
+                <button type="button" role="tab" aria-selected={tab === 'foryou'} onClick={() => setTab('foryou')} className={segBtn(tab === 'foryou')}>
+                  {pill(tab === 'foryou')}<span className={segIn}><Inbox size={16} />For you{forYouCount > 0 && <span className="text-[12px] text-[#3A3FB8]">{forYouCount}</span>}</span>
                 </button>
-              )}
-            </div>
+                <button type="button" role="tab" aria-selected={tab === 'all'} onClick={() => setTab('all')} className={segBtn(tab === 'all')}>
+                  {pill(tab === 'all')}<span className={segIn}><LayoutGrid size={16} />All sheets</span>
+                </button>
+                {meetsTab && (
+                  <button type="button" role="tab" aria-selected={tab === 'meetings'} onClick={() => setTab('meetings')} className={segBtn(tab === 'meetings')}>
+                    {pill(tab === 'meetings')}<span className={segIn}><Presentation size={16} />Meetings{openMeeting && <span className="relative flex h-2 w-2" title="A meeting is open"><span className="absolute inset-0 animate-ping rounded-full bg-[#C77A1A] opacity-60 motion-reduce:animate-none" /><span className="relative h-2 w-2 rounded-full bg-[#C77A1A]" /></span>}</span>
+                  </button>
+                )}
+              </div>
+            </LayoutGroup>
             {uploader && (
               <button type="button" onClick={() => setAdd([])} title="Or drop PDFs anywhere on this page"
                 className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-[#DCDCD5] bg-white px-[18px] text-[14px] font-bold transition hover:border-[#A9AAA2] active:scale-[.98]">
@@ -336,7 +344,7 @@ function Desk({ projects, activeProjectId }: Props) {
                 <div className="mx-auto max-w-md py-20 text-center text-[#5F636D]"><p className="text-lg font-semibold text-[#17191E]">The desk could not load.</p><p className="mt-1">{studioError}</p></div>
               ) : loading ? (
                 <div className="grid min-h-[30vh] place-items-center"><Loader2 className="animate-spin text-[#8A8E97]" /></div>
-              ) : tab === 'meetings' && meetsTab ? (
+              ) : <div key={tab} className="dd-swap">{tab === 'meetings' && meetsTab ? (
                 <Meetings orgId={orgId} projectId={isAll || !current ? null : project} projectName={current?.name || ''} look={current ? projectOf(project) : null}
                   drawings={scope} meetings={meetings} canRun={canRun} canBill={canBill} onResume={(m) => { setRunning(m); window.scrollTo({ top: 0 }); }}
                   projects={infos.map((p) => ({ id: p.id, name: p.name, code: p.code, color: p.color }))} onPickProject={pickProject} />
@@ -347,7 +355,7 @@ function Desk({ projects, activeProjectId }: Props) {
               ) : (
                 <AllSheets scope={scope} isAll={isAll || !current} projects={infos} projectOf={projectOf} q={q} setQ={setQ} filter={filter} setFilter={setFilter}
                   room={room} setRoom={setRoom} onOpen={openSheet} onPickProject={pickProject} reviewer={reviewer} drag={drag} partial={partial} />
-              )}
+              )}</div>}
             </>
           )}
         </>
@@ -355,7 +363,7 @@ function Desk({ projects, activeProjectId }: Props) {
 
       {!open && !live && fileOver && (
         <div className="pointer-events-none fixed inset-0 z-[110] grid place-items-center p-6" style={{ background: 'rgba(23,25,30,.55)', backdropFilter: 'blur(3px)' }}>
-          <div className="dd-breathe max-w-[540px] rounded-[28px] border-[2.5px] border-dashed border-white px-10 py-14 text-center text-white">
+          <div className="dd-breathe dd-march max-w-[540px] rounded-[28px] px-10 py-14 text-center text-white">
             <h2 className="font-display text-[28px] font-semibold">Drop to place your sheets{current ? ` in ${current.name}` : ''}</h2>
             <p className="mt-1.5 opacity-90">{current ? 'Each PDF lands on the drawing it belongs to.' : 'Choose the project next; each PDF then lands on the drawing it belongs to.'}</p>
           </div>
@@ -363,7 +371,7 @@ function Desk({ projects, activeProjectId }: Props) {
       )}
 
       {!open && !live && dragSheet && (
-        <div className="dd-pop fixed bottom-6 left-1/2 z-[70] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 rounded-[22px] border-[2.5px] border-dashed px-6 py-5 text-center transition-colors"
+        <div className={`dd-pop fixed bottom-6 left-1/2 z-[70] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 rounded-[22px] border-[2.5px] border-dashed px-6 py-5 text-center transition-colors ${zoneHot ? '' : 'dd-glow'}`}
           style={{ background: zoneHot ? '#4146C8' : '#ECEDFB', color: zoneHot ? '#fff' : '#23266F', borderColor: zoneHot ? '#fff' : '#4146C8', boxShadow: '0 24px 50px -20px rgba(23,25,30,.45)', transformOrigin: 'center' }}
           onDragOver={(e) => { if (Array.from(e.dataTransfer.types).includes('text/drawing')) { e.preventDefault(); setZoneHot(true); } }}
           onDragLeave={() => setZoneHot(false)}

@@ -1,9 +1,11 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Check, ChevronRight, Circle, Eye, GripVertical, Send, Undo2, type LucideIcon } from 'lucide-react';
 import { stateOf } from '../../lib/drawingReview';
 import { type DeskState } from '../../lib/designDesk';
 import type { ReviewDrawing } from '../../services/drawingReviewService';
 import { Thumb, Initials } from './ui';
+import { Tilt } from './motion';
 
 /*
   The small pieces Design Desk is built from: status pills, project marks,
@@ -116,14 +118,14 @@ export interface RowProps {
 
 export const SheetRow: React.FC<RowProps> = ({ d, meta, project, who, detail, round, action, draggable, dragging, onDragStart, onDragEnd, onOpen, delay = 0 }) => {
   return (
-    <div className="dd-rise flex items-center gap-2 rounded-[14px] py-1 pl-1 pr-2.5 transition hover:bg-[#F6F6F2]"
+    <div className="dd-rise group flex items-center gap-2 rounded-[14px] py-1 pl-1 pr-2.5 transition hover:bg-[#F6F6F2]"
       style={{ animationDelay: `${delay}ms`, opacity: dragging ? 0.45 : 1 }}
       draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd}>
       {draggable
         ? <span className="grid h-10 w-5 shrink-0 cursor-grab place-items-center text-[#9A9DA5]" title="Drag to the Design Head to send" aria-hidden><GripVertical size={16} /></span>
         : <span className="w-1.5 shrink-0" />}
       <button type="button" onClick={onOpen} aria-label={`Open ${d.name}`} className="flex min-h-[56px] min-w-0 flex-1 items-center gap-3.5 rounded-[10px] p-1 text-left">
-        <SheetThumb d={d} className="w-[76px]" />
+        <SheetThumb d={d} className="dd-thumb w-[76px]" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14.5px] font-bold text-[#17191E]">{d.name}</span>
           <span className="flex min-w-0 items-center gap-1.5">
@@ -134,7 +136,7 @@ export const SheetRow: React.FC<RowProps> = ({ d, meta, project, who, detail, ro
         {round && <span className="hidden sm:inline-flex"><Chip tone="red" title="Two review rounds are included">{round}</Chip></span>}
         {who && <span className="hidden sm:inline-flex"><Initials name={who} size={28} color={C.indigo} /></span>}
         {detail && <span className={action ? 'hidden sm:inline-flex' : 'inline-flex'}><Chip tone={detail.tone} icon={detail.icon}>{detail.text}</Chip></span>}
-        {!action && <ChevronRight size={18} className="shrink-0 text-[#8A8E97]" aria-hidden />}
+        {!action && <ChevronRight size={18} className="dd-nudge shrink-0 text-[#8A8E97]" aria-hidden />}
       </button>
       {action && (
         <button type="button" onClick={action.run} disabled={action.disabled || action.busy}
@@ -149,13 +151,17 @@ export const SheetRow: React.FC<RowProps> = ({ d, meta, project, who, detail, ro
 interface TileProps {
   d: ReviewDrawing; meta: string; studio?: boolean; draggable?: boolean; dragging?: boolean;
   onDragStart?: (e: React.DragEvent) => void; onDragEnd?: () => void; onOpen: () => void; delay?: number;
+  /** Glide to a new place when the grid changes (a filter, a search). */
+  glide?: boolean;
 }
 
-export const SheetTile: React.FC<TileProps> = ({ d, meta, studio, draggable, dragging, onDragStart, onDragEnd, onOpen, delay = 0 }) => {
+export const SheetTile: React.FC<TileProps> = ({ d, meta, studio, draggable, dragging, onDragStart, onDragEnd, onOpen, delay = 0, glide }) => {
   return (
+    <motion.div layout={glide ? 'position' : false} transition={{ type: 'spring', stiffness: 420, damping: 38 }}>
     <div className="dd-rise" style={{ animationDelay: `${delay}ms`, opacity: dragging ? 0.45 : 1 }} draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+      <Tilt>
       <button type="button" onClick={onOpen} aria-label={`Open ${d.name}`}
-        className={`flex w-full flex-col gap-2.5 rounded-[18px] border border-[#E4E4DE] bg-white p-2.5 text-left transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-18px_rgba(23,25,30,0.45)] ${draggable ? 'cursor-grab' : ''}`}>
+        className={`flex w-full flex-col gap-2.5 rounded-[18px] border border-[#E4E4DE] bg-white p-2.5 text-left transition-colors hover:border-[#D2D3E8] ${draggable ? 'cursor-grab' : ''}`}>
         <SheetThumb d={d} className="w-full rounded-[8px]" />
         <span className="block px-1">
           <span className="block truncate font-bold text-[#17191E]">{d.name}</span>
@@ -166,7 +172,9 @@ export const SheetTile: React.FC<TileProps> = ({ d, meta, studio, draggable, dra
           {studio && <Chip tone="grey">Studio only</Chip>}
         </span>
       </button>
+      </Tilt>
     </div>
+    </motion.div>
   );
 };
 

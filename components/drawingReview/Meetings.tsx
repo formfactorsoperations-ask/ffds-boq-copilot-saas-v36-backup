@@ -120,8 +120,9 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
           <div className="px-3 pb-3 pt-2 text-[13px] text-[#5F636D]">No drawings for the client in this project yet.</div>
         ) : (
           <div className="flex flex-col">
-            {rooms.map((r) => (
-              <label key={r.room} className={`flex items-center gap-3 border-t border-[#EEEEEA] px-3 py-3 first:border-t-0 ${r.ready ? 'cursor-pointer' : 'opacity-60'}`}>
+            {rooms.map((r, i) => (
+              <label key={r.room} className={`flex items-center gap-3 rounded-[12px] border-t border-[#EEEEEA] px-3 py-3 transition-colors first:border-t-0 ${r.ready ? 'dd-rise cursor-pointer hover:bg-[#F6F6F2]' : 'opacity-60'}`}
+                style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
                 <input type="checkbox" checked={r.ready && !!picked[r.room]} disabled={!r.ready || !canRun || !!open} onChange={() => setPicked((p) => ({ ...p, [r.room]: !p[r.room] }))}
                   className="h-[18px] w-[18px] accent-[#4146C8]" aria-label={`Present ${roomLabel(r.room)}`} />
                 <span className="min-w-0 flex-1">
@@ -164,7 +165,7 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
                 className="min-h-[44px] w-full rounded-[10px] border border-[#DCDCD5] px-3 text-[13.5px] outline-none focus:border-[#4146C8] focus:shadow-[0_0_0_3px_rgba(65,70,200,0.15)]" />
             </label>
             <button type="button" onClick={start} disabled={!chosen.length || !!busy}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#4146C8] px-[18px] text-[14px] font-bold text-white hover:bg-[#3439AD] disabled:opacity-45">
+              className={`dd-cta inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#4146C8] px-[18px] text-[14px] font-bold text-white hover:bg-[#3439AD] disabled:opacity-45 ${chosen.length && !busy ? 'dd-glow' : ''}`}>
               {busy === 'start' ? <Loader2 size={16} className="animate-spin" /> : <Presentation size={16} />}
               {chosen.length ? `Present ${plural(chosen.length, 'room')}` : 'Pick a room to present'}
             </button>

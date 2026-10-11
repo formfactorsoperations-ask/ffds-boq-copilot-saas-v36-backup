@@ -8,6 +8,7 @@ import { dueOf, reviewQueue, roundWarn, type Suggestion, type Viewer } from '../
 import type { ReviewDrawing } from '../../services/drawingReviewService';
 import { roomLabel, ago, shortDate, firstName, Initials } from './ui';
 import { SectionHead, SheetRow, TONE, IconTile, type Tone, type RowProps } from './DeskParts';
+import { CountUp, DrawnCheck, Fold, Tilt } from './motion';
 
 /*
   FOR YOU: what needs this person now, most urgent first, with one button to
@@ -158,15 +159,15 @@ export default function ForYou(props: Props) {
     <div className="flex flex-col gap-4">
       <div className="dd-rise flex flex-wrap items-center gap-x-6 gap-y-4 rounded-[18px] border border-[#E4E4DE] bg-white px-6 py-5">
         {headline.count
-          ? <div className="min-w-[44px] font-display text-[52px] font-semibold leading-none text-[#4146C8]">{headline.count}</div>
-          : <div className="grid h-[52px] w-[52px] place-items-center rounded-full bg-[#E3F2EA] text-[#1B6E4F]"><Check size={26} strokeWidth={2.4} /></div>}
+          ? <CountUp value={headline.count} className="min-w-[44px] font-display text-[52px] font-semibold leading-none tabular-nums text-[#4146C8]" />
+          : <DrawnCheck />}
         <div className="min-w-0 flex-[1_1_280px]">
           <div className="font-display text-[21px] font-semibold text-[#17191E]">{headline.title}</div>
           <div className="mt-0.5 text-[#5F636D]">{headline.sub}</div>
         </div>
         {headline.cta && headline.go && (
-          <button type="button" onClick={headline.go} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#4146C8] px-[18px] text-[14px] font-bold text-white transition hover:bg-[#3439AD] active:scale-[.98]">
-            {headline.cta}<ArrowRight size={16} strokeWidth={2.4} />
+          <button type="button" onClick={headline.go} className="dd-cta inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#4146C8] px-[18px] text-[14px] font-bold text-white transition hover:bg-[#3439AD] active:scale-[.98]">
+            {headline.cta}<ArrowRight size={16} strokeWidth={2.4} className="dd-arrow" />
           </button>
         )}
       </div>
@@ -182,16 +183,18 @@ export default function ForYou(props: Props) {
               const [Icon, cta] = SUGGESTION_LOOK[s.kind];
               const label = s.kind === 'stale' && s.row?.review?.designer?.name ? `Remind ${firstName(s.row.review.designer.name)}` : s.kind === 'readyDue' && s.row ? `Send v${s.row.review?.versionNo || 1}` : cta;
               return (
-                <div key={s.key} className="dd-rise flex items-start gap-3 rounded-[18px] border border-[#E4E4DE] bg-white py-3.5 pl-4 pr-3" style={{ animationDelay: `${i * 60}ms` }}>
+                <div key={s.key} className="dd-rise" style={{ animationDelay: `${i * 60}ms` }}>
+                <Tilt className="flex h-full items-start gap-3 border border-[#E4E4DE] bg-white py-3.5 pl-4 pr-3" max={5}>
                   <IconTile icon={Icon} tone={s.tone} size={36} />
                   <div className="min-w-0 flex-1">
                     <div className="text-[14px] font-bold text-[#17191E]">{s.title}</div>
                     <div className="mt-0.5 text-[12.5px] text-[#5F636D]">{s.sub}</div>
-                    <button type="button" onClick={() => onSuggestion(s)} className="mt-2.5 inline-flex min-h-[36px] items-center gap-1.5 rounded-[10px] border border-[#DCDCD5] bg-white px-3 text-[13px] font-bold text-[#17191E] transition hover:border-[#A9AAA2]">
-                      {label}<ArrowRight size={14} strokeWidth={2.4} />
+                    <button type="button" onClick={() => onSuggestion(s)} className="group mt-2.5 inline-flex min-h-[36px] items-center gap-1.5 rounded-[10px] border border-[#DCDCD5] bg-white px-3 text-[13px] font-bold text-[#17191E] transition hover:border-[#A9AAA2]">
+                      {label}<ArrowRight size={14} strokeWidth={2.4} className="dd-nudge" />
                     </button>
                   </div>
-                  <button type="button" onClick={() => onDismiss(s.key)} aria-label={`Dismiss: ${s.title}`} title="Dismiss" className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-[#6B6F78] hover:bg-[#EBEBE5] hover:text-[#17191E]"><X size={14} strokeWidth={2.4} /></button>
+                  <button type="button" onClick={() => onDismiss(s.key)} aria-label={`Dismiss: ${s.title}`} title="Dismiss" className="relative z-[1] grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-[#6B6F78] hover:bg-[#EBEBE5] hover:text-[#17191E]"><X size={14} strokeWidth={2.4} /></button>
+                </Tilt>
                 </div>
               );
             })}
@@ -204,9 +207,9 @@ export default function ForYou(props: Props) {
         return (
           <section key={s.key} className="rounded-[18px] border border-[#E4E4DE] bg-white px-2.5 pb-2.5 pt-2">
             <SectionHead icon={s.icon} tone={s.tone} title={s.title} count={s.rows.length} sub={s.sub} open={isOpen} onToggle={s.fold ? toggle(s.key) : undefined} />
-            {isOpen && (s.rows.length
+            <Fold open={isOpen}>{s.rows.length
               ? <div className="flex flex-col gap-0.5">{s.rows}{s.hint && <div className="px-3 pb-0.5 pt-1 text-[12px] text-[#5F636D]">{s.hint}</div>}</div>
-              : s.empty ? <div className="px-2.5 pb-3.5 pt-4 text-center text-[13px] text-[#5F636D]">{s.empty}</div> : null)}
+              : s.empty ? <div className="px-2.5 pb-3.5 pt-4 text-center text-[13px] text-[#5F636D]">{s.empty}</div> : null}</Fold>
           </section>
         );
       })}
@@ -214,7 +217,7 @@ export default function ForYou(props: Props) {
       {viewer.reviewer && team.length > 0 && (
         <section className="rounded-[18px] border border-[#E4E4DE] bg-white px-2.5 pb-2.5 pt-2">
           <SectionHead icon={Users} tone="grey" title="Team" sub={`Who has what ${where}`} open={!!open.team} onToggle={toggle('team')} />
-          {open.team && (
+          <Fold open={!!open.team}>
             <div className="grid gap-2.5 px-1.5 pb-1.5 pt-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
               {team.map((t, i) => {
                 const total = t.fix + t.ready + t.review;
@@ -226,14 +229,14 @@ export default function ForYou(props: Props) {
                       <span className="min-w-0 flex-1"><b className="block truncate text-[#17191E]">{t.name}</b><span className="block text-[12.5px] text-[#5F636D]">{bits.join(' · ')}</span></span>
                       {i === 0 && total > 1 && <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: TONE.amber.bg, color: TONE.amber.ink }}>Busiest</span>}
                     </div>
-                    <div className="mt-2.5 flex h-1.5 overflow-hidden rounded-full bg-[#E4E4DE]" style={{ width: `${Math.max(14, (total / maxLoad) * 100)}%` }}>
+                    <div className="dd-grow mt-2.5 flex h-1.5 overflow-hidden rounded-full bg-[#E4E4DE]" style={{ width: `${Math.max(14, (total / maxLoad) * 100)}%` }}>
                       <i style={{ flex: t.fix, background: '#C77A1A' }} /><i style={{ flex: t.ready, background: '#9A9DA5' }} /><i style={{ flex: t.review, background: '#4146C8' }} />
                     </div>
                   </div>
                 );
               })}
             </div>
-          )}
+          </Fold>
         </section>
       )}
     </div>
