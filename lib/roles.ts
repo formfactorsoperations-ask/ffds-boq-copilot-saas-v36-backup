@@ -8,15 +8,17 @@
   questions about breadth -- whether they see the studio's money, whether
   they see only assigned projects -- which the database rules check too.
   The order makes that agree with the whole set: the roles that see money
-  come first, and a Designer, the one role limited to assigned projects,
-  comes after every role that sees them all.
+  come first, and the roles limited to their assigned projects (Client
+  Relations, Site Supervisor, Designer, Vendor) come after every role that
+  sees them all, so adding a broad role to a limited one widens it.
 
   Shared by the app and the Cloud Functions; no imports.
 */
 
 /** Most senior first. */
 export const ROLE_ORDER = [
-  'Super Admin', 'Owner', 'Admin', 'Ops Director', 'Design Head', 'Site Supervisor', 'Viewer', 'Designer', 'Vendor', 'Client',
+  'Super Admin', 'Owner', 'Admin', 'Ops Director', 'Design Head', 'Viewer',
+  'Client Relations', 'Site Supervisor', 'Designer', 'Vendor', 'Client',
 ] as const;
 
 /** One role, several, or none. */

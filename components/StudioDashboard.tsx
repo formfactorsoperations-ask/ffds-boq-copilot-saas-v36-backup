@@ -16,6 +16,7 @@ import { Search, X, CheckCircle2, AlertCircle, Sparkles, Lock, Plus } from 'luci
 import { keepLockedTier, lockedTierId, scopeInForce, detailedBoqForTier, detailedBoqVersion } from '../lib/scopeFlow';
 import { resolveBoqLine, isBillable } from '../lib/boqPricing';
 import { useOrg } from '../contexts/OrgContext';
+import { seesStudioFinance } from '../lib/roleAccess';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import { db as dbService } from '../services/dbService';
 import { db, functions } from '../services/firebaseClient';
@@ -107,7 +108,9 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
     action => setTiersRaw(prev => keepLockedTier(prev, typeof action === 'function' ? (action as (p: ProposalTier[]) => ProposalTier[])(prev) : action, signedTierId)),
     [setTiersRaw, signedTierId]
   );
-  const { orgData, currentRole } = useOrg();
+  const { orgData, currentRole, currentRoles } = useOrg();
+  /* The formula export carries material and labour cost and Margin %: the studio's side of the money. */
+  const mayExportCosts = seesStudioFinance(currentRoles);
   const isOwner = ['Super Admin', 'Admin', 'Ops Director'].includes(currentRole);
   
   const { settings, updateSettings } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
@@ -483,6 +486,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   }
 
   const handleExportExcelWithFormulas = () => {
+        if (!mayExportCosts) return;
         if (!fullBoq.length) {
             alert("No data to export.");
             return;
@@ -696,13 +700,13 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                   <span>Import Excel</span>
               </button>
 
-              <button 
+              {mayExportCosts && <button 
                   onClick={handleExportExcelWithFormulas}
                   className="p-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl hover:bg-emerald-100 transition-all"
                   title="Export Excel with Live Formulas"
               >
                   <ExportIcon className="w-4 h-4" />
-              </button>
+              </button>}
           </div>
       </div>
 

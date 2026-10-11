@@ -39,10 +39,48 @@ service cloud.firestore {
       A Designer is left out too. They may read their studio's projects and
       change drawings, nothing else, so they are granted exactly that further
       down (isTenantDesigner) instead of every write the tenant check allows.
+
+      So are the other roles limited to assigned projects: Client Relations,
+      Site Supervisor and Vendor. Each reads the copy of an assigned project
+      the server makes for it (teamView, below) and the records named for it,
+      never the project document, which carries every rate and margin.
     */
     function getUserTenantId() {
       let u = getUserData();
-      return !(u.get('role', '') in ['Client', 'Designer']) ? u.get('tenantId', null) : null;
+      return !(u.get('role', '') in ['Client', 'Designer', 'Client Relations', 'Site Supervisor', 'Vendor']) ? u.get('tenantId', null) : null;
+    }
+
+    /*
+      Client Relations ('ops') or a Site Supervisor ('site') on THIS project,
+      by the server's copy for their role (functions/src/teamView.ts), which
+      lists the emails assigned to it.
+    */
+    function teamViewPath(projectId, kind) {
+      return /databases/$(database)/documents/projects/$(projectId)/teamView/$(kind);
+    }
+    function teamRoleOf(kind) {
+      return kind == 'ops' ? 'Client Relations' : (kind == 'site' ? 'Site Supervisor' : '');
+    }
+    function isAssignedTeam(tenantId, projectId, kind) {
+      let u = getUserData();
+      return isAuthenticated() && kind in ['ops', 'site']
+        && u.get('role', '') == teamRoleOf(kind)
+        && tenantId != null && u.get('tenantId', '') == tenantId
+        && request.auth.token.email is string
+        && exists(teamViewPath(projectId, kind))
+        && get(teamViewPath(projectId, kind)).data.tenantId == tenantId
+        && request.auth.token.email.lower() in get(teamViewPath(projectId, kind)).data.get('members', []);
+    }
+    /* The kind of copy the caller's role reads, or '' for a role that reads the project itself. */
+    function myTeamKind() {
+      let r = getUserData().get('role', '');
+      return r == 'Client Relations' ? 'ops' : (r == 'Site Supervisor' ? 'site' : '');
+    }
+    /* The project records each of these roles reads, beneath either of the project's two parents. */
+    function teamMayRead(kind, sub) {
+      return (kind == 'ops' && sub in ['designGate', 'decisions', 'timelinePhases', 'tasks', 'deliverables', 'journeySteps',
+                                       'stepProgress', 'moms', 'siteVisits', 'communicationLog', 'drawingTracker', 'drawingVersions'])
+        || (kind == 'site' && sub in ['decisions', 'timelinePhases', 'tasks', 'siteVisits', 'drawingTracker', 'drawingVersions']);
     }
 
     // A Designer of this studio: reads its projects, writes only drawings.
@@ -207,7 +245,8 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
       
       match /settings/{settingId} {
-         allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin() || isTenantDesigner(orgId));
+         allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin() || isTenantDesigner(orgId)
+           || (getUserData().get('tenantId', '') == orgId && myTeamKind() != ''));
          allow write: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
             && (getUserData().role == 'Owner' || isSuperAdmin());
       }
@@ -371,6 +410,11 @@ service cloud.firestore {
                     && resource.data.status != 'published';
     }
 
+    /* Client Relations and Site Supervisors, on an assigned project: the records teamMayRead names. */
+    match /projects/{projectId}/{teamSub}/{teamDoc=**} {
+      allow read: if teamMayRead(myTeamKind(), teamSub) && isAssignedTeam(orgId, projectId, myTeamKind());
+    }
+
     /*
       Everything else beneath the studio, for its own staff.
 
@@ -420,6 +464,25 @@ service cloud.firestore {
             && request.auth.token.email.lower() in resource.data.designers)
         );
         allow write: if false;
+      }
+
+      /*
+        THE CLIENT RELATIONS AND SITE SUPERVISOR COPIES: written only by the
+        server (functions/src/teamView.ts), readable by the studio and by the
+        people of the matching role assigned to the project.
+      */
+      match /teamView/{kind} {
+        allow read: if isAuthenticated() && (
+          isSameTenant(resource.data.tenantId) || isSuperAdmin() ||
+          isAssignedTeam(resource.data.tenantId, projectId, kind)
+        );
+        allow write: if false;
+      }
+
+      /* Client Relations and Site Supervisors: the records teamMayRead names, on an assigned project. */
+      match /{teamSub}/{teamDoc=**} {
+        allow read: if teamMayRead(myTeamKind(), teamSub)
+          && isAssignedTeam(get(teamViewPath(projectId, myTeamKind())).data.tenantId, projectId, myTeamKind());
       }
 
       /*
@@ -799,6 +862,19 @@ service cloud.firestore {
     match /{path=**}/drawingTracker/{drawingId} {
       allow read: if isAuthenticated() && resource.data.get('review', null) != null
         && (isSameTenant(resource.data.review.get('orgId', '')) || isSuperAdmin());
+    }
+
+    /*
+      Client Relations' and a Site Supervisor's list of their own projects:
+      every copy of their kind naming them. The query must say so (tenantId,
+      kind, members array-contains their email).
+    */
+    match /{path=**}/teamView/{kind} {
+      allow list: if isAuthenticated()
+        && getUserData().get('role', '') == teamRoleOf(resource.data.kind)
+        && getUserData().get('tenantId', '') == resource.data.tenantId
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() in resource.data.members;
     }
 
     match /{path=**}/designView/{viewId} {

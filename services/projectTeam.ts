@@ -44,14 +44,17 @@ export interface TeamPerson {
   role: string;
 }
 
+const ASSIGNABLE = new Set(['Designer', 'Client Relations']);
+
 export function useProjectTeam() {
   const { orgData, updateOrgData, teamMembers, currentRole } = useOrg();
   const map: ProjectDesignersMap = ((orgData as any)?.projectDesigners as ProjectDesignersMap) || {};
   const team: any[] = ((orgData as any)?.team as any[]) || (teamMembers as any[]) || [];
 
+  /* Everyone who works on assigned projects only and is given them here: Designers and Client Relations. */
   const designers: TeamPerson[] = team
-    .filter((m) => m?.role === 'Designer' && String(m?.email || '').trim())
-    .map((m) => ({ email: String(m.email).trim().toLowerCase(), name: m.name || m.email, role: 'Designer' }));
+    .filter((m) => ASSIGNABLE.has(m?.role) && String(m?.email || '').trim())
+    .map((m) => ({ email: String(m.email).trim().toLowerCase(), name: m.name || m.email, role: m.role }));
 
   /** Only the studio's senior roles hand out projects. */
   const canAssign = seesStudioFinance(currentRole);

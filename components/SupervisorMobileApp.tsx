@@ -10,8 +10,16 @@ import { formatClientValue } from '../lib/utils';
 interface SupervisorMobileAppProps {
     projects: FullProjectData[];
     onLogout: () => void;
-    onProjectUpdate?: (project: FullProjectData) => void;
+    /** The changed project, for the screen, and the one action that changed it, for the server (functions/src/siteActionPatch.ts). */
+    onProjectUpdate?: (project: FullProjectData, action?: SiteAction) => void;
 }
+
+/* The six things a Supervisor records on site; the server applies the same action to the stored project. */
+type SiteAction =
+    | { type: 'update' | 'material' | 'blocker'; text: string }
+    | { type: 'bundle'; bundleId: string; status: string; completionPercentage: number }
+    | { type: 'sof'; itemId: string; status: string }
+    | { type: 'resolveBlocker'; blockerId: string };
 
 export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdate }: SupervisorMobileAppProps) {
     const { orgData } = useOrg();
@@ -208,7 +216,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
             }
 
             currentExecutionData.lastUpdated = Date.now();
-            onProjectUpdate(updatedProject);
+            onProjectUpdate(updatedProject, { type: quickAction as 'update' | 'material' | 'blocker', text: quickActionText });
         } catch (err) {
             console.error("Error updating project data in handleQuickActionSubmit:", err);
         } finally {
@@ -227,7 +235,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
             const updatedProject = { ...activeProject };
             updatedProject.activeProject!.executionData!.bundles = newBundles;
             updatedProject.activeProject!.executionData!.lastUpdated = Date.now();
-            onProjectUpdate(updatedProject);
+            onProjectUpdate(updatedProject, { type: 'bundle', bundleId, status: newStatus, completionPercentage });
         }
     };
 
@@ -241,7 +249,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
             const updatedProject = { ...activeProject };
             updatedProject.activeProject!.executionData!.sofItems = newSofItems;
             updatedProject.activeProject!.executionData!.lastUpdated = Date.now();
-            onProjectUpdate(updatedProject);
+            onProjectUpdate(updatedProject, { type: 'sof', itemId, status: newStatus });
         }
     };
 
@@ -255,7 +263,7 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
             const updatedProject = { ...activeProject };
             updatedProject.activeProject!.executionData!.blockers = newBlockers;
             updatedProject.activeProject!.executionData!.lastUpdated = Date.now();
-            onProjectUpdate(updatedProject);
+            onProjectUpdate(updatedProject, { type: 'resolveBlocker', blockerId });
         }
     };
 

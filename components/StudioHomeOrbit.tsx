@@ -10,7 +10,7 @@ import {
   AttentionState, isHidden, writeAttentionEntry, TOMORROW_9AM, NEXT_WEEK,
 } from "../services/attentionState";
 import StudioFooter from "./home/StudioFooter";
-import { isDesignerRole, seesStudioFinance, mayOpenStudioTab } from "../lib/roleAccess";
+import { isLimitedRole, seesStudioFinance, mayOpenStudioTab } from "../lib/roleAccess";
 import {
   ArrowRight, CheckCircle2, ChevronDown, Plus, Sparkles, Clock, Wallet, Zap, Layers3, Check, BellOff,
   LayoutGrid, Users, BarChart3, Store, FileSignature, Boxes, PenTool,
@@ -349,8 +349,8 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
 
             {/* Every figure here is live: none of it is written down. */}
             <p className="mt-5 max-w-lg text-[15px] leading-relaxed text-[#64748b]">
-              {/* A Designer sees only the projects assigned to them, and no pipeline. */}
-              {isDesignerRole(role) ? (() => {
+              {/* A Designer or Client Relations sees only the projects assigned to them, and no pipeline. */}
+              {isLimitedRole(role) ? (() => {
                 const n = data.activeCount + data.pipelineCount + data.deliveredCount;
                 return (
                   <strong className="font-semibold" style={{ color: INK }}>
@@ -500,7 +500,7 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
                 {/* A Designer does not start projects; the centre takes them
                     to the ones they are assigned instead. */}
                 <button
-                  onClick={isDesignerRole(role) ? () => onNavigate('projects') : onCreateNew}
+                  onClick={isLimitedRole(role) ? () => onNavigate('projects') : onCreateNew}
                   className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[168px] h-[168px] rounded-full flex flex-col items-center justify-center gap-1.5 text-white transition-transform hover:scale-[1.04] cursor-pointer"
                   style={{
                     background: `linear-gradient(150deg, ${BRAND}, #334486)`,
@@ -508,8 +508,8 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
                   }}
                 >
                   <Plus className="w-8 h-8" strokeWidth={2.2} />
-                  <span className="text-[15px] font-semibold">{isDesignerRole(role) ? 'Your projects' : 'New project'}</span>
-                  <span className="text-[11px] text-white/70">{isDesignerRole(role) ? 'The ones assigned to you' : 'Start from scratch'}</span>
+                  <span className="text-[15px] font-semibold">{isLimitedRole(role) ? 'Your projects' : 'New project'}</span>
+                  <span className="text-[11px] text-white/70">{isLimitedRole(role) ? 'The ones assigned to you' : 'Start from scratch'}</span>
                 </button>
               </div>
             </div>

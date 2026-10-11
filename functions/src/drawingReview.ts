@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
+import { isTeamViewMember } from "./teamView";
 import { createHash } from "crypto";
 import { PLATFORM_OWNER_EMAILS } from "./guards";
 import {
@@ -36,7 +37,9 @@ export interface Actor extends ReviewPerson {
   projectName: string | null;
 }
 
-const STAFF_WITH_PROJECTS = new Set(["Owner", "Admin", "Ops Director", "Design Head", "Site Supervisor", "Viewer", "Super Admin"]);
+const STAFF_WITH_PROJECTS = new Set(["Owner", "Admin", "Ops Director", "Design Head", "Viewer", "Super Admin"]);
+/* Roles that reach only their assigned projects, and the server copy that lists who is assigned (teamView.ts). */
+const ASSIGNED_ONLY: Record<string, "ops" | "site"> = { "Client Relations": "ops", "Site Supervisor": "site" };
 
 /** Who is calling, and whether they may touch this project at all. */
 export async function resolveActor(request: any, orgId: string, projectId: string): Promise<Actor> {
@@ -66,6 +69,10 @@ export async function resolveActor(request: any, orgId: string, projectId: strin
     const view = (await db().doc(`projects/${projectId}/designView/current`).get()).data();
     const assigned = view && view.tenantId === orgId && Array.isArray(view.designers) && view.designers.includes(email);
     if (!assigned) throw new HttpsError("permission-denied", "You are not assigned to this project.");
+  } else if (ASSIGNED_ONLY[role]) {
+    if (!(await isTeamViewMember(projectId, orgId, email, ASSIGNED_ONLY[role]))) {
+      throw new HttpsError("permission-denied", "You are not assigned to this project.");
+    }
   } else if (!STAFF_WITH_PROJECTS.has(role)) {
     throw new HttpsError("permission-denied", "This account cannot use Design Review.");
   }

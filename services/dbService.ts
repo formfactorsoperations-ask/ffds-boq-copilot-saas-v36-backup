@@ -729,7 +729,7 @@ async function writeTierBoqs(projectId: string, tiers: any[]): Promise<void> {
 export async function hydrateProjectDetail(project: FullProjectData): Promise<FullProjectData> {
     if (!firestore || !project?.id) return project;
     // A Designer's copy is complete as it is; the agreement and priced BOQs are not theirs to read.
-    if (viewOnlySession() || (project as any)._designView) return project;
+    if (viewOnlySession() || (project as any)._designView || (project as any)._teamView) return project;
 
     let next = project;
 
@@ -812,13 +812,58 @@ async function designerProjects(tenantId: string): Promise<FullProjectData[]> {
     }
 }
 
+/*
+  Client Relations' and a Site Supervisor's projects: the copies the server
+  keeps for their role of the projects they are assigned to (functions/src/
+  teamView.ts). As with a Designer, the rules give them nothing else of a
+  project, so this never falls back to a copy cached on the device.
+*/
+async function teamProjects(tenantId: string, kind: 'ops' | 'site'): Promise<FullProjectData[]> {
+    const email = String(firebaseAuth?.currentUser?.email || '').trim().toLowerCase();
+    if (!firestore || !email) return [];
+    try {
+        const snap = await getDocs(query(
+            collectionGroup(firestore, 'teamView'),
+            where('tenantId', '==', tenantId),
+            where('kind', '==', kind),
+            where('members', 'array-contains', email),
+        ));
+        return snap.docs
+            .map((d) => {
+                const view = decompressData((d.data() as any).compressedData);
+                if (!view) return null;
+                view.id = view.id || d.ref.parent.parent?.id;
+                view.tiers = view.tiers || [];
+                view._teamView = kind;
+                return view as FullProjectData;
+            })
+            .filter(Boolean)
+            .sort((a: any, b: any) => (b.lastModified || 0) - (a.lastModified || 0)) as FullProjectData[];
+    } catch (e) {
+        console.warn('Could not load your assigned projects', e);
+        return [];
+    }
+}
+
+/** The projects of a limited role, from its own copies; null for a role that reads the projects themselves. */
+function limitedProjects(tenantId: string): Promise<FullProjectData[]> | null {
+    switch (sessionRole()) {
+        case 'Designer': return designerProjects(tenantId);
+        case 'Client Relations': return teamProjects(tenantId, 'ops');
+        case 'Site Supervisor': return teamProjects(tenantId, 'site');
+        case 'Vendor': return Promise.resolve([]);
+        default: return null;
+    }
+}
+
 const CloudStrategy: DBService = {
     upgradeLegacyProject: LocalStrategy.upgradeLegacyProject,
     isCloud: true,
 
     getProjects: async () => {
         if (!firestore) return LocalStrategy.getProjects();
-        if (viewOnlySession()) return designerProjects(getCurrentTenantId());
+        const limited = limitedProjects(getCurrentTenantId());
+        if (limited) return limited;
         try {
             const tenantId = getCurrentTenantId();
             
@@ -1877,9 +1922,18 @@ const WRITE_METHODS = new Set([
   'deleteSchedule',
 ]);
 
-const viewOnlySession = (): boolean => {
-  try { return localStorage.getItem('ffds_current_role') === 'Designer'; } catch { return false; }
+const sessionRole = (): string => {
+  try { return localStorage.getItem('ffds_current_role') || ''; } catch { return ''; }
 };
+
+/*
+  The roles limited to their assigned projects (lib/roleAccess LIMITED_ROLES)
+  never save a project: they hold a copy without the money, and writing that
+  back would wipe it. A Site Supervisor's site work goes through the
+  siteAction function instead.
+*/
+const viewOnlySession = (): boolean =>
+  ['Designer', 'Client Relations', 'Site Supervisor', 'Vendor'].includes(sessionRole());
 
 function viewOnlyGuard<T extends object>(svc: T): T {
   return new Proxy(svc, {

@@ -6,7 +6,7 @@ import { Lock, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, 
 import { NAV_CONFIG, ALWAYS_ON_BAND } from './navConfig';
 import { useProjectJourney } from '../hooks/useProjectJourney';
 import { useOrg } from '../contexts/OrgContext';
-import { seesStudioFinance, isDesignerRole, DESIGNER_EDITABLE_TABS, designerMayOpen, DESIGNER_HOME_TAB } from '../lib/roleAccess';
+import { seesStudioFinance, isDesignerRole, isLimitedRole, DESIGNER_EDITABLE_TABS, limitedMayOpen, limitedHomeTab } from '../lib/roleAccess';
 import { FFDSLogo } from './FFDSLogo';
 import ViewOnlyGuard from './ViewOnlyGuard';
 import ProjectTeamButton from './projectHeader/ProjectTeamButton';
@@ -224,13 +224,16 @@ export function ProjectWorkspace({
   /* Money screens for anyone outside studio finance; for a Designer,
      everything outside their allow-list (lib/roleAccess). */
   const isDesigner = isDesignerRole(currentRole);
+  /* Client Relations works like a Designer here: its own allow-list, all of it look-only for now. */
+  const isLimited = isLimitedRole(currentRole);
+  const limitedHome = limitedHomeTab(currentRole);
   /* R1 in the header mockups: on a Designer's tabs, "view" marks the ones
      they can only look at. The Drawing Tracker, which they work in, has none. */
   const accessBadge = (route?: string): string | null =>
-    isDesigner && route && !DESIGNER_EDITABLE_TABS.has(route) ? 'view only' : null;
+    isLimited && route && !(isDesigner && DESIGNER_EDITABLE_TABS.has(route)) ? 'view only' : null;
   const hiddenForRole = (item: any): boolean =>
     (!seesStudioFinance(currentRole) && !!item?.money) ||
-    (isDesigner && !designerMayOpen(item?.route));
+    (isLimited && !limitedMayOpen(currentRole, item?.route));
 
   const renderNavItem = (item: any, isLockedStage: boolean, isHub: boolean = false) => {
     if (hiddenForRole(item)) return null;
@@ -367,16 +370,16 @@ export function ProjectWorkspace({
             onClick={() => {
               setSelectedStage(0);
               // A Designer has no project home; their base is the drawings.
-              setActiveTab(isDesigner ? DESIGNER_HOME_TAB : 'dashboard');
+              setActiveTab(isLimited ? limitedHome : 'dashboard');
             }}
             className={`phd-lift flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12.5px] font-bold shrink-0 ${
-              selectedStage === 0 || ALWAYS_ON_BAND.some(i => i.route === activeTab) || activeTab === 'dashboard' || (isDesigner && activeTab === DESIGNER_HOME_TAB)
+              selectedStage === 0 || ALWAYS_ON_BAND.some(i => i.route === activeTab) || activeTab === 'dashboard' || (isLimited && activeTab === limitedHome)
                 ? 'bg-[#3D52A0] text-white shadow-md shadow-[#3D52A0]/25'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
             <LayoutGrid className="w-4 h-4" />
-            {isDesigner ? 'Drawings' : 'Hub'}
+            {isDesigner ? 'Drawings' : isLimited ? 'Client Comms' : 'Hub'}
           </button>
 
           <div className="phd-tile hidden md:grid" aria-hidden="true">
@@ -402,14 +405,14 @@ export function ProjectWorkspace({
               <button
                 type="button"
                 // Changing a project's status is the studio's decision.
-                disabled={isDesigner}
-                onClick={() => { if (!isDesigner) setIsStatusModalOpen(true); }}
-                className={`group/statusBtn hidden sm:flex items-center gap-1.5 pl-2.5 pr-2 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-[0.1em] border shrink-0 transition-transform ${isDesigner ? 'cursor-default' : 'hover:scale-105 cursor-pointer'} ${statusStyle.bg} ${statusStyle.color} ${statusStyle.border}`}
-                title={isDesigner ? statusStyle.label : 'Change project lifecycle status & review downstream impact'}
+                disabled={isLimited}
+                onClick={() => { if (!isLimited) setIsStatusModalOpen(true); }}
+                className={`group/statusBtn hidden sm:flex items-center gap-1.5 pl-2.5 pr-2 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-[0.1em] border shrink-0 transition-transform ${isLimited ? 'cursor-default' : 'hover:scale-105 cursor-pointer'} ${statusStyle.bg} ${statusStyle.color} ${statusStyle.border}`}
+                title={isLimited ? statusStyle.label : 'Change project lifecycle status & review downstream impact'}
               >
                 <span className="phd-dot" />
                 <span>{statusStyle.label}</span>
-                {!isDesigner && <ChevronDown className="w-2.5 h-2.5 opacity-60 group-hover/statusBtn:opacity-100 transition-opacity" />}
+                {!isLimited && <ChevronDown className="w-2.5 h-2.5 opacity-60 group-hover/statusBtn:opacity-100 transition-opacity" />}
               </button>
             );
           })()}
@@ -421,7 +424,7 @@ export function ProjectWorkspace({
           <ProjectTeamButton project={{ id: projectId, context: projectContext }} />
 
           {/* The project's next step and progress: the studio's to run. */}
-          {!isDesigner && (
+          {!isLimited && (
             <button
               onClick={() => setIsFloatingWidgetOpen(!isFloatingWidgetOpen)}
               className="phd-lift hidden md:flex items-center gap-2.5 pl-1 pr-2.5 py-1 rounded-2xl border border-transparent hover:border-slate-200 hover:bg-slate-50 cursor-pointer shrink-0"
@@ -439,9 +442,9 @@ export function ProjectWorkspace({
           {/* The studio's own screens, folded into one menu. */}
           <StudioMenuButton
             items={[
-              { tab: 'home', label: 'Home', icon: Home, show: !isDesigner },
+              { tab: 'home', label: 'Home', icon: Home, show: !isLimited },
               { tab: 'projects', label: 'Projects', icon: Building2, show: true },
-              { tab: 'clients', label: 'Clients', icon: Users, show: !isDesigner },
+              { tab: 'clients', label: 'Clients', icon: Users, show: !isLimited },
               { tab: 'reports', label: 'Reports', icon: BarChart3, show: seesStudioFinance(currentRole) },
             ].filter(i => i.show).map(({ show, ...i }) => i)}
             onGo={(tab) => onLeaveProject?.(tab)}
@@ -474,7 +477,7 @@ export function ProjectWorkspace({
               // The screens this person may open in the stage. A stage with none
               // is left out for a Designer rather than offered as a dead end.
               const openableItems = (stageConfig?.items || []).filter(item => !hiddenForRole(item));
-              if (isDesigner && openableItems.length === 0) return null;
+              if (isLimited && openableItems.length === 0) return null;
 
               const shortLabel = label.split(' ')[0];
 
@@ -658,7 +661,7 @@ export function ProjectWorkspace({
             only thing that can reach a client.
           */}
           {/* The studio's alerts lead to screens a Designer does not have. */}
-          <div className={`ml-auto shrink-0 ${isDesigner ? 'hidden' : ''}`}>
+          <div className={`ml-auto shrink-0 ${isLimited ? 'hidden' : ''}`}>
             <HubAlertsBell
               projectId={projectId}
               projectContext={projectContext}
@@ -688,12 +691,21 @@ export function ProjectWorkspace({
               {!DESIGNER_EDITABLE_TABS.has(activeTab) && (
                 <button
                   type="button"
-                  onClick={() => setActiveTab(DESIGNER_HOME_TAB)}
+                  onClick={() => setActiveTab(limitedHome)}
                   className="phd-lift px-3 py-1.5 rounded-xl bg-[#1F4D45] hover:bg-[#12332E] text-white text-[11.5px] font-extrabold whitespace-nowrap"
                 >
                   Open Drawing Tracker
                 </button>
               )}
+            </div>
+          )}
+          {/* Client Relations: the same note. Their own tools -- the Ops Desk and the follow-up log -- come next. */}
+          {isLimited && !isDesigner && (
+            <div className="phd-pop ml-auto shrink-0 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 shadow-2xs">
+              <span className="flex items-center gap-1.5 text-[11.5px] leading-tight text-slate-600">
+                <Eye className="w-3.5 h-3.5 text-amber-600" />
+                <b className="text-slate-900">Read-only:</b> Client Comms, Timeline, Decisions, Drawings, Design Gate, Brief &amp; Site
+              </span>
             </div>
           )}
         </div>
@@ -975,7 +987,7 @@ export function ProjectWorkspace({
             so the title has to follow the screen rather than the route. */}
         <PageTitleBlock route={isWizard ? 'project-setup' : activeTab} />
         {/* Everything but the Drawing Tracker is look-only for a Designer. */}
-        <ViewOnlyGuard active={isDesigner && !DESIGNER_EDITABLE_TABS.has(activeTab)}>
+        <ViewOnlyGuard active={isLimited && !(isDesigner && DESIGNER_EDITABLE_TABS.has(activeTab))}>
           {children}
         </ViewOnlyGuard>
       </div>

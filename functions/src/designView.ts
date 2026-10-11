@@ -6,6 +6,7 @@ import * as pako from "pako";
 import { createHash } from "crypto";
 import { PLATFORM_OWNER_EMAILS } from "./guards";
 import { cleanEmails, designViewOf, storedProject as stored } from "./designViewStrip";
+import { deleteTeamViews, writeTeamViews } from "./teamView";
 
 const storedProject = (data: any) =>
   stored(data, (b64) => Buffer.from(pako.inflate(Buffer.from(b64, "base64"))).toString("utf-8"));
@@ -32,13 +33,16 @@ const storedProject = (data: any) =>
 
 const db = () => admin.firestore();
 
-async function designersFor(projectId: string, tenantId: string | null, project: any): Promise<string[]> {
+/** The people assigned to a project (projectDesigners holds every role's assignments), and the studio's team list. */
+async function assignedFor(projectId: string, tenantId: string | null, project: any): Promise<{ designers: string[]; team: any[] }> {
   let mapped: string[] = [];
+  let team: any[] = [];
   if (tenantId) {
-    const org = await db().collection("organizations").doc(tenantId).get();
-    mapped = cleanEmails(org.data()?.projectDesigners?.[projectId]);
+    const org = (await db().collection("organizations").doc(tenantId).get()).data();
+    mapped = cleanEmails(org?.projectDesigners?.[projectId]);
+    team = Array.isArray(org?.team) ? org!.team : [];
   }
-  return [...new Set([...mapped, ...cleanEmails(project?.context?.assignedDesigners)])];
+  return { designers: [...new Set([...mapped, ...cleanEmails(project?.context?.assignedDesigners)])], team };
 }
 
 async function writeDesignView(projectId: string, data: any): Promise<"written" | "unchanged" | "skipped"> {
@@ -47,7 +51,9 @@ async function writeDesignView(projectId: string, data: any): Promise<"written" 
   project.id = project.id || projectId;
   const view = designViewOf(project);
   const json = JSON.stringify(view);
-  const designers = await designersFor(projectId, view.tenantId, project);
+  const { designers, team } = await assignedFor(projectId, view.tenantId, project);
+  // The Client Relations and Site Supervisor copies, from the same read (teamView.ts).
+  await writeTeamViews(projectId, { ...project, tenantId: view.tenantId }, designers, team);
   const hash = createHash("sha256").update(json).update(designers.join(",")).digest("hex").slice(0, 32);
   const ref = db().collection("projects").doc(projectId).collection("designView").doc("current");
   const existing = await ref.get();
@@ -70,6 +76,7 @@ export const onProjectWrittenDesignView = onDocumentWritten("projects/{projectId
   const after = event.data?.after;
   if (!after?.exists) {
     await db().collection("projects").doc(projectId).collection("designView").doc("current").delete().catch(() => undefined);
+    await deleteTeamViews(projectId);
     return;
   }
   await writeDesignView(projectId, after.data());
@@ -88,8 +95,20 @@ export const onDesignerAssignmentChange = onDocumentUpdated("organizations/{orgI
     if (cleanEmails(before[id]).join(",") === cleanEmails(after[id]).join(",")) continue;
     const ref = db().collection("projects").doc(id).collection("designView").doc("current");
     const view = await ref.get();
+    /* The other copies' member lists follow the same map: rebuild them from the project. */
+    const project = await db().collection("projects").doc(id).get();
+    if (project.exists) {
+      const stored = storedProject(project.data());
+      if (stored) {
+        stored.id = stored.id || id;
+        const tenantId = stored.tenantId || event.params.orgId;
+        if (tenantId === event.params.orgId) {
+          const designers = [...new Set([...cleanEmails(after[id]), ...cleanEmails(stored?.context?.assignedDesigners)])];
+          await writeTeamViews(id, { ...stored, tenantId }, designers, event.data?.after.data()?.team || []);
+        }
+      }
+    }
     if (!view.exists) {
-      const project = await db().collection("projects").doc(id).get();
       if (project.exists) await writeDesignView(id, project.data());
       continue;
     }
@@ -98,7 +117,7 @@ export const onDesignerAssignmentChange = onDocumentUpdated("organizations/{orgI
   }
 });
 
-/** Builds the copy for every project once (platform owner only), for projects not saved since this shipped. */
+/** Builds the copies -- Designer, Client Relations, Site Supervisor -- for every project once (platform owner only), for projects not saved since they shipped. */
 export const rebuildDesignViews = onCall({ timeoutSeconds: 300, memory: "1GiB" }, async (request) => {
   const email = String(request.auth?.token?.email || "").toLowerCase();
   if (!request.auth || request.auth.token?.email_verified !== true || !PLATFORM_OWNER_EMAILS.includes(email)) {
