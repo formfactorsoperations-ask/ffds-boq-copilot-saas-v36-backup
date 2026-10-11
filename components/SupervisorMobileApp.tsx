@@ -6,6 +6,7 @@ import { SiteProgressChart } from './SiteProgressChart';
 import { FullProjectData } from '../types';
 import { useOrg } from '../contexts/OrgContext';
 import { formatClientValue } from '../lib/utils';
+import MyDayCard from './people/MyDayCard';
 
 interface SupervisorMobileAppProps {
     projects: FullProjectData[];
@@ -56,6 +57,10 @@ export default function SupervisorMobileApp({ projects, onLogout, onProjectUpdat
                 </header>
 
                 <main className="flex-1 w-full w-full p-4 sm:p-6 lg:p-8">
+                    {/* My day: check in at the site, with where (People). */}
+                    <div className="mb-8">
+                        <MyDayCard variant="compact" sites={projects.map(p => String(p?.context?.name || '')).filter(Boolean)} />
+                    </div>
                     <div className="mb-8">
                         <h2 className="text-2xl font-black text-slate-900 tracking-tight">Active Sites</h2>
                         <p className="text-slate-500 font-medium mt-1">Select a site to log updates, blockers, and progress.</p>

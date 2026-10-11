@@ -90,3 +90,30 @@ Use only the motion classes that already exist; do not write new keyframes.
 
 Sentence case. Write to the person using the screen, in the studio's own words (clients, projects,
 minutes, payments). Buttons say exactly what they do ("Save to the log", "Send for approval").
+
+## People motion (approved 11 Oct 2026)
+
+The studio owner asked for People (attendance and leave, `components/people/`)
+to feel more modern and more animated than the console screens, with the
+**same type and colour rules as everywhere else**. Only People uses this kit;
+other screens keep the motion listed above.
+
+- Classes live in `components/people/people.css` (import it, or import from
+  `components/people/PeopleBits.tsx`, which does):
+  - `pp-glass` and `pp-glow`: the glass card and its slow brand glow.
+  - `Ring` (`pp-ring-*`): progress rings that fill from empty (the working
+    day, leave balances).
+  - `pp-live`: a breathing halo on the live dot while checked in.
+  - `pp-radar`: radar rings while a location is being found.
+  - `DoneTick` (`pp-burst`, `pp-tick`): the success burst and self-drawing tick.
+  - `Skeleton` (`pp-shimmer`): loading placeholders.
+  - `pp-lift`: the hover lift on interactive cards.
+  - `pp-tickover`: the blinking colon of the live clock.
+- framer-motion, already used across the app, for:
+  - lists that rise in one after another (`listV`, `rowV`);
+  - sections that swap in (`sectionV`);
+  - the gliding segmented choice (`Glide`);
+  - the rail's sliding highlight (`layoutId`).
+- Everything stops under `prefers-reduced-motion`.
+- Still: no new fonts, no new accent colours, no half-pixel sizes. State colours
+  stay rose, amber and emerald; the brand stays `#3D52A0`.
