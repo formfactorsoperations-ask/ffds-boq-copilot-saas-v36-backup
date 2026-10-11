@@ -46,7 +46,7 @@ function meetingRef(orgId: string, projectId: string, meetingId: unknown) {
 }
 
 function mustRun(actor: Actor) {
-  if (!canRunMeeting(actor.role)) throw new HttpsError("permission-denied", "Only the Design Head, the Owner or an Admin runs a design meeting.");
+  if (!canRunMeeting(actor.roles)) throw new HttpsError("permission-denied", "Only the Design Head, the Owner or an Admin runs a design meeting.");
 }
 
 async function start(actor: Actor, orgId: string, projectId: string, input: Input) {
@@ -337,7 +337,7 @@ async function cancel(actor: Actor, orgId: string, projectId: string, input: Inp
 
 /* The billing list: a chargeable round's fee, and whether it was billed or waived. */
 async function charge(actor: Actor, orgId: string, projectId: string, input: Input) {
-  if (!canSetAudience(actor.role)) throw new HttpsError("permission-denied", "Only the Design Head, Ops or the studio's leads update revision billing.");
+  if (!canSetAudience(actor.roles)) throw new HttpsError("permission-denied", "Only the Design Head, Ops or the studio's leads update revision billing.");
   const ref = meetingRef(orgId, projectId, input.meetingId);
   return db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);

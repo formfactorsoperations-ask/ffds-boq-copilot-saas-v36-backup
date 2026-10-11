@@ -1,4 +1,4 @@
-import { Compass, FolderOpen, MessageSquare, Wallet, Scale, Clock, Calendar, MonitorSmartphone, BarChart3 } from '@/lib/lucide-shim';
+import { Compass, FolderOpen, MessageSquare, Wallet, Scale, Clock, Calendar, MonitorSmartphone, BarChart3, FileCheck } from '@/lib/lucide-shim';
 import { ProjectContext } from '../types';
 import { STAGE_LABELS } from '../constants/journeyConstants';
 import { calculateClientActionItems } from '../services/clientPortalEngine';
@@ -129,18 +129,6 @@ export const NAV_CONFIG: NavStage[] = [
       },
       { label: "Payment Schedule", route: "payment-calc", money: true },
       { 
-        label: "Drawing Tracker", 
-        route: "drawing-tracker",
-        statusBadge: (ctx) => {
-          if ((ctx as any)?.drawingTracker) {
-             const drawings = Object.values((ctx as any).drawingTracker);
-             const approved = drawings.filter((d: any) => d.status === 'Approved').length;
-             return `${approved}/${drawings.length}`;
-          }
-          return null;
-        }
-      },
-      { 
         label: "Design Gate", 
         route: "design-gate",
         statusBadge: (ctx) => {
@@ -187,6 +175,25 @@ export const ALWAYS_ON_BAND: NavItem[] = [
     badgeTone: (ctx) => {
       const summary = (ctx as any)?.journeySummary;
       return summary?.pct === 100 ? 'ok' : 'neutral';
+    }
+  },
+  {
+    /* Drawings are worked on from the first sketch to handover, so the
+       tracker sits in the hub rather than under one stage. */
+    label: "Drawings",
+    route: "drawing-tracker",
+    icon: FileCheck,
+    statusBadge: (ctx) => {
+      const tracker = (ctx as any)?.drawingTracker;
+      if (!tracker) return null;
+      const drawings = Object.values(tracker);
+      if (!drawings.length) return null;
+      const approved = drawings.filter((d: any) => d.status === 'Approved').length;
+      return `${approved}/${drawings.length}`;
+    },
+    badgeTone: (ctx) => {
+      const drawings = Object.values((ctx as any)?.drawingTracker || {});
+      return drawings.length && drawings.every((d: any) => d.status === 'Approved') ? 'ok' : 'neutral';
     }
   },
   {

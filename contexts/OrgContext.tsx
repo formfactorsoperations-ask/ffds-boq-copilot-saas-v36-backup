@@ -3,6 +3,7 @@ import { OrganizationContext, TeamMember, UserRole } from '../types';
 import { auth, db } from '../services/firebaseClient';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { setStudioEmailBrand } from '../services/emailService';
+import { rolesOf } from '../lib/roles';
 
 interface OrgContextType {
     orgData: OrganizationContext;
@@ -10,8 +11,12 @@ interface OrgContextType {
     teamMembers: TeamMember[];
     addTeamMember: (member: TeamMember) => void;
     removeTeamMember: (id: string) => void;
+    /** The most senior of the signed-in person's roles. */
     currentRole: UserRole;
-    setCurrentRole: (role: UserRole) => void;
+    /** All of their roles (lib/roles); most senior first, so `currentRoles[0]` is `currentRole`. */
+    currentRoles: string[];
+    /** Sets the role, and with `roles` every role they hold; without it, that one role alone. */
+    setCurrentRole: (role: UserRole, roles?: string[]) => void;
     currentUserAuth: any; // Expose current user auth
 }
 
@@ -186,16 +191,27 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         });
     };
 
-    const handleSetCurrentRole = (role: UserRole) => {
+    const [currentRoles, setCurrentRoles] = useState<string[]>(() => {
+        try {
+            const saved = JSON.parse(localStorage.getItem('ffds_current_roles') || 'null');
+            if (Array.isArray(saved) && saved.length) return rolesOf(saved);
+        } catch { /* storage off or garbled */ }
+        return rolesOf(localStorage.getItem('ffds_current_role') || 'Admin');
+    });
+
+    const handleSetCurrentRole = (role: UserRole, roles?: string[]) => {
+        const all = rolesOf([role, ...(roles || [])]);
         setCurrentRole(role);
+        setCurrentRoles(all);
         localStorage.setItem('ffds_current_role', role);
+        localStorage.setItem('ffds_current_roles', JSON.stringify(all));
     };
 
     return (
         <OrgContext.Provider value={{ 
             orgData, updateOrgData, 
             teamMembers, addTeamMember, removeTeamMember,
-            currentRole, setCurrentRole: handleSetCurrentRole,
+            currentRole, currentRoles, setCurrentRole: handleSetCurrentRole,
             currentUserAuth
         }}>
             {children}

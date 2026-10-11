@@ -133,6 +133,7 @@ import { readPortalView } from "./services/portalViewService";
 import { syncStudioAccess, portalDoor } from "./services/studioAccess";
 import { publishProjectDirectory } from "./services/projectTeam";
 import { seesStudioFinance, FINANCE_TABS, isDesignerRole, designerMayOpen, STUDIO_TABS, DESIGNER_HOME_TAB, visibleToRole } from "./lib/roleAccess";
+import { roleLabel } from "./lib/roles";
 import DesignDeskTab from "./components/drawingReview/DesignDeskTab";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth as firebaseAuth } from "./services/firebaseClient";
@@ -173,7 +174,7 @@ const DEFAULT_LEAD_PROFILE: LeadProfile = {
 export default function App() {
   // Global State
   console.log("App.tsx is rendering...");
-  const { orgData, currentUserAuth, currentRole, setCurrentRole, teamMembers } = useOrg();
+  const { orgData, currentUserAuth, currentRole, currentRoles, setCurrentRole, teamMembers } = useOrg();
   const [activeTab, setActiveTab] = useState("home");
   const [showWizardOverride, setShowWizardOverride] = useState(false);
   useEffect(() => {
@@ -280,6 +281,7 @@ export default function App() {
             data = {
               ...data,
               role: access.role,
+              roles: access.access === "studio" ? access.roles : undefined,
               tenantId: access.tenantId || undefined,
               projectIds: access.access === "client" ? access.projectIds : [],
             };
@@ -298,6 +300,8 @@ export default function App() {
           uid: user.uid,
           email: user.email || undefined,
           role: data.role || "Admin",
+          // Every role they hold (lib/roles), written by the server; older profiles have only `role`.
+          roles: Array.isArray(data.roles) && data.roles.length ? data.roles.map(String) : undefined,
           tenantId: data.tenantId,
           projectIds: data.projectIds || [],
           mustChangePassword: !!data.mustChangePassword && signedInWithPassword,
@@ -390,7 +394,7 @@ export default function App() {
     storage can suggest a destination, never grant one.
   */
   const [authProfile, setAuthProfile] = useState<
-    { uid: string; email?: string; role: string; tenantId?: string; projectIds: string[]; mustChangePassword?: boolean } | null
+    { uid: string; email?: string; role: string; roles?: string[]; tenantId?: string; projectIds: string[]; mustChangePassword?: boolean } | null
   >(null);
   const [authResolved, setAuthResolved] = useState(false);
   /** Branding for the client door, read from the public organizations doc. */
@@ -817,10 +821,13 @@ export default function App() {
   */
   useEffect(() => {
     if (!authProfile || authProfile.role === "Client") return;
-    const role = authProfile.email === "formfactors.operations@gmail.com" ? "Super Admin" : authProfile.role;
-    if (role && role !== currentRole) setCurrentRole(role as any);
+    const owner = authProfile.email === "formfactors.operations@gmail.com";
+    const role = owner ? "Super Admin" : authProfile.role;
+    // All of their roles (lib/roles): the principal architect is an Admin and the Design Head.
+    const roles = owner ? ["Super Admin"] : (authProfile.roles || [role]);
+    if (role && (role !== currentRole || roleLabel(roles) !== roleLabel(currentRoles))) setCurrentRole(role as any, roles);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authProfile?.role, authProfile?.email]);
+  }, [authProfile?.role, authProfile?.email, roleLabel(authProfile?.roles)]);
 
   /* Finance screens stay closed to roles that do not see studio finance, even
      when reached by a link or a button rather than a tab. */
@@ -3032,6 +3039,7 @@ export default function App() {
                       onCreateNew={handleCreateNewProject}
                       onNavigate={setActiveTab}
                       role={currentRole}
+                      roles={currentRoles}
                       userName={currentUserAuth?.displayName || currentUserAuth?.email || "there"}
                       lastTabs={lastTabs}
                       attention={attention}
@@ -3774,6 +3782,7 @@ export default function App() {
                       onCreateNew={handleCreateNewProject}
                       onNavigate={setActiveTab}
                       role={currentRole}
+                      roles={currentRoles}
                       userName={currentUserAuth?.displayName || currentUserAuth?.email || "there"}
                       lastTabs={lastTabs}
                       attention={attention}

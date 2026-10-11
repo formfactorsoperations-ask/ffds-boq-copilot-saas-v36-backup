@@ -150,12 +150,12 @@ service cloud.firestore {
       */
       allow create: if isSuperAdmin() ||
         (isAuthenticated() && request.auth.uid == userId &&
-         !request.resource.data.keys().hasAny(['role', 'tenantId', 'projectIds']));
+         !request.resource.data.keys().hasAny(['role', 'roles', 'tenantId', 'projectIds']));
 
       /*
         Self-service updates may not touch privilege.
 
-        `role`, `tenantId` and `projectIds` decide which app you get and which
+        `role` (and `roles`, all of a person's roles), `tenantId` and `projectIds` decide which app you get and which
         projects you can open. With a blanket write on your own document, a
         client could set their own role to Admin and walk into the studio app.
         Those three are written by the Admin SDK only, which bypasses rules;

@@ -8,6 +8,7 @@ import {
   uploadPrefix, versionsPrefix, safeId, MAX_PDF_BYTES, MAX_THUMB_BYTES,
   type ReviewSummary, type ReviewPerson, type ReviewVersion, type ReviewRound, type ReviewMark, type ReviewEvent,
 } from "../../lib/drawingReview";
+import { primaryRole, rolesOf } from "../../lib/roles";
 
 /*
   DESIGN REVIEW, ON THE SERVER.
@@ -28,7 +29,9 @@ const db = () => admin.firestore();
 const bucket = () => admin.storage().bucket();
 
 export interface Actor extends ReviewPerson {
+  /** The most senior of their roles; `roles` has all of them (lib/roles). */
   role: string;
+  roles: string[];
   platformOwner: boolean;
   projectName: string | null;
 }
@@ -49,11 +52,13 @@ export async function resolveActor(request: any, orgId: string, projectId: strin
   const projectName = String(projectSnap.data()?.context?.name || "").slice(0, 120) || null;
 
   if (token.email_verified === true && PLATFORM_OWNER_EMAILS.includes(email)) {
-    return { uid, email, name: String(token.name || email), role: "Super Admin", platformOwner: true, projectName };
+    return { uid, email, name: String(token.name || email), role: "Super Admin", roles: ["Super Admin"], platformOwner: true, projectName };
   }
 
   const profile: any = (await db().doc(`users/${uid}`).get()).data() || {};
-  const role = String(profile.role || "");
+  // Written only by the server (access.ts); a profile from before has just `role`.
+  const roles = rolesOf(Array.isArray(profile.roles) && profile.roles.length ? profile.roles : profile.role);
+  const role = primaryRole(roles);
   const name = String(profile.displayName || profile.name || token.name || email || "Studio");
   if (String(profile.tenantId || "") !== orgId) throw new HttpsError("permission-denied", "This project belongs to another studio.");
 
@@ -64,7 +69,7 @@ export async function resolveActor(request: any, orgId: string, projectId: strin
   } else if (!STAFF_WITH_PROJECTS.has(role)) {
     throw new HttpsError("permission-denied", "This account cannot use Design Review.");
   }
-  return { uid, email, name, role, platformOwner: false, projectName };
+  return { uid, email, name, role, roles, platformOwner: false, projectName };
 }
 
 export const person = (a: Actor): ReviewPerson => ({ uid: a.uid, email: a.email, name: a.name });
@@ -129,7 +134,7 @@ async function readThumb(path: string): Promise<boolean> {
 type Input = Record<string, any>;
 
 async function finalize(actor: Actor, orgId: string, projectId: string, drawingId: string, input: Input) {
-  if (!canUpload(actor.role)) throw new HttpsError("permission-denied", "This account cannot upload drawings.");
+  if (!canUpload(actor.roles)) throw new HttpsError("permission-denied", "This account cannot upload drawings.");
   const prefix = uploadPrefix(orgId, projectId, drawingId, actor.uid);
   const uploadPath = String(input.uploadPath || "");
   const thumbIn = input.thumbPath ? String(input.thumbPath) : null;
@@ -231,7 +236,7 @@ async function finalize(actor: Actor, orgId: string, projectId: string, drawingI
 }
 
 async function submit(actor: Actor, drawingRef: FirebaseFirestore.DocumentReference, input: Input) {
-  if (!canUpload(actor.role)) throw new HttpsError("permission-denied", "This account cannot send drawings for review.");
+  if (!canUpload(actor.roles)) throw new HttpsError("permission-denied", "This account cannot send drawings for review.");
   return db().runTransaction(async (tx) => {
     const snap = await tx.get(drawingRef);
     if (!snap.exists) throw new HttpsError("not-found", "That drawing is no longer in the tracker.");
@@ -252,7 +257,7 @@ async function submit(actor: Actor, drawingRef: FirebaseFirestore.DocumentRefere
 }
 
 async function withdraw(actor: Actor, drawingRef: FirebaseFirestore.DocumentReference, input: Input) {
-  if (!canUpload(actor.role)) throw new HttpsError("permission-denied", "This account cannot pull drawings back.");
+  if (!canUpload(actor.roles)) throw new HttpsError("permission-denied", "This account cannot pull drawings back.");
   return db().runTransaction(async (tx) => {
     const snap = await tx.get(drawingRef);
     const s: ReviewSummary | undefined = snap.data()?.review;
@@ -268,7 +273,7 @@ async function withdraw(actor: Actor, drawingRef: FirebaseFirestore.DocumentRefe
 }
 
 async function decide(actor: Actor, drawingRef: FirebaseFirestore.DocumentReference, input: Input, kind: "approve" | "return") {
-  if (!canReview(actor.role)) throw new HttpsError("permission-denied", "Only the Design Head can approve or return a sheet.");
+  if (!canReview(actor.roles)) throw new HttpsError("permission-denied", "Only the Design Head can approve or return a sheet.");
   return db().runTransaction(async (tx) => {
     const snap = await tx.get(drawingRef);
     if (!snap.exists) throw new HttpsError("not-found", "That drawing is no longer in the tracker.");
@@ -313,7 +318,7 @@ async function mark(actor: Actor, drawingRef: FirebaseFirestore.DocumentReferenc
     const now = Date.now();
 
     if (op === "create") {
-      if (!canReview(actor.role)) throw new HttpsError("permission-denied", "Only the Design Head marks sheets.");
+      if (!canReview(actor.roles)) throw new HttpsError("permission-denied", "Only the Design Head marks sheets.");
       if (s.state !== "IN_REVIEW" && !clientPending(s)) throw new HttpsError("failed-precondition", "Notes go on a sheet while it is being reviewed.");
       const shape = cleanShape(input.shape);
       const text = cleanText(input.text);
@@ -336,7 +341,7 @@ async function mark(actor: Actor, drawingRef: FirebaseFirestore.DocumentReferenc
     if (m.versionId !== s.versionId) throw new HttpsError("failed-precondition", "That note is on an older version.");
 
     if (op === "update" || op === "delete") {
-      if (!canReview(actor.role)) throw new HttpsError("permission-denied", "Only the Design Head changes notes.");
+      if (!canReview(actor.roles)) throw new HttpsError("permission-denied", "Only the Design Head changes notes.");
       if (s.state !== "IN_REVIEW" && !clientPending(s)) throw new HttpsError("failed-precondition", "Notes can only be changed while the sheet is being reviewed.");
       if (op === "delete") {
         tx.delete(ref);
@@ -360,7 +365,7 @@ async function mark(actor: Actor, drawingRef: FirebaseFirestore.DocumentReferenc
     }
 
     if (op === "fix" || op === "unfix") {
-      if (!canUpload(actor.role)) throw new HttpsError("permission-denied", "This account cannot tick off notes.");
+      if (!canUpload(actor.roles)) throw new HttpsError("permission-denied", "This account cannot tick off notes.");
       if (s.state !== "CHANGES_REQUESTED") throw new HttpsError("failed-precondition", "Notes are ticked off after the sheet comes back.");
       const fixed = op === "fix";
       if ((m.status === "FIXED") === fixed) return { mark: m };
@@ -381,7 +386,7 @@ async function mark(actor: Actor, drawingRef: FirebaseFirestore.DocumentReferenc
   that version was left in, or to having no sheet at all.
 */
 async function removeVersion(actor: Actor, drawingRef: FirebaseFirestore.DocumentReference, input: Input) {
-  if (!canUpload(actor.role)) throw new HttpsError("permission-denied", "This account cannot remove drawings.");
+  if (!canUpload(actor.roles)) throw new HttpsError("permission-denied", "This account cannot remove drawings.");
   const result = await db().runTransaction(async (tx) => {
     const snap = await tx.get(drawingRef);
     if (!snap.exists) throw new HttpsError("not-found", "That drawing is no longer in the tracker.");
@@ -398,7 +403,7 @@ async function removeVersion(actor: Actor, drawingRef: FirebaseFirestore.Documen
     const verSnap = await tx.get(verRef);
     if (!verSnap.exists) throw new HttpsError("not-found", "That version is already gone.");
     const v = verSnap.data() as ReviewVersion;
-    if (v.by?.uid !== actor.uid && !canSetAudience(actor.role)) {
+    if (v.by?.uid !== actor.uid && !canSetAudience(actor.roles)) {
       throw new HttpsError("permission-denied", "Only the person who uploaded this PDF, or the Design Head, can remove it.");
     }
     const roundsHere = await tx.get(drawingRef.collection("reviewRounds").where("versionId", "==", s.versionId));
@@ -459,7 +464,7 @@ async function removeVersion(actor: Actor, drawingRef: FirebaseFirestore.Documen
   notes are then set aside, and the history says what they were).
 */
 async function clientDecide(actor: Actor, drawingRef: FirebaseFirestore.DocumentReference, input: Input, kind: "clientReturn" | "clientKeep") {
-  if (!canReview(actor.role)) throw new HttpsError("permission-denied", "Only the Design Head decides on the client's changes.");
+  if (!canReview(actor.roles)) throw new HttpsError("permission-denied", "Only the Design Head decides on the client's changes.");
   return db().runTransaction(async (tx) => {
     const snap = await tx.get(drawingRef);
     if (!snap.exists) throw new HttpsError("not-found", "That drawing is no longer in the tracker.");
@@ -499,7 +504,7 @@ async function clientDecide(actor: Actor, drawingRef: FirebaseFirestore.Document
 }
 
 async function setAudience(actor: Actor, orgId: string, projectId: string, drawingId: string, drawingRef: FirebaseFirestore.DocumentReference, input: Input) {
-  if (!canSetAudience(actor.role)) throw new HttpsError("permission-denied", "Only the Design Head or the studio's leads decide who a drawing is for.");
+  if (!canSetAudience(actor.roles)) throw new HttpsError("permission-denied", "Only the Design Head or the studio's leads decide who a drawing is for.");
   const audience = input.audience === "studio" ? "studio" : input.audience === "client" ? "client" : null;
   if (!audience) throw new HttpsError("invalid-argument", "Client or studio?");
   return db().runTransaction(async (tx) => {
@@ -529,7 +534,7 @@ export const drawingReview = onCall({ cors: true, memory: "1GiB", timeoutSeconds
     switch (action) {
       /* Asked before an upload starts, so a refusal is explained before any bytes move. */
       case "check": {
-        if (!canUpload(actor.role)) throw new HttpsError("permission-denied", "This account cannot upload drawings.");
+        if (!canUpload(actor.roles)) throw new HttpsError("permission-denied", "This account cannot upload drawings.");
         const snap = await drawingRef.get();
         if (!snap.exists) throw new HttpsError("not-found", "That drawing is no longer in the tracker.");
         if (!allowed("finalize", snap.data()?.review)) throw new HttpsError("failed-precondition", refusal("finalize", snap.data()?.review));

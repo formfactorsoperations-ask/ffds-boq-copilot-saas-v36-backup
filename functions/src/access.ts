@@ -26,6 +26,7 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import * as pako from "pako";
 import { timingSafeEqual, randomInt } from "crypto";
+import { memberRoles, primaryRole, roleLabel, rolesOf } from "../../lib/roles";
 
 /* Resolved per call; see the note on the same line in platformAdmin.ts. */
 const db = () => admin.firestore();
@@ -44,7 +45,7 @@ const TEAM_ROLES = new Set([
 ]);
 
 type Access =
-  | { access: "studio"; tenantId: string | null; role: string }
+  | { access: "studio"; tenantId: string | null; role: string; roles: string[] }
   | { access: "client"; tenantId: string | null; role: "Client"; projectIds: string[] }
   | { access: "none" };
 
@@ -55,6 +56,16 @@ function teamRole(raw: any): string {
   if (role === "Super Admin") return "Admin";
   if (role === "Client" || !role) return "Viewer";
   return TEAM_ROLES.has(role) ? role : "Viewer";
+}
+
+/*
+  A person may hold several roles (lib/roles): the principal architect is an
+  Admin and the Design Head. Each is checked like a single role; the profile
+  keeps all of them, and `role` is the most senior, which the rules read.
+*/
+function teamRoles(member: any): string[] {
+  const roles = rolesOf(memberRoles(member).map(teamRole));
+  return roles.length ? roles : ["Viewer"];
 }
 
 /*
@@ -106,12 +117,12 @@ export const syncStudioAccess = onCall(async (request): Promise<Access> => {
     where they were; otherwise every studio is asked, which is cheap at this
     platform's size and is the only way a newly invited member finds theirs.
   */
-  let match: { tenantId: string; role: string } | null = null;
+  let match: { tenantId: string; roles: string[] } | null = null;
   if (verified && email) {
     if (profile.tenantId) {
       const own = await db().collection("organizations").doc(String(profile.tenantId)).get();
       const member = own.exists ? onTeam(own.data(), email) : null;
-      if (member) match = { tenantId: own.id, role: teamRole(member.role) };
+      if (member) match = { tenantId: own.id, roles: teamRoles(member) };
     }
     if (!match) {
       const orgs = await db().collection("organizations").get();
@@ -122,19 +133,20 @@ export const syncStudioAccess = onCall(async (request): Promise<Access> => {
         });
       }
       if (found.length) {
-        match = { tenantId: found[0].id, role: teamRole(onTeam(found[0].data(), email)?.role) };
+        match = { tenantId: found[0].id, roles: teamRoles(onTeam(found[0].data(), email)) };
       }
     }
   }
 
   if (match) {
-    if (profile.tenantId !== match.tenantId || profile.role !== match.role || profile.email !== email) {
+    const role = primaryRole(match.roles);
+    if (profile.tenantId !== match.tenantId || profile.role !== role || roleLabel(profile.roles) !== roleLabel(match.roles) || profile.email !== email) {
       await ref.set(
-        { email, tenantId: match.tenantId, role: match.role, updatedAt: Date.now() },
+        { email, tenantId: match.tenantId, role, roles: match.roles, updatedAt: Date.now() },
         { merge: true },
       );
     }
-    return { access: "studio", tenantId: match.tenantId, role: match.role };
+    return { access: "studio", tenantId: match.tenantId, role, roles: match.roles };
   }
 
   /*
@@ -159,11 +171,11 @@ export const syncStudioAccess = onCall(async (request): Promise<Access> => {
         return { access: "none" };
       }
     }
-    return { access: "studio", tenantId: profile.tenantId, role: profile.role };
+    return { access: "studio", tenantId: profile.tenantId, role: profile.role, roles: rolesOf(profile.roles || profile.role) };
   }
 
   if (verified && PLATFORM_OWNER_EMAILS.includes(email)) {
-    return { access: "studio", tenantId: profile.tenantId || null, role: "Super Admin" };
+    return { access: "studio", tenantId: profile.tenantId || null, role: "Super Admin", roles: ["Super Admin"] };
   }
 
   logger.info("syncStudioAccess: no studio for this account", { uid, email, verified });
@@ -228,7 +240,7 @@ export const onStudioTeamChange = onDocumentUpdated("organizations/{orgId}", asy
     if (PLATFORM_OWNER_EMAILS.includes(email)) continue;
     const now = after.get(email);
     const removed = !now;
-    const roleChanged = !!now && teamRole(now.role) !== teamRole(member.role);
+    const roleChanged = !!now && roleLabel(teamRoles(now)) !== roleLabel(teamRoles(member));
     if (!removed && !roleChanged) continue;
 
     let uid: string;
@@ -246,9 +258,10 @@ export const onStudioTeamChange = onDocumentUpdated("organizations/{orgId}", asy
     if (removed) {
       await revokeStaff(uid, orgId, "removed from the studio's team");
     } else {
-      await db().collection("users").doc(uid).set({ role: teamRole(now.role), updatedAt: Date.now() }, { merge: true });
+      const roles = teamRoles(now);
+      await db().collection("users").doc(uid).set({ role: primaryRole(roles), roles, updatedAt: Date.now() }, { merge: true });
       await admin.auth().revokeRefreshTokens(uid);
-      logger.info("onStudioTeamChange: role changed", { uid, orgId, from: profile.role, to: teamRole(now.role) });
+      logger.info("onStudioTeamChange: role changed", { uid, orgId, from: profile.role, to: roleLabel(roles) });
     }
   }
 });
@@ -426,7 +439,8 @@ export const createStaffLogin = onCall(async (request) => {
   if (PLATFORM_OWNER_EMAILS.includes(email)) {
     throw new HttpsError("failed-precondition", "The platform owner's login is not managed from a studio team.");
   }
-  const role = teamRole(member.role);
+  const roles = teamRoles(member);
+  const role = primaryRole(roles);
   const password = tempPassword();
 
   let user: admin.auth.UserRecord;
@@ -463,6 +477,7 @@ export const createStaffLogin = onCall(async (request) => {
     email,
     tenantId,
     role,
+    roles,
     displayName: member.name || existing.displayName || null,
     mustChangePassword: true,
     revokedAt: admin.firestore.FieldValue.delete(),

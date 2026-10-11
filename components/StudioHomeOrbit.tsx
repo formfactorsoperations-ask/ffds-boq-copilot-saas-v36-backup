@@ -10,10 +10,10 @@ import {
   AttentionState, isHidden, writeAttentionEntry, TOMORROW_9AM, NEXT_WEEK,
 } from "../services/attentionState";
 import StudioFooter from "./home/StudioFooter";
-import { isDesignerRole, seesStudioFinance } from "../lib/roleAccess";
+import { isDesignerRole, seesStudioFinance, mayOpenStudioTab } from "../lib/roleAccess";
 import {
   ArrowRight, CheckCircle2, ChevronDown, Plus, Sparkles, Clock, Wallet, Zap, Layers3, Check, BellOff,
-  LayoutGrid, Users, BarChart3, Store, FileSignature, Boxes,
+  LayoutGrid, Users, BarChart3, Store, FileSignature, Boxes, PenTool,
 } from "lucide-react";
 
 /**
@@ -84,11 +84,13 @@ interface Props {
   attention?: AttentionState;
   onAttentionChange?: (projectId: string, entry: { snoozedUntil?: number; dismissedAt?: number }) => void;
   role: string;
+  /** Every role they hold (lib/roles); the dial offers what any of them opens. Defaults to `role`. */
+  roles?: string[];
   userName?: string;
 }
 
 export default function StudioHomeOrbit({
-  projects, onOpenProject, onCreateNew, onNavigate, role, userName = "there", lastTabs = {},
+  projects, onOpenProject, onCreateNew, onNavigate, role, roles, userName = "there", lastTabs = {},
   attention = {}, onAttentionChange,
 }: Props) {
   const data = useStudioHomeData(projects, role);
@@ -111,7 +113,13 @@ export default function StudioHomeOrbit({
     { key: "ratebank", label: "Rate bank", icon: Store, accent: "#C77700", tab: "admin-templates-bank", ring: 1 },
     { key: "templates", label: "Templates", icon: FileSignature, accent: "#6D28D9", tab: "admin-templates-bank", ring: 1 },
     { key: "setup", label: "Studio setup", icon: Boxes, accent: "#0F766E", tab: "studio-settings", ring: 1 },
-  ], [data.activeCount, data.pipelineCount, data.deliveredCount, data.clientsCount]);
+    /* For the roles without the studio's setup screens, Design Desk takes the outer ring. */
+    { key: "desk", label: "Design Desk", icon: PenTool, accent: "#6D5BD0", tab: "design-review", ring: 1 },
+  ].filter((h) => {
+    const who = roles?.length ? roles : role;
+    if (!mayOpenStudioTab(h.tab, who)) return false;
+    return h.key !== "desk" || !mayOpenStudioTab("studio-settings", who);
+  }) as Hub[], [data.activeCount, data.pipelineCount, data.deliveredCount, data.clientsCount, role, (roles || []).join("|")]);
 
 const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
 
@@ -341,12 +349,24 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
 
             {/* Every figure here is live: none of it is written down. */}
             <p className="mt-5 max-w-lg text-[15px] leading-relaxed text-[#64748b]">
-              <strong className="font-semibold" style={{ color: INK }}>
-                {data.activeCount} project{data.activeCount === 1 ? "" : "s"}{" "}
-                {data.activeCount === 1 ? "is" : "are"} active
-              </strong>
-              , {data.pipelineCount}{" "}
-              {data.pipelineCount === 1 ? "opportunity is" : "opportunities are"} in the pipeline
+              {/* A Designer sees only the projects assigned to them, and no pipeline. */}
+              {isDesignerRole(role) ? (() => {
+                const n = data.activeCount + data.pipelineCount + data.deliveredCount;
+                return (
+                  <strong className="font-semibold" style={{ color: INK }}>
+                    {n} project{n === 1 ? " is" : "s are"} assigned to you
+                  </strong>
+                );
+              })() : (
+                <>
+                  <strong className="font-semibold" style={{ color: INK }}>
+                    {data.activeCount} project{data.activeCount === 1 ? "" : "s"}{" "}
+                    {data.activeCount === 1 ? "is" : "are"} active
+                  </strong>
+                  , {data.pipelineCount}{" "}
+                  {data.pipelineCount === 1 ? "opportunity is" : "opportunities are"} in the pipeline
+                </>
+              )}
               {data.attentionCount > 0 ? (
                 <>
                   , and{" "}

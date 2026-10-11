@@ -10,6 +10,7 @@ import {
 import { canReview, canUpload, canSetAudience, allowed, clientPending, stateOf, refusal, guessAudience, turnShape, type Turn, type MarkShape, type ReviewMark, type ReviewVersion, type ReviewRound, type ReviewEvent } from '../../lib/drawingReview';
 import { roundWarn, INCLUDED_ROUNDS } from '../../lib/designDesk';
 import { thumbnailOf } from '../../lib/pdfRender';
+import { roleLabel, type RoleSet } from '../../lib/roles';
 import PdfStage, { type Tool } from './PdfStage';
 import { useSheetChanges } from './useSheetChanges';
 import { MARK, FIXED, CLIENT, roomLabel, ago, shortDate, firstName, useToast, Initials } from './ui';
@@ -32,7 +33,8 @@ interface Props {
   look: { code: string; color: string; soft: string };
   /** Other sheets in this project that need the viewer. */
   projectNeeds?: number;
-  role: string;
+  /** One role, or all of the person's roles (lib/roles). */
+  role: RoleSet;
   me: Me;
   queue: { projectId: string; drawingId: string }[];
   onClose: () => void;
@@ -174,7 +176,7 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
     window.addEventListener('dragenter', enter); window.addEventListener('dragleave', leave);
     window.addEventListener('dragover', over); window.addEventListener('drop', drop);
     return () => { window.removeEventListener('dragenter', enter); window.removeEventListener('dragleave', leave); window.removeEventListener('dragover', over); window.removeEventListener('drop', drop); };
-  }, [role, r?.rev, r?.state]);
+  }, [roleLabel(role), r?.rev, r?.state]);
 
   async function act(label: string, fn: () => Promise<any>, ok?: { title: string; sub?: string; celebrate?: boolean }) {
     setBusy(label);
