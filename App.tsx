@@ -1009,6 +1009,35 @@ export default function App() {
     }
   }, [activeTab]);
 
+  /*
+    Load the library again once we know who signed in.
+
+    The first load can run before sign-in settles, using the role the
+    browser remembered from the last person (a Designer's load returns only
+    their assigned projects). After testing a Designer's login and signing
+    back in as an Admin, the library stayed that Designer's empty list
+    everywhere except the Projects tab, which refetches on its own -- so
+    Studio settings → Team offered no projects to assign.
+  */
+  useEffect(() => {
+    if (!authProfile?.uid || authProfile.role === "Client" || !isDataLoaded) return;
+    let live = true;
+    db.getProjects().then((fetched) => {
+      if (!live) return;
+      setProjectLibrary((current) => {
+        // Keep an open project's unsaved copy, as the Projects tab refresh does.
+        const activeId = activeIdRef.current;
+        const inMemory = activeId ? current.find((p) => p.id === activeId) : null;
+        if (!inMemory) return fetched;
+        const i = fetched.findIndex((p) => p.id === activeId);
+        if (i === -1) return [inMemory, ...fetched];
+        return inMemory.lastModified > fetched[i].lastModified ? fetched.map((p, j) => (j === i ? inMemory : p)) : fetched;
+      });
+    }).catch(() => { /* the library loaded at start stays */ });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authProfile?.uid, authProfile?.role, isDataLoaded]);
+
   // Auto-save Item Bank (Critical for Excel Imports Persistence)
   useEffect(() => {
     if (isDataLoaded && bank.length > 0) {
