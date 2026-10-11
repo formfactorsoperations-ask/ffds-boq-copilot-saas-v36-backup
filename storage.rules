@@ -41,7 +41,7 @@ service firebase.storage {
         && tenantId != null
         && firestore.exists(profilePath())
         && profile().get('tenantId', '') == tenantId
-        && profile().get('role', '') in ['Super Admin', 'Owner', 'Admin', 'Ops Director', 'Design Head', 'Designer', 'Site Supervisor', 'Viewer'];
+        && profile().get('role', '') in ['Super Admin', 'Owner', 'Admin', 'Ops Director', 'Design Head', 'Designer', 'Site Supervisor', 'Viewer', 'Client Relations'];
     }
 
     function canUpload(tenantId) {

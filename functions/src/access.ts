@@ -40,7 +40,7 @@ const PLATFORM_OWNER_EMAILS = ["formfactors.operations@gmail.com"];
   createClientLogin with a project attached, never by being typed into a team.
 */
 const TEAM_ROLES = new Set([
-  "Owner", "Admin", "Ops Director", "Design Head", "Designer", "Site Supervisor", "Viewer",
+  "Owner", "Admin", "Ops Director", "Design Head", "Designer", "Site Supervisor", "Viewer", "Client Relations",
   "Vendor",
 ]);
 

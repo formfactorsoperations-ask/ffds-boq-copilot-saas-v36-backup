@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { rolesOf, primaryRole, hasRole, memberRoles, roleLabel } from '../../lib/roles';
-import { seesStudioFinance, isDesignerRole, mayOpenStudioTab, designerMayOpen } from '../../lib/roleAccess';
+import { seesStudioFinance, isDesignerRole, mayOpenStudioTab, designerMayOpen, isLimitedRole, teamViewKindOf, limitedMayOpen, limitedHomeTab, visibleToRole } from '../../lib/roleAccess';
 import { canReview, canUpload, canSetAudience, canRunMeeting } from '../../lib/drawingReview';
 
 describe('several roles', () => {
@@ -64,5 +64,45 @@ describe('studio screens by role', () => {
 
   it('gives the Design Head home, projects, clients and Design Desk', () => {
     for (const tab of ['home', 'projects', 'clients', 'design-review']) expect(mayOpenStudioTab(tab, 'Design Head')).toBe(true);
+  });
+});
+
+describe('the roles limited to assigned projects', () => {
+  it('are Designer, Client Relations, Site Supervisor and Vendor, unless a broader role comes with them', () => {
+    for (const r of ['Designer', 'Client Relations', 'Site Supervisor', 'Vendor']) expect(isLimitedRole(r)).toBe(true);
+    for (const r of ['Owner', 'Admin', 'Ops Director', 'Design Head', 'Viewer']) expect(isLimitedRole(r)).toBe(false);
+    expect(isLimitedRole(['Client Relations', 'Admin'])).toBe(false);
+    expect(isLimitedRole(['Site Supervisor', 'Viewer'])).toBe(false);
+    expect(primaryRole(['Designer', 'Client Relations'])).toBe('Client Relations');
+  });
+
+  it('each reads its own copy', () => {
+    expect(teamViewKindOf('Designer')).toBe('design');
+    expect(teamViewKindOf('Client Relations')).toBe('ops');
+    expect(teamViewKindOf('Site Supervisor')).toBe('site');
+    expect(teamViewKindOf('Vendor')).toBeNull();
+    expect(teamViewKindOf('Admin')).toBeNull();
+  });
+
+  it('gives Client Relations the client screens and nothing about money or setup', () => {
+    for (const t of ['comms-tracker', 'timeline', 'record-decision', 'drawing-tracker', 'home', 'projects']) {
+      expect(limitedMayOpen('Client Relations', t), t).toBe(true);
+    }
+    for (const t of ['payment-calc', 'ops', 'boq-editor', 'execution-agreement', 'site-ops', 'clients', 'reports', 'studio-settings']) {
+      expect(limitedMayOpen('Client Relations', t), t).toBe(false);
+    }
+    expect(limitedHomeTab('Client Relations')).toBe('comms-tracker');
+    expect(limitedHomeTab('Designer')).toBe('drawing-tracker');
+    expect(limitedMayOpen('Admin', 'payment-calc')).toBe(true);
+    expect(mayOpenStudioTab('home', 'Client Relations')).toBe(true);
+    expect(mayOpenStudioTab('clients', 'Client Relations')).toBe(false);
+  });
+
+  it('lists for Client Relations only the projects assigned to them', () => {
+    const projects = [{ id: 'p1' }, { id: 'p2' }, { id: 'p3', _teamView: 'ops' } as any];
+    const map = { p1: ['cr@a.com'], p2: ['d@a.com'] };
+    expect(visibleToRole(projects, 'Client Relations', 'CR@a.com', map).map((p) => p.id)).toEqual(['p1', 'p3']);
+    expect(visibleToRole(projects, 'Client Relations', '', map)).toEqual([]);
+    expect(visibleToRole(projects, 'Admin', 'm@a.com', map)).toHaveLength(3);
   });
 });

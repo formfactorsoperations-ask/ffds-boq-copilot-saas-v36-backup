@@ -38,6 +38,9 @@ import { approveIssuePatch } from "./approveIssue";
 import { downloadPatch } from "./scopeTrail";
 import { raiseQuery } from "../../services/documentQueryEngine";
 import { buildPortalView } from "../../lib/portalProjection";
+import { applySiteAction, SiteActionError } from "./siteActionPatch";
+import { isTeamViewMember } from "./teamView";
+import { primaryRole, rolesOf } from "../../lib/roles";
 
 const withDiagnostics = (functionName: string, handler: (request: any) => Promise<any>) => {
     return async (request: any) => {
@@ -524,16 +527,26 @@ function generateTempPassword(): string {
     return `${pick()}-${pick()}-${digits}`;
 }
 
-/** The caller must be signed in and belong to the tenant they are acting for. */
+/*
+  Who may issue or reset a client's login: the studio's leads.
+
+  It was any signed-in member of the studio, a Designer included -- and a
+  client login opens that client's portal, with their payments and documents.
+  Handing those out is the studio's decision, so it sits with the roles that
+  manage the team and the money.
+*/
+const CLIENT_LOGIN_ROLES = new Set(["Super Admin", "Owner", "Admin", "Ops Director"]);
+
+/** The caller must be one of the studio's leads, acting for their own studio. */
 async function assertStudioCaller(request: any, tenantId: string) {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Sign in first.");
     }
     const callerSnap = await db.collection("users").doc(request.auth.uid).get();
     const caller = callerSnap.exists ? callerSnap.data() : null;
-    const callerRole = caller?.role || "";
-    if (callerRole === "Client") {
-        throw new HttpsError("permission-denied", "Clients cannot issue logins.");
+    const callerRole = primaryRole(rolesOf(Array.isArray(caller?.roles) && caller!.roles.length ? caller!.roles : caller?.role));
+    if (!CLIENT_LOGIN_ROLES.has(callerRole)) {
+        throw new HttpsError("permission-denied", "Only an Owner, Admin or Ops Director can issue or reset a client's login.");
     }
     const callerTenant = caller?.tenantId;
     const isSuperAdmin = callerRole === "Super Admin";
@@ -978,5 +991,65 @@ export const submitClientAction = onCall({ cors: true }, async (request) => {
     });
 
     logger.info("Client action applied", { projectId, type: action?.type });
+    return { ok: true };
+});
+
+/*
+  A SITE SUPERVISOR'S ACTION.
+
+  Their app reads a copy of the project without the money (teamView.ts), so it
+  cannot save the project the way it used to, and the database no longer lets
+  it. The six things they do on site come here instead: one action, checked
+  against their assignment, applied to the site record alone (siteActionPatch).
+  The studio's leads may use it too.
+*/
+const SITE_ACTION_LEADS = new Set(["Super Admin", "Owner", "Admin", "Ops Director"]);
+
+export const siteAction = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+    const projectId = String(request.data?.projectId || "");
+    const action = request.data?.action;
+    if (!projectId) throw new HttpsError("invalid-argument", "Which project?");
+
+    const profile: any = (await db.collection("users").doc(request.auth.uid).get()).data() || {};
+    const role = primaryRole(rolesOf(Array.isArray(profile.roles) && profile.roles.length ? profile.roles : profile.role));
+    const email = String(request.auth.token?.email || "").trim().toLowerCase();
+    const tenantId = String(profile.tenantId || "");
+
+    const ref = db.collection("projects").doc(projectId);
+    const first = await ref.get();
+    if (!first.exists) throw new HttpsError("not-found", "This project no longer exists.");
+    const projectTenant = String(first.data()?.tenantId || "");
+    if (!tenantId || projectTenant !== tenantId) throw new HttpsError("permission-denied", "This project belongs to another studio.");
+
+    if (role === "Site Supervisor") {
+        if (!(await isTeamViewMember(projectId, tenantId, email, "site"))) {
+            throw new HttpsError("permission-denied", "You are not assigned to this site.");
+        }
+    } else if (!SITE_ACTION_LEADS.has(role)) {
+        throw new HttpsError("permission-denied", "This account cannot record site work.");
+    }
+    const author = String(profile.displayName || profile.name || "Site Supervisor").slice(0, 80);
+
+    /* In a transaction for the same reason as a client's action: the studio may be saving this project too. */
+    await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) throw new HttpsError("not-found", "This project no longer exists.");
+        const stored = snap.data() as any;
+        const { project, wasCompressed } = readStoredProject(stored);
+        let next: any;
+        try {
+            next = applySiteAction(project, action, author);
+        } catch (e: any) {
+            if (e instanceof SiteActionError) throw new HttpsError("invalid-argument", e.message);
+            throw e;
+        }
+        const payload = writeableProject(next, wasCompressed, stored);
+        tx.set(ref, payload);
+        // Both stored copies, as submitClientAction explains.
+        tx.set(db.collection(`organizations/${projectTenant}/projects`).doc(projectId), payload);
+    });
+
+    logger.info("Site action applied", { projectId, type: action?.type, role });
     return { ok: true };
 });

@@ -22,7 +22,7 @@ import {
   CashFlowForecastDashboard,
 } from "./CashFlowForecastDashboard";
 import { useOrg } from "../contexts/OrgContext";
-import { seesStudioFinance, isDesignerRole } from "../lib/roleAccess";
+import { seesStudioFinance, isDesignerRole, isLimitedRole } from "../lib/roleAccess";
 import { Users } from '@/lib/lucide-shim';
 import ProjectTeamButton from "./projectHeader/ProjectTeamButton";
 import AssignProjectsModal from "./projectHeader/AssignProjectsModal";
@@ -905,7 +905,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
             )}
             {assignOpen && <AssignProjectsModal onClose={() => setAssignOpen(false)} />}
             {/* A Designer works on the projects they are given; they do not start them. */}
-            {!isDesignerRole(currentRole) && (
+            {!isLimitedRole(currentRole) && (
             <motion.button
               whileHover={{ scale: 1.02, y: -1 }}
               whileTap={{ scale: 0.98 }}
@@ -919,11 +919,11 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
 
           {/* A Designer's list is only what they are assigned, so an empty one
               says how to get a project rather than showing a row of zeros. */}
-          {isDesignerRole(currentRole) && projects.length === 0 && (
+          {isLimitedRole(currentRole) && projects.length === 0 && (
             <div className="mb-4 rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-6 text-center">
               <p className="text-sm font-bold text-slate-800">No projects are assigned to you yet.</p>
               <p className="text-[13px] text-slate-500 mt-1">
-                Ask your studio to add you to a project: they tick your name under Details → Designers on this project.
+                Ask your studio to add you to a project: they tick your name in Studio settings → Team, or on the project's team.
               </p>
             </div>
           )}
@@ -1327,7 +1327,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                   // The studio's next move (agreements, invoices, sign-offs) is not
                   // a Designer's; their work on a project is in the Drawing Tracker.
                   const nextMove =
-                    DORMANT.includes(metrics.status) || isDesignerRole(currentRole)
+                    DORMANT.includes(metrics.status) || isLimitedRole(currentRole)
                       ? null
                       : intel.get(project.id)?.action || null;
 

@@ -23,7 +23,7 @@ import { createStaffLogin, StaffLogin } from '../../services/studioAccess';
 import { useProjectDirectory, useProjectTeam } from '../../services/projectTeam';
 import AssignProjectsModal from '../projectHeader/AssignProjectsModal';
 
-const ROLES: UserRole[] = ['Super Admin', 'Admin', 'Ops Director', 'Design Head', 'Designer', 'Site Supervisor', 'Viewer', 'Client'] as UserRole[];
+const ROLES: UserRole[] = ['Super Admin', 'Admin', 'Ops Director', 'Design Head', 'Designer', 'Client Relations', 'Site Supervisor', 'Viewer', 'Client'] as UserRole[];
 
 /** What each role can reach, said plainly rather than as a permission matrix. */
 const ROLE_BLURB: Record<string, string> = {
@@ -32,7 +32,8 @@ const ROLE_BLURB: Record<string, string> = {
   'Ops Director': 'Projects, settings and margins — no platform access',
   'Design Head': 'Reviews and approves every drawing; all projects, without the money',
   'Designer': 'Drawings on the projects assigned to them; no money, no settings',
-  'Site Supervisor': 'Site visits, snags and progress on assigned projects',
+  'Client Relations': 'Client follow-ups, meetings and payment chasing on assigned projects; sees what clients owe, never costs or margins',
+  'Site Supervisor': 'Site progress on assigned projects, from the site app; no money',
   'Viewer': 'Read only',
   'Client': 'Their own project portal, nothing else',
 };
@@ -345,7 +346,7 @@ const StudioTeamSection: React.FC<Props> = ({ team, onChange, currentEmail, tena
                     </span>
                   )}
                   {/* A2 in the header mockups: a Designer's projects, set from their own row. */}
-                  {m.role === ('Designer' as UserRole) && !incomplete && savedEmails.includes(m.email.trim().toLowerCase()) && (
+                  {(m.role === ('Designer' as UserRole) || m.role === ('Client Relations' as UserRole)) && !incomplete && savedEmails.includes(m.email.trim().toLowerCase()) && (
                     <span className="flex items-center gap-2">
                       <span className={`px-2 py-0.5 rounded-full font-bold ${projectCountFor(m.email) ? 'bg-[#DCEBE6] text-[#1F4D45]' : 'bg-slate-100 text-slate-500'}`}>
                         {projectCountFor(m.email) ? `${projectCountFor(m.email)} project${projectCountFor(m.email) === 1 ? '' : 's'}` : 'No projects yet'}

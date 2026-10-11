@@ -132,7 +132,9 @@ import { issuePortalAccess, projectIdFromToken } from "./services/portalAccessSe
 import { readPortalView } from "./services/portalViewService";
 import { syncStudioAccess, portalDoor } from "./services/studioAccess";
 import { publishProjectDirectory } from "./services/projectTeam";
-import { seesStudioFinance, FINANCE_TABS, isDesignerRole, designerMayOpen, STUDIO_TABS, DESIGNER_HOME_TAB, visibleToRole } from "./lib/roleAccess";
+import { seesStudioFinance, FINANCE_TABS, isLimitedRole, limitedMayOpen, limitedHomeTab, STUDIO_TABS, visibleToRole } from "./lib/roleAccess";
+import { functions as firebaseFunctions } from "./services/firebaseClient";
+import { httpsCallable } from "firebase/functions";
 import { roleLabel } from "./lib/roles";
 import DesignDeskTab from "./components/drawingReview/DesignDeskTab";
 import { onAuthStateChanged } from "firebase/auth";
@@ -832,10 +834,10 @@ export default function App() {
   /* Finance screens stay closed to roles that do not see studio finance, even
      when reached by a link or a button rather than a tab. */
   useEffect(() => {
-    // A Designer may open only their allow-list (lib/roleAccess).
-    if (isDesignerRole(currentRole)) {
-      if (designerMayOpen(activeTab)) return;
-      setActiveTab(STUDIO_TABS.has(activeTab) ? "projects" : DESIGNER_HOME_TAB);
+    // A Designer or Client Relations may open only their allow-list (lib/roleAccess).
+    if (isLimitedRole(currentRole)) {
+      if (limitedMayOpen(currentRole, activeTab)) return;
+      setActiveTab(STUDIO_TABS.has(activeTab) ? "projects" : limitedHomeTab(currentRole));
       return;
     }
     if (!(FINANCE_TABS.has(activeTab) && !seesStudioFinance(currentRole))) return;
@@ -847,7 +849,7 @@ export default function App() {
   /* A Designer holding a project they are no longer assigned to -- opened
      from a remembered tab or a link -- is taken back to their own list. */
   useEffect(() => {
-    if (!isDesignerRole(currentRole) || !activeInternalId || projectLibrary.length === 0) return;
+    if (!isLimitedRole(currentRole) || !activeInternalId || projectLibrary.length === 0) return;
     if (visibleProjects.some((p) => p.id === activeInternalId)) return;
     setActiveProject(null);
     setActiveTab("projects");
@@ -1282,8 +1284,8 @@ export default function App() {
 
   useEffect(() => {
     if (!firestoreDb || !activeInternalId) return;
-    // A Designer reads the project's design copy, not the document (see services/dbService designerProjects).
-    if (isDesignerRole(currentRole)) return;
+    // A limited role reads its own copy, not the document (see services/dbService limitedProjects).
+    if (isLimitedRole(currentRole)) return;
 
     const unsub = onSnapshot(
       doc(firestoreDb, "projects", activeInternalId),
@@ -1855,8 +1857,8 @@ export default function App() {
   };
 
   const handleCreateNewProject = () => {
-    // Designers are given projects; they do not start them (lib/roleAccess).
-    if (isDesignerRole(currentRole)) return;
+    // Designers and the other limited roles are given projects; they do not start them (lib/roleAccess).
+    if (isLimitedRole(currentRole)) return;
     const newId = generateId();
     setActiveInternalId(newId);
     setProjectArchitecture('canonical');
@@ -2894,11 +2896,24 @@ export default function App() {
           localStorage.removeItem("ffds_app_mode");
           setAppMode("login");
         }}
-        onProjectUpdate={async (updatedProject) => {
-          await db.saveProject(updatedProject);
+        /*
+          The Supervisor holds a copy without the money, so the project is not
+          saved from here: the one action goes to the siteAction function,
+          which applies it to the stored project. The screen shows the change
+          at once and puts it back if the server refuses it.
+        */
+        onProjectUpdate={async (updatedProject, action) => {
+          const before = projectLibrary.find((p) => p.id === updatedProject.id);
           setProjectLibrary((prev) =>
             prev.map((p) => (p.id === updatedProject.id ? updatedProject : p)),
           );
+          if (!firebaseFunctions || !action) return;
+          try {
+            await httpsCallable(firebaseFunctions, "siteAction")({ projectId: updatedProject.id, action });
+          } catch (e: any) {
+            if (before) setProjectLibrary((prev) => prev.map((p) => (p.id === before.id ? before : p)));
+            alert(e?.message || "That was not saved. Check your connection and try again.");
+          }
         }}
       />
     );

@@ -199,6 +199,29 @@ export default function PlatformAdminConsole() {
     }
   };
 
+  /*
+    The copies the limited roles read -- Designer, Client Relations, Site
+    Supervisor (functions/src/designView.ts, teamView.ts) -- are made on every
+    save of a project. This makes them once for every project, so the people
+    assigned see their projects without waiting for each one to be saved.
+  */
+  const [rebuild, setRebuild] = useState<{ written: number; unchanged: number; skipped: number } | null>(null);
+  const [rebuildErr, setRebuildErr] = useState<string | null>(null);
+  const [rebuilding, setRebuilding] = useState(false);
+  const runRebuild = async () => {
+    setRebuilding(true);
+    setRebuildErr(null);
+    try {
+      if (!functions) throw new Error('Functions not configured');
+      const res: any = await httpsCallable(functions, 'rebuildDesignViews', { timeout: 300000 })({});
+      setRebuild(res.data);
+    } catch (e: any) {
+      setRebuildErr(looksUndeployed(e) ? 'The rebuild function did not answer; it has probably not been deployed yet.' : (e?.message || e?.code || 'unknown'));
+    } finally {
+      setRebuilding(false);
+    }
+  };
+
   const runReconScan = async () => {
     setReconning(true);
     setReconErr(null);
@@ -843,6 +866,36 @@ export default function PlatformAdminConsole() {
                     ))}
                   </div>
                 </>
+              )}
+            </section>
+
+            <section className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hud-panel-in ${rebuilding ? 'hud-scanning' : ''}`}>
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="max-w-2xl">
+                  <h2 className="font-bold text-slate-800 flex items-center gap-2">
+                    Rebuild limited copies
+                    {rebuilding && <Dot tone="warn" live />}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Designers, Client Relations and Site Supervisors read a copy of each assigned project
+                    without the money, made on every save. Run this once after a deploy so projects not
+                    saved since then get their copies too. It reads every project and changes none of them.
+                  </p>
+                </div>
+                <button onClick={runRebuild} disabled={rebuilding}
+                  className="px-5 py-2.5 rounded-xl bg-[#3D52A0] text-white font-bold text-sm hover:bg-[#334486] disabled:opacity-50 whitespace-nowrap">
+                  {rebuilding ? 'Rebuilding…' : 'Rebuild copies'}
+                </button>
+              </div>
+              {rebuild && (
+                <p className="mt-4 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+                  Done: {rebuild.written} project{rebuild.written === 1 ? '' : 's'} rebuilt, {rebuild.unchanged} already current, {rebuild.skipped} unreadable.
+                </p>
+              )}
+              {rebuildErr && (
+                <p className="mt-4 text-sm text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-4 py-3">
+                  Rebuild failed: {rebuildErr}
+                </p>
               )}
             </section>
 

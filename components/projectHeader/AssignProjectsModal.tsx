@@ -88,7 +88,7 @@ export default function AssignProjectsModal({ designerEmail, onClose }: Props) {
             )
           ) : (
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {designers.length === 0 && <p className="text-[12.5px] text-slate-500">Nobody on the studio team has the Designer role yet. Add them in Studio settings → Team.</p>}
+              {designers.length === 0 && <p className="text-[12.5px] text-slate-500">Nobody on the studio team is a Designer or Client Relations yet. Add them in Studio settings → Team.</p>}
               {designers.map((d) => (
                 <button
                   key={d.email}

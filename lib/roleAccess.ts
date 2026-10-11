@@ -28,6 +28,56 @@ export const seesStudioFinance = (role?: RoleSet): boolean => hasRole(role, FINA
  */
 export const isDesignerRole = (role?: RoleSet): boolean => primaryRole(role) === 'Designer';
 
+/*
+  THE LIMITED ROLES.
+
+  A Designer, a Client Relations executive, a Site Supervisor and a Vendor see
+  only the projects they are assigned to, and of each only a copy the server
+  makes with what their work needs (functions/src/teamView.ts). The database
+  gives them nothing else, so these are not screens being hidden: the money is
+  not in what their browser receives. A person is limited when their most
+  senior role is one of these; any broader role alongside lifts it.
+*/
+export const LIMITED_ROLES = new Set(['Designer', 'Client Relations', 'Site Supervisor', 'Vendor']);
+export const isLimitedRole = (role?: RoleSet): boolean => LIMITED_ROLES.has(primaryRole(role));
+export const isClientRelationsRole = (role?: RoleSet): boolean => primaryRole(role) === 'Client Relations';
+
+/** Which server-made copy a limited role reads: design (Designer), ops (Client Relations), site (Site Supervisor). A Vendor reads none. */
+export type TeamViewKind = 'design' | 'ops' | 'site';
+export function teamViewKindOf(role?: RoleSet): TeamViewKind | null {
+  switch (primaryRole(role)) {
+    case 'Designer': return 'design';
+    case 'Client Relations': return 'ops';
+    case 'Site Supervisor': return 'site';
+    default: return null;
+  }
+}
+
+/*
+  What Client Relations may open, by allow-list, like a Designer. Read-only
+  for now: their own working tools (the Ops Desk, the follow-up log) come with
+  the next phase. Nothing about pricing, contracts or the studio's costs.
+*/
+export const CLIENT_RELATIONS_PROJECT_TABS = new Set([
+  'comms-tracker', 'timeline', 'record-decision', 'drawing-tracker', 'design-gate', 'leadiq',
+]);
+export const CLIENT_RELATIONS_STUDIO_TABS = new Set(['home', 'projects', 'data-privacy', 'support', 'terms-of-use']);
+export const CLIENT_RELATIONS_HOME_TAB = 'comms-tracker';
+
+/** Whether a limited role may open this tab; a broad role may open anything (subject to the finance check). */
+export function limitedMayOpen(role: RoleSet, tab?: string | null): boolean {
+  const t = String(tab || '');
+  const kind = primaryRole(role);
+  if (kind === 'Designer') return designerMayOpen(t);
+  if (kind === 'Client Relations') return STUDIO_TABS.has(t) ? CLIENT_RELATIONS_STUDIO_TABS.has(t) : CLIENT_RELATIONS_PROJECT_TABS.has(t);
+  if (LIMITED_ROLES.has(kind)) return STUDIO_TABS.has(t) && CLIENT_RELATIONS_STUDIO_TABS.has(t);
+  return true;
+}
+
+/** Where a limited role lands inside a project. */
+export const limitedHomeTab = (role: RoleSet): string =>
+  primaryRole(role) === 'Client Relations' ? CLIENT_RELATIONS_HOME_TAB : DESIGNER_HOME_TAB;
+
 /** The one workspace a Designer may change. */
 export const DESIGNER_EDITABLE_TABS = new Set(['drawing-tracker']);
 
@@ -62,8 +112,8 @@ export const DESIGNER_STUDIO_TABS = new Set(['home', 'projects', 'design-review'
 */
 const LEADS = ['Super Admin', 'Owner', 'Admin', 'Ops Director'];
 export const STUDIO_TAB_ROLES: Record<string, string[]> = {
-  home: [...LEADS, 'Design Head', 'Site Supervisor', 'Designer'],
-  projects: [...LEADS, 'Design Head', 'Site Supervisor', 'Designer'],
+  home: [...LEADS, 'Design Head', 'Site Supervisor', 'Designer', 'Client Relations'],
+  projects: [...LEADS, 'Design Head', 'Site Supervisor', 'Designer', 'Client Relations'],
   'design-review': [...LEADS, 'Design Head', 'Designer'],
   // Not for Designers: the client list carries account values, and a Designer's
   // work is reached through their assigned projects.
@@ -109,10 +159,18 @@ export function assignedDesignersFor(project: { id?: string; context?: any } | n
   return assignedDesignersOf(project?.context);
 }
 
-/** The projects a role may open: every one, or a Designer's assigned ones. */
+/**
+ * The projects a role may open: every one, or a limited role's assigned ones.
+ * A limited role's library holds only its copies already (the database
+ * decides), so this is the screen agreeing with it.
+ */
 export function visibleToRole<T extends { id?: string; context?: any }>(
   projects: T[], role?: string | null, email?: string | null, map?: ProjectDesignersMap | null,
 ): T[] {
+  if (primaryRole(role) === 'Client Relations') {
+    const me = String(email || '').trim().toLowerCase();
+    return me ? projects.filter((p) => (p as any)._teamView === 'ops' || assignedDesignersFor(p, map).includes(me)) : [];
+  }
   if (!isDesignerRole(role)) return projects;
   const me = String(email || '').trim().toLowerCase();
   if (!me) return [];
