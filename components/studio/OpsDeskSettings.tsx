@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { opsSettingsOf, escalationRecipientsOf, type OpsSettings } from '../../lib/opsDesk';
 import { runDailyCheckNow } from '../../services/opsDeskService';
+import { Check, Plus } from '@/lib/lucide-shim';
+import { Dot } from '../ui/HudBits';
 
 /*
   Studio settings → Ops Desk: when a payment counts as late, who hears of an
@@ -25,31 +27,32 @@ export default function OpsDeskSettings({ org, team, canEdit, onChange }: {
     const base = chosen.length ? chosen : fallback;
     set({ escalationRecipients: base.includes(email) ? base.filter((e) => e !== email) : [...base, email] });
   };
-  const num = 'w-24 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13.5px] tabular-nums disabled:bg-slate-50';
+  const num = 'w-24 px-3 py-2 rounded-lg border border-slate-300 text-sm tabular-nums outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] disabled:bg-slate-50';
+  const label = 'text-[10px] font-bold uppercase tracking-wider text-slate-500';
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold text-slate-700">Payment is late after</span>
+          <span className={label}>Payment is late after</span>
           <span className="flex items-center gap-2"><input type="number" min={0} max={90} className={num} disabled={!canEdit} value={s.paymentDueDays}
-            onChange={(e) => set({ paymentDueDays: Number(e.target.value) })} /><span className="text-[13px] text-slate-500">days from the invoice</span></span>
+            onChange={(e) => set({ paymentDueDays: Number(e.target.value) })} /><span className="text-xs text-slate-500">days from the invoice</span></span>
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold text-slate-700">Escalate by itself after</span>
+          <span className={label}>Escalate by itself after</span>
           <span className="flex items-center gap-2"><input type="number" min={1} max={10} className={num} disabled={!canEdit} value={s.escalateAfterReminders}
-            onChange={(e) => set({ escalateAfterReminders: Number(e.target.value) })} /><span className="text-[13px] text-slate-500">unanswered reminders</span></span>
+            onChange={(e) => set({ escalateAfterReminders: Number(e.target.value) })} /><span className="text-xs text-slate-500">unanswered reminders</span></span>
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold text-slate-700">…and at least</span>
+          <span className={label}>…and at least</span>
           <span className="flex items-center gap-2"><input type="number" min={1} max={60} className={num} disabled={!canEdit} value={s.escalateAfterDays}
-            onChange={(e) => set({ escalateAfterDays: Number(e.target.value) })} /><span className="text-[13px] text-slate-500">days since the first</span></span>
+            onChange={(e) => set({ escalateAfterDays: Number(e.target.value) })} /><span className="text-xs text-slate-500">days since the first</span></span>
         </label>
       </div>
 
       <div>
-        <p className="text-xs font-bold text-slate-700">Who decides escalations</p>
-        <p className="text-[12.5px] text-slate-500 mt-0.5 mb-2">
+        <p className={label}>Who decides escalations</p>
+        <p className="text-xs text-slate-500 mt-1 mb-2">
           Each gets an email when one is raised and decides it on the Ops Desk. {chosen.length ? '' : 'Nobody chosen yet, so it goes to every Owner and Admin on the team.'}
         </p>
         <div className="flex flex-wrap gap-2">
@@ -58,19 +61,20 @@ export default function OpsDeskSettings({ org, team, canEdit, onChange }: {
             const on = (chosen.length ? chosen : fallback).includes(email);
             return (
               <button key={email} type="button" disabled={!canEdit} onClick={() => toggle(email)} aria-pressed={on}
-                className={`rounded-full border px-3 py-1.5 text-[12.5px] font-bold ${on ? 'border-[#3D52A0] bg-[#3D52A0] text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'} disabled:opacity-60`}>
-                {on ? '✓ ' : '+ '}{m.name || email}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors hud-row-in ${on ? 'border-[#3D52A0] bg-[#3D52A0] text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'} disabled:opacity-60`}>
+                {on ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5 text-slate-400" />}{m.name || email}
               </button>
             );
           })}
         </div>
-        <p className="text-[11.5px] text-slate-500 mt-2">Only an Owner, Admin or Ops Director can record the decision, whoever is emailed.</p>
+        <p className="text-[11px] text-slate-500 mt-2">Only an Owner, Admin or Ops Director can record the decision, whoever is emailed.</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-slate-800">The daily check</p>
           <p className="text-xs text-slate-500">Runs every morning at 9. It raises an escalation for each payment or decision with enough unanswered reminders.</p>
+          {checking && <p className="flex items-center gap-2 text-xs text-slate-500 mt-1"><Dot tone="warn" live />Checking…</p>}
           {checked && <p className="text-xs font-semibold text-slate-700 mt-1">{checked}</p>}
         </div>
         <button type="button" disabled={checking || !canEdit}
@@ -86,7 +90,7 @@ export default function OpsDeskSettings({ org, team, canEdit, onChange }: {
               setChecking(false);
             }
           }}
-          className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-50">
+          className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors disabled:opacity-50">
           {checking ? 'Checking…' : 'Run it now'}
         </button>
       </div>
