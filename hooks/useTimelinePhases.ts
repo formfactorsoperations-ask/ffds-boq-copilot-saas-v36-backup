@@ -38,12 +38,16 @@ export interface MergedTimelinePhase extends TimelinePhaseData {
 export function useTimelinePhases(projectId: string, studioId: string) {
   const [phases, setPhases] = useState<MergedTimelinePhase[]>([]);
   const [loading, setLoading] = useState(true);
+  /** The programme could not be read (most often: this person may not see it). */
+  const [denied, setDenied] = useState(false);
 
   useEffect(() => {
+    setDenied(false);
     if (!projectId?.trim() || !studioId?.trim() || !firestoreDb) {
       setLoading(false);
       return;
     }
+    setLoading(true);
 
     const phasesRef = collection(
       firestoreDb,
@@ -84,15 +88,21 @@ export function useTimelinePhases(projectId: string, studioId: string) {
       setLoading(false);
     };
 
+    /* A refused read must end the wait, or the tab spins for ever. */
     const unsubscribePhases = onSnapshot(phasesRef, (snapshot) => {
       phasesData = snapshot.docs.map((doc) => doc.data() as TimelinePhaseData);
       updateMergedPhases();
+    }, (err) => {
+      console.error("Error fetching timeline phases:", err);
+      setDenied(true);
+      setLoading(false);
     });
 
+    /* Progress only colours the phases; without it they still show. */
     const unsubscribeSteps = onSnapshot(stepsRef, (snapshot) => {
       stepsData = snapshot.docs.map((doc) => doc.data() as StepProgress);
       updateMergedPhases();
-    });
+    }, (err) => console.error("Error fetching step progress:", err));
 
     return () => {
       unsubscribePhases();
@@ -392,6 +402,7 @@ export function useTimelinePhases(projectId: string, studioId: string) {
   return {
     phases,
     loading,
+    denied,
     buildTimelineFromTemplate,
     updatePhaseDuration,
     updatePhaseDates,

@@ -1429,6 +1429,8 @@ export default function App() {
   // Auto-promote project to Stage 5 (Execution) ONLY if project is 'won' and all Stage 4 design gates are completed
   useEffect(() => {
     if (!activeInternalId || !orgData?.tenantId || !projectContext) return;
+    /* The studio promotes; a limited role cannot write the project, so it would only fail. */
+    if (isLimitedRole(currentRole)) return;
     
     // Only consider auto-promoting if the project is currently 'won' (Stage 4)
     // Never auto-promote projects that are draft, lead, proposal_sent, negotiation, work_paused, completed, or lost
@@ -1519,7 +1521,7 @@ export default function App() {
     };
 
     checkAndPromote();
-  }, [activeInternalId, projectContext?.status, projectContext?.paymentMilestones, projectContext?.onboardingData, projectContext?.lifecycle?.stage, orgData?.tenantId]);
+  }, [activeInternalId, projectContext?.status, projectContext?.paymentMilestones, projectContext?.onboardingData, projectContext?.lifecycle?.stage, orgData?.tenantId, currentRole]);
 
   /*
     Scope additions for the portal preview.
