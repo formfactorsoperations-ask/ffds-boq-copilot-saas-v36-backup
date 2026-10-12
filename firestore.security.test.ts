@@ -74,6 +74,12 @@ beforeEach(async () => {
     await setDoc(doc(db, 'projects/p1/designGate/g1'), { stage: 'concept' });
     await setDoc(doc(db, 'projects/p2/designGate/g2'), { stage: 'concept' });
     await setDoc(doc(db, `organizations/${STUDIO}/projects/p2/drawingTracker/dw9`), { name: 'Bedroom', rounds: [] });
+    // The programme (hooks/useTimelinePhases), kept under the studios/ parent.
+    for (const p of ['p1', 'p2']) {
+      await setDoc(doc(db, `studios/${STUDIO}/projects/${p}/timelinePhases/1`), { stepNumber: 1, title: 'Concept' });
+      await setDoc(doc(db, `studios/${STUDIO}/projects/${p}/stepProgress/1`), { stepNumber: 1, status: 'in_progress' });
+      await setDoc(doc(db, `studios/${STUDIO}/projects/${p}/paymentRequests/r1`), { amount: 50000 });
+    }
 
     await setDoc(doc(db, 'users/otheradmin'), { email: 'o@b.com', tenantId: OTHER, role: 'Admin' });
     await setDoc(doc(db, `organizations/${STUDIO}/weeklyReports/w1`), { tenantId: STUDIO, status: 'published' });
@@ -251,6 +257,17 @@ describe('a Designer reads their own projects, without the money, and changes on
       where('tenantId', '==', STUDIO), where('designers', 'array-contains', 'd@a.com'))));
     await assertSucceeds(getDoc(doc(designer(), 'projects/p1/designGate/g1')));
     await assertSucceeds(getDoc(dt(designer())));
+  });
+  it('reads the programme of an assigned project, not its payment requests, and does not change it', async () => {
+    const st = (db: any, path: string) => doc(db, `studios/${STUDIO}/projects/${path}`);
+    await assertSucceeds(getDocs(collection(designer(), `studios/${STUDIO}/projects/p1/timelinePhases`)));
+    await assertSucceeds(getDocs(collection(designer(), `studios/${STUDIO}/projects/p1/stepProgress`)));
+    await assertFails(getDocs(collection(designer(), `studios/${STUDIO}/projects/p2/timelinePhases`)));
+    await assertFails(getDoc(st(designer(), 'p2/stepProgress/1')));
+    await assertFails(getDocs(collection(designer(), `studios/${STUDIO}/projects/p1/paymentRequests`)));
+    await assertFails(getDoc(st(designer(), 'p1')));
+    await assertFails(setDoc(st(designer(), 'p1/timelinePhases/1'), { stepNumber: 1, title: 'Moved' }));
+    await assertSucceeds(getDocs(collection(member(), `studios/${STUDIO}/projects/p2/paymentRequests`)));
   });
   it('does not read a project they are not assigned to', async () => {
     await assertFails(getDoc(doc(designer(), 'projects/p2/designView/current')));

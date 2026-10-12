@@ -965,6 +965,18 @@ service cloud.firestore {
          match /{document=**} {
             allow read, write: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
          }
+         /*
+           The programme lives here too (hooks/useTimelinePhases, useStepProgress),
+           so the same grants as beneath projects/{projectId}: an assigned
+           Designer reads the design records, Client Relations and a Site
+           Supervisor what teamMayRead names. Never payment requests. Without
+           this the Timeline tab was refused to them and span forever.
+         */
+         match /{sub}/{subDoc=**} {
+            allow read: if (sub in ['designGate', 'decisions', 'timelinePhases', 'tasks', 'deliverables', 'journeySteps', 'stepProgress']
+                              && isAssignedDesigner(studioId, projectId))
+                        || (teamMayRead(myTeamKind(), sub) && isAssignedTeam(studioId, projectId, myTeamKind()));
+         }
       }
     }
 

@@ -52,6 +52,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useTimelinePhases } from "../hooks/useTimelinePhases";
 import { useOrg } from "../contexts/OrgContext";
+import { isLimitedRole } from "../lib/roleAccess";
 import { useStudioSettings } from "../hooks/useStudioSettings";
 import { usePaymentRequests } from "../hooks/usePaymentRequests";
 import { StepDeliverableChecklist } from "./studio/StepDeliverableChecklist";
@@ -85,13 +86,16 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   setPhases: setOldPhases,
   bank,
 }) => {
-  const { orgData } = useOrg();
+  const { orgData, currentRole } = useOrg();
   const studioId = orgData.tenantId || "demo-tenant-01";
   const safeProjectId = projectId || "";
+  /* Designers, Client Relations and Site Supervisors read the programme; they do not set it, and payment requests are not theirs. */
+  const limited = isLimitedRole(currentRole);
 
   const {
     phases,
     loading,
+    denied,
     buildTimelineFromTemplate,
     updatePhaseDuration,
     updatePhaseDates,
@@ -100,7 +104,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   } = useTimelinePhases(safeProjectId, studioId);
   
   const { settings } = useStudioSettings(studioId);
-  const { activeRequest } = usePaymentRequests(safeProjectId, studioId);
+  const { activeRequest } = usePaymentRequests(limited ? "" : safeProjectId, studioId);
   const { updateDeliverable, updateClientSignoff, markStepComplete } =
     useStepProgress(safeProjectId, studioId);
 
@@ -654,6 +658,19 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
         <div className="w-8 h-8 border-2 border-[#3D52A0] border-t-transparent rounded-full animate-spin mb-4"></div>
         <p className="text-sm font-medium">Retrieving site timeline & progress engine...</p>
       </div>
+    );
+  }
+
+  if (denied || (limited && phases.length === 0)) {
+    return (
+      <LockedState
+        isEmptyState={!denied}
+        prerequisite=""
+        title={denied ? "The timeline could not be opened" : "No timeline yet"}
+        why={denied
+          ? "You don't have access to this project's programme. Ask the studio to check you are assigned to it on Team & roles."
+          : "The studio has not set this project's programme yet. It will show here once they do."}
+      />
     );
   }
 
