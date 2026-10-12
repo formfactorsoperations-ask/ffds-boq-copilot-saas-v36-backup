@@ -193,11 +193,11 @@ roles, a designer's own projects only.
 
 Times people read are on the 12-hour clock ("9:42 AM"), through `clock12` in
 `lib/peopleDesk.ts`. `timeLabel` stays 24-hour for comparing, exporting and
-importing. The top of Home opens on the studio's time as a 3D flip clock
-(`LiveClock` in `StoryDeck.tsx`): four navy tiles whose digits fold over
-when they change, a pulsing colon, an AM/PM switch and a bar that fills with
-the seconds; the card leans toward the mouse (`Tilt`). The date sits under
-it. Motion stops under `prefers-reduced-motion`.
+importing. The top of Home opens on one chip with the date and the studio's
+time ("Mon, 12 Oct | 11:52 PM", `DateClock` in `StoryDeck.tsx`): the time is a
+small flip clock whose navy tiles fold over when a digit changes, with a
+pulsing colon; the chip leans toward the mouse (`Tilt`). Motion stops under
+`prefers-reduced-motion`.
 
 ### Your day, in order (approved 12 Oct 2026)
 
