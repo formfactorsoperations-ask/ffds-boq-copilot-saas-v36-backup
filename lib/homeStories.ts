@@ -20,6 +20,7 @@ import { dueOf, type DeskRow, type Viewer } from './designDesk';
 import { mySheets, reviewInbox, type Upcoming, type TeamToday } from './homeWidgets';
 import { clientMoneyOf } from './clientMoney';
 import { paymentWaiting, dayKey, type WaitingItem } from './opsDesk';
+import { clock12 } from './peopleDesk';
 
 const DAY = 86_400_000;
 
@@ -171,7 +172,7 @@ function studioStories(i: StoryInput): Stories {
     cards.push({
       id: 'clients-confirm', ring: 'clients', eyebrow: 'To confirm', figure: String(asked.length),
       headline: `${(KIND[u.visit.kind] || 'Meeting').toLowerCase()} with ${u.visit.projectName}`,
-      reason: `Asked for ${whenOf(u)}${u.time ? ` at ${u.time}` : ''}. Confirm it or offer another time.`,
+      reason: `Asked for ${whenOf(u)}${u.time ? ` at ${clock12(u.time)}` : ''}. Confirm it or offer another time.`,
       action: { kind: 'tab', tab: 'ops-desk', label: 'Confirm it' }, weight: u.daysAway <= 2 ? 1 : 3,
     });
   }
@@ -181,7 +182,7 @@ function studioStories(i: StoryInput): Stories {
     cards.push({
       id: 'clients-week', ring: 'clients', eyebrow: 'Meetings this week', figure: String(week.length),
       headline: week.slice(0, 2).map((x) => `${x.visit.projectName} ${whenOf(x)}`).join(', '),
-      reason: `Next: ${(KIND[u.visit.kind] || 'Meeting').toLowerCase()}${u.time ? ` at ${u.time}` : ''}, ${u.visit.status === 'confirmed' ? 'confirmed' : 'not yet confirmed'}.`,
+      reason: `Next: ${(KIND[u.visit.kind] || 'Meeting').toLowerCase()}${u.time ? ` at ${clock12(u.time)}` : ''}, ${u.visit.status === 'confirmed' ? 'confirmed' : 'not yet confirmed'}.`,
       action: { kind: 'tab', tab: 'ops-desk', label: 'See the week' }, weight: 4,
     });
   }
@@ -305,7 +306,7 @@ function designerStories(i: StoryInput): Stories {
   }
   const next = (i.visits || [])[0];
   if (next) cards.push({
-    id: 'meetings-next', ring: 'meetings', eyebrow: `${whenOf(next)}${next.time ? ` ${next.time}` : ''}`, figure: KIND[next.visit.kind] || 'Meeting',
+    id: 'meetings-next', ring: 'meetings', eyebrow: `${whenOf(next)}${next.time ? ` ${clock12(next.time)}` : ''}`, figure: KIND[next.visit.kind] || 'Meeting',
     headline: next.visit.projectName,
     reason: next.visit.status === 'confirmed' ? 'Confirmed with the client.' : 'Asked for; not yet confirmed.',
     action: { kind: 'tab', tab: 'design-review', label: 'Prepare' }, weight: next.daysAway <= 1 ? 1 : 4,

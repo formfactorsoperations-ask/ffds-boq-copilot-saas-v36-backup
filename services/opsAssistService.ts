@@ -13,6 +13,7 @@ import {
   ASK_INSTRUCTIONS, CAPTURE_INSTRUCTIONS, PREP_INSTRUCTIONS, briefForPrompt, normaliseCapture,
   type Capture, type ProjectBrief,
 } from '../lib/opsAssist';
+import { ASK_STUDIO_INSTRUCTIONS } from '../lib/studioAsk';
 
 export const assistAvailable = (): boolean => aiIsReachable();
 
@@ -87,6 +88,23 @@ export async function askProject(brief: ProjectBrief, question: string): Promise
     answer: String(a?.answer || "The records don't say.").slice(0, 1200),
     sources: (Array.isArray(a?.sources) ? a.sources : []).map((s: any) => String(s).slice(0, 80)).slice(0, 6),
     reply: String(a?.reply || '').slice(0, 1000),
+  };
+}
+
+/** Answer a question about the studio from Home's record (lib/studioAsk.ts), which holds only what the person may see. */
+export async function askStudio(record: string, question: string): Promise<Pick<Answer, 'answer' | 'sources'>> {
+  const text = await generate(
+    [{ text: ASK_STUDIO_INSTRUCTIONS }, { text: `Record:\n${record.slice(0, 60000)}` }, { text: `Question: ${question.slice(0, 500)}` }],
+    {
+      type: Type.OBJECT,
+      properties: { answer: { type: Type.STRING }, sources: { type: Type.ARRAY, items: { type: Type.STRING } } },
+      required: ['answer'],
+    },
+  );
+  const a = parse<any>(text, {});
+  return {
+    answer: String(a?.answer || "The records here don't say.").slice(0, 1500),
+    sources: (Array.isArray(a?.sources) ? a.sources : []).map((s: any) => String(s).slice(0, 60)).slice(0, 6),
   };
 }
 

@@ -7,7 +7,7 @@ import {
 import type { HomeFeeds } from './useHomeFeeds';
 import { dueOf, projectLook, type DeskRow, type Viewer } from '../../lib/designDesk';
 import { mySheets, reviewInbox, whenLabel, type TeamToday, type Upcoming } from '../../lib/homeWidgets';
-import { addDays } from '../../lib/peopleDesk';
+import { addDays, clock12 } from '../../lib/peopleDesk';
 import type { AttentionRow } from './useAttention';
 import type { ImportantDates } from './calendarData';
 import { CountUp, Dot } from '../ui/HudBits';
@@ -231,7 +231,7 @@ export function ComingUpWidget({ list, onAll, index, span, wide, today, mileston
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 truncate"><Kind className="w-3.5 h-3.5 shrink-0 text-slate-400" />{KIND_LABEL[u.visit.kind] || 'Meeting'}</span>
                     <span className="block text-[11px] text-slate-500 truncate">{u.visit.projectName}</span>
-                    <span className="flex items-center gap-1 text-[11px] text-slate-500"><Mode className="w-3 h-3" />{whenLabel(u)}{u.time ? ` · ${u.time}` : ''}</span>
+                    <span className="flex items-center gap-1 text-[11px] text-slate-500"><Mode className="w-3 h-3" />{whenLabel(u)}{u.time ? ` · ${clock12(u.time)}` : ''}</span>
                   </span>
                   <span className={`${chip} ${confirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{confirmed ? 'Confirmed' : u.visit.status === 'rescheduled' ? 'Moved' : 'Asked'}</span>
                 </motion.div>

@@ -1649,7 +1649,8 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                       One condition plus a count says the same
                                       thing in the space available. */}
                                   <div className="flex-1 min-w-0 px-2 h-[22px] overflow-hidden flex flex-nowrap items-center gap-x-3">
-                                    {metrics.status !== 'lost' && (
+                                    {/* Payment health is studio finance: those who cannot see it are not asked to read it. */}
+                                    {showFinance && metrics.status !== 'lost' && (
                                       <div className="scale-90 origin-left shrink-0">
                                         <ProjectPaymentBadge projectId={project.id} size="sm" />
                                       </div>

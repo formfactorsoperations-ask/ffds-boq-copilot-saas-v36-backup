@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MapPin, LogIn, LogOut, FolderOpen, ExternalLink, ArrowRight, Sun, CalendarDays, AlertTriangle } from '@/lib/lucide-shim';
-import { isLate, isOff, timeLabel, type Attendance, type Mode } from '../../lib/peopleDesk';
+import { clock12, isLate, isOff, type Attendance, type Mode } from '../../lib/peopleDesk';
 import { myDay, minutesWorked, duration, dayProgress, whereLabel, mapLink, CHARGED, currentFy, leaveLabel } from '../../lib/peopleView';
 import { usePeople, readLocation } from '../../services/peopleService';
 import { Ring, Glide, DoneTick, Skeleton, Notice, Confetti, Tilt, MODE_ICON, EASE } from './PeopleBits';
@@ -80,6 +80,9 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   const late = session ? isLate(session, policy) : false;
   const busy = phase === 'locating' || phase === 'saving';
   const updateUrl = snapshot.me.dailyUpdateUrl;
+  /* The time now, on the 12-hour clock: ["11", "21"] and "PM". */
+  const [clock, ampm] = clock12(now, policy.timezone).split(' ');
+  const hm = clock.split(':');
 
   const checkIn = async () => {
     setProblem(null);
@@ -140,9 +143,9 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
             ) : (
               <>
                 <p className={`${compact ? 'text-lg' : 'text-2xl'} font-black text-slate-800 tabular-nums leading-none`}>
-                  {timeLabel(now, policy.timezone).slice(0, 2)}<span className="pp-tickover">:</span>{timeLabel(now, policy.timezone).slice(3)}
+                  {hm[0]}<span className="pp-tickover">:</span>{hm[1]}
                 </p>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1">now</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1">{ampm} · now</p>
               </>
             )}
           </Ring>
@@ -155,7 +158,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
             </p>
             {session && (
               <p className="text-[11px] text-slate-500 mt-1">
-                In {timeLabel(session.checkIn, policy.timezone)}{session.checkOut ? ` · out ${timeLabel(session.checkOut, policy.timezone)}` : ''} · {session.mode}{session.site ? ` · ${session.site}` : ''}
+                In {clock12(session.checkIn, policy.timezone)}{session.checkOut ? ` · out ${clock12(session.checkOut, policy.timezone)}` : ''} · {session.mode}{session.site ? ` · ${session.site}` : ''}
               </p>
             )}
             {session && session.mode !== 'WFH' && (
@@ -202,7 +205,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
                   <button type="button" className={btnPri} disabled={busy} onClick={() => (updateUrl ? setPhase('update') : checkOut())}>
                     <LogOut className="w-4 h-4" />{phase === 'saving' ? 'Checking out…' : 'Check out'}
                   </button>
-                  <span className="text-[11px] text-slate-500">Studio day ends at {policy.end}.</span>
+                  <span className="text-[11px] text-slate-500">Studio day ends at {clock12(policy.end)}.</span>
                 </motion.div>
               )
             ) : (
@@ -225,7 +228,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
                     ) : phase === 'saving' ? 'Checking in…' : (<><LogIn className="w-4 h-4" />Check in</>)}
                   </button>
                   <span className="text-[11px] text-slate-500">
-                    {mode === 'WFH' ? 'No location is recorded when you work from home.' : `Your location is recorded${policy.requireLocation ? '' : ' if you allow it'}. Late after ${policy.lateAfter}.`}
+                    {mode === 'WFH' ? 'No location is recorded when you work from home.' : `Your location is recorded${policy.requireLocation ? '' : ' if you allow it'}. Late after ${clock12(policy.lateAfter)}.`}
                   </span>
                 </div>
               </motion.div>

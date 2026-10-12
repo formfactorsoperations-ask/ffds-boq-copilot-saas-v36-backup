@@ -389,6 +389,20 @@ export function timeLabel(
       }).format(new Date(instant))
     : "—";
 }
+
+/**
+ * A time for people to read, on the 12-hour clock: "9:42 AM", "7:30 PM".
+ * Takes "HH:MM" as policies hold it, or an instant (read in the studio's
+ * time). timeLabel stays 24-hour: it is compared, exported and imported.
+ */
+export function clock12(time?: string | null, timezone = DEFAULT_POLICY.timezone): string {
+  if (!time) return "—";
+  const hhmm = /^\d{1,2}:\d{2}$/.test(time) ? time : timeLabel(time, timezone);
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+  if (!m) return hhmm;
+  const h = Number(m[1]) % 24;
+  return `${h % 12 || 12}:${m[2]} ${h < 12 ? "AM" : "PM"}`;
+}
 export function addDays(date: string, days: number): string {
   const d = new Date(`${date}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);

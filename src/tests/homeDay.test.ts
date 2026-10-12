@@ -71,7 +71,7 @@ test('where the working day stands, from the People snapshot', () => {
   const today = '2026-10-14';
   const at = (over: any) => ({ ...base, ...over });
   expect(checkInOf(at({})).state).toBe('out');
-  expect(checkInOf(at({ attendance: [{ employeeId: 'e1', date: today, checkIn: '2026-10-14T04:12:00.000Z' }] }))).toEqual({ state: 'in', since: '09:42' });
+  expect(checkInOf(at({ attendance: [{ employeeId: 'e1', date: today, checkIn: '2026-10-14T04:12:00.000Z' }] }))).toEqual({ state: 'in', since: '9:42 AM' });
   expect(checkInOf(at({ attendance: [{ employeeId: 'e1', date: today, checkIn: '2026-10-14T04:12:00.000Z', checkOut: '2026-10-14T12:00:00.000Z' }] })).state).toBe('done');
   expect(checkInOf(at({ policy: { ...base.policy, holidays: [today] } })).state).toBe('off');
   expect(checkInOf(at({ availability: [{ employeeId: 'e1', start: today, end: today, status: 'Approved', mode: 'Away' }] })).state).toBe('off');
