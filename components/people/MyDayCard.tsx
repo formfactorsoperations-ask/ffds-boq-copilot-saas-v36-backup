@@ -4,8 +4,9 @@ import { MapPin, LogIn, LogOut, FolderOpen, ExternalLink, ArrowRight, Sun, Calen
 import { isLate, isOff, timeLabel, type Attendance, type Mode } from '../../lib/peopleDesk';
 import { myDay, minutesWorked, duration, dayProgress, whereLabel, mapLink, CHARGED, currentFy, leaveLabel } from '../../lib/peopleView';
 import { usePeople, readLocation } from '../../services/peopleService';
-import { Ring, Glide, DoneTick, Skeleton, Notice, EASE } from './PeopleBits';
+import { Ring, Glide, DoneTick, Skeleton, Notice, Confetti, Tilt, MODE_ICON, EASE } from './PeopleBits';
 import { Dot } from '../ui/HudBits';
+import { ArrivalStrip, ArrivalToasts } from './Arrivals';
 
 /*
   MY DAY: check in and out (lib/peopleDesk via services/peopleService).
@@ -16,7 +17,7 @@ import { Dot } from '../ui/HudBits';
   Home, at the top of People, and in the Site Supervisor's app.
 */
 
-const btnPri = 'inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] transition-colors disabled:opacity-50 shadow-sm';
+const btnPri = 'pp-press inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50';
 const btnSec = 'inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors disabled:opacity-50';
 const niceDate = (d: string) => new Date(`${d}T12:00:00+05:30`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -37,7 +38,14 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   onOpenPeople?: () => void;
   onCorrect?: (a: Attendance) => void;
 }) {
-  const { snapshot, loading, error, run } = usePeople();
+  const { snapshot, loading, error, run, refresh } = usePeople();
+  /* On Home, those who approve hear about arrivals too: refresh every two minutes while it is on screen. */
+  const watching = variant === 'compact' && !!snapshot && snapshot.me.accessRole !== 'employee';
+  useEffect(() => {
+    if (!watching) return;
+    const t = window.setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 120000);
+    return () => window.clearInterval(t);
+  }, [watching]);
   const now = useNow(snapshot?.serverTime);
   const [mode, setMode] = useState<Mode>('Office');
   const [site, setSite] = useState('');
@@ -119,6 +127,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
       <div className={`relative flex flex-col ${compact ? 'md:flex-row' : 'lg:flex-row'} gap-6 p-6 ${compact ? '' : 'md:p-8'}`}>
         {/* The day */}
         <div className="flex items-center gap-5">
+          <Tilt max={10} glare={false} className="rounded-full">
           <Ring value={ring} size={compact ? 112 : 148} stroke={compact ? 9 : 11} tone={tone} label={`Working day ${Math.round(ring * 100)}%`}>
             {session ? (
               <>
@@ -134,6 +143,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
               </>
             )}
           </Ring>
+          </Tilt>
           <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-wider text-[#3D52A0]">My day</p>
             <p className="font-bold text-slate-800 mt-0.5">{niceDate(today)}</p>
@@ -159,7 +169,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
           <AnimatePresence mode="wait">
             {phase === 'done' && justDone ? (
               <motion.div key="done" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-3">
-                <DoneTick size={44} /><p className="text-sm font-bold text-slate-800">{justDone}</p>
+                <span className="relative"><Confetti pieces={22} spread={80} /><DoneTick size={44} /></span><p className="text-sm font-bold text-slate-800">{justDone}</p>
               </motion.div>
             ) : stale ? (
               <motion.div key="stale" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-2">
@@ -196,7 +206,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
               <motion.div key="in" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Glide id={`mode-${variant}`} label="Where are you working" value={mode} onChange={setMode} disabled={busy}
-                    options={[{ id: 'Office', label: 'Office' }, { id: 'Site', label: 'Site' }, { id: 'WFH', label: 'From home' }]} />
+                    options={[{ id: 'Office', label: 'Office', icon: MODE_ICON.Office }, { id: 'Site', label: 'Site', icon: MODE_ICON.Site }, { id: 'WFH', label: 'From home', icon: MODE_ICON.WFH }]} />
                   {mode === 'Site' && (
                     <select aria-label="Which site" className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#3D52A0]/30 max-w-[220px]"
                       value={site} onChange={(e) => setSite(e.target.value)} disabled={busy}>
@@ -221,6 +231,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
           <AnimatePresence>{problem && <Notice text={problem} tone="bad" onClose={() => setProblem(null)} />}</AnimatePresence>
           {error && !problem && <Notice text={error} tone="bad" />}
 
+          {watching && <div className="pt-1"><ArrivalStrip s={snapshot} /><ArrivalToasts s={snapshot} /></div>}
           {compact && bal && (
             <div className="flex flex-wrap items-center gap-2 pt-1">
               {CHARGED.filter((t) => bal[t]?.entitled || bal[t]?.used).slice(0, 3).map((t) => (

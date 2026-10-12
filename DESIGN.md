@@ -117,3 +117,27 @@ other screens keep the motion listed above.
 - Everything stops under `prefers-reduced-motion`.
 - Still: no new fonts, no new accent colours, no half-pixel sizes. State colours
   stay rose, amber and emerald; the brand stays `#3D52A0`.
+
+### Round two: depth (approved 12 Oct 2026)
+
+The owner asked for People to feel "always exciting": 3D motion, better icons,
+a fresh calendar, and an animated note for admins whenever someone checks in.
+Same fonts, same colours. Still People only.
+
+- In `components/people/PeopleBits.tsx`:
+  - `Tilt`: a card that tilts towards the mouse in 3D, with a soft light (still on touch);
+  - `IconTile` (`pp-tile`): an icon in a tinted tile that lifts and turns on hover
+    (of itself, or of a `group` around it). It replaces the flat icon chip in People panels;
+  - `Coin`: flips from its back to its face (who's in);
+  - `Confetti`: a short burst in the brand and state colours only;
+  - `LEAVE_ICON` / `MODE_ICON`: palm (planned), thermometer (sick), coffee (casual),
+    gift (comp-off), house (home); building (office), hard hat (site).
+- In `people.css`: `pp-3d`, `pp-keep`, `pp-face`, `pp-flipped` (3D stage and flip faces),
+  `pp-press` (a button with depth that sinks when pressed, and a passing light),
+  `pp-hatch` (studio off days), `pp-today` (today's breathing ring), `pp-orbit*`
+  (faces circling a tilted ring), `pp-door` (the arrival icon swinging open) and
+  `pp-float` (empty-state icons).
+- Where they are used: the arrivals board and notes (`Arrivals.tsx`), the calendar
+  (`PeopleCalendar.tsx`: months turn like pages, days ripple in), leave balances
+  that turn over for detail, tilting directory cards, and the check-in button.
+- Everything still stops under `prefers-reduced-motion`.
