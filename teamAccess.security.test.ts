@@ -42,6 +42,7 @@ beforeEach(async () => {
       await setDoc(doc(db, `projects/${p}/timelinePhases/t1`), { name: 'Carpentry' });
       await setDoc(doc(db, `studios/${STUDIO}/projects/${p}/timelinePhases/1`), { stepNumber: 1 });
       await setDoc(doc(db, `studios/${STUDIO}/projects/${p}/paymentRequests/r1`), { amount: 50000 });
+      await setDoc(doc(db, `organizations/${STUDIO}/projects/${p}/schedule/main`), { tasks: [] });
       await setDoc(doc(db, `projects/${p}/tierBoq/t1`), { boq: [{ rate: 1200 }] });
       await setDoc(doc(db, `projects/${p}/engagement/current`), { engagement: { fee: 1 } });
       await setDoc(doc(db, `projects/${p}/paymentRequests/r1`), { amount: 50000 });
@@ -91,6 +92,8 @@ describe('Client Relations', () => {
     await assertSucceeds(getDocs(collection(cr(), `studios/${STUDIO}/projects/p1/timelinePhases`)));
     await assertFails(getDocs(collection(cr(), `studios/${STUDIO}/projects/p2/timelinePhases`)));
     await assertFails(getDoc(doc(cr(), `studios/${STUDIO}/projects/p1/paymentRequests/r1`)));
+    await assertSucceeds(getDoc(doc(cr(), `organizations/${STUDIO}/projects/p1/schedule/main`)));
+    await assertFails(getDoc(doc(cr(), `organizations/${STUDIO}/projects/p2/schedule/main`)));
     await assertSucceeds(getDoc(doc(cr(), `organizations/${STUDIO}/projects/p1/drawingTracker/dw1`)));
     await assertSucceeds(getDoc(doc(cr(), `organizations/${STUDIO}/projects/p1/moms/m1`)));
     await assertFails(getDoc(doc(cr(), 'projects/p2/communicationLog/c1')));
@@ -127,6 +130,7 @@ describe('Site Supervisor', () => {
     await assertSucceeds(getDoc(doc(sup(), 'projects/p1/timelinePhases/t1')));
     await assertSucceeds(getDocs(collection(sup(), `studios/${STUDIO}/projects/p1/timelinePhases`)));
     await assertFails(getDocs(collection(sup(), `studios/${STUDIO}/projects/p2/timelinePhases`)));
+    await assertSucceeds(getDoc(doc(sup(), `organizations/${STUDIO}/projects/p1/schedule/main`)));
     await assertSucceeds(getDoc(doc(sup(), `organizations/${STUDIO}/projects/p1/drawingTracker/dw1`)));
     await assertFails(getDoc(doc(sup(), 'projects/p1/communicationLog/c1')));
     await assertFails(getDoc(doc(sup(), 'projects/p1/tierBoq/t1')));
