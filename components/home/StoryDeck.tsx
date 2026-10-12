@@ -247,7 +247,8 @@ function Deck({ cards, at, dir, go, onAct }: {
             let x = side * f.x * mult, y = f.y, rot = side * f.rot, sc = f.scale;
             if (hover !== null) {
               const d = Math.abs(k - hover);
-              if (k === hover) { y -= 2.5; sc *= 1.08; }
+              /* A small rise, so the button stays under the pointer that is reaching for it (the mockup's 2.5rem moved it away). */
+              if (k === hover) { y -= 0.75; sc *= 1.04; }
               else {
                 /* The others part round the one in hand, the near ones most. */
                 const push = 8 * (1 - Math.abs(k / 3)) * (1 + 0.2 * Math.max(0, 3 - d));
@@ -311,7 +312,8 @@ function StoryCard({ c, active, lifted, onAct }: { c: Story; active: boolean; li
       <div className="flex-1 flex flex-col p-4 text-left">
         <p className="text-base font-bold text-slate-800 leading-snug line-clamp-2">{c.headline}</p>
         <p className="text-xs text-slate-500 mt-1.5 leading-relaxed line-clamp-3">{c.reason}</p>
-        <button type="button" tabIndex={active ? 0 : -1} onClick={(e) => { e.stopPropagation(); if (active) onAct(c.action); }}
+        {/* Every card's button acts, the ones at the side too; a tap elsewhere on a side card brings it to the middle. */}
+        <button type="button" tabIndex={active ? 0 : -1} onClick={(e) => { e.stopPropagation(); onAct(c.action); }}
           className="mt-auto w-full inline-flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold text-white shadow-sm bg-gradient-to-r from-[#3D52A0] to-[#5F79D6] hover:from-[#334486] hover:to-[#3D52A0] transition-colors">
           {c.action.label}<ArrowRight className="w-4 h-4" />
         </button>

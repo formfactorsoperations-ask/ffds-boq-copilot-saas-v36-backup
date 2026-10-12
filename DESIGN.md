@@ -163,7 +163,9 @@ the orbit dial.
 - The fan is the mockup's: seven slots round a circle, the most pressing card
   in front; each step out turns 7°, shrinks and drops. Cards move on a .65s
   overshoot and a new deck rises in card by card (`hs-slot`, `hs-face`).
-  Point at a card and it rises while the others part round it.
+  Point at a card and it rises a little (so its button stays under the
+  pointer) while the others part round it. Every card's button acts, side
+  cards included; a tap elsewhere on a side card brings it to the middle.
 - A ring turns the fan to its first card (it never hides the others); the ring
   of the card in front is lit. Fan with arrows, a swipe, the arrow keys or a
   tap on a side card. Motion stops under `prefers-reduced-motion`.
