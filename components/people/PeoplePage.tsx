@@ -4,7 +4,7 @@ import {
   Sunrise, Fingerprint, TreePalm, Stamp, CalendarDays, Contact, ChartColumn, Plus, RefreshCw, ChevronLeft, ChevronRight, MapPin, Download, Check, X, Search,
   PartyPopper, Inbox, Users, Sparkles, Wrench, History, RotateCcw,
 } from '@/lib/lucide-shim';
-import { LEAVE_LABELS, addDays, isLate, timeLabel, type Attendance, type Balance, type LeaveType, type RequestRecord, type Snapshot, type Status } from '../../lib/peopleDesk';
+import { LEAVE_LABELS, addDays, clock12, isLate, type Attendance, type Balance, type LeaveType, type RequestRecord, type Snapshot, type Status } from '../../lib/peopleDesk';
 import {
   myDay, minutesWorked, duration, whereLabel, mapLink, CHARGED, currentFy, fyLabel, unitsOf, awaitingMe, personName,
   monthGrid, shiftMonth, awayOn, dayKind, monthReport, attendanceCsv, todayOf,
@@ -265,7 +265,7 @@ function AttendanceSection({ s, onCorrect, approver }: { s: Snapshot; onCorrect:
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-slate-800">
                       {whose === 'team' && <span>{personName(s, a.employeeId)} · </span>}
-                      {timeLabel(a.checkIn, s.policy.timezone)} – {a.checkOut ? timeLabel(a.checkOut, s.policy.timezone) : <span className="text-amber-700">{a.imported ? 'no check-out recorded' : 'not checked out'}</span>}
+                      {clock12(a.checkIn, s.policy.timezone)} – {a.checkOut ? clock12(a.checkOut, s.policy.timezone) : <span className="text-amber-700">{a.imported ? 'no check-out recorded' : 'not checked out'}</span>}
                       {a.checkOut && <span className="text-xs font-normal text-slate-500"> · {duration(minutesWorked(a, a.checkOut))}</span>}
                     </p>
                     <p className="text-[11px] text-slate-500 flex flex-wrap items-center gap-x-1">
@@ -394,7 +394,7 @@ function ApprovalsSection({ s, list, onDone }: { s: Snapshot; list: RequestRecor
                         <span className="font-semibold text-slate-500"> · {r.kind === 'correction' ? 'attendance correction' : cancelling ? `cancel ${LEAVE_LABELS[r.type].toLowerCase()}` : LEAVE_LABELS[r.type].toLowerCase()}</span></p>
                       <p className="text-xs text-slate-500">
                         {r.kind === 'correction' && r.correction
-                          ? <>{niceDay(r.start)}: {session ? `${timeLabel(session.checkIn, tz)}–${session.checkOut ? timeLabel(session.checkOut, tz) : 'open'}` : 'recorded day'} → <b className="text-slate-700">{timeLabel(r.correction.checkIn, tz)}–{timeLabel(r.correction.checkOut, tz)}</b>, {r.correction.mode}</>
+                          ? <>{niceDay(r.start)}: {session ? `${clock12(session.checkIn, tz)}–${session.checkOut ? clock12(session.checkOut, tz) : 'open'}` : 'recorded day'} → <b className="text-slate-700">{clock12(r.correction.checkIn, tz)}–{clock12(r.correction.checkOut, tz)}</b>, {r.correction.mode}</>
                           : <>{range(r.start, r.end)} · {unitsOf(r)} day{unitsOf(r) === 1 ? '' : 's'}{r.portion !== 'Full day' ? ` (${r.portion.toLowerCase()})` : ''}</>}
                         {' · '}asked {new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       </p>
@@ -456,7 +456,7 @@ function DirectorySection({ s }: { s: Snapshot }) {
                     <div className="min-w-0 flex-1" style={{ transform: 'translateZ(12px)' }}>
                       <p className="text-sm font-bold text-slate-800 truncate">{p.name}{p.id === s.me.id ? ' (you)' : ''}</p>
                       <p className="text-[11px] text-slate-500 truncate">{p.title || TEAM[p.teamId] || 'Studio'}{p.managerId ? ` · reports to ${personName(s, p.managerId)}` : ''}</p>
-                      {here && ModeIcon && <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5"><ModeIcon className="w-3 h-3" />{here.checkOut ? `In ${timeLabel(here.checkIn, s.policy.timezone)}–${timeLabel(here.checkOut, s.policy.timezone)}` : `In since ${timeLabel(here.checkIn, s.policy.timezone)}`}</p>}
+                      {here && ModeIcon && <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5"><ModeIcon className="w-3 h-3" />{here.checkOut ? `In ${clock12(here.checkIn, s.policy.timezone)}–${clock12(here.checkOut, s.policy.timezone)}` : `In since ${clock12(here.checkIn, s.policy.timezone)}`}</p>}
                     </div>
                     {away && <span className={`${chip} inline-flex items-center gap-1 ${away.mode === 'WFH' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-amber-100 text-amber-700'}`}>{away.mode === 'WFH' ? <MODE_ICON.WFH className="w-3 h-3" /> : <TreePalm className="w-3 h-3" />}{away.mode === 'WFH' ? 'From home' : 'Away'}</span>}
                   </div>

@@ -19,7 +19,7 @@
 */
 import { dueOf, type DeskRow, type Viewer } from './designDesk';
 import { mySheets, reviewInbox, type TeamToday, type Upcoming } from './homeWidgets';
-import { isOff, timeLabel, type Snapshot } from './peopleDesk';
+import { clock12, isOff, type Snapshot } from './peopleDesk';
 import { myDay } from './peopleView';
 
 export type PinKind = 'checkin' | 'sheets' | 'reviews' | 'attention' | 'meetings' | 'team';
@@ -30,7 +30,7 @@ export interface CheckIn { state: 'out' | 'in' | 'done' | 'off'; since?: string 
 export function checkInOf(s: Snapshot): CheckIn {
   const { today, session } = myDay(s);
   if (session?.checkOut) return { state: 'done' };
-  if (session) return { state: 'in', since: timeLabel(session.checkIn, s.policy.timezone) };
+  if (session) return { state: 'in', since: clock12(session.checkIn, s.policy.timezone) };
   if (s.policy.holidays.includes(today) || isOff(today, s.policy)) return { state: 'off' };
   const away = s.availability.find((a) => a.employeeId === s.me.id && a.start <= today && a.end >= today && a.status !== 'Pending' && a.mode !== 'WFH');
   return { state: away ? 'off' : 'out' };

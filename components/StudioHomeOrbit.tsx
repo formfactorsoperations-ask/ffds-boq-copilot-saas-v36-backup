@@ -9,6 +9,7 @@ import DayBoard from "./home/DayBoard";
 import StoryDeck from "./home/StoryDeck";
 import { useHomeFeeds } from "./home/useHomeFeeds";
 import { useAttentionRows } from "./home/useAttention";
+import AskStudio from "./home/AskStudio";
 
 /**
  * STUDIO HOME (the owner's chosen design, Option 6; DESIGN.md → "Home stories"
@@ -21,6 +22,8 @@ import { useAttentionRows } from "./home/useAttention";
  *   Your day      every widget pinned along a path in the order to do it:
  *                 checking in, your sheets, reviews, the projects that need
  *                 you, the week ahead with clients, the team (DayBoard).
+ *   Ask           a question about the studio, answered from the same data
+ *                 (AskStudio).
  *
  * Nothing of the day sits below the board: the old attention panel, recent
  * projects rail and clock-and-calendar strip were folded into it.
@@ -78,6 +81,9 @@ export default function StudioHomeOrbit({
             onDismiss: onAttentionChange ? (id) => onAttentionChange(id, { dismissedAt: Date.now() }) : undefined,
           }} />
       </div>
+
+      {/* Ask the studio: a question answered from what Home holds for this person. */}
+      <AskStudio feeds={feeds} projects={projects} rows={rows} role={role} roles={roles} />
 
       <div className="max-w-[1400px] mx-auto w-full">
         <StudioFooter onNavigate={onNavigate} />

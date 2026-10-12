@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { DoorOpen, Moon, TreePalm, House, Sparkles, X } from '@/lib/lucide-shim';
-import { isLate, timeLabel, type Attendance, type Person, type Snapshot } from '../../lib/peopleDesk';
+import { clock12, isLate, type Attendance, type Person, type Snapshot } from '../../lib/peopleDesk';
 import { awayOn, todayOf } from '../../lib/peopleView';
 import { CountUp, Dot } from '../ui/HudBits';
 import { Avatar, Coin, Confetti, IconTile, MODE_ICON, Ring, initials, EASE } from './PeopleBits';
@@ -118,7 +118,7 @@ export function StudioPulse({ s }: { s: Snapshot }) {
                   } />
                 <p className="text-xs font-semibold text-slate-800 truncate max-w-full">{p.id === s.me.id ? 'You' : firstName(p.name)}</p>
                 <p className={`text-[11px] -mt-1 ${a ? (a.late ? 'text-amber-700' : 'text-slate-500') : 'text-slate-400'}`}>
-                  {a ? `${timeLabel(a.session.checkIn, tz)}${a.late ? ' · late' : ''}` : off ? (off.mode === 'WFH' ? 'from home' : off.pending ? 'asked off' : 'away') : 'not yet'}
+                  {a ? `${clock12(a.session.checkIn, tz)}${a.late ? ' · late' : ''}` : off ? (off.mode === 'WFH' ? 'from home' : off.pending ? 'asked off' : 'away') : 'not yet'}
                 </p>
               </div>
             );
@@ -157,11 +157,11 @@ export function ArrivalToasts({ s }: { s: Snapshot }) {
     fresh.forEach((a) => seen.add(a.session.id));
     writeSeen(today, seen);
     const next: Toast[] = fresh.length > 3 || (first.current && fresh.length > 1)
-      ? [{ id: `many-${Date.now()}`, title: `${fresh.length} people checked in`, sub: fresh.map((a) => `${firstName(a.person.name)} ${timeLabel(a.session.checkIn, tz)}`).join(' · '), late: false, mode: null }]
+      ? [{ id: `many-${Date.now()}`, title: `${fresh.length} people checked in`, sub: fresh.map((a) => `${firstName(a.person.name)} ${clock12(a.session.checkIn, tz)}`).join(' · '), late: false, mode: null }]
       : fresh.map((a) => ({
         id: a.session.id,
         title: `${a.person.name} checked in`,
-        sub: `${timeLabel(a.session.checkIn, tz)} · ${a.session.mode === 'WFH' ? 'from home' : a.session.mode === 'Site' ? (a.session.site || 'at a site') : 'at the office'}`,
+        sub: `${clock12(a.session.checkIn, tz)} · ${a.session.mode === 'WFH' ? 'from home' : a.session.mode === 'Site' ? (a.session.site || 'at a site') : 'at the office'}`,
         late: a.late,
         mode: a.session.mode,
       }));

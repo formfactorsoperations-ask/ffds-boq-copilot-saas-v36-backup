@@ -1597,7 +1597,8 @@ export default function App() {
   */
   const [storedBoqBaseline, setStoredBoqBaseline] = useState<ClientBoqRow[] | null>(null);
   useEffect(() => {
-    if (!activeInternalId) { setStoredBoqBaseline(null); return; }
+    /* The client's copy is not the limited roles' to read (firestore.rules); asking only logs a refusal. */
+    if (!activeInternalId || isLimitedRole(currentRole)) { setStoredBoqBaseline(null); return; }
     let cancelled = false;
     readPortalView(activeInternalId).then(view => {
       if (cancelled) return;
@@ -1611,7 +1612,7 @@ export default function App() {
       setStoredBoqBaseline(ctx.clientBoqBaseline || baselineFromSentRows(ctx.clientBoq) || null);
     });
     return () => { cancelled = true; };
-  }, [activeInternalId]);
+  }, [activeInternalId, currentRole]);
 
   /** Rooms, as both the baseline and the current rows need them. */
   const clientBoqRooms = (projectContext as any)?.rooms;

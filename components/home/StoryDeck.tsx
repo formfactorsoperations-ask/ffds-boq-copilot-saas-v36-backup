@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Plus, Sparkles, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Sparkles, ArrowRight, Clock } from 'lucide-react';
 import { useOrg } from '../../contexts/OrgContext';
 import { isLimitedRole, isClientRelationsRole, seesStudioFinance } from '../../lib/roleAccess';
 import { buildStories, paymentsOf, type Ring, type Story, type StoryAction, type Swatch } from '../../lib/homeStories';
 import { teamToday } from '../../lib/homeWidgets';
 import { opsSettingsOf } from '../../lib/opsDesk';
+import { clock12 } from '../../lib/peopleDesk';
 import { formatCompactINR, timeAgo } from '../../lib/utils';
 import { projectLook } from '../../lib/designDesk';
 import { openInDesignReview } from '../../services/drawingReviewService';
@@ -88,7 +89,10 @@ export default function StoryDeck({ feeds, counts, projects, role, roles, userNa
         <div className="aurora-a absolute -top-48 right-[-6rem] w-[38rem] h-[38rem] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(61, 82, 160,.12), transparent 70%)' }} />
       </div>
       <div className="relative px-5 md:px-12 pt-9 pb-8 flex flex-col items-center text-center">
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">{today}</p>
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">{today}</p>
+          <LiveClock />
+        </div>
         <h1 className="mt-2 text-[30px] md:text-[44px] font-bold leading-[1.08] tracking-tight" style={{ ...DISPLAY, color: INK }}>
           {greetingWord()}, {first}. {stories.view === 'designer' ? 'Here is your day.' : 'Here is your studio.'}
         </h1>
@@ -142,6 +146,26 @@ function around<T>(list: T[]): T[] {
   list.forEach((x, i) => { const p = i % 2 ? (i + 1) / 2 : -i / 2; out[(p + n) % n] = x; });
   return out;
 }
+
+/* ── The clock at the top of Home ────────────────────────────────────────── */
+
+/** The studio's time now, on the 12-hour clock; the colon ticks. */
+const LiveClock: React.FC = () => {
+  const [now, setNow] = useState(() => new Date().toISOString());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date().toISOString()), 10000);
+    return () => window.clearInterval(t);
+  }, []);
+  const [clock, ampm] = clock12(now).split(' ');
+  const [h, m] = clock.split(':');
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-[#3D52A0]" aria-label={`The time is ${clock} ${ampm}`}>
+      <Clock className="w-3.5 h-3.5" />
+      <span className="text-sm font-bold tabular-nums" style={DISPLAY}>{h}<span className="pp-tickover">:</span>{m}</span>
+      <span className="text-[10px] font-bold tracking-wider">{ampm}</span>
+    </span>
+  );
+};
 
 /* ── Continue where you left off ─────────────────────────────────────────── */
 

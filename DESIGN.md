@@ -179,6 +179,23 @@ and the review inbox, meetings and visits booked with clients, and the team
 today (who is away or working from home only) with a countdown to the next
 holiday. Each shows only for the roles that open what it shows.
 
+### Ask the studio (approved 12 Oct 2026)
+
+Under the board, a question box (`components/home/AskStudio.tsx`, record in
+`lib/studioAsk.ts`): a sparkle, the question, an Ask button, and three
+suggested questions for the person's view. The answer card repeats the
+question, gives the answer in plain sentences and names what it read
+("From: Sheets, Harmony 704"). It reads only what Home already holds for that
+person, through the studio's server-side AI proxy: money only for finance
+roles, a designer's own projects only.
+
+### Times
+
+Times people read are on the 12-hour clock ("9:42 AM"), through `clock12` in
+`lib/peopleDesk.ts`. `timeLabel` stays 24-hour for comparing, exporting and
+importing. The top of Home shows the studio's time beside the date, the
+colon ticking (`pp-tickover`).
+
 ### Your day, in order (approved 12 Oct 2026)
 
 Home pins the widgets to a sheet of ruled paper along a dashed path
