@@ -326,13 +326,14 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
         if (JSON.stringify(prev) === JSON.stringify(nextSchedule)) return prev;
         return nextSchedule;
       });
-      if (safeProjectId) {
+      /* Only the studio saves the programme; a limited role's copy stays on screen. */
+      if (safeProjectId && !limited) {
         db.saveSchedule(safeProjectId, nextSchedule).catch(e =>
           console.error("Failed to sync schedule override with phases", e)
         );
       }
     }
-  }, [phases, scheduleOverride, safeProjectId]);
+  }, [phases, scheduleOverride, safeProjectId, limited]);
 
   /*
     The same `computeSchedule` the chart runs, so the status band above can name

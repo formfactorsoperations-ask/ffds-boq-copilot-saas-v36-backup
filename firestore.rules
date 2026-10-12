@@ -86,10 +86,10 @@ service cloud.firestore {
 
     /* The project records each of these roles reads, beneath either of the project's two parents. */
     function teamMayRead(kind, sub) {
-      return (kind == 'ops' && sub in ['designGate', 'decisions', 'timelinePhases', 'tasks', 'deliverables', 'journeySteps',
+      return (kind == 'ops' && sub in ['designGate', 'decisions', 'timelinePhases', 'schedule', 'tasks', 'deliverables', 'journeySteps',
                                        'stepProgress', 'moms', 'siteVisits', 'communicationLog', 'drawingTracker', 'drawingVersions',
                                        'followUps', 'escalations', 'checklists', 'visitRequests'])
-        || (kind == 'site' && sub in ['decisions', 'timelinePhases', 'tasks', 'siteVisits', 'drawingTracker', 'drawingVersions']);
+        || (kind == 'site' && sub in ['decisions', 'timelinePhases', 'schedule', 'tasks', 'siteVisits', 'drawingTracker', 'drawingVersions']);
     }
 
     // A Designer of this studio: reads its projects, writes only drawings.
@@ -323,6 +323,17 @@ service cloud.firestore {
                ? (getUserData().role in ['Owner', 'Designer', 'Admin', 'Ops Director', 'Super Admin'] || isSuperAdmin() || isLegacyFFDS())
                : true
              );
+         }
+
+         /*
+           The programme the Timeline draws (dbService.getSchedule): stages,
+           dates, holds and the target handover; no prices. An assigned
+           Designer reads it, as Client Relations and a Site Supervisor do
+           through teamMayRead. Without it they saw a programme rebuilt from
+           their own copy, which has no BOQ, so no trades and no handover.
+         */
+         match /schedule/{scheduleId} {
+           allow read: if isAssignedDesigner(orgId, projectId);
          }
 
          match /drawingVersions/{versionId} {

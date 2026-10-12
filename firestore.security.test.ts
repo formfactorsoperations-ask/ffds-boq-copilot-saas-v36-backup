@@ -79,6 +79,7 @@ beforeEach(async () => {
       await setDoc(doc(db, `studios/${STUDIO}/projects/${p}/timelinePhases/1`), { stepNumber: 1, title: 'Concept' });
       await setDoc(doc(db, `studios/${STUDIO}/projects/${p}/stepProgress/1`), { stepNumber: 1, status: 'in_progress' });
       await setDoc(doc(db, `studios/${STUDIO}/projects/${p}/paymentRequests/r1`), { amount: 50000 });
+      await setDoc(doc(db, `organizations/${STUDIO}/projects/${p}/schedule/main`), { tasks: [], targetHandoverISO: '2027-01-15' });
     }
 
     await setDoc(doc(db, 'users/otheradmin'), { email: 'o@b.com', tenantId: OTHER, role: 'Admin' });
@@ -268,6 +269,10 @@ describe('a Designer reads their own projects, without the money, and changes on
     await assertFails(getDoc(st(designer(), 'p1')));
     await assertFails(setDoc(st(designer(), 'p1/timelinePhases/1'), { stepNumber: 1, title: 'Moved' }));
     await assertSucceeds(getDocs(collection(member(), `studios/${STUDIO}/projects/p2/paymentRequests`)));
+    // The saved schedule the Timeline draws: theirs to read, not to change, and not another project's.
+    await assertSucceeds(getDoc(doc(designer(), `organizations/${STUDIO}/projects/p1/schedule/main`)));
+    await assertFails(getDoc(doc(designer(), `organizations/${STUDIO}/projects/p2/schedule/main`)));
+    await assertFails(setDoc(doc(designer(), `organizations/${STUDIO}/projects/p1/schedule/main`), { tasks: [] }));
   });
   it('does not read a project they are not assigned to', async () => {
     await assertFails(getDoc(doc(designer(), 'projects/p2/designView/current')));
