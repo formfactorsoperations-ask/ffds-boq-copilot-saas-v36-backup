@@ -145,13 +145,15 @@ const RingButton: React.FC<{ r: Ring; k: number; on: boolean; onClick: () => voi
 
 /* ── The fanned deck ─────────────────────────────────────────────────────── */
 
-function useWide() {
-  const [wide, setWide] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth >= 768));
+/** True while the window is at least `min` pixels wide. */
+export function useWide(min = 768) {
+  const [wide, setWide] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth >= min));
   useEffect(() => {
-    const on = () => setWide(window.innerWidth >= 768);
+    const on = () => setWide(window.innerWidth >= min);
+    on();
     window.addEventListener('resize', on);
     return () => window.removeEventListener('resize', on);
-  }, []);
+  }, [min]);
   return wide;
 }
 

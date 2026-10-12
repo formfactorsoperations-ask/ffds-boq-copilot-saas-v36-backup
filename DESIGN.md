@@ -163,9 +163,25 @@ the orbit dial.
 
 ### Home widgets (approved 12 Oct 2026)
 
-The shelf of widgets on Home (`components/home/HomeWidgets.tsx`, rules in
-`lib/homeWidgets.ts`) uses the same People motion kit: glass cards that tilt,
-icon tiles, coins and flip digits, with the same fonts and colours. Widgets:
-Design Desk "for you" and the review inbox, meetings and visits booked with
-clients, the team today (who is away or working from home only), and the next
+The Home widgets (`components/home/HomeWidgets.tsx`, rules in
+`lib/homeWidgets.ts`) use the same People motion kit: icon tiles, coins and
+flip digits, with the same fonts and colours. Widgets: Design Desk "for you"
+and the review inbox, meetings and visits booked with clients, and the team
+today (who is away or working from home only) with a countdown to the next
 holiday. Each shows only for the roles that open what it shows.
+
+### Your day, in order (approved 12 Oct 2026)
+
+Home pins the widgets to a sheet of ruled paper along a dashed path
+(`components/home/DayBoard.tsx`, order in `lib/homeDay.ts`), the one that saves
+the most time first: a meeting today, then late or blocking work, then work
+ready to go, then what is only worth knowing.
+
+- Each pin is numbered (01, 02…) in the display face and says in a word why it
+  sits there ("Today", "Overdue", "Ready to send"). The heading counts the
+  pins that are something to do.
+- Pin colours run brass, indigo, rose, sage in order, lightened for paper.
+- Two staggered columns from 1024px, one column below. Pins hang slightly
+  tilted from the pin, straighten on hover, drop in one after another, and the
+  path's dashes walk (`hs-paper`, `hs-march` in `homeStyles.ts`). All of it
+  stops under `prefers-reduced-motion`.
