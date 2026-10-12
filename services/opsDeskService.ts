@@ -170,3 +170,14 @@ export async function createVisit(v: NewVisit): Promise<string> {
 export async function updateVisit(projectId: string, id: string, patch: Pick<VisitRequest, 'status' | 'slot' | 'reschedules' | 'history' | 'updatedAt' | 'updatedBy'>): Promise<void> {
   await updateDoc(doc(db!, `projects/${projectId}/visitRequests`, id), patch);
 }
+
+/**
+ * Meetings, site visits and measurements booked on these projects, for the
+ * Home widget. A project this person may not read is skipped quietly.
+ */
+export async function loadVisits(projectIds: string[]): Promise<VisitRequest[]> {
+  if (!db) return [];
+  const lists = await Promise.all(projectIds.slice(0, 40).map((pid) =>
+    getDocs(collection(db!, `projects/${pid}/visitRequests`)).then((snap) => rows(snap) as VisitRequest[]).catch(() => [] as VisitRequest[])));
+  return lists.flat();
+}
