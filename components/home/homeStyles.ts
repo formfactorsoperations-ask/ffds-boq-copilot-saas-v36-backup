@@ -37,9 +37,10 @@ const HOME_CSS = `
     linear-gradient(140deg, #2B3A78 0%, #1E2A5A 100%);
 }
 
-/* The deck: a stage the cards fan across, and a soft floor shadow. */
-.hs-stage { perspective: 1400px; }
-.hs-card { transform-style: preserve-3d; will-change: transform; }
+/* The deck (the mockup's fan): each slot moves on a springy overshoot, and a new deck rises in card by card. */
+.hs-slot { transition: transform .65s cubic-bezier(.34, 1.56, .64, 1), opacity .45s ease; will-change: transform; }
+.hs-face { animation: hs-enter 1.2s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes hs-enter { from { transform: translateY(12rem) scale(.5); opacity: 0; } }
 .hs-sheen::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
@@ -65,7 +66,8 @@ const HOME_CSS = `
 @keyframes hs-march { to { stroke-dashoffset: -140; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .hs-sheen::after, .hs-march { animation: none !important; }
+  .hs-sheen::after, .hs-march, .hs-face { animation: none !important; }
+  .hs-slot { transition: none !important; }
 }
 `;
 
