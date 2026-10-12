@@ -143,6 +143,24 @@ Same fonts, same colours. Still People only.
   that turn over for detail, tilting directory cards, and the check-in button.
 - Everything still stops under `prefers-reduced-motion`.
 
+### Home stories (approved 12 Oct 2026)
+
+The top of Home is the owner's chosen design (Option 6): a greeting, story
+rings, a fanned 3D deck of cards and a strip of five swatches
+(`components/home/StoryDeck.tsx`, rules in `lib/homeStories.ts`). It replaced
+the orbit dial.
+
+- Five materials, for Home only, in `components/home/homeStyles.ts`:
+  indigo (the brand), periwinkle (the brand lightened), brass, rose and sage
+  (the accents Home already used for Reports, Blocked and Clients), and navy
+  (the brand darkened) for the Team ring. Nothing else.
+- The greeting and big figures use the display face Home already had
+  (`--font-display`). Everything else is the app's type scale.
+- Each card says one true thing from StudioDesk's own data, with one button;
+  money appears only for finance roles. Cards with nothing to say are left out.
+- Fan with arrows, a swipe, the arrow keys or a tap on a side card. Motion
+  stops under `prefers-reduced-motion`.
+
 ### Home widgets (approved 12 Oct 2026)
 
 The shelf of widgets on Home (`components/home/HomeWidgets.tsx`, rules in

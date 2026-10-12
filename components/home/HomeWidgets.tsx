@@ -1,18 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   PenTool, Undo2, Send, Eye, ArrowRight, Stamp, Flame, Clock, Sparkles, CalendarClock, Users, HardHat, Ruler, Video, Phone,
   MapPin, PartyPopper, TreePalm, House, Hourglass, MessageSquareQuote,
 } from '@/lib/lucide-shim';
-import { useOrg } from '../../contexts/OrgContext';
+import type { HomeFeeds } from './useHomeFeeds';
 import { mayOpenStudioTab } from '../../lib/roleAccess';
-import { canReview } from '../../lib/drawingReview';
 import { dueOf, projectLook, type DeskRow, type Viewer } from '../../lib/designDesk';
-import { mySheets, reviewInbox, teamToday, upcoming, whenLabel, type Upcoming } from '../../lib/homeWidgets';
-import { watchProjectDrawings, watchStudioReviews, openInDesignReview, type ReviewDrawing } from '../../services/drawingReviewService';
-import { loadVisits } from '../../services/opsDeskService';
+import { mySheets, reviewInbox, teamToday, whenLabel, type Upcoming } from '../../lib/homeWidgets';
+import { openInDesignReview } from '../../services/drawingReviewService';
 import { usePeople } from '../../services/peopleService';
-import { businessDate } from '../../lib/peopleDesk';
 import { CountUp, Dot } from '../ui/HudBits';
 import { Confetti, IconTile, Tilt, initials, EASE } from '../people/PeopleBits';
 
@@ -88,65 +85,10 @@ const AllClear: React.FC<{ text: string }> = ({ text }) => (
   </div>
 );
 
-/* ── Data ────────────────────────────────────────────────────────────────── */
-
-/** The Design Desk's sheets this person may see: the studio's for reviewers, their projects' for everyone else. */
-function useDeskRows(orgId: string, reviewer: boolean, projectIds: string[], on: boolean): ReviewDrawing[] | null {
-  const [studio, setStudio] = useState<ReviewDrawing[] | null>(null);
-  const [byProject, setByProject] = useState<Record<string, ReviewDrawing[]>>({});
-  const key = projectIds.join('|');
-  useEffect(() => {
-    if (!on || !orgId || !reviewer) return;
-    return watchStudioReviews(orgId, setStudio, () => setStudio([]));
-  }, [orgId, reviewer, on]);
-  useEffect(() => {
-    if (!on || !orgId || reviewer) return;
-    const offs = projectIds.slice(0, 12).map((id) => watchProjectDrawings(orgId, id, (list) => setByProject((m) => ({ ...m, [id]: list })), () => setByProject((m) => ({ ...m, [id]: [] }))));
-    return () => offs.forEach((off) => off());
-  }, [orgId, reviewer, key, on]);
-  if (!on) return null;
-  if (reviewer) return studio;
-  if (projectIds.length && !Object.keys(byProject).length) return null;
-  const all: ReviewDrawing[] = [];
-  for (const k of Object.keys(byProject)) all.push(...byProject[k]);
-  return all;
-}
-
-function useUpcoming(projectIds: string[], on: boolean): Upcoming[] | null {
-  const [list, setList] = useState<Upcoming[] | null>(null);
-  const key = projectIds.join('|');
-  useEffect(() => {
-    if (!on) return;
-    let live = true;
-    const load = () => loadVisits(projectIds).then((v) => { if (live) setList(upcoming(v, businessDate(new Date()))); }).catch(() => { if (live) setList([]); });
-    load();
-    const t = window.setInterval(load, 5 * 60000);
-    return () => { live = false; window.clearInterval(t); };
-  }, [key, on]);
-  return list;
-}
-
 /* ── The shelf ───────────────────────────────────────────────────────────── */
 
-export default function HomeWidgets({ projects, role, roles, onNavigate }: {
-  projects: any[]; role: string; roles?: string[]; onNavigate: (tab: string) => void;
-}) {
-  const org: any = useOrg();
-  const orgId = String(org?.orgData?.tenantId || '');
-  const email = String(org?.currentUserAuth?.email || '').trim().toLowerCase();
-  const who = roles?.length ? roles : role;
-  const desk = mayOpenStudioTab(DESK_TAB, who);
-  const reviewer = desk && canReview(who);
-  const people = mayOpenStudioTab('people', who);
-  const visitsOn = desk || mayOpenStudioTab('ops-desk', who);
-
-  const live = useMemo(() => projects.filter((p: any) => p?.id && !['Delivered', 'Closed', 'Archived'].includes(String(p?.status || p?.context?.status || ''))), [projects]);
-  const ids = useMemo(() => live.map((p: any) => String(p.id)), [live]);
-  const names = useMemo(() => new Map(projects.map((p: any) => [String(p.id), String(p?.context?.name || p?.name || 'Project')])), [projects]);
-
-  const rows = useDeskRows(orgId, reviewer, ids, desk);
-  const visits = useUpcoming(ids, visitsOn);
-  const viewer: Viewer = { reviewer, email };
+export default function HomeWidgets({ feeds, onNavigate }: { feeds: HomeFeeds; onNavigate: (tab: string) => void }) {
+  const { who, desk, reviewer, people, visitsOn, rows, visits, viewer, names } = feeds;
 
   if (!desk && !people && !visitsOn) return null;
   /*

@@ -99,16 +99,17 @@ export async function peopleImportCall(studio: string, data: Record<string, unkn
 }
 
 /** The shared snapshot; loads on first use, and again when the tab comes back after half a minute. */
-export function usePeople() {
+export function usePeople(enabled = true) {
   const studio = String((useOrg() as any)?.orgData?.tenantId || '');
   const s = useSyncExternalStore(subscribe, () => state, () => state);
   useEffect(() => {
-    if (!studio) return;
+    /* Off for those not on People: nothing is fetched for them. */
+    if (!studio || !enabled) return;
     if (studio !== tenantId) { tenantId = studio; set({ snapshot: null, error: null, at: 0 }); inflight = null; refreshPeople(); return; }
     if (!state.snapshot && !state.loading) refreshPeople();
     const onFocus = () => { if (Date.now() - state.at > 30000) refreshPeople(); };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [studio]);
+  }, [studio, enabled]);
   return { ...s, refresh: refreshPeople, run: runPeople };
 }
