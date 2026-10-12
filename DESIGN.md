@@ -145,8 +145,10 @@ Same fonts, same colours. Still People only.
 
 ### Home stories (approved 12 Oct 2026)
 
-The top of Home is the owner's chosen design (Option 6): a greeting, story
-rings, a fanned 3D deck of cards and a strip of five swatches
+The top of Home is the owner's chosen design (Option 6): a greeting, the
+projects you were last in ("Continue where you left off": chips beside New
+project, each back to the tab you left), story rings, a fanned deck of cards
+and a strip of five swatches
 (`components/home/StoryDeck.tsx`, rules in `lib/homeStories.ts`). It replaced
 the orbit dial.
 
@@ -180,12 +182,26 @@ holiday. Each shows only for the roles that open what it shows.
 Home pins the widgets to a sheet of ruled paper along a dashed path
 (`components/home/DayBoard.tsx`, order in `lib/homeDay.ts`), the one that saves
 the most time first: a meeting today, then late or blocking work, then work
-ready to go, then what is only worth knowing.
+ready to go, then what is only worth knowing. Nothing of the day sits below
+the board.
+
+- My day (check in and out) is pin 01 until the person is in; then it steps to
+  the end ("In since 9:42", "Day done", "Day off").
+- "Needs your attention" (the studio's worklist, `useAttention.ts`) is a pin:
+  the top three projects blocked or due, with snooze and dismiss, and the rest
+  a tap away.
+- "Coming up" opens with the week ahead: a cell a day, a rose dot for each
+  client meeting and a brass one for a project milestone (handover, BOQ
+  freeze, signup, possession), the milestones named under it.
+- The old clock-and-calendar strip, studio pulse, attention panel and recent
+  projects rail are gone: the date is in the greeting and the pulse figures
+  are in the swatches.
 
 - Each pin is numbered (01, 02…) in the display face and says in a word why it
   sits there ("Today", "Overdue", "Ready to send"). The heading counts the
   pins that are something to do.
-- Pin colours run brass, indigo, rose, sage in order, lightened for paper.
+- Pin colours run brass, indigo, rose, sage, periwinkle, navy in order,
+  lightened for paper.
 - Two staggered columns from 1024px, one column below. Pins hang slightly
   tilted from the pin, straighten on hover, drop in one after another, and the
   path's dashes walk (`hs-paper`, `hs-march` in `homeStyles.ts`). All of it

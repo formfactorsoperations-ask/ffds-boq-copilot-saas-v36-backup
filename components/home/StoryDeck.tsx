@@ -6,7 +6,8 @@ import { isLimitedRole, isClientRelationsRole, seesStudioFinance } from '../../l
 import { buildStories, paymentsOf, type Ring, type Story, type StoryAction, type Swatch } from '../../lib/homeStories';
 import { teamToday } from '../../lib/homeWidgets';
 import { opsSettingsOf } from '../../lib/opsDesk';
-import { formatCompactINR } from '../../lib/utils';
+import { formatCompactINR, timeAgo } from '../../lib/utils';
+import { projectLook } from '../../lib/designDesk';
 import { openInDesignReview } from '../../services/drawingReviewService';
 import { usePeople } from '../../services/peopleService';
 import type { HomeFeeds } from './useHomeFeeds';
@@ -15,8 +16,9 @@ import { EDGE } from './homeStyles';
 import '../people/peopleStyles';
 
 /*
-  THE TOP OF HOME (lib/homeStories.ts): a greeting, the story rings, a fanned
-  deck of cards and a strip of five swatches.
+  THE TOP OF HOME (lib/homeStories.ts): a greeting, the projects you were last
+  in (one tap back to the tab you left), the story rings, a fanned deck of
+  cards and a strip of five swatches.
 
   Each card is one thing worth knowing with the button that acts on it; the
   deck opens on the most pressing. The fan is the mockup's: seven slots round
@@ -30,8 +32,11 @@ import '../people/peopleStyles';
 const INK = '#0A1B33';
 const DISPLAY = { fontFamily: 'var(--font-display)' } as const;
 
-export default function StoryDeck({ feeds, counts, projects, role, roles, userName, onNavigate, onOpenProject, onCreateNew }: {
+export default function StoryDeck({ feeds, counts, projects, role, roles, userName, recent = [], onResume, onNavigate, onOpenProject, onCreateNew }: {
   feeds: HomeFeeds;
+  /** The projects this person was last in, most recent first. */
+  recent?: any[];
+  onResume?: (project: any) => void;
   counts: { active: number; pipeline: number; booked: number; open: number; winRate: number };
   projects: any[];
   role: string;
@@ -92,11 +97,20 @@ export default function StoryDeck({ feeds, counts, projects, role, roles, userNa
             ? 'Only your projects. Fan through your cards; each one has the button that acts on it.'
             : 'Tap a story or fan through the cards: each is one thing worth knowing, with the button that acts on it.'}
         </p>
-        {!isLimitedRole(who) && (
-          <button type="button" onClick={onCreateNew}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm font-bold text-[#3D52A0] hover:border-[#3D52A0]/40 hover:bg-white transition-colors">
-            <Plus className="w-4 h-4" />New project
-          </button>
+        {/* New project, then back into what you were last in. */}
+        {(!isLimitedRole(who) || recent.length > 0) && (
+          <div className="mt-4 w-full flex flex-col items-center gap-2">
+            {recent.length > 0 && <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Continue where you left off</p>}
+            <div className="max-w-full flex items-center gap-2 overflow-x-auto pb-1 px-1 [scrollbar-width:none]">
+              {!isLimitedRole(who) && (
+                <button type="button" onClick={onCreateNew}
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm font-bold text-[#3D52A0] hover:border-[#3D52A0]/40 hover:bg-white transition-colors">
+                  <Plus className="w-4 h-4" />New project
+                </button>
+              )}
+              {recent.slice(0, 4).map((p, k) => <RecentChip key={p.id} p={p} k={k} onClick={() => onResume?.(p)} />)}
+            </div>
+          </div>
         )}
 
         {/* The rings */}
@@ -128,6 +142,29 @@ function around<T>(list: T[]): T[] {
   list.forEach((x, i) => { const p = i % 2 ? (i + 1) / 2 : -i / 2; out[(p + n) % n] = x; });
   return out;
 }
+
+/* ── Continue where you left off ─────────────────────────────────────────── */
+
+const STAGE: Record<string, string> = {
+  lead: 'Lead', draft: 'Draft', proposal_sent: 'Proposal sent', negotiation: 'Negotiation', won: 'Won',
+  execution: 'On site', work_paused: 'Paused', completed: 'Delivered',
+};
+const RecentChip: React.FC<{ p: any; k: number; onClick: () => void }> = ({ p, k, onClick }) => {
+  const name = String(p.context?.name || p.context?.clientName || 'Untitled');
+  const look = projectLook(String(p.id), name);
+  return (
+    <motion.button type="button" onClick={onClick} title={`Open ${name} where you left it`}
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + k * 0.05, type: 'spring', stiffness: 300, damping: 24 }}
+      whileHover={{ y: -2 }}
+      className="shrink-0 inline-flex items-center gap-2.5 rounded-full border border-slate-200 bg-white/80 pl-1.5 pr-4 py-1.5 text-left hover:border-[#3D52A0]/40 hover:bg-white transition-colors">
+      <span className="w-7 h-7 rounded-full grid place-items-center text-[10px] font-black text-white" style={{ background: look.color }}>{look.code}</span>
+      <span className="min-w-0">
+        <span className="block max-w-[150px] truncate text-xs font-bold text-slate-800">{name}</span>
+        <span className="block text-[10px] text-slate-500">{STAGE[p.context?.status || 'draft'] || 'Draft'} · {timeAgo(p.lastModified)}</span>
+      </span>
+    </motion.button>
+  );
+};
 
 /* ── Rings ───────────────────────────────────────────────────────────────── */
 

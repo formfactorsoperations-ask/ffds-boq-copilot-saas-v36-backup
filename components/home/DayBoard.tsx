@@ -4,10 +4,14 @@ import { Pin } from '@/lib/lucide-shim';
 import type { HomeFeeds } from './useHomeFeeds';
 import { mayOpenStudioTab } from '../../lib/roleAccess';
 import { teamToday } from '../../lib/homeWidgets';
-import { dayOrder, dayTitle, type DayPin } from '../../lib/homeDay';
+import { checkInOf, dayOrder, dayTitle, type DayPin } from '../../lib/homeDay';
+import { businessDate } from '../../lib/peopleDesk';
 import { openInDesignReview } from '../../services/drawingReviewService';
 import { usePeople } from '../../services/peopleService';
-import { ComingUpWidget, ForYouWidget, Pinned, ReviewWidget, TeamWidget } from './HomeWidgets';
+import MyDayCard from '../people/MyDayCard';
+import { AttentionWidget, ComingUpWidget, ForYouWidget, Pinned, ReviewWidget, TeamWidget } from './HomeWidgets';
+import type { AttentionRow } from './useAttention';
+import { useCalendarData } from './calendarData';
 import { useWide } from './StoryDeck';
 import './homeStyles';
 
@@ -16,25 +20,49 @@ import './homeStyles';
   pinned to ruled paper along a dashed path, the one that saves the most time
   first (lib/homeDay.ts). Each pin is numbered and says in a word why it sits
   where it does. Two staggered columns on a wide screen, one on a phone.
+
+  My day (check in and out) is pin 01 until the person is in, then steps to
+  the end. The studio's worklist ("Needs your attention") and the week ahead
+  (inside "Coming up") live here too, so nothing of the day sits below it.
 */
 
 const DISPLAY = { fontFamily: 'var(--font-display)' } as const;
-/* The pin colours in order: brass, indigo, rose, sage (Home's materials, lightened for paper). */
+/* The pin colours in order: brass, indigo, rose, sage, periwinkle, navy (Home's materials, lightened for paper). */
 const TINT = [
   { bg: '#FBF5EA', fg: '#8C6A33', bd: '#EBDDC2' },
   { bg: '#ECEFFB', fg: '#3D52A0', bd: '#D5DCF5' },
   { bg: '#FBEFF3', fg: '#B4436A', bd: '#F2D3DF' },
   { bg: '#E7F5EF', fg: '#0E7C5A', bd: '#C8E8DA' },
+  { bg: '#EEF2FD', fg: '#5F79D6', bd: '#D9E1FA' },
+  { bg: '#ECEEF6', fg: '#1E2A5A', bd: '#D3D8EA' },
 ];
-const TILT = [1.5, -1.5, 1.2, -1.2];
+const TILT = [1.5, -1.5, 1.2, -1.2, 1, -1];
 
-export default function DayBoard({ feeds, onNavigate }: { feeds: HomeFeeds; onNavigate: (tab: string) => void }) {
+export interface AttentionFeed {
+  rows: AttentionRow[];
+  money: (n: number) => string;
+  onOpen: (r: AttentionRow, action?: any) => void;
+  onSnooze?: (projectId: string) => void;
+  onDismiss?: (projectId: string) => void;
+}
+
+export default function DayBoard({ feeds, projects, attention, onNavigate }: {
+  feeds: HomeFeeds; projects: any[]; attention: AttentionFeed | null; onNavigate: (tab: string) => void;
+}) {
   const { who, desk, reviewer, people, visitsOn, rows, visits, viewer, names } = feeds;
   const { snapshot } = usePeople(people);
   const team = useMemo(() => (people && snapshot ? teamToday(snapshot) : undefined), [people, snapshot]);
+  const checkin = useMemo(() => (people && snapshot?.me ? checkInOf(snapshot) : undefined), [people, snapshot]);
+  const counts = useMemo(() => (attention ? {
+    blocked: attention.rows.filter((r) => r.worst === 'blocker').length,
+    due: attention.rows.filter((r) => r.worst === 'due').length,
+  } : undefined), [attention?.rows]);
   const day = useMemo(() => dayOrder({
-    rows: desk ? rows : undefined, reviewer, viewer, visits: visitsOn ? visits : undefined, team,
-  }), [desk, rows, reviewer, viewer, visitsOn, visits, team]);
+    rows: desk ? rows : undefined, reviewer, viewer, visits: visitsOn ? visits : undefined, team, checkin, attention: counts,
+  }), [desk, rows, reviewer, viewer, visitsOn, visits, team, checkin, counts]);
+  const { importantDates } = useCalendarData(projects);
+  const today = businessDate(new Date());
+  const sites = useMemo(() => projects.map((p: any) => String(p?.context?.name || '')).filter(Boolean), [projects]);
   const wide = useWide(1024);
   if (!day.pins.length) return null;
 
@@ -42,7 +70,9 @@ export default function DayBoard({ feeds, onNavigate }: { feeds: HomeFeeds; onNa
   const widget = (p: DayPin) =>
     p.kind === 'sheets' ? <ForYouWidget index={0} rows={rows} viewer={viewer} names={names} onOpen={(d) => openInDesignReview(d.projectId, d.id)} onAll={toDesk} />
       : p.kind === 'reviews' ? <ReviewWidget index={0} rows={rows} viewer={viewer} onAll={toDesk} />
-      : p.kind === 'meetings' ? <ComingUpWidget index={0} list={visits} onAll={mayOpenStudioTab('ops-desk', who) ? () => onNavigate('ops-desk') : undefined} />
+      : p.kind === 'meetings' ? <ComingUpWidget index={0} list={visits} today={today} milestones={importantDates} onAll={mayOpenStudioTab('ops-desk', who) ? () => onNavigate('ops-desk') : undefined} />
+      : p.kind === 'checkin' ? <MyDayCard variant="pin" sites={sites} onOpenPeople={() => onNavigate('people')} />
+      : p.kind === 'attention' ? <AttentionWidget index={0} {...attention!} />
       : <TeamWidget index={0} t={team!} onAll={() => onNavigate('people')} />;
 
   return (
