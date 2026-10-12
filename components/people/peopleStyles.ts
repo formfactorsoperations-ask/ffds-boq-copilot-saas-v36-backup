@@ -1,12 +1,18 @@
 /*
   People: the motion kit (DESIGN.md → "People motion").
 
-  Approved by the studio owner on 11 Oct 2026 for People only: richer motion
-  than the console screens, the same type and palette. Brand #3D52A0, slate,
-  and rose/amber/emerald for state; nothing else. Every animation here stops
-  under prefers-reduced-motion.
-*/
+  Approved by the studio owner on 11 Oct 2026 for People (and, from 12 Oct,
+  the Home widgets): richer motion than the console screens, the same type
+  and palette. Brand #3D52A0, slate, and rose/amber/emerald for state;
+  nothing else. Every animation here stops under prefers-reduced-motion.
 
+  The styles ship inside this module, which adds them to the page once when
+  it is first imported (by PeopleBits.tsx). A separate .css file could be
+  left behind when the app is copied or synced without it; then every glass
+  card, ring track and tile shadow silently disappears, as happened on the
+  live app on 12 Oct 2026.
+*/
+const PEOPLE_CSS = `
 /* A glass card over the page: the My day card and the People header panel. */
 .pp-glass {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(247, 250, 254, 0.86));
@@ -170,3 +176,13 @@
   .pp-orbit { transform: rotateX(66deg); }
   .pp-orbit-face { transform: rotateX(-66deg); }
 }
+`;
+
+if (typeof document !== 'undefined' && !document.getElementById('pp-styles')) {
+  const style = document.createElement('style');
+  style.id = 'pp-styles';
+  style.textContent = PEOPLE_CSS;
+  document.head.appendChild(style);
+}
+
+export {};

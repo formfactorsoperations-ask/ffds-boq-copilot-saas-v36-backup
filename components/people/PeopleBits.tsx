@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { motion, useMotionValue, useReducedMotion, useSpring, useTransform, type Variants } from 'framer-motion';
 import { TreePalm, Thermometer, Coffee, Gift, House, Building2, HardHat } from '@/lib/lucide-shim';
 import type { LeaveType, Mode } from '../../lib/peopleDesk';
-import './people.css';
+import './peopleStyles';
 
 /*
   Small pieces shared by the People screens (DESIGN.md → "People motion"):
