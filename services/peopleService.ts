@@ -77,6 +77,27 @@ export async function runPeople(action: Command['action'], data: Command['data']
   return { ok: false, error: 'People did not answer.' };
 }
 
+/**
+ * A month's attendance older than the snapshot's four months (the monthly
+ * report reaching into imported history), for the studio being viewed.
+ */
+export async function fetchPeopleMonth(month: string): Promise<Snapshot | null> {
+  if (!functions || !tenantId) return null;
+  const r: any = await httpsCallable(functions, 'peopleSnapshot', { timeout: 30000 })({ tenantId, month });
+  return r.data.snapshot as Snapshot;
+}
+
+/** One step of a People Hub import (functions/src/peopleImport.ts). Only those who run People may. */
+export async function peopleImportCall(studio: string, data: Record<string, unknown>): Promise<any> {
+  if (!functions) throw new Error('People needs the studio to be connected.');
+  try {
+    const r: any = await httpsCallable(functions, 'peopleImport', { timeout: 120000 })({ tenantId: studio, ...data });
+    return r.data;
+  } catch (e: any) {
+    throw new Error(messageOf(e));
+  }
+}
+
 /** The shared snapshot; loads on first use, and again when the tab comes back after half a minute. */
 export function usePeople() {
   const studio = String((useOrg() as any)?.orgData?.tenantId || '');

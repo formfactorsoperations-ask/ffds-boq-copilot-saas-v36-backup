@@ -5,6 +5,7 @@ import {
   type LeaveType, type MemberSettings, type PeopleSettings,
 } from '../../lib/peopleDesk';
 import { CountUp, Dot } from '../ui/HudBits';
+import PeopleImport, { type SettingsAdd } from './PeopleImport';
 
 /*
   Studio settings → People (lib/peopleDesk.ts): the working day, leave
@@ -108,6 +109,25 @@ export default function PeopleSettings({ org, canEdit, onChange }: {
     );
   };
   const setOffice = (k: 'lat' | 'lng' | 'radiusM', v: string) => setPolicy({ office: { ...office, [k]: v === '' ? '' : Number(v) } });
+
+  /* What a People Hub import adds to these settings: holidays, and comp-off earned there. */
+  const applyImport = ({ holidays, grants }: SettingsAdd) => {
+    const next: PeopleSettings = { ...raw };
+    if (holidays.length) {
+      const names = { ...(rawPolicy.holidayNames || {}) };
+      for (const h of holidays) if (!names[h.date]) names[h.date] = h.name;
+      next.policy = { ...rawPolicy, holidays: [...new Set([...policy.holidays, ...holidays.map((h) => h.date)])].sort(), holidayNames: names };
+    }
+    if (grants.length) {
+      const ms = { ...members };
+      for (const g of grants) {
+        const m = ms[g.personId] || {};
+        ms[g.personId] = { ...m, entitlements: { ...(m.entitlements || {}), [g.fy]: { ...(m.entitlements?.[g.fy] || {}), COMP: g.earned } } };
+      }
+      next.members = ms;
+    }
+    onChange(next);
+  };
 
   /* People */
   const [open, setOpen] = useState<string | null>(null);
@@ -320,6 +340,8 @@ export default function PeopleSettings({ org, canEdit, onChange }: {
           </div>
         )}
       </Block>
+
+      <PeopleImport org={org} canEdit={canEdit} onApply={applyImport} />
     </div>
   );
 }
