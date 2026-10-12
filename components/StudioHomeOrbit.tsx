@@ -12,10 +12,11 @@ import {
 import StudioFooter from "./home/StudioFooter";
 import MyDayCard from "./people/MyDayCard";
 import HomeWidgets from "./home/HomeWidgets";
+import StoryDeck from "./home/StoryDeck";
+import { useHomeFeeds } from "./home/useHomeFeeds";
 import { isLimitedRole, seesStudioFinance, mayOpenStudioTab } from "../lib/roleAccess";
 import {
   ArrowRight, CheckCircle2, ChevronDown, Plus, Sparkles, Clock, Wallet, Zap, Layers3, Check, BellOff,
-  LayoutGrid, Users, BarChart3, Store, FileSignature, Boxes, PenTool, Inbox, UserCheck,
 } from "lucide-react";
 
 /**
@@ -58,23 +59,6 @@ const initialsOf = (name: string) =>
 const BRAND = "#3D52A0";
 const INK = "#0A1B33";
 
-interface Hub {
-  key: string;
-  label: string;
-  icon: React.ElementType;
-  accent: string;
-  tab: string;
-  /** Live figure, shown only where a true one is to hand. */
-  count?: number;
-  ring: 0 | 1;
-}
-
-/** Ring geometry. Inner = daily, outer = set up once and referred to later. */
-const RINGS = [
-  { d: 384, dur: "52s", dir: "lpo-orbit-ccw", anti: "lpo-upright-cw", offset: 0 },
-  { d: 620, dur: "72s", dir: "lpo-orbit-cw", anti: "lpo-upright-ccw", offset: 36 },
-] as const;
-
 interface Props {
   projects: FullProjectData[];
   onOpenProject: (project: FullProjectData, targetTab?: string) => void;
@@ -86,7 +70,7 @@ interface Props {
   attention?: AttentionState;
   onAttentionChange?: (projectId: string, entry: { snoozedUntil?: number; dismissedAt?: number }) => void;
   role: string;
-  /** Every role they hold (lib/roles); the dial offers what any of them opens. Defaults to `role`. */
+  /** Every role they hold (lib/roles); Home shows what any of them opens. Defaults to `role`. */
   roles?: string[];
   userName?: string;
 }
@@ -96,34 +80,8 @@ export default function StudioHomeOrbit({
   attention = {}, onAttentionChange,
 }: Props) {
   const data = useStudioHomeData(projects, role);
-
-  /* Counts appear only for Projects and Clients, the two this page already
-     derives honestly. The rate bank and template library live in Firestore and
-     are not passed to this component, so those tiles carry no number rather
-     than a guessed one. */
-  const hubs: Hub[] = useMemo(() => [
-    {
-      key: "projects", label: "Projects", icon: LayoutGrid, accent: "#1D4ED8",
-      tab: "projects", ring: 0,
-      count: data.activeCount + data.pipelineCount + data.deliveredCount,
-    },
-    {
-      key: "clients", label: "Clients", icon: Users, accent: "#0E7C5A",
-      tab: "clients", ring: 0, count: data.clientsCount,
-    },
-    { key: "reports", label: "Reports", icon: BarChart3, accent: "#B5945B", tab: "reports", ring: 0 },
-    { key: "ratebank", label: "Rate bank", icon: Store, accent: "#C77700", tab: "admin-templates-bank", ring: 1 },
-    { key: "templates", label: "Templates", icon: FileSignature, accent: "#6D28D9", tab: "admin-templates-bank", ring: 1 },
-    { key: "setup", label: "Studio setup", icon: Boxes, accent: "#0F766E", tab: "studio-settings", ring: 1 },
-    { key: "ops", label: "Ops Desk", icon: Inbox, accent: "#0F766E", tab: "ops-desk", ring: 0 },
-    { key: "people", label: "People", icon: UserCheck, accent: "#3D52A0", tab: "people", ring: 1 },
-    /* For the roles without the studio's setup screens, Design Desk takes the outer ring. */
-    { key: "desk", label: "Design Desk", icon: PenTool, accent: "#6D5BD0", tab: "design-review", ring: 1 },
-  ].filter((h) => {
-    const who = roles?.length ? roles : role;
-    if (!mayOpenStudioTab(h.tab, who)) return false;
-    return h.key !== "desk" || !mayOpenStudioTab("studio-settings", who);
-  }) as Hub[], [data.activeCount, data.pipelineCount, data.deliveredCount, data.clientsCount, role, (roles || []).join("|")]);
+  /* What Home reads live, once: the Design Desk's sheets and client visits, for the deck and the widgets. */
+  const feeds = useHomeFeeds(projects, role, roles);
 
 const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
 
@@ -233,8 +191,6 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
   const recentTilt = useTilt(5);
 
   const worklistRef = React.useRef<HTMLDivElement | null>(null);
-  const reviewPriorities = () =>
-    worklistRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const [open, setOpen] = React.useState<Record<string, boolean>>({});
   const [showAll, setShowAll] = React.useState(false);
@@ -326,200 +282,10 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
       animate={{ opacity: 1 }}
       className="w-full px-3 lg:px-6 pb-16 space-y-6 font-['Plus_Jakarta_Sans']"
     >
-      <div className="relative w-full max-w-[1400px] mx-auto rounded-[40px] bg-white border border-slate-200/60 shadow-[0_40px_100px_-24px_rgba(0,0,0,0.07)] overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#F7FAFE] via-white to-[#FAF7F1]" />
-          <div
-            className="aurora-a absolute -top-48 right-[-6rem] w-[38rem] h-[38rem] rounded-full blur-3xl"
-            style={{ background: "radial-gradient(circle, rgba(61, 82, 160,.14), transparent 70%)" }}
-          />
-        </div>
-
-        <div className="relative flex flex-col xl:flex-row items-center gap-4 px-6 md:px-12 py-10">
-          {/* Left — the ask */}
-          <div className="flex-[0_1_520px] w-full">
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#0a1b33]/45">
-              {greetingWord()}, {userName}
-            </p>
-
-            <h1
-              className="mt-3 text-[38px] md:text-[50px] font-bold leading-[1.06] tracking-tight"
-              style={{ color: INK }}
-            >
-              Your studio, ready
-              <br />
-              for <span style={{ color: BRAND }}>what&rsquo;s next.</span>
-            </h1>
-
-            {/* Every figure here is live: none of it is written down. */}
-            <p className="mt-5 max-w-lg text-[15px] leading-relaxed text-[#64748b]">
-              {/* A Designer or Client Relations sees only the projects assigned to them, and no pipeline. */}
-              {isLimitedRole(role) ? (() => {
-                const n = data.activeCount + data.pipelineCount + data.deliveredCount;
-                return (
-                  <strong className="font-semibold" style={{ color: INK }}>
-                    {n} project{n === 1 ? " is" : "s are"} assigned to you
-                  </strong>
-                );
-              })() : (
-                <>
-                  <strong className="font-semibold" style={{ color: INK }}>
-                    {data.activeCount} project{data.activeCount === 1 ? "" : "s"}{" "}
-                    {data.activeCount === 1 ? "is" : "are"} active
-                  </strong>
-                  , {data.pipelineCount}{" "}
-                  {data.pipelineCount === 1 ? "opportunity is" : "opportunities are"} in the pipeline
-                </>
-              )}
-              {data.attentionCount > 0 ? (
-                <>
-                  , and{" "}
-                  <strong className="font-semibold" style={{ color: INK }}>
-                    {data.attentionCount} item{data.attentionCount === 1 ? "" : "s"}
-                  </strong>{" "}
-                  need{data.attentionCount === 1 ? "s" : ""} your attention today.
-                </>
-              ) : (
-                <>, and nothing needs your attention today.</>
-              )}
-            </p>
-
-            <p className="mt-2 max-w-lg text-[14px] leading-relaxed text-slate-400">
-              Choose a workspace from the launchpad, or review today&rsquo;s priorities.
-            </p>
-
-            <div className="mt-7">
-              <div className="lpo-border-wrap inline-block">
-                <button
-                  onClick={reviewPriorities}
-                  className="relative z-10 inline-flex items-center gap-2 rounded-[50px] px-6 py-3 text-[14px] font-semibold text-white transition-colors"
-                  style={{ background: BRAND }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#334486")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = BRAND)}
-                >
-                  Review priorities
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Portfolio shape. Clients is not repeated here -- it already
-                carries its own count on the dial. */}
-            <div className="mt-6 flex flex-wrap gap-2">
-              {[
-                { n: data.activeCount, label: "active" },
-                { n: data.pipelineCount, label: "pipeline" },
-                { n: data.deliveredCount, label: "delivered" },
-              ].map((s) => (
-                <button
-                  key={s.label}
-                  onClick={() => onNavigate("projects")}
-                  className="rounded-full border border-slate-200 bg-white/70 px-4 py-2 text-[13px] hover:border-slate-300 transition-colors"
-                >
-                  <span className="font-semibold tabular-nums" style={{ color: INK }}>{s.n}</span>
-                  <span className="ml-1.5 text-slate-500">{s.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Right — the hub dial */}
-          <div className="flex-1 min-w-0 flex items-center justify-center">
-            <div className="lpo-stage-box lpo-stage-box--home">
-              <div className="lpo-stage">
-                {RINGS.map((r, ri) => {
-                  const onRing = hubs.filter((h) => h.ring === ri);
-                  return (
-                    <div
-                      key={ri}
-                      className="lpo-orbit"
-                      style={{
-                        width: r.d,
-                        height: r.d,
-                        ["--lpo-dur" as any]: r.dur,
-                        ["--lpo-dir" as any]: r.dir,
-                      }}
-                    >
-                      {onRing.map((h, i) => {
-                        const angle = (360 / Math.max(onRing.length, 1)) * i + r.offset;
-                        const Icon = h.icon;
-                        return (
-                          <div
-                            key={h.key}
-                            className="absolute top-1/2 left-1/2"
-                            style={{
-                              transform: `translate(-50%, -50%) rotate(${angle}deg) translate(${r.d / 2}px) rotate(${-angle}deg)`,
-                            }}
-                          >
-                            {/* Cancels the ring's spin so the tile stays upright. */}
-                            <div
-                              className="lpo-upright"
-                              style={{ ["--lpo-dur" as any]: r.dur, ["--lpo-anti" as any]: r.anti }}
-                            >
-                              <button
-                                onClick={() => onNavigate(h.tab)}
-                                title={h.label}
-                                className="lpo-anim group flex flex-col items-center justify-center gap-2 w-[116px] h-[100px] rounded-[26px] bg-white/95 backdrop-blur-sm hover:-translate-y-1 transition-transform cursor-pointer"
-                                style={{
-                                  border: `1px solid ${h.accent}2E`,
-                                  boxShadow: `0 14px 32px -14px ${h.accent}99`,
-                                  animationName: "lpo-chip-in",
-                                  animationDuration: "0.6s",
-                                  animationDelay: `${0.35 + (ri * 3 + i) * 0.09}s`,
-                                }}
-                              >
-                                <span
-                                  className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                                  style={{
-                                    background: `linear-gradient(140deg, ${h.accent}, ${h.accent}B3)`,
-                                    boxShadow: `0 6px 16px -5px ${h.accent}80`,
-                                  }}
-                                >
-                                  <Icon className="w-5 h-5 text-white" strokeWidth={1.9} />
-                                </span>
-                                <span className="flex items-baseline gap-1.5">
-                                  <span className="text-[12.5px] font-semibold" style={{ color: INK }}>
-                                    {h.label}
-                                  </span>
-                                  {h.count !== undefined && (
-                                    <span
-                                      className="text-[11px] font-bold tabular-nums"
-                                      style={{ color: h.accent }}
-                                    >
-                                      {h.count}
-                                    </span>
-                                  )}
-                                </span>
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-
-                {/* Bullseye. Sits outside the rings rather than on the inner
-                    one, so it needs no counter-rotation and never wobbles. */}
-                {/* A Designer does not start projects; the centre takes them
-                    to the ones they are assigned instead. */}
-                <button
-                  onClick={isLimitedRole(role) ? () => onNavigate('projects') : onCreateNew}
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[168px] h-[168px] rounded-full flex flex-col items-center justify-center gap-1.5 text-white transition-transform hover:scale-[1.04] cursor-pointer"
-                  style={{
-                    background: `linear-gradient(150deg, ${BRAND}, #334486)`,
-                    boxShadow: `0 26px 60px -18px ${BRAND}, 0 0 0 10px rgba(61, 82, 160,0.07)`,
-                  }}
-                >
-                  <Plus className="w-8 h-8" strokeWidth={2.2} />
-                  <span className="text-[15px] font-semibold">{isLimitedRole(role) ? 'Your projects' : 'New project'}</span>
-                  <span className="text-[11px] text-white/70">{isLimitedRole(role) ? 'The ones assigned to you' : 'Start from scratch'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* The top of Home: greeting, story rings, the fanned deck and the swatches (Option 6). */}
+      <StoryDeck feeds={feeds} projects={projects} role={role} roles={roles} userName={userName}
+        counts={{ active: data.activeCount, pipeline: data.pipelineCount, booked: data.bookedValue, open: data.openValue, winRate: data.winRate }}
+        onNavigate={onNavigate} onOpenProject={(p) => onOpenProject(p)} onCreateNew={onCreateNew} />
 
       {/* Clock, calendar and pulse as one strip directly under the hero --
           today's context before today's work. Same component design A uses, so
@@ -533,7 +299,7 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
 
       {/* Widgets: Design Desk for you and the review inbox, meetings with clients, the team today. */}
       <div className="max-w-[1400px] mx-auto w-full">
-        <HomeWidgets projects={projects} role={role} roles={roles} onNavigate={(t) => onNavigate?.(t)} />
+        <HomeWidgets feeds={feeds} onNavigate={(t) => onNavigate?.(t)} />
       </div>
 
       <div className="max-w-[1400px] mx-auto w-full">
