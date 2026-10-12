@@ -11,7 +11,7 @@ import {
 } from "../services/attentionState";
 import StudioFooter from "./home/StudioFooter";
 import MyDayCard from "./people/MyDayCard";
-import HomeWidgets from "./home/HomeWidgets";
+import DayBoard from "./home/DayBoard";
 import StoryDeck from "./home/StoryDeck";
 import { useHomeFeeds } from "./home/useHomeFeeds";
 import { isLimitedRole, seesStudioFinance, mayOpenStudioTab } from "../lib/roleAccess";
@@ -297,9 +297,9 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
         </div>
       )}
 
-      {/* Widgets: Design Desk for you and the review inbox, meetings with clients, the team today. */}
+      {/* Your day, in order: the widgets pinned along a path, the most pressing first. */}
       <div className="max-w-[1400px] mx-auto w-full">
-        <HomeWidgets feeds={feeds} onNavigate={(t) => onNavigate?.(t)} />
+        <DayBoard feeds={feeds} onNavigate={(t) => onNavigate?.(t)} />
       </div>
 
       <div className="max-w-[1400px] mx-auto w-full">

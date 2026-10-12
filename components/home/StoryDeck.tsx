@@ -145,13 +145,15 @@ const RingButton: React.FC<{ r: Ring; k: number; on: boolean; onClick: () => voi
 
 /* ── The fanned deck ─────────────────────────────────────────────────────── */
 
-function useWide() {
-  const [wide, setWide] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth >= 768));
+/** True while the window is at least `min` pixels wide. */
+export function useWide(min = 768) {
+  const [wide, setWide] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth >= min));
   useEffect(() => {
-    const on = () => setWide(window.innerWidth >= 768);
+    const on = () => setWide(window.innerWidth >= min);
+    on();
     window.addEventListener('resize', on);
     return () => window.removeEventListener('resize', on);
-  }, []);
+  }, [min]);
   return wide;
 }
 
@@ -160,7 +162,9 @@ function Deck({ cards, at, setAt, onAct }: { cards: Story[]; at: number; setAt: 
   const wide = useWide();
   const box = useRef<HTMLDivElement>(null);
   const drag = useRef<number | null>(null);
-  const go = (n: number) => setAt(Math.max(0, Math.min(cards.length - 1, n)));
+  /* The side card under the mouse lifts to the front for a look, without moving the fan; a click brings it to the middle. */
+  const [peek, setPeek] = useState<string | null>(null);
+  const go = (n: number) => { setPeek(null); setAt(Math.max(0, Math.min(cards.length - 1, n))); };
   const spread = wide ? 168 : 74;
   const reach = wide ? 3 : 1;
   return (
@@ -175,17 +179,21 @@ function Deck({ cards, at, setAt, onAct }: { cards: Story[]; at: number; setAt: 
           const off = Math.abs(k);
           if (off > reach + 1) return null;
           const hidden = off > reach;
+          const lifted = peek === c.id && k !== 0 && !hidden;
           return (
             <motion.div key={c.id} className="hs-card absolute left-1/2 top-4 w-[272px] md:w-[290px] -ml-[136px] md:-ml-[145px]"
               initial={still ? false : { opacity: 0, y: 40, rotate: k * 9 }}
               animate={{
-                x: k * spread, y: off * (wide ? 28 : 18), rotate: still ? 0 : k * (wide ? 8.5 : 6), scale: 1 - off * 0.05,
-                opacity: hidden ? 0 : 1, rotateY: still ? 0 : k * -4,
+                x: k * spread, y: lifted ? off * (wide ? 28 : 18) - 34 : off * (wide ? 28 : 18),
+                rotate: still ? 0 : k * (wide ? 8.5 : 6) * (lifted ? 0.35 : 1), scale: lifted ? 1.02 : 1 - off * 0.05,
+                opacity: hidden ? 0 : 1, rotateY: still || lifted ? 0 : k * -4,
               }}
-              transition={{ type: 'spring', stiffness: 170, damping: 22, mass: 0.9 }}
-              style={{ zIndex: 50 - off, transformOrigin: '50% 120%', pointerEvents: hidden ? 'none' : 'auto' }}
+              transition={{ type: 'spring', stiffness: lifted ? 260 : 170, damping: 22, mass: 0.9 }}
+              style={{ zIndex: lifted ? 60 : 50 - off, transformOrigin: '50% 120%', pointerEvents: hidden ? 'none' : 'auto' }}
+              onPointerEnter={(e) => { if (e.pointerType === 'mouse' && k !== 0) setPeek(c.id); }}
+              onPointerLeave={() => setPeek((p) => (p === c.id ? null : p))}
               onClick={() => { if (k !== 0) go(i); }}>
-              <StoryCard c={c} active={k === 0} onAct={onAct} />
+              <StoryCard c={c} active={k === 0} lifted={lifted} onAct={onAct} />
             </motion.div>
           );
         })}
@@ -215,10 +223,10 @@ const LABEL: Record<string, string> = {
   sheets: 'My sheets', reviews: 'Reviews', meetings: 'Meetings', wins: 'Wins',
 };
 
-function StoryCard({ c, active, onAct }: { c: Story; active: boolean; onAct: (a: StoryAction) => void }) {
+function StoryCard({ c, active, lifted, onAct }: { c: Story; active: boolean; lifted?: boolean; onAct: (a: StoryAction) => void }) {
   const size = c.figure.length > 9 ? 'text-3xl' : c.figure.length > 6 ? 'text-4xl' : 'text-5xl';
   return (
-    <article className={`relative h-[360px] md:h-[372px] rounded-[26px] overflow-hidden bg-white border border-white flex flex-col transition-shadow ${active ? 'shadow-[0_34px_60px_-26px_rgba(10,27,51,0.55)]' : 'shadow-[0_18px_40px_-26px_rgba(10,27,51,0.5)] cursor-pointer'}`}>
+    <article className={`relative h-[360px] md:h-[372px] rounded-[26px] overflow-hidden bg-white border border-white flex flex-col transition-shadow ${active || lifted ? 'shadow-[0_34px_60px_-26px_rgba(10,27,51,0.55)]' : 'shadow-[0_18px_40px_-26px_rgba(10,27,51,0.5)]'} ${active ? '' : 'cursor-pointer'}`}>
       <div className={`hs-${MATERIAL[c.ring]} ${active ? 'hs-sheen' : ''} relative h-[150px] shrink-0 px-4 pt-3.5 pb-3 flex flex-col text-left`}>
         <div className="flex items-start justify-between gap-2">
           <span className="px-2.5 py-1 rounded-full bg-black/20 text-white text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm">{c.eyebrow}</span>
@@ -271,7 +279,7 @@ const SwatchCard: React.FC<{ w: Swatch; k: number }> = ({ w, k }) => {
         <span className="text-xl font-black text-white tabular-nums leading-none drop-shadow-sm" style={DISPLAY}>{w.figure}</span>
       </div>
       <div className="px-3.5 py-2.5">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-800 truncate">{w.material} · {w.label}</p>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-800 truncate">{w.label}</p>
         <p className="text-[11px] text-slate-500 truncate">{w.sub}</p>
       </div>
     </motion.div>

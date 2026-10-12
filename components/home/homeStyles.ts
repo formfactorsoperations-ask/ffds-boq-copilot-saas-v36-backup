@@ -51,8 +51,21 @@ const HOME_CSS = `
 /* A ring around each story, like a stamp. */
 .hs-ring { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--hs-edge, #3D52A0), 0 14px 26px -14px rgba(10, 27, 51, 0.6); }
 
+/* "Your day, in order": ruled paper that fades at the sides, and a dashed path that walks. */
+.hs-paper { position: relative; background: #fff; }
+.hs-paper::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background-image: linear-gradient(rgba(10, 27, 51, 0.06) 1px, transparent 1px); background-size: 100% 32px;
+}
+.hs-paper::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(90deg, #fff, rgba(255, 255, 255, 0) 22%, rgba(255, 255, 255, 0) 78%, #fff);
+}
+.hs-march { stroke-dasharray: 8 6; animation: hs-march 3s linear infinite; }
+@keyframes hs-march { to { stroke-dashoffset: -140; } }
+
 @media (prefers-reduced-motion: reduce) {
-  .hs-sheen::after { animation: none !important; }
+  .hs-sheen::after, .hs-march { animation: none !important; }
 }
 `;
 

@@ -1,34 +1,33 @@
-import React, { useMemo } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   PenTool, Undo2, Send, Eye, ArrowRight, Stamp, Flame, Clock, Sparkles, CalendarClock, Users, HardHat, Ruler, Video, Phone,
   MapPin, PartyPopper, TreePalm, House, Hourglass, MessageSquareQuote,
 } from '@/lib/lucide-shim';
 import type { HomeFeeds } from './useHomeFeeds';
-import { mayOpenStudioTab } from '../../lib/roleAccess';
 import { dueOf, projectLook, type DeskRow, type Viewer } from '../../lib/designDesk';
-import { mySheets, reviewInbox, teamToday, whenLabel, type Upcoming } from '../../lib/homeWidgets';
-import { openInDesignReview } from '../../services/drawingReviewService';
-import { usePeople } from '../../services/peopleService';
+import { mySheets, reviewInbox, whenLabel, type TeamToday, type Upcoming } from '../../lib/homeWidgets';
 import { CountUp, Dot } from '../ui/HudBits';
 import { Confetti, IconTile, Tilt, initials, EASE } from '../people/PeopleBits';
 
 /*
-  HOME WIDGETS (lib/homeWidgets.ts): a shelf of live cards under My day, one
-  for each thing a team member checks first.
+  HOME WIDGETS (lib/homeWidgets.ts): live cards, one for each thing a team
+  member checks first. Home pins them along "Your day, in order"
+  (components/home/DayBoard.tsx).
 
     For you        Design Desk: my sheets to fix and to send, with one tap to open
     Review inbox   Design Desk, for those who review: what waits and for how long
     Coming up      meetings, site visits and measurements booked with clients
-    Team today     who is away or working from home (never why, never who is in)
-    Next holiday   a countdown
+    Team today     who is away or working from home (never why, never who is in),
+                   and a countdown to the next holiday
 
   Each card appears only for someone whose role opens what it shows. Built
   with the People motion kit (DESIGN.md → "People motion"): the same fonts
   and colours, with depth.
 */
 
-const DESK_TAB = 'design-review';
+/** True inside a pin on the day board: the pin is the card, so a widget drops its own. */
+export const Pinned = createContext(false);
 const tone = { late: 'text-rose-700 bg-rose-100', soon: 'text-amber-700 bg-amber-100', week: 'text-[#3D52A0] bg-[#3D52A0]/10', later: 'text-slate-600 bg-slate-100' } as const;
 const chip = 'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap';
 
@@ -37,29 +36,36 @@ const chip = 'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-
 const Widget: React.FC<{
   icon: React.ComponentType<any>; tone?: 'brand' | 'ok' | 'warn' | 'bad' | 'slate'; eyebrow: string; title?: React.ReactNode;
   live?: boolean; action?: { label: string; onClick: () => void }; span?: string; index: number; children: React.ReactNode;
-}> = ({ icon, tone: t = 'brand', eyebrow, title, live, action, span = '', index, children }) => (
+}> = ({ icon, tone: t = 'brand', eyebrow, title, live, action, span = '', index, children }) => {
+  const pinned = useContext(Pinned);
+  const head = (
+    <header className="relative flex items-center gap-3">
+      <IconTile icon={icon} tone={t} size="sm" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">{eyebrow}{live && <Dot tone="ok" live />}</p>
+        {title && <p className="text-sm font-bold text-slate-800 truncate">{title}</p>}
+      </div>
+      {action && (
+        <button type="button" onClick={action.onClick} className="inline-flex items-center gap-1 text-xs font-bold text-[#3D52A0] hover:gap-1.5 transition-all">
+          {action.label}<ArrowRight className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </header>
+  );
+  if (pinned) return <section className="relative flex flex-col gap-4">{head}<div className="relative flex flex-col">{children}</div></section>;
+  return (
   <motion.div initial={{ opacity: 0, y: 18, rotateX: -18 }} animate={{ opacity: 1, y: 0, rotateX: 0 }}
     transition={{ delay: 0.08 + index * 0.07, duration: 0.6, ease: EASE }} style={{ transformPerspective: 1000 }} className={`min-w-0 ${span}`}>
     <Tilt max={5} className="h-full rounded-3xl">
       <section className="group relative h-full overflow-hidden rounded-3xl pp-glass p-5 flex flex-col gap-4">
         <div className="pp-glow" />
-        <header className="relative flex items-center gap-3">
-          <IconTile icon={icon} tone={t} size="sm" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">{eyebrow}{live && <Dot tone="ok" live />}</p>
-            {title && <p className="text-sm font-bold text-slate-800 truncate">{title}</p>}
-          </div>
-          {action && (
-            <button type="button" onClick={action.onClick} className="inline-flex items-center gap-1 text-xs font-bold text-[#3D52A0] hover:gap-1.5 transition-all">
-              {action.label}<ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </header>
+        {head}
         <div className="relative flex-1 min-h-0 flex flex-col">{children}</div>
       </section>
     </Tilt>
   </motion.div>
-);
+  );
+};
 
 /** A big figure and what it counts. */
 const Figure: React.FC<{ value: number; label: string; small?: string }> = ({ value, label, small }) => (
@@ -85,34 +91,9 @@ const AllClear: React.FC<{ text: string }> = ({ text }) => (
   </div>
 );
 
-/* ── The shelf ───────────────────────────────────────────────────────────── */
-
-export default function HomeWidgets({ feeds, onNavigate }: { feeds: HomeFeeds; onNavigate: (tab: string) => void }) {
-  const { who, desk, reviewer, people, visitsOn, rows, visits, viewer, names } = feeds;
-
-  if (!desk && !people && !visitsOn) return null;
-  /*
-    The shelf, four columns wide. Those who review: For you, the inbox and the
-    team on top, client dates across the row below. Everyone else: For you
-    beside client dates, the team and the next holiday below.
-  */
-  const toDesk = () => onNavigate(DESK_TAB);
-  const comingUp = visitsOn && <ComingUpWidget index={3} list={visits} wide={reviewer} span={reviewer ? 'md:col-span-2 xl:col-span-4' : 'md:col-span-2'}
-    onAll={mayOpenStudioTab('ops-desk', who) ? () => onNavigate('ops-desk') : undefined} />;
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-      {desk && <ForYouWidget index={0} rows={rows} viewer={viewer} names={names} onOpen={(d) => openInDesignReview(d.projectId, d.id)} onAll={toDesk} />}
-      {reviewer && <ReviewWidget index={1} rows={rows} viewer={viewer} onAll={toDesk} />}
-      {!reviewer && comingUp}
-      {people && <PeopleWidgets index={2} stacked={reviewer} onAll={() => onNavigate('people')} />}
-      {reviewer && comingUp}
-    </div>
-  );
-}
-
 /* ── For you (Design Desk) ───────────────────────────────────────────────── */
 
-function ForYouWidget({ rows, viewer, names, onOpen, onAll, index }: {
+export function ForYouWidget({ rows, viewer, names, onOpen, onAll, index }: {
   rows: DeskRow[] | null; viewer: Viewer; names: Map<string, string>; onOpen: (d: DeskRow) => void; onAll: () => void; index: number;
 }) {
   const m = useMemo(() => (rows ? mySheets(rows, viewer) : null), [rows, viewer.email]);
@@ -165,7 +146,7 @@ function ForYouWidget({ rows, viewer, names, onOpen, onAll, index }: {
 
 /* ── Review inbox (Design Desk, reviewers) ───────────────────────────────── */
 
-function ReviewWidget({ rows, viewer, onAll, index }: { rows: DeskRow[] | null; viewer: Viewer; onAll: () => void; index: number }) {
+export function ReviewWidget({ rows, viewer, onAll, index }: { rows: DeskRow[] | null; viewer: Viewer; onAll: () => void; index: number }) {
   const r = useMemo(() => (rows ? reviewInbox(rows, viewer) : null), [rows]);
   const still = useReducedMotion();
   const peak = r ? Math.max(1, ...r.approvedByDay) : 1;
@@ -205,14 +186,15 @@ const KIND_ICON: Record<string, React.ComponentType<any>> = { meeting: Users, si
 const KIND_LABEL: Record<string, string> = { meeting: 'Design meeting', site_visit: 'Site visit', measurement: 'Measurement' };
 const MODE_ICON: Record<string, React.ComponentType<any>> = { in_person: MapPin, video: Video, call: Phone };
 
-function ComingUpWidget({ list, onAll, index, span, wide }: { list: Upcoming[] | null; onAll?: () => void; index: number; span: string; wide: boolean }) {
-  const shown = (list || []).slice(0, 4);
+export function ComingUpWidget({ list, onAll, index, span, wide }: { list: Upcoming[] | null; onAll?: () => void; index: number; span?: string; wide?: boolean }) {
+  const pinned = useContext(Pinned);
+  const shown = (list || []).slice(0, pinned ? 3 : 4);
   return (
     <Widget index={index} icon={CalendarClock} eyebrow="Coming up with clients" title={list ? (list.length ? `${list.length} in the next two weeks` : 'Nothing booked') : 'Loading…'}
       action={onAll ? { label: 'Ops Desk', onClick: onAll } : undefined} span={span}>
       {!list ? <div className="grid grid-cols-2 gap-3">{[0, 1].map((k) => <div key={k} className="pp-shimmer h-24 rounded-2xl" />)}</div>
         : shown.length === 0 ? <AllClear text="No meetings or visits booked for the next two weeks." /> : (
-          <div className={`grid grid-cols-1 sm:grid-cols-2 ${wide ? 'xl:grid-cols-4' : ''} gap-3`}>
+          <div className={`grid grid-cols-1 ${pinned ? '' : 'sm:grid-cols-2'} ${wide ? 'xl:grid-cols-4' : ''} gap-3`}>
             {shown.map((u, k) => {
               const Kind = KIND_ICON[u.visit.kind] || Users;
               const Mode = MODE_ICON[u.visit.mode] || MapPin;
@@ -239,24 +221,6 @@ function ComingUpWidget({ list, onAll, index, span, wide }: { list: Upcoming[] |
   );
 }
 
-/* The two People cards, only for those on People (the snapshot loads here, never for anyone else). */
-function PeopleWidgets({ index, onAll, stacked }: { index: number; onAll: () => void; stacked: boolean }) {
-  const { snapshot } = usePeople();
-  if (!snapshot) return null;
-  /* Beside the review inbox they share one column; otherwise they take a row between them. */
-  return stacked ? (
-    <div className="flex flex-col gap-5 min-w-0">
-      <TeamWidget index={index} s={snapshot} onAll={onAll} compact />
-      <HolidayWidget index={index + 1} s={snapshot} compact />
-    </div>
-  ) : (
-    <>
-      <TeamWidget index={index} s={snapshot} onAll={onAll} span="md:col-span-1 xl:col-span-2" />
-      <HolidayWidget index={index + 1} s={snapshot} span="md:col-span-1 xl:col-span-2" />
-    </>
-  );
-}
-
 /* ── Team today (People) ─────────────────────────────────────────────────── */
 
 const Faces: React.FC<{ list: { personId: string; name: string }[]; icon: React.ComponentType<any>; tint: string; label: string; delay: number }> = ({ list, icon: Icon, tint, label, delay }) => (
@@ -273,8 +237,7 @@ const Faces: React.FC<{ list: { personId: string; name: string }[]; icon: React.
   </div>
 );
 
-function TeamWidget({ s, onAll, index, span, compact }: { s: any; onAll: () => void; index: number; span?: string; compact?: boolean }) {
-  const t = useMemo(() => teamToday(s), [s]);
+export function TeamWidget({ t, onAll, index, span, compact }: { t: TeamToday; onAll: () => void; index: number; span?: string; compact?: boolean }) {
   const out = t.away.length + t.home.length;
   return (
     <Widget index={index} icon={Users} eyebrow="Team today" action={{ label: 'People', onClick: onAll }} span={span}>
@@ -285,32 +248,30 @@ function TeamWidget({ s, onAll, index, span, compact }: { s: any; onAll: () => v
         {t.asked.length > 0 && <Faces list={t.asked} icon={Hourglass} tint="bg-slate-100 text-slate-600" label="asked off" delay={0.5} />}
         {out === 0 && t.asked.length === 0 && <p className="flex items-center gap-2 text-xs font-semibold text-emerald-700"><Sparkles className="w-4 h-4" />Everyone's in today.</p>}
       </div>
+      <Holiday h={t.nextHoliday} />
     </Widget>
   );
 }
 
-/* ── Next holiday ────────────────────────────────────────────────────────── */
+/* ── Next holiday: a countdown at the foot of Team today ────────────────── */
 
-function HolidayWidget({ s, index, span, compact }: { s: any; index: number; span?: string; compact?: boolean }) {
-  const t = useMemo(() => teamToday(s), [s]);
-  const h = t.nextHoliday;
+function Holiday({ h }: { h: TeamToday['nextHoliday'] }) {
+  if (!h) return null;
   return (
-    <Widget index={index} icon={PartyPopper} tone="ok" eyebrow="Next holiday" span={span}>
-      {!h ? <p className="text-xs text-slate-500">No studio holidays set yet.</p> : (
-        <div className={`flex-1 flex ${compact ? 'flex-col gap-3' : 'flex-wrap items-end justify-between gap-4'}`}>
-          <div className="flex items-end gap-2">
-            {String(h.days).padStart(2, '0').split('').map((ch, k) => (
-              <motion.span key={`${h.date}-${k}`} initial={{ rotateX: -90, opacity: 0 }} animate={{ rotateX: 0, opacity: 1 }} transition={{ delay: 0.3 + k * 0.12, duration: 0.55, ease: EASE }}
-                style={{ transformPerspective: 500 }} className="pp-tile w-11 h-14 rounded-xl bg-emerald-100 text-emerald-700 grid place-items-center text-3xl font-black tabular-nums">{ch}</motion.span>
-            ))}
-            <span className="text-xs text-slate-500 pb-1">{h.days === 0 ? 'today!' : h.days === 1 ? 'day to go' : 'days to go'}</span>
-          </div>
-          <div>
-            <p className="text-sm font-bold text-slate-800 truncate">{h.name}</p>
-            <p className="text-[11px] text-slate-500">{new Date(`${h.date}T12:00:00+05:30`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-          </div>
-        </div>
-      )}
-    </Widget>
+    <div className="mt-4 pt-4 border-t border-slate-200/70 flex items-center gap-3">
+      <IconTile icon={PartyPopper} tone="ok" size="sm" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Next holiday</p>
+        <p className="text-sm font-bold text-slate-800 truncate">{h.name}</p>
+        <p className="text-[11px] text-slate-500">{new Date(`${h.date}T12:00:00+05:30`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</p>
+      </div>
+      <div className="flex items-end gap-1">
+        {String(h.days).padStart(2, '0').split('').map((ch, k) => (
+          <motion.span key={`${h.date}-${k}`} initial={{ rotateX: -90, opacity: 0 }} animate={{ rotateX: 0, opacity: 1 }} transition={{ delay: 0.5 + k * 0.12, duration: 0.55, ease: EASE }}
+            style={{ transformPerspective: 500 }} className="pp-tile w-8 h-10 rounded-lg bg-emerald-100 text-emerald-700 grid place-items-center text-xl font-black tabular-nums">{ch}</motion.span>
+        ))}
+        <span className="text-[11px] text-slate-500 pb-0.5 pl-1">{h.days === 0 ? 'today!' : h.days === 1 ? 'day' : 'days'}</span>
+      </div>
+    </div>
   );
 }
