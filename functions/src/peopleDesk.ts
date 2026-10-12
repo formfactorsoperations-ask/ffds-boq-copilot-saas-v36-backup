@@ -39,7 +39,7 @@ const STATUS: Record<number, FunctionsErrorCode> = {
   400: "invalid-argument", 401: "unauthenticated", 403: "permission-denied", 404: "not-found",
   409: "failed-precondition", 429: "resource-exhausted", 503: "failed-precondition",
 };
-function fail(e: any): never {
+export function fail(e: any): never {
   if (e instanceof HttpsError) throw e;
   if (e instanceof DomainError) throw new HttpsError(STATUS[e.status] || "invalid-argument", e.message, { code: e.code });
   logger.error("peopleDesk failed", { message: e?.message || String(e) });
@@ -49,9 +49,9 @@ function fail(e: any): never {
 /* Firestore keeps no undefined values; a JSON round trip drops them. */
 const plain = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
-interface Ctx { tenantId: string; people: Person[]; policy: Policy; me: Person }
+export interface Ctx { tenantId: string; people: Person[]; policy: Policy; me: Person }
 
-async function contextOf(request: any): Promise<Ctx> {
+export async function contextOf(request: any): Promise<Ctx> {
   const staff = await requireStaff(request);
   /* The platform owner belongs to no one studio: they name the one they are viewing (as zohoBooks does). */
   const asked = String(request.data?.tenantId || "");
@@ -74,15 +74,19 @@ async function contextOf(request: any): Promise<Ctx> {
   return { tenantId, people, policy, me };
 }
 
-async function snapshotFor(ctx: Ctx, now: string): Promise<Snapshot> {
+async function snapshotFor(ctx: Ctx, now: string, month = ""): Promise<Snapshot> {
   const today = businessDate(now, ctx.policy.timezone);
-  const [attendance, requests] = await Promise.all([
-    db().collection(`${base(ctx.tenantId)}/attendance`).where("date", ">=", addDays(today, -ATTENDANCE_DAYS)).get(),
+  const from = addDays(today, -ATTENDANCE_DAYS);
+  /* An older month asked for (the monthly report), on top of the recent four. */
+  const older = /^\d{4}-(0[1-9]|1[0-2])$/.test(month) && `${month}-31` < from;
+  const [attendance, requests, past] = await Promise.all([
+    db().collection(`${base(ctx.tenantId)}/attendance`).where("date", ">=", from).get(),
     db().collection(`${base(ctx.tenantId)}/requests`).where("createdAt", ">=", new Date(Date.parse(now) - REQUEST_DAYS * 86400000).toISOString()).get(),
+    older ? db().collection(`${base(ctx.tenantId)}/attendance`).where("date", ">=", `${month}-01`).where("date", "<=", `${month}-31`).get() : null,
   ]);
   const store: Store = {
     people: ctx.people, policy: ctx.policy,
-    attendance: attendance.docs.map((d) => d.data() as Attendance),
+    attendance: [...attendance.docs, ...(past?.docs || [])].map((d) => d.data() as Attendance),
     requests: requests.docs.map((d) => d.data() as RequestRecord),
     events: [],
   };
@@ -92,7 +96,7 @@ async function snapshotFor(ctx: Ctx, now: string): Promise<Snapshot> {
 export const peopleSnapshot = onCall({ cors: true }, async (request) => {
   try {
     const ctx = await contextOf(request);
-    return { ok: true, snapshot: await snapshotFor(ctx, new Date().toISOString()) };
+    return { ok: true, snapshot: await snapshotFor(ctx, new Date().toISOString(), String(request.data?.month || "")) };
   } catch (e) {
     return fail(e);
   }

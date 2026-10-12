@@ -51,7 +51,12 @@ export interface Policy {
   lateAfter: string;
   end: string;
   weeklyOffDays: number[];
-  alternateSundays: boolean;
+  /**
+   * A day off on chosen weeks of each month, on top of the weekly offs:
+   * People Hub's 2nd and 4th Sunday is {weekday: 0, weeks: [2, 4]}. Week n
+   * is the nth such weekday of the month (days 7n-6 to 7n).
+   */
+  monthlyOff: { weekday: number; weeks: number[] };
   holidays: string[];
   fiscalStartMonth: number;
   allowances: Record<LeaveType, number>;
@@ -77,7 +82,7 @@ export const DEFAULT_POLICY: Policy = {
   lateAfter: "11:30",
   end: "18:30",
   weeklyOffDays: [1],
-  alternateSundays: true,
+  monthlyOff: { weekday: 0, weeks: [2, 4] },
   holidays: [],
   fiscalStartMonth: 4,
   allowances: { PL: 12, SL: 6, CL: 6, COMP: 0, WFH: 0 },
@@ -123,7 +128,12 @@ export function validateConfiguration(people: Person[], policy: Policy) {
       policy.weeklyOffDays.every(
         (n) => Number.isInteger(n) && n >= 0 && n <= 6,
       ) &&
-      typeof policy.alternateSundays === "boolean",
+      !!policy.monthlyOff &&
+      Number.isInteger(policy.monthlyOff.weekday) &&
+      policy.monthlyOff.weekday >= 0 &&
+      policy.monthlyOff.weekday <= 6 &&
+      Array.isArray(policy.monthlyOff.weeks) &&
+      policy.monthlyOff.weeks.every((n) => Number.isInteger(n) && n >= 1 && n <= 5),
     "Invalid weekly offs.",
     "CONFIG",
     503,
@@ -222,6 +232,17 @@ export interface Attendance {
   /** Where the person was, for Office and Site sessions. */
   checkInLocation?: Located | null;
   checkOutLocation?: Located | null;
+  /** Brought over from People Hub (lib/peopleImport.ts). */
+  imported?: Imported;
+}
+/** Where an imported record came from: the People Hub workbook row, and the import that wrote it. */
+export interface Imported {
+  from: "people-hub";
+  batch: string;
+  tab: string;
+  row: number;
+  /** What the import noticed, e.g. no check-out was recorded. */
+  flags: string[];
 }
 export interface Located {
   lat: number;
@@ -254,6 +275,7 @@ export interface RequestRecord {
     mode: Mode;
     site: string;
   };
+  imported?: Imported;
 }
 export interface Event {
   id: string;
@@ -385,15 +407,26 @@ export function fiscalYear(date: string, policy: Policy): string {
     Number(date.slice(5, 7)) >= policy.fiscalStartMonth ? year : year - 1,
   );
 }
+/** Which of its weekday this date is in its month: 1 for days 1–7, 5 for 29–31. */
+export const weekOfMonth = (date: string): number => Math.floor((Number(date.slice(8, 10)) - 1) / 7) + 1;
+const ORDINAL = ["", "1st", "2nd", "3rd", "4th", "5th"];
+const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+/** "2nd and 4th Sunday", or "" when there is no monthly off. */
+export function monthlyOffLabel(policy: Pick<Policy, "monthlyOff">): string {
+  const weeks = [...(policy.monthlyOff?.weeks || [])].sort();
+  if (!weeks.length) return "";
+  const list = weeks.map((w) => ORDINAL[w]);
+  const joined = list.length === 1 ? list[0] : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+  return `${joined} ${WEEKDAY[policy.monthlyOff.weekday]}`;
+}
 export function isOff(date: string, policy: Policy): boolean {
   const d = new Date(`${date}T12:00:00Z`);
   const day = d.getUTCDay();
   return (
     policy.holidays.includes(date) ||
     policy.weeklyOffDays.includes(day) ||
-    (policy.alternateSundays &&
-      day === 0 &&
-      Math.floor((d.getUTCDate() - 1) / 7) % 2 === 1)
+    (day === policy.monthlyOff.weekday &&
+      policy.monthlyOff.weeks.includes(weekOfMonth(date)))
   );
 }
 export function leaveDays(
@@ -705,8 +738,9 @@ export function execute(
   };
   const data = command.data;
   const today = businessDate(now, store.policy.timezone);
+  /* An imported day with no check-out is history, not a session left open. */
   const open = store.attendance.find(
-    (s) => s.employeeId === actor.id && !s.checkOut,
+    (s) => s.employeeId === actor.id && !s.checkOut && !s.imported,
   );
   if (command.action === "checkin") {
     assert(
@@ -1040,6 +1074,18 @@ const teamOf = (roles: string[]): string =>
             ? "ops"
             : "studio";
 
+/* The monthly off as saved, or from the older 2nd-and-4th-Sunday switch. */
+function monthlyOffOf(p: any): Policy["monthlyOff"] {
+  const m = p.monthlyOff;
+  if (m && Number.isInteger(Number(m.weekday)) && Number(m.weekday) >= 0 && Number(m.weekday) <= 6 && Array.isArray(m.weeks))
+    return {
+      weekday: Number(m.weekday),
+      weeks: [...new Set(m.weeks.map(Number).filter((n: number) => Number.isInteger(n) && n >= 1 && n <= 5))].sort() as number[],
+    };
+  if (p.alternateSundays === false) return { weekday: 0, weeks: [] };
+  return { weekday: DEFAULT_POLICY.monthlyOff.weekday, weeks: [...DEFAULT_POLICY.monthlyOff.weeks] };
+}
+
 /** The studio's People settings, with anything missing or malformed taken from the defaults. */
 export function policyOf(org: any): Policy {
   const p: any = org?.peopleDesk?.policy || {};
@@ -1071,7 +1117,7 @@ export function policyOf(org: any): Policy {
     weeklyOffDays: Array.isArray(p.weeklyOffDays)
       ? [...new Set(p.weeklyOffDays.map(Number).filter((n: number) => Number.isInteger(n) && n >= 0 && n <= 6))] as number[]
       : [...DEFAULT_POLICY.weeklyOffDays],
-    alternateSundays: typeof p.alternateSundays === "boolean" ? p.alternateSundays : DEFAULT_POLICY.alternateSundays,
+    monthlyOff: monthlyOffOf(p),
     holidays: [...new Set(holidays)].sort() as string[],
     holidayNames: names,
     fiscalStartMonth: Number.isInteger(month) && month >= 1 && month <= 12 ? month : DEFAULT_POLICY.fiscalStartMonth,

@@ -388,3 +388,21 @@ test("the studio team becomes People: co-founders run it, managers by who report
   const ok = applyEvent(req, execute(req, "tm-mayuri", { id: "mayuri_ok_1", action: "decide", data: { requestId: id, version: 1, decision: "approve" } }, now));
   expect(ok.requests[0].status).toBe("Approved");
 });
+
+test("the monthly off can be any weeks of a chosen weekday", async () => {
+  const { isOff, monthlyOffLabel, policyOf, weekOfMonth } = await import("../../lib/peopleDesk");
+  /* October 2026: Sundays fall on 4, 11, 18 and 25; Mondays are the weekly off. */
+  const second = structuredClone(DEFAULT_POLICY);
+  expect(["2026-10-04", "2026-10-11", "2026-10-18", "2026-10-25"].map((d) => isOff(d, second))).toEqual([false, true, false, true]);
+  const firstThird = { ...second, monthlyOff: { weekday: 0, weeks: [1, 3] } };
+  expect(["2026-10-04", "2026-10-11", "2026-10-18", "2026-10-25"].map((d) => isOff(d, firstThird))).toEqual([true, false, true, false]);
+  expect(monthlyOffLabel(firstThird)).toBe("1st and 3rd Sunday");
+  expect(monthlyOffLabel({ monthlyOff: { weekday: 6, weeks: [] } })).toBe("");
+  expect(weekOfMonth("2026-10-29")).toBe(5);
+  /* Leave over a monthly off is not charged for it. */
+  expect(leaveDays("2026-10-03", "2026-10-05", "Full day", firstThird).map((d) => d.date)).toEqual(["2026-10-03"]);
+  /* Studios saved before this keep their 2nd and 4th Sunday, or none. */
+  expect(policyOf({ peopleDesk: { policy: {} } }).monthlyOff).toEqual({ weekday: 0, weeks: [2, 4] });
+  expect(policyOf({ peopleDesk: { policy: { alternateSundays: false } } }).monthlyOff).toEqual({ weekday: 0, weeks: [] });
+  expect(policyOf({ peopleDesk: { policy: { alternateSundays: true, monthlyOff: { weekday: 6, weeks: [3, 1, 9] } } } }).monthlyOff).toEqual({ weekday: 6, weeks: [1, 3] });
+});

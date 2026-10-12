@@ -1,19 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Sun, Clock3, CalendarDays, Inbox, Users, BookUser, FileSpreadsheet, Plus, RefreshCw, ChevronLeft, ChevronRight, MapPin, Download, Check, X, Search,
+  Sunrise, Fingerprint, TreePalm, Stamp, CalendarDays, Contact, ChartColumn, Plus, RefreshCw, ChevronLeft, ChevronRight, MapPin, Download, Check, X, Search,
+  PartyPopper, Inbox, Users, Sparkles, Wrench, History, RotateCcw,
 } from '@/lib/lucide-shim';
-import { LEAVE_LABELS, isLate, timeLabel, type Attendance, type RequestRecord, type Snapshot, type Status } from '../../lib/peopleDesk';
+import { LEAVE_LABELS, addDays, isLate, timeLabel, type Attendance, type Balance, type LeaveType, type RequestRecord, type Snapshot, type Status } from '../../lib/peopleDesk';
 import {
   myDay, minutesWorked, duration, whereLabel, mapLink, CHARGED, currentFy, fyLabel, unitsOf, awaitingMe, personName,
   monthGrid, shiftMonth, awayOn, dayKind, monthReport, attendanceCsv, todayOf,
 } from '../../lib/peopleView';
-import { usePeople, runPeople } from '../../services/peopleService';
+import { usePeople, runPeople, fetchPeopleMonth } from '../../services/peopleService';
 import ConsoleHeader from '../ui/ConsoleHeader';
 import { CountUp, Dot } from '../ui/HudBits';
 import MyDayCard from './MyDayCard';
 import { LeaveSheet, CorrectionSheet } from './PeopleSheets';
-import { Ring, Avatar, Skeleton, Glide, Notice, listV, rowV, sectionV, EASE } from './PeopleBits';
+import { Ring, Avatar, Skeleton, Glide, Notice, IconTile, Tilt, LEAVE_ICON, MODE_ICON, initials, listV, rowV, sectionV, EASE } from './PeopleBits';
+import { StudioPulse, ArrivalToasts, useToday } from './Arrivals';
+import PeopleCalendar from './PeopleCalendar';
 import { btnPri, btnSec, btnSm, input } from '../opsDesk/OpsDeskPanels';
 
 /*
@@ -35,9 +38,9 @@ const STATUS_TINT: Record<Status, string> = {
 };
 
 const Panel: React.FC<{ icon: React.ComponentType<any>; title: string; blurb: string; children: React.ReactNode; aside?: React.ReactNode }> = ({ icon: Icon, title, blurb, children, aside }) => (
-  <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in">
+  <section className="group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in">
     <div className="flex flex-wrap items-start gap-3 mb-5">
-      <div className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] flex items-center justify-center shrink-0"><Icon className="w-4 h-4" /></div>
+      <IconTile icon={Icon} />
       <div className="min-w-0 flex-1">
         <h2 className="font-bold text-slate-800">{title}</h2>
         <p className="text-xs text-slate-500 mt-0.5">{blurb}</p>
@@ -47,7 +50,12 @@ const Panel: React.FC<{ icon: React.ComponentType<any>; title: string; blurb: st
     {children}
   </section>
 );
-const Empty: React.FC<{ text: string }> = ({ text }) => <p className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-slate-500">{text}</p>;
+const Empty: React.FC<{ text: string; icon?: React.ComponentType<any> }> = ({ text, icon: Icon = Sparkles }) => (
+  <div className="rounded-xl border border-dashed border-slate-300 px-4 py-6 flex flex-col items-center gap-2 text-center">
+    <span className="pp-float text-slate-300"><Icon className="w-6 h-6" /></span>
+    <p className="text-xs text-slate-500">{text}</p>
+  </div>
+);
 
 export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   const { snapshot, loading, error, refresh } = usePeople();
@@ -57,6 +65,13 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   const [notice, setNotice] = useState<string | null>(null);
   const sites = useMemo(() => [...new Set(projects.map((p) => String(p?.context?.name || '')).filter(Boolean))].sort(), [projects]);
   useEffect(() => { if (!notice) return; const t = window.setTimeout(() => setNotice(null), 4500); return () => window.clearTimeout(t); }, [notice]);
+  /* Those who approve see arrivals as they happen: refresh every minute while People is open and on screen. */
+  const approving = !!snapshot && snapshot.me.accessRole !== 'employee';
+  useEffect(() => {
+    if (!approving) return;
+    const t = window.setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 60000);
+    return () => window.clearInterval(t);
+  }, [approving]);
 
   if (!snapshot) {
     return (
@@ -75,13 +90,13 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   const fy = currentFy(s);
   const bal = s.balances[fy];
   const SECTIONS: { id: Section; label: string; icon: React.ComponentType<any>; n?: number; show: boolean }[] = [
-    { id: 'today', label: 'Today', icon: Sun, show: true },
-    { id: 'attendance', label: 'Attendance', icon: Clock3, show: true },
-    { id: 'leave', label: 'Leave', icon: CalendarDays, n: s.requests.filter((r) => r.employeeId === s.me.id && r.status === 'Pending').length, show: true },
-    { id: 'approvals', label: 'Approvals', icon: Inbox, n: waiting.length, show: approver },
-    { id: 'calendar', label: 'Team calendar', icon: Users, show: true },
-    { id: 'directory', label: 'Directory', icon: BookUser, show: true },
-    { id: 'report', label: 'Monthly report', icon: FileSpreadsheet, show: approver },
+    { id: 'today', label: 'Today', icon: Sunrise, show: true },
+    { id: 'attendance', label: 'Attendance', icon: Fingerprint, show: true },
+    { id: 'leave', label: 'Leave', icon: TreePalm, n: s.requests.filter((r) => r.employeeId === s.me.id && r.status === 'Pending').length, show: true },
+    { id: 'approvals', label: 'Approvals', icon: Stamp, n: waiting.length, show: approver },
+    { id: 'calendar', label: 'Team calendar', icon: CalendarDays, show: true },
+    { id: 'directory', label: 'Directory', icon: Contact, show: true },
+    { id: 'report', label: 'Monthly report', icon: ChartColumn, show: approver },
   ];
   const done = (msg: string) => { setLeaveOpen(null); setCorrecting(null); setNotice(msg); };
 
@@ -98,11 +113,11 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
           <button type="button" className={btnSec} onClick={refresh} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh</button>
         </>}
         panel={bal ? (
-          <div className="w-full md:w-[290px]">
+          <Tilt max={6} glare={false} className="w-full md:w-[290px]">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Leave left · {fyLabel(fy)}</div>
             <div className="mt-3 flex items-center justify-between gap-2">
               {(['PL', 'SL', 'CL'] as const).map((t, i) => (
-                <motion.div key={t} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.08, ease: EASE }} className="flex flex-col items-center gap-1">
+                <motion.div key={t} initial={{ opacity: 0, y: 8, rotateY: -90 }} animate={{ opacity: 1, y: 0, rotateY: 0 }} transition={{ delay: 0.1 + i * 0.1, duration: 0.6, ease: EASE }} style={{ transformPerspective: 600 }} className="flex flex-col items-center gap-1">
                   <Ring value={bal[t].entitled ? bal[t].available / bal[t].entitled : 0} size={64} stroke={6} tone={bal[t].available <= 1 ? 'warn' : 'brand'} label={`${LEAVE_LABELS[t]}: ${bal[t].available} left`}>
                     <span className="text-sm font-black text-slate-800 tabular-nums"><CountUp value={bal[t].available} /></span>
                   </Ring>
@@ -110,7 +125,7 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
                 </motion.div>
               ))}
             </div>
-          </div>
+          </Tilt>
         ) : undefined}
       />
 
@@ -124,7 +139,9 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
                 className={`relative lg:w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-colors hud-row-in whitespace-nowrap ${on ? 'text-white' : 'text-slate-700 hover:bg-slate-100'}`}
                 style={{ animationDelay: `${i * 30}ms` }}>
                 {on && <motion.span layoutId="people-rail" className="absolute inset-0 rounded-xl bg-[#3D52A0] shadow-sm" transition={{ type: 'spring', stiffness: 420, damping: 36 }} />}
-                <Icon className={`relative w-4 h-4 shrink-0 ${on ? 'text-white' : 'text-slate-400'}`} />
+                <motion.span className="relative inline-flex" whileHover={{ rotateY: 180 }} transition={{ duration: 0.5 }} style={{ transformPerspective: 300 }}>
+                  <Icon className={`w-4 h-4 shrink-0 ${on ? 'text-white' : 'text-slate-400'}`} />
+                </motion.span>
                 <span className="relative text-sm font-semibold flex-1 min-w-0 truncate">{x.label}</span>
                 {!!x.n && <span className={`relative text-[10px] font-black px-1.5 py-0.5 rounded-full ${on ? 'bg-white/20 text-white' : x.id === 'approvals' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{x.n}</span>}
               </button>
@@ -141,7 +158,7 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
               {section === 'attendance' && <AttendanceSection s={s} onCorrect={setCorrecting} approver={approver} />}
               {section === 'leave' && <LeaveSection s={s} onApply={() => setLeaveOpen({})} onDone={setNotice} />}
               {section === 'approvals' && approver && <ApprovalsSection s={s} list={waiting} onDone={setNotice} />}
-              {section === 'calendar' && <CalendarSection s={s} onLeave={(start) => setLeaveOpen({ start })} />}
+              {section === 'calendar' && <PeopleCalendar s={s} onLeave={(start) => setLeaveOpen({ start })} />}
               {section === 'directory' && <DirectorySection s={s} />}
               {section === 'report' && approver && <ReportSection s={s} />}
             </motion.div>
@@ -149,6 +166,7 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
         </div>
       </div>
 
+      {approver && <ArrivalToasts s={s} />}
       {leaveOpen && <LeaveSheet snapshot={s} start={leaveOpen.start} onClose={() => setLeaveOpen(null)} onSaved={done} />}
       {correcting && <CorrectionSheet snapshot={s} session={correcting} sites={sites} onClose={() => setCorrecting(null)} onSaved={done} />}
     </div>
@@ -165,6 +183,7 @@ function TodaySection({ s, sites, onCorrect, onLeave, onGo, waiting }: { s: Snap
   return (
     <>
       <MyDayCard sites={sites} onCorrect={onCorrect} />
+      {s.me.accessRole !== 'employee' && <StudioPulse s={s} />}
       {waiting > 0 && (
         <motion.button type="button" onClick={() => onGo('approvals')} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
           className="w-full flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left pp-lift">
@@ -174,12 +193,13 @@ function TodaySection({ s, sites, onCorrect, onLeave, onGo, waiting }: { s: Snap
       )}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Panel icon={Users} title="Away today" blurb="Who is on leave or working from home. Never why.">
-          {away.length === 0 ? <Empty text="Everyone is in today." /> : (
+          {away.length === 0 ? <Empty icon={Users} text="Everyone is in today." /> : (
             <motion.ul variants={listV} initial="hidden" animate="show" className="flex flex-col gap-2">
               {away.map((a) => (
                 <motion.li key={a.personId} variants={rowV} className="flex items-center gap-3">
                   <Avatar name={a.name} ring={a.pending ? 'warn' : null} />
                   <span className="text-sm font-semibold text-slate-800 flex-1 min-w-0 truncate">{a.name}</span>
+                  {a.mode === 'WFH' ? <MODE_ICON.WFH className="w-4 h-4 text-[#3D52A0]" /> : <TreePalm className="w-4 h-4 text-amber-600" />}
                   <span className={`${chip} ${a.mode === 'WFH' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-slate-100 text-slate-600'}`}>{a.mode === 'WFH' ? 'From home' : a.portion === 'Full day' ? 'Away' : a.portion}</span>
                 </motion.li>
               ))}
@@ -187,24 +207,26 @@ function TodaySection({ s, sites, onCorrect, onLeave, onGo, waiting }: { s: Snap
           )}
         </Panel>
         <Panel icon={CalendarDays} title="Your leave ahead" blurb="Asked for or approved." aside={<button type="button" className={btnSm} onClick={() => onLeave()}><Plus className="w-3.5 h-3.5" />Apply</button>}>
-          {mine.length === 0 ? <Empty text="Nothing booked. Plan a break?" /> : (
+          {mine.length === 0 ? <Empty icon={TreePalm} text="Nothing booked. Plan a break?" /> : (
             <motion.ul variants={listV} initial="hidden" animate="show" className="flex flex-col gap-2">
               {mine.map((r) => (
                 <motion.li key={r.id} variants={rowV} className="flex items-center gap-3">
-                  <span className="w-9 h-9 shrink-0 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center text-[10px] font-black">{r.type}</span>
-                  <span className="text-sm font-semibold text-slate-800 flex-1 min-w-0 truncate">{range(r.start, r.end)}</span>
+                  <IconTile icon={LEAVE_ICON[r.type]} size="sm" tone={r.type === 'SL' ? 'warn' : 'brand'} />
+                  <span className="text-sm font-semibold text-slate-800 flex-1 min-w-0 truncate">{range(r.start, r.end)}<span className="block text-[11px] font-normal text-slate-500">{LEAVE_LABELS[r.type]}</span></span>
                   <span className={`${chip} ${STATUS_TINT[r.status]}`}>{r.status === 'Cancellation requested' ? 'Cancelling' : r.status}</span>
                 </motion.li>
               ))}
             </motion.ul>
           )}
         </Panel>
-        <Panel icon={Sun} title="Studio holidays" blurb="Coming up.">
-          {holidays.length === 0 ? <Empty text="No holidays set yet." /> : (
+        <Panel icon={PartyPopper} title="Studio holidays" blurb="Coming up.">
+          {holidays.length === 0 ? <Empty icon={PartyPopper} text="No holidays set yet." /> : (
             <motion.ul variants={listV} initial="hidden" animate="show" className="flex flex-col gap-2">
               {holidays.map((d) => (
                 <motion.li key={d} variants={rowV} className="flex items-center gap-3">
-                  <span className="w-9 h-9 shrink-0 rounded-xl bg-emerald-100 text-emerald-700 grid place-items-center text-xs font-black tabular-nums">{Number(d.slice(8))}</span>
+                  <span className="pp-tile w-9 h-9 shrink-0 rounded-xl bg-emerald-100 text-emerald-700 grid place-items-center leading-none text-center">
+                    <span><span className="block text-[9px] font-bold uppercase">{new Date(`${d}T12:00:00+05:30`).toLocaleDateString('en-IN', { month: 'short' })}</span><span className="block text-xs font-black tabular-nums">{Number(d.slice(8))}</span></span>
+                  </span>
                   <span className="text-sm font-semibold text-slate-800 flex-1 min-w-0 truncate">{s.policy.holidayNames?.[d] || 'Holiday'}</span>
                   <span className="text-[11px] text-slate-500">{niceDay(d)}</span>
                 </motion.li>
@@ -226,15 +248,16 @@ function AttendanceSection({ s, onCorrect, approver }: { s: Snapshot; onCorrect:
     .sort((a, b) => b.date.localeCompare(a.date) || personName(s, a.employeeId).localeCompare(personName(s, b.employeeId)));
   const pendingFix = new Set(s.requests.filter((r) => r.kind === 'correction' && r.status === 'Pending').map((r) => r.correction?.sessionId));
   return (
-    <Panel icon={Clock3} title="Attendance" blurb="The last four months. A day can be corrected once your approver agrees."
+    <Panel icon={Fingerprint} title="Attendance" blurb="The last four months. A day can be corrected once your approver agrees."
       aside={approver ? <Glide id="att-whose" label="Whose" value={whose} onChange={(v) => { setWhose(v); setShown(30); }} options={[{ id: 'mine', label: 'Mine' }, { id: 'team', label: 'My people' }]} /> : undefined}>
-      {list.length === 0 ? <Empty text={whose === 'mine' ? 'No attendance yet. Check in from Today.' : 'No attendance from your people yet.'} /> : (
+      {list.length === 0 ? <Empty icon={Fingerprint} text={whose === 'mine' ? 'No attendance yet. Check in from Today.' : 'No attendance from your people yet.'} /> : (
         <>
           <motion.div variants={listV} initial="hidden" animate="show" key={whose} className="rounded-xl border border-slate-200 divide-y divide-slate-100">
             {list.slice(0, shown).map((a) => {
               const late = isLate(a, s.policy);
               return (
-                <motion.div key={a.id} variants={rowV} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+                <motion.div key={a.id} variants={rowV} className="group flex flex-wrap items-center gap-3 px-3 py-2.5 hover:bg-slate-50/70 transition-colors">
+                  <IconTile icon={MODE_ICON[a.mode]} size="sm" tone={late ? 'warn' : a.checkOut ? 'brand' : 'slate'} />
                   <div className="w-14 shrink-0 text-center">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{new Date(`${a.date}T12:00:00+05:30`).toLocaleDateString('en-IN', { weekday: 'short' })}</p>
                     <p className="text-sm font-black text-slate-800 tabular-nums">{new Date(`${a.date}T12:00:00+05:30`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
@@ -242,7 +265,7 @@ function AttendanceSection({ s, onCorrect, approver }: { s: Snapshot; onCorrect:
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-slate-800">
                       {whose === 'team' && <span>{personName(s, a.employeeId)} · </span>}
-                      {timeLabel(a.checkIn, s.policy.timezone)} – {a.checkOut ? timeLabel(a.checkOut, s.policy.timezone) : <span className="text-amber-700">not checked out</span>}
+                      {timeLabel(a.checkIn, s.policy.timezone)} – {a.checkOut ? timeLabel(a.checkOut, s.policy.timezone) : <span className="text-amber-700">{a.imported ? 'no check-out recorded' : 'not checked out'}</span>}
                       {a.checkOut && <span className="text-xs font-normal text-slate-500"> · {duration(minutesWorked(a, a.checkOut))}</span>}
                     </p>
                     <p className="text-[11px] text-slate-500 flex flex-wrap items-center gap-x-1">
@@ -250,6 +273,7 @@ function AttendanceSection({ s, onCorrect, approver }: { s: Snapshot; onCorrect:
                       {a.checkInLocation ? <a className="inline-flex items-center gap-0.5 hover:underline" href={mapLink(a.checkInLocation)} target="_blank" rel="noreferrer"><MapPin className="w-3 h-3" />{whereLabel(a.checkInLocation, a.mode)}</a> : <span>{whereLabel(null, a.mode)}</span>}
                     </p>
                   </div>
+                  {a.imported && <span className={`${chip} bg-slate-100 text-slate-600 inline-flex items-center gap-1`} title={a.imported.flags.join('. ')}><History className="w-3 h-3" />People Hub</span>}
                   {late && <span className={`${chip} bg-amber-100 text-amber-700`}>Late</span>}
                   {pendingFix.has(a.id) ? <span className={`${chip} bg-[#3D52A0]/10 text-[#3D52A0]`}>Correction asked</span>
                     : whose === 'mine' && <button type="button" className={btnSm} onClick={() => onCorrect(a)}>Correct</button>}
@@ -289,38 +313,28 @@ function LeaveSection({ s, onApply, onDone }: { s: Snapshot; onApply: () => void
         aside={years.length > 1 ? <Glide id="leave-fy" label="Leave year" value={fy} onChange={setFy} options={years.map((y) => ({ id: y, label: fyLabel(y) }))} /> : undefined}>
         {bal ? (
           <motion.div variants={listV} initial="hidden" animate="show" key={fy} className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {CHARGED.map((t) => {
-              const b = bal[t];
-              return (
-                <motion.div key={t} variants={rowV} className="rounded-2xl border border-slate-200 p-4 flex flex-col items-center gap-2 pp-lift">
-                  <Ring value={b.entitled ? b.available / b.entitled : 0} size={92} stroke={8} tone={b.available <= 0 ? 'slate' : b.available <= 1 ? 'warn' : 'brand'} label={`${LEAVE_LABELS[t]}: ${b.available} of ${b.entitled}`}>
-                    <p className="text-lg font-black text-slate-800 tabular-nums leading-none"><CountUp value={b.available} /></p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">of {b.entitled}</p>
-                  </Ring>
-                  <p className="text-sm font-semibold text-slate-800 text-center">{LEAVE_LABELS[t]}</p>
-                  <p className="text-[11px] text-slate-500">{b.used} used{b.reserved ? ` · ${b.reserved} held` : ''}</p>
-                </motion.div>
-              );
-            })}
-            <motion.div variants={rowV} className="rounded-2xl border border-slate-200 p-4 flex flex-col items-center justify-center gap-2 pp-lift">
-              <span className="w-[92px] h-[92px] rounded-full bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center">
+            {CHARGED.map((t) => (
+              <motion.div key={t} variants={rowV}><BalanceCard type={t} b={bal[t]} onApply={onApply} /></motion.div>
+            ))}
+            <motion.div variants={rowV} className="group rounded-2xl border border-slate-200 p-4 flex flex-col items-center justify-center gap-2 pp-lift min-h-[208px]">
+              <span className="pp-tile w-[92px] h-[92px] rounded-full bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center">
                 <span className="text-center"><span className="block text-lg font-black tabular-nums leading-none"><CountUp value={wfhDays} /></span><span className="text-[10px]">days</span></span>
               </span>
               <p className="text-sm font-semibold text-slate-800">Work from home</p>
               <p className="text-[11px] text-slate-500">approved this year</p>
             </motion.div>
           </motion.div>
-        ) : <Empty text="No balance for this year." />}
+        ) : <Empty icon={TreePalm} text="No balance for this year." />}
       </Panel>
       <Panel icon={Inbox} title="Your requests" blurb="Withdraw one that is waiting; cancel approved leave, which your approver confirms." aside={<button type="button" className={btnSm} onClick={onApply}><Plus className="w-3.5 h-3.5" />Apply</button>}>
         <AnimatePresence>{error && <Notice text={error} tone="bad" onClose={() => setError(null)} />}</AnimatePresence>
-        {mine.length === 0 ? <Empty text="No requests yet." /> : (
+        {mine.length === 0 ? <Empty icon={Inbox} text="No requests yet." /> : (
           <motion.div variants={listV} initial="hidden" animate="show" className="rounded-xl border border-slate-200 divide-y divide-slate-100 mt-2">
             {mine.map((r) => {
               const last = r.decisions[r.decisions.length - 1];
               return (
-                <motion.div key={r.id} variants={rowV} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
-                  <span className="w-10 h-10 shrink-0 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center text-[10px] font-black">{r.kind === 'correction' ? 'FIX' : r.type}</span>
+                <motion.div key={r.id} variants={rowV} className="group flex flex-wrap items-center gap-3 px-3 py-2.5">
+                  <IconTile icon={r.kind === 'correction' ? Wrench : LEAVE_ICON[r.type]} tone={r.status === 'Rejected' ? 'bad' : r.status === 'Approved' ? 'ok' : r.status === 'Pending' || r.status === 'Cancellation requested' ? 'warn' : 'slate'} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-slate-800">{r.kind === 'correction' ? `Attendance correction, ${niceDay(r.start)}` : `${LEAVE_LABELS[r.type]} · ${range(r.start, r.end)}`}
                       {r.kind === 'leave' && <span className="text-xs font-normal text-slate-500"> · {unitsOf(r)} day{unitsOf(r) === 1 ? '' : 's'}{r.portion !== 'Full day' ? ` (${r.portion.toLowerCase()})` : ''}</span>}</p>
@@ -363,7 +377,7 @@ function ApprovalsSection({ s, list, onDone }: { s: Snapshot; list: RequestRecor
   return (
     <Panel icon={Inbox} title="Approvals" blurb={s.me.accessRole === 'manager' ? 'Leave and corrections from the people who report to you, oldest first.' : 'Leave and corrections from across the studio, oldest first. Never your own.'}>
       <AnimatePresence>{error && <Notice text={error} tone="bad" onClose={() => setError(null)} />}</AnimatePresence>
-      {list.length === 0 ? <Empty text="Nothing waiting for you." /> : (
+      {list.length === 0 ? <Empty icon={Stamp} text="Nothing waiting for you. All clear." /> : (
         <motion.div variants={listV} initial="hidden" animate="show" className="flex flex-col gap-3 mt-2">
           <AnimatePresence initial={false}>
             {list.map((r) => {
@@ -372,9 +386,9 @@ function ApprovalsSection({ s, list, onDone }: { s: Snapshot; list: RequestRecor
               const session = r.correction ? s.attendance.find((a) => a.id === r.correction!.sessionId) : null;
               return (
                 <motion.div key={r.id} variants={rowV} layout exit={{ opacity: 0, x: 40, transition: { duration: 0.25 } }}
-                  className="rounded-2xl border border-slate-200 p-4 flex flex-col gap-3 pp-lift">
+                  className="group rounded-2xl border border-slate-200 p-4 flex flex-col gap-3 pp-lift">
                   <div className="flex flex-wrap items-start gap-3">
-                    <Avatar name={name} />
+                    <span className="relative"><Avatar name={name} /><span className="absolute -bottom-1 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 grid place-items-center text-[#3D52A0]">{React.createElement(r.kind === 'correction' ? Wrench : LEAVE_ICON[r.type], { className: 'w-3 h-3' })}</span></span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-slate-800">{name}
                         <span className="font-semibold text-slate-500"> · {r.kind === 'correction' ? 'attendance correction' : cancelling ? `cancel ${LEAVE_LABELS[r.type].toLowerCase()}` : LEAVE_LABELS[r.type].toLowerCase()}</span></p>
@@ -410,64 +424,6 @@ function ApprovalsSection({ s, list, onDone }: { s: Snapshot; list: RequestRecor
   );
 }
 
-/* ── The team calendar ───────────────────────────────────────────────────── */
-
-function CalendarSection({ s, onLeave }: { s: Snapshot; onLeave: (start?: string) => void }) {
-  const today = todayOf(s);
-  const [month, setMonth] = useState(today.slice(0, 7));
-  const [picked, setPicked] = useState<string>(today);
-  const weeks = monthGrid(month);
-  const label = new Date(`${month}-15T12:00:00+05:30`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-  const away = awayOn(s, picked);
-  return (
-    <Panel icon={Users} title="Team calendar" blurb="Who is away or working from home, studio holidays and offs. Dashed means asked for, not yet approved."
-      aside={<div className="flex items-center gap-1">
-        <button type="button" className={btnSm} aria-label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))}><ChevronLeft className="w-3.5 h-3.5" /></button>
-        <span className="text-sm font-bold text-slate-800 w-36 text-center">{label}</span>
-        <button type="button" className={btnSm} aria-label="Next month" onClick={() => setMonth(shiftMonth(month, 1))}><ChevronRight className="w-3.5 h-3.5" /></button>
-      </div>}>
-      <div className="grid grid-cols-7 gap-1.5 text-center mb-1.5">
-        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <span key={d} className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{d}</span>)}
-      </div>
-      <motion.div key={month} variants={listV} initial="hidden" animate="show" className="grid grid-cols-7 gap-1.5">
-        {weeks.flat().map((d) => {
-          const kind = dayKind(s.policy, d);
-          const people = awayOn(s, d);
-          const inMonth = d.slice(0, 7) === month;
-          return (
-            <motion.button key={d} type="button" variants={rowV} onClick={() => setPicked(d)} aria-pressed={picked === d}
-              className={`min-h-[76px] rounded-xl border p-1.5 text-left flex flex-col gap-1 transition-colors ${!inMonth ? 'opacity-40' : ''} ${picked === d ? 'border-[#3D52A0] ring-2 ring-[#3D52A0]/20' : 'border-slate-200 hover:border-slate-300'} ${kind === 'work' ? 'bg-white' : 'bg-slate-50'}`}>
-              <span className={`text-xs font-black tabular-nums ${d === today ? 'w-6 h-6 rounded-full bg-[#3D52A0] text-white grid place-items-center' : 'text-slate-700'}`}>{Number(d.slice(8))}</span>
-              {kind === 'holiday' && <span className="text-[10px] font-semibold text-emerald-700 leading-tight line-clamp-2">{s.policy.holidayNames?.[d] || 'Holiday'}</span>}
-              {kind === 'off' && <span className="text-[10px] text-slate-400">Off</span>}
-              {kind === 'work' && people.length > 0 && (
-                <span className="flex flex-wrap gap-0.5">
-                  {people.slice(0, 4).map((p) => (
-                    <span key={p.personId} className={`w-5 h-5 rounded-full text-[9px] font-black grid place-items-center ${p.mode === 'WFH' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-amber-100 text-amber-700'} ${p.pending ? 'border border-dashed border-current' : ''}`} title={`${p.name}: ${p.mode === 'WFH' ? 'from home' : 'away'}`}>
-                      {p.name.slice(0, 1)}
-                    </span>
-                  ))}
-                  {people.length > 4 && <span className="text-[10px] text-slate-500">+{people.length - 4}</span>}
-                </span>
-              )}
-            </motion.button>
-          );
-        })}
-      </motion.div>
-      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <p className="text-sm font-bold text-slate-800">{niceDay(picked)}</p>
-        <p className="text-xs text-slate-500 flex-1">
-          {dayKind(s.policy, picked) === 'holiday' ? s.policy.holidayNames?.[picked] || 'Studio holiday'
-            : dayKind(s.policy, picked) === 'off' ? 'Studio off day'
-            : away.length ? away.map((a) => `${a.name} (${a.mode === 'WFH' ? 'from home' : a.portion === 'Full day' ? 'away' : a.portion.toLowerCase()}${a.pending ? ', asked' : ''})`).join(', ')
-            : 'Everyone in.'}
-        </p>
-        {dayKind(s.policy, picked) === 'work' && picked >= today && <button type="button" className={btnSm} onClick={() => onLeave(picked)}><Plus className="w-3.5 h-3.5" />Take this day off</button>}
-      </div>
-    </Panel>
-  );
-}
-
 /* ── Directory ───────────────────────────────────────────────────────────── */
 
 const TEAM: Record<string, string> = { leadership: 'Leadership', design: 'Design', site: 'Site', 'client-relations': 'Client relations', ops: 'Operations', studio: 'Studio' };
@@ -476,23 +432,35 @@ function DirectorySection({ s }: { s: Snapshot }) {
   const [q, setQ] = useState('');
   const today = todayOf(s);
   const awayToday = new Map(awayOn(s, today).map((a) => [a.personId, a]));
+  /* Who is in now, for the people whose attendance this person may see. */
+  const inToday = new Map(s.attendance.filter((a) => a.date === today).map((a) => [a.employeeId, a]));
   const people = [...s.people].filter((p) => p.active).sort((a, b) => a.name.localeCompare(b.name))
     .filter((p) => !q.trim() || `${p.name} ${p.title} ${TEAM[p.teamId] || ''}`.toLowerCase().includes(q.trim().toLowerCase()));
   return (
-    <Panel icon={BookUser} title="Directory" blurb="Everyone in the studio, who they report to, and whether they are away today."
+    <Panel icon={Contact} title="Directory" blurb="Everyone in the studio, who they report to, and whether they are away today."
       aside={<label className="relative"><Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" /><input aria-label="Search people" className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 w-44" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></label>}>
-      {people.length === 0 ? <Empty text="Nobody matches." /> : (
+      {people.length === 0 ? <Empty icon={Search} text="Nobody matches." /> : (
         <motion.div variants={listV} initial="hidden" animate="show" key={q} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {people.map((p) => {
             const away = awayToday.get(p.id);
+            const here = inToday.get(p.id);
+            const ModeIcon = here ? MODE_ICON[here.mode] : null;
             return (
-              <motion.div key={p.id} variants={rowV} className="rounded-2xl border border-slate-200 p-4 flex items-center gap-3 pp-lift">
-                <Avatar name={p.name} ring={away && away.mode !== 'WFH' ? 'warn' : null} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-slate-800 truncate">{p.name}{p.id === s.me.id ? ' (you)' : ''}</p>
-                  <p className="text-[11px] text-slate-500 truncate">{p.title || TEAM[p.teamId] || 'Studio'}{p.managerId ? ` · reports to ${personName(s, p.managerId)}` : ''}</p>
-                </div>
-                {away && <span className={`${chip} ${away.mode === 'WFH' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-amber-100 text-amber-700'}`}>{away.mode === 'WFH' ? 'From home' : 'Away'}</span>}
+              <motion.div key={p.id} variants={rowV} className="h-full">
+                <Tilt max={8} className="rounded-2xl h-full">
+                  <div className="h-full rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 flex items-center gap-3 hover:shadow-[0_18px_34px_-22px_rgba(61,82,160,0.6)] transition-shadow">
+                    <span className="relative inline-flex shrink-0" style={{ transform: 'translateZ(24px)' }}>
+                      <span className={`w-12 h-12 rounded-2xl grid place-items-center text-sm font-black shadow-[0_10px_18px_-12px_rgba(61,82,160,0.7)] ${here ? 'bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]'}`}>{initials(p.name)}</span>
+                      {here && !here.checkOut && <span className="absolute -top-1 -right-1 pp-live inline-flex"><Dot tone="ok" live /></span>}
+                    </span>
+                    <div className="min-w-0 flex-1" style={{ transform: 'translateZ(12px)' }}>
+                      <p className="text-sm font-bold text-slate-800 truncate">{p.name}{p.id === s.me.id ? ' (you)' : ''}</p>
+                      <p className="text-[11px] text-slate-500 truncate">{p.title || TEAM[p.teamId] || 'Studio'}{p.managerId ? ` · reports to ${personName(s, p.managerId)}` : ''}</p>
+                      {here && ModeIcon && <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5"><ModeIcon className="w-3 h-3" />{here.checkOut ? `In ${timeLabel(here.checkIn, s.policy.timezone)}–${timeLabel(here.checkOut, s.policy.timezone)}` : `In since ${timeLabel(here.checkIn, s.policy.timezone)}`}</p>}
+                    </div>
+                    {away && <span className={`${chip} inline-flex items-center gap-1 ${away.mode === 'WFH' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-amber-100 text-amber-700'}`}>{away.mode === 'WFH' ? <MODE_ICON.WFH className="w-3 h-3" /> : <TreePalm className="w-3 h-3" />}{away.mode === 'WFH' ? 'From home' : 'Away'}</span>}
+                  </div>
+                </Tilt>
               </motion.div>
             );
           })}
@@ -504,12 +472,26 @@ function DirectorySection({ s }: { s: Snapshot }) {
 
 /* ── The monthly report ──────────────────────────────────────────────────── */
 
+/** The first month the snapshot covers in full; older months are fetched for the report. */
+const coveredFrom = (s: Snapshot) => shiftMonth(addDays(todayOf(s), -120).slice(0, 7), 1);
+
 function ReportSection({ s }: { s: Snapshot }) {
   const [month, setMonth] = useState(todayOf(s).slice(0, 7));
-  const rows = monthReport(s, month);
+  const [older, setOlder] = useState<{ month: string; s: Snapshot | null; error?: string } | null>(null);
+  const old = month < coveredFrom(s);
+  useEffect(() => {
+    if (!old || older?.month === month) return;
+    let live = true;
+    setOlder({ month, s: null });
+    fetchPeopleMonth(month).then((x) => { if (live) setOlder({ month, s: x }); }).catch((e) => { if (live) setOlder({ month, s: null, error: String(e?.message || 'Could not load that month.') }); });
+    return () => { live = false; };
+  }, [month, old]);
+  const source = old ? (older?.month === month ? older.s : null) : s;
+  const rows = source ? monthReport(source, month) : [];
   const label = new Date(`${month}-15T12:00:00+05:30`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
   const download = () => {
-    const blob = new Blob([attendanceCsv(s, month)], { type: 'text/csv;charset=utf-8' });
+    if (!source) return;
+    const blob = new Blob([attendanceCsv(source, month)], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -519,18 +501,21 @@ function ReportSection({ s }: { s: Snapshot }) {
   };
   const totals = rows.reduce((t, r) => ({ present: t.present + r.present, late: t.late + r.late, away: t.away + r.awayDays }), { present: 0, late: 0, away: 0 });
   return (
-    <Panel icon={FileSpreadsheet} title="Monthly report" blurb={s.me.accessRole === 'manager' ? 'You and the people who report to you.' : 'Everyone in the studio. Covers the last four months.'}
+    <Panel icon={ChartColumn} title="Monthly report" blurb={s.me.accessRole === 'manager' ? 'You and the people who report to you.' : 'Everyone in the studio, including months brought over from People Hub.'}
       aside={<div className="flex items-center gap-1">
         <button type="button" className={btnSm} aria-label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))}><ChevronLeft className="w-3.5 h-3.5" /></button>
         <span className="text-sm font-bold text-slate-800 w-36 text-center">{label}</span>
         <button type="button" className={btnSm} aria-label="Next month" onClick={() => setMonth(shiftMonth(month, 1))}><ChevronRight className="w-3.5 h-3.5" /></button>
-        <button type="button" className={`${btnSm} ml-2`} onClick={download}><Download className="w-3.5 h-3.5" />CSV</button>
+        <button type="button" className={`${btnSm} ml-2`} onClick={download} disabled={!source}><Download className="w-3.5 h-3.5" />CSV</button>
       </div>}>
+      {old && !source && (older?.error ? <Notice text={older.error} tone="bad" /> : <div className="space-y-2 mb-4">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-9 rounded-xl" />)}</div>)}
       <div className="grid grid-cols-3 gap-3 mb-4">
-        {([['Days present', totals.present], ['Late arrivals', totals.late], ['Leave days taken', totals.away]] as [string, number][]).map(([k, v], i) => (
-          <motion.div key={k} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06, ease: EASE }} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{k}</p>
-            <p className="text-sm font-black text-slate-800 tabular-nums mt-1"><CountUp value={v} /></p>
+        {([[Fingerprint, 'Days present', totals.present, 'brand'], [Sunrise, 'Late arrivals', totals.late, 'warn'], [TreePalm, 'Leave days taken', totals.away, 'ok']] as const).map(([Icon, k, v, tone], i) => (
+          <motion.div key={k} initial={{ opacity: 0, y: 8, rotateX: -40 }} animate={{ opacity: 1, y: 0, rotateX: 0 }} transition={{ delay: i * 0.08, duration: 0.5, ease: EASE }} style={{ transformPerspective: 600 }}
+            className="group rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-center gap-3">
+            <IconTile icon={Icon} tone={tone} size="sm" />
+            <span><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{k}</p>
+            <p className="text-sm font-black text-slate-800 tabular-nums mt-1"><CountUp value={v} /></p></span>
           </motion.div>
         ))}
       </div>
@@ -557,7 +542,43 @@ function ReportSection({ s }: { s: Snapshot }) {
           </motion.tbody>
         </table>
       </div>
-      <p className="text-[11px] text-slate-500 mt-2">Open: checked in, never checked out. The CSV has every session with times, mode, site and where.</p>
+      <p className="text-[11px] text-slate-500 mt-2">Open: checked in, never checked out (or, from People Hub, no check-out recorded). The CSV has every session with times, mode, site and where.</p>
     </Panel>
+  );
+}
+
+/* ── A leave balance, as a card that turns over ──────────────────────────── */
+
+function BalanceCard({ type, b, onApply }: { type: LeaveType; b: Balance; onApply: () => void }) {
+  const [flipped, setFlipped] = useState(false);
+  const Icon = LEAVE_ICON[type];
+  const tone = b.available <= 0 ? 'slate' : b.available <= 1 ? 'warn' : 'brand';
+  return (
+    <div className="pp-3d h-[208px]">
+      <motion.button type="button" aria-pressed={flipped} aria-label={`${LEAVE_LABELS[type]}: ${b.available} of ${b.entitled} left. ${flipped ? 'Show the ring' : 'Show the details'}`}
+        onClick={() => setFlipped((f) => !f)} animate={{ rotateY: flipped ? 180 : 0 }} transition={{ type: 'spring', stiffness: 160, damping: 18 }}
+        whileHover={{ y: -3 }} className="pp-keep relative w-full h-full text-left">
+        <span className="group pp-face absolute inset-0 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 flex flex-col items-center gap-2 shadow-sm">
+          <span className="absolute top-3 right-3"><IconTile icon={Icon} size="sm" tone={tone} /></span>
+          <Ring value={b.entitled ? b.available / b.entitled : 0} size={92} stroke={8} tone={tone} label={`${LEAVE_LABELS[type]}: ${b.available} of ${b.entitled}`}>
+            <p className="text-lg font-black text-slate-800 tabular-nums leading-none"><CountUp value={b.available} /></p>
+            <p className="text-[10px] text-slate-500 mt-0.5">of {b.entitled}</p>
+          </Ring>
+          <p className="text-sm font-semibold text-slate-800 text-center">{LEAVE_LABELS[type]}</p>
+          <p className="text-[11px] text-slate-500">{b.used} used{b.reserved ? ` · ${b.reserved} held` : ''} · tap to turn</p>
+        </span>
+        <span className="pp-face pp-flipped absolute inset-0 rounded-2xl border border-[#3D52A0]/30 bg-[#3D52A0] text-white p-4 flex flex-col gap-2 shadow-lg">
+          <span className="flex items-center gap-2"><Icon className="w-4 h-4" /><span className="text-sm font-bold">{LEAVE_LABELS[type]}</span></span>
+          {([['Allowed this year', b.entitled], ['Taken', b.used], ['Waiting for approval', b.reserved], ['Left to plan', b.available]] as [string, number][]).map(([k, v]) => (
+            <span key={k} className="flex items-center justify-between text-xs"><span className="opacity-80">{k}</span><span className="font-black tabular-nums">{v}</span></span>
+          ))}
+          <span className="mt-auto flex items-center justify-between">
+            <span className="text-[11px] opacity-80 inline-flex items-center gap-1"><RotateCcw className="w-3 h-3" />Tap to turn back</span>
+            {b.available > 0 && <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onApply(); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onApply(); } }}
+              className="px-2.5 py-1 rounded-lg bg-white text-[#3D52A0] text-xs font-bold hover:bg-slate-100">Plan</span>}
+          </span>
+        </span>
+      </motion.button>
+    </div>
   );
 }

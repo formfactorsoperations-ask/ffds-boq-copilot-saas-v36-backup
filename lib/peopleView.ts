@@ -18,7 +18,7 @@ export function myDay(s: Snapshot): { today: string; session: Attendance | null;
   return {
     today,
     session: mine.find((a) => a.date === today) || null,
-    stale: mine.find((a) => a.date < today && !a.checkOut) || null,
+    stale: mine.find((a) => a.date < today && !a.checkOut && !a.imported) || null,
   };
 }
 
@@ -66,7 +66,7 @@ export function awaitingMe(s: Snapshot): RequestRecord[] {
 }
 
 export const personName = (s: Pick<Snapshot, 'people' | 'me'>, id: string) =>
-  (id === s.me.id ? s.me : s.people.find((p) => p.id === id))?.name || 'Someone';
+  (id === s.me.id ? s.me : s.people.find((p) => p.id === id))?.name || (id === 'people-hub' ? 'People Hub' : 'Someone');
 
 /* ── The calendar ────────────────────────────────────────────────────────── */
 

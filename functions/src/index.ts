@@ -34,6 +34,7 @@ export { designMeeting } from "./designMeeting";
 export { onEscalationWritten, opsDeskDailyCheck, opsDeskCheckNow } from "./opsDesk";
 /* People: attendance and leave; see peopleDesk.ts. */
 export { peopleSnapshot, peopleCommand } from "./peopleDesk";
+export { peopleImport } from "./peopleImport";
 import { confirmMeetingByClient, portalSheetFor } from "./designMeeting";
 import * as pako from "pako";
 import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";

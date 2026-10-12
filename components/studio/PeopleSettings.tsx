@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { Check, Plus, X, MapPin, Crosshair, ChevronDown } from '@/lib/lucide-shim';
 import {
-  LEAVE_LABELS, businessDate, fiscalYear, peopleOf, policyOf,
+  LEAVE_LABELS, addDays, businessDate, fiscalYear, monthlyOffLabel, peopleOf, policyOf, weekOfMonth,
   type LeaveType, type MemberSettings, type PeopleSettings,
 } from '../../lib/peopleDesk';
 import { CountUp, Dot } from '../ui/HudBits';
+import PeopleImport, { type SettingsAdd } from './PeopleImport';
 
 /*
   Studio settings → People (lib/peopleDesk.ts): the working day, leave
@@ -19,6 +20,9 @@ const field = 'w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outli
 const small = 'px-3 py-2 rounded-lg border border-slate-300 text-sm tabular-nums outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] disabled:bg-slate-50';
 const btnSm = 'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50';
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const FULL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const ORDINAL = ['', '1st', '2nd', '3rd', '4th', '5th'];
+const shortDay = (d: string) => new Date(`${d}T12:00:00+05:30`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CHARGED: LeaveType[] = ['PL', 'SL', 'CL', 'COMP'];
 const niceDay = (d: string) => new Date(`${d}T12:00:00+05:30`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -77,6 +81,16 @@ export default function PeopleSettings({ org, canEdit, onChange }: {
   };
   const thisYear = policy.holidays.filter((d) => fiscalYear(d, policy) === fy);
 
+  /* The monthly off, and when it next falls */
+  const monthly = monthlyOffLabel(policy);
+  const nextMonthly = useMemo(() => {
+    const out: string[] = [];
+    let d = businessDate(new Date());
+    for (let i = 0; i < 120 && out.length < 3; i++, d = addDays(d, 1))
+      if (new Date(`${d}T12:00:00Z`).getUTCDay() === policy.monthlyOff.weekday && policy.monthlyOff.weeks.includes(weekOfMonth(d))) out.push(d);
+    return out;
+  }, [policy.monthlyOff]);
+
   /* Office location */
   const office = rawPolicy.office || {};
   const [locating, setLocating] = useState(false);
@@ -95,6 +109,25 @@ export default function PeopleSettings({ org, canEdit, onChange }: {
     );
   };
   const setOffice = (k: 'lat' | 'lng' | 'radiusM', v: string) => setPolicy({ office: { ...office, [k]: v === '' ? '' : Number(v) } });
+
+  /* What a People Hub import adds to these settings: holidays, and comp-off earned there. */
+  const applyImport = ({ holidays, grants }: SettingsAdd) => {
+    const next: PeopleSettings = { ...raw };
+    if (holidays.length) {
+      const names = { ...(rawPolicy.holidayNames || {}) };
+      for (const h of holidays) if (!names[h.date]) names[h.date] = h.name;
+      next.policy = { ...rawPolicy, holidays: [...new Set([...policy.holidays, ...holidays.map((h) => h.date)])].sort(), holidayNames: names };
+    }
+    if (grants.length) {
+      const ms = { ...members };
+      for (const g of grants) {
+        const m = ms[g.personId] || {};
+        ms[g.personId] = { ...m, entitlements: { ...(m.entitlements || {}), [g.fy]: { ...(m.entitlements?.[g.fy] || {}), COMP: g.earned } } };
+      }
+      next.members = ms;
+    }
+    onChange(next);
+  };
 
   /* People */
   const [open, setOpen] = useState<string | null>(null);
@@ -138,12 +171,32 @@ export default function PeopleSettings({ org, canEdit, onChange }: {
             );
           })}
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-          <div>
-            <p className="text-sm font-semibold text-slate-800">2nd and 4th Sunday off</p>
-            <p className="text-xs text-slate-500">On top of the weekly offs above.</p>
+        <div className="flex flex-col gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">{monthly ? `${monthly} off` : 'No monthly off'}</p>
+              <p className="text-xs text-slate-500">On top of the weekly offs above. Pick the day, then which ones in the month.</p>
+            </div>
+            <select aria-label="Monthly off day" disabled={!canEdit}
+              className="px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#3D52A0]/30 disabled:bg-slate-50"
+              value={policy.monthlyOff.weekday} onChange={(e) => setPolicy({ monthlyOff: { ...policy.monthlyOff, weekday: Number(e.target.value) } })}>
+              {DAYS.map((d, i) => <option key={d} value={i}>{FULL_DAYS[i]}</option>)}
+            </select>
           </div>
-          <Toggle label="2nd and 4th Sunday off" on={policy.alternateSundays} disabled={!canEdit} onChange={(v) => setPolicy({ alternateSundays: v })} />
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Weeks of the month">
+            {[1, 2, 3, 4, 5].map((w, i) => {
+              const on = policy.monthlyOff.weeks.includes(w);
+              return (
+                <button key={w} type="button" disabled={!canEdit} aria-pressed={on}
+                  onClick={() => setPolicy({ monthlyOff: { ...policy.monthlyOff, weeks: on ? policy.monthlyOff.weeks.filter((x) => x !== w) : [...policy.monthlyOff.weeks, w].sort() } })}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors hud-row-in ${on ? 'border-[#3D52A0] bg-[#3D52A0] text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'} disabled:opacity-60`}
+                  style={{ animationDelay: `${i * 30}ms` }}>
+                  {on ? <Check className="w-3.5 h-3.5" /> : null}{ORDINAL[w]}
+                </button>
+              );
+            })}
+            <span className="text-[11px] text-slate-500 ml-1">{nextMonthly.length ? `Next: ${nextMonthly.map((d) => shortDay(d)).join(', ')}` : ''}</span>
+          </div>
         </div>
       </Block>
 
@@ -287,6 +340,8 @@ export default function PeopleSettings({ org, canEdit, onChange }: {
           </div>
         )}
       </Block>
+
+      <PeopleImport org={org} canEdit={canEdit} onApply={applyImport} />
     </div>
   );
 }
