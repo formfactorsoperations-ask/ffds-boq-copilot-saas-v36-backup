@@ -50,15 +50,16 @@ test('a day off asked for today needs a decision; someone away is only worth kno
   expect(dayOrder({ rows: null, reviewer: true, viewer: head, visits: null, team: null }).pins.map((p) => p.weight + p.why)).toEqual(['0', '0', '0', '0']);
 });
 
-test('checking in is pin 01 until done, then steps to the end', () => {
+test('My day is always pin 01; it is something to do only until the person is in', () => {
   const rows = [sheet('a', 'DRAFT')];
   const before = dayOrder({ rows, viewer: designer, checkin: { state: 'out' }, attention: { blocked: 1, due: 0 }, now: NOW });
   expect(before.pins.map((p) => p.kind)).toEqual(['checkin', 'attention', 'sheets']);
   expect(before.pins[0].why).toBe('Start here');
   expect(before.toDo).toBe(3);
   const after = dayOrder({ rows, viewer: designer, checkin: { state: 'in', since: '09:42' }, attention: { blocked: 0, due: 2 }, now: NOW });
-  expect(after.pins.map((p) => p.kind)).toEqual(['attention', 'sheets', 'checkin']);
-  expect(after.pins.map((p) => p.why)).toEqual(['Next up', 'Ready to send', 'In since 09:42']);
+  expect(after.pins.map((p) => p.kind)).toEqual(['checkin', 'attention', 'sheets']);
+  expect(after.pins.map((p) => p.why)).toEqual(['In since 09:42', 'Next up', 'Ready to send']);
+  expect(after.toDo).toBe(2);
   expect(dayOrder({ checkin: { state: 'off' } }).pins[0].why).toBe('Day off');
 });
 

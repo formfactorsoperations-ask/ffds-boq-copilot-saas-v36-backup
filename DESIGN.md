@@ -185,8 +185,8 @@ the most time first: a meeting today, then late or blocking work, then work
 ready to go, then what is only worth knowing. Nothing of the day sits below
 the board.
 
-- My day (check in and out) is pin 01 until the person is in; then it steps to
-  the end ("In since 9:42", "Day done", "Day off").
+- My day (check in and out) is always pin 01: "Start here" until the person is
+  in, then "In since 9:42", "Day done" or "Day off".
 - "Needs your attention" (the studio's worklist, `useAttention.ts`) is a pin:
   the top three projects blocked or due, with snooze and dismiss, and the rest
   a tap away.
