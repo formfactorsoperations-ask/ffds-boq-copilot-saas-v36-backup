@@ -21,8 +21,7 @@ import './homeStyles';
   first (lib/homeDay.ts). Each pin is numbered and says in a word why it sits
   where it does. Two staggered columns on a wide screen, one on a phone.
 
-  My day (check in and out) is pin 01 until the person is in, then steps to
-  the end. The studio's worklist ("Needs your attention") and the week ahead
+  My day (check in and out) is always pin 01. The studio's worklist ("Needs your attention") and the week ahead
   (inside "Coming up") live here too, so nothing of the day sits below it.
 */
 

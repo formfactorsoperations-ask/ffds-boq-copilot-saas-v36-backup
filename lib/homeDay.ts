@@ -9,9 +9,10 @@
     meetings   meetings and visits booked with clients, and the week ahead
     team       the team today, and the next holiday
 
-  A pin's weight says how much it asks of the person today. Checking in
-  starts the day, so until then it is pin 01; once in (or on a day off) it
-  steps to the end. Then a meeting today: it cannot move. Then work late or
+  A pin's weight says how much it asks of the person today. My day is always
+  pin 01: checking in starts the day, and checking out ends it (it counts as
+  something to do only until the person is in). Then a meeting today: it
+  cannot move. Then work late or
   blocking others, then work ready to go, then what is only worth knowing.
   Equal weights keep the order above, so the board does not shuffle for
   nothing.
@@ -60,7 +61,7 @@ export interface DayPin {
 
 export function pinWeight(kind: PinKind, i: DayInput): number {
   const now = i.now || new Date();
-  if (kind === 'checkin') return i.checkin?.state === 'out' ? 200 : -1;
+  if (kind === 'checkin') return 200;
   if (kind === 'attention') {
     if (!i.attention) return 0;
     return i.attention.blocked ? 80 : i.attention.due ? 55 : 0;
@@ -122,7 +123,8 @@ export function dayOrder(i: DayInput): { pins: DayPin[]; toDo: number } {
     return { kind, weight, why: loading(kind, i) ? '' : why };
   })
     .sort((a, b) => b.weight - a.weight || ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
-  return { pins, toDo: pins.filter((p) => p.weight >= TO_DO).length };
+  const todo = (p: DayPin) => p.weight >= TO_DO && (p.kind !== 'checkin' || i.checkin?.state === 'out');
+  return { pins, toDo: pins.filter(todo).length };
 }
 
 const WORD = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six'];
