@@ -1,12 +1,15 @@
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext, useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   PenTool, Undo2, Send, Eye, ArrowRight, Stamp, Flame, Clock, Sparkles, CalendarClock, Users, HardHat, Ruler, Video, Phone,
-  MapPin, PartyPopper, TreePalm, House, Hourglass, MessageSquareQuote,
+  MapPin, PartyPopper, TreePalm, House, Hourglass, MessageSquareQuote, BellOff, Check, Flag,
 } from '@/lib/lucide-shim';
 import type { HomeFeeds } from './useHomeFeeds';
 import { dueOf, projectLook, type DeskRow, type Viewer } from '../../lib/designDesk';
 import { mySheets, reviewInbox, whenLabel, type TeamToday, type Upcoming } from '../../lib/homeWidgets';
+import { addDays } from '../../lib/peopleDesk';
+import type { AttentionRow } from './useAttention';
+import type { ImportantDates } from './calendarData';
 import { CountUp, Dot } from '../ui/HudBits';
 import { Confetti, IconTile, Tilt, initials, EASE } from '../people/PeopleBits';
 
@@ -17,7 +20,9 @@ import { Confetti, IconTile, Tilt, initials, EASE } from '../people/PeopleBits';
 
     For you        Design Desk: my sheets to fix and to send, with one tap to open
     Review inbox   Design Desk, for those who review: what waits and for how long
-    Coming up      meetings, site visits and measurements booked with clients
+    Attention      projects blocked or due, with snooze and dismiss
+    Coming up      the week ahead (client meetings and project milestones), then
+                   meetings, site visits and measurements booked with clients
     Team today     who is away or working from home (never why, never who is in),
                    and a countdown to the next holiday
 
@@ -186,14 +191,31 @@ const KIND_ICON: Record<string, React.ComponentType<any>> = { meeting: Users, si
 const KIND_LABEL: Record<string, string> = { meeting: 'Design meeting', site_visit: 'Site visit', measurement: 'Measurement' };
 const MODE_ICON: Record<string, React.ComponentType<any>> = { in_person: MapPin, video: Video, call: Phone };
 
-export function ComingUpWidget({ list, onAll, index, span, wide }: { list: Upcoming[] | null; onAll?: () => void; index: number; span?: string; wide?: boolean }) {
+export function ComingUpWidget({ list, onAll, index, span, wide, today, milestones }: {
+  list: Upcoming[] | null; onAll?: () => void; index: number; span?: string; wide?: boolean;
+  /** With these, a strip of the week ahead leads the card: client meetings and project milestones, day by day. */
+  today?: string; milestones?: ImportantDates;
+}) {
   const pinned = useContext(Pinned);
   const shown = (list || []).slice(0, pinned ? 3 : 4);
+  const week = today && milestones ? weekOf(today, list || [], milestones) : null;
+  const marks = week ? week.flatMap((d) => d.events.map((e) => ({ ...e, day: d }))).slice(0, 2) : [];
   return (
-    <Widget index={index} icon={CalendarClock} eyebrow="Coming up with clients" title={list ? (list.length ? `${list.length} in the next two weeks` : 'Nothing booked') : 'Loading…'}
+    <Widget index={index} icon={CalendarClock} eyebrow={week ? 'Coming up' : 'Coming up with clients'} title={list ? (list.length ? `${list.length} with clients in the next two weeks` : 'No client meetings booked') : 'Loading…'}
       action={onAll ? { label: 'Ops Desk', onClick: onAll } : undefined} span={span}>
+      {week && <WeekStrip week={week} />}
+      {marks.length > 0 && (
+        <ul className="mb-3 flex flex-col gap-1.5">
+          {marks.map((m, k) => (
+            <li key={k} className="flex items-center gap-2 text-[11px] text-slate-600 min-w-0">
+              <span className="w-5 h-5 shrink-0 rounded-md bg-[#B5945B]/15 text-[#8C6A33] grid place-items-center"><Flag className="w-3 h-3" /></span>
+              <b className="font-bold text-slate-800 shrink-0">{m.day.label}</b><span className="truncate">{m.label} · {m.project}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       {!list ? <div className="grid grid-cols-2 gap-3">{[0, 1].map((k) => <div key={k} className="pp-shimmer h-24 rounded-2xl" />)}</div>
-        : shown.length === 0 ? <AllClear text="No meetings or visits booked for the next two weeks." /> : (
+        : shown.length === 0 ? (week ? null : <AllClear text="No meetings or visits booked for the next two weeks." />) : (
           <div className={`grid grid-cols-1 ${pinned ? '' : 'sm:grid-cols-2'} ${wide ? 'xl:grid-cols-4' : ''} gap-3`}>
             {shown.map((u, k) => {
               const Kind = KIND_ICON[u.visit.kind] || Users;
@@ -217,6 +239,117 @@ export function ComingUpWidget({ list, onAll, index, span, wide }: { list: Upcom
             })}
           </div>
         )}
+    </Widget>
+  );
+}
+
+/* The week ahead, a day a cell: a rose dot for each client meeting, a brass one for a project milestone. */
+interface WeekDay { date: string; label: string; meetings: number; events: { label: string; project: string }[] }
+function weekOf(today: string, list: Upcoming[], milestones: ImportantDates): WeekDay[] {
+  return Array.from({ length: 7 }, (_, k) => {
+    const date = addDays(today, k);
+    const d = new Date(`${date}T12:00:00+05:30`);
+    return {
+      date,
+      label: k === 0 ? 'Today' : k === 1 ? 'Tomorrow' : d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' }),
+      meetings: list.filter((u) => u.date === date).length,
+      events: milestones[date]?.events || [],
+    };
+  });
+}
+function WeekStrip({ week }: { week: WeekDay[] }) {
+  return (
+    <div className="mb-3 grid grid-cols-7 gap-1.5" aria-label="The week ahead">
+      {week.map((d, k) => {
+        const day = new Date(`${d.date}T12:00:00+05:30`);
+        const busy = d.meetings + d.events.length;
+        return (
+          <motion.div key={d.date} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + k * 0.04, duration: 0.4, ease: EASE }}
+            title={busy ? `${d.label}: ${d.meetings ? `${d.meetings} client meeting${d.meetings === 1 ? '' : 's'}` : ''}${d.meetings && d.events.length ? ', ' : ''}${d.events.map((e) => e.label).join(', ')}` : d.label}
+            className={`rounded-xl py-1.5 flex flex-col items-center gap-1 ${k === 0 ? 'bg-[#3D52A0] text-white' : busy ? 'bg-white text-slate-800 border border-slate-200/80' : 'text-slate-400'}`}>
+            <span className="text-[10px] font-bold uppercase">{day.toLocaleDateString('en-IN', { weekday: 'narrow' })}</span>
+            <span className="text-sm font-black tabular-nums leading-none">{day.getDate()}</span>
+            <span className="flex gap-0.5 h-1.5">
+              {Array.from({ length: Math.min(3, d.meetings) }, (_, i) => <i key={`m${i}`} className={`w-1.5 h-1.5 rounded-full ${k === 0 ? 'bg-white' : 'bg-[#B4436A]'}`} />)}
+              {d.events.length > 0 && <i className={`w-1.5 h-1.5 rounded-full ${k === 0 ? 'bg-[#D9BF88]' : 'bg-[#B5945B]'}`} />}
+            </span>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Needs your attention (the studio's worklist) ────────────────────────── */
+
+const FLAG = {
+  blocker: { word: 'Blocked', cls: 'bg-rose-100 text-rose-700' },
+  due: { word: 'Next up', cls: 'bg-amber-100 text-amber-700' },
+  suggested: { word: 'Can wait', cls: 'bg-slate-100 text-slate-600' },
+} as const;
+const nameOf = (r: AttentionRow) => r.project.context?.name || r.project.context?.clientName || 'Untitled';
+
+export function AttentionWidget({ rows, money, onOpen, onSnooze, onDismiss, index }: {
+  rows: AttentionRow[]; money: (n: number) => string; index: number;
+  onOpen: (r: AttentionRow, action?: any) => void; onSnooze?: (projectId: string) => void; onDismiss?: (projectId: string) => void;
+}) {
+  const [all, setAll] = useState(false);
+  const [wait, setWait] = useState(false);
+  const now = rows.filter((r) => r.worst !== 'suggested');
+  const later = rows.filter((r) => r.worst === 'suggested');
+  const held = now.reduce((t, r) => t + r.value, 0);
+  const shown = all ? [...now, ...(wait ? later : [])] : now.slice(0, 3);
+  const blocked = now.some((r) => r.worst === 'blocker');
+  return (
+    <Widget index={index} icon={Flame} tone={blocked ? 'bad' : now.length ? 'warn' : 'ok'} eyebrow="Needs your attention"
+      title={now.length ? `${now.length} project${now.length === 1 ? '' : 's'} need${now.length === 1 ? 's' : ''} you${held > 0 ? ` · ${money(held)} held up` : ''}` : 'Everything is clear'}>
+      {now.length === 0 && !wait ? (
+        <>
+          <AllClear text="Nothing is blocked and nothing is due." />
+          {later.length > 0 && <button type="button" onClick={() => { setAll(true); setWait(true); }} className="text-xs font-bold text-[#3D52A0] hover:underline self-center">See {later.length} that can wait</button>}
+        </>
+      ) : (
+        <>
+          <ul className="flex flex-col gap-2">
+            {shown.map((r, k) => {
+              const look = projectLook(r.project.id, nameOf(r));
+              const f = FLAG[r.worst];
+              return (
+                <motion.li key={r.project.id} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 + Math.min(k, 6) * 0.06, ease: EASE }}
+                  className="group/row flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/70 pr-2 hover:bg-white hover:shadow-[0_10px_24px_-16px_rgba(61,82,160,0.55)] transition-all">
+                  <button type="button" onClick={() => onOpen(r, r.actions[0])} className="min-w-0 flex-1 flex items-center gap-3 px-3 py-2.5 text-left">
+                    <span className="w-9 h-9 shrink-0 rounded-xl grid place-items-center text-[10px] font-black text-white shadow-sm" style={{ background: look.color }}>{look.code}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-semibold text-slate-800 truncate">{nameOf(r)}</span>
+                        <span className={`${chip} ${f.cls}`}>{f.word}</span>
+                      </span>
+                      <span className="block text-[11px] text-slate-500 truncate">
+                        {r.actions[0]?.title}{r.actions.length > 1 ? ` +${r.actions.length - 1}` : ''} · {r.idle <= 0 ? 'touched today' : `idle ${r.idle} day${r.idle === 1 ? '' : 's'}`}{r.value > 0 ? ` · ${money(r.value)}` : ''}
+                      </span>
+                    </span>
+                  </button>
+                  {/* Snooze and dismiss, so the queue is yours. Dismissed returns when the project moves again. */}
+                  <span className="flex items-center gap-0.5 opacity-60 group-hover/row:opacity-100 focus-within:opacity-100 transition-opacity">
+                    {onSnooze && <button type="button" onClick={() => onSnooze(r.project.id)} title="Not today: back tomorrow morning" aria-label={`Snooze ${nameOf(r)} until tomorrow`}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-[#3D52A0] hover:bg-slate-100 transition-colors"><BellOff className="w-3.5 h-3.5" /></button>}
+                    {onDismiss && <button type="button" onClick={() => onDismiss(r.project.id)} title="Handled: returns if the project moves again" aria-label={`Mark ${nameOf(r)} handled`}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"><Check className="w-3.5 h-3.5" /></button>}
+                  </span>
+                </motion.li>
+              );
+            })}
+          </ul>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+            {now.length > 3 && <button type="button" onClick={() => { setAll((v) => !v); setWait(false); }} className="text-xs font-bold text-[#3D52A0] hover:underline">{all ? 'Show the top three' : `See all ${now.length}`}</button>}
+            {(all || now.length <= 3) && later.length > 0 && (
+              <button type="button" onClick={() => { setAll(true); setWait((v) => !v); }} className="text-xs font-semibold text-slate-500 hover:text-slate-800">
+                {wait ? 'Hide what can wait' : `${later.length} more can wait`}
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </Widget>
   );
 }

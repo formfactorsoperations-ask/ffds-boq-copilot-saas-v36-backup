@@ -14,7 +14,8 @@ import { ArrivalStrip, ArrivalToasts } from './Arrivals';
   Office and Site check-ins ask the browser for a location first; WFH never
   does. The ring is the working day: how much of it has passed before
   check-in, the hours worked once in, full when the day is done. Shown on
-  Home, at the top of People, and in the Site Supervisor's app.
+  Home (as a pin on "Your day, in order"), at the top of People, and in the
+  Site Supervisor's app.
 */
 
 const btnPri = 'pp-press inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50';
@@ -34,13 +35,14 @@ function useNow(serverTime?: string) {
 export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, onCorrect }: {
   /** Project names to pick from for a site check-in. */
   sites?: string[];
-  variant?: 'full' | 'compact';
+  /** full: People; compact: a wide card; pin: one narrow column inside a pin on Home's day board. */
+  variant?: 'full' | 'compact' | 'pin';
   onOpenPeople?: () => void;
   onCorrect?: (a: Attendance) => void;
 }) {
   const { snapshot, loading, error, run, refresh } = usePeople();
   /* On Home, those who approve hear about arrivals too: refresh every two minutes while it is on screen. */
-  const watching = variant === 'compact' && !!snapshot && snapshot.me.accessRole !== 'employee';
+  const watching = variant !== 'full' && !!snapshot && snapshot.me.accessRole !== 'employee';
   useEffect(() => {
     if (!watching) return;
     const t = window.setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 120000);
@@ -116,19 +118,20 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
 
   const status = session?.checkOut ? 'Day complete' : open ? (late ? 'Checked in, late' : 'Checked in') : holiday ? holiday : off ? 'Studio off day' : onLeave ? (onLeave.mode === 'WFH' ? 'Working from home today' : 'On leave today') : 'Ready when you are';
   const statusTone: 'ok' | 'warn' | 'bad' = session?.checkOut ? 'ok' : open ? (late ? 'warn' : 'ok') : 'warn';
-  const compact = variant === 'compact';
+  const pin = variant === 'pin';
+  const compact = variant !== 'full';
   const fy = currentFy(snapshot);
   const bal = snapshot.balances[fy];
 
   return (
     <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}
-      className="relative overflow-hidden rounded-3xl pp-glass">
-      <div className="pp-glow" />
-      <div className={`relative flex flex-col ${compact ? 'md:flex-row' : 'lg:flex-row'} gap-6 p-6 ${compact ? '' : 'md:p-8'}`}>
+      className={pin ? 'relative' : 'relative overflow-hidden rounded-3xl pp-glass'}>
+      {!pin && <div className="pp-glow" />}
+      <div className={`relative flex flex-col ${pin ? 'gap-4' : `${compact ? 'md:flex-row' : 'lg:flex-row'} gap-6 p-6 ${compact ? '' : 'md:p-8'}`}`}>
         {/* The day */}
         <div className="flex items-center gap-5">
           <Tilt max={10} glare={false} className="rounded-full">
-          <Ring value={ring} size={compact ? 112 : 148} stroke={compact ? 9 : 11} tone={tone} label={`Working day ${Math.round(ring * 100)}%`}>
+          <Ring value={ring} size={pin ? 96 : compact ? 112 : 148} stroke={pin ? 8 : compact ? 9 : 11} tone={tone} label={`Working day ${Math.round(ring * 100)}%`}>
             {session ? (
               <>
                 <p className={`${compact ? 'text-lg' : 'text-2xl'} font-black text-slate-800 tabular-nums leading-none`}>{duration(worked)}</p>

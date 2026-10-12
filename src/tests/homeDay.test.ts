@@ -2,7 +2,8 @@
   Home: "Your day, in order" (lib/homeDay.ts).
 */
 import { test, expect } from 'vitest';
-import { dayOrder, dayTitle } from '../../lib/homeDay';
+import { checkInOf, dayOrder, dayTitle } from '../../lib/homeDay';
+import { DEFAULT_POLICY } from '../../lib/peopleDesk';
 import type { DeskRow } from '../../lib/designDesk';
 import type { TeamToday, Upcoming } from '../../lib/homeWidgets';
 
@@ -47,4 +48,31 @@ test('a day off asked for today needs a decision; someone away is only worth kno
   expect(dayOrder({ team: team({ away: asked }) }).pins[0].weight).toBe(10);
   /* Loading pins stay in place with no weight. */
   expect(dayOrder({ rows: null, reviewer: true, viewer: head, visits: null, team: null }).pins.map((p) => p.weight + p.why)).toEqual(['0', '0', '0', '0']);
+});
+
+test('checking in is pin 01 until done, then steps to the end', () => {
+  const rows = [sheet('a', 'DRAFT')];
+  const before = dayOrder({ rows, viewer: designer, checkin: { state: 'out' }, attention: { blocked: 1, due: 0 }, now: NOW });
+  expect(before.pins.map((p) => p.kind)).toEqual(['checkin', 'attention', 'sheets']);
+  expect(before.pins[0].why).toBe('Start here');
+  expect(before.toDo).toBe(3);
+  const after = dayOrder({ rows, viewer: designer, checkin: { state: 'in', since: '09:42' }, attention: { blocked: 0, due: 2 }, now: NOW });
+  expect(after.pins.map((p) => p.kind)).toEqual(['attention', 'sheets', 'checkin']);
+  expect(after.pins.map((p) => p.why)).toEqual(['Next up', 'Ready to send', 'In since 09:42']);
+  expect(dayOrder({ checkin: { state: 'off' } }).pins[0].why).toBe('Day off');
+});
+
+test('where the working day stands, from the People snapshot', () => {
+  const base: any = {
+    me: { id: 'e1' }, serverTime: '2026-10-14T05:00:00.000Z', attendance: [], availability: [],
+    policy: { ...DEFAULT_POLICY, holidays: [] },
+  };
+  const today = '2026-10-14';
+  const at = (over: any) => ({ ...base, ...over });
+  expect(checkInOf(at({})).state).toBe('out');
+  expect(checkInOf(at({ attendance: [{ employeeId: 'e1', date: today, checkIn: '2026-10-14T04:12:00.000Z' }] }))).toEqual({ state: 'in', since: '09:42' });
+  expect(checkInOf(at({ attendance: [{ employeeId: 'e1', date: today, checkIn: '2026-10-14T04:12:00.000Z', checkOut: '2026-10-14T12:00:00.000Z' }] })).state).toBe('done');
+  expect(checkInOf(at({ policy: { ...base.policy, holidays: [today] } })).state).toBe('off');
+  expect(checkInOf(at({ availability: [{ employeeId: 'e1', start: today, end: today, status: 'Approved', mode: 'Away' }] })).state).toBe('off');
+  expect(checkInOf(at({ availability: [{ employeeId: 'e1', start: today, end: today, status: 'Approved', mode: 'WFH' }] })).state).toBe('out');
 });
