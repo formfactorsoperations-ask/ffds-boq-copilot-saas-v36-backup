@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Plus, Sparkles, ArrowRight, Clock } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { ChevronLeft, ChevronRight, Plus, Sparkles, ArrowRight } from 'lucide-react';
 import { useOrg } from '../../contexts/OrgContext';
 import { isLimitedRole, isClientRelationsRole, seesStudioFinance } from '../../lib/roleAccess';
 import { buildStories, paymentsOf, type Ring, type Story, type StoryAction, type Swatch } from '../../lib/homeStories';
@@ -15,6 +15,7 @@ import type { HomeFeeds } from './useHomeFeeds';
 import { greetingWord } from './useStudioHomeData';
 import { EDGE } from './homeStyles';
 import '../people/peopleStyles';
+import { Tilt } from '../people/PeopleBits';
 
 /*
   THE TOP OF HOME (lib/homeStories.ts): a greeting, the projects you were last
@@ -89,10 +90,8 @@ export default function StoryDeck({ feeds, counts, projects, role, roles, userNa
         <div className="aurora-a absolute -top-48 right-[-6rem] w-[38rem] h-[38rem] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(61, 82, 160,.12), transparent 70%)' }} />
       </div>
       <div className="relative px-5 md:px-12 pt-9 pb-8 flex flex-col items-center text-center">
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">{today}</p>
-          <LiveClock />
-        </div>
+        <LiveClock />
+        <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">{today}</p>
         <h1 className="mt-2 text-[30px] md:text-[44px] font-bold leading-[1.08] tracking-tight" style={{ ...DISPLAY, color: INK }}>
           {greetingWord()}, {first}. {stories.view === 'designer' ? 'Here is your day.' : 'Here is your studio.'}
         </h1>
@@ -149,20 +148,69 @@ function around<T>(list: T[]): T[] {
 
 /* ── The clock at the top of Home ────────────────────────────────────────── */
 
-/** The studio's time now, on the 12-hour clock; the colon ticks. */
+/*
+  The studio's time now, as a flip clock: four navy tiles in 3D (the navy
+  material, plain so the digits read), each digit
+  folding over when it changes, the colon pulsing, AM and PM on a little
+  switch, and a bar that fills with the seconds. It leans toward the mouse.
+  All of it holds still under prefers-reduced-motion.
+*/
 const LiveClock: React.FC = () => {
-  const [now, setNow] = useState(() => new Date().toISOString());
+  const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const t = window.setInterval(() => setNow(new Date().toISOString()), 10000);
+    const t = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(t);
   }, []);
-  const [clock, ampm] = clock12(now).split(' ');
+  const [clock, ampm] = clock12(now.toISOString()).split(' ');
   const [h, m] = clock.split(':');
+  const hh = h.padStart(2, '0');
+  const sec = now.getSeconds();
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-[#3D52A0]" aria-label={`The time is ${clock} ${ampm}`}>
-      <Clock className="w-3.5 h-3.5" />
-      <span className="text-sm font-bold tabular-nums" style={DISPLAY}>{h}<span className="pp-tickover">:</span>{m}</span>
-      <span className="text-[10px] font-bold tracking-wider">{ampm}</span>
+    <Tilt max={12} className="rounded-[22px]">
+      <div role="timer" aria-label={`The time is ${clock} ${ampm}`}
+        className="relative inline-flex flex-col items-center gap-2 rounded-[22px] bg-white/90 border border-slate-200/80 px-4 pt-3.5 pb-3 shadow-[0_24px_40px_-24px_rgba(10,27,51,0.55),inset_0_1px_0_rgba(255,255,255,0.9)]"
+        style={{ transformStyle: 'preserve-3d' }}>
+        <div className="flex items-center gap-1.5" style={{ transform: 'translateZ(24px)' }}>
+          <FlipDigit d={hh[0]} />
+          <FlipDigit d={hh[1]} />
+          <span className="flex flex-col gap-2 px-1" aria-hidden>
+            <i className="pp-tickover w-1.5 h-1.5 rounded-full bg-[#3D52A0]" /><i className="pp-tickover w-1.5 h-1.5 rounded-full bg-[#3D52A0]" />
+          </span>
+          <FlipDigit d={m[0]} />
+          <FlipDigit d={m[1]} />
+          <span className="ml-1.5 flex flex-col gap-1" aria-hidden>
+            {['AM', 'PM'].map((x) => (
+              <span key={x} className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wider transition-colors ${x === ampm ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-400'}`}>{x}</span>
+            ))}
+          </span>
+        </div>
+        {/* The minute so far. */}
+        <span className="relative h-1 w-full rounded-full bg-slate-200/80 overflow-hidden" aria-hidden style={{ transform: 'translateZ(12px)' }}>
+          <span className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#3D52A0] to-[#7B93E6] ${sec ? 'transition-[width] duration-1000 ease-linear' : ''}`} style={{ width: `${((sec + 1) / 60) * 100}%` }} />
+        </span>
+      </div>
+    </Tilt>
+  );
+};
+
+/** One tile of the flip clock: the old digit folds away as the new one folds in. */
+const FlipDigit: React.FC<{ d: string }> = ({ d }) => {
+  const still = useReducedMotion();
+  return (
+    <span className="relative w-[34px] h-[46px] sm:w-[40px] sm:h-[54px] rounded-[10px] overflow-hidden shadow-[0_10px_18px_-8px_rgba(10,27,51,0.7),inset_0_1px_0_rgba(255,255,255,0.18)]"
+      style={{ perspective: 260, background: 'linear-gradient(160deg, #2B3A78 0%, #1E2A5A 100%)' }}>
+      <AnimatePresence initial={false}>
+        <motion.span key={d} className="absolute inset-0 grid place-items-center text-white text-[26px] sm:text-[32px] font-semibold tabular-nums leading-none"
+          style={{ ...DISPLAY, transformOrigin: '50% 50%', backfaceVisibility: 'hidden' }}
+          initial={still ? false : { rotateX: -100, opacity: 0 }} animate={{ rotateX: 0, opacity: 1 }}
+          exit={still ? { opacity: 0 } : { rotateX: 100, opacity: 0 }}
+          transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}>
+          {d.trim()}
+        </motion.span>
+      </AnimatePresence>
+      {/* The fold across the middle, and light on the upper half. */}
+      <span aria-hidden className="absolute inset-x-0 top-1/2 h-px bg-black/35" />
+      <span aria-hidden className="absolute inset-x-0 top-0 h-1/2 bg-white/[0.07]" />
     </span>
   );
 };
