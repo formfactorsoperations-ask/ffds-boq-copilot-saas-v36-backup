@@ -3,7 +3,7 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { requireStaff, rateLimiter } from "./guards";
 import {
-  DomainError, addDays, businessDate, execute, peopleOf, personByEmail, policyOf, scopeSnapshot, validateConfiguration,
+  DomainError, PEOPLE_ADMIN_ROLES, addDays, businessDate, execute, peopleOf, personByEmail, policyOf, scopeSnapshot, validateConfiguration,
   type Attendance, type Command, type Event, type Person, type Policy, type RequestRecord, type Snapshot, type Store,
 } from "../../lib/peopleDesk";
 
@@ -67,6 +67,16 @@ export async function contextOf(request: any): Promise<Ctx> {
   if (!me && staff.platformOwner) {
     me = { id: "platform-owner", name: String(request.auth?.token?.name || "Platform owner").slice(0, 80), title: "Platform owner", teamId: "leadership", managerId: "", accessRole: "admin", active: true, email: staff.email, entitlements: {} };
     people.push(me);
+  }
+  /*
+    Whoever runs the studio in StudioDesk runs People too: the platform owner,
+    and an account whose own role is Owner or Admin, even when their entry on
+    Team & roles carries another role (say Design Head).
+  */
+  if (me && me.active && me.accessRole !== "admin" && (staff.platformOwner || PEOPLE_ADMIN_ROLES.includes(staff.role))) {
+    const id = me.id;
+    me = { ...me, accessRole: "admin" };
+    people.splice(people.findIndex((p) => p.id === id), 1, me);
   }
   if (!me || !me.active) {
     throw new HttpsError("permission-denied", "You are not on attendance yet. Ask an admin to add you in Studio settings → People.");

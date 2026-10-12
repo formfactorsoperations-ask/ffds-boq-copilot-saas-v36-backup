@@ -77,6 +77,8 @@ beforeAll(async () => {
   await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `organizations/${STUDIO}`), ORG); });
   await makeUser('anish', 'anish@i.in', { tenantId: STUDIO, role: 'Owner' });
   await makeUser('tanvi', 'tanvi@i.in', { tenantId: STUDIO, role: 'Designer' });
+  /* An Admin account whose Team & roles entry says only Design Head. */
+  await makeUser('mayuri', 'mayuri@i.in', { tenantId: STUDIO, role: 'Admin' });
 }, 120000);
 afterAll(async () => { await Promise.all(apps.map((a) => deleteApp(a))); await env.cleanup(); });
 
@@ -90,7 +92,10 @@ describe('People Hub import', () => {
   it('is for those who run People only', async () => {
     expect(await code(call.tanvi.imp({ action: 'begin', batch }))).toBe('functions/permission-denied');
     expect(await code(call.tanvi.imp({ action: 'list' }))).toBe('functions/permission-denied');
-  });
+    /* Their account's own role counts, not only the role on Team & roles. */
+    expect(await code(call.mayuri.imp({ action: 'list' }))).toBe('ok');
+    expect((await call.mayuri.snap()).me.accessRole).toBe('admin');
+  }, 30000);
 
   it('saves checked records; StudioDesk\'s own day wins; sending twice does nothing twice', async () => {
     /* Tanvi checked in today on StudioDesk; the workbook also has today. */
