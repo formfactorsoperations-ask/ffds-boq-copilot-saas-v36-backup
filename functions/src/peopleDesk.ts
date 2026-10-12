@@ -53,17 +53,25 @@ interface Ctx { tenantId: string; people: Person[]; policy: Policy; me: Person }
 
 async function contextOf(request: any): Promise<Ctx> {
   const staff = await requireStaff(request);
-  if (!staff.tenantId) throw new HttpsError("permission-denied", "Open People from your studio.");
+  /* The platform owner belongs to no one studio: they name the one they are viewing (as zohoBooks does). */
+  const asked = String(request.data?.tenantId || "");
+  const tenantId = staff.tenantId || (staff.platformOwner && /^[A-Za-z0-9_-]{1,128}$/.test(asked) ? asked : null);
+  if (!tenantId) throw new HttpsError("permission-denied", "Open People from your studio.");
   if (!underLimit(staff.uid)) throw new HttpsError("resource-exhausted", "Too many requests. Wait a minute and try again.");
-  const org = (await db().doc(`organizations/${staff.tenantId}`).get()).data() || {};
+  const org = (await db().doc(`organizations/${tenantId}`).get()).data() || {};
   const people = peopleOf(org);
   const policy = policyOf(org);
   validateConfiguration(people, policy);
-  const me = personByEmail(people, staff.email);
+  let me = personByEmail(people, staff.email);
+  /* The platform owner looking in on a studio whose team does not list them: they see it as an admin. */
+  if (!me && staff.platformOwner) {
+    me = { id: "platform-owner", name: String(request.auth?.token?.name || "Platform owner").slice(0, 80), title: "Platform owner", teamId: "leadership", managerId: "", accessRole: "admin", active: true, email: staff.email, entitlements: {} };
+    people.push(me);
+  }
   if (!me || !me.active) {
     throw new HttpsError("permission-denied", "You are not on attendance yet. Ask an admin to add you in Studio settings → People.");
   }
-  return { tenantId: staff.tenantId, people, policy, me };
+  return { tenantId, people, policy, me };
 }
 
 async function snapshotFor(ctx: Ctx, now: string): Promise<Snapshot> {

@@ -9,6 +9,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from './firebaseClient';
 import type { Command, Snapshot } from '../lib/peopleDesk';
 import { newCommandId } from '../lib/peopleView';
+import { useOrg } from '../contexts/OrgContext';
 
 export interface Reading { lat: number; lng: number; accuracyM: number }
 
@@ -28,6 +29,8 @@ export function readLocation(timeoutMs = 15000): Promise<{ reading: Reading | nu
 
 interface State { snapshot: Snapshot | null; loading: boolean; error: string | null; at: number }
 let state: State = { snapshot: null, loading: false, error: null, at: 0 };
+/* The studio being viewed. Staff belong to one; the platform owner names it (functions/src/peopleDesk.ts). */
+let tenantId = '';
 const listeners = new Set<() => void>();
 const set = (patch: Partial<State>) => { state = { ...state, ...patch }; listeners.forEach((l) => l()); };
 const subscribe = (l: () => void) => { listeners.add(l); return () => listeners.delete(l); };
@@ -45,7 +48,7 @@ export function refreshPeople(): Promise<void> {
   if (inflight) return inflight;
   if (!functions) { set({ error: 'People needs the studio to be connected.', loading: false }); return Promise.resolve(); }
   set({ loading: true });
-  inflight = httpsCallable(functions, 'peopleSnapshot', { timeout: 30000 })({})
+  inflight = httpsCallable(functions, 'peopleSnapshot', { timeout: 30000 })({ tenantId })
     .then((r: any) => set({ snapshot: r.data.snapshot, error: null, at: Date.now() }))
     .catch((e) => set({ error: messageOf(e) }))
     .finally(() => { set({ loading: false }); inflight = null; });
@@ -63,7 +66,7 @@ export async function runPeople(action: Command['action'], data: Command['data']
   const call = httpsCallable(functions, 'peopleCommand', { timeout: 40000 });
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const r: any = await call({ command });
+      const r: any = await call({ command, tenantId });
       set({ snapshot: r.data.snapshot, error: null, at: Date.now() });
       return { ok: true };
     } catch (e: any) {
@@ -76,12 +79,15 @@ export async function runPeople(action: Command['action'], data: Command['data']
 
 /** The shared snapshot; loads on first use, and again when the tab comes back after half a minute. */
 export function usePeople() {
+  const studio = String((useOrg() as any)?.orgData?.tenantId || '');
   const s = useSyncExternalStore(subscribe, () => state, () => state);
   useEffect(() => {
+    if (!studio) return;
+    if (studio !== tenantId) { tenantId = studio; set({ snapshot: null, error: null, at: 0 }); inflight = null; refreshPeople(); return; }
     if (!state.snapshot && !state.loading) refreshPeople();
     const onFocus = () => { if (Date.now() - state.at > 30000) refreshPeople(); };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, []);
+  }, [studio]);
   return { ...s, refresh: refreshPeople, run: runPeople };
 }
