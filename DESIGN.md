@@ -141,3 +141,12 @@ Same fonts, same colours. Still People only.
   (`PeopleCalendar.tsx`: months turn like pages, days ripple in), leave balances
   that turn over for detail, tilting directory cards, and the check-in button.
 - Everything still stops under `prefers-reduced-motion`.
+
+### Home widgets (approved 12 Oct 2026)
+
+The shelf of widgets on Home (`components/home/HomeWidgets.tsx`, rules in
+`lib/homeWidgets.ts`) uses the same People motion kit: glass cards that tilt,
+icon tiles, coins and flip digits, with the same fonts and colours. Widgets:
+Design Desk "for you" and the review inbox, meetings and visits booked with
+clients, the team today (who is away or working from home only), and the next
+holiday. Each shows only for the roles that open what it shows.

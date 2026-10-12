@@ -11,6 +11,7 @@ import {
 } from "../services/attentionState";
 import StudioFooter from "./home/StudioFooter";
 import MyDayCard from "./people/MyDayCard";
+import HomeWidgets from "./home/HomeWidgets";
 import { isLimitedRole, seesStudioFinance, mayOpenStudioTab } from "../lib/roleAccess";
 import {
   ArrowRight, CheckCircle2, ChevronDown, Plus, Sparkles, Clock, Wallet, Zap, Layers3, Check, BellOff,
@@ -529,6 +530,11 @@ const RANK: Record<string, number> = { blocker: 0, due: 1, suggested: 2 };
           <MyDayCard variant="compact" sites={projects.map((p: any) => String(p?.context?.name || "")).filter(Boolean)} onOpenPeople={() => onNavigate?.("people")} />
         </div>
       )}
+
+      {/* Widgets: Design Desk for you and the review inbox, meetings with clients, the team today. */}
+      <div className="max-w-[1400px] mx-auto w-full">
+        <HomeWidgets projects={projects} role={role} roles={roles} onNavigate={(t) => onNavigate?.(t)} />
+      </div>
 
       <div className="max-w-[1400px] mx-auto w-full">
         <ClockCalendar projects={projects} />
