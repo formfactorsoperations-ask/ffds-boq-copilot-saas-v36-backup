@@ -98,8 +98,9 @@ to feel more modern and more animated than the console screens, with the
 **same type and colour rules as everywhere else**. Only People uses this kit;
 other screens keep the motion listed above.
 
-- Classes live in `components/people/people.css` (import it, or import from
-  `components/people/PeopleBits.tsx`, which does):
+- Classes live in `components/people/peopleStyles.ts`, which adds them to the page
+  when first imported (import it, or import from `components/people/PeopleBits.tsx`,
+  which does). There is no separate .css file to forget when syncing:
   - `pp-glass` and `pp-glow`: the glass card and its slow brand glow.
   - `Ring` (`pp-ring-*`): progress rings that fill from empty (the working
     day, leave balances).
@@ -132,7 +133,7 @@ Same fonts, same colours. Still People only.
   - `Confetti`: a short burst in the brand and state colours only;
   - `LEAVE_ICON` / `MODE_ICON`: palm (planned), thermometer (sick), coffee (casual),
     gift (comp-off), house (home); building (office), hard hat (site).
-- In `people.css`: `pp-3d`, `pp-keep`, `pp-face`, `pp-flipped` (3D stage and flip faces),
+- In `peopleStyles.ts`: `pp-3d`, `pp-keep`, `pp-face`, `pp-flipped` (3D stage and flip faces),
   `pp-press` (a button with depth that sinks when pressed, and a passing light),
   `pp-hatch` (studio off days), `pp-today` (today's breathing ring), `pp-orbit*`
   (faces circling a tilted ring), `pp-door` (the arrival icon swinging open) and
