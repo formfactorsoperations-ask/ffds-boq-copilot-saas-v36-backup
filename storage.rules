@@ -83,9 +83,10 @@ service firebase.storage {
       (the emulator does not enforce this), and a third read is a denial. So
       each branch below reads two: a Designer their profile and the
       designView, which only the server writes and which carries the
-      project's own tenantId; the studio their profile and the project. The
-      Designer branch is asked first, and a studio role leaves it at the
-      profile, before the designView is read.
+      project's own tenantId; the studio their profile and the project; the
+      platform owner, whom the drawingReview function lets upload, the
+      project alone. The Designer branch is asked before the studio's, and a
+      studio role leaves it at the profile, before the designView is read.
     */
     function projectDesignerOf(tenantId, projectId) {
       let view = /databases/(default)/documents/projects/$(projectId)/designView/current;
@@ -104,7 +105,8 @@ service firebase.storage {
     match /drawingReview/{tenantId}/{projectId}/{drawingId}/uploads/{uid}/{file} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
-        && (projectDesignerOf(tenantId, projectId)
+        && ((isPlatformOwner() && projectTenant(projectId) == tenantId)
+            || projectDesignerOf(tenantId, projectId)
             || (reviewStaff(tenantId) && profile().get('role', '') != 'Viewer' && projectTenant(projectId) == tenantId))
         && request.resource.size < 25 * 1024 * 1024
         && request.resource.contentType in ['application/pdf', 'image/png'];
