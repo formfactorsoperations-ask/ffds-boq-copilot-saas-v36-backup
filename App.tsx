@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, lazy, Suspense, useCallback } from "react";
 import SuccessWithNextToast from './components/SuccessWithNextToast';
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Menu, X } from '@/lib/lucide-shim';
 import Sidebar from "./components/Header";
 import Breadcrumb from "./components/Breadcrumb";
@@ -2600,7 +2600,6 @@ export default function App() {
     setActiveTab("dashboard");
   };
 
-  const MotionDiv = motion.div as any;
 
   // Render Logic
     /* Where this person last was, per project. Loaded once on sign-in and
@@ -3060,14 +3059,13 @@ export default function App() {
                   }}
                 >
                 <div className={`flex-grow h-full overflow-y-auto ${activeTab === "client" || activeTab === "client-boq-pack" ? "" : "pt-3 pb-8 px-4 lg:px-6"}`}>
-                  <AnimatePresence mode="wait">
-                <MotionDiv
-                  key={activeTab}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 0 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                >
+                  {/*
+                    The tab swap. This was AnimatePresence mode="wait", which mounts the new
+                    tab only once the old one has finished fading out; when that exit
+                    stalled, the new tab never appeared and the page stayed blank with
+                    nothing in the console. A CSS entrance (hud-swap) needs no exit.
+                  */}
+                  <div key={activeTab} className="hud-swap">
                   <Suspense fallback={
                     <div className="p-12 flex flex-col items-center justify-center text-slate-400 space-y-3">
                       <div className="w-6 h-6 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
@@ -3816,8 +3814,7 @@ export default function App() {
                     )
                   )}
                   </Suspense>
-                </MotionDiv>
-              </AnimatePresence>
+                </div>
                 </div>
               </ProjectWorkspace>
               <SuccessWithNextToast projectId={activeInternalId || undefined} projectContext={projectContext} />
@@ -3827,14 +3824,13 @@ export default function App() {
                   {activeTab !== "client" && activeTab !== "client-boq-pack" && (
                     <PageTitleBlock route={activeTab} />
                   )}
-                  <AnimatePresence mode="wait">
-                <MotionDiv
-                  key={activeTab}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 0 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                >
+                  {/*
+                    The tab swap. This was AnimatePresence mode="wait", which mounts the new
+                    tab only once the old one has finished fading out; when that exit
+                    stalled, the new tab never appeared and the page stayed blank with
+                    nothing in the console. A CSS entrance (hud-swap) needs no exit.
+                  */}
+                  <div key={activeTab} className="hud-swap">
                   <Suspense fallback={
                     <div className="p-12 flex flex-col items-center justify-center text-slate-400 space-y-3">
                       <div className="w-6 h-6 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
@@ -4560,8 +4556,7 @@ export default function App() {
                     )
                   )}
                   </Suspense>
-                </MotionDiv>
-              </AnimatePresence>
+                </div>
               </div>
             )}
           </main>
