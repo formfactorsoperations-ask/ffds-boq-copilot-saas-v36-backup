@@ -9,6 +9,7 @@ import { syncStudioAccess, NO_STUDIO_MESSAGE } from '../services/studioAccess';
 import { setCachedAccessToken } from '../services/authService';
 import { StudioDeskLogo, TervaroMark } from './brand/StudioDeskLogo';
 import { BRAND } from '../lib/brand';
+import { signInMessage } from '../lib/signInErrors';
 
 interface LoginScreenProps {
     onLoginOps: () => void;
@@ -109,7 +110,8 @@ export default function LoginScreen({ onLoginOps, mustSetPasswordFor, onPassword
 
         if (auth && db) {
             try {
-                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                // A pasted email often carries a space at either end.
+                const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
                 const user = userCredential.user;
                 
                 const resolved = await resolveStudioAccess(user);
@@ -134,7 +136,7 @@ export default function LoginScreen({ onLoginOps, mustSetPasswordFor, onPassword
                 }
                 onLoginOps();
             } catch (err: any) {
-                setError(err.message || 'Authentication failed');
+                setError(signInMessage(err));
                 setIsLoading(false);
             }
         } else {
@@ -178,7 +180,7 @@ export default function LoginScreen({ onLoginOps, mustSetPasswordFor, onPassword
                 const domain = window.location.hostname;
                 setError(`Firebase Domain Error: Please add "${domain}" to Firebase Console -> Authentication -> Settings -> Authorized domains.`);
             } else {
-                setError(err.message || 'Google Auth failed');
+                setError(signInMessage(err));
             }
             setIsLoading(false);
         }
