@@ -9,7 +9,8 @@ import { OrgProvider } from '../../contexts/OrgContext';
 test('ProjectContextCard area parsing does not multiply by 10 (1200 -> 1200)', () => {
     
     const Wrapper = () => {
-        const [context, setContext] = useState({ area: 0, rooms: [] } as any);
+        /* A real area to start from: the field shows nothing at 0, so "the box showing 0" was some other field. */
+        const [context, setContext] = useState({ area: 900, rooms: [] } as any);
         return (
             <OrgProvider>
                 <ProjectContextCard projectContext={context} setProjectContext={setContext} aiStrategy="balanced" />
@@ -19,7 +20,7 @@ test('ProjectContextCard area parsing does not multiply by 10 (1200 -> 1200)', (
     }
 
     render(<Wrapper />);
-    const areaInput = screen.getByDisplayValue('0') as HTMLInputElement;
+    const areaInput = screen.getByDisplayValue('900') as HTMLInputElement;
     fireEvent.change(areaInput, { target: { value: '1200' } });
     
     expect(screen.getByTestId('output').textContent).toBe('1200');
