@@ -2,7 +2,7 @@ import { collection, collectionGroup, doc, onSnapshot, query, where, orderBy } f
 import { ref, uploadBytesResumable, getBlob } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import { db, storage, functions } from './firebaseClient';
-import { uploadPrefix, readShape, type ReviewSummary, type ReviewVersion, type ReviewMark, type ReviewRound, type ReviewEvent, type MarkShape } from '../lib/drawingReview';
+import { uploadPrefix, readShape, MAX_PDF_BYTES, type ReviewSummary, type ReviewVersion, type ReviewMark, type ReviewRound, type ReviewEvent, type MarkShape } from '../lib/drawingReview';
 
 /*
   The browser's side of Design Review: it listens, uploads into its own
@@ -122,7 +122,12 @@ function put(path: string, data: Blob, contentType: string, onProgress?: (fracti
     const task = uploadBytesResumable(ref(storage!, path), data, { contentType });
     task.on('state_changed',
       (s) => onProgress?.(s.totalBytes ? s.bytesTransferred / s.totalBytes : 0),
-      (e) => reject(new ReviewError(e?.code === 'storage/unauthorized' ? 'You cannot upload to this drawing.' : 'The upload stopped. Check the connection and try again.', String(e?.code || 'upload'))),
+      /*
+        The server has already said yes (the check in uploadSheet), so a refusal
+        here means the file store's rules disagree with it -- usually storage.rules
+        not deployed, or Storage not allowed to read Firestore for its rules.
+      */
+      (e) => reject(new ReviewError(e?.code === 'storage/unauthorized' ? 'The file store refused the upload, although the studio allows it. Ask the studio admin to check the storage rules are deployed. Nothing was uploaded.' : 'The upload stopped. Check the connection and try again.', String(e?.code || 'upload'))),
       () => resolve());
   });
 }
@@ -136,6 +141,8 @@ export async function uploadSheet(t: Target, uid: string, file: File, opts: {
   note?: string; submit?: boolean; thumb?: Blob | null; expectedRev?: number;
   onStage?: (stage: 'uploading' | 'checking', fraction?: number) => void;
 }) {
+  /* The file store refuses anything this size with a bare 403; say why before any bytes move. */
+  if (file.size >= MAX_PDF_BYTES) throw new ReviewError('That PDF is over 25 MB. Export it smaller and try again.', 'too-large');
   /*
     Ask the server first. A refusal (wrong project, sheet under review) is
     explained before any bytes move, and if the drawingReview function is not
