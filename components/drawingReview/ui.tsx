@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check } from 'lucide-react';
 import { fileUrl } from '../../services/drawingReviewService';
 import type { ReviewSummary } from '../../lib/drawingReview';
@@ -91,7 +92,8 @@ export function ToastHost({ children }: { children: React.ReactNode }) {
   return (
     <ToastCtx.Provider value={push}>
       {children}
-      <div className="pointer-events-none fixed bottom-5 left-1/2 z-[120] flex -translate-x-1/2 flex-col items-center gap-2" style={{ width: 'min(440px, calc(100vw - 32px))' }} aria-live="polite">
+      {/* On the page itself, so an animated ancestor's transform cannot hold the toasts under a full-screen sheet. */}
+      {createPortal(<div className="pointer-events-none fixed bottom-5 left-1/2 z-[120] flex -translate-x-1/2 flex-col items-center gap-2" style={{ width: 'min(440px, calc(100vw - 32px))' }} aria-live="polite">
         {list.map((t) => (
           <div key={t.id} className="dr-pop relative flex w-full items-start gap-2.5 rounded-2xl bg-[#14211E] px-4 py-3 text-[13px] font-bold text-white" style={{ boxShadow: '0 20px 40px -16px rgba(0,0,0,.5)' }}>
             {t.celebrate && <Burst x={26} y={22} count={22} spread={90} />}
@@ -99,7 +101,7 @@ export function ToastHost({ children }: { children: React.ReactNode }) {
             <div>{t.title}{t.sub && <small className="mt-0.5 block font-medium opacity-75">{t.sub}</small>}</div>
           </div>
         ))}
-      </div>
+      </div>, document.body)}
     </ToastCtx.Provider>
   );
 }
