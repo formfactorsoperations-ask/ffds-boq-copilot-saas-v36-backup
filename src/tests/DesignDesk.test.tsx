@@ -8,17 +8,17 @@ import { render, screen, fireEvent, cleanup, act, within } from '@testing-librar
   dragging, search, and opening a sheet.
 */
 
-const h = vi.hoisted(() => ({ org: {} as any, studio: [] as any[], trackers: {} as Record<string, any[]>, submit: null as any }));
+const h = vi.hoisted(() => ({ org: {} as any, studio: [] as any[], trackers: {} as Record<string, any[]>, versions: [] as any[], submit: null as any }));
 
 vi.mock('../../contexts/OrgContext', () => ({ useOrg: () => h.org }));
-vi.mock('../../lib/pdfRender', () => ({ thumbnailOf: vi.fn(async () => null), loadPdf: vi.fn(), renderPage: vi.fn() }));
+vi.mock('../../lib/pdfRender', () => ({ thumbnailOf: vi.fn(async () => null), loadPdf: vi.fn(() => new Promise(() => undefined)), renderPage: vi.fn() }));
 vi.mock('../../services/drawingReviewService', () => {
   const none = () => () => undefined;
   return {
     watchStudioReviews: (_o: string, cb: (r: any[]) => void) => { cb(h.studio); return () => undefined; },
     watchProjectDrawings: (_o: string, p: string, cb: (r: any[]) => void) => { cb(h.trackers[p] || []); return () => undefined; },
     watchDrawing: (_o: string, p: string, d: string, cb: (r: any) => void) => { cb([...h.studio, ...Object.values(h.trackers).flat()].find((x) => x.projectId === p && x.id === d) || null); return () => undefined; },
-    watchVersions: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb([]); return () => undefined; },
+    watchVersions: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb(h.versions); return () => undefined; },
     watchMarks: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb([]); return () => undefined; },
     watchRounds: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb([]); return () => undefined; },
     watchEvents: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb([]); return () => undefined; },
@@ -68,8 +68,11 @@ beforeEach(() => {
   cleanup();
   localStorage.clear();
   data();
+  h.versions = [];
   h.submit = vi.fn(async () => ({}));
   window.scrollTo = vi.fn() as any;
+  /* The sheet measures its box; jsdom has no layout to measure. */
+  (globalThis as any).ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
 });
 
 const asHead = () => { h.org = { orgData: { tenantId: 's' }, currentRole: 'Design Head', currentUserAuth: { uid: 'head', email: 'head@studio.in', displayName: 'Design Head' } }; };
@@ -148,5 +151,22 @@ describe('Design Desk', () => {
     expect(screen.getByText('A clear desk')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Design Desk/ }));
     expect(screen.getByRole('heading', { name: 'Design Desk' })).toBeTruthy();
+  });
+
+  it('gives a sheet under review the whole screen, and leaves it with Esc or F', () => {
+    asHead();
+    h.versions = [{ id: 'v1', n: 1, pdfPath: 'x.pdf', by: person('Kabir'), at: NOW }];
+    render(<DesignDeskTab projects={projects} activeProjectId="p1" />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open Master Bedroom Wardrobe' })[0]);
+    expect(screen.getByRole('heading', { name: 'Master Bedroom Wardrobe' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Full screen' }));
+    expect(screen.getByRole('button', { name: /Exit · Esc/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /Notes/ })).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('button', { name: /Exit · Esc/ })).toBeNull();
+    fireEvent.keyDown(window, { key: 'f' });
+    expect(screen.getByRole('button', { name: /Exit · Esc/ })).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'f' });
+    expect(screen.queryByRole('button', { name: /Exit · Esc/ })).toBeNull();
   });
 });

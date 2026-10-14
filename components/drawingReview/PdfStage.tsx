@@ -156,8 +156,9 @@ export default function PdfStage(props: Props) {
 
   const error = main.error || other.error;
   return (
-    <div ref={wrap} className="flex w-full justify-center">
-      <div className="relative" style={{ width: main.size?.width || width, minHeight: main.size ? undefined : width * 0.7 }}>
+    /* Centred by its margins, not justify-center: a page zoomed wider than the view then starts at its left edge and scrolls, instead of spilling out of reach. */
+    <div ref={wrap} className="flex w-full">
+      <div className="relative mx-auto shrink-0" style={{ width: main.size?.width || width, minHeight: main.size ? undefined : width * 0.7 }}>
         <div className="relative overflow-hidden rounded-[3px] bg-white" style={{ boxShadow: '0 1px 2px rgba(23,25,30,.08), 0 24px 50px -26px rgba(23,25,30,.45), 0 0 0 1px rgba(23,25,30,.08)' }}>
           {comparePath ? (
             <>
@@ -175,7 +176,7 @@ export default function PdfStage(props: Props) {
             <>
               <canvas ref={main.canvas} className="block" />
               {main.size && (
-                <svg ref={svg} viewBox={`0 0 1000 ${H}`} className="absolute inset-0 h-full w-full" style={{ cursor: drawing ? 'crosshair' : 'default', touchAction: 'none' }}
+                <svg ref={svg} viewBox={`0 0 1000 ${H}`} className="absolute inset-0 h-full w-full" style={{ cursor: drawing ? 'crosshair' : undefined, touchAction: 'none' }}
                   onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { start.current = null; setLive(null); }}>
                   {(changes || []).map((c, i) => {
                     const t = turnShape({ t: 'rect', ...c }, turn, 'view') as { x: number; y: number; w: number; h: number };

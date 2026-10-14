@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
-  Check, ChevronDown, ChevronLeft, ChevronRight, Columns2, History, Info, Layers, ListChecks, Loader2, MapPin, MessageSquare,
-  Minus, MousePointer2, MoveUpRight, PenLine, Plus, Presentation, RotateCcw, RotateCw, Send, Sparkles, Square, Trash2, Undo2, Upload,
+  Check, ChevronDown, ChevronLeft, ChevronRight, Columns2, History, Info, Layers, ListChecks, Loader2, MapPin, Maximize2, MessageSquare,
+  Minimize2, Minus, MousePointer2, MoveUpRight, PenLine, Plus, Presentation, RotateCcw, RotateCw, Send, Sparkles, Square, Trash2, Undo2, Upload,
 } from 'lucide-react';
 import {
   watchDrawing, watchVersions, watchMarks, watchRounds, watchEvents, uploadSheet, submitSheet, withdrawSheet,
@@ -42,7 +43,7 @@ interface Props {
 }
 
 const TOOLS: [Tool, string, string, string, React.ComponentType<any>][] = [
-  ['select', 'V', 'Select', 'Click a note to see it. Clicks on the sheet add nothing.', MousePointer2],
+  ['select', 'V', 'Select', 'Click a note to see it. Drag the sheet to move around it.', MousePointer2],
   ['pin', 'P', 'Pin', 'Click to drop a numbered note', MapPin],
   ['rect', 'B', 'Box', 'Drag across an area to box it', Square],
   ['arrow', 'A', 'Arrow', 'Drag from the note to what it points at', MoveUpRight],
@@ -97,6 +98,53 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
   const draftBox = useRef<HTMLTextAreaElement>(null);
   const depth = useRef(0);
 
+  /*
+    Moving around a zoomed sheet: drag it with Select, or hold Space (or the
+    middle button) with any other tool. Full screen gives the sheet and its
+    notes the whole screen, as a design meeting does; it covers the app with
+    a fixed layer and asks the browser for full screen on the whole page, so
+    toasts still show over it.
+  */
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const pan = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  const [grabbing, setGrabbing] = useState(false);
+  const [scrollable, setScrollable] = useState(false);
+  const [space, setSpace] = useState(false);
+  const overSheet = useRef(false);
+  const [full, setFull] = useState(false);
+  const [vh, setVh] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 900));
+  const measure = useCallback(() => { const el = scroller.current; if (el) setScrollable(el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1); }, []);
+  /* The page is redrawn a moment after a zoom, turn or resize; the grab hand follows once it has its new size. */
+  useEffect(() => { const t = setTimeout(measure, 450); return () => clearTimeout(t); }, [zoom, turn, full, page, vh, measure]);
+  const enterFull = useCallback(() => {
+    setFull(true);
+    document.documentElement.requestFullscreen?.().catch(() => undefined);
+  }, []);
+  const exitFull = useCallback(() => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
+    setFull(false);
+  }, []);
+  useEffect(() => {
+    const onResize = () => setVh(window.innerHeight);
+    const onFs = () => { if (!document.fullscreenElement) setFull(false); };
+    window.addEventListener('resize', onResize);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      document.removeEventListener('fullscreenchange', onFs);
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
+    };
+  }, []);
+  useEffect(() => {
+    const typing = () => { const el = document.activeElement as HTMLElement | null; return !!el && /INPUT|TEXTAREA|SELECT/.test(el.tagName); };
+    /* Only with the pointer on the sheet, so Space still presses a focused button anywhere else. */
+    const down = (e: KeyboardEvent) => { if (e.key === ' ' && overSheet.current && !typing()) { e.preventDefault(); setSpace(true); } };
+    const up = (e: KeyboardEvent) => { if (e.key === ' ') setSpace(false); };
+    const blur = () => setSpace(false);
+    window.addEventListener('keydown', down); window.addEventListener('keyup', up); window.addEventListener('blur', blur);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur); };
+  }, []);
+
   useEffect(() => {
     setD(undefined); setViewId(null); setPage(0); setCompare(false); setSelected(null); setDraft(null); setRetMsg(''); setRequestOpen(false);
     const off = [
@@ -149,16 +197,17 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
     const key = (e: KeyboardEvent) => {
       const el = document.activeElement as HTMLElement | null;
       if (el && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) return;
-      if (e.key === 'Escape') { if (draft) setDraft(null); else if (versionMenu) setVersionMenu(false); else setTool('select'); return; }
+      if (e.key === 'Escape') { if (draft) setDraft(null); else if (versionMenu) setVersionMenu(false); else if (tool !== 'select') setTool('select'); else if (full) exitFull(); return; }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = ({ v: 'select', p: 'pin', b: 'rect', a: 'arrow', d: 'pen' } as Record<string, Tool>)[e.key.toLowerCase()];
       if (t && canMark) setTool(t);
       if (e.key.toLowerCase() === 'c' && prev) setCompare((c) => !c);
       if (e.key.toLowerCase() === 'r') rotate();
+      if (e.key.toLowerCase() === 'f') { if (full) exitFull(); else enterFull(); }
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [canMark, prev?.id, !!draft, versionMenu]);
+  }, [canMark, prev?.id, !!draft, versionMenu, tool, full]);
 
   /* A PDF dropped anywhere on this screen becomes this sheet's next version. */
   useEffect(() => {
@@ -279,6 +328,28 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
   const toolNow = TOOLS.find((t) => t[0] === tool) || TOOLS[0];
   const dockBtn = (on = false) => `inline-flex min-h-[40px] min-w-[40px] items-center justify-center gap-1.5 rounded-[11px] px-2.5 text-[12.5px] font-bold transition disabled:opacity-40 ${on ? 'bg-[#17191E] text-white' : 'text-[#4F535C] hover:bg-[#F1F1EC] hover:text-[#17191E]'}`;
   const sep = <span className="mx-1 h-6 w-px shrink-0 bg-[#E4E4DE]" />;
+  /* Select, or Space held, moves the sheet; marks, the note box and the compare slider keep their own clicks. */
+  const moving = space || tool === 'select' || !canMark;
+  const panStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = scroller.current;
+    if (!el || (e.button !== 1 && (e.button !== 0 || !moving))) return;
+    if (e.button === 0 && (e.target as HTMLElement).closest('button, a, input, textarea, select, label')) return;
+    if (el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1) return;
+    e.preventDefault();
+    el.setPointerCapture?.(e.pointerId);
+    pan.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
+    setGrabbing(true);
+  };
+  const panMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = scroller.current, p = pan.current;
+    if (!el) return;
+    if (!p) { measure(); return; }
+    el.scrollLeft = p.left - (e.clientX - p.x);
+    el.scrollTop = p.top - (e.clientY - p.y);
+  };
+  const panEnd = () => { pan.current = null; setGrabbing(false); };
+  /* Full screen is drawn on the page itself: an animated ancestor keeps a transform, which would hold a fixed layer inside it. */
+  const portal = (n: React.ReactNode) => (full ? createPortal(n, document.body) : n);
   const draftNo = (r?.marksSeq || 0) + 1;
   const roundLabel = (v: ReviewVersion) => {
     const rd = [...rounds].reverse().find((x) => x.versionId === v.id);
@@ -385,8 +456,18 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
         )}
       </div>
 
-      <div className="flex flex-wrap items-stretch gap-4">
-        <div className="relative flex min-h-[620px] min-w-0 flex-[999_1_620px] flex-col overflow-hidden rounded-[22px]"
+      {portal(
+      <div className={full ? 'fixed inset-0 z-[110] flex items-stretch gap-4 p-4 pt-[68px] text-[#17191E]' : 'flex flex-wrap items-stretch gap-4'}
+        style={full ? { backgroundColor: '#EDEDE7', backgroundImage: 'radial-gradient(#D6D6CE 1px, transparent 1px)', backgroundSize: '20px 20px' } : undefined}>
+        {full && <>
+          <div className="absolute left-4 top-3.5 flex max-w-[calc(100%-200px)] items-center gap-2 rounded-[12px] border border-[#E4E4DE] bg-white/90 px-3 py-2 shadow-[0_4px_14px_-8px_rgba(23,25,30,.3)] backdrop-blur">
+            <b className="truncate font-display text-[16px]">{d.name}</b>
+            <span className="truncate text-[13px] text-[#5F636D]">{projectName} · {roomLabel(d.roomName)}{viewing ? ` · v${viewing.n}` : ''}</span>
+            <StatusPill state={state} />
+          </div>
+          <button type="button" onClick={exitFull} className="absolute right-4 top-3.5 inline-flex min-h-[40px] items-center gap-1.5 rounded-[12px] border border-[#E4E4DE] bg-white px-3 text-[13px] font-bold hover:border-[#A9AAA2]"><Minimize2 size={15} />Exit · Esc</button>
+        </>}
+        <div className={`relative flex min-w-0 flex-col overflow-hidden rounded-[22px] ${full ? 'flex-1' : 'h-[clamp(620px,calc(100vh-200px),860px)] flex-[999_1_620px]'}`}
           style={{ backgroundColor: '#E8E8E2', backgroundImage: 'radial-gradient(#D3D3CB 1px, transparent 1px)', backgroundSize: '18px 18px' }}>
           {fromClient && banner('amber', <Presentation size={16} />,
             reviewer
@@ -402,13 +483,16 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
           {spotting && changes.diff?.kind === 'size' && banner('grey', <Sparkles size={15} />, `The page size changed since v${prev!.n}, so the changes cannot be outlined. Compare shows them side by side.`)}
           {spotting && changes.diff?.kind === 'same' && banner('grey', <Sparkles size={15} />, `Nothing on this page changed since v${prev!.n}.`)}
 
-          <div className="flex-1 overflow-auto px-7 pb-[130px] pt-9">
+          <div ref={scroller} className="flex-1 overflow-auto px-7 pb-[130px] pt-9"
+            style={{ cursor: grabbing ? 'grabbing' : moving && scrollable ? 'grab' : undefined }}
+            onPointerDown={panStart} onPointerMove={panMove} onPointerUp={panEnd} onPointerCancel={panEnd} onPointerEnter={() => { overSheet.current = true; measure(); }} onPointerLeave={() => { overSheet.current = false; }}>
             {viewing ? (
               <div>
                 <PdfStage
                   pdfPath={viewing.pdfPath} comparePath={compare && prev ? prev.pdfPath : null} compareLabel={prev ? [`v${prev.n}`, `v${viewing.n}`] : undefined}
                   page={page} zoom={zoom} turn={turn} marks={onSheet.filter((m) => m.page === page)} draft={draft?.shape || null} selectedId={selected}
-                  tool={tool} canMark={canMark && !draft} onPageCount={setPages} changes={boxes}
+                  tool={space ? 'select' : tool} canMark={canMark && !draft} onPageCount={setPages} changes={boxes}
+                  maxWidth={full ? 4000 : undefined} fitHeight={full ? vh - 250 : undefined}
                   onSelect={(id) => { setSelected(id); setRailTab('notes'); }}
                   onShape={(shape, anchor) => { setDraft({ shape, anchor, text: '', blocking: false }); setRailTab('notes'); setSelected(null); }}
                   overlay={composer}
@@ -427,7 +511,7 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
 
           {viewing && (
             <div className="absolute bottom-4 left-1/2 z-10 flex w-max max-w-[calc(100%-24px)] -translate-x-1/2 flex-col items-center gap-2">
-              {canMark && !draft && <div className="dd-rise rounded-full bg-[rgba(23,25,30,0.86)] px-3 py-1.5 text-center text-[12.5px] font-semibold text-white">{toolNow[2]}: {toolNow[3]}</div>}
+              {canMark && !draft && <div className="dd-rise rounded-full bg-[rgba(23,25,30,0.86)] px-3 py-1.5 text-center text-[12.5px] font-semibold text-white">{toolNow[2]}: {toolNow[3]}{tool !== 'select' && scrollable ? ' Hold Space and drag to move the sheet.' : ''}</div>}
               <div className="flex flex-wrap items-center justify-center gap-0.5 rounded-2xl bg-white p-[5px] shadow-[0_2px_4px_rgba(23,25,30,0.06),0_16px_40px_-14px_rgba(23,25,30,0.35)]" role="toolbar" aria-label="Sheet tools">
                 {canMark && <>
                   {TOOLS.map(([t, key, name, hint, Icon]) => (
@@ -461,12 +545,16 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
                 <button type="button" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))} aria-label="Zoom out" className={dockBtn()}><Minus size={17} /></button>
                 <span className="min-w-[42px] text-center text-[12.5px] font-bold text-[#4F535C]">{Math.round(zoom * 100)}%</span>
                 <button type="button" onClick={() => setZoom((z) => Math.min(2.5, +(z + 0.25).toFixed(2)))} aria-label="Zoom in" className={dockBtn()}><Plus size={17} /></button>
+                {sep}
+                <button type="button" onClick={() => (full ? exitFull() : enterFull())} aria-pressed={full} title={full ? 'Leave full screen (Esc)' : 'Full screen, with the notes beside the sheet (F)'} className={dockBtn(full)}>
+                  {full ? <Minimize2 size={17} /> : <Maximize2 size={17} />}{full ? 'Exit' : 'Full screen'}
+                </button>
               </div>
             </div>
           )}
         </div>
 
-        <aside className="flex min-h-[620px] min-w-0 max-w-full flex-[1_1_340px] flex-col overflow-hidden rounded-[18px] border border-[#E4E4DE] bg-white lg:max-h-[860px]">
+        <aside className={`flex min-w-0 max-w-full flex-col overflow-hidden rounded-[18px] border border-[#E4E4DE] bg-white ${full ? 'w-[380px] flex-none' : 'min-h-[620px] flex-[1_1_340px] lg:max-h-[860px]'}`}>
           <div className="border-b border-[#EEEEEA] px-4 pt-3.5">
             <div className="flex items-center gap-2.5">
               <Initials name={r?.designer?.name || viewing?.by?.name || d.name} size={30} color="#4146C8" />
@@ -719,7 +807,7 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
             )}
           </div>
         </aside>
-      </div>
+      </div>)}
 
       {fileOver && (
         <div className="pointer-events-none fixed inset-0 z-[110] grid place-items-center p-6" style={{ background: 'rgba(23,25,30,.55)', backdropFilter: 'blur(3px)' }}>
