@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_POLICY, type Snapshot, type Attendance } from '../../lib/peopleDesk';
 import {
-  myDay, minutesWorked, duration, dayProgress, whereLabel, awaitingMe, monthGrid, shiftMonth, awayOn, dayKind, monthReport, attendanceCsv, newCommandId,
+  myDay, minutesWorked, duration, dayProgress, whereLabel, awaitingMe, monthGrid, shiftMonth, awayOn, dayKind, monthReport, attendanceCsv, newCommandId, dayRoster,
 } from '../../lib/peopleView';
 
 const policy = { ...DEFAULT_POLICY, holidays: ['2026-10-20'] };
@@ -88,5 +88,50 @@ describe('the attendance report', () => {
     expect(csv[1]).toBe('2026-10-07,T,Office,,11:40,18:40,7.00,Yes,At the office,30');
     expect(csv[3]).toContain('"Kapoor, ""Villa"""');
     expect(newCommandId()).toMatch(/^[a-zA-Z0-9_-]{8,100}$/);
+  });
+});
+
+describe('who is where on a day', () => {
+  /* Today is Wed 7 Oct (snap's serverTime, 13:30 IST). me manages t; x is outside me's team. */
+  const leave = (over: any) => ({ requestId: 'r', employeeId: 'x', start: '2026-10-07', end: '2026-10-07', portion: 'Full day', status: 'Approved', mode: 'Away', ...over });
+  const s = snap({
+    attendance: [
+      session({ id: 'a', employeeId: 'me', checkIn: '2026-10-07T03:50:00.000Z' }), // 9:20 IST
+      session({ id: 'b', employeeId: 't', mode: 'Site', site: 'Palm Grove', checkIn: '2026-10-07T06:15:00.000Z' }), // 11:45 IST, after 11:30: late
+      session({ id: 'c', employeeId: 't', date: '2026-10-02', checkIn: '2026-10-02T04:00:00.000Z', checkOut: '2026-10-02T12:00:00.000Z' }),
+      session({ id: 'd', employeeId: 'x', date: '2026-10-06', mode: 'WFH', checkIn: '2026-10-06T04:00:00.000Z' }),
+    ],
+    availability: [leave({}), leave({ requestId: 'r2', employeeId: 't', start: '2026-10-09', end: '2026-10-09', mode: 'WFH', status: 'Pending' })] as any,
+  });
+
+  it('names who came in, how and when, and who is away', () => {
+    const day = dayRoster(s, '2026-10-07');
+    expect(day.map((d) => [d.personId, d.status])).toEqual([['me', 'office'], ['t', 'site'], ['x', 'away']]);
+    expect(day[0]).toMatchObject({ late: false, open: true });
+    expect(day[1]).toMatchObject({ late: true, note: 'Palm Grove' });
+  });
+
+  it("shows a manager's own team missing on a past day, but never someone outside it", () => {
+    const day = dayRoster(s, '2026-10-06');
+    /* t has used People since 2 Oct; me only from 7 Oct, so is not missing on the 6th. */
+    expect(day.map((d) => [d.personId, d.status])).toEqual([['t', 'missing']]);
+    expect(day.some((d) => d.personId === 'x')).toBe(false);
+  });
+
+  it('does not call anyone missing before their first check-in, nor on a future day', () => {
+    expect(dayRoster(s, '2026-10-01')).toEqual([]);
+    expect(dayRoster(s, '2026-10-09').map((d) => [d.personId, d.status, d.pending])).toEqual([['t', 'home', true]]);
+  });
+
+  it('shows an admin everyone, and nobody on a studio off day or holiday', () => {
+    const admin = { ...s, me: { ...s.me, accessRole: 'admin' as const } };
+    expect(dayRoster(admin, '2026-10-06').map((d) => [d.personId, d.status])).toEqual([['x', 'home'], ['t', 'missing']]);
+    expect(dayRoster(admin, '2026-10-12')).toEqual([]);
+    expect(dayRoster(admin, '2026-10-20')).toEqual([]);
+  });
+
+  it('lets an employee see only their own check-ins, and everyone\'s leave', () => {
+    const solo = { ...s, me: { ...s.me, id: 't', accessRole: 'employee' as const } };
+    expect(dayRoster(solo, '2026-10-07').map((d) => [d.personId, d.status])).toEqual([['t', 'site'], ['x', 'away']]);
   });
 });
