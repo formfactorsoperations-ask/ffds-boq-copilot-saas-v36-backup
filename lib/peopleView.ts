@@ -96,6 +96,77 @@ export function awayOn(s: Snapshot, date: string): DayAway[] {
     .filter((a) => a.start <= date && a.end >= date && !isOff(date, s.policy))
     .map((a) => ({ personId: a.employeeId, name: personName(s, a.employeeId), mode: a.mode, portion: a.portion, pending: a.status === 'Pending' }));
 }
+/* ── Who is where on a day (the team calendar) ───────────────────────────── */
+
+export type DayStatus = 'office' | 'site' | 'home' | 'away' | 'missing';
+export interface DayEntry {
+  personId: string;
+  name: string;
+  status: DayStatus;
+  /** Checked in after the studio's late mark. */
+  late: boolean;
+  /** Leave or home asked for, not yet approved. */
+  pending: boolean;
+  /** The check-in, for a day someone came in. */
+  checkIn?: string;
+  /** Still checked in (today only). */
+  open: boolean;
+  /** A part day of leave ("First half"), or the site worked at. */
+  note: string;
+}
+export const STATUS_ORDER: DayStatus[] = ['office', 'site', 'home', 'away', 'missing'];
+
+/** Whose check-ins this person sees: everyone for admins and Ops, their team for a manager, otherwise themselves. */
+export function rosterScope(s: Pick<Snapshot, 'me' | 'people'>): Person[] {
+  const all = s.me.accessRole === 'admin' || s.me.accessRole === 'ops';
+  const others = s.people.filter((p) => p.active && p.id !== s.me.id && (all || p.managerId === s.me.id));
+  return [s.me, ...others];
+}
+
+/**
+ * Everyone worth naming on a working day: who came in and how, who is away
+ * or at home, and -- for the people whose check-ins this person sees -- who
+ * has not checked in by today or did not on a past day. A future day shows
+ * only the leave and home days asked for. "Not checked in" starts from a
+ * person's first check-in the snapshot holds, so someone new to People is
+ * not shown missing for the days before they began.
+ */
+export function dayRoster(s: Snapshot, date: string): DayEntry[] {
+  if (isOff(date, s.policy) || s.policy.holidays.includes(date)) return [];
+  const today = todayOf(s);
+  const scope = rosterScope(s);
+  const inScope = new Set(scope.map((p) => p.id));
+  const out = new Map<string, DayEntry>();
+  const base = (id: string) => ({ personId: id, name: personName(s, id), late: false, pending: false, open: false, note: '' });
+  if (date <= today) {
+    for (const a of s.attendance) {
+      if (a.date !== date || !inScope.has(a.employeeId)) continue;
+      out.set(a.employeeId, {
+        ...base(a.employeeId),
+        status: a.mode === 'WFH' ? 'home' : a.mode === 'Site' ? 'site' : 'office',
+        late: isLate(a, s.policy),
+        checkIn: a.checkIn,
+        open: !a.checkOut && date === today,
+        note: a.mode === 'Site' ? a.site || '' : '',
+      });
+    }
+  }
+  for (const a of awayOn(s, date)) {
+    if (out.has(a.personId)) continue;
+    out.set(a.personId, { ...base(a.personId), status: a.mode === 'WFH' ? 'home' : 'away', pending: a.pending, note: a.mode === 'WFH' || a.portion === 'Full day' ? '' : a.portion });
+  }
+  if (date <= today) {
+    const first = new Map<string, string>();
+    for (const a of s.attendance) if (!first.has(a.employeeId) || a.date < first.get(a.employeeId)!) first.set(a.employeeId, a.date);
+    for (const p of scope) {
+      if (out.has(p.id) || !first.has(p.id) || first.get(p.id)! > date) continue;
+      out.set(p.id, { ...base(p.id), status: 'missing' });
+    }
+  }
+  return [...out.values()].sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status)
+    || (a.checkIn || '').localeCompare(b.checkIn || '') || a.name.localeCompare(b.name));
+}
+
 export const dayKind = (policy: Policy, date: string): 'holiday' | 'off' | 'work' =>
   policy.holidays.includes(date) ? 'holiday' : isOff(date, policy) ? 'off' : 'work';
 

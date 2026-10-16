@@ -60,7 +60,7 @@ export function refreshPeople(): Promise<void> {
  * command ID, which the server answers with the first outcome rather than
  * acting twice.
  */
-export async function runPeople(action: Command['action'], data: Command['data']): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function runPeople(action: Command['action'], data: Command['data']): Promise<{ ok: true; snapshot?: Snapshot } | { ok: false; error: string }> {
   if (!functions) return { ok: false, error: 'People needs the studio to be connected.' };
   const command: Command = { id: newCommandId(), action, data };
   const call = httpsCallable(functions, 'peopleCommand', { timeout: 40000 });
@@ -68,7 +68,7 @@ export async function runPeople(action: Command['action'], data: Command['data']
     try {
       const r: any = await call({ command, tenantId });
       set({ snapshot: r.data.snapshot, error: null, at: Date.now() });
-      return { ok: true };
+      return { ok: true, snapshot: r.data.snapshot };
     } catch (e: any) {
       if (attempt === 1 && transient(e)) continue;
       return { ok: false, error: transient(e) ? 'That may have been saved. Refresh to check before trying again.' : messageOf(e) };
