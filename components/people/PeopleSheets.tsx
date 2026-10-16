@@ -155,7 +155,9 @@ export function CorrectionSheet({ snapshot, session, sites, onClose, onSaved }: 
     });
     setSaving(false);
     if ('error' in r) { setError(r.error); return; }
-    onSaved('Correction sent for approval.');
+    /* With nobody to approve them, the studio's top is signed off at once (lib/peopleDesk). */
+    const signed = r.snapshot?.requests.some((q) => q.kind === 'correction' && q.correction?.sessionId === session.id && q.status === 'Approved');
+    onSaved(signed ? 'Correction saved and approved. You can check in now.' : 'Correction sent for approval.');
   };
 
   return (

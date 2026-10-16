@@ -276,6 +276,36 @@ test("attendance and approved corrections are atomic with version protection", (
   assert.equal(s.attendance[0].checkOut, "2026-10-07T06:30:00.000Z");
 });
 
+test("the studio's only admin signs off their own forgotten check-out and can check in again", () => {
+  const solo = (people: Store["people"]): Store => ({ ...setup(), people });
+  const boss = { id: "boss", name: "Boss", title: "Principal", teamId: "ops", managerId: "", accessRole: "admin" as const, active: true };
+  const fix = (sessionId: string) => ({
+    sessionId, version: 1, checkIn: "2026-10-07T04:00:00Z", checkOut: "2026-10-07T12:30:00Z", mode: "Office", reason: "Forgot to check out",
+  });
+
+  /* Nobody beside or above them: approved at once, the day mended, and the next check-in allowed. */
+  let s = send(solo([boss, setup().people[0]]), "boss", "checkin", { mode: "Office" }, "2026-10-07T04:00:00Z");
+  assert.throws(() => send(s, "boss", "checkin", { mode: "Office" }, "2026-10-08T04:00:00Z"), /open attendance/);
+  s = send(s, "boss", "correction", fix(s.attendance[0].id), "2026-10-08T03:30:00Z");
+  assert.equal(s.requests[0].status, "Approved");
+  assert.equal(s.requests[0].decisions[0].actorId, "boss");
+  assert.match(s.requests[0].decisions[0].note, /themselves/);
+  assert.equal(s.attendance[0].checkOut, "2026-10-07T12:30:00.000Z");
+  assert.equal(s.attendance[0].version, 2);
+  s = send(s, "boss", "checkin", { mode: "Office" }, "2026-10-08T04:00:00Z");
+  assert.equal(s.attendance.filter((a) => a.employeeId === "boss").length, 2);
+
+  /* With People Ops beside them, the same correction waits for People Ops. */
+  let t = send(solo([boss, setup().people[3]]), "boss", "checkin", { mode: "Office" }, "2026-10-07T04:00:00Z");
+  t = send(t, "boss", "correction", fix(t.attendance[0].id), "2026-10-08T03:30:00Z");
+  assert.equal(t.requests[0].status, "Pending");
+  assert.equal(t.attendance[0].checkOut, undefined);
+
+  /* Anyone else with no approver is still told so. */
+  let u = send(solo([{ ...setup().people[0], managerId: "" }]), "a", "checkin", { mode: "Office" }, "2026-10-07T04:00:00Z");
+  assert.throws(() => send(u, "a", "correction", fix(u.attendance[0].id), "2026-10-08T03:30:00Z"), /No approver/);
+});
+
 test("daily update links are optional and private to the current member", () => {
   let s = setup();
   s.people[0].dailyUpdateUrl =

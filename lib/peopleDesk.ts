@@ -880,12 +880,17 @@ export function execute(
     );
     const reason = text(data.reason, "Reason");
     assert(reason.length >= 3, "Add a reason for the correction.");
-    assert(
-      store.people.some((p) => p.active && canReview(p, actor)),
-      "No approver is assigned.",
-      "NO_APPROVER",
-      409,
-    );
+    /*
+      The studio's own top -- an admin or People Ops with nobody beside or
+      above them -- has no one who may approve their attendance, and a
+      session left open blocks every check-in after it. Their correction
+      is signed off by themselves at once and the record says so, rather
+      than waiting on an approver who does not exist.
+    */
+    const reviewed = store.people.some((p) => p.active && canReview(p, actor));
+    const selfSigned =
+      !reviewed && (actor.accessRole === "admin" || actor.accessRole === "ops");
+    assert(reviewed || selfSigned, "No approver is assigned.", "NO_APPROVER", 409);
     event.request = {
       id: `rq_${scopedId}`,
       employeeId: actor.id,
@@ -909,6 +914,24 @@ export function execute(
         site: text(data.site ?? "", "Site", 120),
       },
     };
+    if (selfSigned) {
+      const c = event.request.correction!;
+      event.request.status = "Approved";
+      event.request.decisions.push({
+        actorId: actor.id,
+        at: now,
+        status: "Approved",
+        note: "Approved by themselves: nobody else in the studio can approve their attendance.",
+      });
+      event.session = {
+        ...session,
+        checkIn: c.checkIn,
+        checkOut: c.checkOut,
+        mode: c.mode,
+        site: c.site,
+        version: session.version + 1,
+      };
+    }
   } else if (["decide", "withdraw", "cancel"].includes(command.action)) {
     const original = store.requests.find((r) => r.id === data.requestId);
     assert(original, "Request not found.", "NOT_FOUND", 404);
