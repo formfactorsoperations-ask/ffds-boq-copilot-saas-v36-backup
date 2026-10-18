@@ -153,9 +153,26 @@ describe('clients stay inside their own project', () => {
   it('reads site visits and minutes for their project only', async () => {
     const VISIT_TYPES = ['client_meeting', 'site_visit', 'measurement_survey'];
     const MOM_TYPES = ['client_meeting', 'site_visit', 'measurement_survey', 'client'];
+    const ISSUED = ['finalised', 'shared', 'acknowledged', 'correction_requested'];
     await assertSucceeds(getDocs(query(collection(client(), `organizations/${STUDIO}/projects/p1/siteVisits`), where('type', 'in', VISIT_TYPES))));
-    await assertSucceeds(getDocs(query(collection(client(), `organizations/${STUDIO}/projects/p1/moms`), where('meetingType', 'in', MOM_TYPES))));
-    await assertFails(getDocs(query(collection(client(), `organizations/${STUDIO}/projects/p2/moms`), where('meetingType', 'in', MOM_TYPES))));
+    await assertSucceeds(getDocs(query(collection(client(), `organizations/${STUDIO}/projects/p1/moms`),
+      where('meetingType', 'in', MOM_TYPES), where('status', 'in', ISSUED))));
+    await assertFails(getDocs(query(collection(client(), `organizations/${STUDIO}/projects/p2/moms`),
+      where('meetingType', 'in', MOM_TYPES), where('status', 'in', ISSUED))));
+  });
+  it('never reads minutes the studio has not issued', async () => {
+    const MOM_TYPES = ['client_meeting', 'site_visit', 'measurement_survey', 'client'];
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, `organizations/${STUDIO}/projects/p1/moms/m-draft`), { status: 'draft', meetingType: 'client_meeting', rawNotes: 'carpenter quote 12% under' });
+      await setDoc(doc(db, `organizations/${STUDIO}/projects/p1/moms/m-review`), { status: 'pending_review', meetingType: 'client_meeting' });
+    });
+    await assertFails(getDoc(doc(client(), `organizations/${STUDIO}/projects/p1/moms/m-draft`)));
+    await assertFails(getDoc(doc(client(), `organizations/${STUDIO}/projects/p1/moms/m-review`)));
+    // A query that could return a draft is refused outright.
+    await assertFails(getDocs(query(collection(client(), `organizations/${STUDIO}/projects/p1/moms`), where('meetingType', 'in', MOM_TYPES))));
+    await assertSucceeds(getDoc(doc(client(), `organizations/${STUDIO}/projects/p1/moms/m1`)));
+    await assertSucceeds(getDoc(doc(member(), `organizations/${STUDIO}/projects/p1/moms/m-draft`)));
   });
   it('never reads internal or vendor meetings, or their minutes', async () => {
     await assertSucceeds(getDoc(doc(client(), `organizations/${STUDIO}/projects/p1/siteVisits/v1`)));
@@ -238,6 +255,13 @@ describe('decisions: the portal keeps working, the public listing is gone', () =
     await assertSucceeds(updateDoc(doc(client(), 'projects/p1/decisions/d1'), {
       status: 'signed', signoff: { type: 'approved', clientNameEntered: 'C' },
     }));
+  });
+  it('refuses a client a decision the studio has not released', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'projects/p1/decisions/d-draft'), { status: 'draft', presentees: 'Ramesh (carpenter)' });
+    });
+    await assertFails(getDoc(doc(client(), 'projects/p1/decisions/d-draft')));
+    await assertSucceeds(getDoc(doc(member(), 'projects/p1/decisions/d-draft')));
   });
   it('refuses a client on another project, or touching other fields', async () => {
     await assertFails(getDoc(doc(client(), 'projects/p2/decisions/d2')));

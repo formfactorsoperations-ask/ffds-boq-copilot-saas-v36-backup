@@ -21,7 +21,7 @@ import { Check, Clock, MessageSquare, ImageOff } from '@/lib/lucide-shim';
  * than the allowance their contract carries for that item, which becomes a cost
  * variation against the project. Then the extra is stated plainly and the button
  * itself carries it. Otherwise the card shows the finish -- photograph, brand
- * and code, vendor, spec, lead time -- and asks them to choose it.
+ * and code, spec, lead time -- and asks them to choose it.
  *
  * Whether they can act comes from the selection's STATUS, not from whether a
  * price happens to be filled in. `to_select` means the studio is still sourcing
@@ -126,17 +126,13 @@ const PortalFinishCard: React.FC<Props> = ({ selection: m, onConfirm, onAsk, rea
             </span>
           </div>
 
-          {/* What it is, precisely enough to recognise or look up. */}
-          {(m.brand || m.finishCode || m.vendor) && (
+          {/* What it is, precisely enough to recognise or look up. Not who
+              supplies it: the studio's vendors are the studio's business. */}
+          {(m.brand || m.finishCode) && (
             <p className="mt-1.5 text-[12.5px] text-slate-600">
               {m.brand && <span className="font-semibold">{m.brand}</span>}
               {m.brand && m.finishCode && <span className="text-slate-300 mx-1.5">|</span>}
               {m.finishCode && <span>{m.finishCode}</span>}
-              {m.vendor && (
-                <span className="text-slate-400">
-                  {(m.brand || m.finishCode) ? ' · ' : ''}from {m.vendor}
-                </span>
-              )}
             </p>
           )}
 
@@ -146,7 +142,6 @@ const PortalFinishCard: React.FC<Props> = ({ selection: m, onConfirm, onAsk, rea
             </p>
           )}
 
-          {m.notes && <p className="mt-1.5 text-[12px] text-slate-500 leading-snug">{m.notes}</p>}
         </div>
       </div>
 

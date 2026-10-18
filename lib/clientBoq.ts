@@ -181,7 +181,16 @@ export function buildClientBoqRows({ boq, bank, rooms, revisions, previous }: Bu
 
     const itemCat = item.cat || item.category || bankItem?.cat || 'General Scope';
     const itemUnit = item.unit || bankItem?.unit || 'nos';
-    const itemSpecs = item.description || item.specs || item.rationale || bankItem?.specs || '';
+    /*
+      `rationale` is only a description when it reads like one. The studio's
+      tools also stamp it with their own bookkeeping -- "Added via Focus Studio
+      Workspace", "Added from Bundle: …" -- and that was being printed to the
+      client as the line's description.
+    */
+    const rationale = typeof item.rationale === 'string' && !/^added (via|from)\b/i.test(item.rationale.trim())
+      ? item.rationale
+      : '';
+    const itemSpecs = item.description || item.specs || rationale || bankItem?.specs || '';
     const itemQty = item.qty !== undefined ? item.qty : 1;
 
     /*
