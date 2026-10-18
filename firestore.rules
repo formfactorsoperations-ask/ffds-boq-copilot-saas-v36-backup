@@ -387,13 +387,24 @@ service cloud.firestore {
       function isClientMeetingType(t) {
         return t in ['client_meeting', 'site_visit', 'measurement_survey', 'client'];
       }
+      /*
+        Minutes the studio has issued. A draft, or minutes waiting for a lead
+        to review them, were readable by the client straight from the
+        database -- raw notes, unreviewed wording, a revision in progress --
+        and hidden only by the portal screen. The portal asks for these
+        statuses by name (lib/meetingTypes CLIENT_MOM_STATUSES).
+      */
+      function isIssuedMinutes(st) {
+        return st in ['finalised', 'shared', 'acknowledged', 'correction_requested'];
+      }
       match /projects/{projectId}/siteVisits/{visitId} {
         allow read: if isProjectClient(orgId, projectId) &&
           isClientMeetingType(resource.data.get('type', ''));
       }
       match /projects/{projectId}/moms/{momId} {
         allow read: if isProjectClient(orgId, projectId) &&
-          isClientMeetingType(resource.data.get('meetingType', ''));
+          isClientMeetingType(resource.data.get('meetingType', '')) &&
+          isIssuedMinutes(resource.data.get('status', ''));
         // From the portal a client may do one of two things to issued
         // minutes: acknowledge them (these four fields only), or ask for a
         // correction (the request and the status, nothing else). Neither on a
@@ -877,7 +888,14 @@ service cloud.firestore {
                           (isLegacyFFDS() && !('tenantId' in get(/databases/$(database)/documents/projects/$(projectId)).data)) ||
                           isSuperAdmin()
                         )) ||
-                       isDecisionClient();
+                       /*
+                         Only what has been released to them. A draft decision is
+                         the studio's working note -- who was on site, the cost
+                         being weighed -- and the portal never shows one; the
+                         client could still read it from the database.
+                       */
+                       (isDecisionClient() &&
+                        resource.data.get('status', '') in ['notified', 'drawing_pending', 'drawing_sent', 'signed', 'disputed']);
 
         /*
           The portal client approves or queries a decision on their own

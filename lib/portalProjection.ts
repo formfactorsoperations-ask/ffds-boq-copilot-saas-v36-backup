@@ -84,6 +84,52 @@ export interface PortalScopeAddition {
   lines?: { description: string; qty: number; unit: string; amount: number }[];
 }
 
+/**
+ * The programme as the client may receive it.
+ *
+ * A saved schedule is the studio's working document: tasks carry internal
+ * notes, a hold records who logged it and a free-text note about why (a
+ * vendor's name, a payment chase), and markers list internal and vendor
+ * meetings. The portal needs only what positions the bars: the tasks, their
+ * links and dates, and the hold windows themselves. Everything else stays with
+ * the studio.
+ */
+export function clientSafeSchedule(schedule: ProjectSchedule): ProjectSchedule {
+  return {
+    tasks: (schedule.tasks || []).map(t => ({
+      id: t.id,
+      title: t.title,
+      kind: t.kind,
+      trade: t.trade,
+      room: t.room,
+      dependencies: t.dependencies || [],
+      workDays: t.workDays,
+      notBeforeISO: t.notBeforeISO,
+      baselineStartISO: t.baselineStartISO,
+      baselineWorkDays: t.baselineWorkDays,
+      actualStartISO: t.actualStartISO,
+      actualEndISO: t.actualEndISO,
+      status: t.status,
+      pinned: t.pinned,
+      milestoneLabel: t.milestoneLabel,
+      overlapDays: t.overlapDays,
+      /* Whether it was released ahead of the gate places it; the reason and who
+         released it are the studio's. */
+      earlyStart: t.earlyStart ? { reason: '', at: t.earlyStart.at } : undefined,
+    })),
+    /* The window a hold blocks still moves the dates, so it travels; the note
+       and the name of whoever logged it do not. */
+    holds: (schedule.holds || []).map(h => ({
+      id: h.id, scope: h.scope, target: h.target, fromISO: h.fromISO,
+      workDays: h.workDays, reason: h.reason, at: h.at, liftedAt: h.liftedAt,
+    })),
+    calendar: schedule.calendar,
+    baselineAt: schedule.baselineAt ?? null,
+    targetHandoverISO: schedule.targetHandoverISO,
+    projectStartISO: schedule.projectStartISO,
+  } as ProjectSchedule;
+}
+
 /** Keep only published items, and only the fields a client has business seeing. */
 function published<T extends Record<string, any>>(items: T[] | undefined, pick: (i: T) => any): any[] {
   return (items || []).filter(isVisibleToClient).map(pick);
@@ -297,14 +343,17 @@ export function buildPortalView(
         `boqAbsorbed` crosses so the card can say the studio is covering an
         overage rather than leaving them to assume they owe it.
 
-        What still does not cross: anything about what it costs the studio.
+        What still does not cross: anything about what it costs the studio, who
+        supplies it, or the studio's own notes on it. `vendor` and `notes` used
+        to travel and print on the client's card -- the shop the studio buys
+        from, and a box the studio's own form labels "private notes, vendor
+        info, or follow-up details". Brand and finish code are enough for a
+        client to recognise or look up what they are confirming.
       */
       materialSelections: published(c.materialSelections, (i) => ({
         id: i.id, itemName: i.itemName, roomId: i.roomId, category: i.category,
         brand: i.brand, finishCode: i.finishCode, status: i.status, photos: i.photos,
         clientConfirmedAt: i.clientConfirmedAt, clientVisibility: i.clientVisibility,
-        vendor: i.vendor,
-        notes: i.notes,
         dimensions: i.dimensions, colorTemp: i.colorTemp, wattage: i.wattage,
         quotedPrice: i.quotedPrice, priceUnit: i.priceUnit,
         estimatedQty: i.estimatedQty, estimatedTotal: i.estimatedTotal,
@@ -373,8 +422,8 @@ export function buildPortalView(
 
       // The scope, sell rates only. See lib/clientBoq for what is stripped.
       clientBoq: clientBoq && clientBoq.length ? clientBoq : undefined,
-      /* Task names, durations and dates. No rates: a ProjectSchedule has none. */
-      clientSchedule: schedule && schedule.tasks?.length ? schedule : undefined,
+      /* Task names, durations and dates -- see clientSafeSchedule for what is left behind. */
+      clientSchedule: schedule && schedule.tasks?.length ? clientSafeSchedule(schedule) : undefined,
       clientBoqBaseline: clientBoqBaseline && clientBoqBaseline.length ? clientBoqBaseline : undefined,
 
       /*

@@ -987,7 +987,12 @@ export const submitClientAction = onCall({ cors: true }, async (request) => {
                 */
                 (viewSnap.data() as any)?.scopeAdditions,
                 previous.portalMoney,
-                undefined,
+                /*
+                  The published programme, carried like the rest. Passing nothing
+                  here dropped it, so the first thing a client confirmed swapped
+                  the studio's dates for an estimate derived from the BOQ.
+                */
+                previous.clientSchedule,
                 /* The design meetings, kept current by the designMeeting function. */
                 (viewSnap.data() as any)?.designRecord,
             );

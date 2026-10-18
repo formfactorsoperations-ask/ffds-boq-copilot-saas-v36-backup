@@ -18,6 +18,11 @@
 export const CLIENT_VISIT_TYPES = ['client_meeting', 'site_visit', 'measurement_survey'];
 /** MoMs also carry the older "client" label. */
 export const CLIENT_MOM_TYPES = ['client_meeting', 'site_visit', 'measurement_survey', 'client'];
+/**
+ * Minutes the studio has issued -- mirrors isIssuedMinutes() in firestore.rules.
+ * A draft, or minutes waiting for a lead's review, are not the client's yet.
+ */
+export const CLIENT_MOM_STATUSES = ['finalised', 'shared', 'acknowledged', 'correction_requested'];
 
 export type MeetingKind = 'client' | 'internal' | 'vendor' | 'site' | 'survey' | 'other';
 

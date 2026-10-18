@@ -18,6 +18,7 @@ import {
     Check
 } from '@/lib/lucide-shim';
 import { MOM } from '../../types';
+import { clientVisibleAttendees, clientActionOwner } from '../../lib/clientPeople';
 
 interface ClientMoMViewerModalProps {
     isOpen: boolean;
@@ -61,7 +62,8 @@ export const ClientMoMViewerModal: React.FC<ClientMoMViewerModalProps> = ({
     const isAcknowledged = currentMom.status === 'acknowledged' || !!currentMom.acknowledgedAt;
 
     // Normalizing attendees
-    const rawAttendees = currentMom.attendees || [];
+    // Vendors who were in the room stay with the studio (lib/clientPeople).
+    const rawAttendees = clientVisibleAttendees(currentMom.attendees || [], currentMom.people);
     const clientAttendees: string[] = [];
     const studioAttendees: string[] = [];
     const otherAttendees: string[] = [];
@@ -107,7 +109,7 @@ export const ClientMoMViewerModal: React.FC<ClientMoMViewerModalProps> = ({
         return {
             id: a.id || `a-${idx}`,
             text: a.text || a.task || a.action || a.title || a.description || 'Action item',
-            owner: a.ownerName || a.owner || 'Project Lead',
+            owner: clientActionOwner(a),
             dueDate: a.dueDate || a.targetDate || null,
             status: a.status || 'open',
             flags: a.flags || {}

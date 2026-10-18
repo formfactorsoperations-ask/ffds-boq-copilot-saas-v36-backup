@@ -30,6 +30,7 @@ import { submitClientAction, ClientAction } from '../services/clientPortalAction
 import { isVisibleToClient } from '../lib/clientVisibility';
 import PortalOverview from './client/PortalOverview';
 import PortalTimeline from './client/PortalTimeline';
+import { clientVisibleAttendees, clientActionOwner } from '../lib/clientPeople';
 import { buildSpine, buildCatchUp, stageOfMilestone, AttachmentKind } from './client/spineModel';
 import { buildProgramme } from './client/programme';
 import PortalHero from './client/PortalHero';
@@ -41,7 +42,7 @@ import PortalPayments from './client/PortalPayments';
 import { PortalMoney } from '../lib/portalMoney';
 import { issuePortalAccess } from '../services/portalAccessService';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { CLIENT_VISIT_TYPES, CLIENT_MOM_TYPES, toMillis } from '../lib/meetingTypes';
+import { CLIENT_VISIT_TYPES, CLIENT_MOM_TYPES, CLIENT_MOM_STATUSES, toMillis } from '../lib/meetingTypes';
 import { httpsCallable } from 'firebase/functions';
 import { 
     calculateClientLifecycleStages, 
@@ -563,14 +564,16 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         try {
             const q = query(
                 collection(db, `organizations/${studioId}/projects/${projectData.id}/moms`),
-                where('meetingType', 'in', CLIENT_MOM_TYPES)
+                where('meetingType', 'in', CLIENT_MOM_TYPES),
+                // Issued minutes only; the rules refuse a query that could return a draft.
+                where('status', 'in', CLIENT_MOM_STATUSES)
             );
             const unsubscribe = onSnapshot(q, (snap) => {
                 const list: any[] = [];
                 snap.forEach(d => list.push({ id: d.id, ...d.data() }));
                 list.sort((a, b) => toMillis(b.meetingDate) - toMillis(a.meetingDate));
                 setSyncedMoms(list.filter(m => {
-                    if (m.status === 'draft' && !m.sharedAt) return false;
+                    if (!CLIENT_MOM_STATUSES.includes(m.status)) return false;
                     if (!isVisibleToClient(m)) return false;
                     const typeStr = String(m.meetingType || m.type || '').toLowerCase();
                     if (typeStr === 'internal_meeting' || typeStr === 'internal' || typeStr === 'vendor_meeting' || typeStr === 'vendor' || typeStr === 'internal_review') return false;
@@ -1138,7 +1141,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             return {
                 id: a.id || `a-${aIdx}`,
                 text: a.text || a.task || a.action || a.title || 'Action item',
-                owner: a.ownerName || a.owner || 'Project Lead',
+                owner: clientActionOwner(a),
                 dueDate: a.dueDate || a.targetDate || null
             };
         }).filter((a: any) => a.text && a.text.trim().length > 0);
@@ -1345,7 +1348,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                     status: mom.status || 'finalised',
                     isAcknowledged: mom.status === 'acknowledged' || !!mom.acknowledgedAt,
                     author: resolvedAuthor,
-                    attendees: mom.attendees || [],
+                    attendees: clientVisibleAttendees(mom.attendees, mom.people),
                     actionItems: actionList,
                     decisions: decisionsList,
                     momRef: momRefStr,
@@ -1408,7 +1411,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         id: v.id || `synced-${idx}`,
                         meetingTitle: v.title || 'Client Strategy & Alignment Meeting',
                         meetingDate: meetingDateVal,
-                        attendees: v.attendees || [],
+                        attendees: clientVisibleAttendees(v.attendees, v.people),
                         decisions: decisionsList,
                         actionItems: actionList,
                         executiveSummary: executiveSummary,
@@ -1430,7 +1433,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         status: v.status || 'completed',
                         isAcknowledged: v.status === 'acknowledged' || !!v.acknowledgedAt,
                         author: formatCleanAuthor(v.createdByName || v.authorName || 'Design Studio PM'),
-                        attendees: v.attendees || [],
+                        attendees: clientVisibleAttendees(v.attendees, v.people),
                         actionItems: actionList,
                         decisions: decisionsList,
                         startTime: v.startTime,
@@ -1481,7 +1484,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         id: sv.id || `sv-${idx}`,
                         meetingTitle: sv.title || 'Client Project Discussion',
                         meetingDate: sv.date?.toDate ? sv.date.toDate() : (sv.date || Date.now()),
-                        attendees: sv.attendees || [],
+                        attendees: clientVisibleAttendees(sv.attendees, sv.people),
                         decisions: [],
                         actionItems: [],
                         momRef: momRefStr,
@@ -1496,7 +1499,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         description: 'Client design review conducted on site. Meeting minutes and alignment points recorded.',
                         status: 'completed',
                         author: sv.loggedBy || 'Site Team',
-                        attendees: sv.attendees || [],
+                        attendees: clientVisibleAttendees(sv.attendees, sv.people),
                         momRef: momRefStr,
                         hasMoM: true,
                         momData: synthesizedMom,
@@ -1511,7 +1514,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         description: sv.notes,
                         status: 'completed',
                         author: sv.loggedBy || 'Site Team',
-                        attendees: sv.attendees || [],
+                        attendees: clientVisibleAttendees(sv.attendees, sv.people),
                         data: sv
                     });
                 }

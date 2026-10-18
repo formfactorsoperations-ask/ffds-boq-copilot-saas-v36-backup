@@ -5,6 +5,7 @@ import { MOM } from '../../types';
 import { CheckCircle2, CheckCircle, Calendar, MessageCircle, AlertTriangle } from '@/lib/lucide-shim';
 import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
+import { clientVisibleAttendees, clientActionOwner } from '../../lib/clientPeople';
 
 export function MomAcknowledgePage({ token }: { token: string }) {
     const [mom, setMom] = useState<MOM | null>(null);
@@ -132,7 +133,7 @@ export function MomAcknowledgePage({ token }: { token: string }) {
                          <div>
                              <h4 className="font-bold border-b border-slate-200 pb-1 mb-2 uppercase tracking-wide text-xs text-slate-500">Attendees</h4>
                              <ul className="list-disc pl-5">
-                                 {mom.attendees?.map((a, i) => <li key={i}>{a.name} ({a.side})</li>)}
+                                 {(clientVisibleAttendees(mom.attendees) as any[]).map((a, i) => <li key={i}>{a.name} ({a.side === 'ffds' ? 'FFDS' : a.side})</li>)}
                              </ul>
                          </div>
                          {/* Decisions */}
@@ -162,7 +163,7 @@ export function MomAcknowledgePage({ token }: { token: string }) {
                                          {mom.actionItems.map(a => (
                                              <tr key={a.id}>
                                                  <td className="border border-slate-200 p-2 font-medium">{a.text} {a.flags?.cost ? '(Cost Impact)' : ''}</td>
-                                                 <td className="border border-slate-200 p-2 uppercase font-bold">{a.owner}</td>
+                                                 <td className="border border-slate-200 p-2 uppercase font-bold">{clientActionOwner(a)}</td>
                                                  <td className="border border-slate-200 p-2">{a.dueDate ? new Date(a.dueDate).toLocaleDateString() : '-'}</td>
                                              </tr>
                                          ))}
