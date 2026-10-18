@@ -386,7 +386,7 @@ export function ProjectWorkspace({
             <Building2 className="w-[18px] h-[18px] relative z-[1]" />
           </div>
 
-          <div className="min-w-0 leading-tight">
+          <div className="min-w-[80px] flex-1 sm:flex-initial leading-tight">
             <h1 className="text-[15px] sm:text-[16.5px] font-extrabold text-slate-900 tracking-tight truncate">
               {projectContext.name || 'Untitled Project'}
             </h1>
@@ -419,7 +419,7 @@ export function ProjectWorkspace({
 
           <ProjectContextTier projectContext={projectContext} />
 
-          <div className="flex-1" />
+          <div className="hidden sm:block flex-1" />
 
           <ProjectTeamButton project={{ id: projectId, context: projectContext }} />
 
@@ -466,7 +466,7 @@ export function ProjectWorkspace({
 
 
           {/* Stages */}
-          <div className="flex items-center flex-1 py-2 min-w-0 flex-nowrap">
+          <div className="flex items-center flex-1 py-2 min-w-0 flex-wrap xl:flex-nowrap gap-1.5 sm:gap-2 xl:gap-0">
             {[1, 2, 3, 4, 5, 6].map((stg) => {
               const isCompleted = stg < currentStage;
               const isActive = stg === currentStage;
@@ -479,8 +479,6 @@ export function ProjectWorkspace({
               const openableItems = (stageConfig?.items || []).filter(item => !hiddenForRole(item));
               if (isLimited && openableItems.length === 0) return null;
 
-              const shortLabel = label.split(' ')[0];
-
               return (
                 <div key={stg} className="flex items-center shrink-0">
                   <div className="relative group flex items-center">
@@ -491,7 +489,7 @@ export function ProjectWorkspace({
                           setActiveTab(openableItems[0].route);
                         }
                       }}
-                      className={`relative flex items-center gap-1 sm:gap-1.5 transition-all duration-300 cursor-pointer shrink-0 py-1.5 px-3 rounded-lg z-0 ${
+                      className={`relative flex items-center gap-1 sm:gap-1.5 transition-all duration-300 cursor-pointer shrink-0 py-1.5 px-2.5 sm:px-3 rounded-lg z-0 ${
                         isSelectedStage
                           ? 'text-white font-bold'
                           : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 tracking-normal hover:tracking-[0.01em]'
@@ -517,7 +515,7 @@ export function ProjectWorkspace({
                         {label}
                       </span>
                       {isLocked && <Lock className="w-3 h-3 text-slate-300 ml-0.5" />}
-                      <ChevronDown className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
+                      <ChevronDown className="hidden md:block w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
                       
                       {isActive && (
                         <span className="text-[8px] text-[#C5A85C] font-black uppercase tracking-widest ml-0.5 mt-0.5">
@@ -528,8 +526,8 @@ export function ProjectWorkspace({
 
                     {/* Hover Dropdown */}
                     {stageConfig && stageConfig.items.length > 0 && (
-                      <div className={`absolute top-full ${
-  stg >= 5 ? 'right-0' : 'left-1/2 -translate-x-1/2'
+                      <div className={`hidden md:block absolute top-full ${
+  stg >= 5 ? 'right-0' : stg === 1 ? 'left-0' : 'left-1/2 -translate-x-1/2'
 } mt-0 pt-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform translate-y-2 group-hover:translate-y-0 z-[100] min-w-[220px] pointer-events-none group-hover:pointer-events-auto`}>
                         <div className="bg-white rounded-xl shadow-xl border border-slate-200/80 p-1.5 flex flex-col">
                           <div className="px-3 py-2 border-b border-slate-100 mb-1 flex justify-between items-center">
@@ -564,7 +562,7 @@ export function ProjectWorkspace({
                       </div>
                     )}
                   </div>
-                  {stg < 6 && <div className="w-2 sm:w-4 lg:w-8 h-px bg-slate-200 shrink-0 mx-1 sm:mx-2" />}
+                  {stg < 6 && <div className="hidden xl:block w-2 sm:w-4 lg:w-8 h-px bg-slate-200 shrink-0 mx-1 sm:mx-2" />}
                 </div>
               );
             })}

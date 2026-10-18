@@ -21,7 +21,8 @@ import {
   HardDrive,
   PenTool,
   Inbox,
-  UserCheck
+  UserCheck,
+  X
 } from '@/lib/lucide-shim';
 import { AIStatus } from '../types';
 import AIStatusIndicator from './AIStatusIndicator';
@@ -43,6 +44,8 @@ interface SidebarProps {
   commsHealthScore?: number;
   autoCollapse?: boolean;
   isHidden?: boolean;
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 /* Who opens each studio screen is decided once, in lib/roleAccess (STUDIO_TAB_ROLES); the home dial reads the same list. */
@@ -83,7 +86,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   onLogout, 
   className, 
   autoCollapse = false,
-  isHidden = false
+  isHidden = false,
+  isMobileOpen = false,
+  onMobileClose
 }) => {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   /* Two disclosure menus on the bar, dismissed together so neither is left
@@ -270,7 +275,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     return () => ro.disconnect();
   }, [activeTab, allowedTabs.length]);
 
-  if (isHidden) return null;
+  if (isHidden && !isMobileOpen) return null;
 
   /*
     ── The studio bar, as instrumentation ──────────────────────────────────
@@ -327,8 +332,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
+      {!isHidden && (
       <header
-        className={`fixed top-0 left-0 right-0 z-[100] h-[74px] flex items-center gap-2.5 px-4 sm:px-6
+        className={`hidden md:flex fixed top-0 left-0 right-0 z-[100] h-[74px] items-center gap-2.5 px-4 sm:px-6
                     bg-gradient-to-b from-white to-[#F5F9FD] backdrop-blur-xl
                     border-b border-slate-200/70 ${className || ''}`}
       >
@@ -507,6 +513,107 @@ const Sidebar: React.FC<SidebarProps> = ({
           </AnimatePresence>
         </div>
       </header>
+      )}
+
+      {/* Mobile slide-over navigation drawer */}
+      <aside
+        aria-label="Mobile studio navigation"
+        className={`md:hidden fixed inset-y-0 left-0 z-[100] w-72 max-w-[85vw] bg-white border-r border-slate-200
+                    shadow-[0_24px_60px_-16px_rgba(15,23,42,0.35)] flex flex-col transition-transform duration-300 ease-out
+                    ${isMobileOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'}`}
+      >
+        <div className="flex items-center justify-between px-4 h-16 border-b border-slate-200/80 shrink-0 bg-gradient-to-b from-white to-[#F5F9FD]">
+          <button
+            type="button"
+            onClick={() => { setActiveTab('home'); onMobileClose?.(); }}
+            className="flex items-center gap-2.5 outline-none cursor-pointer"
+          >
+            {activeLogo
+              ? <img src={activeLogo} alt="" className="h-8 w-auto max-w-[160px] object-contain" />
+              : <FFDSLogo className="h-8 w-auto" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => onMobileClose?.()}
+            aria-label="Close navigation menu"
+            className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+          {sections.map(([sectionName, sectionTabs]) => (
+            <div key={sectionName} className="space-y-1">
+              <div className="px-2.5 pb-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400 font-mono">
+                {sectionName}
+              </div>
+              {sectionTabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(tab.id);
+                      onMobileClose?.();
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13.5px] transition-all cursor-pointer outline-none ${
+                      isActive
+                        ? 'bg-gradient-to-b from-[#4C65B5] to-[#334486] text-white font-bold shadow-sm'
+                        : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-semibold'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                    <span className="truncate">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        <div className="border-t border-slate-200 p-3.5 bg-slate-50/70 space-y-2 shrink-0">
+          <div className="flex items-center gap-3 px-1.5 py-1.5">
+            <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#4C65B5] to-[#3D52A0] text-white
+                             flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
+              {userInitial}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-extrabold text-slate-900 truncate leading-tight">{userName}</p>
+              {currentUserAuth?.email && (
+                <p className="text-[11px] text-slate-500 truncate leading-tight mt-0.5">{currentUserAuth.email}</p>
+              )}
+              <span className="inline-block mt-1 text-[9.5px] font-extrabold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full bg-[#E8ECFB] text-[#3D52A0]">
+                {roleText}
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => { onMobileClose?.(); setIsConfigOpen(true); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-semibold
+                       text-slate-600 hover:bg-white hover:text-[#334486] border border-transparent hover:border-slate-200 transition-colors cursor-pointer"
+          >
+            {isCloud ? <Cloud className="w-4 h-4 opacity-70" /> : <HardDrive className="w-4 h-4 opacity-70" />}
+            Storage &amp; sync
+          </button>
+
+          {onLogout && (
+            <button
+              type="button"
+              onClick={() => { onMobileClose?.(); onLogout(); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-semibold
+                         text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4 opacity-70" />
+              Sign out
+            </button>
+          )}
+        </div>
+      </aside>
 
       <CloudConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} />
     </>

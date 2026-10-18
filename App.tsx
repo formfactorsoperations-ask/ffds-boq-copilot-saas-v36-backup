@@ -2959,22 +2959,30 @@ export default function App() {
         </div>
       ) : (
         <>
-          <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200 sticky top-0 z-[60]">
-            <div className="font-bold text-lg text-slate-800">FORM FACTORS</div>
+          <div className="md:hidden flex items-center justify-between px-4 h-14 bg-white border-b border-slate-200 sticky top-0 z-[60]">
             <button
+              type="button"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 -mr-2 text-slate-600"
+              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+              className="p-2 -ml-2 text-slate-600 hover:text-slate-900 rounded-lg cursor-pointer"
             >
               {isMobileMenuOpen ? (
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               ) : (
-                <Menu className="w-6 h-6" />
+                <Menu className="w-5 h-5" />
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("home")}
+              className="text-[11px] font-mono font-black text-slate-800 uppercase tracking-widest cursor-pointer"
+            >
+              FORM FACTORS DESIGN STUDIO
             </button>
           </div>
 
           <div
-            className={`fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/50 z-[70] md:hidden transition-opacity ${isMobileMenuOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+            className={`fixed inset-0 bg-slate-900/45 backdrop-blur-xs z-[90] md:hidden transition-opacity duration-200 ${isMobileMenuOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
             onClick={() => setIsMobileMenuOpen(false)}
           />
 
@@ -2998,7 +3006,8 @@ export default function App() {
             commsHealthScore={projectContext.commsSummary?.healthScore || 0}
             autoCollapse={false}
             isHidden={isProjectTab && hasProjectData}
-            className={`transition-transform duration-300 z-[80] ${isMobileMenuOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0"}`}
+            isMobileOpen={isMobileMenuOpen}
+            onMobileClose={() => setIsMobileMenuOpen(false)}
           />
           
           <main
@@ -3015,18 +3024,6 @@ export default function App() {
               width: 'calc(100% - var(--sidebar-w, 0px))',
             }}
           >
-            {/* MOBILE ONLY TOP NAVBAR */}
-            <div className="md:hidden h-14 shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-4 sticky top-0 z-[60]">
-               <button
-                  className="p-2 -ml-2 text-slate-500 hover:text-slate-900"
-                  onClick={() => setIsMobileMenuOpen(true)}
-                >
-                  <Menu className="w-5 h-5" />
-                </button>
-                <span className="text-[10px] font-mono font-black text-slate-800 uppercase tracking-widest">
-                  FORM FACTORS DESIGN STUDIO
-                </span>
-            </div>
 
             {/* PROJECT WORKSPACE WRAPPER */}
             {/* ACTIVE_WORKSPACE_BLOCK */}

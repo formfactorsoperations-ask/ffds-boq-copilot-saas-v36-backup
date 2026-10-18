@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFDS Studio OS — Studio Homepage Overhaul Options (Interactive 3D Mockup)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans, Playfair Display, JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#3D52A0',
+              dark: '#0A1B33',
+              accent: '#7091E6',
+              lavender: '#EDE8F5',
+              surface: '#F8FAFD'
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            serif: ['"Playfair Display"', 'serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          },
+          boxShadow: {
+            'card': '0 40px 100px -24px rgba(0,0,0,0.07)',
+            'dial': '0 26px 60px -18px rgba(61, 82, 160, 0.45), 0 0 0 10px rgba(61, 82, 160, 0.07)',
+            'tile': '0 14px 32px -14px rgba(61, 82, 160, 0.4)'
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #F8FAFD;
+      color: #0A1B33;
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    /* 3D Depth Stages */
+    .perspective-stage {
+      perspective: 1200px;
+      perspective-origin: 50% 50%;
+    }
+
+    .preserve-3d {
+      transform-style: preserve-3d;
+    }
+
+    /* Kinetic Gyroscopic Tilt */
+    .tilt-3d {
+      transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+      will-change: transform;
+    }
+
+    /* Specular light overlay */
+    .specular-sheen {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255, 255, 255, 0.45) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity 0.2s;
+      border-radius: inherit;
+    }
+    .tilt-3d:hover .specular-sheen {
+      opacity: 1;
+    }
+
+    /* Orbit animations */
+    @keyframes orbitRotateCW {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    @keyframes orbitRotateCCW {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(-360deg); }
+    }
+    @keyframes uprightCounterCW {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(-360deg); }
+    }
+    @keyframes uprightCounterCCW {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .orbit-ring-cw {
+      animation: orbitRotateCW 65s linear infinite;
+    }
+    .orbit-ring-ccw {
+      animation: orbitRotateCCW 50s linear infinite;
+    }
+    .orbit-counter-cw {
+      animation: uprightCounterCW 65s linear infinite;
+    }
+    .orbit-counter-ccw {
+      animation: uprightCounterCCW 50s linear infinite;
+    }
+
+    /* Aurora Glow Backdrop */
+    .aurora-glow {
+      background: radial-gradient(circle, rgba(61, 82, 160, 0.14), transparent 70%);
+    }
+
+    .tabular {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- OVERHAUL LAB FLOATING CONTROLS: Concept Switcher & Role Morph Bar -->
+  <aside class="sticky top-0 z-50 bg-[#0A1B33] text-white border-b border-indigo-950 px-4 sm:px-8 py-3 shadow-xl">
+    <div class="max-w-[1520px] mx-auto flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3">
+      
+      <!-- Left: Overhaul Lab Flag -->
+      <div class="flex items-center gap-3 shrink-0">
+        <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-md">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold tracking-tight text-white uppercase">Studio Homepage Overhaul</span>
+            <span class="text-[10px] px-2 py-0.5 rounded font-extrabold bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">Top 8 Options</span>
+          </div>
+          <p class="text-[11px] text-slate-300">Evaluating overhauls directly on the Form Factors Studio Homepage</p>
+        </div>
+      </div>
+
+      <!-- Center: Role Persona Switcher -->
+      <div class="flex items-center gap-2 overflow-x-auto max-w-full pb-1 xl:pb-0 scrollbar-none">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
+          <i data-lucide="user-check" class="w-3.5 h-3.5 text-indigo-400"></i> Role:
+        </span>
+        <div class="inline-flex p-1 bg-slate-900/90 rounded-xl border border-slate-700/80 shrink-0">
+          <button onclick="setPersona('super_admin')" id="role-super_admin" class="persona-btn px-2.5 py-1 text-xs font-bold rounded-lg transition-all bg-white text-[#0A1B33] shadow-sm">
+            Super Admin (Anish K)
+          </button>
+          <button onclick="setPersona('owner')" id="role-owner" class="persona-btn px-2.5 py-1 text-xs font-semibold rounded-lg transition-all text-slate-300 hover:text-white">
+            Studio Owner
+          </button>
+          <button onclick="setPersona('ops')" id="role-ops" class="persona-btn px-2.5 py-1 text-xs font-semibold rounded-lg transition-all text-slate-300 hover:text-white">
+            Ops Director
+          </button>
+          <button onclick="setPersona('design_head')" id="role-design_head" class="persona-btn px-2.5 py-1 text-xs font-semibold rounded-lg transition-all text-slate-300 hover:text-white">
+            Design Head
+          </button>
+          <button onclick="setPersona('designer')" id="role-designer" class="persona-btn px-2.5 py-1 text-xs font-semibold rounded-lg transition-all text-slate-300 hover:text-white">
+            Senior Designer
+          </button>
+          <button onclick="setPersona('supervisor')" id="role-supervisor" class="persona-btn px-2.5 py-1 text-xs font-semibold rounded-lg transition-all text-slate-300 hover:text-white">
+            Site Supervisor
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: Triage Drawer Toggle -->
+      <div class="flex items-center gap-2 shrink-0 self-end xl:self-auto">
+        <button onclick="toggleTriageDrawer()" class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-sm">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          <span>Smart AI Pulse (12)</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- 8 Concept Switcher Tabs -->
+    <div class="max-w-[1520px] mx-auto mt-2.5 pt-2.5 border-t border-slate-800 flex items-center gap-2 overflow-x-auto scrollbar-none">
+      <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">Overhaul Concepts:</span>
+      
+      <button onclick="setConcept(1)" id="tab-1" class="concept-tab px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all bg-[#3D52A0] text-white shadow-sm flex items-center gap-1.5">
+        <span>01. 3D Kinetic Gyroscopic Hub</span>
+        <span class="text-[10px] px-1 py-0.2 rounded bg-white/20 font-normal">3D Depth</span>
+      </button>
+
+      <button onclick="setConcept(2)" id="tab-2" class="concept-tab px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-1.5">
+        <span>02. 3D Spatial Room Viewport</span>
+        <span class="text-[10px] px-1 py-0.2 rounded bg-slate-800 font-normal">BIM Stage</span>
+      </button>
+
+      <button onclick="setConcept(3)" id="tab-3" class="concept-tab px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-1.5">
+        <span>03. Executive Flight Deck</span>
+        <span class="text-[10px] px-1 py-0.2 rounded bg-slate-800 font-normal">KPI Strip</span>
+      </button>
+
+      <button onclick="setConcept(4)" id="tab-4" class="concept-tab px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-1.5">
+        <span>04. 3D Timeline Runway Orbit</span>
+        <span class="text-[10px] px-1 py-0.2 rounded bg-slate-800 font-normal">Stage Bands</span>
+      </button>
+
+      <button onclick="setConcept(5)" id="tab-5" class="concept-tab px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-1.5">
+        <span>05. Dynamic Bento Prism</span>
+        <span class="text-[10px] px-1 py-0.2 rounded bg-slate-800 font-normal">Glass Sheen</span>
+      </button>
+
+      <button onclick="setConcept(6)" id="tab-6" class="concept-tab px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-1.5">
+        <span>06. Digital Twin Site Deck</span>
+        <span class="text-[10px] px-1 py-0.2 rounded bg-slate-800 font-normal">Site Telemetry</span>
+      </button>
+
+      <button onclick="setConcept(7)" id="tab-7" class="concept-tab px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-1.5">
+        <span>07. Commercial Fortress</span>
+        <span class="text-[10px] px-1 py-0.2 rounded bg-slate-800 font-normal">3D Waterfall</span>
+      </button>
+
+      <button onclick="setConcept(8)" id="tab-8" class="concept-tab px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-1.5">
+        <span>08. Minimalist Artisan Atelier</span>
+        <span class="text-[10px] px-1 py-0.2 rounded bg-slate-800 font-normal">Editorial Serif</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ACTUAL APP HEADER: Exact replica from the screenshot -->
+  <header class="bg-white border-b border-slate-200/80 px-4 sm:px-8 py-3 sticky top-[95px] z-40">
+    <div class="max-w-[1400px] mx-auto flex items-center justify-between gap-4">
+      
+      <!-- Logo: Form Factors Design Studio -->
+      <div class="flex items-center gap-3">
+        <div class="h-9 px-2 rounded-lg border border-slate-200 flex items-center justify-center bg-white shadow-2xs">
+          <span class="text-[11px] font-bold tracking-tight text-[#0A1B33] font-serif uppercase">Form Factors<span class="block text-[8px] tracking-widest text-slate-500 font-sans">Design Studio</span></span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs from Screenshot -->
+      <nav class="hidden md:flex items-center gap-2">
+        <a href="#home" class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#3D52A0] text-white font-semibold text-xs shadow-sm">
+          <i data-lucide="home" class="w-4 h-4"></i>
+          <span>Home</span>
+        </a>
+        <a href="#projects" class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-[#0A1B33] hover:bg-slate-100 font-semibold text-xs transition-colors">
+          <i data-lucide="layout-grid" class="w-4 h-4"></i>
+          <span>Projects</span>
+        </a>
+        <a href="#design-desk" class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-[#0A1B33] hover:bg-slate-100 font-semibold text-xs transition-colors">
+          <i data-lucide="pen-tool" class="w-4 h-4"></i>
+          <span>Design Desk</span>
+        </a>
+        <a href="#clients" class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-[#0A1B33] hover:bg-slate-100 font-semibold text-xs transition-colors">
+          <i data-lucide="users" class="w-4 h-4"></i>
+          <span>Clients</span>
+        </a>
+        <a href="#reports" class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-slate-600 hover:text-[#0A1B33] hover:bg-slate-100 font-semibold text-xs transition-colors">
+          <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+          <span>Reports</span>
+        </a>
+      </nav>
+
+      <!-- Right Utility Controls from Screenshot -->
+      <div class="flex items-center gap-3">
+        <button class="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+          <i data-lucide="settings" class="w-4 h-4"></i>
+        </button>
+        <button class="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+          <i data-lucide="library" class="w-4 h-4"></i>
+        </button>
+        <button class="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+          <i data-lucide="globe" class="w-4 h-4"></i>
+        </button>
+
+        <!-- User Chip from Screenshot -->
+        <div class="flex items-center gap-2 pl-2 border-l border-slate-200">
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs font-bold text-[#0A1B33]" id="user-display-name">Anish K</span>
+            <span class="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700" id="user-role-badge">Super Admin</span>
+          </div>
+          <div class="w-8 h-8 rounded-full bg-[#3D52A0] text-white font-bold text-xs flex items-center justify-center">
+            F
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- SUBHEADER: "Home  Studio activity and what needs attention" -->
+  <div class="max-w-[1400px] w-full mx-auto px-4 sm:px-8 pt-6 pb-4">
+    <div class="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
+      <div class="flex items-baseline gap-3">
+        <h1 class="text-2xl font-bold tracking-tight text-[#0A1B33]">Home</h1>
+        <span class="text-sm text-slate-500 font-medium">Studio activity and what needs attention</span>
+      </div>
+
+      <!-- Live Overhaul Archetype Flag -->
+      <div class="flex items-center gap-2 text-xs">
+        <span class="text-slate-400 font-semibold uppercase tracking-wider text-[11px]">Archetype:</span>
+        <span id="active-concept-tag" class="px-2.5 py-1 rounded-lg bg-indigo-50 font-bold text-[#3D52A0] border border-indigo-200/60">
+          Option 01: 3D Kinetic Gyroscopic Hub with Live Financials
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN HOMEPAGE CANVAS: Overhauled Container -->
+  <main class="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-8 pb-16 space-y-6">
+
+    <!-- ======================================================== -->
+    <!-- OVERHAUL HERO SLAB (The exact slab from the screenshot)  -->
+    <!-- ======================================================== -->
+    <div id="hero-slab-container" class="relative w-full rounded-[40px] bg-white border border-slate-200/60 shadow-card overflow-hidden">
+      
+      <!-- Aurora Gradient Glow from Screenshot -->
+      <div class="absolute inset-0 pointer-events-none">
+        <div class="absolute inset-0 bg-gradient-to-br from-[#F7FAFE] via-white to-[#FAF7F1]"></div>
+        <div class="aurora-glow absolute -top-48 right-[-6rem] w-[38rem] h-[38rem] rounded-full blur-3xl"></div>
+      </div>
+
+      <!-- Slab Content: Injected dynamically based on selected concept -->
+      <div id="hero-slab-content" class="relative p-6 md:p-12">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- CLOCK, CALENDAR & PULSE STRIP (Directly under hero from screenshot) -->
+    <div class="w-full bg-white rounded-3xl border border-slate-200/70 p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-[#3D52A0] shrink-0 font-mono font-bold text-lg">
+          <i data-lucide="clock" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-bold text-[#0A1B33]">Friday, 9 October 2026</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">Studio On-Track</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5">3 Project Milestones scheduled for walkthrough this week</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-6 text-xs text-slate-600">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+          <span>18 Workers on Site</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+          <span>6 GFC Sheets Approved</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+          <span>₹14.8L Unbilled Scope</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- NEEDS YOUR ATTENTION & RECENT PROJECTS SECTION -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      
+      <!-- Left 2 Cols: Needs Your Attention -->
+      <div class="lg:col-span-2 bg-white rounded-3xl border border-slate-200/70 p-6 shadow-sm space-y-4">
+        <div class="flex items-baseline justify-between pb-3 border-b border-slate-100">
+          <div>
+            <h2 class="text-[19px] font-bold tracking-tight text-[#0A1B33]">Needs your attention</h2>
+            <p class="text-[12.5px] text-slate-400 mt-0.5">High-leverage blockers sorted by studio urgency</p>
+          </div>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200" id="attention-badge-count">
+            12 Items Pending
+          </span>
+        </div>
+
+        <!-- Attention Item Cards -->
+        <div class="space-y-3" id="attention-cards-list">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+
+      <!-- Right 1 Col: Continue where you left off -->
+      <div class="bg-white rounded-3xl border border-slate-200/70 p-6 shadow-sm space-y-4">
+        <div>
+          <h2 class="text-[19px] font-bold tracking-tight text-[#0A1B33]">Continue where you left off</h2>
+          <p class="text-[12.5px] text-slate-400 mt-0.5">Your recent work sessions</p>
+        </div>
+
+        <div class="rounded-2xl bg-[#F8FAFD] border border-slate-200/60 divide-y divide-slate-200/70" id="recent-projects-list">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- AI TRIAGE DRAWER (Slide-over) -->
+  <aside id="triage-drawer" class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl border-l border-slate-200 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col justify-between">
+    <div class="p-6 overflow-y-auto">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-indigo-50 text-[#3D52A0] flex items-center justify-center font-bold">
+            <i data-lucide="bot" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-[#0A1B33]">Studio AI Priority Triage</h3>
+            <span class="text-[11px] text-slate-400">12 items analyzed for your active role</span>
+          </div>
+        </div>
+        <button onclick="toggleTriageDrawer()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="mt-6 space-y-4 text-xs">
+        <div class="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2">
+          <div class="flex justify-between font-bold text-amber-900">
+            <span>Critical Gate Delay</span>
+            <span class="text-[10px] uppercase bg-amber-200/80 px-2 py-0.5 rounded">Action Due</span>
+          </div>
+          <p class="text-amber-800">
+            Villa Serene (Phase 2) carpentry team ready for on-site execution, but Master Wardrobe GFC sheet is pending Design Head stamp.
+          </p>
+          <div class="flex items-center gap-2 pt-1">
+            <button class="px-3 py-1.5 rounded-lg bg-[#3D52A0] text-white font-bold text-[11px]">Authorize GFC Release</button>
+            <button class="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-600 text-[11px]">Snooze 4h</button>
+          </div>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200 space-y-2">
+          <div class="flex justify-between font-bold text-indigo-900">
+            <span>Milestone Recovery Due</span>
+            <span class="text-[10px] uppercase bg-indigo-200/80 px-2 py-0.5 rounded">₹18.5 L</span>
+          </div>
+          <p class="text-indigo-800">
+            Prestige Golfshire Phase 2 woodwork stage is 100% verified. Generate payment demand docket for client.
+          </p>
+          <div class="flex items-center gap-2 pt-1">
+            <button class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-[11px]">Issue Claim Docket</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+      <span>AI Engine: Gemini Studio Copilot</span>
+      <span class="text-[#3D52A0] font-semibold cursor-pointer">Configure SLA Rules</span>
+    </div>
+  </aside>
+
+  <!-- JAVASCRIPT LOGIC: 8 CONCEPTS, ROLE PERSONAS & 3D CANVASES -->
+  <script>
+    let activeConcept = 1;
+    let activePersona = 'super_admin';
+
+    // Persona Configurations
+    const PERSONAS = {
+      super_admin: {
+        name: 'Anish K',
+        badge: 'Super Admin',
+        activeCount: 12,
+        pipelineCount: 11,
+        attentionCount: 12,
+        deliveredCount: 5,
+        financialMetric: '₹4.82 Cr Live Pipeline · 26.4% Net Margin',
+        focusDesc: 'Full studio executive authority across portfolio economics, contracts, and delivery gates.'
+      },
+      owner: {
+        name: 'Anish K',
+        badge: 'Studio Owner',
+        activeCount: 12,
+        pipelineCount: 11,
+        attentionCount: 9,
+        deliveredCount: 5,
+        financialMetric: '₹2.84 Cr Invoiced · ₹38.5L Claimable',
+        focusDesc: 'Commercial fortress, cashflow velocity, and client relationship governance.'
+      },
+      ops: {
+        name: 'Vikram Joshi',
+        badge: 'Ops Director',
+        activeCount: 12,
+        pipelineCount: 8,
+        attentionCount: 14,
+        deliveredCount: 5,
+        financialMetric: '11.2d Procurement Turnaround · 28 Active POs',
+        focusDesc: 'Cross-site execution velocity, vendor procurement, and handover SLAs.'
+      },
+      design_head: {
+        name: 'Sanya Malhotra',
+        badge: 'Design Head',
+        activeCount: 10,
+        pipelineCount: 6,
+        attentionCount: 8,
+        deliveredCount: 4,
+        financialMetric: '24 Sheets in Review · 91.8% Gate Pass Rate',
+        focusDesc: 'Drawing accuracy, design gate clearances, and client aesthetic signoffs.'
+      },
+      designer: {
+        name: 'Kavita Patel',
+        badge: 'Senior Designer',
+        activeCount: 4,
+        pipelineCount: 2,
+        attentionCount: 5,
+        deliveredCount: 2,
+        financialMetric: '8 Sheets Assigned · 4 Feedback Pins Open',
+        focusDesc: 'Detailing room elevations, joinery details, and spec sheets.'
+      },
+      supervisor: {
+        name: 'Ramesh Sawant',
+        badge: 'Site Supervisor',
+        activeCount: 3,
+        pipelineCount: 0,
+        attentionCount: 4,
+        deliveredCount: 1,
+        financialMetric: '18 Workers Active · 5 Open Snags',
+        focusDesc: 'Daily site feed logs, material delivery check-ins, and defect resolutions.'
+      }
+    };
+
+    // Concept Archetypes Description
+    const CONCEPT_TAGS = {
+      1: 'Option 01: 3D Kinetic Gyroscopic Hub with Live Financials',
+      2: 'Option 02: 3D Spatial Room Viewport (Interactive BIM Stage)',
+      3: 'Option 03: Executive Flight Deck (Multi-Tier KPI Strip)',
+      4: 'Option 04: 3D Timeline Runway Orbit (Stage Parallax Bands)',
+      5: 'Option 05: Dynamic Bento Prism (Modular Glass Sheen Deck)',
+      6: 'Option 06: Digital Twin Site Deck (Real-Time Jobsite Telemetry)',
+      7: 'Option 07: Commercial Fortress (3D Cashflow Waterfall Engine)',
+      8: 'Option 08: Minimalist Artisan Atelier (Luxury Editorial Journal)'
+    };
+
+    // Render the Overhauled Hero Slab
+    function renderHeroSlab() {
+      const p = PERSONAS[activePersona];
+      const container = document.getElementById('hero-slab-content');
+      document.getElementById('active-concept-tag').innerText = CONCEPT_TAGS[activeConcept];
+
+      // CONCEPT 1: 3D KINETIC GYROSCOPIC HUB
+      if (activeConcept === 1) {
+        container.innerHTML = `
+          <div class="flex flex-col xl:flex-row items-center gap-8">
+            <!-- Left Ask & Live Financials -->
+            <div class="flex-[0_1_540px] w-full space-y-4">
+              <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-[#0a1b33]/45">
+                GOOD AFTERNOON, ${p.name.toUpperCase()}
+              </p>
+
+              <h1 class="text-[38px] md:text-[50px] font-bold leading-[1.06] tracking-tight text-[#0A1B33]">
+                Your studio, ready<br>
+                for <span style="color: #3D52A0;">what&rsquo;s next.</span>
+              </h1>
+
+              <p class="text-[15px] leading-relaxed text-[#64748b]">
+                <strong class="font-semibold text-[#0A1B33]">${p.activeCount} projects are active</strong>, 
+                ${p.pipelineCount} opportunities are in the pipeline, and 
+                <strong class="font-semibold text-[#0A1B33]">${p.attentionCount} items</strong> need your attention today.
+              </p>
+
+              <!-- New Expanded KPI Ribbon in Concept 1 -->
+              <div class="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200/60 flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span class="text-slate-500 font-medium">Financial Pulse:</span>
+                  <span class="font-bold text-[#0A1B33]">${p.financialMetric}</span>
+                </div>
+                <span class="text-[11px] font-bold text-indigo-700">Live INR Sync</span>
+              </div>
+
+              <div class="pt-2 flex items-center gap-4">
+                <button onclick="toggleTriageDrawer()" class="inline-flex items-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold text-white transition-all shadow-md hover:opacity-95" style="background: #3D52A0;">
+                  <span>Review priorities</span>
+                  <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </button>
+              </div>
+
+              <!-- Stat pills with tabular counts -->
+              <div class="pt-2 flex flex-wrap gap-2">
+                <button class="rounded-full border border-slate-200 bg-white/70 px-4 py-2 text-[13px] hover:border-slate-300">
+                  <span class="font-semibold tabular text-[#0A1B33]">${p.activeCount}</span>
+                  <span class="ml-1.5 text-slate-500">active</span>
+                </button>
+                <button class="rounded-full border border-slate-200 bg-white/70 px-4 py-2 text-[13px] hover:border-slate-300">
+                  <span class="font-semibold tabular text-[#0A1B33]">${p.pipelineCount}</span>
+                  <span class="ml-1.5 text-slate-500">pipeline</span>
+                </button>
+                <button class="rounded-full border border-slate-200 bg-white/70 px-4 py-2 text-[13px] hover:border-slate-300">
+                  <span class="font-semibold tabular text-[#0A1B33]">${p.deliveredCount}</span>
+                  <span class="ml-1.5 text-slate-500">delivered</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Right: 3D Kinetic Gyroscopic Hub -->
+            <div class="flex-1 min-w-0 flex items-center justify-center perspective-stage">
+              <div id="kinetic-hub-stage" class="relative w-[480px] h-[480px] rounded-full border border-indigo-200/50 flex items-center justify-center tilt-3d preserve-3d" style="background: radial-gradient(circle, rgba(255,255,255,0.9), rgba(241,245,249,0.5));">
+                <div class="specular-sheen"></div>
+                
+                <!-- Rotating Outer Ring -->
+                <div class="absolute inset-4 rounded-full border border-dashed border-indigo-300/40 orbit-ring-cw"></div>
+                <!-- Rotating Inner Ring -->
+                <div class="absolute inset-16 rounded-full border border-indigo-300/60 orbit-ring-ccw"></div>
+
+                <!-- Floating Orbit Nodes -->
+                <div class="absolute -top-3 left-1/2 -translate-x-1/2 p-3 bg-white rounded-2xl border border-indigo-100 shadow-tile flex items-center gap-2 hover:-translate-y-1 transition-transform cursor-pointer">
+                  <div class="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                    <i data-lucide="layout-grid" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <span class="text-xs font-bold text-[#0A1B33] block">Projects</span>
+                    <span class="text-[10px] text-slate-400">${p.activeCount + p.pipelineCount} Total</span>
+                  </div>
+                </div>
+
+                <div class="absolute top-1/2 -right-4 -translate-y-1/2 p-3 bg-white rounded-2xl border border-indigo-100 shadow-tile flex items-center gap-2 hover:-translate-y-1 transition-transform cursor-pointer">
+                  <div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
+                    <i data-lucide="pen-tool" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <span class="text-xs font-bold text-[#0A1B33] block">Design Desk</span>
+                    <span class="text-[10px] text-slate-400">8 In Review</span>
+                  </div>
+                </div>
+
+                <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 p-3 bg-white rounded-2xl border border-indigo-100 shadow-tile flex items-center gap-2 hover:-translate-y-1 transition-transform cursor-pointer">
+                  <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold">
+                    <i data-lucide="credit-card" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <span class="text-xs font-bold text-[#0A1B33] block">Milestones</span>
+                    <span class="text-[10px] text-slate-400">₹38.5L Ready</span>
+                  </div>
+                </div>
+
+                <div class="absolute top-1/2 -left-4 -translate-y-1/2 p-3 bg-white rounded-2xl border border-indigo-100 shadow-tile flex items-center gap-2 hover:-translate-y-1 transition-transform cursor-pointer">
+                  <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center font-bold">
+                    <i data-lucide="users" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <span class="text-xs font-bold text-[#0A1B33] block">Clients</span>
+                    <span class="text-[10px] text-slate-400">27 Direct</span>
+                  </div>
+                </div>
+
+                <!-- Center 3D Bullseye -->
+                <div class="w-40 h-40 rounded-full flex flex-col items-center justify-center text-white cursor-pointer hover:scale-105 transition-transform" style="background: linear-gradient(150deg, #3D52A0, #334486); box-shadow: 0 26px 60px -18px #3D52A0, 0 0 0 10px rgba(61, 82, 160,0.08);">
+                  <i data-lucide="plus" class="w-8 h-8"></i>
+                  <span class="text-sm font-bold mt-1">New project</span>
+                  <span class="text-[10px] text-white/70">Start from scratch</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      } 
+      // CONCEPT 2: 3D SPATIAL ROOM VIEWPORT
+      else if (activeConcept === 2) {
+        container.innerHTML = `
+          <div class="flex flex-col xl:flex-row items-center gap-8">
+            <div class="flex-[0_1_520px] w-full space-y-4">
+              <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-[#0a1b33]/45">
+                SPATIAL BIM OVERHAUL · ${p.name.toUpperCase()}
+              </p>
+              <h1 class="text-[38px] md:text-[50px] font-bold leading-[1.06] tracking-tight text-[#0A1B33]">
+                Your studio in <span style="color: #3D52A0;">live 3D space.</span>
+              </h1>
+              <p class="text-[15px] leading-relaxed text-[#64748b]">
+                Real-time architectural stage view across your ${p.activeCount} active sites. Inspect room-by-room execution % and pending GFC signoffs directly from home.
+              </p>
+              <div class="pt-2">
+                <button class="inline-flex items-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold text-white shadow-md" style="background: #3D52A0;">
+                  <span>Inspect Spatial Snags (3)</span>
+                  <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- 3D Room Canvas Box -->
+            <div class="flex-1 min-w-0 bg-slate-900 rounded-3xl p-6 text-white relative min-h-[380px] flex flex-col justify-between overflow-hidden shadow-xl">
+              <div class="flex justify-between items-center z-10 text-xs">
+                <span class="font-mono text-indigo-300">VILLA SERENE // LEVEL 02</span>
+                <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono">BIM ACTIVE</span>
+              </div>
+
+              <!-- Interactive 3D Room Grid Graphic -->
+              <div class="relative flex-1 flex items-center justify-center my-4 cursor-grab">
+                <div class="w-72 h-52 border-2 border-indigo-400/40 rounded-2xl bg-indigo-950/40 backdrop-blur-md p-4 flex flex-col justify-between transform rotate-6 hover:rotate-0 transition-transform">
+                  <div class="flex justify-between text-xs font-mono">
+                    <span class="text-white font-bold">MASTER SUITE</span>
+                    <span class="text-emerald-400">74% Complete</span>
+                  </div>
+                  <div class="text-[11px] text-slate-300 space-y-1">
+                    <div>· 24 Carpentry items installed</div>
+                    <div>· Veneer alignment passed</div>
+                    <div>· Cove lighting test OK</div>
+                  </div>
+                  <div class="flex justify-between items-center text-[10px] text-indigo-300 pt-2 border-t border-indigo-400/20">
+                    <span>Allocated: ₹18.45L</span>
+                    <span class="underline">View Drawings &rarr;</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex justify-between text-[11px] font-mono text-slate-400 pt-2 border-t border-white/10 z-10">
+                <span>Drag to pan room elevation</span>
+                <span>Click room to open BOQ line items</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      // CONCEPT 3: EXECUTIVE FLIGHT DECK (MULTI-TIER KPI STRIP)
+      else if (activeConcept === 3) {
+        container.innerHTML = `
+          <div class="space-y-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-[#0a1b33]/45">
+                  EXECUTIVE COMMAND · ${p.name.toUpperCase()}
+                </p>
+                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-[#0A1B33]">
+                  Studio Operations Flight Deck
+                </h1>
+              </div>
+              <div class="flex items-center gap-3">
+                <button class="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-xs font-bold shadow-sm">
+                  + Quick Inbound Lead
+                </button>
+              </div>
+            </div>
+
+            <!-- 4-Column KPI Vitals Strip -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200">
+                <span class="text-xs text-slate-400 block font-semibold">Active Booked Value</span>
+                <span class="text-2xl font-bold text-[#0A1B33] tabular mt-1 block">₹4.82 Cr</span>
+                <span class="text-[11px] text-emerald-600 font-semibold mt-1 block">+18% vs Last Month</span>
+              </div>
+              <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200">
+                <span class="text-xs text-slate-400 block font-semibold">Realized Margin Health</span>
+                <span class="text-2xl font-bold text-indigo-600 tabular mt-1 block">26.4%</span>
+                <span class="text-[11px] text-slate-500 mt-1 block">Benchmark: 22.0%</span>
+              </div>
+              <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200">
+                <span class="text-xs text-slate-400 block font-semibold">Design Gate Clearance</span>
+                <span class="text-2xl font-bold text-emerald-600 tabular mt-1 block">91.8%</span>
+                <span class="text-[11px] text-emerald-600 font-semibold mt-1 block">First-time Approval</span>
+              </div>
+              <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200">
+                <span class="text-xs text-slate-400 block font-semibold">Unbilled Scope Leaks</span>
+                <span class="text-2xl font-bold text-rose-600 tabular mt-1 block">₹14.8 L</span>
+                <span class="text-[11px] text-rose-600 font-semibold mt-1 block">6 Items Require Docket</span>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-between text-xs">
+              <span class="text-slate-600 font-medium">Auto-Triage Radar: 3 accounts have payments pending client walkthrough.</span>
+              <button onclick="toggleTriageDrawer()" class="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 font-bold hover:bg-indigo-100">Batch Resolve &rarr;</button>
+            </div>
+          </div>
+        `;
+      }
+      // CONCEPT 4: 3D TIMELINE RUNWAY ORBIT
+      else if (activeConcept === 4) {
+        container.innerHTML = `
+          <div class="space-y-6">
+            <div class="flex justify-between items-center">
+              <div>
+                <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-[#0a1b33]/45">
+                  STAGE RUNWAY · ${p.name.toUpperCase()}
+                </p>
+                <h1 class="text-3xl font-bold text-[#0A1B33]">
+                  Project Lifecycle Orbit Bands
+                </h1>
+              </div>
+              <div class="text-xs text-slate-500">
+                Horizontal Stage Parallax Active
+              </div>
+            </div>
+
+            <!-- Horizontal Stage Runway Strip -->
+            <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 pt-2">
+              <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+                <div class="flex justify-between font-bold text-[#0A1B33] pb-2 border-b border-slate-200">
+                  <span>01. Intake</span>
+                  <span class="px-1.5 bg-slate-200 rounded font-mono">4</span>
+                </div>
+                <div class="mt-2 space-y-1 text-slate-600">
+                  <div class="font-semibold">Malabar Hill</div>
+                  <div class="text-[11px] text-slate-400">Lead IQ 94%</div>
+                </div>
+              </div>
+
+              <div class="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs">
+                <div class="flex justify-between font-bold text-indigo-900 pb-2 border-b border-indigo-200">
+                  <span>02. Proposals</span>
+                  <span class="px-1.5 bg-indigo-200 rounded font-mono">3</span>
+                </div>
+                <div class="mt-2 space-y-1 text-slate-600">
+                  <div class="font-semibold">Prestige Golf</div>
+                  <div class="text-[11px] text-indigo-600 font-medium">3 Tiers Sent</div>
+                </div>
+              </div>
+
+              <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+                <div class="flex justify-between font-bold text-[#0A1B33] pb-2 border-b border-slate-200">
+                  <span>03. Drawing Gate</span>
+                  <span class="px-1.5 bg-slate-200 rounded font-mono">5</span>
+                </div>
+                <div class="mt-2 space-y-1 text-slate-600">
+                  <div class="font-semibold">Bandra Seaface</div>
+                  <div class="text-[11px] text-slate-400">22/24 GFC Approved</div>
+                </div>
+              </div>
+
+              <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs">
+                <div class="flex justify-between font-bold text-emerald-900 pb-2 border-b border-emerald-200">
+                  <span>04. On Site</span>
+                  <span class="px-1.5 bg-emerald-200 rounded font-mono">8</span>
+                </div>
+                <div class="mt-2 space-y-1 text-slate-600">
+                  <div class="font-semibold">Villa Serene</div>
+                  <div class="text-[11px] text-emerald-600 font-medium">74% Complete</div>
+                </div>
+              </div>
+
+              <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+                <div class="flex justify-between font-bold text-[#0A1B33] pb-2 border-b border-slate-200">
+                  <span>05. Handover</span>
+                  <span class="px-1.5 bg-slate-200 rounded font-mono">2</span>
+                </div>
+                <div class="mt-2 space-y-1 text-slate-600">
+                  <div class="font-semibold">Khar West</div>
+                  <div class="text-[11px] text-slate-400">Punchlist Signoff</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      // CONCEPT 5: DYNAMIC BENTO PRISM (GLASS SHEEN)
+      else if (activeConcept === 5) {
+        container.innerHTML = `
+          <div class="space-y-6">
+            <div class="flex justify-between items-center">
+              <div>
+                <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-[#0a1b33]/45">
+                  BENTO PRISM · ${p.name.toUpperCase()}
+                </p>
+                <h1 class="text-3xl font-bold text-[#0A1B33]">
+                  Adaptive Role-Morphing Glass Deck
+                </h1>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div class="md:col-span-2 p-6 rounded-3xl bg-gradient-to-br from-indigo-900 to-[#0A1B33] text-white flex flex-col justify-between shadow-lg">
+                <div class="space-y-2">
+                  <span class="text-xs font-mono text-indigo-300">PRIORITY FOCUS FOR YOUR ROLE</span>
+                  <h3 class="text-2xl font-bold">Today&rsquo;s Critical Commercial Clearance</h3>
+                  <p class="text-xs text-slate-300 max-w-lg leading-relaxed">
+                    ${p.focusDesc} 12 attention items detected requiring authorization before 6 PM today.
+                  </p>
+                </div>
+                <div class="pt-6 flex items-center gap-3">
+                  <button onclick="toggleTriageDrawer()" class="px-4 py-2 rounded-xl bg-white text-[#0A1B33] font-bold text-xs">
+                    Launch AI Triage Drawer
+                  </button>
+                </div>
+              </div>
+
+              <div class="p-6 rounded-3xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                <div>
+                  <span class="text-xs font-bold text-slate-400 uppercase">Live Metric</span>
+                  <div class="text-3xl font-extrabold text-[#0A1B33] mt-2">${p.activeCount}</div>
+                  <span class="text-xs text-slate-500 mt-1 block">Active production projects</span>
+                </div>
+                <button class="mt-4 w-full py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold text-[#3D52A0]">
+                  View Directory &rarr;
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      // CONCEPT 6: DIGITAL TWIN SITE DECK
+      else if (activeConcept === 6) {
+        container.innerHTML = `
+          <div class="flex flex-col xl:flex-row items-center gap-8">
+            <div class="flex-[0_1_500px] w-full space-y-4">
+              <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-[#0a1b33]/45">
+                JOB-SITE DIGITAL TWIN · ${p.name.toUpperCase()}
+              </p>
+              <h1 class="text-[38px] font-bold leading-tight text-[#0A1B33]">
+                Physical execution, <span style="color: #3D52A0;">tracked in real time.</span>
+              </h1>
+              <p class="text-sm text-slate-500">
+                18 workers checked in across 2 live residential sites. Italian marble and marine ply delivery confirmed at Bandra Seaface.
+              </p>
+              <div class="pt-2">
+                <button class="px-6 py-3 rounded-full bg-[#3D52A0] text-white text-xs font-bold shadow-md">
+                  View Daily Site Feed (8 Updates) &rarr;
+                </button>
+              </div>
+            </div>
+
+            <div class="flex-1 min-w-0 bg-slate-900 rounded-3xl p-6 text-white min-h-[340px] flex flex-col justify-between">
+              <div class="flex justify-between items-center text-xs font-mono">
+                <span class="text-indigo-400">SITE CAMERA FEED // BANDRA</span>
+                <span class="text-emerald-400">PUNCHLIST 94% CLEAR</span>
+              </div>
+              <div class="my-6 p-4 rounded-2xl bg-slate-800/80 border border-slate-700 text-xs space-y-2">
+                <div class="flex justify-between text-slate-300">
+                  <span>Italian Marble Foyer Flooring:</span>
+                  <span class="text-emerald-400 font-bold">Polishing in progress</span>
+                </div>
+                <div class="flex justify-between text-slate-300">
+                  <span>Master Wardrobe Joinery:</span>
+                  <span class="text-indigo-300 font-bold">Hardware fitted</span>
+                </div>
+                <div class="flex justify-between text-slate-300">
+                  <span>Guest Bath Plumbing:</span>
+                  <span class="text-amber-400 font-bold">1 Snag reported</span>
+                </div>
+              </div>
+              <div class="text-[11px] font-mono text-slate-400">
+                Last geo-fenced log: Today at 11:42 AM by Ramesh Sawant
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      // CONCEPT 7: COMMERCIAL FORTRESS
+      else if (activeConcept === 7) {
+        container.innerHTML = `
+          <div class="space-y-6">
+            <div class="flex justify-between items-center">
+              <div>
+                <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-[#0a1b33]/45">
+                  COMMERCIAL FORTRESS · ${p.name.toUpperCase()}
+                </p>
+                <h1 class="text-3xl font-bold text-[#0A1B33]">
+                  Financial Cashflow & Claimable Milestones
+                </h1>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div class="p-6 rounded-3xl bg-slate-50 border border-slate-200">
+                <span class="text-xs font-bold text-slate-400 uppercase">Gross Recovered</span>
+                <div class="text-3xl font-bold text-emerald-600 tabular mt-2">₹2.12 Cr</div>
+                <span class="text-xs text-slate-500 mt-1 block">Cleared into studio bank</span>
+              </div>
+              <div class="p-6 rounded-3xl bg-slate-50 border border-slate-200">
+                <span class="text-xs font-bold text-slate-400 uppercase">Claimable Milestones</span>
+                <div class="text-3xl font-bold text-indigo-600 tabular mt-2">₹38.5 L</div>
+                <span class="text-xs text-slate-500 mt-1 block">Ready for client billing</span>
+              </div>
+              <div class="p-6 rounded-3xl bg-slate-50 border border-slate-200">
+                <span class="text-xs font-bold text-slate-400 uppercase">Retention Secured</span>
+                <div class="text-3xl font-bold text-amber-600 tabular mt-2">₹14.2 L</div>
+                <span class="text-xs text-slate-500 mt-1 block">Handover release safe</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      // CONCEPT 8: MINIMALIST ARTISAN ATELIER
+      else if (activeConcept === 8) {
+        container.innerHTML = `
+          <div class="space-y-4 max-w-3xl">
+            <p class="text-xs font-serif italic text-indigo-700 tracking-widest uppercase">
+              STUDIO PORTFOLIO ATELIER · ${p.name.toUpperCase()}
+            </p>
+            <h1 class="text-4xl font-serif font-bold text-[#0A1B33] leading-tight">
+              Nineteen residences in craft, measured against architectural perfection.
+            </h1>
+            <p class="text-sm text-slate-600 leading-relaxed font-sans">
+              ${p.activeCount} projects progressing steadily on site, ${p.pipelineCount} emerging commissions in dialogue, and ${p.attentionCount} architectural signoffs awaiting creative review.
+            </p>
+            <div class="pt-4 flex items-center gap-4">
+              <button class="px-6 py-2.5 rounded-full bg-[#0A1B33] text-white text-xs font-semibold">
+                Open Creative Attention Log
+              </button>
+            </div>
+          </div>
+        `;
+      }
+
+      lucide.createIcons();
+      setupKineticTilt();
+    }
+
+    // Populate Attention Items
+    function renderAttentionItems() {
+      const list = document.getElementById('attention-cards-list');
+      const items = [
+        { project: 'Villa Serene (Phase 2)', task: 'Approve Wardrobe Joinery GFC Sheet', priority: 'blocker', time: '2 hours ago', tone: { bg: '#FDF2F6', fg: '#B4436A', text: 'Blocked' } },
+        { project: 'Prestige Golfshire Penthouse', task: 'Review Client Scope Addition (Wine Rack ₹1.45L)', priority: 'due', time: '4 hours ago', tone: { bg: '#FDF7EC', fg: '#C77700', text: 'Next up' } },
+        { project: 'Bandra Seaface Duplex', task: 'Sign off Phase 2 Milestone Invoicing Docket', priority: 'standard', time: 'Yesterday', tone: { bg: '#F6F8FB', fg: '#64748B', text: 'When there is time' } }
+      ];
+
+      list.innerHTML = items.map(item => `
+        <div class="p-4 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-between gap-4 hover:border-slate-300 transition-colors">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="text-xs px-2 py-0.5 rounded font-bold" style="background: ${item.tone.bg}; color: ${item.tone.fg};">${item.tone.text}</span>
+              <span class="text-xs font-semibold text-slate-400">· ${item.project}</span>
+            </div>
+            <div class="text-sm font-bold text-[#0A1B33]">${item.task}</div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button class="px-3 py-1.5 rounded-lg bg-[#3D52A0] hover:bg-[#324382] text-white text-xs font-bold transition-all">
+              Resolve
+            </button>
+            <button class="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-500 text-xs">
+              Snooze
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Populate Recent Projects List
+    function renderRecentProjects() {
+      const list = document.getElementById('recent-projects-list');
+      const recents = [
+        { name: 'Villa Serene', stage: 'On site · 20m ago', initials: 'VS' },
+        { name: 'Prestige Golfshire', stage: 'Drawing gate · 2h ago', initials: 'PG' },
+        { name: 'Bandra Seaface', stage: 'Contract · Yesterday', initials: 'BS' },
+        { name: 'Alibaug Ocean Villa', stage: 'Proposal sent · 2d ago', initials: 'AV' }
+      ];
+
+      list.innerHTML = recents.map(r => `
+        <div class="flex items-center gap-3.5 px-4 py-3 hover:bg-white transition-colors cursor-pointer first:rounded-t-2xl last:rounded-b-2xl">
+          <span class="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center text-[11px] font-bold tracking-wide bg-[#E8F0FB] text-[#3D52A0]">
+            ${r.initials}
+          </span>
+          <div class="flex-1 min-w-0">
+            <span class="block text-[14px] font-semibold text-[#0A1B33] truncate">${r.name}</span>
+            <span class="block text-[12px] text-slate-500 truncate">${r.stage}</span>
+          </div>
+          <i data-lucide="arrow-right" class="w-4 h-4 text-slate-300"></i>
+        </div>
+      `).join('');
+    }
+
+    // Kinetic 3D Tilt Math
+    function setupKineticTilt() {
+      const hub = document.getElementById('kinetic-hub-stage');
+      if (!hub) return;
+
+      hub.addEventListener('mousemove', (e) => {
+        const rect = hub.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const cx = rect.width / 2;
+        const cy = rect.height / 2;
+
+        const rotateX = ((y - cy) / cy) * -8;
+        const rotateY = ((x - cx) / cx) * 8;
+
+        hub.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+        hub.style.setProperty('--mouse-x', `${(x / rect.width) * 100}%`);
+        hub.style.setProperty('--mouse-y', `${(y / rect.height) * 100}%`);
+      });
+
+      hub.addEventListener('mouseleave', () => {
+        hub.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`;
+      });
+    }
+
+    // Role Switcher
+    function setPersona(roleKey) {
+      if (!PERSONAS[roleKey]) return;
+      activePersona = roleKey;
+
+      document.querySelectorAll('.persona-btn').forEach(b => {
+        b.classList.remove('bg-white', 'text-[#0A1B33]', 'shadow-sm');
+        b.classList.add('text-slate-300');
+      });
+      const targetBtn = document.getElementById(`role-${roleKey}`);
+      if (targetBtn) {
+        targetBtn.classList.add('bg-white', 'text-[#0A1B33]', 'shadow-sm');
+        targetBtn.classList.remove('text-slate-300');
+      }
+
+      const p = PERSONAS[roleKey];
+      document.getElementById('user-display-name').innerText = p.name;
+      document.getElementById('user-role-badge').innerText = p.badge;
+
+      renderHeroSlab();
+    }
+
+    // Concept Switcher
+    function setConcept(optId) {
+      activeConcept = optId;
+
+      document.querySelectorAll('.concept-tab').forEach(b => {
+        b.classList.remove('bg-[#3D52A0]', 'text-white', 'shadow-sm');
+        b.classList.add('text-slate-300');
+      });
+      const targetTab = document.getElementById(`tab-${optId}`);
+      if (targetTab) {
+        targetTab.classList.add('bg-[#3D52A0]', 'text-white', 'shadow-sm');
+        targetTab.classList.remove('text-slate-300');
+      }
+
+      renderHeroSlab();
+    }
+
+    function toggleTriageDrawer() {
+      document.getElementById('triage-drawer').classList.toggle('translate-x-full');
+    }
+
+    // Init
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      renderHeroSlab();
+      renderAttentionItems();
+      renderRecentProjects();
+    });
+  </script>
+</body>
+</html>

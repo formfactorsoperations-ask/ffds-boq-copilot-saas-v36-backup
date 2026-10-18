@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFDS Studio OS — 3D Spatial Material Pinboard (v3.0 Ultra Edition)</title>
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: '#3D52A0',
+            brandDark: '#1E2B58',
+            ink: '#0a1b33',
+            cork: '#EFE7DA',
+            corkBorder: '#D7C7B0'
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Google Fonts: Plus Jakarta Sans + Caveat for architectural notes + Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;1,600&family=Space+Grotesk:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #090d16;
+      color: #0a1b33;
+      overflow-x: hidden;
+    }
+    .font-handwriting {
+      font-family: 'Caveat', cursive;
+    }
+    .font-mono-studio {
+      font-family: 'Space Grotesk', monospace;
+    }
+    /* 3D stage and cards */
+    .viewport-3d {
+      perspective: 1400px;
+      perspective-origin: 50% 30%;
+      transform-style: preserve-3d;
+    }
+    .pinboard-surface-3d {
+      transform-style: preserve-3d;
+      transform: rotateX(15deg) translateZ(0);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+    }
+    /* Corkboard grain */
+    .cork-texture {
+      background-color: #f3ece1;
+      background-image: 
+        radial-gradient(#d8cbba 1.5px, transparent 1.5px),
+        radial-gradient(#cebea8 1.5px, #f3ece1 1.5px);
+      background-size: 26px 26px;
+      background-position: 0 0, 13px 13px;
+    }
+    .blueprint-texture {
+      background-color: #0e224e;
+      background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.09) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    /* 3D Pushpins with realistic drop shadow */
+    .pushpin-brass {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #FFF08A, #CA8A04 60%, #713F12);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.45), inset 0 1px 2px #FEF08A;
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%) translateZ(30px);
+      z-index: 40;
+    }
+    .pushpin-red {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #FCA5A5, #DC2626 60%, #7F1D1D);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.45), inset 0 1px 2px #FECACA;
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%) translateZ(30px);
+      z-index: 40;
+    }
+    /* Card depth in real 3D space */
+    .spatial-card {
+      transform-style: preserve-3d;
+      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      cursor: pointer;
+    }
+    .spatial-card:hover {
+      transform: translateZ(50px) translateY(-10px) scale(1.03) !important;
+      box-shadow: 0 35px 50px -15px rgba(0, 0, 0, 0.35), 0 15px 25px -5px rgba(0, 0, 0, 0.2) !important;
+      z-index: 60 !important;
+    }
+    /* Ultra Modern Chronometer dial */
+    .modern-chrono-glass {
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 20px 40px -10px rgba(10, 27, 51, 0.15), inset 0 1px 2px rgba(255, 255, 255, 0.9);
+    }
+    /* Rotating second ring */
+    @keyframes sweep {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .second-ring-sweep {
+      animation: sweep 60s linear infinite;
+    }
+    /* Floating action dock */
+    .floating-action-dock {
+      transform-style: preserve-3d;
+      transform: translateZ(45px);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.15);
+    }
+    .swatch-chip {
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15), 0 3px 6px rgba(0,0,0,0.15);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+
+  <!-- ================= TOP APP HEADER ================= -->
+  <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-6 py-2.5 flex items-center justify-between text-slate-900 shadow-sm">
+    <div class="flex items-center gap-6">
+      <div class="flex items-center gap-3">
+        <div class="h-8 px-2.5 py-1 rounded-lg border border-slate-200 bg-white flex items-center justify-center font-bold text-[10px] tracking-wider text-slate-700 shadow-2xs">
+          FORM FACTORS
+        </div>
+        <div class="h-4 w-px bg-slate-200"></div>
+        <span class="text-xs font-semibold text-slate-500">FFDS Studio OS <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand/10 text-brand">v3.0 Ultra</span></span>
+      </div>
+
+      <!-- Main Navigation Tabs Tailored by Role -->
+      <nav id="top-nav-tabs" class="hidden md:flex items-center gap-1">
+        <!-- Injected dynamically -->
+      </nav>
+    </div>
+
+    <!-- Right user bar -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/60 text-emerald-700 text-[11px] font-semibold">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        Live Session
+      </div>
+      <div class="h-4 w-px bg-slate-200"></div>
+      <div class="text-right">
+        <span id="user-display-name" class="text-xs font-semibold text-slate-800 block leading-tight">Anish K</span>
+        <span id="user-display-role" class="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-brand uppercase">SUPER ADMIN</span>
+      </div>
+      <div id="user-display-avatar" class="w-7 h-7 rounded-xl bg-brand text-white flex items-center justify-center font-bold text-xs shadow-xs">
+        F
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= TOP 3D & ROLE CONTROLLER TOOLBAR ================= -->
+  <aside class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white px-6 py-3 border-b border-indigo-900/60 shadow-lg">
+    <div class="max-w-[1650px] mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      
+      <!-- Role Switcher -->
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-bold text-[10px] uppercase tracking-wider border border-indigo-500/30">
+            Version 3.0 Ultra
+          </span>
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-300">Studio Persona:</span>
+        </div>
+        <div class="flex items-center gap-1 bg-white/10 p-1 rounded-xl backdrop-blur-md border border-white/10 overflow-x-auto">
+          <button onclick="setStudioRole('founder')" id="role-founder" class="px-2.5 py-1 rounded-lg text-xs font-bold transition bg-white text-indigo-950 shadow-sm">
+            Founder / Super Admin
+          </button>
+          <button onclick="setStudioRole('ops-director')" id="role-ops-director" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition">
+            Ops Director
+          </button>
+          <button onclick="setStudioRole('design-head')" id="role-design-head" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition">
+            Design Head
+          </button>
+          <button onclick="setStudioRole('designer')" id="role-designer" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition">
+            Designer (Assigned Only)
+          </button>
+          <button onclick="setStudioRole('junior-ops')" id="role-junior-ops" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition">
+            Junior Ops / Client Exec
+          </button>
+        </div>
+      </div>
+
+      <!-- 3D Spatial Gyroscope & Camera Sliders -->
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 text-xs text-indigo-200">
+          <span>Pitch (X):</span>
+          <input type="range" id="slider-pitch" min="0" max="30" value="15" oninput="update3DCamera()" class="w-20 accent-indigo-400 cursor-pointer">
+          <span id="label-pitch" class="font-mono text-white font-bold w-6">15°</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-indigo-200">
+          <span>Yaw (Y):</span>
+          <input type="range" id="slider-yaw" min="-20" max="20" value="0" oninput="update3DCamera()" class="w-20 accent-indigo-400 cursor-pointer">
+          <span id="label-yaw" class="font-mono text-white font-bold w-6">0°</span>
+        </div>
+        <button onclick="resetCamera()" class="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-semibold text-white transition">
+          Reset 15°
+        </button>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ================= 3D VIEWPORT CONTAINER ================= -->
+  <main class="flex-1 max-w-[1650px] w-full mx-auto p-6 viewport-3d">
+
+    <!-- ================= FLOATING ACTION COMMAND DOCK (TRANSLATED ON Z-AXIS) ================= -->
+    <!-- Solves "How do we add new projects, access templates, or go to settings?" -->
+    <div class="floating-action-dock bg-slate-900/90 backdrop-blur-xl border border-white/20 rounded-2xl p-3 mb-6 flex flex-wrap items-center justify-between gap-4 text-white">
+      
+      <!-- Primary Action: New Project Modal Trigger -->
+      <div class="flex items-center gap-2">
+        <button onclick="openNewProjectModal()" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand to-indigo-600 hover:from-brandDark hover:to-indigo-700 text-white font-bold text-xs shadow-md transition flex items-center gap-2 transform hover:scale-105">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>+ New Project</span>
+          <span class="text-[10px] bg-white/20 px-1.5 py-0.5 rounded font-normal">BOQ or Brief</span>
+        </button>
+
+        <button onclick="openTemplateBankModal()" class="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold text-xs transition flex items-center gap-2 border border-white/10">
+          <i data-lucide="file-signature" class="w-3.5 h-3.5 text-indigo-300"></i>
+          <span>Template Bank</span>
+          <span class="text-[9px] bg-indigo-500/30 text-indigo-200 px-1.5 py-0.2 rounded font-mono">1,420 Items</span>
+        </button>
+
+        <button onclick="openSettingsModal()" class="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold text-xs transition flex items-center gap-2 border border-white/10">
+          <i data-lucide="sliders" class="w-3.5 h-3.5 text-indigo-300"></i>
+          <span>Studio Settings</span>
+          <span class="text-[9px] bg-emerald-500/30 text-emerald-300 px-1.5 py-0.2 rounded font-mono">GST & Fees</span>
+        </button>
+      </div>
+
+      <!-- Quick Action Jumpers -->
+      <div class="flex items-center gap-3">
+        <span class="text-[11px] text-slate-400 hidden sm:inline">Studio Jump:</span>
+        <div class="flex items-center gap-1.5">
+          <button onclick="triggerQuickAction('Drawing Gate')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-medium text-slate-200 border border-white/5">
+            GFC Drawings
+          </button>
+          <button onclick="triggerQuickAction('Rate Bank')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-medium text-slate-200 border border-white/5">
+            Rate Bank
+          </button>
+          <button onclick="triggerQuickAction('Snag List')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-medium text-slate-200 border border-white/5">
+            Snag Punchlist
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ================= THE 3D ROTATABLE PINBOARD CANVAS ================= -->
+    <div id="pinboard-surface" class="pinboard-surface-3d cork-texture rounded-3xl border-4 border-corkBorder shadow-[0_35px_70px_rgba(0,0,0,0.65)] p-6 lg:p-8 min-h-[840px] relative transition-all duration-300">
+
+      <!-- Ambient Cork Vignette & Inner Wood Shadow -->
+      <div class="absolute inset-0 pointer-events-none rounded-[22px] shadow-[inset_0_0_100px_rgba(40,25,10,0.3)]"></div>
+
+      <!-- ================= BOARD TOP HEADER: HIGH-TECH MODERN CHRONOMETER ================= -->
+      <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
+        
+        <!-- Studio Label Ribbon -->
+        <div class="flex items-center gap-3">
+          <div class="bg-amber-100/95 border border-amber-300 px-4 py-2.5 rounded-2xl shadow-md transform -rotate-1 flex items-center gap-3">
+            <div class="w-3.5 h-3.5 rounded-full bg-red-600 shadow-xs animate-pulse"></div>
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-900 block font-mono-studio">FORM FACTORS DESIGN STUDIO · THANE</span>
+              <span id="board-role-title" class="text-sm font-extrabold text-amber-950 font-serif">Executive Ops Pin-up Board</span>
+            </div>
+          </div>
+          <span id="board-role-quote" class="font-handwriting text-xl text-amber-950 font-bold transform rotate-1 hidden sm:inline-block">
+            "Live tracking active site advances, drawing releases & client dockets"
+          </span>
+        </div>
+
+        <!-- RE-ENGINEERED ULTRA-MODERN STUDIO CHRONOMETER (Sleek, Architectural & Alive) -->
+        <div class="modern-chrono-glass rounded-2xl p-3.5 shadow-xl flex items-center gap-4 border border-white/80 transform rotate-1">
+          
+          <!-- Outer Precision Chronometer Ring with live sweep -->
+          <div class="relative w-14 h-14 rounded-full border-2 border-indigo-200/60 bg-gradient-to-tr from-slate-900 to-indigo-950 flex items-center justify-center shadow-md">
+            <!-- Sweep indicator ring -->
+            <div class="absolute inset-0 rounded-full border-2 border-transparent border-t-indigo-400 second-ring-sweep pointer-events-none"></div>
+            <!-- Center Studio Monogram / Seconds Counter -->
+            <div class="text-center">
+              <span id="chrono-seconds" class="text-xs font-mono font-bold text-indigo-300">07s</span>
+            </div>
+          </div>
+
+          <!-- Digital Precision Readout -->
+          <div>
+            <div class="flex items-baseline gap-1.5">
+              <span id="chrono-clock-time" class="text-xl font-extrabold text-slate-900 tabular-nums font-mono-studio leading-none">10:48</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-brand uppercase border border-indigo-200/50">AM IST</span>
+            </div>
+            <div class="text-[11px] font-semibold text-slate-500 mt-1 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>Saturday, Oct 10, 2026 · Shift Active</span>
+            </div>
+          </div>
+
+          <div class="h-8 w-px bg-slate-200"></div>
+
+          <!-- Society Crane / Noise Restriction Window Indicator -->
+          <div class="text-right">
+            <span class="text-[9px] font-bold uppercase tracking-wider text-amber-800 block">SOCIETY WINDOW</span>
+            <span class="text-xs font-bold text-slate-800">Crane: Till 4:00 PM</span>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ================= DYNAMIC 3D PINNED CARDS GRID ================= -->
+      <div id="dynamic-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 relative z-10 items-start">
+        <!-- Rendered dynamically by current role -->
+      </div>
+
+      <!-- Bottom Pinned Tape -->
+      <div class="mt-8 pt-4 border-t-2 border-dashed border-amber-300/60 flex flex-wrap items-center justify-between text-xs text-amber-950 font-mono-studio relative z-10">
+        <div class="flex items-center gap-4">
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span> 12 Active Sites Monitored</span>
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-600"></span> 3 GFC Drawings Awaiting Signoff</span>
+        </div>
+        <span class="font-handwriting text-base text-amber-950 font-bold">Tactile 3D Tilt 15° · FFDS Studio OS v3.0</span>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ================= MODAL OVERLAYS (NEW PROJECT, TEMPLATES, SETTINGS) ================= -->
+
+  <!-- Modal 1: + New Project Modal -->
+  <div id="modal-new-project" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-200">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-brand text-white flex items-center justify-center">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Create New Project</h3>
+            <span class="text-[11px] text-slate-500">Initiate BOQ workspace or client brief</span>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-new-project')" class="text-slate-400 hover:text-slate-700">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Project Name / Apartment</label>
+          <input type="text" placeholder="e.g. Skyline Penthouse 4BHK" class="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-brand">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Client Name</label>
+          <input type="text" placeholder="e.g. Dr. Rajesh Sharma" class="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-brand">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Carpet Area (sq.ft)</label>
+            <input type="number" placeholder="2,400" class="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-brand">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Lead Source</label>
+            <select class="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-brand bg-white">
+              <option>Architect Referral</option>
+              <option>Past Client</option>
+              <option>Instagram Studio</option>
+              <option>Direct Walk-in</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <button onclick="closeModal('modal-new-project')" class="px-4 py-2 rounded-xl text-slate-600 font-semibold text-xs hover:bg-slate-100">Cancel</button>
+        <button onclick="alert('Project Draft Initialized in Firestore!'); closeModal('modal-new-project')" class="px-5 py-2 rounded-xl bg-brand hover:bg-brandDark text-white font-bold text-xs shadow-md">Create Project Workspace</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Templates & Rate Bank Modal -->
+  <div id="modal-templates" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 max-w-xl w-full shadow-2xl border border-slate-200">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center">
+            <i data-lucide="store" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Template & Rate Bank Library</h3>
+            <span class="text-[11px] text-slate-500">1,420 items with cost, buy & selling rates</span>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-templates')" class="text-slate-400 hover:text-slate-700">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+          <div>
+            <span class="font-bold text-slate-900 block">Civil & Flooring Master Docket</span>
+            <span class="text-slate-500 text-[11px]">Italian marble, vitrified tiling, waterproofing</span>
+          </div>
+          <button class="px-3 py-1 rounded-lg bg-brand text-white font-semibold">Open Bank</button>
+        </div>
+        <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+          <div>
+            <span class="font-bold text-slate-900 block">Modular Kitchen & Hardware Spec</span>
+            <span class="text-slate-500 text-[11px]">Hafele, Blum, Hettich soft-close systems</span>
+          </div>
+          <button class="px-3 py-1 rounded-lg bg-brand text-white font-semibold">Open Bank</button>
+        </div>
+        <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+          <div>
+            <span class="font-bold text-slate-900 block">Electrical & Automation Docket</span>
+            <span class="text-slate-500 text-[11px]">Legrand Arteor, Lutron dimming specs</span>
+          </div>
+          <button class="px-3 py-1 rounded-lg bg-brand text-white font-semibold">Open Bank</button>
+        </div>
+      </div>
+
+      <div class="mt-4 text-right">
+        <button onclick="closeModal('modal-templates')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-semibold text-xs">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3: Studio Settings Modal -->
+  <div id="modal-settings" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-200">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center">
+            <i data-lucide="settings" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Studio Configuration & GST</h3>
+            <span class="text-[11px] text-slate-500">Tax rules, design fees & team permissions</span>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-settings')" class="text-slate-400 hover:text-slate-700">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+          <div>
+            <span class="font-bold text-slate-800 block">Default GST Rate</span>
+            <span class="text-slate-500 text-[11px]">Applied to BOQ items and design fee</span>
+          </div>
+          <span class="font-mono font-bold text-sm text-brand">18.0%</span>
+        </div>
+        <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+          <div>
+            <span class="font-bold text-slate-800 block">Design Fee Model</span>
+            <span class="text-slate-500 text-[11px]">Configured on per sq.ft basis</span>
+          </div>
+          <span class="font-mono font-bold text-sm text-brand">₹350 / sq.ft</span>
+        </div>
+      </div>
+
+      <div class="mt-4 text-right">
+        <button onclick="closeModal('modal-settings')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-semibold text-xs">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= JAVASCRIPT CONTROLLERS ================= -->
+  <script>
+    lucide.createIcons();
+
+    // 1. Role configurations and custom tailored boards
+    const ROLES = {
+      founder: {
+        name: "Anish K",
+        title: "Founder / Super Admin",
+        tag: "SUPER ADMIN",
+        avatar: "F",
+        quote: "\"Full studio command: live cashflow, P&L margins, and contract dockets\"",
+        tabs: ['Home', 'Projects (28)', 'Design Desk', 'Clients (28)', 'Reports (P&L)', 'Studio Settings', 'Templates & Bank'],
+        cards: [
+          {
+            type: "orbit",
+            span: "lg:col-span-5",
+            tilt: "-rotate-1",
+            pin: "pushpin-brass",
+            title: "CONCENTRIC WORKSPACE WHEEL",
+            eyebrow: "STUDIO CORE",
+            items: [
+              { label: "Projects Hub", sub: "28 Total (₹4.82 Cr)", color: "blue" },
+              { label: "Clients Directory", sub: "28 Accounts", color: "emerald" },
+              { label: "Reports & P&L", sub: "41% Net Margin", color: "purple" },
+              { label: "Rate Bank", sub: "1,420 Items", color: "amber" }
+            ],
+            footerNote: "Cashflow runway: 6.4 months at current burn rate."
+          },
+          {
+            type: "cashflow",
+            span: "lg:col-span-4",
+            tilt: "rotate-1",
+            title: "FINANCIAL COCKPIT & RUNWAY",
+            eyebrow: "STUDIO FINANCE",
+            badge: "₹38.50 L Collected",
+            content: `
+              <div class="space-y-2.5">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-500">October Invoiced:</span>
+                  <span class="font-bold text-slate-800">₹44.20 L</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-500">Execution Advances Pending:</span>
+                  <span class="font-bold text-rose-600">₹6.50 L</span>
+                </div>
+                <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
+                  <span class="font-bold text-emerald-800 block">GST Liability Provisioned:</span>
+                  <span class="text-emerald-700">₹3.42 L filed for Q3</span>
+                </div>
+              </div>
+            `
+          },
+          {
+            type: "punchlist",
+            span: "lg:col-span-3",
+            tilt: "-rotate-2",
+            pin: "pushpin-red",
+            title: "CRITICAL HELD UP (₹2.08 CR)",
+            eyebrow: "NEEDS ATTENTION",
+            items: [
+              { title: "Penthouse 8", desc: "Execution Agreement (₹38.22L)", badge: "HIGH VALUE" },
+              { title: "Client ABC", desc: "Collect Advance (18d idle)", badge: "18D IDLE" }
+            ]
+          },
+          {
+            type: "sitePolaroid",
+            span: "lg:col-span-6",
+            tilt: "rotate-0.5",
+            title: "LIVE SITE POLAROIDS & MATERIALS",
+            eyebrow: "SUPERVISOR FEEDS",
+            photoTitle: "Villa Nirvana · Living Area",
+            photoSub: "Italian Marble Dry Lay (Bottochino)",
+            status: "Dry Lay Approved ✓"
+          },
+          {
+            type: "recent",
+            span: "lg:col-span-6",
+            tilt: "-rotate-0.5",
+            title: "CONTINUE WHERE YOU LEFT OFF",
+            eyebrow: "RECENT WORKSPACE",
+            items: [
+              { name: "New Project – bundle test", sub: "On site · 1d ago" },
+              { name: "ABC test client · 3BHK", sub: "Won · 1d ago" },
+              { name: "Icon Dhokali · Penthouse", sub: "Won · 2d ago" }
+            ]
+          }
+        ]
+      },
+
+      "ops-director": {
+        name: "Vikram R",
+        title: "Operations Director",
+        tag: "OPS DIRECTOR",
+        avatar: "V",
+        quote: "\"Milestone velocity: vendor POs, site permits, and society clearances\"",
+        tabs: ['Home', 'Projects (28)', 'Clients (28)', 'Reports', 'Studio Settings'],
+        cards: [
+          {
+            type: "punchlist",
+            span: "lg:col-span-4",
+            tilt: "-rotate-1",
+            pin: "pushpin-red",
+            title: "OPS SITE BLOCKERS",
+            eyebrow: "NEEDS ATTENTION",
+            items: [
+              { title: "Skyline 4BHK", desc: "Crane window closes at 4 PM", badge: "URGENT" },
+              { title: "Palm Meadows", desc: "Society work permit renewal due", badge: "PERMIT" }
+            ]
+          },
+          {
+            type: "sitePolaroid",
+            span: "lg:col-span-4",
+            tilt: "rotate-1",
+            title: "DAILY SITE CHECK-IN GRID",
+            eyebrow: "12 ACTIVE SITES",
+            photoTitle: "Indiranagar Duplex · Carpentry",
+            photoSub: "Wardrobe carcass alignment",
+            status: "3 Carpenters On Site"
+          },
+          {
+            type: "orbit",
+            span: "lg:col-span-4",
+            tilt: "rotate-0.5",
+            pin: "pushpin-brass",
+            title: "OPERATIONS HUBS",
+            eyebrow: "OPS DESK",
+            items: [
+              { label: "Active Sites", sub: "12 Sites Running", color: "blue" },
+              { label: "Vendor POs", sub: "8 In Procurement", color: "amber" },
+              { label: "Snag Lists", sub: "4 Items Open", color: "emerald" },
+              { label: "Handovers", sub: "2 Ready", color: "purple" }
+            ]
+          }
+        ]
+      },
+
+      "design-head": {
+        name: "Pooja M",
+        title: "Design Head",
+        tag: "DESIGN HEAD",
+        avatar: "P",
+        quote: "\"Design gate freeze: zero deviations on 3D renders, GFC sheets & finishes\"",
+        tabs: ['Home', 'Projects', 'Design Desk', 'Clients', 'Design Review'],
+        cards: [
+          {
+            type: "blueprint",
+            span: "lg:col-span-6",
+            tilt: "-rotate-1",
+            title: "GFC DRAWING APPROVAL GATE",
+            eyebrow: "DESIGN REVIEW",
+            sheets: [
+              { id: "DWG-ELEC-04", name: "Kitchen Automation Loop", status: "Approved" },
+              { id: "DWG-PLUMB-03", name: "Master Shower Concealed Diverter", status: "In Review" },
+              { id: "DWG-CARP-12", name: "Walk-in Wardrobe Fluting", status: "Approved" }
+            ]
+          },
+          {
+            type: "swatches",
+            span: "lg:col-span-6",
+            tilt: "rotate-1",
+            title: "MATERIAL MOODBOARD PALETTE",
+            eyebrow: "SPEC SIGN-OFF",
+            swatches: [
+              { name: "Smoked Walnut", color: "#3d2b1f", status: "Signed by Client" },
+              { name: "Brushed Brass", color: "#c5a059", status: "Vendor Sample Ready" },
+              { name: "Fluted Travertine", color: "#eae6df", status: "Batch Inspected" }
+            ]
+          }
+        ]
+      },
+
+      designer: {
+        name: "Rohan D",
+        title: "Interior Designer",
+        tag: "DESIGNER",
+        avatar: "R",
+        quote: "\"Assigned projects only: focusing on CAD details, joinery & revision deadlines\"",
+        tabs: ['Home', 'Projects (Assigned)', 'Design Desk', 'Design Review'],
+        cards: [
+          {
+            type: "blueprint",
+            span: "lg:col-span-7",
+            tilt: "-rotate-1",
+            title: "YOUR ASSIGNED GFC SHEETS",
+            eyebrow: "DRAWING TRACKER",
+            sheets: [
+              { id: "DWG-CARP-08", name: "Pooja Room CNC Jali Detail", status: "Rev 2 Due Today" },
+              { id: "DWG-PLUMB-02", name: "Powder Room Vanity Plumbing", status: "Approved" }
+            ]
+          },
+          {
+            type: "punchlist",
+            span: "lg:col-span-5",
+            tilt: "rotate-1",
+            pin: "pushpin-brass",
+            title: "TODAY'S DESIGN TASKS",
+            eyebrow: "ASSIGNED ACTIONS",
+            items: [
+              { title: "Villa Nirvana", desc: "Upload revised lighting plan", badge: "DUE 2 PM" },
+              { title: "Skyline 4BHK", desc: "Resolve site contractor query", badge: "QUERY" }
+            ]
+          }
+        ]
+      },
+
+      "junior-ops": {
+        name: "Neha S",
+        title: "Junior Ops / Client Executive",
+        tag: "CLIENT EXEC",
+        avatar: "N",
+        quote: "\"Client onboarding, meeting minutes, payment follow-ups & handover dockets\"",
+        tabs: ['Home', 'Projects', 'Clients (28)', 'Client Onboarding', 'Handovers'],
+        cards: [
+          {
+            type: "punchlist",
+            span: "lg:col-span-6",
+            tilt: "-rotate-1",
+            pin: "pushpin-red",
+            title: "CLIENT FOLLOW-UP QUEUE",
+            eyebrow: "DAILY ACTIONS",
+            items: [
+              { title: "Client ABC", desc: "Send WhatsApp payment reminder", badge: "PAYMENT" },
+              { title: "Icon Dhokali", desc: "Collect signed Execution Docket", badge: "ONBOARDING" },
+              { title: "Villa Nirvana", desc: "Send Meeting MoM from site visit", badge: "MINUTES" }
+            ]
+          },
+          {
+            type: "recent",
+            span: "lg:col-span-6",
+            tilt: "rotate-1",
+            title: "APPROVED INVOICE DISPATCHES",
+            eyebrow: "COLLECTIONS TRACKER",
+            items: [
+              { name: "Inv #2026-88 · Skyline Penthouse", sub: "Dispatched via WhatsApp · UTR Awaited" },
+              { name: "Inv #2026-89 · Indiranagar Duplex", sub: "Paid via NEFT · Receipt Sent ✓" }
+            ]
+          }
+        ]
+      }
+    };
+
+    function setStudioRole(roleKey) {
+      const role = ROLES[roleKey];
+      if (!role) return;
+
+      ['founder', 'ops-director', 'design-head', 'designer', 'junior-ops'].forEach(k => {
+        const btn = document.getElementById('role-' + k);
+        if (k === roleKey) {
+          btn.className = 'px-2.5 py-1 rounded-lg text-xs font-bold transition bg-white text-indigo-950 shadow-sm';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition';
+        }
+      });
+
+      document.getElementById('user-display-name').innerText = role.name;
+      document.getElementById('user-display-role').innerText = role.tag;
+      document.getElementById('user-display-avatar').innerText = role.avatar;
+
+      const navContainer = document.getElementById('top-nav-tabs');
+      navContainer.innerHTML = role.tabs.map((t, idx) => `
+        <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${idx === 0 ? 'bg-brand text-white font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium'} text-xs transition">
+          ${t}
+        </button>
+      `).join('');
+
+      document.getElementById('board-role-title').innerText = role.title + " Pin-up Board";
+      document.getElementById('board-role-quote').innerText = role.quote;
+
+      renderCards(role.cards);
+      lucide.createIcons();
+    }
+
+    function renderCards(cards) {
+      const container = document.getElementById('dynamic-cards-grid');
+      container.innerHTML = cards.map(c => {
+        if (c.type === 'orbit') {
+          return `
+            <div class="${c.span} spatial-card relative bg-[#FFFDF9] border border-[#E8DFC8] rounded-2xl p-6 shadow-md transform ${c.tilt}">
+              <div class="pushpin-brass"></div>
+              <div class="flex items-center justify-between border-b border-amber-200/60 pb-3 mb-4">
+                <div>
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-amber-800 font-mono-studio">${c.eyebrow}</span>
+                  <h3 class="text-base font-bold text-ink">${c.title}</h3>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3 mb-4">
+                ${c.items.map(it => `
+                  <div class="p-3.5 rounded-xl bg-${it.color}-50/50 border border-${it.color}-200/80 hover:bg-${it.color}-50 transition cursor-pointer">
+                    <span class="block text-xs font-bold text-ink">${it.label}</span>
+                    <span class="text-[11px] text-${it.color}-800 font-semibold">${it.sub}</span>
+                  </div>
+                `).join('')}
+              </div>
+              <div class="bg-amber-100/70 border border-amber-300/80 p-3 rounded-xl">
+                <p class="font-handwriting text-lg text-amber-950 leading-tight">${c.footerNote || ''}</p>
+              </div>
+            </div>
+          `;
+        }
+
+        if (c.type === 'punchlist') {
+          return `
+            <div class="${c.span} spatial-card relative bg-[#FEFCE8] border-2 border-[#FEF08A] rounded-2xl p-5 shadow-md transform ${c.tilt}">
+              <div class="pushpin-red"></div>
+              <div class="border-b-2 border-dashed border-amber-300 pb-2 mb-3">
+                <span class="text-[10px] font-bold text-amber-800 uppercase tracking-wider font-mono-studio">${c.eyebrow}</span>
+                <h4 class="text-sm font-extrabold text-amber-950 mt-0.5">${c.title}</h4>
+              </div>
+              <div class="space-y-2.5">
+                ${c.items.map(it => `
+                  <div class="bg-white/80 p-3 rounded-xl border border-amber-200 shadow-2xs hover:bg-white transition cursor-pointer">
+                    <div class="flex items-center justify-between mb-1">
+                      <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 font-mono">${it.badge}</span>
+                    </div>
+                    <p class="text-xs font-bold text-slate-900 leading-tight">${it.title}</p>
+                    <span class="text-[11px] text-slate-600 block mt-0.5">${it.desc}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        if (c.type === 'blueprint') {
+          return `
+            <div class="${c.span} spatial-card relative blueprint-texture text-white rounded-2xl p-6 shadow-xl transform ${c.tilt} border-2 border-blue-400/40">
+              <div class="pushpin-brass"></div>
+              <div class="flex items-center justify-between border-b border-blue-400/30 pb-3 mb-4">
+                <div>
+                  <span class="text-[10px] font-mono tracking-wider text-blue-300 uppercase block">${c.eyebrow}</span>
+                  <h3 class="text-base font-bold text-white">${c.title}</h3>
+                </div>
+                <span class="text-xs font-mono text-emerald-400 font-bold">GFC LIVE GATE</span>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                ${c.sheets.map(s => `
+                  <div class="p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/15">
+                    <span class="text-[9px] font-mono text-blue-300 block">${s.id}</span>
+                    <h4 class="text-xs font-bold text-white mt-0.5">${s.name}</h4>
+                    <span class="text-[10px] text-emerald-300 font-bold mt-2 block">${s.status}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        if (c.type === 'swatches') {
+          return `
+            <div class="${c.span} spatial-card relative bg-white border border-slate-200 rounded-2xl p-6 shadow-md transform ${c.tilt}">
+              <div class="pushpin-brass"></div>
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                <div>
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono-studio">${c.eyebrow}</span>
+                  <h3 class="text-base font-bold text-ink">${c.title}</h3>
+                </div>
+              </div>
+              <div class="space-y-3">
+                ${c.swatches.map(sw => `
+                  <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                      <span class="w-7 h-7 rounded-lg swatch-chip shrink-0" style="background: ${sw.color}"></span>
+                      <div>
+                        <span class="text-xs font-bold text-ink block">${sw.name}</span>
+                        <span class="text-[10px] text-slate-500">${sw.status}</span>
+                      </div>
+                    </div>
+                    <button class="text-[10px] font-bold text-brand bg-indigo-50 px-2 py-1 rounded">View Spec</button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        if (c.type === 'sitePolaroid') {
+          return `
+            <div class="${c.span} spatial-card relative bg-white border border-slate-200 rounded-2xl p-5 shadow-md transform ${c.tilt}">
+              <div class="pushpin-brass"></div>
+              <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono-studio">${c.eyebrow}</span>
+                <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Live Field Cam</span>
+              </div>
+              <div class="bg-slate-100 border border-slate-200 rounded-xl p-2 mb-3">
+                <div class="h-28 bg-gradient-to-tr from-amber-900 to-amber-700 rounded-lg flex flex-col justify-end p-3 text-white">
+                  <span class="text-[10px] font-bold uppercase">${c.photoTitle}</span>
+                  <p class="text-xs font-semibold mt-0.5">${c.photoSub}</p>
+                </div>
+                <div class="pt-2 px-1 flex items-center justify-between text-xs">
+                  <span class="font-handwriting text-base text-slate-700">Supervisor Stamp: Raju M.</span>
+                  <span class="font-bold text-emerald-700">${c.status}</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        if (c.type === 'cashflow') {
+          return `
+            <div class="${c.span} spatial-card relative bg-white border border-slate-200 rounded-2xl p-6 shadow-md transform ${c.tilt}">
+              <div class="pushpin-brass"></div>
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+                <div>
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono-studio">${c.eyebrow}</span>
+                  <h3 class="text-base font-bold text-ink">${c.title}</h3>
+                </div>
+                <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">${c.badge}</span>
+              </div>
+              ${c.content}
+            </div>
+          `;
+        }
+
+        if (c.type === 'recent') {
+          return `
+            <div class="${c.span} spatial-card relative bg-[#FDFBF7] border border-stone-300 rounded-2xl p-5 shadow-md transform ${c.tilt}">
+              <div class="pushpin-brass"></div>
+              <div class="flex items-center justify-between border-b border-stone-200 pb-2 mb-3">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-stone-500 font-mono-studio">${c.eyebrow}</span>
+                <i data-lucide="history" class="w-3.5 h-3.5 text-stone-400"></i>
+              </div>
+              <div class="space-y-2">
+                ${c.items.map(it => `
+                  <div class="p-2.5 rounded-xl bg-white border border-stone-200 flex items-center justify-between hover:border-brand/40 transition">
+                    <div>
+                      <span class="text-xs font-bold text-ink block">${it.name}</span>
+                      <span class="text-[10px] text-slate-500">${it.sub}</span>
+                    </div>
+                    <span class="text-[10px] font-bold text-brand bg-indigo-50 px-2 py-0.5 rounded">Open →</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        return '';
+      }).join('');
+    }
+
+    // 2. 3D Camera Controls
+    function update3DCamera() {
+      const pitch = document.getElementById('slider-pitch').value;
+      const yaw = document.getElementById('slider-yaw').value;
+      document.getElementById('label-pitch').innerText = pitch + '°';
+      document.getElementById('label-yaw').innerText = yaw + '°';
+      
+      const surface = document.getElementById('pinboard-surface');
+      surface.style.transform = `rotateX(${pitch}deg) rotateY(${yaw}deg) translateZ(0)`;
+    }
+
+    function resetCamera() {
+      document.getElementById('slider-pitch').value = 15;
+      document.getElementById('slider-yaw').value = 0;
+      update3DCamera();
+    }
+
+    // 3. Modal Controllers
+    function openNewProjectModal() {
+      document.getElementById('modal-new-project').classList.remove('hidden');
+    }
+    function openTemplateBankModal() {
+      document.getElementById('modal-templates').classList.remove('hidden');
+    }
+    function openSettingsModal() {
+      document.getElementById('modal-settings').classList.remove('hidden');
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+    function triggerQuickAction(act) {
+      alert("Navigating directly to: " + act);
+    }
+
+    // 4. Live Clock Updates
+    setInterval(() => {
+      const d = new Date();
+      const sec = String(d.getSeconds()).padStart(2, '0');
+      const hrs = String(d.getHours() % 12 || 12).padStart(2, '0');
+      const mins = String(d.getMinutes()).padStart(2, '0');
+      const secEl = document.getElementById('chrono-seconds');
+      const timeEl = document.getElementById('chrono-clock-time');
+      if (secEl) secEl.innerText = sec + 's';
+      if (timeEl) timeEl.innerText = `${hrs}:${mins}`;
+    }, 1000);
+
+    // Initial role
+    setStudioRole('founder');
+  </script>
+</body>
+</html>

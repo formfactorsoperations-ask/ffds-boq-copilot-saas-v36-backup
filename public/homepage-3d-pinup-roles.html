@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFDS Studio OS — 3D Spatial Material Board & Role-Tailored Homepage</title>
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: '#3D52A0',
+            brandDark: '#1E2B58',
+            ink: '#0a1b33',
+            cork: '#EFE7DA',
+            corkBorder: '#D7C7B0'
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Three.js CDN for real 3D spatial rendering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Google Fonts: Plus Jakarta Sans + Caveat for architectural notes + Playfair Display -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;1,600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #0d121f;
+      color: #0a1b33;
+      overflow-x: hidden;
+    }
+    .font-handwriting {
+      font-family: 'Caveat', cursive;
+    }
+    .font-mono-studio {
+      font-family: 'Space Grotesk', monospace;
+    }
+    /* 3D stage and cards */
+    .viewport-3d {
+      perspective: 1200px;
+      transform-style: preserve-3d;
+    }
+    .pinboard-surface-3d {
+      transform-style: preserve-3d;
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    /* Corkboard grain */
+    .cork-texture {
+      background-color: #f3ece1;
+      background-image: 
+        radial-gradient(#d8cbba 1.5px, transparent 1.5px),
+        radial-gradient(#cebea8 1.5px, #f3ece1 1.5px);
+      background-size: 26px 26px;
+      background-position: 0 0, 13px 13px;
+    }
+    /* Blueprint grid */
+    .blueprint-texture {
+      background-color: #0e224e;
+      background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.09) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    /* Pushpin 3D heads */
+    .pushpin-brass {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #FDE047, #CA8A04 60%, #854D0E);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4), inset 0 1px 1px #FEF08A;
+      position: absolute;
+      top: -7px;
+      left: 50%;
+      transform: translateX(-50%) translateZ(20px);
+      z-index: 30;
+    }
+    .pushpin-red {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #F87171, #DC2626 60%, #991B1B);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4), inset 0 1px 1px #FECACA;
+      position: absolute;
+      top: -7px;
+      left: 50%;
+      transform: translateX(-50%) translateZ(20px);
+      z-index: 30;
+    }
+    /* Card hovering in real 3D space */
+    .spatial-card {
+      transform-style: preserve-3d;
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s ease;
+      cursor: pointer;
+    }
+    .spatial-card:hover {
+      transform: translateZ(35px) translateY(-8px) scale(1.02) !important;
+      box-shadow: 0 25px 40px -10px rgba(0, 0, 0, 0.3), 0 10px 20px -5px rgba(0, 0, 0, 0.15) !important;
+      z-index: 50 !important;
+    }
+    /* Realistic Washi Tape */
+    .washi-tape {
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%) rotate(-1deg);
+      width: 80px;
+      height: 20px;
+      background: rgba(234, 179, 8, 0.45);
+      backdrop-filter: blur(2px);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      z-index: 30;
+      border-left: 2px dashed rgba(202, 138, 4, 0.4);
+      border-right: 2px dashed rgba(202, 138, 4, 0.4);
+    }
+    .swatch-chip {
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15), 0 3px 6px rgba(0,0,0,0.15);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-900 text-slate-100">
+
+  <!-- ================= TOP HEADER (FAITHFUL TO REAL FFDS APP) ================= -->
+  <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-6 py-2.5 flex items-center justify-between text-slate-900">
+    <div class="flex items-center gap-6">
+      <div class="flex items-center gap-3">
+        <div class="h-8 px-2.5 py-1 rounded-lg border border-slate-200 bg-white flex items-center justify-center font-bold text-[10px] tracking-wider text-slate-700 shadow-2xs">
+          FORM FACTORS
+        </div>
+        <div class="h-4 w-px bg-slate-200"></div>
+        <span class="text-xs font-semibold text-slate-500">FFDS Studio OS <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand/10 text-brand">v36.1</span></span>
+      </div>
+
+      <!-- App Tabs Dynamically Tailored by Role -->
+      <nav id="top-nav-tabs" class="hidden md:flex items-center gap-1">
+        <!-- Dynamically injected via JS -->
+      </nav>
+    </div>
+
+    <!-- Right user bar -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/60 text-emerald-700 text-[11px] font-semibold">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        Live
+      </div>
+      <div class="h-4 w-px bg-slate-200"></div>
+      <div class="text-right">
+        <span id="user-display-name" class="text-xs font-semibold text-slate-800 block leading-tight">Anish K</span>
+        <span id="user-display-role" class="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-brand uppercase">SUPER ADMIN</span>
+      </div>
+      <div id="user-display-avatar" class="w-7 h-7 rounded-xl bg-brand text-white flex items-center justify-center font-bold text-xs shadow-xs">
+        F
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= 3D CONTROLLER & ROLE SIMULATOR BAR ================= -->
+  <aside class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white px-6 py-3 border-b border-indigo-900/60 shadow-lg">
+    <div class="max-w-[1600px] mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      
+      <!-- Role Switcher -->
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
+          <span class="text-xs font-bold uppercase tracking-wider text-indigo-300">Switch Studio Role:</span>
+        </div>
+        <div class="flex items-center gap-1 bg-white/10 p-1 rounded-xl backdrop-blur-md border border-white/10 overflow-x-auto">
+          <button onclick="setStudioRole('founder')" id="role-founder" class="px-2.5 py-1 rounded-lg text-xs font-bold transition bg-white text-indigo-950 shadow-sm">
+            Founder / Owner
+          </button>
+          <button onclick="setStudioRole('ops-director')" id="role-ops-director" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition">
+            Ops Director
+          </button>
+          <button onclick="setStudioRole('design-head')" id="role-design-head" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition">
+            Design Head
+          </button>
+          <button onclick="setStudioRole('designer')" id="role-designer" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition">
+            Designer (GFC Focus)
+          </button>
+          <button onclick="setStudioRole('junior-ops')" id="role-junior-ops" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition">
+            Junior Ops / Client Exec
+          </button>
+        </div>
+      </div>
+
+      <!-- 3D Spatial Camera Angle Controls -->
+      <div class="flex items-center gap-3">
+        <span class="text-xs font-semibold text-indigo-200">3D Board Perspective:</span>
+        <div class="flex items-center gap-1 bg-white/10 p-1 rounded-xl border border-white/10">
+          <button onclick="setCameraAngle('flat')" id="cam-flat" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition">
+            Top-Down Wall
+          </button>
+          <button onclick="setCameraAngle('tilted')" id="cam-tilted" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs">
+            Tactile 3D Tilt (15°)
+          </button>
+          <button onclick="setCameraAngle('isometric')" id="cam-isometric" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition">
+            Isometric Studio Desk
+          </button>
+        </div>
+
+        <button onclick="toggleMaterialLight()" id="btn-light" class="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition" title="Toggle Studio Spotlights">
+          <i data-lucide="sun" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ================= ROLE BRIEF NOTIFICATION ================= -->
+  <div id="role-brief-banner" class="bg-indigo-900/60 border-b border-indigo-700/50 px-6 py-2 text-xs flex items-center justify-between text-indigo-100">
+    <!-- Injected dynamically -->
+  </div>
+
+  <!-- ================= 3D VIEWPORT CONTAINER ================= -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto p-6 viewport-3d">
+
+    <!-- THE 3D ROTATABLE PINBOARD CANVAS -->
+    <div id="pinboard-surface" class="pinboard-surface-3d cork-texture rounded-3xl border-4 border-corkBorder shadow-[0_30px_60px_rgba(0,0,0,0.6)] p-6 lg:p-8 min-h-[820px] relative transition-all duration-500" style="transform: rotateX(12deg) rotateY(-2deg) translateZ(0);">
+
+      <!-- Ambient Wood Frame Shadow -->
+      <div class="absolute inset-0 pointer-events-none rounded-[22px] shadow-[inset_0_0_90px_rgba(40,25,10,0.25)]"></div>
+
+      <!-- Real-time Three.js Ambient Particle Light Canvas (Overlay) -->
+      <div id="three-canvas-container" class="absolute inset-0 pointer-events-none z-0 rounded-[22px] opacity-40"></div>
+
+      <!-- ================= TOP BOARD HEADER: TIME & BRASS CLOCK ================= -->
+      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        
+        <!-- Studio Label Tape -->
+        <div class="flex items-center gap-3">
+          <div class="bg-amber-100/95 border border-amber-300 px-4 py-2 rounded-xl shadow-md transform -rotate-1 flex items-center gap-2.5">
+            <div class="w-3 h-3 rounded-full bg-red-600 shadow-xs"></div>
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-900 block font-mono-studio">FORM FACTORS DESIGN STUDIO</span>
+              <span id="board-role-title" class="text-xs font-extrabold text-amber-950 font-serif">Executive Ops Pin-up Board</span>
+            </div>
+          </div>
+          <span id="board-role-quote" class="font-handwriting text-xl text-amber-900 font-bold transform rotate-2 hidden sm:inline-block">
+            "Tracking live site progress, client advances, and design releases"
+          </span>
+        </div>
+
+        <!-- Tactile Brass Chronometer & IST Time -->
+        <div class="bg-white/95 backdrop-blur-md border border-amber-200/80 px-5 py-2.5 rounded-2xl shadow-lg flex items-center gap-4 transform rotate-1">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full border-2 border-amber-500 bg-amber-50 flex items-center justify-center shadow-inner relative">
+              <div class="w-1 h-3 bg-slate-800 rounded-full absolute top-2 origin-bottom transform rotate-[210deg]"></div>
+              <div class="w-0.5 h-4 bg-slate-600 rounded-full absolute top-1 origin-bottom transform rotate-[290deg]"></div>
+              <div class="w-1.5 h-1.5 rounded-full bg-red-600 z-10"></div>
+            </div>
+            <div>
+              <div class="text-base font-extrabold text-slate-900 tabular-nums leading-none">10:48:07 AM</div>
+              <div class="text-[10px] font-bold text-amber-800 mt-0.5">Saturday, Oct 10, 2026 · IST</div>
+            </div>
+          </div>
+          <div class="h-6 w-px bg-slate-200"></div>
+          <button onclick="pinNewTactileItem()" class="px-3.5 py-1.5 rounded-xl bg-brand text-white font-semibold text-xs shadow-sm hover:bg-brandDark transition flex items-center gap-1.5">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            Pin Card
+          </button>
+        </div>
+      </div>
+
+      <!-- ================= DYNAMIC GRID OF 3D PINNED CARDS ================= -->
+      <div id="dynamic-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 relative z-10 items-start">
+        <!-- Injected dynamically based on active studio role -->
+      </div>
+
+      <!-- Bottom Pinned Tape -->
+      <div class="mt-8 pt-4 border-t-2 border-dashed border-amber-300/60 flex flex-wrap items-center justify-between text-xs text-amber-950 font-mono-studio relative z-10">
+        <div class="flex items-center gap-4">
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span> 12 Active Sites Inspected</span>
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-600"></span> 3 Signoffs Awaiting Verification</span>
+        </div>
+        <span class="font-handwriting text-base text-amber-950 font-bold">Porcelain & Indigo · Material Board Prototype v36.1</span>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ================= ROLE LOGIC & 3D INTERACTIVITY ================= -->
+  <script>
+    lucide.createIcons();
+
+    // 1. Role configurations and custom tailored boards
+    const ROLES = {
+      founder: {
+        name: "Anish K",
+        title: "Founder / Studio Principal",
+        tag: "SUPER ADMIN",
+        avatar: "F",
+        quote: "\"Total studio visibility: P&L margins, cashflow velocity, and client health\"",
+        brief: "<strong>Super Admin / Founder Mode:</strong> You see full studio finances (₹4.82 Cr live execution, ₹2.08 Cr held up), top margins (41% avg), high-stake contract signoffs, and all tabs.",
+        tabs: ['Home', 'Projects (28)', 'Design Desk', 'Clients (28)', 'Reports (P&L)', 'Studio Settings', 'Templates & Bank'],
+        cards: [
+          {
+            type: "orbit",
+            span: "lg:col-span-5",
+            tilt: "-rotate-1",
+            pin: "pushpin-brass",
+            title: "CONCENTRIC LAUNCHPAD WHEEL",
+            eyebrow: "STUDIO CORE",
+            desc: "12 active projects, 11 opportunities in pipeline",
+            items: [
+              { label: "Projects Hub", sub: "28 Total (₹4.82 Cr)", color: "blue", icon: "layout-grid" },
+              { label: "Clients Directory", sub: "28 Accounts", color: "emerald", icon: "users" },
+              { label: "Reports & P&L", sub: "41% Net Margin", color: "purple", icon: "bar-chart-3" },
+              { label: "Rate Bank", sub: "1,420 Verified Rates", color: "amber", icon: "store" }
+            ],
+            footerNote: "Cashflow runway: 6.4 months at current burn rate."
+          },
+          {
+            type: "cashflow",
+            span: "lg:col-span-4",
+            tilt: "rotate-1",
+            pin: "washi-tape",
+            title: "FINANCIAL COCKPIT & RUNWAY",
+            eyebrow: "STUDIO FINANCE",
+            badge: "₹38.50 L Collected",
+            content: `
+              <div class="space-y-2.5">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-500">October Invoiced:</span>
+                  <span class="font-bold text-slate-800">₹44.20 L</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-500">Execution Advances Pending:</span>
+                  <span class="font-bold text-rose-600">₹6.50 L</span>
+                </div>
+                <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
+                  <span class="font-bold text-emerald-800 block">GST Liability Provisioned:</span>
+                  <span class="text-emerald-700">₹3.42 L filed for Q3</span>
+                </div>
+              </div>
+            `
+          },
+          {
+            type: "punchlist",
+            span: "lg:col-span-3",
+            tilt: "-rotate-2",
+            pin: "pushpin-red",
+            title: "CRITICAL HELD UP (₹2.08 CR)",
+            eyebrow: "NEEDS ATTENTION",
+            items: [
+              { title: "Penthouse 8", desc: "Execution Agreement (₹38.22L)", badge: "HIGH VALUE" },
+              { title: "Client ABC", desc: "Collect Advance (18d idle)", badge: "18D IDLE" }
+            ]
+          },
+          {
+            type: "sitePolaroid",
+            span: "lg:col-span-6",
+            tilt: "rotate-0.5",
+            title: "LIVE SITE POLAROIDS & MATERIALS",
+            eyebrow: "SUPERVISOR FEEDS",
+            photoTitle: "Villa Nirvana · Living Area",
+            photoSub: "Italian Marble Dry Lay (Bottochino)",
+            status: "Dry Lay Approved ✓"
+          },
+          {
+            type: "recent",
+            span: "lg:col-span-6",
+            tilt: "-rotate-0.5",
+            title: "CONTINUE WHERE YOU LEFT OFF",
+            eyebrow: "RECENT WORKSPACE",
+            items: [
+              { name: "New Project – bundle test", sub: "On site · 1d ago" },
+              { name: "ABC test client · 3BHK", sub: "Won · 1d ago" },
+              { name: "Icon Dhokali · Penthouse", sub: "Won · 2d ago" }
+            ]
+          }
+        ]
+      },
+
+      "ops-director": {
+        name: "Vikram R",
+        title: "Operations Director",
+        tag: "OPS DIRECTOR",
+        avatar: "V",
+        quote: "\"Keeping site velocity on track, unblocking procurement and vendors\"",
+        brief: "<strong>Ops Director Mode:</strong> Focused on site milestone adherence, contractor workforce on site, procurement purchase orders, and payment follow-ups.",
+        tabs: ['Home', 'Projects (28)', 'Clients (28)', 'Reports', 'Studio Settings'],
+        cards: [
+          {
+            type: "punchlist",
+            span: "lg:col-span-4",
+            tilt: "-rotate-1",
+            pin: "pushpin-red",
+            title: "OPS SITE BLOCKERS",
+            eyebrow: "NEEDS ATTENTION",
+            items: [
+              { title: "Skyline 4BHK", desc: "Crane window closes at 4 PM", badge: "URGENT" },
+              { title: "Palm Meadows", desc: "Society work permit renewal due", badge: "PERMIT" }
+            ]
+          },
+          {
+            type: "sitePolaroid",
+            span: "lg:col-span-4",
+            tilt: "rotate-1",
+            title: "DAILY SITE CHECK-IN GRID",
+            eyebrow: "12 ACTIVE SITES",
+            photoTitle: "Indiranagar Duplex · Carpentry",
+            photoSub: "Wardrobe carcass alignment",
+            status: "3 Carpenters On Site"
+          },
+          {
+            type: "orbit",
+            span: "lg:col-span-4",
+            tilt: "rotate-0.5",
+            pin: "pushpin-brass",
+            title: "OPERATIONS HUBS",
+            eyebrow: "OPS DESK",
+            items: [
+              { label: "Active Sites", sub: "12 Sites Running", color: "blue", icon: "layout-grid" },
+              { label: "Vendor POs", sub: "8 In Procurement", color: "amber", icon: "store" },
+              { label: "Snag Lists", sub: "4 Items Open", color: "emerald", icon: "check-circle" },
+              { label: "Handovers", sub: "2 Ready", color: "purple", icon: "flag" }
+            ]
+          }
+        ]
+      },
+
+      "design-head": {
+        name: "Pooja M",
+        title: "Design Head",
+        tag: "DESIGN HEAD",
+        avatar: "P",
+        quote: "\"Zero design gate deviations: every 3D render, drawing & sample signed off\"",
+        brief: "<strong>Design Head Mode:</strong> Client moodboards, material sample approvals, GFC drawing releases, and design gate freeze enforcement.",
+        tabs: ['Home', 'Projects', 'Design Desk', 'Clients', 'Design Review'],
+        cards: [
+          {
+            type: "blueprint",
+            span: "lg:col-span-6",
+            tilt: "-rotate-1",
+            title: "GFC DRAWING APPROVAL GATE",
+            eyebrow: "DESIGN REVIEW",
+            sheets: [
+              { id: "DWG-ELEC-04", name: "Kitchen Automation Loop", status: "Approved" },
+              { id: "DWG-PLUMB-03", name: "Master Shower Concealed Diverter", status: "In Review" },
+              { id: "DWG-CARP-12", name: "Walk-in Wardrobe Fluting", status: "Approved" }
+            ]
+          },
+          {
+            type: "swatches",
+            span: "lg:col-span-6",
+            tilt: "rotate-1",
+            title: "MATERIAL MOODBOARD PALETTE",
+            eyebrow: "SPEC SIGN-OFF",
+            swatches: [
+              { name: "Smoked Walnut", color: "#3d2b1f", status: "Signed by Client" },
+              { name: "Brushed Brass", color: "#c5a059", status: "Vendor Sample Ready" },
+              { name: "Fluted Travertine", color: "#eae6df", status: "Batch Inspected" }
+            ]
+          }
+        ]
+      },
+
+      designer: {
+        name: "Rohan D",
+        title: "Interior Designer",
+        tag: "DESIGNER",
+        avatar: "R",
+        quote: "\"Assigned projects only: focusing on drawing sheets and revisions\"",
+        brief: "<strong>Designer Mode (Restricted):</strong> Restricted from studio financial margins. Showing assigned projects only (`Villa Nirvana`, `Skyline 4BHK`) and the Drawing Tracker.",
+        tabs: ['Home', 'Projects (Assigned)', 'Design Desk', 'Design Review'],
+        cards: [
+          {
+            type: "blueprint",
+            span: "lg:col-span-7",
+            tilt: "-rotate-1",
+            title: "YOUR ASSIGNED GFC SHEETS",
+            eyebrow: "DRAWING TRACKER",
+            sheets: [
+              { id: "DWG-CARP-08", name: "Pooja Room CNC Jali Detail", status: "Rev 2 Due Today" },
+              { id: "DWG-PLUMB-02", name: "Powder Room Vanity Plumbing", status: "Approved" }
+            ]
+          },
+          {
+            type: "punchlist",
+            span: "lg:col-span-5",
+            tilt: "rotate-1",
+            pin: "pushpin-brass",
+            title: "TODAY'S DESIGN TASKS",
+            eyebrow: "ASSIGNED ACTIONS",
+            items: [
+              { title: "Villa Nirvana", desc: "Upload revised lighting plan", badge: "DUE 2 PM" },
+              { title: "Skyline 4BHK", desc: "Resolve site contractor query", badge: "QUERY" }
+            ]
+          }
+        ]
+      },
+
+      "junior-ops": {
+        name: "Neha S",
+        title: "Junior Ops / Client Executive",
+        tag: "CLIENT EXEC",
+        avatar: "N",
+        quote: "\"Client onboarding, meeting minutes, payment follow-ups & handover dockets\"",
+        brief: "<strong>Junior Ops Mode:</strong> Client communication timeline, onboarding checklist, approved invoice dispatches, and WhatsApp meeting notes (no margin exposure).",
+        tabs: ['Home', 'Projects', 'Clients (28)', 'Client Onboarding', 'Handovers'],
+        cards: [
+          {
+            type: "punchlist",
+            span: "lg:col-span-6",
+            tilt: "-rotate-1",
+            pin: "pushpin-red",
+            title: "CLIENT FOLLOW-UP QUEUE",
+            eyebrow: "DAILY ACTIONS",
+            items: [
+              { title: "Client ABC", desc: "Send WhatsApp payment reminder", badge: "PAYMENT" },
+              { title: "Icon Dhokali", desc: "Collect signed Execution Docket", badge: "ONBOARDING" },
+              { title: "Villa Nirvana", desc: "Send Meeting MoM from site visit", badge: "MINUTES" }
+            ]
+          },
+          {
+            type: "recent",
+            span: "lg:col-span-6",
+            tilt: "rotate-1",
+            title: "APPROVED INVOICE DISPATCHES",
+            eyebrow: "COLLECTIONS TRACKER",
+            items: [
+              { name: "Inv #2026-88 · Skyline Penthouse", sub: "Dispatched via WhatsApp · UTR Awaited" },
+              { name: "Inv #2026-89 · Indiranagar Duplex", sub: "Paid via NEFT · Receipt Sent ✓" }
+            ]
+          }
+        ]
+      }
+    };
+
+    // Render the board for a selected role
+    function setStudioRole(roleKey) {
+      const role = ROLES[roleKey];
+      if (!role) return;
+
+      // Update button highlights
+      ['founder', 'ops-director', 'design-head', 'designer', 'junior-ops'].forEach(k => {
+        const btn = document.getElementById('role-' + k);
+        if (k === roleKey) {
+          btn.className = 'px-2.5 py-1 rounded-lg text-xs font-bold transition bg-white text-indigo-950 shadow-sm';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition';
+        }
+      });
+
+      // Update header profile
+      document.getElementById('user-display-name').innerText = role.name;
+      document.getElementById('user-display-role').innerText = role.tag;
+      document.getElementById('user-display-avatar').innerText = role.avatar;
+
+      // Update top navigation tabs
+      const navContainer = document.getElementById('top-nav-tabs');
+      navContainer.innerHTML = role.tabs.map((t, idx) => `
+        <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${idx === 0 ? 'bg-brand text-white font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium'} text-xs transition">
+          ${t}
+        </button>
+      `).join('');
+
+      // Update role brief banner
+      document.getElementById('role-brief-banner').innerHTML = `
+        <div class="flex items-center gap-2">
+          <i data-lucide="info" class="w-4 h-4 text-indigo-300"></i>
+          <span>${role.brief}</span>
+        </div>
+        <span class="font-mono text-[10px] text-indigo-300">Role ACL: Strict Scope Enforced</span>
+      `;
+
+      // Update board titles
+      document.getElementById('board-role-title').innerText = role.title + " Pin-up Board";
+      document.getElementById('board-role-quote').innerText = role.quote;
+
+      // Render cards
+      renderCards(role.cards);
+      lucide.createIcons();
+    }
+
+    // Render dynamic cards into grid
+    function renderCards(cards) {
+      const container = document.getElementById('dynamic-cards-grid');
+      container.innerHTML = cards.map(c => {
+        if (c.type === 'orbit') {
+          return `
+            <div class="${c.span} spatial-card relative bg-[#FFFDF9] border border-[#E8DFC8] rounded-2xl p-6 shadow-md transform ${c.tilt}">
+              <div class="pushpin-brass"></div>
+              <div class="flex items-center justify-between border-b border-amber-200/60 pb-3 mb-4">
+                <div>
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-amber-800 font-mono-studio">${c.eyebrow}</span>
+                  <h3 class="text-base font-bold text-ink">${c.title}</h3>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3 mb-4">
+                ${c.items.map(it => `
+                  <div class="p-3.5 rounded-xl bg-${it.color}-50/50 border border-${it.color}-200/80 hover:bg-${it.color}-50 transition cursor-pointer">
+                    <span class="block text-xs font-bold text-ink">${it.label}</span>
+                    <span class="text-[11px] text-${it.color}-800 font-semibold">${it.sub}</span>
+                  </div>
+                `).join('')}
+              </div>
+              <div class="bg-amber-100/70 border border-amber-300/80 p-3 rounded-xl">
+                <p class="font-handwriting text-lg text-amber-950 leading-tight">${c.footerNote || ''}</p>
+              </div>
+            </div>
+          `;
+        }
+
+        if (c.type === 'punchlist') {
+          return `
+            <div class="${c.span} spatial-card relative bg-[#FEFCE8] border-2 border-[#FEF08A] rounded-2xl p-5 shadow-md transform ${c.tilt}">
+              <div class="pushpin-red"></div>
+              <div class="border-b-2 border-dashed border-amber-300 pb-2 mb-3">
+                <span class="text-[10px] font-bold text-amber-800 uppercase tracking-wider font-mono-studio">${c.eyebrow}</span>
+                <h4 class="text-sm font-extrabold text-amber-950 mt-0.5">${c.title}</h4>
+              </div>
+              <div class="space-y-2.5">
+                ${c.items.map(it => `
+                  <div class="bg-white/80 p-3 rounded-xl border border-amber-200 shadow-2xs hover:bg-white transition cursor-pointer">
+                    <div class="flex items-center justify-between mb-1">
+                      <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 font-mono">${it.badge}</span>
+                    </div>
+                    <p class="text-xs font-bold text-slate-900 leading-tight">${it.title}</p>
+                    <span class="text-[11px] text-slate-600 block mt-0.5">${it.desc}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        if (c.type === 'blueprint') {
+          return `
+            <div class="${c.span} spatial-card relative blueprint-texture text-white rounded-2xl p-6 shadow-xl transform ${c.tilt} border-2 border-blue-400/40">
+              <div class="washi-tape"></div>
+              <div class="flex items-center justify-between border-b border-blue-400/30 pb-3 mb-4">
+                <div>
+                  <span class="text-[10px] font-mono tracking-wider text-blue-300 uppercase block">${c.eyebrow}</span>
+                  <h3 class="text-base font-bold text-white">${c.title}</h3>
+                </div>
+                <span class="text-xs font-mono text-emerald-400 font-bold">GFC LIVE GATE</span>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                ${c.sheets.map(s => `
+                  <div class="p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/15">
+                    <span class="text-[9px] font-mono text-blue-300 block">${s.id}</span>
+                    <h4 class="text-xs font-bold text-white mt-0.5">${s.name}</h4>
+                    <span class="text-[10px] text-emerald-300 font-bold mt-2 block">${s.status}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        if (c.type === 'swatches') {
+          return `
+            <div class="${c.span} spatial-card relative bg-white border border-slate-200 rounded-2xl p-6 shadow-md transform ${c.tilt}">
+              <div class="pushpin-brass"></div>
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                <div>
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono-studio">${c.eyebrow}</span>
+                  <h3 class="text-base font-bold text-ink">${c.title}</h3>
+                </div>
+              </div>
+              <div class="space-y-3">
+                ${c.swatches.map(sw => `
+                  <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                      <span class="w-7 h-7 rounded-lg swatch-chip shrink-0" style="background: ${sw.color}"></span>
+                      <div>
+                        <span class="text-xs font-bold text-ink block">${sw.name}</span>
+                        <span class="text-[10px] text-slate-500">${sw.status}</span>
+                      </div>
+                    </div>
+                    <button class="text-[10px] font-bold text-brand bg-indigo-50 px-2 py-1 rounded">View Spec</button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        if (c.type === 'sitePolaroid') {
+          return `
+            <div class="${c.span} spatial-card relative bg-white border border-slate-200 rounded-2xl p-5 shadow-md transform ${c.tilt}">
+              <div class="washi-tape"></div>
+              <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono-studio">${c.eyebrow}</span>
+                <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Live Field Cam</span>
+              </div>
+              <div class="bg-slate-100 border border-slate-200 rounded-xl p-2 mb-3">
+                <div class="h-28 bg-gradient-to-tr from-amber-900 to-amber-700 rounded-lg flex flex-col justify-end p-3 text-white">
+                  <span class="text-[10px] font-bold uppercase">${c.photoTitle}</span>
+                  <p class="text-xs font-semibold mt-0.5">${c.photoSub}</p>
+                </div>
+                <div class="pt-2 px-1 flex items-center justify-between text-xs">
+                  <span class="font-handwriting text-base text-slate-700">Supervisor Stamp: Raju M.</span>
+                  <span class="font-bold text-emerald-700">${c.status}</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        if (c.type === 'cashflow') {
+          return `
+            <div class="${c.span} spatial-card relative bg-white border border-slate-200 rounded-2xl p-6 shadow-md transform ${c.tilt}">
+              <div class="pushpin-brass"></div>
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+                <div>
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono-studio">${c.eyebrow}</span>
+                  <h3 class="text-base font-bold text-ink">${c.title}</h3>
+                </div>
+                <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">${c.badge}</span>
+              </div>
+              ${c.content}
+            </div>
+          `;
+        }
+
+        if (c.type === 'recent') {
+          return `
+            <div class="${c.span} spatial-card relative bg-[#FDFBF7] border border-stone-300 rounded-2xl p-5 shadow-md transform ${c.tilt}">
+              <div class="pushpin-brass"></div>
+              <div class="flex items-center justify-between border-b border-stone-200 pb-2 mb-3">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-stone-500 font-mono-studio">${c.eyebrow}</span>
+                <i data-lucide="history" class="w-3.5 h-3.5 text-stone-400"></i>
+              </div>
+              <div class="space-y-2">
+                ${c.items.map(it => `
+                  <div class="p-2.5 rounded-xl bg-white border border-stone-200 flex items-center justify-between hover:border-brand/40 transition">
+                    <div>
+                      <span class="text-xs font-bold text-ink block">${it.name}</span>
+                      <span class="text-[10px] text-slate-500">${it.sub}</span>
+                    </div>
+                    <span class="text-[10px] font-bold text-brand bg-indigo-50 px-2 py-0.5 rounded">Open →</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        return '';
+      }).join('');
+    }
+
+    // 2. 3D Camera Angles
+    function setCameraAngle(angle) {
+      const surface = document.getElementById('pinboard-surface');
+      ['flat', 'tilted', 'isometric'].forEach(a => {
+        const btn = document.getElementById('cam-' + a);
+        if (a === angle) {
+          btn.className = 'px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition';
+        }
+      });
+
+      if (angle === 'flat') {
+        surface.style.transform = 'rotateX(0deg) rotateY(0deg) translateZ(0)';
+      } else if (angle === 'tilted') {
+        surface.style.transform = 'rotateX(12deg) rotateY(-2deg) translateZ(0)';
+      } else if (angle === 'isometric') {
+        surface.style.transform = 'rotateX(24deg) rotateY(-14deg) rotateZ(3deg) scale(0.96)';
+      }
+    }
+
+    // 3. Dynamic Studio Light Toggle
+    let lightOn = true;
+    function toggleMaterialLight() {
+      const surface = document.getElementById('pinboard-surface');
+      const btn = document.getElementById('btn-light');
+      lightOn = !lightOn;
+      if (!lightOn) {
+        surface.style.filter = 'brightness(0.75) contrast(1.1)';
+        btn.classList.add('bg-amber-400/20', 'text-amber-300');
+      } else {
+        surface.style.filter = 'none';
+        btn.classList.remove('bg-amber-400/20', 'text-amber-300');
+      }
+    }
+
+    function pinNewTactileItem() {
+      alert("Pinned a new custom action card to your current role's pinboard!");
+    }
+
+    // Initialize Default Role: Founder
+    setStudioRole('founder');
+  </script>
+</body>
+</html>

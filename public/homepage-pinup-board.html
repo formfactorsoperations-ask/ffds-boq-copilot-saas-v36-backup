@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFDS Studio OS — Material Pin-up Board & Interactive Creative Studio Mockups</title>
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: '#3D52A0',
+            brandDark: '#1E2B58',
+            ink: '#0a1b33',
+            cork: '#EFE7DA',
+            corkBorder: '#D7C7B0',
+            draftPaper: '#FDFCF7',
+            blueprint: '#1E3A8A',
+            blueprintBg: '#0F1E4A'
+          },
+          boxShadow: {
+            pinShadow: '0 10px 25px -5px rgba(40, 30, 20, 0.15), 0 4px 6px -2px rgba(40, 30, 20, 0.08)',
+            swatchGlow: '0 12px 28px -6px rgba(10, 27, 51, 0.18)',
+            polaroid: '0 8px 20px -3px rgba(0, 0, 0, 0.15), 0 2px 6px -2px rgba(0, 0, 0, 0.1)'
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Google Fonts: Plus Jakarta Sans + Caveat for architectural hand-drawn notes + Playfair Display -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;1,600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #F4F0E8;
+      color: #0a1b33;
+    }
+    .font-handwriting {
+      font-family: 'Caveat', cursive;
+    }
+    .font-mono-studio {
+      font-family: 'Space Grotesk', monospace;
+    }
+    /* Pin-up textures and paper effects */
+    .cork-texture {
+      background-color: #f3ece1;
+      background-image: 
+        radial-gradient(#d8cbba 1px, transparent 1px),
+        radial-gradient(#cebea8 1px, #f3ece1 1px);
+      background-size: 28px 28px;
+      background-position: 0 0, 14px 14px;
+    }
+    .blueprint-grid {
+      background-color: #0d1e47;
+      background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    .grid-paper-texture {
+      background-color: #fbfbf8;
+      background-image: 
+        linear-gradient(rgba(61, 82, 160, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(61, 82, 160, 0.04) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    /* Pushpin heads */
+    .pushpin-brass {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #FDE047, #CA8A04 60%, #854D0E);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.35), inset 0 1px 1px #FEF08A;
+      position: absolute;
+      top: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+    }
+    .pushpin-red {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #F87171, #DC2626 60%, #991B1B);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.35), inset 0 1px 1px #FECACA;
+      position: absolute;
+      top: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+    }
+    .pushpin-indigo {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #818CF8, #4F46E5 60%, #312E81);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.35), inset 0 1px 1px #C7D2FE;
+      position: absolute;
+      top: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+    }
+    /* Washi tape */
+    .washi-tape {
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%) rotate(-1deg);
+      width: 80px;
+      height: 20px;
+      background: rgba(234, 179, 8, 0.45);
+      backdrop-filter: blur(2px);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      z-index: 30;
+      border-left: 2px dashed rgba(202, 138, 4, 0.4);
+      border-right: 2px dashed rgba(202, 138, 4, 0.4);
+    }
+    .washi-tape-slate {
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%) rotate(2deg);
+      width: 70px;
+      height: 18px;
+      background: rgba(148, 163, 184, 0.5);
+      backdrop-filter: blur(2px);
+      z-index: 30;
+    }
+    /* Draggable/tilt effect */
+    .pin-card {
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      cursor: grab;
+    }
+    .pin-card:hover {
+      transform: translateY(-6px) scale(1.02) rotate(0deg) !important;
+      z-index: 40 !important;
+      box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.2), 0 6px 12px -2px rgba(0, 0, 0, 0.08);
+    }
+    .pin-card:active {
+      cursor: grabbing;
+    }
+    /* Swatch chip */
+    .swatch-chip {
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1), 0 3px 6px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- ================= TOP NAVIGATION (FFDS STUDIO OS SYSTEM HEADER) ================= -->
+  <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-6 py-2.5 flex items-center justify-between">
+    <div class="flex items-center gap-6">
+      <div class="flex items-center gap-3">
+        <div class="h-8 px-2.5 py-1 rounded-lg border border-slate-200 bg-white flex items-center justify-center font-bold text-[10px] tracking-wider text-slate-700 shadow-2xs">
+          FORM FACTORS
+        </div>
+        <div class="h-4 w-px bg-slate-200"></div>
+        <span class="text-xs font-semibold text-slate-500">FFDS Studio OS <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand/10 text-brand">v36.1</span></span>
+      </div>
+
+      <!-- App Tabs -->
+      <nav class="hidden md:flex items-center gap-1">
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand text-white font-semibold text-xs shadow-sm">
+          <i data-lucide="home" class="w-3.5 h-3.5"></i>
+          Home
+        </button>
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium text-xs transition">
+          <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+          Projects <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">28</span>
+        </button>
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium text-xs transition">
+          <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i>
+          Design Desk
+        </button>
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium text-xs transition">
+          <i data-lucide="users" class="w-3.5 h-3.5"></i>
+          Clients <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">28</span>
+        </button>
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium text-xs transition">
+          <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>
+          Reports
+        </button>
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium text-xs transition">
+          <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+          Studio Settings
+        </button>
+      </nav>
+    </div>
+
+    <!-- Right user bar -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/60 text-emerald-700 text-[11px] font-semibold">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        Live
+      </div>
+      <div class="h-4 w-px bg-slate-200"></div>
+      <span class="text-xs font-semibold text-slate-800">Anish K</span>
+      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand/10 text-brand uppercase">SUPER ADMIN</span>
+      <div class="w-7 h-7 rounded-xl bg-brand text-white flex items-center justify-center font-bold text-xs shadow-xs">
+        F
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= PIN-UP BOARD CONTROLLER BAR ================= -->
+  <aside class="bg-gradient-to-r from-amber-950 via-[#3a2717] to-stone-900 text-white px-6 py-3.5 border-b border-amber-900/60 shadow-md">
+    <div class="max-w-[1550px] mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold text-[10px] uppercase tracking-wider border border-amber-500/30 flex items-center gap-1">
+            <i data-lucide="pin" class="w-3 h-3 text-amber-400"></i>
+            Interior Designer Studio Concept
+          </span>
+          <h1 class="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
+            The Interactive Material Pin-up Board
+            <span class="text-xs font-normal text-amber-200">· Tactile, Studio-Native & Alive</span>
+          </h1>
+        </div>
+        <p class="text-[11.5px] text-amber-100/80 mt-0.5">
+          Interior design studios don't live in cold corporate dashboards — they live on <strong>material boards, tactile fabric swatches, architectural trace paper, Polaroid site updates, and sticky action nudges</strong>.
+        </p>
+      </div>
+
+      <!-- Board Flavor Switcher -->
+      <div class="flex items-center gap-1.5 bg-black/30 p-1 rounded-xl backdrop-blur-md border border-white/10 overflow-x-auto max-w-full">
+        <button onclick="switchBoardFlavor('cork')" id="btn-flavor-cork" class="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-amber-100 text-amber-950 shadow-sm">
+          <i data-lucide="layout" class="w-3.5 h-3.5 text-amber-800"></i>
+          1. Natural Studio Corkboard
+        </button>
+        <button onclick="switchBoardFlavor('blueprint')" id="btn-flavor-blueprint" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-100/70 hover:text-white transition flex items-center gap-1.5">
+          <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i>
+          2. Architectural Blueprint Desk
+        </button>
+        <button onclick="switchBoardFlavor('gallery')" id="btn-flavor-gallery" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-100/70 hover:text-white transition flex items-center gap-1.5">
+          <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+          3. Porcelain Atelier Moodboard
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ================= PIN-UP BOARD INTERACTIVE CANVAS ================= -->
+  <main class="flex-1 max-w-[1550px] w-full mx-auto px-6 py-6">
+
+    <div id="board-canvas" class="cork-texture rounded-3xl border-4 border-corkBorder shadow-2xl p-6 lg:p-8 min-h-[820px] relative overflow-hidden transition-all duration-300">
+
+      <!-- Ambient Cork Vignette & Wood Frame Inner Shadow -->
+      <div class="absolute inset-0 pointer-events-none rounded-[20px] shadow-[inset_0_0_80px_rgba(70,50,30,0.18)]"></div>
+
+      <!-- ================= BOARD TOP HEADER: STUDIO BRASS CLOCK & RUNNING TAPE ================= -->
+      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        
+        <!-- Studio Brand Tape -->
+        <div class="flex items-center gap-3">
+          <div class="bg-amber-100/90 border border-amber-300 px-4 py-2 rounded-xl shadow-sm transform -rotate-1 flex items-center gap-2.5">
+            <div class="w-3 h-3 rounded-full bg-red-600 shadow-xs"></div>
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-900 block font-mono-studio">FORM FACTORS DESIGN STUDIO</span>
+              <span class="text-xs font-extrabold text-amber-950 font-serif">Daily Creative & Ops Pin-up Board</span>
+            </div>
+          </div>
+          <span class="font-handwriting text-xl text-amber-800 font-bold transform rotate-2 hidden sm:inline-block">
+            "Every brief, swatch, drawing & fee on one wall"
+          </span>
+        </div>
+
+        <!-- Tactile Brass Studio Clock & Date Ribbon -->
+        <div class="bg-white/90 backdrop-blur-md border border-amber-200/80 px-5 py-2.5 rounded-2xl shadow-md flex items-center gap-4 transform rotate-1">
+          <div class="flex items-center gap-3">
+            <!-- Brass Chronometer Dial -->
+            <div class="w-10 h-10 rounded-full border-2 border-amber-500 bg-amber-50 flex items-center justify-center shadow-inner relative">
+              <div class="w-1 h-3 bg-slate-800 rounded-full absolute top-2 origin-bottom transform rotate-[210deg]"></div>
+              <div class="w-0.5 h-4 bg-slate-600 rounded-full absolute top-1 origin-bottom transform rotate-[290deg]"></div>
+              <div class="w-1.5 h-1.5 rounded-full bg-red-600 z-10"></div>
+            </div>
+            <div>
+              <div class="text-base font-extrabold text-slate-900 tabular-nums leading-none">10:48:07 AM</div>
+              <div class="text-[10px] font-bold text-amber-800 mt-0.5">Saturday, Oct 10, 2026 · IST</div>
+            </div>
+          </div>
+          <div class="h-6 w-px bg-slate-200"></div>
+          <!-- Quick Pin New Card Button -->
+          <button onclick="pinNewNote()" class="px-3 py-1.5 rounded-xl bg-brand text-white font-semibold text-xs shadow-xs hover:bg-brandDark transition flex items-center gap-1.5">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            Pin Card
+          </button>
+        </div>
+      </div>
+
+      <!-- ================= THE PIN-UP GRID (TACTILE PINS & POLAROIDS) ================= -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 relative z-10 items-start">
+
+        <!-- ================= CARD 1: THE STUDIO ORBIT AS A TACTILE MOOD RING (lg:col-span-5) ================= -->
+        <div class="lg:col-span-5 pin-card relative bg-[#FFFDF9] border border-[#E8DFC8] rounded-2xl p-6 shadow-pinShadow transform -rotate-1">
+          <div class="pushpin-brass"></div>
+          
+          <div class="flex items-center justify-between border-b border-amber-200/60 pb-3 mb-4">
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-800 font-mono-studio">ACTIVE STUDIO HUBS</span>
+              <h3 class="text-base font-bold text-ink">Concentric Workspace Wheel</h3>
+            </div>
+            <span class="font-handwriting text-base text-amber-700 font-bold">12 sites live</span>
+          </div>
+
+          <!-- Tactile Hub Buttons Arranged on a Craft Board -->
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <!-- Projects Card with Swatch accent -->
+            <div onclick="filterBoardBy('projects')" class="p-3.5 rounded-xl bg-blue-50/50 border border-blue-200/80 hover:bg-blue-50 transition cursor-pointer group relative">
+              <span class="w-2.5 h-2.5 rounded-full bg-blue-600 absolute top-2 right-2"></span>
+              <i data-lucide="layout-grid" class="w-5 h-5 text-blue-700 mb-1.5"></i>
+              <span class="block text-xs font-bold text-ink">Projects Hub</span>
+              <span class="text-[11px] text-blue-800 font-semibold">28 in pipeline / site</span>
+            </div>
+
+            <!-- Clients Card with Coral accent -->
+            <div onclick="filterBoardBy('clients')" class="p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-200/80 hover:bg-emerald-50 transition cursor-pointer group relative">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 absolute top-2 right-2"></span>
+              <i data-lucide="users" class="w-5 h-5 text-emerald-700 mb-1.5"></i>
+              <span class="block text-xs font-bold text-ink">Client Directory</span>
+              <span class="text-[11px] text-emerald-800 font-semibold">28 Accounts Active</span>
+            </div>
+
+            <!-- Rate Bank with Ochre accent -->
+            <div onclick="filterBoardBy('rates')" class="p-3.5 rounded-xl bg-amber-50/50 border border-amber-200/80 hover:bg-amber-50 transition cursor-pointer group relative">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-600 absolute top-2 right-2"></span>
+              <i data-lucide="store" class="w-5 h-5 text-amber-700 mb-1.5"></i>
+              <span class="block text-xs font-bold text-ink">Rate & Spec Bank</span>
+              <span class="text-[11px] text-amber-800 font-semibold">1,420 Verified Rates</span>
+            </div>
+
+            <!-- Reports with Purple accent -->
+            <div onclick="filterBoardBy('reports')" class="p-3.5 rounded-xl bg-purple-50/50 border border-purple-200/80 hover:bg-purple-50 transition cursor-pointer group relative">
+              <span class="w-2.5 h-2.5 rounded-full bg-purple-600 absolute top-2 right-2"></span>
+              <i data-lucide="bar-chart-3" class="w-5 h-5 text-purple-700 mb-1.5"></i>
+              <span class="block text-xs font-bold text-ink">P&L Reports</span>
+              <span class="text-[11px] text-purple-800 font-semibold">41% Avg Margin</span>
+            </div>
+          </div>
+
+          <!-- Handwritten Architect's Sticky Note at the Bottom -->
+          <div class="bg-amber-100/70 border border-amber-300/80 p-3 rounded-xl">
+            <div class="flex items-start gap-2">
+              <i data-lucide="sticky-note" class="w-4 h-4 text-amber-800 shrink-0 mt-0.5"></i>
+              <p class="font-handwriting text-lg text-amber-950 leading-tight">
+                Anish: 3 carpentry signoffs needed before society crane window closes at 4 PM today!
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= CARD 2: POLAROID SITE SNAPSHOTS & MATERIAL SWATCHES (lg:col-span-4) ================= -->
+        <div class="lg:col-span-4 pin-card relative bg-white border border-slate-200 rounded-2xl p-5 shadow-polaroid transform rotate-1">
+          <div class="washi-tape"></div>
+
+          <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono-studio">LIVE SITE POLAROIDS</span>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Updated 2h ago</span>
+          </div>
+
+          <!-- Polaroid Photo Frame Simulation -->
+          <div class="bg-slate-100 border border-slate-200 rounded-xl p-2 mb-3 shadow-inner">
+            <div class="h-32 bg-gradient-to-tr from-amber-800 to-amber-600 rounded-lg flex flex-col justify-end p-3 text-white relative overflow-hidden">
+              <div class="absolute inset-0 bg-black/20"></div>
+              <div class="relative z-10">
+                <span class="px-2 py-0.5 rounded bg-black/50 text-[10px] font-bold tracking-wider uppercase">Villa Nirvana · Living Area</span>
+                <p class="text-xs font-semibold mt-1">Italian Marble Laying (Bottochino)</p>
+              </div>
+            </div>
+            <div class="pt-2 px-1 flex items-center justify-between">
+              <span class="font-handwriting text-base text-slate-700">Site Supervisor: Raju M.</span>
+              <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Dry Lay Approved ✓</span>
+            </div>
+          </div>
+
+          <!-- Material Palette Swatch Strip Pinned Directly -->
+          <div class="space-y-1.5 pt-1">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Palette Signoff:</span>
+            <div class="flex items-center gap-2">
+              <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium">
+                <span class="w-3.5 h-3.5 rounded-full bg-[#3d2b1f] swatch-chip"></span>
+                <span>Smoked Walnut</span>
+              </div>
+              <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium">
+                <span class="w-3.5 h-3.5 rounded-full bg-[#c5a059] swatch-chip"></span>
+                <span>Brushed Brass</span>
+              </div>
+              <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium">
+                <span class="w-3.5 h-3.5 rounded-full bg-[#eae6df] swatch-chip"></span>
+                <span>Fluted Travertine</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= CARD 3: TACTILE ATTENTION PUNCHLIST (YELLOW LEGAL PAD) (lg:col-span-3) ================= -->
+        <div class="lg:col-span-3 pin-card relative bg-[#FEFCE8] border-2 border-[#FEF08A] rounded-2xl p-5 shadow-pinShadow transform -rotate-2">
+          <div class="pushpin-red"></div>
+
+          <div class="border-b-2 border-dashed border-amber-300 pb-2 mb-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-bold text-amber-800 uppercase tracking-wider font-mono-studio">PRIORITY PUNCHLIST</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500 text-white font-mono">12 OPEN</span>
+            </div>
+            <h4 class="text-sm font-extrabold text-amber-950 mt-1">₹2.08 Cr In Holding</h4>
+          </div>
+
+          <!-- Sticky Action Notes -->
+          <div class="space-y-3">
+            <!-- Action Item 1 -->
+            <div class="bg-white/80 p-2.5 rounded-xl border border-amber-200 shadow-2xs hover:bg-white transition cursor-pointer">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700">MOST AT STAKE</span>
+                <span class="text-[10px] font-extrabold text-rose-700">₹38.22 L</span>
+              </div>
+              <p class="text-xs font-bold text-slate-900 leading-tight">Penthouse 8: Execution Agreement</p>
+              <span class="font-handwriting text-sm text-slate-600 block mt-0.5">Awaiting client digital signoff</span>
+            </div>
+
+            <!-- Action Item 2 -->
+            <div class="bg-white/80 p-2.5 rounded-xl border border-amber-200 shadow-2xs hover:bg-white transition cursor-pointer">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">18 DAYS IDLE</span>
+                <span class="text-[10px] font-bold text-slate-700">Client ABC</span>
+              </div>
+              <p class="text-xs font-bold text-slate-900 leading-tight">Collect Advance (₹6.50 L)</p>
+              <button class="mt-2 w-full py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold transition">
+                Send WhatsApp Nudge
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= CARD 4: BLUEPRINT DRAWING TRACKER (lg:col-span-8) ================= -->
+        <div class="lg:col-span-8 pin-card relative blueprint-grid text-white rounded-2xl p-6 shadow-2xl transform rotate-0.5 border-2 border-blue-400/40">
+          <div class="washi-tape-slate"></div>
+
+          <div class="flex items-center justify-between border-b border-blue-400/30 pb-3 mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="compass" class="w-4 h-4 text-blue-300"></i>
+              <div>
+                <span class="text-[10px] font-mono tracking-wider text-blue-300 uppercase block">ARCHITECTURAL DRAWING GATE</span>
+                <h3 class="text-base font-bold text-white">Active GFC (Good For Construction) Sheets</h3>
+              </div>
+            </div>
+            <div class="text-right">
+              <span class="text-xs font-mono text-emerald-400 font-bold block">14 / 16 RELEASED</span>
+              <span class="text-[10px] text-blue-200">2 Pending Society Stamp</span>
+            </div>
+          </div>
+
+          <!-- Drawing Sheets Grid on Blueprint paper -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 hover:border-blue-300 transition">
+              <span class="text-[9px] font-mono text-blue-300 block">DWG-ELEC-04 · Villa 2</span>
+              <h4 class="text-xs font-bold text-white mt-0.5">Kitchen Automation Loop</h4>
+              <div class="mt-3 flex items-center justify-between">
+                <span class="text-[10px] text-emerald-300 font-bold">Approved</span>
+                <button class="text-[10px] text-white underline hover:text-blue-200">View PDF</button>
+              </div>
+            </div>
+
+            <div class="p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 hover:border-amber-300 transition">
+              <span class="text-[9px] font-mono text-amber-300 block">DWG-PLUMB-03 · Penthouse</span>
+              <h4 class="text-xs font-bold text-white mt-0.5">Master Shower Concealed Diverter</h4>
+              <div class="mt-3 flex items-center justify-between">
+                <span class="text-[10px] text-amber-300 font-bold">Rev 2 In Review</span>
+                <button class="text-[10px] text-white underline hover:text-blue-200">Sign Off</button>
+              </div>
+            </div>
+
+            <div class="p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 hover:border-blue-300 transition">
+              <span class="text-[9px] font-mono text-blue-300 block">DWG-CARP-12 · Indiranagar</span>
+              <h4 class="text-xs font-bold text-white mt-0.5">Walk-in Wardrobe Fluting</h4>
+              <div class="mt-3 flex items-center justify-between">
+                <span class="text-[10px] text-emerald-300 font-bold">Approved</span>
+                <button class="text-[10px] text-white underline hover:text-blue-200">View PDF</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= CARD 5: RECENT WORKSPACE PINS (lg:col-span-4) ================= -->
+        <div class="lg:col-span-4 pin-card relative bg-[#FDFBF7] border border-stone-300 rounded-2xl p-5 shadow-pinShadow transform -rotate-1">
+          <div class="pushpin-indigo"></div>
+
+          <div class="flex items-center justify-between border-b border-stone-200 pb-2 mb-3">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-stone-500 font-mono-studio">CONTINUE WHERE YOU LEFT OFF</span>
+            <i data-lucide="history" class="w-3.5 h-3.5 text-stone-400"></i>
+          </div>
+
+          <div class="space-y-2">
+            <div class="p-2.5 rounded-xl bg-white border border-stone-200 flex items-center justify-between hover:border-brand/40 transition cursor-pointer">
+              <div>
+                <span class="text-xs font-bold text-ink block">bundle test</span>
+                <span class="text-[10px] text-slate-500">BOQ Editor · 1d ago</span>
+              </div>
+              <span class="text-[10px] font-bold text-brand bg-indigo-50 px-2 py-0.5 rounded">Jump In →</span>
+            </div>
+
+            <div class="p-2.5 rounded-xl bg-white border border-stone-200 flex items-center justify-between hover:border-brand/40 transition cursor-pointer">
+              <div>
+                <span class="text-xs font-bold text-ink block">ABC test client · 3BHK</span>
+                <span class="text-[10px] text-slate-500">Payment Calc · 1d ago</span>
+              </div>
+              <span class="text-[10px] font-bold text-brand bg-indigo-50 px-2 py-0.5 rounded">Jump In →</span>
+            </div>
+
+            <div class="p-2.5 rounded-xl bg-white border border-stone-200 flex items-center justify-between hover:border-brand/40 transition cursor-pointer">
+              <div>
+                <span class="text-xs font-bold text-ink block">Icon Dhokali</span>
+                <span class="text-[10px] text-slate-500">Terms Docket · 2d ago</span>
+              </div>
+              <span class="text-[10px] font-bold text-brand bg-indigo-50 px-2 py-0.5 rounded">Jump In →</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ================= BOTTOM PINNED STRIP: MATERIAL SAMPLES & VENDOR CATALOGS ================= -->
+      <div class="mt-8 pt-4 border-t-2 border-dashed border-corkBorder flex flex-wrap items-center justify-between text-xs text-amber-900/80 font-mono-studio">
+        <div class="flex items-center gap-4">
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-600"></span> Site Check-ins: 100% on time</span>
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-600"></span> Society Permissions: 2 under approval</span>
+        </div>
+        <span class="font-handwriting text-base text-amber-950 font-bold">Form Factors Studio OS · Tactile Pin-up Concept</span>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script>
+    lucide.createIcons();
+
+    // Switch flavor of board (Cork vs Blueprint vs Gallery)
+    function switchBoardFlavor(flavor) {
+      const board = document.getElementById('board-canvas');
+      const btnCork = document.getElementById('btn-flavor-cork');
+      const btnBlueprint = document.getElementById('btn-flavor-blueprint');
+      const btnGallery = document.getElementById('btn-flavor-gallery');
+
+      // Reset buttons
+      [btnCork, btnBlueprint, btnGallery].forEach(b => {
+        b.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-100/70 hover:text-white transition flex items-center gap-1.5';
+      });
+
+      if (flavor === 'cork') {
+        board.className = 'cork-texture rounded-3xl border-4 border-corkBorder shadow-2xl p-6 lg:p-8 min-h-[820px] relative overflow-hidden transition-all duration-300';
+        btnCork.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-amber-100 text-amber-950 shadow-sm';
+      } else if (flavor === 'blueprint') {
+        board.className = 'blueprint-grid rounded-3xl border-4 border-blue-900 shadow-2xl p-6 lg:p-8 min-h-[820px] relative overflow-hidden transition-all duration-300';
+        btnBlueprint.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-blue-100 text-blue-950 shadow-sm';
+      } else if (flavor === 'gallery') {
+        board.className = 'bg-[#FAF8F5] rounded-3xl border-4 border-slate-200 shadow-2xl p-6 lg:p-8 min-h-[820px] relative overflow-hidden transition-all duration-300';
+        btnGallery.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-white text-slate-900 shadow-sm';
+      }
+      lucide.createIcons();
+    }
+
+    function pinNewNote() {
+      alert("Pinned a new tactile sticky card to your studio board!");
+    }
+
+    function filterBoardBy(category) {
+      alert("Filtering pin-up board for: " + category.toUpperCase());
+    }
+  </script>
+</body>
+</html>

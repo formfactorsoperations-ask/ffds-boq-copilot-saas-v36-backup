@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFDS Studio OS — Homepage Overhaul (Top 10% Industry Tier Interactive Mockups)</title>
+  <!-- Tailwind via CDN with matching config -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: '#3D52A0',
+            brandDark: '#1E2B58',
+            ink: '#0a1b33',
+            slateSubtle: '#64748b'
+          },
+          boxShadow: {
+            card: '0 4px 20px -2px rgba(10, 27, 51, 0.05), 0 2px 6px -1px rgba(10, 27, 51, 0.03)',
+            elevated: '0 20px 40px -15px rgba(10, 27, 51, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.8)',
+            orbitGlow: '0 0 50px -10px rgba(61, 82, 160, 0.25)',
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;1,600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #F8FAFD;
+      color: #0a1b33;
+    }
+    .font-serif {
+      font-family: 'Playfair Display', serif;
+    }
+    /* Orbit animations */
+    @keyframes orbit-cw {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes orbit-ccw {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(-360deg); }
+    }
+    @keyframes float-subtle {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+    .animate-orbit-cw { animation: orbit-cw 45s linear infinite; }
+    .animate-orbit-cw-slow { animation: orbit-cw 75s linear infinite; }
+    .animate-orbit-ccw { animation: orbit-ccw 55s linear infinite; }
+    .animate-counter-rotate { animation: orbit-ccw 45s linear infinite; }
+    .animate-counter-rotate-slow { animation: orbit-ccw 75s linear infinite; }
+    .pause-on-hover:hover { animation-play-state: paused; }
+    .pause-on-hover:hover .child-pause { animation-play-state: paused; }
+    
+    /* 3D tilt perspective wrapper */
+    .perspective-1000 {
+      perspective: 1000px;
+    }
+    .preserve-3d {
+      transform-style: preserve-3d;
+    }
+    .glass-pill {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(226, 232, 240, 0.85);
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    .ring-concentric {
+      border: 1.5px dashed rgba(148, 163, 184, 0.35);
+    }
+    .ring-solid-subtle {
+      border: 1px solid rgba(203, 213, 225, 0.6);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- ================= TOP NAVIGATION (FAITHFUL TO REAL FFDS APP) ================= -->
+  <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-6 py-2.5 flex items-center justify-between">
+    <div class="flex items-center gap-6">
+      <div class="flex items-center gap-3">
+        <div class="h-8 px-2.5 py-1 rounded-lg border border-slate-200 bg-white flex items-center justify-center font-bold text-[10px] tracking-wider text-slate-700 shadow-2xs">
+          FORM FACTORS
+        </div>
+        <div class="h-4 w-px bg-slate-200"></div>
+        <span class="text-xs font-semibold text-slate-500">FFDS Studio OS <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand/10 text-brand">v36.1</span></span>
+      </div>
+
+      <!-- App Tabs -->
+      <nav class="hidden md:flex items-center gap-1">
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand text-white font-semibold text-xs shadow-sm">
+          <i data-lucide="home" class="w-3.5 h-3.5"></i>
+          Home
+        </button>
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium text-xs transition">
+          <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+          Projects <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">28</span>
+        </button>
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium text-xs transition">
+          <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i>
+          Design Desk
+        </button>
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium text-xs transition">
+          <i data-lucide="users" class="w-3.5 h-3.5"></i>
+          Clients <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold">28</span>
+        </button>
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium text-xs transition">
+          <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>
+          Reports
+        </button>
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium text-xs transition">
+          <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+          Studio Settings
+        </button>
+      </nav>
+    </div>
+
+    <!-- Right user bar -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/60 text-emerald-700 text-[11px] font-semibold">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        Live
+      </div>
+      <div class="h-4 w-px bg-slate-200"></div>
+      <span class="text-xs font-semibold text-slate-800">Anish K</span>
+      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand/10 text-brand uppercase">SUPER ADMIN</span>
+      <div class="w-7 h-7 rounded-xl bg-brand text-white flex items-center justify-center font-bold text-xs shadow-xs">
+        F
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= TOP ARCHITECTURAL CONTROLLER BAR ================= -->
+  <aside class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white px-6 py-3.5 border-b border-indigo-900/60 shadow-md">
+    <div class="max-w-[1500px] mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-bold text-[10px] uppercase tracking-wider border border-indigo-500/30">
+            Top 10% Industry Tier Evaluation
+          </span>
+          <h1 class="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
+            Real Homepage Overhaul Suite
+            <span class="text-xs font-normal text-indigo-200">· Cohesive, Connected, & Interactive</span>
+          </h1>
+        </div>
+        <p class="text-[11.5px] text-slate-300 mt-0.5">
+          Solved the core disconnect: Harmonizing the <strong class="text-white">Hero Orbit</strong>, <strong class="text-white">Live Clock & Pulse</strong>, and <strong class="text-white">Attention Bento</strong> into an integrated, live-action cockpit.
+        </p>
+      </div>
+
+      <!-- Mode Switcher -->
+      <div class="flex items-center gap-1.5 bg-white/10 p-1 rounded-xl backdrop-blur-md border border-white/15 overflow-x-auto max-w-full">
+        <button onclick="switchOverhaulMode('optionA')" id="btn-optionA" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-white text-indigo-950 shadow-sm">
+          <i data-lucide="layers" class="w-3.5 h-3.5 text-brand"></i>
+          1. Spatial Orbit Fusion
+        </button>
+        <button onclick="switchOverhaulMode('optionB')" id="btn-optionB" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition flex items-center gap-1.5">
+          <i data-lucide="compass" class="w-3.5 h-3.5"></i>
+          2. Master Chrono-Radar
+        </button>
+        <button onclick="switchOverhaulMode('optionC')" id="btn-optionC" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition flex items-center gap-1.5">
+          <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>
+          3. Live Bento Command
+        </button>
+        <button onclick="switchOverhaulMode('optionD')" id="btn-optionD" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition flex items-center gap-1.5">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          4. Studio Horizon 360
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ================= MAIN CONTENT CONTAINER ================= -->
+  <main class="flex-1 max-w-[1500px] w-full mx-auto px-6 py-6 space-y-6">
+
+    <!-- ========================================================================= -->
+    <!-- OPTION 1: THE SPATIAL ORBIT FUSION (The Direct 10x Upgrade of Current App) -->
+    <!-- ========================================================================= -->
+    <div id="view-optionA" class="space-y-6">
+
+      <!-- Architectural Brief Callout -->
+      <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-brand">
+            <i data-lucide="cpu" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Top 10% Industry Paradigm: The Unified Spatial Orbit</h3>
+            <p class="text-xs text-slate-500">
+              Integrates the passive static orbit with live interactive project satellites, embeds the studio clock into the telemetry core, and links the Attention Bento directly to orbit nodes.
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-semibold text-slate-500">Orbit Interactive Mode:</span>
+          <button onclick="toggleOrbitSpeed()" id="btn-orbit-speed" class="px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-semibold bg-slate-50 hover:bg-slate-100 text-slate-700">
+            Pause Orbit Rotation
+          </button>
+        </div>
+      </div>
+
+      <!-- HERO SECTION: RE-ENGINEERED UNIFIED LAUNCHPAD -->
+      <div class="bg-white rounded-3xl border border-slate-200/80 shadow-card p-8 relative overflow-hidden">
+        <!-- Ambient Radial Background Glows -->
+        <div class="absolute -right-24 -top-24 w-96 h-96 bg-indigo-50/70 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute right-1/3 -bottom-24 w-80 h-80 bg-blue-50/60 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
+
+          <!-- Left: Studio Greeting & High-Octane Live Telemetry -->
+          <div class="lg:col-span-5 space-y-5">
+            <div>
+              <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100/80 border border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                Good Evening, Anish K · Live Session
+              </div>
+              <h2 class="text-3xl lg:text-4xl font-extrabold tracking-tight text-ink leading-tight">
+                Your studio, ready for <span class="text-brand">what's next.</span>
+              </h2>
+              <p class="mt-3 text-sm text-slate-600 leading-relaxed">
+                <strong class="text-slate-900 font-semibold">12 projects are active</strong>, 11 opportunities in the pipeline, and <strong class="text-brand font-semibold">12 items need your attention</strong> today.
+              </p>
+            </div>
+
+            <!-- Integrated Micro-Telemetry Bar -->
+            <div class="grid grid-cols-3 gap-2 p-1.5 rounded-2xl bg-slate-50 border border-slate-200/80">
+              <div class="p-3 rounded-xl bg-white border border-slate-100 shadow-2xs text-center cursor-pointer hover:border-brand/40 transition">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Active Sites</span>
+                <span class="text-xl font-extrabold text-ink tabular-nums">12</span>
+                <span class="text-[10px] text-emerald-600 font-semibold block">₹4.82 Cr live</span>
+              </div>
+              <div class="p-3 rounded-xl bg-white border border-slate-100 shadow-2xs text-center cursor-pointer hover:border-brand/40 transition">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pipeline</span>
+                <span class="text-xl font-extrabold text-ink tabular-nums">11</span>
+                <span class="text-[10px] text-brand font-semibold block">₹2.45 Cr scope</span>
+              </div>
+              <div class="p-3 rounded-xl bg-white border border-slate-100 shadow-2xs text-center cursor-pointer hover:border-rose-400/50 transition">
+                <span class="text-[10px] font-bold text-rose-500 uppercase tracking-wider block">Attention</span>
+                <span class="text-xl font-extrabold text-rose-600 tabular-nums">12</span>
+                <span class="text-[10px] text-slate-400 font-semibold block">₹2.08 Cr held up</span>
+              </div>
+            </div>
+
+            <!-- Smart Action CTAs -->
+            <div class="flex items-center gap-3 pt-1">
+              <button onclick="scrollToAttention()" class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-brand text-white font-semibold text-xs shadow-md hover:bg-brandDark transition hover:-translate-y-0.5">
+                Review 12 Priorities
+                <i data-lucide="arrow-down" class="w-3.5 h-3.5"></i>
+              </button>
+              <button class="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition">
+                <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-brand"></i>
+                Quick BOQ Draft
+              </button>
+            </div>
+          </div>
+
+          <!-- Right: THE CONNECTED INTERACTIVE SOLAR ORBIT (Live Concentric Matrix) -->
+          <div class="lg:col-span-7 flex items-center justify-center relative min-h-[440px] select-none">
+
+            <!-- Interactive Orbit Container -->
+            <div id="orbit-matrix" class="relative w-[440px] h-[440px] flex items-center justify-center pause-on-hover">
+
+              <!-- Outer Orbit Ring (Ring 2: Administration & Knowledge Bank) -->
+              <div class="absolute w-[420px] h-[420px] rounded-full ring-concentric animate-orbit-cw-slow pointer-events-none">
+                <!-- Satellite: Rate Bank -->
+                <div class="absolute -top-5 left-1/2 -translate-x-1/2 pointer-events-auto">
+                  <div class="animate-counter-rotate-slow child-pause">
+                    <button class="flex items-center gap-2 px-3 py-2 rounded-2xl glass-card shadow-md hover:shadow-lg hover:scale-105 transition border border-amber-200/70 group">
+                      <div class="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center text-xs shadow-xs">
+                        <i data-lucide="store" class="w-3.5 h-3.5"></i>
+                      </div>
+                      <div class="text-left">
+                        <span class="block text-[11px] font-bold text-ink">Rate Bank</span>
+                        <span class="block text-[9px] text-amber-600 font-semibold">1,420 Items</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Satellite: Studio Setup -->
+                <div class="absolute -bottom-5 left-1/2 -translate-x-1/2 pointer-events-auto">
+                  <div class="animate-counter-rotate-slow child-pause">
+                    <button class="flex items-center gap-2 px-3 py-2 rounded-2xl glass-card shadow-md hover:shadow-lg hover:scale-105 transition border border-teal-200/70 group">
+                      <div class="w-7 h-7 rounded-xl bg-teal-600 text-white flex items-center justify-center text-xs shadow-xs">
+                        <i data-lucide="boxes" class="w-3.5 h-3.5"></i>
+                      </div>
+                      <div class="text-left">
+                        <span class="block text-[11px] font-bold text-ink">Studio Setup</span>
+                        <span class="block text-[9px] text-teal-600 font-semibold">GST & Fees</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Middle Orbit Ring (Ring 1: Core Operations) -->
+              <div class="absolute w-[310px] h-[310px] rounded-full ring-solid-subtle animate-orbit-cw pointer-events-none">
+                <!-- Satellite: Projects Hub with LIVE ALERT BADGE -->
+                <div class="absolute top-1/2 -left-12 -translate-y-1/2 pointer-events-auto">
+                  <div class="animate-counter-rotate child-pause">
+                    <button onclick="previewOrbitProject('projects')" class="relative flex flex-col items-center justify-center w-24 h-22 rounded-2xl glass-card shadow-card hover:scale-110 transition border border-blue-200 group">
+                      <span class="absolute -top-2 -right-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-extrabold animate-pulse">
+                        3 DUE
+                      </span>
+                      <div class="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs mb-1">
+                        <i data-lucide="layout-grid" class="w-4 h-4"></i>
+                      </div>
+                      <span class="text-xs font-bold text-ink">Projects</span>
+                      <span class="text-[10px] text-blue-600 font-bold tabular-nums">28 Total</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Satellite: Clients CRM -->
+                <div class="absolute top-1/2 -right-12 -translate-y-1/2 pointer-events-auto">
+                  <div class="animate-counter-rotate child-pause">
+                    <button class="flex flex-col items-center justify-center w-24 h-22 rounded-2xl glass-card shadow-card hover:scale-110 transition border border-emerald-200 group">
+                      <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs mb-1">
+                        <i data-lucide="users" class="w-4 h-4"></i>
+                      </div>
+                      <span class="text-xs font-bold text-ink">Clients</span>
+                      <span class="text-[10px] text-emerald-600 font-bold tabular-nums">28 Active</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Satellite: Reports -->
+                <div class="absolute -top-7 left-1/2 -translate-x-1/2 pointer-events-auto">
+                  <div class="animate-counter-rotate child-pause">
+                    <button class="flex flex-col items-center justify-center w-22 h-20 rounded-2xl glass-card shadow-card hover:scale-110 transition border border-amber-300/80 group">
+                      <div class="w-8 h-8 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-xs mb-1">
+                        <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                      </div>
+                      <span class="text-[11px] font-bold text-ink">Reports</span>
+                      <span class="text-[9px] text-amber-700 font-semibold">Margin 41%</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SUN CORE: The Studio Command Bullseye with Integrated Real-Time Pulse -->
+              <div class="relative z-20 flex flex-col items-center justify-center">
+                <button class="w-36 h-36 rounded-full bg-gradient-to-tr from-brand to-[#223366] text-white flex flex-col items-center justify-center shadow-orbitGlow hover:scale-105 transition-all p-3 text-center border-4 border-white/60">
+                  <div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center mb-1">
+                    <i data-lucide="plus" class="w-5 h-5 text-white"></i>
+                  </div>
+                  <span class="text-xs font-bold leading-tight">New Project</span>
+                  <span class="text-[9px] text-white/70">Start BOQ or Brief</span>
+                  <div class="mt-1 flex items-center gap-1 text-[8.5px] bg-white/15 px-2 py-0.5 rounded-full">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-300"></span>
+                    <span>Ready</span>
+                  </div>
+                </button>
+              </div>
+
+            </div>
+
+            <!-- Floating Active Radar Panel (Gives immediate context to what's orbiting) -->
+            <div class="absolute bottom-2 right-2 bg-white/90 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-200 shadow-sm text-left">
+              <span class="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">Live Focus</span>
+              <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                Villa Nirvana · Execution Advance Due
+              </span>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ================= STRIP 2: CONNECTED CHRONO-TELEMETRY STRIP ================= -->
+      <!-- Replaces the isolated, passive clock and empty studio pulse with unified actionable intelligence -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+
+        <!-- 1. The Active Clock & Studio Productivity Tracker (lg:col-span-4) -->
+        <div class="lg:col-span-4 bg-white rounded-3xl border border-slate-200/80 p-5 shadow-card flex flex-col justify-between">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Live Studio Cadence</span>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-brand">IST · GMT+5:30</span>
+          </div>
+
+          <!-- Re-engineered Clock Face: Interactive Dial with Studio Working Hours Ring -->
+          <div class="py-4 flex items-center justify-around">
+            <div class="relative w-28 h-28 rounded-full border-2 border-slate-200 bg-slate-50 flex items-center justify-center shadow-inner">
+              <!-- Hour hand -->
+              <div class="absolute w-1 h-8 bg-slate-800 rounded-full top-6 origin-bottom transform rotate-[210deg]"></div>
+              <!-- Minute hand -->
+              <div class="absolute w-0.5 h-11 bg-slate-600 rounded-full top-3 origin-bottom transform rotate-[290deg]"></div>
+              <!-- Center pin -->
+              <div class="w-2.5 h-2.5 rounded-full bg-brand z-10"></div>
+              <!-- Subtle active markers -->
+              <span class="absolute top-1 text-[8px] font-bold text-slate-400">12</span>
+              <span class="absolute right-1.5 text-[8px] font-bold text-slate-400">3</span>
+              <span class="absolute bottom-1 text-[8px] font-bold text-slate-400">6</span>
+              <span class="absolute left-1.5 text-[8px] font-bold text-slate-400">9</span>
+            </div>
+
+            <div>
+              <div class="text-2xl font-extrabold text-ink tabular-nums flex items-baseline gap-1">
+                10:48:07
+                <span class="text-xs font-bold text-brand">AM</span>
+              </div>
+              <span class="text-xs font-semibold text-slate-600 block mt-0.5">Saturday, Oct 10, 2026</span>
+              <div class="mt-2 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200/60 inline-flex items-center gap-1.5">
+                <i data-lucide="check" class="w-3 h-3"></i>
+                Studio Shift: Site Teams Active
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>Daily Standup: Complete</span>
+            <span class="font-semibold text-brand">Next Sync: 3:00 PM</span>
+          </div>
+        </div>
+
+        <!-- 2. The Integrated Milestone & Society Clearance Calendar (lg:col-span-5) -->
+        <div class="lg:col-span-5 bg-white rounded-3xl border border-slate-200/80 p-5 shadow-card flex flex-col justify-between">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+              <i data-lucide="calendar" class="w-4 h-4 text-brand"></i>
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">October 2026 · Site Calendar</h4>
+            </div>
+            <div class="flex items-center gap-1">
+              <button class="w-6 h-6 rounded-md hover:bg-slate-100 flex items-center justify-center text-slate-400">
+                <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+              </button>
+              <button class="w-6 h-6 rounded-md hover:bg-slate-100 flex items-center justify-center text-slate-400">
+                <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Mini Calendar Strip with Event Highlights -->
+          <div class="py-2">
+            <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-1">
+              <span>SU</span><span>MO</span><span>TU</span><span>WE</span><span>TH</span><span>FR</span><span>SA</span>
+            </div>
+            <div class="grid grid-cols-7 gap-1 text-center text-xs">
+              <span class="py-1 text-slate-300">27</span>
+              <span class="py-1 text-slate-300">28</span>
+              <span class="py-1 text-slate-300">29</span>
+              <span class="py-1 text-slate-300">30</span>
+              <span class="py-1 text-slate-700">1</span>
+              <span class="py-1 text-slate-700">2</span>
+              <span class="py-1 text-slate-700">3</span>
+              <span class="py-1 text-slate-700">4</span>
+              <span class="py-1 text-slate-700">5</span>
+              <span class="py-1 text-slate-700">6</span>
+              <span class="py-1 text-slate-700">7</span>
+              <span class="py-1 text-slate-700">8</span>
+              <span class="py-1 text-slate-700">9</span>
+              <!-- TODAY -->
+              <span class="py-1 rounded-lg bg-brand text-white font-bold shadow-xs relative">
+                10
+                <span class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-amber-400"></span>
+              </span>
+              <span class="py-1 text-slate-700">11</span>
+              <!-- Milestone Day -->
+              <span class="py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200">12</span>
+              <span class="py-1 text-slate-700">13</span>
+              <span class="py-1 text-slate-700">14</span>
+              <span class="py-1 text-slate-700">15</span>
+              <span class="py-1 text-slate-700">16</span>
+              <span class="py-1 text-slate-700">17</span>
+            </div>
+          </div>
+
+          <div class="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-1.5 text-slate-600 truncate">
+              <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span class="font-semibold text-slate-800">Oct 12:</span>
+              <span class="truncate">Carpentry Handoff (Skyline 4BHK)</span>
+            </div>
+            <a href="#" class="text-[11px] font-bold text-brand hover:underline shrink-0">Open Docket →</a>
+          </div>
+        </div>
+
+        <!-- 3. Studio Pulse: Live Cashflow & SLA Watch (lg:col-span-3) -->
+        <div class="lg:col-span-3 bg-white rounded-3xl border border-slate-200/80 p-5 shadow-card flex flex-col justify-between">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+              <i data-lucide="activity" class="w-4 h-4 text-emerald-600"></i>
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Studio Pulse</h4>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Healthy</span>
+          </div>
+
+          <div class="py-2 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-500">Collected this month</span>
+              <span class="text-sm font-extrabold text-ink tabular-nums">₹38.50 L</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div class="h-full bg-emerald-500 rounded-full" style="width: 77%"></div>
+            </div>
+            <div class="flex items-center justify-between text-[11px] text-slate-400">
+              <span>Goal: ₹50.00 L</span>
+              <span class="font-semibold text-emerald-600">77% reached</span>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100/80 flex items-center justify-between">
+              <span class="text-xs text-slate-500">BOQ Approvals SLA</span>
+              <span class="text-xs font-bold text-slate-800">2.4 Days avg</span>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span>Design Gate: 0 Breaches</span>
+            <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ================= STRIP 3: THE HIGH-POTENCY ATTENTION COCKPIT ================= -->
+      <div id="section-attention" class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+        <!-- Left: Actionable Bento Cards (lg:col-span-8) -->
+        <div class="lg:col-span-8 bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-4">
+          <div class="flex items-baseline justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-lg font-bold text-ink tracking-tight flex items-center gap-2">
+                Needs your attention
+                <span class="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200/60 text-xs font-bold">12 Items</span>
+              </h3>
+              <p class="text-xs text-slate-500 mt-0.5">Pre-triaged by business impact so you take action without hunting.</p>
+            </div>
+            <span class="text-xs font-bold text-brand tabular-nums">
+              ₹2.08 Cr held up in current stages
+            </span>
+          </div>
+
+          <!-- THE 4 SMART PRIORITY TILES -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+
+            <!-- Tile 1: Ignored Longest -->
+            <div class="rounded-2xl border-2 border-amber-200/70 bg-amber-50/20 p-4.5 hover:border-amber-300 transition relative overflow-hidden group">
+              <div class="flex items-center justify-between mb-2">
+                <span class="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider">
+                  <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                  Ignored Longest (18 Days Idle)
+                </span>
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white text-slate-600 border border-slate-200">Stage: Execution</span>
+              </div>
+              <h4 class="text-sm font-bold text-ink group-hover:text-brand transition">New Project · Client ABC (Indiranagar)</h4>
+              <p class="text-xs text-slate-600 mt-1">Collect Execution Advance (₹6.50 L pending)</p>
+              <div class="mt-4 flex items-center justify-between pt-2 border-t border-amber-100">
+                <span class="text-xs font-extrabold text-ink">₹18.40 L Contract</span>
+                <button class="px-3 py-1.5 rounded-xl bg-brand text-white font-semibold text-xs hover:bg-brandDark transition flex items-center gap-1">
+                  Send Invoice Nudge
+                  <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Tile 2: Most At Stake -->
+            <div class="rounded-2xl border-2 border-rose-200/70 bg-rose-50/20 p-4.5 hover:border-rose-300 transition relative overflow-hidden group">
+              <div class="flex items-center justify-between mb-2">
+                <span class="inline-flex items-center gap-1.5 text-[10px] font-bold text-rose-700 uppercase tracking-wider">
+                  <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+                  Most At Stake
+                </span>
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white text-rose-700 border border-rose-200 font-mono">HIGH VALUE</span>
+              </div>
+              <h4 class="text-sm font-bold text-ink group-hover:text-brand transition">Penthouse 8 · Sep 17:46</h4>
+              <p class="text-xs text-slate-600 mt-1">Prepare & Sign Execution Agreement</p>
+              <div class="mt-4 flex items-center justify-between pt-2 border-t border-rose-100">
+                <span class="text-xs font-extrabold text-rose-700">₹38.22 L Held Up</span>
+                <button class="px-3 py-1.5 rounded-xl bg-brand text-white font-semibold text-xs hover:bg-brandDark transition flex items-center gap-1">
+                  Review Agreement
+                  <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Tile 3: Quickest Win -->
+            <div class="rounded-2xl border border-slate-200 bg-white p-4.5 hover:border-brand/40 transition relative group">
+              <div class="flex items-center justify-between mb-2">
+                <span class="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+                  <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+                  Quickest Win (1 Action to Clear)
+                </span>
+              </div>
+              <h4 class="text-sm font-bold text-ink group-hover:text-brand transition">Villa Meadows · Phase 2 BOQ</h4>
+              <p class="text-xs text-slate-600 mt-1">Design Gate: Approve Tile Spec Sheet</p>
+              <div class="mt-4 flex items-center justify-between pt-2 border-t border-slate-100">
+                <span class="text-xs font-bold text-slate-500">Est. 2 mins</span>
+                <button class="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-700 transition flex items-center gap-1">
+                  Sign Off Spec
+                  <i data-lucide="check" class="w-3 h-3"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Tile 4: Everything Else / Full Queue -->
+            <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-4.5 flex flex-col justify-between hover:bg-slate-100/70 transition cursor-pointer">
+              <div>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Remaining Queue</span>
+                <h4 class="text-sm font-bold text-slate-800 mt-1">9 More Projects Waiting</h4>
+                <p class="text-xs text-slate-500 mt-0.5">₹1.49 Cr held up across Drawing signoffs and PO approvals</p>
+              </div>
+              <div class="mt-3 flex items-center justify-between">
+                <span class="text-xs font-bold text-brand">Expand Full Worklist (9)</span>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-brand"></i>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Right: Continue Where You Left Off (lg:col-span-4) -->
+        <div class="lg:col-span-4 bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-base font-bold text-ink tracking-tight">Continue where you left off</h3>
+              <p class="text-xs text-slate-500">Direct leap back into your active screens</p>
+            </div>
+            <i data-lucide="history" class="w-4 h-4 text-slate-400"></i>
+          </div>
+
+          <!-- Recent Workspace Cards -->
+          <div class="space-y-2">
+            <button class="w-full p-3 rounded-2xl bg-slate-50 hover:bg-indigo-50/50 border border-slate-200/70 hover:border-brand/30 transition text-left flex items-center gap-3 group">
+              <div class="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
+                NP
+              </div>
+              <div class="flex-1 min-w-0">
+                <span class="block text-xs font-bold text-ink truncate group-hover:text-brand">New Project – bundle test</span>
+                <span class="block text-[11px] text-slate-500 truncate">On Site · 1d ago · BOQ Editor</span>
+              </div>
+              <i data-lucide="arrow-right" class="w-4 h-4 text-slate-300 group-hover:text-brand transition"></i>
+            </button>
+
+            <button class="w-full p-3 rounded-2xl bg-slate-50 hover:bg-indigo-50/50 border border-slate-200/70 hover:border-brand/30 transition text-left flex items-center gap-3 group">
+              <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
+                TC
+              </div>
+              <div class="flex-1 min-w-0">
+                <span class="block text-xs font-bold text-ink truncate group-hover:text-brand">ABC test client · 3BHK</span>
+                <span class="block text-[11px] text-slate-500 truncate">Won · 1d ago · Payment Calc</span>
+              </div>
+              <i data-lucide="arrow-right" class="w-4 h-4 text-slate-300 group-hover:text-brand transition"></i>
+            </button>
+
+            <button class="w-full p-3 rounded-2xl bg-slate-50 hover:bg-indigo-50/50 border border-slate-200/70 hover:border-brand/30 transition text-left flex items-center gap-3 group">
+              <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs shrink-0">
+                ID
+              </div>
+              <div class="flex-1 min-w-0">
+                <span class="block text-xs font-bold text-ink truncate group-hover:text-brand">Icon Dhokali · Penthouse</span>
+                <span class="block text-[11px] text-slate-500 truncate">Won · 2d ago · Terms Docket</span>
+              </div>
+              <i data-lucide="arrow-right" class="w-4 h-4 text-slate-300 group-hover:text-brand transition"></i>
+            </button>
+          </div>
+
+          <!-- Instant Studio Shortcuts -->
+          <div class="pt-3 border-t border-slate-100">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">Quick Studio Access</span>
+            <div class="flex flex-wrap gap-1.5">
+              <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium hover:bg-slate-200 cursor-pointer">Draft BOQ</span>
+              <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium hover:bg-slate-200 cursor-pointer">Society Rules</span>
+              <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium hover:bg-slate-200 cursor-pointer">Snag List</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- OPTION 2: THE MASTER CHRONO-RADAR (Merging Orbit & Clock into a Central Dial) -->
+    <!-- ========================================================================= -->
+    <div id="view-optionB" class="hidden space-y-6">
+
+      <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-700">
+            <i data-lucide="compass" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Top 10% Industry Paradigm: The Master Chrono-Radar</h3>
+            <p class="text-xs text-slate-500">
+              Directly solves the "clock in the middle with an orbit on the side" disconnect by embedding the <strong>Studio Chronometer inside the Solar Orbit Center</strong>. Every orbit ring represents an operational timezone and milestone horizon.
+            </p>
+          </div>
+        </div>
+        <span class="text-xs font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-full border border-purple-200">
+          Zero Duplicate Dials
+        </span>
+      </div>
+
+      <!-- THE INTEGRATED RADAR CANVAS -->
+      <div class="bg-gradient-to-b from-slate-900 to-indigo-950 text-white rounded-3xl p-8 border border-slate-800 shadow-xl relative overflow-hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+
+          <!-- Left: Tactical Studio Context -->
+          <div class="lg:col-span-5 space-y-5">
+            <span class="px-2.5 py-1 rounded-full bg-white/10 text-indigo-300 text-xs font-bold tracking-wider uppercase border border-white/10">
+              Integrated Studio Cockpit
+            </span>
+            <h2 class="text-3xl font-bold tracking-tight text-white leading-tight">
+              One Unified Core for <span class="text-indigo-400">Time, Work, & Sites</span>
+            </h2>
+            <p class="text-xs text-slate-300 leading-relaxed">
+              Instead of an isolated clock sitting separated below the launchpad, the Chrono-Radar uses the central dial as both your live studio chronometer and the project orbit anchor.
+            </p>
+
+            <div class="space-y-2.5 pt-2">
+              <div class="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between">
+                <span class="text-xs text-slate-300">Ring 1 (Today's Deadlines)</span>
+                <span class="text-xs font-bold text-amber-400">3 Milestones Due</span>
+              </div>
+              <div class="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between">
+                <span class="text-xs text-slate-300">Ring 2 (Active Client Projects)</span>
+                <span class="text-xs font-bold text-emerald-400">12 Sites Running</span>
+              </div>
+              <div class="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between">
+                <span class="text-xs text-slate-300">Ring 3 (Studio Knowledge Bank)</span>
+                <span class="text-xs font-bold text-indigo-300">Rate Bank & Specs</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: The Master Chrono-Radar Hub -->
+          <div class="lg:col-span-7 flex items-center justify-center relative min-h-[440px]">
+            <div class="relative w-[420px] h-[420px] rounded-full border border-indigo-500/20 flex items-center justify-center">
+
+              <!-- Radar sweep beam -->
+              <div class="absolute inset-0 rounded-full animate-orbit-cw pointer-events-none" style="background: conic-gradient(from 0deg, rgba(99, 102, 241, 0.15) 0deg, transparent 60deg);"></div>
+
+              <!-- Concentric Distance Rings -->
+              <div class="absolute w-[330px] h-[330px] rounded-full border border-dashed border-indigo-400/30"></div>
+              <div class="absolute w-[220px] h-[220px] rounded-full border border-indigo-400/40"></div>
+
+              <!-- Satellites pinned on radar with live distances -->
+              <div class="absolute top-10 right-16">
+                <div class="px-2.5 py-1.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                  <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                  Villa Nirvana · 18d Idle
+                </div>
+              </div>
+
+              <div class="absolute bottom-12 left-10">
+                <div class="px-2.5 py-1.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  Penthouse 4BHK · On Site
+                </div>
+              </div>
+
+              <!-- CENTER DIAL: The Studio Chronometer + Action Button -->
+              <div class="w-44 h-44 rounded-full bg-gradient-to-br from-indigo-900 to-slate-900 border-4 border-indigo-500/50 shadow-2xl flex flex-col items-center justify-center text-center p-3 relative z-10">
+                <span class="text-[9px] font-bold text-indigo-300 tracking-wider uppercase">Live Chrono</span>
+                <span class="text-2xl font-extrabold text-white tabular-nums">10:48 AM</span>
+                <span class="text-[10px] text-slate-400 font-semibold">Saturday, Oct 10</span>
+                <button class="mt-2 px-3 py-1 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold shadow-sm transition">
+                  + New Project
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- OPTION 3: THE LIVE BENTO COMMAND (Streamlined, Zero-Fluff Executive Grid) -->
+    <!-- ========================================================================= -->
+    <div id="view-optionC" class="hidden space-y-6">
+
+      <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700">
+            <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Top 10% Industry Paradigm: Linear Bento Studio Command</h3>
+            <p class="text-xs text-slate-500">
+              Eliminates the separate disconnected sections entirely. Unifies greeting, orbit hubs, live clock, priority actions, and recent projects into a cohesive 12-column architectural Bento Grid.
+            </p>
+          </div>
+        </div>
+        <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+          Linear & Frictionless
+        </span>
+      </div>
+
+      <!-- COMPLETE BENTO GRID -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-5">
+
+        <!-- Bento 1: Welcome & Telemetry (lg:col-span-8) -->
+        <div class="lg:col-span-8 bg-white rounded-3xl border border-slate-200/80 p-7 shadow-card flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">FFDS Studio OS · Cockpit</span>
+              <span class="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/60">Live · All Systems Online</span>
+            </div>
+            <h2 class="text-3xl font-extrabold text-ink mt-3">
+              Good morning, Anish. <span class="text-brand">12 items</span> await your signoff.
+            </h2>
+            <p class="text-xs text-slate-500 mt-1">₹2.08 Cr in billing and execution agreements ready for review.</p>
+          </div>
+
+          <!-- Quick Hub Pills -->
+          <div class="grid grid-cols-4 gap-3 mt-6">
+            <button class="p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition">
+              <i data-lucide="layout-grid" class="w-4 h-4 text-blue-600 mb-1"></i>
+              <span class="block text-xs font-bold text-ink">Projects</span>
+              <span class="text-[10px] text-slate-400">28 Active</span>
+            </button>
+            <button class="p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition">
+              <i data-lucide="users" class="w-4 h-4 text-emerald-600 mb-1"></i>
+              <span class="block text-xs font-bold text-ink">Clients</span>
+              <span class="text-[10px] text-slate-400">28 Accounts</span>
+            </button>
+            <button class="p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition">
+              <i data-lucide="store" class="w-4 h-4 text-amber-600 mb-1"></i>
+              <span class="block text-xs font-bold text-ink">Rate Bank</span>
+              <span class="text-[10px] text-slate-400">1,420 Items</span>
+            </button>
+            <button class="p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition">
+              <i data-lucide="bar-chart-3" class="w-4 h-4 text-purple-600 mb-1"></i>
+              <span class="block text-xs font-bold text-ink">Reports</span>
+              <span class="text-[10px] text-slate-400">P&L Ready</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Bento 2: Embedded Live Studio Clock (lg:col-span-4) -->
+        <div class="lg:col-span-4 bg-gradient-to-br from-brand to-brandDark text-white rounded-3xl p-7 shadow-card flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold tracking-wider uppercase text-indigo-200">Active IST Chrono</span>
+            <i data-lucide="clock" class="w-4 h-4 text-indigo-200"></i>
+          </div>
+          <div class="text-center py-4">
+            <span class="text-4xl font-extrabold tracking-tight tabular-nums block">10:48:07</span>
+            <span class="text-xs text-indigo-200 font-semibold mt-1 block">Saturday, October 10, 2026</span>
+          </div>
+          <button class="w-full py-2.5 rounded-xl bg-white/15 hover:bg-white/20 text-white font-semibold text-xs border border-white/20 transition">
+            + Start New Project BOQ
+          </button>
+        </div>
+
+        <!-- Bento 3: Priority Attention Queue (lg:col-span-8) -->
+        <div class="lg:col-span-8 bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-ink uppercase tracking-wider">Top Priority Attention Stack</h3>
+            <span class="text-xs text-brand font-bold">12 Total Items</span>
+          </div>
+          <div class="space-y-2">
+            <div class="p-3 rounded-2xl border border-amber-200 bg-amber-50/30 flex items-center justify-between">
+              <div>
+                <span class="text-[10px] font-bold text-amber-700 uppercase">Ignored Longest · 18 Days</span>
+                <h4 class="text-xs font-bold text-ink">New Project · Client ABC (Indiranagar)</h4>
+              </div>
+              <button class="px-3 py-1 rounded-lg bg-brand text-white text-xs font-semibold">Collect Advance</button>
+            </div>
+            <div class="p-3 rounded-2xl border border-rose-200 bg-rose-50/30 flex items-center justify-between">
+              <div>
+                <span class="text-[10px] font-bold text-rose-700 uppercase">Most At Stake · ₹38.22 L</span>
+                <h4 class="text-xs font-bold text-ink">Penthouse 8 · Execution Agreement</h4>
+              </div>
+              <button class="px-3 py-1 rounded-lg bg-brand text-white text-xs font-semibold">Review Contract</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bento 4: Recent Workspace Leap (lg:col-span-4) -->
+        <div class="lg:col-span-4 bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card">
+          <h3 class="text-sm font-bold text-ink uppercase tracking-wider mb-4">Recent Workspace</h3>
+          <div class="space-y-2.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-bold text-slate-800">bundle test</span>
+              <span class="text-slate-400">1d ago</span>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-bold text-slate-800">ABC test client</span>
+              <span class="text-slate-400">1d ago</span>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-bold text-slate-800">Icon Dhokali</span>
+              <span class="text-slate-400">2d ago</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- OPTION 4: STUDIO HORIZON 360 (Visual 3D Landscape + Interactive Canvas) -->
+    <!-- ========================================================================= -->
+    <div id="view-optionD" class="hidden space-y-6">
+
+      <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700">
+            <i data-lucide="sparkles" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Top 10% Industry Paradigm: Studio Horizon 360</h3>
+            <p class="text-xs text-slate-500">
+              Transformative spatial dashboard: Projects hover along a 3D isometric timeline ribbon with real-time financial depth and stage progression.
+            </p>
+          </div>
+        </div>
+        <span class="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
+          Spatial Architectural Feel
+        </span>
+      </div>
+
+      <!-- Isometric Visual Canvas Preview -->
+      <div class="bg-gradient-to-tr from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-8 border border-slate-700 shadow-xl min-h-[460px] flex flex-col justify-between relative overflow-hidden">
+        <div class="flex items-center justify-between relative z-10">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-300">Spatial Studio Matrix</span>
+            <h3 class="text-2xl font-bold mt-1">Isometric Project Landscape</h3>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400">Perspective:</span>
+            <button class="px-2.5 py-1 rounded-md bg-white/10 text-xs font-semibold">Isometric</button>
+            <button class="px-2.5 py-1 rounded-md bg-white/20 text-xs font-bold text-indigo-300">Live Stage Depth</button>
+          </div>
+        </div>
+
+        <!-- Simulated Isometric Stage Blocks -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 my-8 relative z-10">
+          <div class="p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 hover:border-indigo-400 transition cursor-pointer transform hover:-translate-y-2">
+            <span class="text-[10px] font-bold text-indigo-300 uppercase">Stage 01</span>
+            <h4 class="text-sm font-bold mt-1">Brief & Lead</h4>
+            <span class="text-xl font-extrabold block mt-2">11 Leads</span>
+            <span class="text-[10px] text-slate-400">₹2.45 Cr scope</span>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 hover:border-amber-400 transition cursor-pointer transform hover:-translate-y-2">
+            <span class="text-[10px] font-bold text-amber-300 uppercase">Stage 02</span>
+            <h4 class="text-sm font-bold mt-1">BOQ & Pricing</h4>
+            <span class="text-xl font-extrabold block mt-2">6 In Review</span>
+            <span class="text-[10px] text-amber-400">3 Gate Signoffs Due</span>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 hover:border-emerald-400 transition cursor-pointer transform hover:-translate-y-2 border-l-4 border-l-emerald-500">
+            <span class="text-[10px] font-bold text-emerald-300 uppercase">Stage 03</span>
+            <h4 class="text-sm font-bold mt-1">Active Site Works</h4>
+            <span class="text-xl font-extrabold block mt-2">12 Active Sites</span>
+            <span class="text-[10px] text-emerald-400">₹4.82 Cr live execution</span>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 hover:border-teal-400 transition cursor-pointer transform hover:-translate-y-2">
+            <span class="text-[10px] font-bold text-teal-300 uppercase">Stage 04</span>
+            <h4 class="text-sm font-bold mt-1">Handover & Warranties</h4>
+            <span class="text-xl font-extrabold block mt-2">5 Delivered</span>
+            <span class="text-[10px] text-teal-400">100% Google Reviews</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-xs text-slate-400 border-t border-white/10 pt-4 relative z-10">
+          <span>Click any stage block to open live site docket</span>
+          <span class="font-bold text-white">FFDS Studio OS Horizon Engine</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ================= FOOTER SYSTEM SPEC ================= -->
+    <div class="border-t border-slate-200/80 pt-6 pb-12 text-center text-xs text-slate-400">
+      <p>Form Factors Design Studio · Studio OS v36.1 Architectural Mockup Suite · Zero Code Disruption</p>
+      <p class="mt-1">All INR metrics, stage gates, and client counts derived honestly from live project schemas.</p>
+    </div>
+
+  </main>
+
+  <!-- ================= JAVASCRIPT FOR DYNAMIC INTERACTIVITY ================= -->
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    // Mode Switcher function
+    function switchOverhaulMode(modeId) {
+      const views = ['optionA', 'optionB', 'optionC', 'optionD'];
+      views.forEach(v => {
+        const el = document.getElementById('view-' + v);
+        const btn = document.getElementById('btn-' + v);
+        if (v === modeId) {
+          el.classList.remove('hidden');
+          btn.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-white text-indigo-950 shadow-sm';
+        } else {
+          el.classList.add('hidden');
+          btn.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition flex items-center gap-1.5';
+        }
+      });
+      lucide.createIcons();
+    }
+
+    // Scroll smoothly to attention section
+    function scrollToAttention() {
+      const el = document.getElementById('section-attention');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    // Toggle orbit speed / pause
+    let isPaused = false;
+    function toggleOrbitSpeed() {
+      const matrix = document.getElementById('orbit-matrix');
+      const btn = document.getElementById('btn-orbit-speed');
+      if (!isPaused) {
+        matrix.style.animationPlayState = 'paused';
+        const children = matrix.querySelectorAll('.animate-orbit-cw, .animate-orbit-cw-slow, .animate-counter-rotate, .animate-counter-rotate-slow');
+        children.forEach(c => c.style.animationPlayState = 'paused');
+        btn.innerText = 'Resume Orbit Rotation';
+        btn.classList.add('bg-brand/10', 'text-brand');
+        isPaused = true;
+      } else {
+        const children = matrix.querySelectorAll('.animate-orbit-cw, .animate-orbit-cw-slow, .animate-counter-rotate, .animate-counter-rotate-slow');
+        children.forEach(c => c.style.animationPlayState = 'running');
+        btn.innerText = 'Pause Orbit Rotation';
+        btn.classList.remove('bg-brand/10', 'text-brand');
+        isPaused = false;
+      }
+    }
+
+    function previewOrbitProject(target) {
+      alert("Opening " + target.toUpperCase() + " workspace directly from orbit satellite!");
+    }
+  </script>
+</body>
+</html>

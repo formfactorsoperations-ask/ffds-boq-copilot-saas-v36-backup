@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFDS Studio OS — Homepage Complete Overhaul: Top 10 Interactive Concepts</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans, Playfair Display, JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Three.js CDN for genuine 3D interactive models in Concept 1 and 5 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#3D52A0',
+              dark: '#0A1B33',
+              accent: '#7091E6',
+              surface: '#F8FAFD',
+              card: '#FFFFFF',
+              border: '#E2E8F0'
+            },
+            ink: '#12182F'
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            serif: ['"Playfair Display"', 'serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          },
+          boxShadow: {
+            'card': '0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.03)',
+            'float': '0 20px 40px -10px rgba(10, 27, 51, 0.12), 0 1px 3px rgba(10, 27, 51, 0.05)'
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #F8FAFD;
+      color: #12182F;
+      margin: 0;
+      overflow-x: hidden;
+    }
+    .tabular {
+      font-variant-numeric: tabular-nums;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+    .active-concept-tab {
+      background: #3D52A0 !important;
+      color: #FFFFFF !important;
+      font-weight: 700 !important;
+      box-shadow: 0 4px 12px -2px rgba(61, 82, 160, 0.35);
+    }
+    canvas {
+      outline: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#F8FAFD] text-[#12182F]">
+
+  <!-- TOP HEADER: VISION & TOP 10 SWITCHER -->
+  <header class="sticky top-0 z-50 bg-[#0A1B33] text-white border-b border-indigo-950 px-4 sm:px-8 py-3 shadow-xl">
+    <div class="max-w-[1680px] mx-auto flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3">
+      
+      <!-- Studio Brand & Overhaul Header -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-bold shadow-md">
+          <i data-lucide="layers" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-bold tracking-tight text-white uppercase">FFDS Studio OS</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-extrabold bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">Homepage Overhaul Lab</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-400/30">Top 10 Options</span>
+          </div>
+          <p class="text-xs text-slate-300">Complete Homepage Transformation · From Disconnected Orbit to High-Power Spatial Cockpit</p>
+        </div>
+      </div>
+
+      <!-- Top 10 Option Switcher Chips -->
+      <div class="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 xl:pb-0 scrollbar-none text-xs">
+        <button onclick="selectConcept(1)" id="tab-c1" class="concept-tab px-3 py-1.5 rounded-xl whitespace-nowrap transition-all active-concept-tab flex items-center gap-1">
+          <span>01. 3D Spatial Matrix</span>
+        </button>
+        <button onclick="selectConcept(2)" id="tab-c2" class="concept-tab px-3 py-1.5 rounded-xl whitespace-nowrap transition-all text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1">
+          <span>02. Mission Control Radar</span>
+        </button>
+        <button onclick="selectConcept(3)" id="tab-c3" class="concept-tab px-3 py-1.5 rounded-xl whitespace-nowrap transition-all text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1">
+          <span>03. Bionic Kanban Flow</span>
+        </button>
+        <button onclick="selectConcept(4)" id="tab-c4" class="concept-tab px-3 py-1.5 rounded-xl whitespace-nowrap transition-all text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1">
+          <span>04. Horizon Time-Machine</span>
+        </button>
+        <button onclick="selectConcept(5)" id="tab-c5" class="concept-tab px-3 py-1.5 rounded-xl whitespace-nowrap transition-all text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1">
+          <span>05. Gravity Orbit 2.0 (3D)</span>
+        </button>
+        <button onclick="selectConcept(6)" id="tab-c6" class="concept-tab px-3 py-1.5 rounded-xl whitespace-nowrap transition-all text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1">
+          <span>06. AI Studio Orchestrator</span>
+        </button>
+        <button onclick="selectConcept(7)" id="tab-c7" class="concept-tab px-3 py-1.5 rounded-xl whitespace-nowrap transition-all text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1">
+          <span>07. Super Bento Grid</span>
+        </button>
+        <button onclick="selectConcept(8)" id="tab-c8" class="concept-tab px-3 py-1.5 rounded-xl whitespace-nowrap transition-all text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1">
+          <span>08. Client Sentiment Radar</span>
+        </button>
+        <button onclick="selectConcept(9)" id="tab-c9" class="concept-tab px-3 py-1.5 rounded-xl whitespace-nowrap transition-all text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1">
+          <span>09. Site Drone Matrix</span>
+        </button>
+        <button onclick="selectConcept(10)" id="tab-c10" class="concept-tab px-3 py-1.5 rounded-xl whitespace-nowrap transition-all text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1">
+          <span>10. Minimalist Zen Desk</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- CONCEPT INTRO HERO STRIP -->
+  <div class="bg-white border-b border-slate-200/80 px-4 sm:px-8 py-3.5">
+    <div class="max-w-[1680px] mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
+      <div class="flex items-center gap-3">
+        <span id="concept-number-badge" class="px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-extrabold font-mono text-xs">CONCEPT 01</span>
+        <div>
+          <h2 id="concept-title" class="text-base font-bold text-[#12182F] font-serif">The 3D Studio Spatial Matrix</h2>
+          <p id="concept-description" class="text-slate-500 text-[11.5px]">Interactive 3D architectural floorplate where active projects float on an isometric spatial grid with live site pins and milestone progress.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <span class="text-slate-400">Interaction:</span>
+        <span id="concept-interaction-pill" class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[11px]">3D Orbit &amp; Clickable Rooms</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CANVAS CONTAINER -->
+  <main class="flex-1 max-w-[1680px] w-full mx-auto p-4 sm:p-8 space-y-6">
+
+    <!-- ================================================================= -->
+    <!-- CONCEPT 1: THE 3D STUDIO SPATIAL MATRIX (INTERACTIVE THREE.JS)   -->
+    <!-- ================================================================= -->
+    <section id="concept-view-1" class="concept-view space-y-6">
+      
+      <!-- Spatial Viewport & Controls -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left 8 Cols: Interactive 3D Canvas -->
+        <div class="lg:col-span-8 bg-[#0A1B33] rounded-[32px] p-6 text-white relative shadow-float overflow-hidden flex flex-col justify-between min-h-[520px]">
+          
+          <!-- Viewport Top Toolbar -->
+          <div class="flex items-center justify-between z-10">
+            <div class="flex items-center gap-2">
+              <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span class="text-xs font-bold text-white tracking-wide uppercase">Live Spatial Grid · 4 Active Sites</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="changeLighting('golden')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold border border-slate-700">Golden Hour</button>
+              <button onclick="changeLighting('day')" class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold">Studio Daylight</button>
+              <button onclick="changeLighting('night')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold border border-slate-700">Night Render</button>
+            </div>
+          </div>
+
+          <!-- THREE.JS 3D CANVAS INJECTION TARGET -->
+          <div id="three-canvas-container" class="absolute inset-0 z-0 flex items-center justify-center">
+            <!-- Canvas is mounted here via script -->
+          </div>
+
+          <!-- Viewport Bottom HUD Overlay -->
+          <div class="z-10 bg-slate-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-4">
+              <div>
+                <span class="text-slate-400 text-[10px] block uppercase font-bold">Focused Project</span>
+                <span id="spatial-focused-name" class="font-bold text-white">Villa Serene (Penthouse)</span>
+              </div>
+              <div class="h-6 w-px bg-slate-700"></div>
+              <div>
+                <span class="text-slate-400 text-[10px] block uppercase font-bold">Site Progress</span>
+                <span class="font-bold text-emerald-400">72% Completed · Milestone 3</span>
+              </div>
+              <div class="h-6 w-px bg-slate-700"></div>
+              <div>
+                <span class="text-slate-400 text-[10px] block uppercase font-bold">Workers on Site</span>
+                <span class="font-bold text-indigo-300">8 Carpenters · 3 POP</span>
+              </div>
+            </div>
+            <button onclick="triggerFeedback('Jumped directly into Villa Serene 3D Room Takeoff!')" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md">
+              Open 3D Takeoff →
+            </button>
+          </div>
+        </div>
+
+        <!-- Right 4 Cols: Spatial Project Nodes & Live Triage -->
+        <div class="lg:col-span-4 space-y-4">
+          <div class="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-card space-y-3">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Interactive Spatial Nodes</span>
+            <p class="text-xs text-slate-500">Click any site to fly the 3D spatial camera directly to that architectural model:</p>
+            
+            <div class="space-y-2 text-xs">
+              <button onclick="focusSpatialNode(0, 'Villa Serene')" class="w-full text-left p-3 rounded-2xl bg-indigo-50/60 border border-indigo-200 flex items-center justify-between hover:bg-indigo-100/60 transition-colors">
+                <div>
+                  <span class="font-bold text-indigo-950 block">1. Villa Serene</span>
+                  <span class="text-[11px] text-slate-500">Whitefield · Prestige Handover</span>
+                </div>
+                <span class="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-100 text-emerald-800">72% Site</span>
+              </button>
+
+              <button onclick="focusSpatialNode(1, 'The Oberoi Penthouse')" class="w-full text-left p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between hover:bg-slate-100 transition-colors">
+                <div>
+                  <span class="font-bold text-[#12182F] block">2. The Oberoi Penthouse</span>
+                  <span class="text-[11px] text-slate-500">Hebbal · Past Client Referral</span>
+                </div>
+                <span class="px-2 py-0.5 rounded font-bold text-[10px] bg-purple-100 text-purple-800">45% MEP</span>
+              </button>
+
+              <button onclick="focusSpatialNode(2, 'Palm Grove Apt 402')" class="w-full text-left p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between hover:bg-slate-100 transition-colors">
+                <div>
+                  <span class="font-bold text-[#12182F] block">3. Palm Grove Apt 402</span>
+                  <span class="text-[11px] text-slate-500">Indiranagar · Architect Referral</span>
+                </div>
+                <span class="px-2 py-0.5 rounded font-bold text-[10px] bg-blue-100 text-blue-800">90% Finishes</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Daily Horizon Card -->
+          <div class="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-card space-y-2 text-xs">
+            <span class="text-xs font-bold text-slate-700 uppercase block">Spatial Smart Bit</span>
+            <p class="text-slate-500 text-[11.5px] leading-relaxed">
+              Drag on the 3D canvas with your mouse to rotate the studio's spatial volume. Each floating cuboid represents a live room under active carpentry or tiling.
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- CONCEPT 2: EXECUTIVE MISSION CONTROL & LIVE RADAR                -->
+    <!-- ================================================================= -->
+    <section id="concept-view-2" class="concept-view space-y-6 hidden">
+      <div class="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-card space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+          <div>
+            <span class="text-xs font-bold text-indigo-600 uppercase">Mission Control Dial</span>
+            <h3 class="text-xl font-bold text-[#12182F]">Studio Operational &amp; Financial Radar</h3>
+            <p class="text-xs text-slate-500">Live velocity vectors tracking project health, approval speed, and cashflow gates</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-400">Cashflow Forecast Horizon:</span>
+            <input type="range" min="15" max="60" value="30" id="radar-slider" oninput="updateCashflowSlider(this.value)" class="w-28 accent-[#3D52A0]">
+            <span id="slider-days-label" class="text-xs font-bold font-mono text-[#3D52A0]">30 Days</span>
+          </div>
+        </div>
+
+        <!-- Radar Ticker Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+          <div class="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 space-y-1">
+            <span class="text-[10px] uppercase font-bold text-indigo-900 block">Projected Cash Inflow</span>
+            <span id="radar-cash-val" class="text-2xl font-bold text-[#12182F] tabular">₹34.8 L</span>
+            <span class="text-[10px] text-emerald-700 block font-semibold">4 Milestones clearing on time</span>
+          </div>
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+            <span class="text-[10px] uppercase font-bold text-slate-500 block">Avg Drawing Approval Velocity</span>
+            <span class="text-2xl font-bold text-[#12182F] tabular">1.6 Days</span>
+            <span class="text-[10px] text-indigo-600 block font-semibold">Target &lt;2.0 days</span>
+          </div>
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+            <span class="text-[10px] uppercase font-bold text-slate-500 block">Lead Source Win Rate</span>
+            <span class="text-2xl font-bold text-emerald-700 tabular">78.5%</span>
+            <span class="text-[10px] text-slate-500 block">Prestige &amp; Ar. Referrals leading</span>
+          </div>
+          <div class="p-4 rounded-2xl bg-rose-50/60 border border-rose-200 space-y-1">
+            <span class="text-[10px] uppercase font-bold text-rose-900 block">Site Blockers / Critical Path</span>
+            <span class="text-2xl font-bold text-rose-700 tabular">2 Blockers</span>
+            <span class="text-[10px] text-rose-800 block font-semibold">Villa Serene keys &amp; Powder silicone</span>
+          </div>
+        </div>
+
+        <!-- Radar Interactive Vectors Table -->
+        <div class="overflow-x-auto text-xs">
+          <table class="w-full text-left border border-slate-200 rounded-2xl overflow-hidden">
+            <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] border-b border-slate-200">
+              <tr>
+                <th class="p-3.5">Active Project</th>
+                <th class="p-3.5">Lead Acquisition Channel</th>
+                <th class="p-3.5">Current Flight Vector</th>
+                <th class="p-3.5">Next Commercial Gate</th>
+                <th class="p-3.5">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700">
+              <tr class="hover:bg-slate-50">
+                <td class="p-3.5 font-bold text-[#12182F]">Villa Serene</td>
+                <td class="p-3.5"><span class="px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-bold text-[10px]">Developer Handover</span></td>
+                <td class="p-3.5 text-amber-700 font-bold">Amber (Key Delivery Stall)</td>
+                <td class="p-3.5">Milestone 1 Advance: ₹5,00,000</td>
+                <td class="p-3.5"><button onclick="triggerFeedback('Dispatched guard key reminder')" class="px-2.5 py-1 bg-[#3D52A0] text-white rounded font-bold text-[10px]">Resolve</button></td>
+              </tr>
+              <tr class="hover:bg-slate-50">
+                <td class="p-3.5 font-bold text-[#12182F]">The Oberoi Penthouse</td>
+                <td class="p-3.5"><span class="px-2 py-0.5 rounded bg-purple-100 text-purple-900 font-bold text-[10px]">Past Client Referral</span></td>
+                <td class="p-3.5 text-emerald-700 font-bold">Green (Optimal Velocity)</td>
+                <td class="p-3.5">Milestone 2 Carcass: ₹12,50,000</td>
+                <td class="p-3.5"><button onclick="triggerFeedback('Viewed Oberoi health docket')" class="px-2.5 py-1 bg-white border border-slate-200 rounded font-bold text-[10px]">Inspect</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- CONCEPT 3: BIONIC KANBAN FLOW & STAGE FUNNEL                      -->
+    <!-- ================================================================= -->
+    <section id="concept-view-3" class="concept-view space-y-6 hidden">
+      <div class="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-card space-y-6">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div>
+            <h3 class="text-xl font-bold text-[#12182F]">Studio Lifecycle Kanban Flow</h3>
+            <p class="text-xs text-slate-500">Fluid end-to-end journey from Lead Inbound to Final Handover with blocker heatmap</p>
+          </div>
+          <button onclick="triggerFeedback('Kanban refreshed with live project status')" class="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-bold text-xs">Refresh Flow</button>
+        </div>
+
+        <!-- 5-Column Interactive Kanban -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+          
+          <!-- Column 1: Onboarding -->
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+            <div class="flex justify-between items-center font-bold text-slate-700">
+              <span>1. Onboarding</span>
+              <span class="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[10px]">2</span>
+            </div>
+            
+            <div class="p-3 rounded-xl bg-white border border-slate-200 space-y-2 shadow-sm cursor-pointer hover:border-indigo-400 transition-colors">
+              <span class="font-bold text-[#12182F] block">Villa Serene</span>
+              <span class="text-[10px] text-slate-400">Prestige Handover · 4d in stage</span>
+              <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full bg-amber-500" style="width: 65%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 2: 3D & Design -->
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+            <div class="flex justify-between items-center font-bold text-slate-700">
+              <span>2. Design &amp; GFC</span>
+              <span class="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[10px]">1</span>
+            </div>
+
+            <div class="p-3 rounded-xl bg-white border border-slate-200 space-y-2 shadow-sm cursor-pointer hover:border-indigo-400 transition-colors">
+              <span class="font-bold text-[#12182F] block">The Oberoi Penthouse</span>
+              <span class="text-[10px] text-slate-400">DWG-PLUMB-03 tagged</span>
+              <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full bg-indigo-600" style="width: 80%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 3: Site Execution -->
+          <div class="p-3.5 rounded-2xl bg-indigo-50/50 border border-indigo-200 space-y-3">
+            <div class="flex justify-between items-center font-bold text-indigo-950">
+              <span>3. Site Execution</span>
+              <span class="w-5 h-5 rounded-full bg-indigo-200 text-indigo-900 flex items-center justify-center text-[10px]">2</span>
+            </div>
+
+            <div class="p-3 rounded-xl bg-white border border-indigo-200 space-y-2 shadow-sm cursor-pointer hover:border-indigo-400 transition-colors">
+              <span class="font-bold text-[#12182F] block">Palm Grove Apt</span>
+              <span class="text-[10px] text-slate-400">Carcass Assembly · 12d in stage</span>
+              <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full bg-emerald-600" style="width: 90%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 4: Snagging -->
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+            <div class="flex justify-between items-center font-bold text-slate-700">
+              <span>4. Snagging &amp; Polish</span>
+              <span class="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[10px]">1</span>
+            </div>
+
+            <div class="p-3 rounded-xl bg-white border border-slate-200 space-y-2 shadow-sm cursor-pointer hover:border-indigo-400 transition-colors">
+              <span class="font-bold text-[#12182F] block">Greenwood Estate</span>
+              <span class="text-[10px] text-rose-600 font-bold">1 Snag Pending</span>
+              <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full bg-amber-500" style="width: 95%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 5: Handover -->
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+            <div class="flex justify-between items-center font-bold text-slate-700">
+              <span>5. Handover Ready</span>
+              <span class="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[10px]">0</span>
+            </div>
+            <div class="p-6 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl text-[11px]">
+              Ready for Handover
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- CONCEPT 4: HORIZON TIME-MACHINE (SCRUBBABLE TIMELINE)            -->
+    <!-- ================================================================= -->
+    <section id="concept-view-4" class="concept-view space-y-6 hidden">
+      <div class="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-card space-y-6">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div>
+            <h3 class="text-xl font-bold text-[#12182F]">Studio Horizon Time-Machine</h3>
+            <p class="text-xs text-slate-500">Scrub across hours and weeks to visualize meeting schedules, site walkthroughs, and material delivery gates</p>
+          </div>
+          <button onclick="triggerFeedback('Playing morning 60-second audio summary!')" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm">
+            <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+            <span>Play 60s Morning Audio Brief</span>
+          </button>
+        </div>
+
+        <!-- Scrubbable Timeline Track -->
+        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+          <div class="flex justify-between text-xs font-bold text-slate-600">
+            <span>09:00 AM (Site Open)</span>
+            <span class="text-indigo-600 font-mono">11:30 AM (NOW)</span>
+            <span>06:00 PM (Site Close)</span>
+          </div>
+
+          <div class="relative h-12 bg-white rounded-xl border border-slate-200 flex items-center px-4">
+            <!-- Timeline Pin 1 -->
+            <div class="absolute left-[15%] flex flex-col items-center cursor-pointer group">
+              <span class="w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white shadow"></span>
+              <span class="text-[10px] font-bold text-slate-600 mt-1">10:00 AM</span>
+            </div>
+
+            <!-- Current Time Bar -->
+            <div class="absolute left-[40%] flex flex-col items-center">
+              <span class="w-4 h-4 rounded-full bg-indigo-600 border-2 border-white shadow-lg animate-ping"></span>
+              <span class="text-[10px] font-bold text-indigo-700 font-mono mt-1">11:30 AM</span>
+            </div>
+
+            <!-- Timeline Pin 2 -->
+            <div class="absolute left-[65%] flex flex-col items-center cursor-pointer">
+              <span class="w-3.5 h-3.5 rounded-full bg-amber-500 border-2 border-white shadow"></span>
+              <span class="text-[10px] font-bold text-slate-600 mt-1">02:30 PM</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Schedule Breakdown -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-1">
+            <span class="text-[10px] text-emerald-700 font-bold uppercase">10:00 AM · Cleared</span>
+            <span class="font-bold text-[#12182F] block">Villa Serene Security NOC</span>
+            <p class="text-slate-500 text-[11px]">Guard confirmed society elevator protection sheets placed.</p>
+          </div>
+          <div class="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 space-y-1">
+            <span class="text-[10px] text-indigo-700 font-bold uppercase">02:30 PM · Next Up</span>
+            <span class="font-bold text-indigo-950 block">Palm Grove Quartz Sample Drop</span>
+            <p class="text-slate-600 text-[11px]">Delivering Calacatta Gold 150x150mm slab sample for client sign-off.</p>
+          </div>
+          <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-1">
+            <span class="text-[10px] text-slate-400 font-bold uppercase">05:00 PM · Scheduled</span>
+            <span class="font-bold text-[#12182F] block">Oberoi Penthouse MoM Review</span>
+            <p class="text-slate-500 text-[11px]">Lead Designer Priya reviewing diverter pipe height adjustment.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- CONCEPT 5: GRAVITY ORBIT 2.0 (REIMAGINED 3D SOLAR SYSTEM)        -->
+    <!-- ================================================================= -->
+    <section id="concept-view-5" class="concept-view space-y-6 hidden">
+      <div class="bg-[#0A1B33] rounded-[32px] p-6 text-white min-h-[540px] flex flex-col justify-between relative shadow-float overflow-hidden">
+        
+        <div class="flex items-center justify-between z-10">
+          <div>
+            <span class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Planetary Gravity Orbit 2.0</span>
+            <h3 class="text-xl font-bold text-white font-serif">Studio Core &amp; Orbiting Project Satellites</h3>
+          </div>
+          <button onclick="triggerFeedback('Gravitational orbit centered onto Studio Revenue Core')" class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-xs">Center Gravity</button>
+        </div>
+
+        <!-- Orbit Stage Simulator Target -->
+        <div id="orbit-three-container" class="absolute inset-0 z-0 flex items-center justify-center">
+          <!-- Animated orbit canvas mounted via script -->
+        </div>
+
+        <!-- Orbit Legend & Control Strip -->
+        <div class="z-10 bg-slate-900/90 backdrop-blur-md p-4 rounded-2xl border border-slate-800 flex items-center justify-between text-xs">
+          <div class="flex items-center gap-4">
+            <span class="text-slate-400">Gravitational Rule:</span>
+            <span class="flex items-center gap-1.5 text-white font-bold"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> Fast Moving (Near Core)</span>
+            <span class="flex items-center gap-1.5 text-white font-bold"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Approvals Delayed (Outer Ring)</span>
+          </div>
+          <span class="text-indigo-400 font-mono text-[11px]">Hover or drag planets to inspect project nodes</span>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- CONCEPT 6: AI STUDIO ORCHESTRATOR & COPILOT RADAR               -->
+    <!-- ================================================================= -->
+    <section id="concept-view-6" class="concept-view space-y-6 hidden">
+      <div class="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-card space-y-6">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div>
+            <span class="text-xs font-bold text-indigo-600 uppercase">Proactive Intelligence</span>
+            <h3 class="text-xl font-bold text-[#12182F]">Studio Copilot &amp; Proactive Alert Orchestrator</h3>
+          </div>
+          <span class="px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 font-bold text-xs font-mono">AUTONOMOUS DISPATCH</span>
+        </div>
+
+        <!-- AI Proactive Feeds -->
+        <div class="space-y-3 text-xs">
+          
+          <div class="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200 flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <span class="font-bold text-[#12182F] text-sm block">Proactive Alert: Tile Variation Delay Detected</span>
+                <p class="text-slate-600 mt-1 leading-relaxed">
+                  Villa Serene client selected 600x1200mm tiles instead of 800x800mm in yesterday's meeting. Copilot calculated +₹14,200 mortar and labor impact. A draft variation sheet has been pre-assembled for Ops Director sign-off.
+                </p>
+                <div class="flex items-center gap-2 mt-2">
+                  <button onclick="triggerFeedback('Draft variation approved and routed to Director')" class="px-3 py-1 bg-indigo-600 text-white rounded-lg font-bold text-[11px]">Review Draft Variation</button>
+                  <button onclick="triggerFeedback('Snoozed alert until 4 PM')" class="px-3 py-1 bg-white border border-slate-200 rounded-lg font-bold text-[11px]">Snooze</button>
+                </div>
+              </div>
+            </div>
+            <span class="text-slate-400 font-mono text-[10px]">Calculated 8m ago</span>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                <i data-lucide="check" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <span class="font-bold text-[#12182F] text-sm block">Payment Verification: UTR #HDFC0029418 Matched</span>
+                <p class="text-slate-600 mt-1 leading-relaxed">
+                  Ananya Roy transferred ₹4,20,000 for Palm Grove Milestone 2. Copilot verified the amount against the approved proforma and generated an automatic receipt acknowledgment.
+                </p>
+                <div class="flex items-center gap-2 mt-2">
+                  <button onclick="triggerFeedback('Sent receipt acknowledgment via WhatsApp')" class="px-3 py-1 bg-emerald-700 text-white rounded-lg font-bold text-[11px]">Send Receipt Acknowledgment</button>
+                </div>
+              </div>
+            </div>
+            <span class="text-slate-400 font-mono text-[10px]">Verified 24m ago</span>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- CONCEPT 7: SUPER BENTO GRID (MODULAR APPLE-STYLE WIDGETS)        -->
+    <!-- ================================================================= -->
+    <section id="concept-view-7" class="concept-view space-y-6 hidden">
+      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 text-xs">
+        
+        <!-- Large Widget 1: Revenue & Lead Funnel -->
+        <div class="md:col-span-2 p-6 rounded-3xl bg-white border border-slate-200/80 shadow-card space-y-3">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-base text-[#12182F]">Lead Acquisition &amp; Revenue Conversion</span>
+            <span class="text-emerald-700 font-bold font-mono">₹2.20 Cr Pipeline</span>
+          </div>
+          <div class="grid grid-cols-2 gap-3 pt-2">
+            <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+              <span class="text-slate-400 block text-[10px] uppercase font-bold">Developer Tie-ups</span>
+              <span class="text-lg font-bold text-blue-950">75% Close · ₹85L</span>
+            </div>
+            <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+              <span class="text-slate-400 block text-[10px] uppercase font-bold">Architect Referrals</span>
+              <span class="text-lg font-bold text-purple-950">80% Close · ₹62L</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Widget 2: 1-Click WhatsApp Broadcaster -->
+        <div class="p-6 rounded-3xl bg-indigo-50/60 border border-indigo-200 shadow-card flex flex-col justify-between space-y-3">
+          <div>
+            <span class="font-bold text-[#12182F] block">Quick Cadence Nudge</span>
+            <p class="text-slate-500 text-[11px] mt-1">Pre-filled with client token, milestone name &amp; proforma amount.</p>
+          </div>
+          <button onclick="triggerFeedback('WhatsApp Nudge Triggered!')" class="w-full py-2 rounded-xl bg-[#3D52A0] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            <span>Send Today's Nudges (3)</span>
+          </button>
+        </div>
+
+        <!-- Widget 3: EOD Digest Generator -->
+        <div class="p-6 rounded-3xl bg-slate-900 text-white shadow-card flex flex-col justify-between space-y-3">
+          <div>
+            <span class="font-bold text-white block">EOD Work Digest</span>
+            <p class="text-slate-400 text-[11px] mt-1">19 touchpoints verified today across 4 active sites.</p>
+          </div>
+          <button onclick="triggerFeedback('Copied EOD Report to Clipboard!')" class="w-full py-2 rounded-xl bg-white text-slate-900 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copy EOD Digest</span>
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- CONCEPT 8: CLIENT SENTIMENT & RELATIONSHIP RADAR                  -->
+    <!-- ================================================================= -->
+    <section id="concept-view-8" class="concept-view space-y-6 hidden">
+      <div class="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-card space-y-6 text-xs">
+        <div class="flex justify-between items-center pb-3 border-b border-slate-100">
+          <div>
+            <h3 class="text-xl font-bold text-[#12182F]">Luxury Client Relationship &amp; Sentiment Radar</h3>
+            <p class="text-xs text-slate-500">Track client delight pulse, housewarming milestones, and NPS health</p>
+          </div>
+          <span class="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold">Studio CSAT: 4.9 / 5.0</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="p-5 rounded-2xl bg-emerald-50/50 border border-emerald-200 space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-emerald-950 text-sm">Ananya Roy</span>
+              <span class="text-[10px] font-bold bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded">DELIGHTED</span>
+            </div>
+            <p class="text-slate-600">Loved the Friday weekly photo update. Milestone 2 NEFT logged.</p>
+            <button onclick="triggerFeedback('Invited Ananya to marble selection walkthrough')" class="text-emerald-800 font-bold text-[11px]">Invite to Walkthrough →</button>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-amber-50/50 border border-amber-200 space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-amber-950 text-sm">Vikramaditya S.</span>
+              <span class="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded">ANXIOUS (BUSY)</span>
+            </div>
+            <p class="text-slate-600">Site keys pending at Prestige security. Follow up scheduled 10:30 AM.</p>
+            <button onclick="triggerFeedback('Dispatched gentle WhatsApp to Vikramaditya')" class="text-amber-800 font-bold text-[11px]">Send Gentle Nudge →</button>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-slate-900 text-sm">Kunal &amp; Radhika Shah</span>
+              <span class="text-[10px] font-bold bg-purple-100 text-purple-900 px-2 py-0.5 rounded">ENGAGED</span>
+            </div>
+            <p class="text-slate-600">Decision speed: under 4 hours. Awaiting kitchen quartz sample.</p>
+            <button onclick="triggerFeedback('Sample tracking link dispatched')" class="text-indigo-700 font-bold text-[11px]">Send Sample ETA →</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- CONCEPT 9: SITE DRONE & EXECUTION CAMERA MATRIX                  -->
+    <!-- ================================================================= -->
+    <section id="concept-view-9" class="concept-view space-y-6 hidden">
+      <div class="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-card space-y-6 text-xs">
+        <div class="flex justify-between items-center pb-3 border-b border-slate-100">
+          <div>
+            <h3 class="text-xl font-bold text-[#12182F]">Site Execution Drone &amp; 360° Inspection Matrix</h3>
+            <p class="text-xs text-slate-500">Live supervisor check-ins, labor headcount audit, and snag clearances</p>
+          </div>
+          <button onclick="triggerFeedback('Live supervisor photos synced')" class="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-bold text-xs">Sync Site Feeds</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+            <span class="font-bold text-[#12182F] block">Villa Serene (Phase 2)</span>
+            <div class="h-28 bg-slate-200 rounded-xl flex items-center justify-center text-slate-400 font-bold text-[11px]">
+              Site Photo Feed #04
+            </div>
+            <div class="flex justify-between text-[11px]">
+              <span>Carpentry: Active</span>
+              <span class="text-emerald-700 font-bold">8 Workers</span>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+            <span class="font-bold text-[#12182F]">The Oberoi Penthouse</span>
+            <div class="h-28 bg-slate-200 rounded-xl flex items-center justify-center text-slate-400 font-bold text-[11px]">
+              Site Photo Feed #08
+            </div>
+            <div class="flex justify-between text-[11px]">
+              <span>Plumbing Diverter</span>
+              <span class="text-emerald-700 font-bold">4 Workers</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- CONCEPT 10: MINIMALIST ZEN MONOGRAPH DESK                        -->
+    <!-- ================================================================= -->
+    <section id="concept-view-10" class="concept-view space-y-6 hidden">
+      <div class="bg-white rounded-3xl border border-slate-200/80 p-8 sm:p-14 shadow-card space-y-8 max-w-4xl mx-auto text-center">
+        <div class="space-y-2">
+          <span class="text-xs font-mono uppercase tracking-widest text-slate-400">Zen Focus Edition</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-[#12182F] font-serif">The Single Most Important Action Today</h2>
+          <p class="text-slate-500 text-sm max-w-xl mx-auto">
+            Collect physical site keys from Prestige Tower 3 security for <strong class="text-indigo-900 font-bold">Villa Serene</strong> before 11:00 AM to unlock 8 carpenters on schedule.
+          </p>
+        </div>
+
+        <div class="flex justify-center gap-3">
+          <button onclick="triggerFeedback('Key collection task marked confirmed!')" class="px-6 py-3 rounded-2xl bg-[#3D52A0] text-white font-bold text-sm shadow-md hover:bg-[#334486] transition-colors">
+            Confirm Key Collection (Done)
+          </button>
+          <button onclick="triggerFeedback('Next priority loaded')" class="px-6 py-3 rounded-2xl bg-slate-100 text-slate-700 font-semibold text-sm hover:bg-slate-200 transition-colors">
+            Show Next Priority →
+          </button>
+        </div>
+
+        <div class="pt-8 border-t border-slate-100 flex justify-center gap-8 text-xs text-slate-400">
+          <div><strong class="text-slate-800 text-base block font-serif">4</strong> Active Sites</div>
+          <div><strong class="text-slate-800 text-base block font-serif">₹14.2 L</strong> Collected Today</div>
+          <div><strong class="text-slate-800 text-base block font-serif">97.1%</strong> SLA Met</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- TOAST FEEDBACK -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 bg-[#0A1B33] text-white px-4 py-3 rounded-2xl shadow-2xl border border-indigo-500/30 text-xs font-semibold flex items-center gap-2 transform translate-y-24 transition-transform duration-300">
+    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toast-message">Action executed</span>
+  </div>
+
+  <!-- THREE.JS INTERACTIVE INITIALIZER & LOGIC SCRIPT -->
+  <script>
+    const CONCEPTS_METADATA = [
+      { id: 1, title: "The 3D Studio Spatial Matrix", desc: "Interactive 3D architectural floorplate where active projects float on an isometric spatial grid with live site pins and milestone progress.", pill: "3D Orbit & Clickable Rooms" },
+      { id: 2, title: "Mission Control Radar & Financial Velocity", desc: "Live velocity vectors tracking project health, approval speed, and cashflow gates with an interactive 30-day forecast slider.", pill: "Financial Vectors & Sliders" },
+      { id: 3, title: "Bionic Kanban Flow & Stage Funnel", desc: "Fluid end-to-end journey from Lead Inbound to Final Handover with blocker heatmap and days-in-stage metrics.", pill: "Fluid Drag & Micro-Metrics" },
+      { id: 4, title: "Horizon Time-Machine Timeline", desc: "Scrub across hours and weeks to visualize meeting schedules, site walkthroughs, and material delivery gates with morning audio brief.", pill: "Scrubbable Track & Audio HUD" },
+      { id: 5, title: "Planetary Gravity Orbit 2.0 (True 3D)", desc: "Replaces the passive clock with an interactive gravitational planetary solar system where satellites speed up or glow by urgency.", pill: "Gravitational 3D Engine" },
+      { id: 6, title: "AI Studio Copilot & Autonomous Dispatch", desc: "Proactive intelligence that calculates variation impacts, matches bank UTRs automatically, and drafts responses before you type.", pill: "Proactive Autonomous Radar" },
+      { id: 7, title: "Super Bento Grid (Modular Apple-Style)", desc: "High-density modular tiles: Lead Source Funnel, 1-Click WhatsApp Cadence, Cashflow Milestones, and EOD Report generator.", pill: "Modular Expandable Bento" },
+      { id: 8, title: "Luxury Client Relationship & Sentiment Radar", desc: "Track client delight pulse, housewarming countdowns, and real-time CSAT with 1-click invitation triggers.", pill: "Relationship & CSAT Pulse" },
+      { id: 9, title: "Site Execution Drone & Inspection Matrix", desc: "Live supervisor photo sync, daily labor headcount checks, and snag punchlist burn-down charts.", pill: "Live Site Inspection HUD" },
+      { id: 10, title: "Minimalist Zen Monograph Desk", desc: "Kinfolk/Monocle editorial elegance. Removes all visual noise to highlight only the single most impactful action today.", pill: "Distraction-Free Monograph" }
+    ];
+
+    let activeConcept = 1;
+    let threeScene, threeCamera, threeRenderer, threeCubes = [];
+
+    function selectConcept(num) {
+      activeConcept = num;
+      document.querySelectorAll('.concept-tab').forEach((t, i) => {
+        t.classList.remove('active-concept-tab');
+        t.classList.add('text-slate-300');
+      });
+
+      const currentTab = document.getElementById(`tab-c${num}`);
+      if (currentTab) {
+        currentTab.classList.add('active-concept-tab');
+        currentTab.classList.remove('text-slate-300');
+      }
+
+      document.querySelectorAll('.concept-view').forEach(v => v.classList.add('hidden'));
+      const targetView = document.getElementById(`concept-view-${num}`);
+      if (targetView) targetView.classList.remove('hidden');
+
+      const meta = CONCEPTS_METADATA[num - 1];
+      document.getElementById('concept-number-badge').innerText = `CONCEPT ${num < 10 ? '0' + num : num}`;
+      document.getElementById('concept-title').innerText = meta.title;
+      document.getElementById('concept-description').innerText = meta.desc;
+      document.getElementById('concept-interaction-pill').innerText = meta.pill;
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function triggerFeedback(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-message').innerText = msg;
+      toast.classList.remove('translate-y-24');
+      setTimeout(() => {
+        toast.classList.add('translate-y-24');
+      }, 2500);
+    }
+
+    function updateCashflowSlider(val) {
+      document.getElementById('slider-days-label').innerText = `${val} Days`;
+      const calculated = (val * 1.16).toFixed(1);
+      document.getElementById('radar-cash-val').innerText = `₹${calculated} L`;
+    }
+
+    function changeLighting(mode) {
+      triggerFeedback(`3D Lighting switched to ${mode.toUpperCase()} render mode!`);
+      if (threeScene) {
+        if (mode === 'golden') threeScene.background = new THREE.Color(0x1a120b);
+        else if (mode === 'night') threeScene.background = new THREE.Color(0x05070e);
+        else threeScene.background = new THREE.Color(0x0A1B33);
+      }
+    }
+
+    function focusSpatialNode(idx, name) {
+      document.getElementById('spatial-focused-name').innerText = name;
+      triggerFeedback(`Camera focused on 3D spatial node: ${name}`);
+      if (threeCubes[idx]) {
+        threeCubes[idx].rotation.y += 1.5;
+        threeCubes[idx].scale.set(1.4, 1.4, 1.4);
+        setTimeout(() => {
+          if (threeCubes[idx]) threeCubes[idx].scale.set(1, 1, 1);
+        }, 800);
+      }
+    }
+
+    // INIT GENUINE 3D THREE.JS FOR CONCEPT 1
+    function initThreeSpatial() {
+      const container = document.getElementById('three-canvas-container');
+      if (!container || typeof THREE === 'undefined') return;
+
+      const width = container.clientWidth || 700;
+      const height = container.clientHeight || 480;
+
+      threeScene = new THREE.Scene();
+      threeScene.background = new THREE.Color(0x0A1B33);
+
+      threeCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+      threeCamera.position.set(0, 5, 9);
+      threeCamera.lookAt(0, 0, 0);
+
+      threeRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      threeRenderer.setSize(width, height);
+      container.appendChild(threeRenderer.domElement);
+
+      // Add architectural grid
+      const grid = new THREE.GridHelper(12, 12, 0x3D52A0, 0x1e293b);
+      grid.position.y = -1;
+      threeScene.add(grid);
+
+      // Add floating room nodes
+      const geom = new THREE.BoxGeometry(1.6, 1.2, 1.6);
+      const colors = [0x4f46e5, 0x10b981, 0x8b5cf6];
+
+      for (let i = 0; i < 3; i++) {
+        const mat = new THREE.MeshPhongMaterial({
+          color: colors[i],
+          wireframe: false,
+          shininess: 80,
+          transparent: true,
+          opacity: 0.85
+        });
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.position.set((i - 1) * 3, 0.2, 0);
+        threeScene.add(mesh);
+        threeCubes.push(mesh);
+      }
+
+      // Lights
+      const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+      threeScene.add(ambient);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      dirLight.position.set(5, 10, 7);
+      threeScene.add(dirLight);
+
+      // Render loop
+      function animate() {
+        requestAnimationFrame(animate);
+        threeCubes.forEach((c, idx) => {
+          c.rotation.y += 0.006 * (idx + 1);
+        });
+        threeRenderer.render(threeScene, threeCamera);
+      }
+      animate();
+
+      // Window resize
+      window.addEventListener('resize', () => {
+        if (!container) return;
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        threeCamera.aspect = w / h;
+        threeCamera.updateProjectionMatrix();
+        threeRenderer.setSize(w, h);
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initThreeSpatial();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFDS Studio OS — Client Executive & Ops Desk (Lead Source Attribution & Intuitive UI)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans, Playfair Display, JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#4f46e5',
+              dark: '#0f172a',
+              accent: '#6366f1',
+              surface: '#F8FAFC',
+              card: '#FFFFFF',
+              border: '#E2E8F0'
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            serif: ['"Playfair Display"', 'serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          },
+          boxShadow: {
+            'card': '0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.03)',
+            'float': '0 20px 40px -10px rgba(15, 23, 42, 0.12), 0 1px 3px rgba(15, 23, 42, 0.05)'
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #F8FAFC;
+      color: #0F172A;
+      margin: 0;
+      overflow-x: hidden;
+    }
+    .tabular {
+      font-variant-numeric: tabular-nums;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+    .badge-architect {
+      background: #FAF5FF;
+      color: #6B21A8;
+      border: 1px solid #E9D5FF;
+    }
+    .badge-pastclient {
+      background: #ECFDF5;
+      color: #065F46;
+      border: 1px solid #A7F3D0;
+    }
+    .badge-developer {
+      background: #EFF6FF;
+      color: #1E40AF;
+      border: 1px solid #BFDBFE;
+    }
+    .badge-instagram {
+      background: #FFF7ED;
+      color: #9A3412;
+      border: 1px solid #FED7AA;
+    }
+    .badge-website {
+      background: #F0FDF4;
+      color: #166534;
+      border: 1px solid #BBF7D0;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#F8FAFC] text-[#0F172A]">
+
+  <!-- TOP HEADER & NAVIGATION BAR -->
+  <header class="sticky top-0 z-50 bg-[#0F172A] text-white border-b border-indigo-950 px-4 sm:px-8 py-3.5 shadow-xl">
+    <div class="max-w-[1560px] mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      
+      <!-- Logo, Title & Role Persona Badge -->
+      <div class="flex items-center gap-3.5">
+        <div class="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md font-bold">
+          <i data-lucide="sparkles" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-bold tracking-tight text-white uppercase">FFDS Studio OS</span>
+            <span class="text-[10px] px-2 py-0.5 rounded font-extrabold bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">Client Executive Desk</span>
+            <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-amber-500/20 text-amber-300 border border-amber-400/30">Lead Source Attribution</span>
+          </div>
+          <p class="text-xs text-slate-300">Intuitive Operations UI · Performance by Lead Source · CRM &amp; Handover Workflows</p>
+        </div>
+      </div>
+
+      <!-- Main Section Switcher -->
+      <div class="flex items-center gap-2">
+        <div class="inline-flex p-1 bg-slate-900 rounded-2xl border border-slate-700">
+          <button onclick="setViewMode('mockup')" id="tab-mockup" class="px-4 py-2 text-xs font-bold rounded-xl transition-all bg-white text-[#0F172A] shadow-sm flex items-center gap-1.5">
+            <i data-lucide="layout" class="w-3.5 h-3.5 text-indigo-600"></i>
+            <span>1. Intuitive Interactive Mockups (7 Screens)</span>
+          </button>
+          <button onclick="setViewMode('leadsource')" id="tab-leadsource" class="px-4 py-2 text-xs font-semibold rounded-xl transition-all text-slate-300 hover:text-white flex items-center gap-1.5">
+            <i data-lucide="pie-chart" class="w-3.5 h-3.5"></i>
+            <span>2. Lead Source Attribution Engine</span>
+          </button>
+          <button onclick="setViewMode('plan')" id="tab-plan" class="px-4 py-2 text-xs font-semibold rounded-xl transition-all text-slate-300 hover:text-white flex items-center gap-1.5">
+            <i data-lucide="compass" class="w-3.5 h-3.5"></i>
+            <span>3. Implementation Plan &amp; Specs</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ======================================================== -->
+  <!-- VIEW 1: INTUITIVE INTERACTIVE MOCKUP (7 SCREENS)         -->
+  <!-- ======================================================== -->
+  <main id="section-mockup" class="flex-1 max-w-[1520px] w-full mx-auto p-4 sm:p-8 space-y-6">
+    
+    <!-- Top Controller Bar: Screen Tabs & Fast Actions -->
+    <div class="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-card flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-indigo-600 uppercase tracking-wider">Intuitive Ops Workspace</span>
+          <span class="text-slate-300">·</span>
+          <span class="text-xs font-semibold text-slate-500">Coordinator: Ramesh K.</span>
+          <span class="text-slate-300">·</span>
+          <span class="text-[11px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800">Target: ₹2.5 Cr Pipeline</span>
+        </div>
+        <h2 class="text-xl sm:text-2xl font-bold text-[#0F172A] font-serif">
+          Executive Cockpit with Live Lead Source Performance
+        </h2>
+      </div>
+
+      <!-- Feature Screen Tabs -->
+      <div class="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 lg:pb-0 scrollbar-none">
+        <button onclick="setMockupScreen(1)" id="ms-btn-1" class="mock-btn px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all bg-[#4f46e5] text-white shadow-sm flex items-center gap-1.5">
+          <i data-lucide="activity" class="w-3.5 h-3.5"></i>
+          <span>1. Daily Scorecard</span>
+        </button>
+        <button onclick="setMockupScreen(2)" id="ms-btn-2" class="mock-btn px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all text-slate-600 hover:bg-slate-100 flex items-center gap-1.5">
+          <i data-lucide="target" class="w-3.5 h-3.5"></i>
+          <span>2. Lead Source Performance</span>
+        </button>
+        <button onclick="setMockupScreen(3)" id="ms-btn-3" class="mock-btn px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all text-slate-600 hover:bg-slate-100 flex items-center gap-1.5">
+          <i data-lucide="users" class="w-3.5 h-3.5"></i>
+          <span>3. CRM &amp; Follow-up Radar</span>
+        </button>
+        <button onclick="setMockupScreen(4)" id="ms-btn-4" class="mock-btn px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all text-slate-600 hover:bg-slate-100 flex items-center gap-1.5">
+          <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+          <span>4. Pre-Site Onboarding Gate</span>
+        </button>
+        <button onclick="setMockupScreen(5)" id="ms-btn-5" class="mock-btn px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all text-slate-600 hover:bg-slate-100 flex items-center gap-1.5">
+          <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+          <span>5. MoM &amp; Drawing Tags</span>
+        </button>
+        <button onclick="setMockupScreen(6)" id="ms-btn-6" class="mock-btn px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all text-slate-600 hover:bg-slate-100 flex items-center gap-1.5">
+          <i data-lucide="credit-card" class="w-3.5 h-3.5"></i>
+          <span>6. Approved Invoices &amp; UTR</span>
+        </button>
+        <button onclick="setMockupScreen(7)" id="ms-btn-7" class="mock-btn px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all text-slate-600 hover:bg-slate-100 flex items-center gap-1.5">
+          <i data-lucide="award" class="w-3.5 h-3.5"></i>
+          <span>7. Handover &amp; Warranties</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- MOCKUP CONTAINER VIEWPORT -->
+    <div class="bg-white rounded-[32px] border border-slate-200/80 p-6 sm:p-8 shadow-card min-h-[620px]">
+
+      <!-- ======================================================== -->
+      <!-- SCREEN 1: DAILY WORK QUANTIFICATION & SCORECARD          -->
+      <!-- ======================================================== -->
+      <div id="mock-screen-1" class="mock-view space-y-6">
+        
+        <!-- Header & Quick Actions -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-indigo-600 uppercase">Today's Productivity Engine</span>
+              <span class="text-[10px] px-2 py-0.5 rounded font-extrabold bg-emerald-100 text-emerald-800">100% Traceable</span>
+            </div>
+            <h3 class="text-lg sm:text-xl font-bold text-[#0F172A]">Coordinator Daily Scorecard &amp; Quantified Output</h3>
+            <p class="text-xs text-slate-500">Every interaction logs lead source, project progress, and verified output in seconds</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="openLogTouchpointModal()" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all">
+              <i data-lucide="plus" class="w-3.5 h-3.5 text-indigo-400"></i>
+              <span>+ Log Touchpoint (30s)</span>
+            </button>
+            <button onclick="generateEODDigest()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+              <span>Generate 1-Click EOD Report</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 Intuitive Live KPI Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+            <div class="flex items-center justify-between text-slate-500 text-xs">
+              <span class="font-medium">Client Touchpoints</span>
+              <i data-lucide="phone-call" class="w-4 h-4 text-indigo-600"></i>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span id="metric-touchpoints" class="text-2xl font-bold text-[#0F172A] tabular">19</span>
+              <span class="text-[11px] text-emerald-600 font-semibold">+7 vs target</span>
+            </div>
+            <p class="text-[10px] text-slate-400">12 WhatsApp, 5 Calls, 2 Visits</p>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+            <div class="flex items-center justify-between text-slate-500 text-xs">
+              <span class="font-medium">Follow-Up SLA Adherence</span>
+              <i data-lucide="clock" class="w-4 h-4 text-emerald-600"></i>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span class="text-2xl font-bold text-[#0F172A] tabular">97.1%</span>
+              <span class="text-[11px] text-emerald-600 font-semibold">&lt;15m web turn</span>
+            </div>
+            <p class="text-[10px] text-slate-400">34 of 35 follow-ups on time</p>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+            <div class="flex items-center justify-between text-slate-500 text-xs">
+              <span class="font-medium">MoMs Dispatched</span>
+              <i data-lucide="file-check-2" class="w-4 h-4 text-purple-600"></i>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span id="metric-moms" class="text-2xl font-bold text-[#0F172A] tabular">3</span>
+              <span class="text-[11px] text-purple-600 font-semibold">Avg 2.8h turn</span>
+            </div>
+            <p class="text-[10px] text-slate-400">16 action tags assigned</p>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+            <div class="flex items-center justify-between text-slate-500 text-xs">
+              <span class="font-medium">Payments Followed / Logged</span>
+              <i data-lucide="indian-rupee" class="w-4 h-4 text-emerald-600"></i>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span class="text-2xl font-bold text-[#0F172A] tabular">₹14.2 L</span>
+              <span class="text-[11px] text-emerald-600 font-semibold">3 UTRs logged</span>
+            </div>
+            <p class="text-[10px] text-slate-400">Overdue aging down to 1.8 days</p>
+          </div>
+        </div>
+
+        <!-- Activity Stream with Lead Source Tags -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div class="lg:col-span-8 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-700 uppercase">Today's Verified Output Log (With Lead Source Attribution)</span>
+              <span class="text-xs text-slate-400">Chronological Audit</span>
+            </div>
+
+            <div id="activity-stream-list" class="space-y-2.5 text-xs">
+              
+              <!-- Stream Item 1 -->
+              <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-start justify-between gap-3 hover:bg-slate-100/60 transition-colors">
+                <div class="flex items-start gap-3">
+                  <div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="phone-call" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="font-bold text-[#0F172A]">Call with Vikramaditya Sharma</span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold badge-developer flex items-center gap-1">
+                        <i data-lucide="building-2" class="w-3 h-3"></i> Developer Tie-up (Prestige)
+                      </span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">Key Handover Set</span>
+                    </div>
+                    <p class="text-slate-600 mt-1">Confirmed key handover at security desk for tomorrow 10:30 AM. Carpentry team scheduled.</p>
+                    <div class="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
+                      <span>Project: Villa Serene</span>
+                      <span>·</span>
+                      <span>11:42 AM</span>
+                      <span>·</span>
+                      <span class="text-indigo-600 font-semibold">Attributed to: Ramesh K.</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="text-[10px] text-slate-400 shrink-0 font-mono">Logged in 20s</span>
+              </div>
+
+              <!-- Stream Item 2 -->
+              <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-start justify-between gap-3 hover:bg-slate-100/60 transition-colors">
+                <div class="flex items-start gap-3">
+                  <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="credit-card" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="font-bold text-[#0F172A]">Payment UTR Logged · Ananya Roy</span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold badge-architect flex items-center gap-1">
+                        <i data-lucide="crown" class="w-3 h-3"></i> Architect Referral (Studio Matrix)
+                      </span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">₹4,20,000 Verified</span>
+                    </div>
+                    <p class="text-slate-600 mt-1">UTR #HDFC0029418 recorded for Milestone 2. Sent immediate receipt acknowledgement.</p>
+                    <div class="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
+                      <span>Project: Palm Grove Apt</span>
+                      <span>·</span>
+                      <span>02:15 PM</span>
+                      <span>·</span>
+                      <span class="text-emerald-600 font-semibold">Payment Follow-up Closed in 24h</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="text-[10px] text-slate-400 shrink-0 font-mono">Logged in 35s</span>
+              </div>
+
+              <!-- Stream Item 3 -->
+              <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-start justify-between gap-3 hover:bg-slate-100/60 transition-colors">
+                <div class="flex items-start gap-3">
+                  <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="message-square" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="font-bold text-[#0F172A]">WhatsApp MoM Broadcast · Kunal Shah</span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold badge-pastclient flex items-center gap-1">
+                        <i data-lucide="heart-handshake" class="w-3 h-3"></i> Past Client Referral
+                      </span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">MoM &lt;3h</span>
+                    </div>
+                    <p class="text-slate-600 mt-1">Dispatched bullet MoM card to client family group. Tagged 3 actions to Designer Priya and Site Supv Rajesh.</p>
+                    <div class="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
+                      <span>Project: The Oberoi Penthouse</span>
+                      <span>·</span>
+                      <span>04:10 PM</span>
+                      <span>·</span>
+                      <span class="text-purple-600 font-semibold">SLA Met (Dispatched in 2.5h)</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="text-[10px] text-slate-400 shrink-0 font-mono">Logged in 40s</span>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Right 4 Cols: Performance Summary & EOD Quick Card -->
+          <div class="lg:col-span-4 space-y-4">
+            <div class="p-5 rounded-2xl bg-gradient-to-br from-indigo-50/80 to-purple-50/40 border border-indigo-200/80 space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-indigo-950 uppercase">Lead Source Performance Summary</span>
+                <span class="text-[10px] font-bold text-indigo-600">Ramesh K.</span>
+              </div>
+
+              <div class="space-y-2 text-xs">
+                <div class="flex justify-between items-center p-2 rounded-xl bg-white border border-slate-200">
+                  <span class="font-semibold text-slate-700">Developer Tie-up</span>
+                  <span class="font-bold text-indigo-700">75% Close · ₹85L</span>
+                </div>
+                <div class="flex justify-between items-center p-2 rounded-xl bg-white border border-slate-200">
+                  <span class="font-semibold text-slate-700">Architect Referral</span>
+                  <span class="font-bold text-purple-700">80% Close · ₹62L</span>
+                </div>
+                <div class="flex justify-between items-center p-2 rounded-xl bg-white border border-slate-200">
+                  <span class="font-semibold text-slate-700">Past Client Referral</span>
+                  <span class="font-bold text-emerald-700">100% Close · ₹45L</span>
+                </div>
+                <div class="flex justify-between items-center p-2 rounded-xl bg-white border border-slate-200">
+                  <span class="font-semibold text-slate-700">Social / Web Inbound</span>
+                  <span class="font-bold text-amber-700">38% Close · ₹28L</span>
+                </div>
+              </div>
+
+              <div class="pt-2 border-t border-indigo-200/60 flex items-center justify-between text-xs text-indigo-950 font-bold">
+                <span>Total Attributed Deal Size:</span>
+                <span class="text-sm font-extrabold text-indigo-700">₹2.20 Cr</span>
+              </div>
+            </div>
+
+            <!-- EOD 1-Click Digest Card -->
+            <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-2 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-[#0F172A]">EOD Report Dispatch</span>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Ready</span>
+              </div>
+              <p class="text-slate-500 text-[11px] leading-relaxed">
+                Aggregates today's touchpoints, payments collected, and lead source updates into a crisp WhatsApp digest for the Studio Owner.
+              </p>
+              <button onclick="generateEODDigest()" class="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span>Preview &amp; Send EOD Digest</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- SCREEN 2: LEAD SOURCE ATTRIBUTION & PERFORMANCE RADAR    -->
+      <!-- ======================================================== -->
+      <div id="mock-screen-2" class="mock-view space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-indigo-600 uppercase">Performance by Channel</span>
+              <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-indigo-100 text-indigo-800">Coordinator Attribution</span>
+            </div>
+            <h3 class="text-lg sm:text-xl font-bold text-[#0F172A]">Lead Source Conversion &amp; SLA Breakdown</h3>
+            <p class="text-xs text-slate-500">Measure how efficiently the coordinator converts and nurtures leads from each studio acquisition channel</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-500">View Month:</span>
+            <select class="p-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold">
+              <option>October 2026 (Current)</option>
+              <option>September 2026</option>
+              <option>Q3 2026 Cumulative</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Channel Performance Cards Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          
+          <!-- Channel 1: Developer Tie-up -->
+          <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-3 shadow-sm hover:border-indigo-300 transition-colors">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold badge-developer flex items-center gap-1.5">
+                <i data-lucide="building-2" class="w-3.5 h-3.5"></i> Developer Tie-ups
+              </span>
+              <span class="text-xs font-extrabold text-indigo-700">75% Win</span>
+            </div>
+            <div class="space-y-1">
+              <div class="flex justify-between text-slate-500">
+                <span>Leads Handled:</span>
+                <span class="font-bold text-[#0F172A]">12 Leads</span>
+              </div>
+              <div class="flex justify-between text-slate-500">
+                <span>Converted to Projects:</span>
+                <span class="font-bold text-emerald-600">9 Active Sites</span>
+              </div>
+              <div class="flex justify-between text-slate-500">
+                <span>Avg Cycle Time:</span>
+                <span class="font-bold text-slate-700">8.5 Days</span>
+              </div>
+              <div class="flex justify-between text-slate-500">
+                <span>Total Booked Value:</span>
+                <span class="font-bold text-indigo-900">₹85,00,000</span>
+              </div>
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span class="text-slate-400">First Response SLA:</span>
+              <span class="font-bold text-emerald-600">12 Mins (Target &lt;30m)</span>
+            </div>
+          </div>
+
+          <!-- Channel 2: Architect Referrals -->
+          <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-3 shadow-sm hover:border-purple-300 transition-colors">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold badge-architect flex items-center gap-1.5">
+                <i data-lucide="crown" class="w-3.5 h-3.5"></i> Architect Referrals
+              </span>
+              <span class="text-xs font-extrabold text-purple-700">80% Win</span>
+            </div>
+            <div class="space-y-1">
+              <div class="flex justify-between text-slate-500">
+                <span>Leads Handled:</span>
+                <span class="font-bold text-[#0F172A]">5 Leads</span>
+              </div>
+              <div class="flex justify-between text-slate-500">
+                <span>Converted to Projects:</span>
+                <span class="font-bold text-emerald-600">4 Active Sites</span>
+              </div>
+              <div class="flex justify-between text-slate-500">
+                <span>Avg Cycle Time:</span>
+                <span class="font-bold text-slate-700">14.0 Days</span>
+              </div>
+              <div class="flex justify-between text-slate-500">
+                <span>Total Booked Value:</span>
+                <span class="font-bold text-purple-900">₹62,00,000</span>
+              </div>
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span class="text-slate-400">First Response SLA:</span>
+              <span class="font-bold text-emerald-600">Same Day Meeting</span>
+            </div>
+          </div>
+
+          <!-- Channel 3: Past Client Referrals -->
+          <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-3 shadow-sm hover:border-emerald-300 transition-colors">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold badge-pastclient flex items-center gap-1.5">
+                <i data-lucide="heart-handshake" class="w-3.5 h-3.5"></i> Past Client Referrals
+              </span>
+              <span class="text-xs font-extrabold text-emerald-700">100% Win</span>
+            </div>
+            <div class="space-y-1">
+              <div class="flex justify-between text-slate-500">
+                <span>Leads Handled:</span>
+                <span class="font-bold text-[#0F172A]">3 Leads</span>
+              </div>
+              <div class="flex justify-between text-slate-500">
+                <span>Converted to Projects:</span>
+                <span class="font-bold text-emerald-600">3 Active Sites</span>
+              </div>
+              <div class="flex justify-between text-slate-500">
+                <span>Avg Cycle Time:</span>
+                <span class="font-bold text-slate-700">6.0 Days</span>
+              </div>
+              <div class="flex justify-between text-slate-500">
+                <span>Total Booked Value:</span>
+                <span class="font-bold text-emerald-900">₹45,00,000</span>
+              </div>
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span class="text-slate-400">First Response SLA:</span>
+              <span class="font-bold text-emerald-600">Immediate VIP Call</span>
+            </div>
+          </div>
+
+          <!-- Channel 4: Social / Web Inbound -->
+          <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-3 shadow-sm hover:border-amber-300 transition-colors">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold badge-instagram flex items-center gap-1.5">
+                <i data-lucide="camera" class="w-3.5 h-3.5"></i> Instagram / Inbound
+              </span>
+              <span class="text-xs font-extrabold text-amber-700">38% Win</span>
+            </div>
+            <div class="space-y-1">
+              <div class="flex justify-between text-slate-500">
+                <span>Leads Handled:</span>
+                <span class="font-bold text-[#0F172A]">8 Leads</span>
+              </div>
+              <div class="flex justify-between text-slate-500">
+                <span>Converted to Projects:</span>
+                <span class="font-bold text-emerald-600">3 Active Sites</span>
+              </div>
+              <div class="flex justify-between text-slate-500">
+                <span>Avg Cycle Time:</span>
+                <span class="font-bold text-slate-700">22.0 Days</span>
+              </div>
+              <div class="flex justify-between text-slate-500">
+                <span>Total Booked Value:</span>
+                <span class="font-bold text-amber-900">₹28,00,000</span>
+              </div>
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span class="text-slate-400">First Response SLA:</span>
+              <span class="font-bold text-amber-600">18 Mins (Target &lt;15m)</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Channel Specific Action Recommendations -->
+        <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 text-xs">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-[#0F172A] uppercase">Coordinator Channel Nurturing Guidelines</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold">Studio Best Practices</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="p-3 bg-white rounded-xl border border-slate-200 space-y-1">
+              <span class="font-bold text-indigo-900 block">• Developer Tie-ups (Volume Driver)</span>
+              <p class="text-slate-600 text-[11px]">Fast-track society NOC &amp; elevator padding. Pre-load society floor plans into LeadIQ to impress clients on Day 1.</p>
+            </div>
+            <div class="p-3 bg-white rounded-xl border border-slate-200 space-y-1">
+              <span class="font-bold text-purple-900 block">• Architect Referrals (High Value)</span>
+              <p class="text-slate-600 text-[11px]">Ensure zero conflict with external architect specs. Tag drawing queries directly to Lead Designer within 2 hours.</p>
+            </div>
+            <div class="p-3 bg-white rounded-xl border border-slate-200 space-y-1">
+              <span class="font-bold text-amber-900 block">• Instagram Inbound (Filter &amp; Nurture)</span>
+              <p class="text-slate-600 text-[11px]">Send digital lookbook immediately. Qualify budget tier within first phone call before booking physical studio visit.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- SCREEN 3: INTUITIVE CRM & FOLLOW-UP RADAR                -->
+      <!-- ======================================================== -->
+      <div id="mock-screen-3" class="mock-view space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-indigo-600 uppercase">Client Relationship Radar</span>
+              <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-indigo-100 text-indigo-800">4 Active Accounts</span>
+            </div>
+            <h3 class="text-lg sm:text-xl font-bold text-[#0F172A]">Follow-up Cadence &amp; Sentiment Monitor</h3>
+            <p class="text-xs text-slate-500">Filter accounts by Lead Source or Health Sentiment; trigger pre-approved WhatsApp follow-ups in 1 click</p>
+          </div>
+          
+          <!-- Source Filter Chips -->
+          <div class="flex flex-wrap items-center gap-1.5 text-xs">
+            <span class="text-slate-400 mr-1 text-[11px]">Source:</span>
+            <button onclick="filterSource('all')" class="px-2.5 py-1 rounded-lg bg-slate-900 text-white font-bold">All</button>
+            <button onclick="filterSource('developer')" class="px-2.5 py-1 rounded-lg badge-developer font-bold">Developer</button>
+            <button onclick="filterSource('architect')" class="px-2.5 py-1 rounded-lg badge-architect font-bold">Architect</button>
+            <button onclick="filterSource('pastclient')" class="px-2.5 py-1 rounded-lg badge-pastclient font-bold">Past Client</button>
+            <button onclick="filterSource('inbound')" class="px-2.5 py-1 rounded-lg badge-instagram font-bold">Instagram</button>
+          </div>
+        </div>
+
+        <!-- 4 Intuitive CRM Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+          <!-- Card 1 (Developer Tie-up, Amber delay) -->
+          <div class="p-5 rounded-2xl bg-amber-50/40 border border-amber-200 space-y-3">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-base text-[#0F172A]">Vikramaditya Sharma</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold badge-developer flex items-center gap-1">
+                    <i data-lucide="building-2" class="w-3 h-3"></i> Prestige Tie-up
+                  </span>
+                  <span class="text-[10px] px-2 py-0.5 rounded font-extrabold bg-amber-200 text-amber-900">AMBER · KEY DUE</span>
+                </div>
+                <span class="text-xs text-slate-500">Villa Serene, Whitefield · Contract: ₹28,50,000</span>
+              </div>
+              <button onclick="openLogTouchpointModal('Vikramaditya Sharma', 'Villa Serene')" class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-[#0F172A] hover:bg-slate-50">
+                + Log Touch
+              </button>
+            </div>
+
+            <div class="p-3 rounded-xl bg-white border border-amber-100 text-xs space-y-1.5">
+              <div class="flex justify-between text-slate-400 text-[10px]">
+                <span>Last Touch: WhatsApp (Yesterday)</span>
+                <span class="text-amber-800 font-bold">Next Action: Key Pickup TODAY</span>
+              </div>
+              <p class="text-slate-700 font-medium">Pending: Site keys at security. Carpenter team standing by to start on Thursday.</p>
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+              <span class="text-[11px] text-slate-500">Sentiment: <span class="text-amber-800 font-bold">Cooperative (Busy)</span></span>
+              <button onclick="triggerWhatsAppNudge('Vikramaditya Sharma', 'Key Pickup Confirmation')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                <span>1-Click WhatsApp Nudge</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Card 2 (Architect Referral, Green Delighted) -->
+          <div class="p-5 rounded-2xl bg-emerald-50/30 border border-emerald-200 space-y-3">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-base text-[#0F172A]">Ananya Roy</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold badge-architect flex items-center gap-1">
+                    <i data-lucide="crown" class="w-3.5 h-3.5"></i> Architect Referral
+                  </span>
+                  <span class="text-[10px] px-2 py-0.5 rounded font-extrabold bg-emerald-100 text-emerald-800">GREEN · DELIGHTED</span>
+                </div>
+                <span class="text-xs text-slate-500">Palm Grove Apt 402 · Contract: ₹32,00,000</span>
+              </div>
+              <button onclick="openLogTouchpointModal('Ananya Roy', 'Palm Grove Apt')" class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-[#0F172A] hover:bg-slate-50">
+                + Log Touch
+              </button>
+            </div>
+
+            <div class="p-3 rounded-xl bg-white border border-emerald-100 text-xs space-y-1.5">
+              <div class="flex justify-between text-slate-400 text-[10px]">
+                <span>Last Touch: Phone Call (Today)</span>
+                <span class="text-emerald-700 font-bold">Next Action: Tile Sample Walkthrough</span>
+              </div>
+              <p class="text-slate-700 font-medium">NEFT payment for Carcass stage logged. Client delighted with weekly milestone photo updates.</p>
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+              <span class="text-[11px] text-slate-500">Sentiment: <span class="text-emerald-700 font-bold">Highly Delighted</span></span>
+              <button onclick="triggerWhatsAppNudge('Ananya Roy', 'Tile Walkthrough Invite')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                <span>Invite to Studio Walkthrough</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Card 3 (Past Client Referral, Green) -->
+          <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-base text-[#0F172A]">Kunal &amp; Radhika Shah</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold badge-pastclient flex items-center gap-1">
+                    <i data-lucide="heart-handshake" class="w-3 h-3"></i> Past Client (2nd Home)
+                  </span>
+                  <span class="text-[10px] px-2 py-0.5 rounded font-extrabold bg-emerald-100 text-emerald-800">GREEN</span>
+                </div>
+                <span class="text-xs text-slate-500">The Oberoi Penthouse · Contract: ₹65,00,000</span>
+              </div>
+              <button onclick="openLogTouchpointModal('Kunal Shah', 'The Oberoi Penthouse')" class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-[#0F172A] hover:bg-slate-50">
+                + Log Touch
+              </button>
+            </div>
+
+            <div class="p-3 rounded-xl bg-white border border-slate-200 text-xs space-y-1.5">
+              <div class="flex justify-between text-slate-400 text-[10px]">
+                <span>Last Touch: MoM Sent (Today)</span>
+                <span class="text-indigo-600 font-bold">Next Action: Quartz Counter Signoff</span>
+              </div>
+              <p class="text-slate-700 font-medium">Walkthrough MoM broadcasted within 2.5h. Quartz sample dispatched for residence sign-off.</p>
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+              <span class="text-[11px] text-slate-500">Sentiment: <span class="text-emerald-700 font-bold">Fast Decision Maker</span></span>
+              <button onclick="triggerWhatsAppNudge('Kunal Shah', 'Quartz Sample Tracking')" class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                <span>Send Sample ETA Link</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Card 4 (Instagram Inbound, Amber billing) -->
+          <div class="p-5 rounded-2xl bg-amber-50/40 border border-amber-200 space-y-3">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-base text-[#0F172A]">Dr. Arvind Swaminathan</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold badge-instagram flex items-center gap-1">
+                    <i data-lucide="camera" class="w-3.5 h-3.5"></i> Instagram Reel Lead
+                  </span>
+                  <span class="text-[10px] px-2 py-0.5 rounded font-extrabold bg-amber-200 text-amber-900">AMBER · PAYMENT DUE</span>
+                </div>
+                <span class="text-xs text-slate-500">Greenwood Estate · Contract: ₹22,00,000</span>
+              </div>
+              <button onclick="openLogTouchpointModal('Dr. Arvind', 'Greenwood Estate')" class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-[#0F172A] hover:bg-slate-50">
+                + Log Touch
+              </button>
+            </div>
+
+            <div class="p-3 rounded-xl bg-white border border-amber-100 text-xs space-y-1.5">
+              <div class="flex justify-between text-slate-400 text-[10px]">
+                <span>Last Touch: Invoice Sent (5d ago)</span>
+                <span class="text-rose-700 font-bold">Overdue: ₹2,80,000</span>
+              </div>
+              <p class="text-slate-700 font-medium">Milestone 4 (Finishes). Client traveling until Thursday. Cadence rule: Send gentle reminder #2.</p>
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+              <span class="text-[11px] text-slate-500">Sentiment: <span class="text-amber-800 font-bold">Delayed Payment</span></span>
+              <button onclick="triggerWhatsAppNudge('Dr. Arvind', 'Milestone 4 Gentle Followup')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                <span>Send Gentle WhatsApp Nudge</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- SCREEN 4: PRE-SITE ONBOARDING GATE                       -->
+      <!-- ======================================================== -->
+      <div id="mock-screen-4" class="mock-view space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-indigo-600 uppercase">Pre-Site Kickoff Gate</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold badge-developer">Developer Tie-up</span>
+            </div>
+            <h3 class="text-lg sm:text-xl font-bold text-[#0F172A]">Villa Serene · 6-Step Onboarding Readiness</h3>
+            <p class="text-xs text-slate-500">Zero site deployment without verified society NOC, elevator protection, and key handover</p>
+          </div>
+          <button onclick="triggerAction('All pre-site gates cleared! Site Kickoff authorized.')" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-sm">
+            Authorize Carpentry Deployment
+          </button>
+        </div>
+
+        <!-- 6 Step Pipeline Ribbon -->
+        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+          <div class="flex items-center justify-between text-xs font-bold text-slate-700 mb-2">
+            <span>Onboarding Pipeline Progress</span>
+            <span class="text-indigo-600 font-mono">4 of 6 Steps Cleared (67%)</span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center text-[10px] font-bold">
+            <div class="p-2.5 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-200">✔ 1. Welcome Kit</div>
+            <div class="p-2.5 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-200">✔ 2. Brief &amp; Quiz</div>
+            <div class="p-2.5 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-200">✔ 3. Society NOC</div>
+            <div class="p-2.5 rounded-xl bg-indigo-600 text-white shadow-md">4. Keys &amp; Passcode</div>
+            <div class="p-2.5 rounded-xl bg-slate-200 text-slate-600">5. Utilities Active</div>
+            <div class="p-2.5 rounded-xl bg-slate-200 text-slate-600">6. Advance Verified</div>
+          </div>
+        </div>
+
+        <!-- Checklists -->
+        <div class="space-y-3 text-xs">
+          <label class="flex items-center justify-between p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200 cursor-pointer">
+            <div class="flex items-center gap-3">
+              <input type="checkbox" checked class="w-4 h-4 text-emerald-600 rounded">
+              <div>
+                <span class="font-bold text-[#0F172A] block">1. Society Work Permission &amp; Demolition NOC</span>
+                <span class="text-[11px] text-slate-500">Approved by Prestige Association on 6 Oct. Work timings: 9 AM to 6 PM.</span>
+              </div>
+            </div>
+            <span class="text-[10px] px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold">Verified NOC</span>
+          </label>
+
+          <label class="flex items-center justify-between p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200 cursor-pointer">
+            <div class="flex items-center gap-3">
+              <input type="checkbox" checked class="w-4 h-4 text-emerald-600 rounded">
+              <div>
+                <span class="font-bold text-[#0F172A] block">2. Service Elevator Padding &amp; Corridor Floor Covers</span>
+                <span class="text-[11px] text-slate-500">High-density padded covers installed. Inspected by Building Security Head.</span>
+              </div>
+            </div>
+            <span class="text-[10px] px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold">Verified</span>
+          </label>
+
+          <label class="flex items-center justify-between p-4 rounded-2xl bg-amber-50 border border-amber-200 cursor-pointer">
+            <div class="flex items-center gap-3">
+              <input type="checkbox" class="w-4 h-4 text-amber-600 rounded">
+              <div>
+                <span class="font-bold text-amber-950 block">3. Site Physical Key &amp; Digital Door Pin Handover</span>
+                <span class="text-[11px] text-amber-800">Client promised keys at Tower 3 security desk tomorrow 10:30 AM.</span>
+              </div>
+            </div>
+            <button onclick="triggerAction('Pickup task added to Site Supervisor Rajesh calendar')" class="px-3 py-1.5 rounded-xl bg-amber-600 text-white text-[10px] font-bold shadow-sm">
+              Confirm Guard Pickup
+            </button>
+          </label>
+
+          <label class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
+            <div class="flex items-center gap-3">
+              <input type="checkbox" class="w-4 h-4 text-slate-400 rounded">
+              <div>
+                <span class="font-bold text-slate-700 block">4. Temporary Site Water &amp; Electricity MCB Verified</span>
+                <span class="text-[11px] text-slate-400">Electrician scheduled to install heavy duty breaker tomorrow 2 PM.</span>
+              </div>
+            </div>
+            <span class="text-[10px] px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 font-bold">Pending Site</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- SCREEN 5: MOM & DIRECT DRAWING ACTION TAGS               -->
+      <!-- ======================================================== -->
+      <div id="mock-screen-5" class="mock-view space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-indigo-600 uppercase">Minutes &amp; Decisions</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold badge-pastclient">Past Client Referral</span>
+            </div>
+            <h3 class="text-lg sm:text-xl font-bold text-[#0F172A]">MoM Capture with Drawing ID &amp; Room Action Tags</h3>
+            <p class="text-xs text-slate-500">Every decision tags the drawing sheet ID directly, alerting the Designer in Design Desk</p>
+          </div>
+          <button onclick="triggerAction('MoM broadcasted to WhatsApp Group within 2.5h!')" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-sm flex items-center gap-1.5">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            <span>Broadcast MoM to WhatsApp Group</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 text-xs">
+          <div class="lg:col-span-7 space-y-3">
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+              <div class="flex justify-between items-center text-slate-800 font-bold">
+                <span>The Oberoi Penthouse · Walkthrough #04</span>
+                <span class="text-slate-400 text-[10px] font-mono">11:00 AM - 12:30 PM</span>
+              </div>
+              <p class="text-slate-500 text-[11px]">Attendees: Kunal Shah, Priya M. (Designer), Rajesh K. (Site Supv), Ramesh (Junior Ops)</p>
+            </div>
+
+            <div class="space-y-2.5">
+              <div class="p-3.5 bg-white rounded-2xl border border-slate-200 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[#0F172A]">Master Bath Concealed Diverter Height</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-indigo-100 text-indigo-700">TAG: DWG-PLUMB-03</span>
+                </div>
+                <p class="text-slate-600 text-[11px]">Raise diverter from 1050mm to 1125mm per client ergonomics request.</p>
+                <div class="flex justify-between items-center text-[10px] text-slate-400 pt-1">
+                  <span>Assigned to: Priya M. (Lead Designer)</span>
+                  <span class="text-amber-700 font-bold">Due: Tomorrow 2 PM</span>
+                </div>
+              </div>
+
+              <div class="p-3.5 bg-white rounded-2xl border border-slate-200 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[#0F172A]">Living Ceiling Light Cove Shift</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-indigo-100 text-indigo-700">TAG: DWG-ELEC-07</span>
+                </div>
+                <p class="text-slate-600 text-[11px]">Shift cove profile 100mm towards TV wall to clear AC copper routing line.</p>
+                <div class="flex justify-between items-center text-[10px] text-slate-400 pt-1">
+                  <span>Assigned to: Rajesh K. (Site Supv)</span>
+                  <span class="text-emerald-700 font-bold">Status: Cleared on Site</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="lg:col-span-5 p-5 rounded-2xl bg-emerald-50/50 border border-emerald-200 space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-emerald-950">WhatsApp Group MoM Card</span>
+              <span class="text-[10px] px-2 py-0.5 bg-emerald-200 text-emerald-900 rounded font-bold">Instant Broadcast</span>
+            </div>
+
+            <div class="p-4 rounded-xl bg-white border border-emerald-200/80 font-mono text-[11px] text-slate-800 space-y-2 leading-relaxed">
+              <p class="font-bold text-[#0F172A] font-sans">📋 MOM: The Oberoi Penthouse (Site Walkthrough #04)</p>
+              <p>📅 Date: 09 Oct 2026 | Attendees: Kunal S., Priya, Rajesh, Ramesh</p>
+              <div class="border-t border-slate-100 pt-1.5 space-y-1 text-slate-600 font-sans">
+                <p>• <strong>Master Bath:</strong> Diverter height raised 75mm (@Priya updating DWG-PLUMB-03 by 2 PM tomorrow).</p>
+                <p>• <strong>Living Ceiling:</strong> Cove shifted 100mm to clear AC line (@Rajesh executing with POP team).</p>
+                <p>• <strong>Kitchen Quartz:</strong> Calacatta Gold sample arriving at residence by 6 PM today (@Ramesh coordinating).</p>
+              </div>
+              <p class="text-[10px] text-emerald-700 font-bold pt-1 font-sans">✨ All actions recorded in Studio OS decision ledger.</p>
+            </div>
+
+            <button onclick="triggerAction('MoM card copied to clipboard & WhatsApp opened!')" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span>Copy &amp; Open WhatsApp Group</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- SCREEN 6: APPROVED INVOICES & UTR INTAKE                 -->
+      <!-- ======================================================== -->
+      <div id="mock-screen-6" class="mock-view space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-indigo-600 uppercase">Billing Desk</span>
+              <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-indigo-100 text-indigo-800">Approved Claims Only</span>
+            </div>
+            <h3 class="text-lg sm:text-xl font-bold text-[#0F172A]">Approved Invoices Dispatch &amp; UTR Receipt Intake</h3>
+            <p class="text-xs text-slate-500">Coordinator views milestone selling amounts (studio profit margins hidden) and logs bank transaction proof</p>
+          </div>
+          <button onclick="openLogUTRModal()" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-sm flex items-center gap-1.5">
+            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+            <span>Log Payment UTR Receipt</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="font-bold text-[#0F172A] block">Milestone 3: Carcass Stage</span>
+                <span class="text-[10px] text-slate-400">Villa Serene · #FFDS-INV-1092</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold">Approved</span>
+            </div>
+            <div class="flex justify-between items-baseline py-1">
+              <span class="text-slate-500">Claim Amount:</span>
+              <span class="text-lg font-bold text-[#0F172A]">₹6,50,000</span>
+            </div>
+            <button onclick="triggerAction('Approved Proforma & Bank QR Link sent via WhatsApp!')" class="w-full py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs flex items-center justify-center gap-1.5">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+              <span>Dispatch Approved Proforma</span>
+            </button>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-amber-50/50 border border-amber-200 space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="font-bold text-[#0F172A] block">Milestone 4: Paint &amp; Polish</span>
+                <span class="text-[10px] text-slate-400">Greenwood Estate · #FFDS-INV-1088</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold">Overdue 5d</span>
+            </div>
+            <div class="flex justify-between items-baseline py-1">
+              <span class="text-slate-500">Due Amount:</span>
+              <span class="text-lg font-bold text-rose-700">₹2,80,000</span>
+            </div>
+            <button onclick="triggerWhatsAppNudge('Dr. Arvind', 'Gentle Milestone 4 Overdue Reminder')" class="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5">
+              <i data-lucide="bell" class="w-3.5 h-3.5"></i>
+              <span>Send Gentle Payment Nudge</span>
+            </button>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-emerald-50/40 border border-emerald-200 space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="font-bold text-[#0F172A] block">Milestone 2: MEP &amp; Masonry</span>
+                <span class="text-[10px] text-slate-400">Palm Grove Apt · #FFDS-INV-1085</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">UTR Logged</span>
+            </div>
+            <div class="flex justify-between items-baseline py-1">
+              <span class="text-slate-500">Received Amount:</span>
+              <span class="text-lg font-bold text-emerald-700">₹4,20,000</span>
+            </div>
+            <button onclick="triggerAction('Accounts reconciliation notified!')" class="w-full py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-slate-50">
+              <i data-lucide="check" class="w-3.5 h-3.5"></i>
+              <span>Reconciliation Alert Sent</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- SCREEN 7: HANDOVER & WARRANTIES                          -->
+      <!-- ======================================================== -->
+      <div id="mock-screen-7" class="mock-view space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-indigo-600 uppercase">Handover Engine</span>
+              <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-indigo-100 text-indigo-800">Palm Grove Apt</span>
+            </div>
+            <h3 class="text-lg sm:text-xl font-bold text-[#0F172A]">Handover Dossier Binder, Snags &amp; Review Trigger</h3>
+            <p class="text-xs text-slate-500">Collect appliance warranty cards, clear punchlists, and dispatch Google Review links</p>
+          </div>
+          <button onclick="triggerAction('Handover Dossier Compiled & Final 5% Retention Claim Unlocked!')" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-sm">
+            Generate Handover Certificate
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
+          <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+            <div class="flex justify-between items-center font-bold text-[#0F172A]">
+              <span>Snag Punchlist Resolution</span>
+              <span class="text-[11px] text-emerald-600">3 of 4 Snags Resolved</span>
+            </div>
+            <div class="space-y-2">
+              <div class="p-3 bg-white rounded-xl border border-slate-200 flex justify-between">
+                <span>Master Bed Veneer Touchup</span>
+                <span class="text-emerald-600 font-bold">✔ Cleared (Photo Attached)</span>
+              </div>
+              <div class="p-3 bg-white rounded-xl border border-slate-200 flex justify-between">
+                <span>Balcony Planter Waterproofing</span>
+                <span class="text-emerald-600 font-bold">✔ Cleared (Pond Test Passed)</span>
+              </div>
+              <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 flex justify-between items-center">
+                <span class="font-bold text-amber-950">Guest Powder Room Silicone</span>
+                <button onclick="triggerAction('Silicone fix photo uploaded & resolved')" class="px-2 py-0.5 bg-amber-600 text-white rounded font-bold text-[10px]">
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+            <div class="flex justify-between items-center font-bold text-[#0F172A]">
+              <span>Handover Collateral Binder</span>
+              <span class="text-[11px] text-indigo-600">4 of 5 Collected</span>
+            </div>
+            <div class="space-y-2">
+              <div class="p-2.5 bg-white rounded-xl border border-slate-200 flex justify-between">
+                <span>✔ Bosch Chimney &amp; Hob Warranty</span>
+                <span class="text-slate-400 text-[10px]">Uploaded</span>
+              </div>
+              <div class="p-2.5 bg-white rounded-xl border border-slate-200 flex justify-between">
+                <span>✔ Italian Marble Sealing Manual</span>
+                <span class="text-slate-400 text-[10px]">Uploaded</span>
+              </div>
+              <div class="p-2.5 bg-white rounded-xl border border-slate-200 flex justify-between">
+                <span>✔ Paint Touch-up Shade Code Card</span>
+                <span class="text-slate-400 text-[10px]">Uploaded</span>
+              </div>
+            </div>
+            <button onclick="triggerWhatsAppNudge('Ananya Roy', 'Google Review & Testimonial Request')" class="w-full mt-2 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm">
+              <i data-lucide="star" class="w-3.5 h-3.5"></i>
+              <span>Send Google Review &amp; Testimonial Link</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- VIEW 2: LEAD SOURCE ATTRIBUTION ARCHITECTURE             -->
+  <!-- ======================================================== -->
+  <main id="section-leadsource" class="flex-1 max-w-[1520px] w-full mx-auto p-4 sm:p-8 space-y-8 hidden">
+    <section class="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-card space-y-4">
+      <div class="space-y-1">
+        <span class="text-xs font-bold text-indigo-600 uppercase tracking-wider">Business Architecture Evaluation</span>
+        <h2 class="text-2xl sm:text-3xl font-bold text-[#0F172A] font-serif">
+          Why Lead Source is the Heart of Operations Team Performance
+        </h2>
+        <p class="text-xs sm:text-sm text-slate-500 max-w-4xl">
+          In an interior design studio, not all leads are created equal. An Architect Referral converts in 12 days with high trust, while an Instagram inbound requires aggressive qualification to avoid wasting design resources. Evaluating an Ops member on conversion without factoring in Lead Source penalizes them unfairly or hides channel bottlenecks.
+        </p>
+      </div>
+
+      <!-- 5 Studio Lead Sources Breakdown -->
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4 pt-4 text-xs">
+        <div class="p-4 rounded-2xl badge-developer space-y-1.5">
+          <div class="flex items-center gap-1.5 font-bold">
+            <i data-lucide="building-2" class="w-4 h-4"></i>
+            <span>1. Developer Handover</span>
+          </div>
+          <p class="text-slate-600 leading-relaxed text-[11px]">Handover drives at Prestige, Sobha, DLF. High volume, strict move-in dates, society NOC dependent.</p>
+          <span class="block font-bold text-indigo-900 pt-1">Ops KPI: Key to Kickoff &lt;10d</span>
+        </div>
+
+        <div class="p-4 rounded-2xl badge-architect space-y-1.5">
+          <div class="flex items-center gap-1.5 font-bold">
+            <i data-lucide="crown" class="w-4 h-4"></i>
+            <span>2. Architect Referral</span>
+          </div>
+          <p class="text-slate-600 leading-relaxed text-[11px]">High ticket value (₹45L+). Ops must maintain white-glove comms and ensure strict drawing fidelity.</p>
+          <span class="block font-bold text-purple-900 pt-1">Ops KPI: Zero spec conflict</span>
+        </div>
+
+        <div class="p-4 rounded-2xl badge-pastclient space-y-1.5">
+          <div class="flex items-center gap-1.5 font-bold">
+            <i data-lucide="heart-handshake" class="w-4 h-4"></i>
+            <span>3. Past Client Referral</span>
+          </div>
+          <p class="text-slate-600 leading-relaxed text-[11px]">80%+ closing rate. Fast track onboarding and personalized gift kit within 24h.</p>
+          <span class="block font-bold text-emerald-900 pt-1">Ops KPI: 100% On-time survey</span>
+        </div>
+
+        <div class="p-4 rounded-2xl badge-instagram space-y-1.5">
+          <div class="flex items-center gap-1.5 font-bold">
+            <i data-lucide="camera" class="w-4 h-4"></i>
+            <span>4. Instagram / Social</span>
+          </div>
+          <p class="text-slate-600 leading-relaxed text-[11px]">Visual curiosity. Ops must respond in &lt;15 mins and qualify budget fit before booking 3D designers.</p>
+          <span class="block font-bold text-amber-900 pt-1">Ops KPI: First response &lt;15m</span>
+        </div>
+
+        <div class="p-4 rounded-2xl badge-website space-y-1.5">
+          <div class="flex items-center gap-1.5 font-bold">
+            <i data-lucide="globe" class="w-4 h-4"></i>
+            <span>5. Website Organic/Ads</span>
+          </div>
+          <p class="text-slate-600 leading-relaxed text-[11px]">High search intent. Immediate portfolio dispatch and discovery call scheduling.</p>
+          <span class="block font-bold text-green-900 pt-1">Ops KPI: Discovery booked in 24h</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- VIEW 3: COMPREHENSIVE IMPLEMENTATION PLAN                -->
+  <!-- ======================================================== -->
+  <main id="section-plan" class="flex-1 max-w-[1520px] w-full mx-auto p-4 sm:p-8 space-y-8 hidden">
+    <section class="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-card space-y-6">
+      <div class="space-y-1">
+        <span class="text-xs font-bold text-indigo-600 uppercase tracking-wider">Engineering Roadmap</span>
+        <h2 class="text-2xl sm:text-3xl font-bold text-[#0F172A] font-serif">
+          Phased Implementation Plan: From Types to Production UI
+        </h2>
+        <p class="text-xs sm:text-sm text-slate-500 max-w-4xl">
+          Concrete plan adhering strictly to the Working Agreement (no router, Tailwind in HTML, Lucide icons, Framer Motion, TypeScript, dbService persistence).
+        </p>
+      </div>
+
+      <!-- 5 Implementation Phases -->
+      <div class="space-y-4 text-xs">
+        
+        <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-base text-[#0F172A]">Phase 1: Types &amp; Domain Model Extension (`types.ts`)</span>
+            <span class="px-2.5 py-1 rounded bg-indigo-100 text-indigo-700 font-bold font-mono">TYPES LAYER</span>
+          </div>
+          <p class="text-slate-600 leading-relaxed">
+            • Add `LeadSourceType = 'developer_tieup' | 'architect_referral' | 'past_client' | 'instagram' | 'website_organic' | 'walk_in' | 'broker'` to `types.ts`.<br>
+            • Extend `ProjectContext` and `LeadProfile` with `leadSource: LeadSourceType`, `referralPartnerName?: string`, and `leadAttributedToUid?: string`.<br>
+            • Add `TouchpointLogRecord` interface: id, projectId, coordinatorUid, channel, sentiment ('green' | 'amber' | 'red'), summary, nextActionDate, leadSource, timestamp.<br>
+            • Add `PreSiteChecklistState`: societyNocDone, elevatorPaddingDone, keysDeposited, utilitiesActive, briefSigned, advanceVerified.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-base text-[#0F172A]">Phase 2: RBAC Hard Security &amp; Tab Permissions (`lib/roleAccess.ts`)</span>
+            <span class="px-2.5 py-1 rounded bg-purple-100 text-purple-700 font-bold font-mono">SECURITY LAYER</span>
+          </div>
+          <p class="text-slate-600 leading-relaxed">
+            • Register `UserRole = 'Ops Coordinator'` in `types.ts` and `lib/roleAccess.ts`.<br>
+            • In `roleAccess.ts`: grant active access to `home`, `clients`, `onboarding`, `mom-action-tracker`, `handover-docket`, `drawing-tracker`.<br>
+            • Maintain strict financial isolation: `FINANCE_TABS` blocks `ops` (pricing), `analytics` (margins), `reports` (studio P&amp;L), and item bank buy rates.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-base text-[#0F172A]">Phase 3: Global Sidebar &amp; Routing Integration (`components/Header.tsx` &amp; `App.tsx`)</span>
+            <span class="px-2.5 py-1 rounded bg-indigo-100 text-indigo-700 font-bold font-mono">ROUTING LAYER</span>
+          </div>
+          <p class="text-slate-600 leading-relaxed">
+            • In `components/Header.tsx`: ensure `Ops Coordinator` sees `Home`, `Projects`, `Clients` in the `STUDIO` section.<br>
+            • In `components/StudioHomeOrbit.tsx`: render the tailored **Coordinator Daily Cockpit** when `currentRole === 'Ops Coordinator'`.<br>
+            • In `components/ClientsTab.tsx`: add segmented sub-navigation for *1. Client Directory*, *2. Lead Source Attribution &amp; Follow-up Radar*, and *3. Daily Activity Scorecard*.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-base text-[#0F172A]">Phase 4: Component Implementation (`components/ops/*`)</span>
+            <span class="px-2.5 py-1 rounded bg-emerald-100 text-emerald-700 font-bold font-mono">UI COMPONENTS</span>
+          </div>
+          <p class="text-slate-600 leading-relaxed">
+            • Create `components/ops/LeadSourcePerformanceLedger.tsx` for channel win rates &amp; cycle times.<br>
+            • Create `components/ops/ClientTouchpointLoggerModal.tsx` for frictionless 30s interaction capture.<br>
+            • Upgrade `components/onboarding/OnboardingTab.tsx` with the 6-step gated pre-site readiness pipeline.<br>
+            • Upgrade `components/MomActionTracker.tsx` with direct Drawing Sheet ID and Room action tagging and WhatsApp MoM card generator.<br>
+            • Build `components/ops/EODDigestModal.tsx` for 1-click WhatsApp/Slack daily summary generation.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-base text-[#0F172A]">Phase 5: Persistence &amp; Audit Layer (`services/dbService.ts`)</span>
+            <span class="px-2.5 py-1 rounded bg-amber-100 text-amber-700 font-bold font-mono">STORAGE &amp; AUDIT</span>
+          </div>
+          <p class="text-slate-600 leading-relaxed">
+            • Persist touchpoints into `organizations/{orgId}/touchpoints` subcollection or project context with cryptographic audit trail.<br>
+            • Track EOD submissions in `organizations/{orgId}/eodReports`.<br>
+            • Ensure full offline fallback to `idb-keyval` when running without active Firestore connection.
+          </p>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: QUICK LOG TOUCHPOINT WITH LEAD SOURCE             -->
+  <!-- ======================================================== -->
+  <div id="modal-touchpoint" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div>
+          <span class="text-[10px] font-bold text-indigo-600 uppercase">Quantify Output</span>
+          <h3 class="text-base font-bold text-[#0F172A]">Log Client Touchpoint (30s Capture)</h3>
+        </div>
+        <button onclick="closeLogTouchpointModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Project &amp; Client</label>
+          <select id="tp-project" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium">
+            <option>Villa Serene · Vikramaditya Sharma</option>
+            <option>Palm Grove Apt · Ananya Roy</option>
+            <option>The Oberoi Penthouse · Kunal Shah</option>
+            <option>Greenwood Estate · Dr. Arvind</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Lead Source Attribution</label>
+            <select id="tp-source" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium">
+              <option>Developer Tie-up (Prestige/Sobha)</option>
+              <option>Architect Referral</option>
+              <option>Past Client Referral</option>
+              <option>Instagram / Social</option>
+              <option>Website / Organic</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Channel</label>
+            <select id="tp-channel" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium">
+              <option>WhatsApp Message</option>
+              <option>Phone Call</option>
+              <option>Studio Visit</option>
+              <option>Site Walkthrough</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Interaction Summary &amp; Next Action</label>
+          <textarea id="tp-notes" rows="2" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium placeholder-slate-400" placeholder="e.g. Discussed tile selections; key pickup scheduled for 10:30 AM tomorrow..."></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Client Health Sentiment</label>
+            <select id="tp-sentiment" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium">
+              <option>Delighted (Green)</option>
+              <option>Neutral / Cooperative</option>
+              <option>Anxious / Needs Nudge</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Next Follow-up Due</label>
+            <input type="date" value="2026-10-11" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+        <button onclick="closeLogTouchpointModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs">Cancel</button>
+        <button onclick="saveLoggedTouchpoint()" class="px-4 py-2 rounded-xl bg-[#4f46e5] text-white font-bold text-xs shadow-sm">Save &amp; Update Scorecard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: LOG PAYMENT UTR                                   -->
+  <!-- ======================================================== -->
+  <div id="modal-utr" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div>
+          <span class="text-[10px] font-bold text-emerald-600 uppercase">Billing Desk Intake</span>
+          <h3 class="text-base font-bold text-[#0F172A]">Log Payment UTR Receipt</h3>
+        </div>
+        <button onclick="closeLogUTRModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Project &amp; Invoice</label>
+          <select class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium">
+            <option>Villa Serene · Milestone 3 (₹6,50,000)</option>
+            <option>Greenwood Estate · Milestone 4 (₹2,80,000)</option>
+            <option>The Oberoi Penthouse · Advance Payment (₹5,00,000)</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Bank UTR / Ref Number</label>
+            <input type="text" placeholder="e.g. HDFC00982341" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono font-medium">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Amount Transferred</label>
+            <input type="text" placeholder="₹6,50,000" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Payment Proof Screenshot</label>
+          <div class="p-4 rounded-xl border-2 border-dashed border-slate-200 text-center text-slate-400 space-y-1">
+            <i data-lucide="upload-cloud" class="w-5 h-5 mx-auto text-slate-400"></i>
+            <span class="block text-[11px]">Upload receipt screenshot (JPEG / PNG)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+        <button onclick="closeLogUTRModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs">Cancel</button>
+        <button onclick="saveUTRIntake()" class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-sm">Save &amp; Alert Accounts</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: EOD DIGEST PREVIEW                                -->
+  <!-- ======================================================== -->
+  <div id="modal-eod" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div>
+          <span class="text-[10px] font-bold text-indigo-600 uppercase">Work Output Summary</span>
+          <h3 class="text-base font-bold text-[#0F172A]">End-Of-Day (EOD) Operations Digest</h3>
+        </div>
+        <button onclick="closeEODModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 font-mono text-[11px] text-slate-800 space-y-2 whitespace-pre-wrap leading-relaxed" id="eod-content-box">
+📊 *FFDS STUDIO OS — EOD DIGEST*
+👤 Coordinator: Ramesh K.
+📅 Date: 10 October 2026
+
+━━━━━━━━━━━━━━━━━━━
+1. LEAD SOURCE & TOUCHPOINTS (19 Logged)
+• Developer Tie-up (Villa Serene): Key handover set at security for tomorrow 10:30 AM.
+• Architect Referral (Palm Grove): Logged UTR #HDFC0029418 for Carcass (₹4.2L).
+• Past Client (The Oberoi): Dispatched MoM with 3 action tags within 2.5h.
+• Instagram (Greenwood): Followed up Milestone 4 payment.
+
+2. PERFORMANCE RADAR
+• Follow-up SLA: 97.1% on time (&lt;15m web turn).
+• Collections Assisted Today: ₹14,20,000.
+• Active Pipeline Attributed: ₹2.20 Cr across 4 channels.
+
+🚀 Tomorrow Focus: Site key pickup &amp; carpentry kickoff at Villa Serene.
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+        <button onclick="closeEODModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs">Close</button>
+        <button onclick="copyEODToClipboard()" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-sm flex items-center gap-1.5">
+          <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+          <span>Copy for WhatsApp / Slack</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 bg-[#0F172A] text-white px-4 py-3 rounded-2xl shadow-2xl border border-indigo-500/30 text-xs font-semibold flex items-center gap-2 transform translate-y-24 transition-transform duration-300">
+    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toast-message">Action executed</span>
+  </div>
+
+  <!-- JAVASCRIPT CONTROLLERS -->
+  <script>
+    let touchpointsCount = 19;
+
+    function setViewMode(mode) {
+      const mockSec = document.getElementById('section-mockup');
+      const lsSec = document.getElementById('section-leadsource');
+      const planSec = document.getElementById('section-plan');
+      const tabMock = document.getElementById('tab-mockup');
+      const tabLs = document.getElementById('tab-leadsource');
+      const tabPlan = document.getElementById('tab-plan');
+
+      mockSec.classList.add('hidden');
+      lsSec.classList.add('hidden');
+      planSec.classList.add('hidden');
+
+      tabMock.classList.remove('bg-white', 'text-[#0F172A]', 'shadow-sm');
+      tabMock.classList.add('text-slate-300');
+      tabLs.classList.remove('bg-white', 'text-[#0F172A]', 'shadow-sm');
+      tabLs.classList.add('text-slate-300');
+      tabPlan.classList.remove('bg-white', 'text-[#0F172A]', 'shadow-sm');
+      tabPlan.classList.add('text-slate-300');
+
+      if (mode === 'mockup') {
+        mockSec.classList.remove('hidden');
+        tabMock.classList.add('bg-white', 'text-[#0F172A]', 'shadow-sm');
+        tabMock.classList.remove('text-slate-300');
+      } else if (mode === 'leadsource') {
+        lsSec.classList.remove('hidden');
+        tabLs.classList.add('bg-white', 'text-[#0F172A]', 'shadow-sm');
+        tabLs.classList.remove('text-slate-300');
+      } else if (mode === 'plan') {
+        planSec.classList.remove('hidden');
+        tabPlan.classList.add('bg-white', 'text-[#0F172A]', 'shadow-sm');
+        tabPlan.classList.remove('text-slate-300');
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function setMockupScreen(screenId) {
+      document.querySelectorAll('.mock-view').forEach(v => v.classList.add('hidden'));
+      document.querySelectorAll('.mock-btn').forEach(b => {
+        b.classList.remove('bg-[#4f46e5]', 'text-white', 'shadow-sm');
+        b.classList.add('text-slate-600');
+      });
+
+      const targetView = document.getElementById(`mock-screen-${screenId}`);
+      if (targetView) targetView.classList.remove('hidden');
+
+      const targetBtn = document.getElementById(`ms-btn-${screenId}`);
+      if (targetBtn) {
+        targetBtn.classList.add('bg-[#4f46e5]', 'text-white', 'shadow-sm');
+        targetBtn.classList.remove('text-slate-600');
+      }
+    }
+
+    function triggerAction(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-message').innerText = msg;
+      toast.classList.remove('translate-y-24');
+      setTimeout(() => {
+        toast.classList.add('translate-y-24');
+      }, 2500);
+    }
+
+    function triggerWhatsAppNudge(client, topic) {
+      triggerAction(`WhatsApp message for ${topic} sent to ${client}!`);
+    }
+
+    function filterSource(source) {
+      triggerAction(`Filtered client accounts by Lead Source: ${source.toUpperCase()}`);
+    }
+
+    function openLogTouchpointModal(client = '', project = '') {
+      document.getElementById('modal-touchpoint').classList.remove('hidden');
+    }
+    function closeLogTouchpointModal() {
+      document.getElementById('modal-touchpoint').classList.add('hidden');
+    }
+    function saveLoggedTouchpoint() {
+      touchpointsCount++;
+      document.getElementById('metric-touchpoints').innerText = touchpointsCount;
+      closeLogTouchpointModal();
+      triggerAction(`Touchpoint logged with Lead Source attribution! Total today: ${touchpointsCount}.`);
+    }
+
+    function openLogUTRModal() {
+      document.getElementById('modal-utr').classList.remove('hidden');
+    }
+    function closeLogUTRModal() {
+      document.getElementById('modal-utr').classList.add('hidden');
+    }
+    function saveUTRIntake() {
+      closeLogUTRModal();
+      triggerAction('Payment UTR recorded! Accounts team alerted.');
+    }
+
+    function generateEODDigest() {
+      document.getElementById('modal-eod').classList.remove('hidden');
+    }
+    function closeEODModal() {
+      document.getElementById('modal-eod').classList.add('hidden');
+    }
+    function copyEODToClipboard() {
+      const text = document.getElementById('eod-content-box').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        triggerAction('EOD Digest copied to clipboard for WhatsApp/Slack!');
+        closeEODModal();
+      }).catch(() => {
+        triggerAction('EOD Digest ready for WhatsApp dispatch.');
+        closeEODModal();
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

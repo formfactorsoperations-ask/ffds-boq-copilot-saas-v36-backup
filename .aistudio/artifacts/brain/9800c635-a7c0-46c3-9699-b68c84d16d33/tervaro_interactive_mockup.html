@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tervaro — The Unified Architecture & Interior Studio OS</title>
+  <meta name="description" content="Tervaro unifies StudioDesk, DesignDesk, and OpsDesk into one synchronized workflow for high-end interior architecture and turnkey design studios.">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            obsidian: '#08090C',
+            surfaceDark: '#0E1118',
+            surfaceCard: '#131822',
+            surfaceHover: '#1B2130',
+            hairline: 'rgba(255, 255, 255, 0.08)',
+            hairlineBright: 'rgba(255, 255, 255, 0.16)',
+            indigoAccent: '#6366F1',
+            indigoBright: '#818CF8',
+            indigoGlow: 'rgba(99, 102, 241, 0.25)',
+            emeraldAccent: '#10B981',
+            amberAccent: '#F59E0B'
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      background-color: #08090C;
+      color: #E2E8F0;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      overflow-x: hidden;
+      selection-background-color: #6366F1;
+      selection-color: #FFFFFF;
+    }
+    ::selection {
+      background: #6366F1;
+      color: #FFFFFF;
+    }
+    /* Subtle custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #08090C;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1E293B;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+
+    /* Ambient dynamic glows */
+    .ambient-glow-1 {
+      position: absolute;
+      top: -10%;
+      left: 20%;
+      width: 650px;
+      height: 650px;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0) 70%);
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .ambient-glow-2 {
+      position: absolute;
+      top: 40%;
+      right: 5%;
+      width: 550px;
+      height: 550px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0) 70%);
+      filter: blur(90px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Architectural grid overlay */
+    .architectural-grid {
+      background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+
+    /* Tilt effect card */
+    .tilt-card {
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+    }
+    .tilt-card:hover {
+      border-color: rgba(99, 102, 241, 0.4);
+      box-shadow: 0 20px 40px -15px rgba(99, 102, 241, 0.15);
+    }
+
+    /* Keyframes */
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.05); }
+    }
+    .animate-pulse-glow {
+      animation: pulseGlow 6s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="relative architectural-grid min-h-screen antialiased">
+
+  <!-- Ambient Light Orbs -->
+  <div class="ambient-glow-1 animate-pulse-glow"></div>
+  <div class="ambient-glow-2 animate-pulse-glow" style="animation-delay: -3s;"></div>
+
+  <!-- Top Navigation (Strict 3-Zone Contract) -->
+  <header class="sticky top-0 z-50 bg-[#08090C]/85 backdrop-blur-md border-b border-hairline transition-all">
+    <div class="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between gap-8">
+      
+      <!-- Zone 1: Single Wordmark Brand Zone -->
+      <a href="#" class="flex items-center gap-2.5 whitespace-nowrap shrink-0 group">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigoAccent to-indigoBright flex items-center justify-center text-white font-bold text-base shadow-lg shadow-indigoGlow">
+          T
+        </div>
+        <div class="flex flex-col">
+          <span class="text-lg font-bold tracking-tight text-white group-hover:text-indigoBright transition-colors">TERVARO</span>
+        </div>
+      </a>
+
+      <!-- Zone 2: 4-5 Concise Single-Line Navigation Links -->
+      <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
+        <a href="#suite" class="hover:text-white transition-colors whitespace-nowrap">Product Suite</a>
+        <a href="#studiodesk" class="hover:text-white transition-colors whitespace-nowrap">StudioDesk</a>
+        <a href="#designdesk" class="hover:text-white transition-colors whitespace-nowrap">DesignDesk</a>
+        <a href="#opsdesk" class="hover:text-white transition-colors whitespace-nowrap">OpsDesk</a>
+        <a href="#impact" class="hover:text-white transition-colors whitespace-nowrap">Studio Impact</a>
+      </nav>
+
+      <!-- Zone 3: Primary Action Button -->
+      <div class="flex items-center gap-3 shrink-0">
+        <button onclick="openSandbox('studiodesk')" class="px-4 py-2 text-xs font-semibold text-white bg-indigoAccent hover:bg-indigo-500 rounded-xl transition-all shadow-md shadow-indigoGlow hover:shadow-indigo-500/30 whitespace-nowrap flex items-center gap-2 cursor-pointer">
+          <i data-lucide="play" class="w-3.5 h-3.5 fill-white"></i>
+          <span>Launch Sandbox</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO SECTION -->
+    <section class="relative pt-20 pb-28 px-6 max-w-7xl mx-auto">
+      <div class="flex flex-col items-center text-center max-w-4xl mx-auto">
+        
+        <!-- Quiet Kicker with typographic separator -->
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-hairline text-xs font-mono tracking-wide text-indigoBright mb-8">
+          <span class="w-1.5 h-1.5 rounded-full bg-indigoAccent animate-pulse"></span>
+          <span>UNIFIED STUDIO INFRASTRUCTURE</span>
+          <span class="text-slate-600">·</span>
+          <span class="text-slate-400">STUDIODESK · DESIGNDESK · OPSDESK</span>
+        </div>
+
+        <!-- Headline with balanced wrapping -->
+        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.12] mb-6" style="text-wrap: balance;">
+          Where architectural vision meets <span class="bg-clip-text text-transparent bg-gradient-to-r from-indigoBright via-white to-slate-300">ledger-grade precision.</span>
+        </h1>
+
+        <!-- High-clarity subtitle -->
+        <p class="text-lg sm:text-xl text-slate-400 leading-relaxed max-w-2xl mb-10">
+          The all-in-one operating system engineered specifically for elite architecture and interior design firms. Replace fragmented spreadsheets, untracked drawing revisions, and site chaos with one synchronized line of truth.
+        </p>
+
+        <!-- CTA Cluster -->
+        <div class="flex flex-wrap items-center justify-center gap-4 mb-16">
+          <button onclick="openSandbox('studiodesk')" class="px-6 py-3.5 text-sm font-semibold text-white bg-indigoAccent hover:bg-indigo-500 rounded-xl transition-all shadow-lg shadow-indigoGlow hover:shadow-indigo-500/40 cursor-pointer flex items-center gap-2.5 group">
+            <span>Launch Interactive Sandbox</span>
+            <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+          </button>
+          <a href="#suite" class="px-6 py-3.5 text-sm font-medium text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-hairline rounded-xl transition-colors flex items-center gap-2">
+            <span>Explore The 3 Desks</span>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+          </a>
+        </div>
+
+        <!-- Metric Badges Strip -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-6 w-full pt-8 border-t border-hairline text-left">
+          <div>
+            <div class="text-2xl font-bold font-mono text-white tabular-nums">100%</div>
+            <div class="text-xs text-slate-400 mt-1">Margin lock before site handover</div>
+          </div>
+          <div>
+            <div class="text-2xl font-bold font-mono text-indigoBright tabular-nums">0 Drift</div>
+            <div class="text-xs text-slate-400 mt-1">Drawing revisions to site BOQs</div>
+          </div>
+          <div>
+            <div class="text-2xl font-bold font-mono text-emeraldAccent tabular-nums">38% Faster</div>
+            <div class="text-xs text-slate-400 mt-1">Client proposal & MOM sign-offs</div>
+          </div>
+          <div>
+            <div class="text-2xl font-bold font-mono text-white tabular-nums">₹0 Unbilled</div>
+            <div class="text-xs text-slate-400 mt-1">Change order leakage</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- LIVE INTERACTIVE HERO WORKBENCH SIMULATOR -->
+      <div class="mt-14 relative rounded-2xl border border-hairline bg-surfaceDark/80 backdrop-blur-xl p-4 sm:p-6 shadow-2xl">
+        <div class="flex flex-wrap items-center justify-between pb-4 mb-4 border-b border-hairline gap-4">
+          <div class="flex items-center gap-3">
+            <div class="flex gap-1.5">
+              <div class="w-3 h-3 rounded-full bg-rose-500/80"></div>
+              <div class="w-3 h-3 rounded-full bg-amber-500/80"></div>
+              <div class="w-3 h-3 rounded-full bg-emerald-500/80"></div>
+            </div>
+            <span class="text-xs font-mono text-slate-400">tervaro-core // project-atlas-residence</span>
+          </div>
+          
+          <!-- Interactive Workspace Tab Switcher -->
+          <div class="flex items-center gap-1 bg-obsidian p-1 rounded-xl border border-hairline">
+            <button onclick="switchHeroTab('studiodesk')" id="hero-tab-studiodesk" class="hero-tab-btn px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigoAccent text-white transition-all flex items-center gap-1.5">
+              <i data-lucide="calculator" class="w-3.5 h-3.5"></i>
+              <span>StudioDesk (Finance)</span>
+            </button>
+            <button onclick="switchHeroTab('designdesk')" id="hero-tab-designdesk" class="hero-tab-btn px-3 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5">
+              <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+              <span>DesignDesk (Drawings)</span>
+            </button>
+            <button onclick="switchHeroTab('opsdesk')" id="hero-tab-opsdesk" class="hero-tab-btn px-3 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5">
+              <i data-lucide="hard-hat" class="w-3.5 h-3.5"></i>
+              <span>OpsDesk (Field)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- HERO TAB 1: STUDIODESK -->
+        <div id="hero-view-studiodesk" class="space-y-4">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            
+            <!-- Commercial Metrics -->
+            <div class="p-4 rounded-xl bg-surfaceCard border border-hairline">
+              <span class="text-xs text-slate-400 uppercase tracking-wider font-mono">Contract Value</span>
+              <div class="text-2xl font-bold font-mono text-white mt-1 tabular-nums">₹48,50,000</div>
+              <div class="flex items-center gap-2 mt-3 text-xs text-emeraldAccent">
+                <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
+                <span>Gross Margin: 26.4% locked</span>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl bg-surfaceCard border border-hairline">
+              <span class="text-xs text-slate-400 uppercase tracking-wider font-mono">Milestone Inflow</span>
+              <div class="text-2xl font-bold font-mono text-indigoBright mt-1 tabular-nums">₹32,00,000</div>
+              <div class="flex items-center gap-2 mt-3 text-xs text-slate-400">
+                <span>Stage 3 of 5 · ₹16.5L due on Carpentry</span>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl bg-surfaceCard border border-hairline">
+              <span class="text-xs text-slate-400 uppercase tracking-wider font-mono">Change Orders</span>
+              <div class="text-2xl font-bold font-mono text-amberAccent mt-1 tabular-nums">2 Signed</div>
+              <div class="flex items-center gap-2 mt-3 text-xs text-slate-400">
+                <span>₹3,40,000 client authorized</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mini BOQ Interactive View -->
+          <div class="rounded-xl bg-surfaceCard border border-hairline p-4">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-semibold text-slate-200">Live BOQ Line-Item Margin Engine</span>
+              <span class="text-xs font-mono text-indigoBright">Tier: Luxury Turnkey</span>
+            </div>
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between p-2.5 rounded-lg bg-obsidian/60 border border-hairline">
+                <span class="font-medium text-slate-200">Living Room Full-Height Fluted Veneer Paneling</span>
+                <div class="flex items-center gap-4 font-mono">
+                  <span class="text-slate-400">Cost: ₹1,420/sqft</span>
+                  <span class="text-white">Price: ₹1,950/sqft</span>
+                  <span class="text-emeraldAccent font-semibold">+27.1%</span>
+                </div>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-lg bg-obsidian/60 border border-hairline">
+                <span class="font-medium text-slate-200">Custom Master Bedroom Headboard & Brass Inlay</span>
+                <div class="flex items-center gap-4 font-mono">
+                  <span class="text-slate-400">Cost: ₹48,000/unit</span>
+                  <span class="text-white">Price: ₹68,000/unit</span>
+                  <span class="text-emeraldAccent font-semibold">+29.4%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- HERO TAB 2: DESIGNDESK -->
+        <div id="hero-view-designdesk" class="hidden space-y-4">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="p-4 rounded-xl bg-surfaceCard border border-hairline">
+              <span class="text-xs text-slate-400 uppercase tracking-wider font-mono">Drawing Set Health</span>
+              <div class="text-2xl font-bold font-mono text-emeraldAccent mt-1 tabular-nums">94% GFC Ready</div>
+              <div class="flex items-center gap-2 mt-3 text-xs text-slate-400">
+                <span>16 of 17 sheets approved</span>
+              </div>
+            </div>
+            <div class="p-4 rounded-xl bg-surfaceCard border border-hairline">
+              <span class="text-xs text-slate-400 uppercase tracking-wider font-mono">Advisory Design Gate</span>
+              <div class="text-2xl font-bold font-mono text-indigoBright mt-1">Approved</div>
+              <div class="flex items-center gap-2 mt-3 text-xs text-slate-400">
+                <span>Sign-off: Design Head & Principal</span>
+              </div>
+            </div>
+            <div class="p-4 rounded-xl bg-surfaceCard border border-hairline">
+              <span class="text-xs text-slate-400 uppercase tracking-wider font-mono">Revisions In Progress</span>
+              <div class="text-2xl font-bold font-mono text-amberAccent mt-1 tabular-nums">1 Pending</div>
+              <div class="flex items-center gap-2 mt-3 text-xs text-slate-400">
+                <span>Kitchen electrical loop review</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-xl bg-surfaceCard border border-hairline p-4">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-semibold text-slate-200">Drawing Delivery Matrix</span>
+              <span class="text-xs font-mono text-slate-400">Revision R3 Active</span>
+            </div>
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between p-2.5 rounded-lg bg-obsidian/60 border border-hairline">
+                <div class="flex items-center gap-3">
+                  <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">GFC-04</span>
+                  <span class="font-medium text-slate-200">False Ceiling & HVAC Ducting Coordination Plan</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="text-slate-400 font-mono">Rev 2.1</span>
+                  <span class="text-emerald400 font-semibold text-emeraldAccent flex items-center gap-1">
+                    <i data-lucide="check" class="w-3.5 h-3.5"></i> Stamped
+                  </span>
+                </div>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-lg bg-obsidian/60 border border-hairline">
+                <div class="flex items-center gap-3">
+                  <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-indigo-500/10 text-indigo400 text-indigoBright border border-indigo-500/20">DET-09</span>
+                  <span class="font-medium text-slate-200">Crockery Unit Joinery & Concealed Hardware Schedule</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="text-slate-400 font-mono">Rev 1.0</span>
+                  <span class="text-emeraldAccent font-semibold flex items-center gap-1">
+                    <i data-lucide="check" class="w-3.5 h-3.5"></i> Stamped
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- HERO TAB 3: OPSDESK -->
+        <div id="hero-view-opsdesk" class="hidden space-y-4">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="p-4 rounded-xl bg-surfaceCard border border-hairline">
+              <span class="text-xs text-slate-400 uppercase tracking-wider font-mono">Site Execution Pace</span>
+              <div class="text-2xl font-bold font-mono text-emeraldAccent mt-1 tabular-nums">Day 42 of 90</div>
+              <div class="flex items-center gap-2 mt-3 text-xs text-slate-400">
+                <span>On-schedule · Flooring completed</span>
+              </div>
+            </div>
+            <div class="p-4 rounded-xl bg-surfaceCard border border-hairline">
+              <span class="text-xs text-slate-400 uppercase tracking-wider font-mono">Active Blockers</span>
+              <div class="text-2xl font-bold font-mono text-white mt-1 tabular-nums">0 Blockers</div>
+              <div class="flex items-center gap-2 mt-3 text-xs text-emeraldAccent">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                <span>Site running smoothly</span>
+              </div>
+            </div>
+            <div class="p-4 rounded-xl bg-surfaceCard border border-hairline">
+              <span class="text-xs text-slate-400 uppercase tracking-wider font-mono">Schedule of Finishes (SOF)</span>
+              <div class="text-2xl font-bold font-mono text-indigoBright mt-1 tabular-nums">28 Items</div>
+              <div class="flex items-center gap-2 mt-3 text-xs text-slate-400">
+                <span>24 procured · 4 in transit</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-xl bg-surfaceCard border border-hairline p-4">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-semibold text-slate-200">Daily Field Feed & Quality Checkpoints</span>
+              <span class="text-xs font-mono text-emeraldAccent">Synced 12m ago</span>
+            </div>
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between p-2.5 rounded-lg bg-obsidian/60 border border-hairline">
+                <div class="flex items-center gap-3">
+                  <span class="w-2 h-2 rounded-full bg-emeraldAccent"></span>
+                  <span class="font-medium text-slate-200">Italian Marble Dry Lay & Polishing Inspection</span>
+                </div>
+                <span class="text-slate-400">Verified by Site Supervisor Vikram</span>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-lg bg-obsidian/60 border border-hairline">
+                <div class="flex items-center gap-3">
+                  <span class="w-2 h-2 rounded-full bg-indigoBright"></span>
+                  <span class="font-medium text-slate-200">Acoustic Paneling Delivery & Moisture Verification</span>
+                </div>
+                <span class="text-slate-400">Vendor: Decowood Acoustics</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- THE THREE DESKS — KINETIC SCROLL-DRIVEN PRODUCT DECK -->
+    <section id="suite" class="py-24 px-6 max-w-7xl mx-auto border-t border-hairline">
+      
+      <div class="flex flex-col items-center text-center max-w-3xl mx-auto mb-16">
+        <span class="text-xs font-mono text-indigoBright uppercase tracking-widest mb-3">THE TERVARO TRINITY</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          Three specialized desks. One unbroken line of truth.
+        </h2>
+        <p class="text-slate-400 mt-4 leading-relaxed">
+          Every interior architecture project is a relay race between commercial commitments, creative specifications, and physical fabrication. Tervaro removes the seams.
+        </p>
+      </div>
+
+      <!-- PRODUCT 1: STUDIODESK -->
+      <div id="studiodesk" class="tilt-card rounded-2xl bg-surfaceDark border border-hairline p-8 sm:p-12 mb-12 relative overflow-hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          
+          <div class="lg:col-span-5 space-y-6">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-indigoAccent/10 border border-indigoAccent/20 text-xs font-semibold text-indigoBright">
+              <i data-lucide="calculator" class="w-3.5 h-3.5"></i>
+              <span>01. COMMERCIAL & FINANCE</span>
+            </div>
+            
+            <h3 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+              StudioDesk: Bulletproof Proposals, Margins & Cashflow
+            </h3>
+
+            <p class="text-slate-300 text-sm sm:text-base leading-relaxed">
+              Eliminate guesswork with dynamic three-tier proposals (Standard, Elevated, Luxury) that allow clients to adjust scope transparently while locking your studio's minimum gross margin.
+            </p>
+
+            <ul class="space-y-3 text-sm text-slate-300">
+              <li class="flex items-start gap-2.5">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-indigoBright mt-0.5 shrink-0"></i>
+                <span>Automated multi-tier BOQ estimations linked directly to your master rate cards.</span>
+              </li>
+              <li class="flex items-start gap-2.5">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-indigoBright mt-0.5 shrink-0"></i>
+                <span>Design fee configurations (Fixed, Per-SqFt, or Cost-Plus) guarded against scope creep.</span>
+              </li>
+              <li class="flex items-start gap-2.5">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-indigoBright mt-0.5 shrink-0"></i>
+                <span>Contract generation with legally binding milestone schedules and GST breakdown.</span>
+              </li>
+            </ul>
+
+            <div class="pt-2">
+              <button onclick="openSandbox('studiodesk')" class="px-5 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-hairline text-sm font-semibold text-white transition-all flex items-center gap-2">
+                <span>Test StudioDesk Interactive Simulation</span>
+                <i data-lucide="arrow-right" class="w-4 h-4 text-indigoBright"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Interactive Card Visual -->
+          <div class="lg:col-span-7 bg-obsidian rounded-xl border border-hairline p-5 shadow-xl">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-hairline">
+              <div class="flex items-center gap-2 text-xs font-mono text-slate-300">
+                <i data-lucide="file-text" class="w-4 h-4 text-indigoBright"></i>
+                <span>Proposal Tiers Preview · 3BHK Penthouse</span>
+              </div>
+              <span class="text-xs font-mono text-emeraldAccent">Status: Client Signed</span>
+            </div>
+
+            <!-- Tier Selector Mockup -->
+            <div class="grid grid-cols-3 gap-3 mb-4">
+              <div class="p-3 rounded-lg bg-surfaceCard border border-hairline text-center">
+                <div class="text-[11px] font-mono text-slate-400">ESSENTIAL</div>
+                <div class="text-base font-bold text-slate-200 mt-1">₹34.5L</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">24.0% Margin</div>
+              </div>
+              <div class="p-3 rounded-lg bg-indigoAccent/10 border border-indigoAccent/40 text-center relative">
+                <span class="absolute -top-2 left-1/2 -translate-x-1/2 px-1.5 py-0.2 text-[9px] font-bold rounded bg-indigoAccent text-white">SELECTED</span>
+                <div class="text-[11px] font-mono text-indigoBright">PREMIUM</div>
+                <div class="text-base font-bold text-white mt-1">₹48.2L</div>
+                <div class="text-[10px] text-emeraldAccent mt-0.5">27.8% Margin</div>
+              </div>
+              <div class="p-3 rounded-lg bg-surfaceCard border border-hairline text-center">
+                <div class="text-[11px] font-mono text-slate-400">LUXURY TURNKEY</div>
+                <div class="text-base font-bold text-slate-200 mt-1">₹62.0L</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">29.5% Margin</div>
+              </div>
+            </div>
+
+            <div class="p-3 rounded-lg bg-surfaceCard border border-hairline space-y-2 text-xs">
+              <div class="flex justify-between text-slate-300">
+                <span>Civil, Flooring & Partitions</span>
+                <span class="font-mono text-white">₹14,20,000</span>
+              </div>
+              <div class="flex justify-between text-slate-300">
+                <span>Bespoke Millwork & Veneer Paneling</span>
+                <span class="font-mono text-white">₹21,80,000</span>
+              </div>
+              <div class="flex justify-between text-slate-300">
+                <span>Electrical, Automation & Architectural Lighting</span>
+                <span class="font-mono text-white">₹8,50,000</span>
+              </div>
+              <div class="flex justify-between border-t border-hairline pt-2 font-semibold text-slate-100">
+                <span>Design & Supervision Fee (10%)</span>
+                <span class="font-mono text-indigoBright">₹4,45,000</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- PRODUCT 2: DESIGNDESK -->
+      <div id="designdesk" class="tilt-card rounded-2xl bg-surfaceDark border border-hairline p-8 sm:p-12 mb-12 relative overflow-hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          
+          <div class="lg:col-span-5 space-y-6">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-emeraldAccent/10 border border-emeraldAccent/20 text-xs font-semibold text-emeraldAccent">
+              <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+              <span>02. CREATIVE & DELIVERABLES</span>
+            </div>
+            
+            <h3 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+              DesignDesk: Drawing Sets & The Advisory Design Gate
+            </h3>
+
+            <p class="text-slate-300 text-sm sm:text-base leading-relaxed">
+              Keep designers in flow while safeguarding the studio from unapproved site changes. Track drawing deliverables by room and stage, with automated diff history and formal Design Gate sign-offs.
+            </p>
+
+            <ul class="space-y-3 text-sm text-slate-300">
+              <li class="flex items-start gap-2.5">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-emeraldAccent mt-0.5 shrink-0"></i>
+                <span>Complete Drawing Tracker: Concept, Schematics, GFC, and As-Built drawings.</span>
+              </li>
+              <li class="flex items-start gap-2.5">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-emeraldAccent mt-0.5 shrink-0"></i>
+                <span>Advisory Design Gate prevents premature procurement until key milestones freeze.</span>
+              </li>
+              <li class="flex items-start gap-2.5">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-emeraldAccent mt-0.5 shrink-0"></i>
+                <span>Drawing revision logs with client acknowledgement to eliminate "we didn't approve that" disputes.</span>
+              </li>
+            </ul>
+
+            <div class="pt-2">
+              <button onclick="openSandbox('designdesk')" class="px-5 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-hairline text-sm font-semibold text-white transition-all flex items-center gap-2">
+                <span>Explore DesignDesk Workflows</span>
+                <i data-lucide="arrow-right" class="w-4 h-4 text-emeraldAccent"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Interactive Card Visual -->
+          <div class="lg:col-span-7 bg-obsidian rounded-xl border border-hairline p-5 shadow-xl">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-hairline">
+              <div class="flex items-center gap-2 text-xs font-mono text-slate-300">
+                <i data-lucide="folder-check" class="w-4 h-4 text-emeraldAccent"></i>
+                <span>GFC Release Sheet · Level 14 Penthouse</span>
+              </div>
+              <span class="text-xs font-mono text-indigoBright">Gate: 6/6 Cleared</span>
+            </div>
+
+            <!-- Drawing Table View -->
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between p-3 rounded-lg bg-surfaceCard border border-hairline">
+                <div>
+                  <div class="font-semibold text-white">AR-101 // Master Suite Wardrobe Detail</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">3D Render & Hardware Cutouts Attached</div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="font-mono text-slate-400">R2.0</span>
+                  <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emeraldAccent border border-emerald-500/20">Site Released</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between p-3 rounded-lg bg-surfaceCard border border-hairline">
+                <div>
+                  <div class="font-semibold text-white">EL-204 // Kitchen Power & Automation Conduit</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">Coordinated with Blum motorized lift units</div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="font-mono text-slate-400">R1.4</span>
+                  <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emeraldAccent border border-emerald-500/20">Site Released</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between p-3 rounded-lg bg-surfaceCard border border-hairline">
+                <div>
+                  <div class="font-semibold text-white">HV-301 // Ducted AC Return Air Plenum & Louver</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">Client acoustic clearance pending</div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="font-mono text-slate-400">R0.9</span>
+                  <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amberAccent border border-amber-500/20">Review</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- PRODUCT 3: OPSDESK -->
+      <div id="opsdesk" class="tilt-card rounded-2xl bg-surfaceDark border border-hairline p-8 sm:p-12 mb-12 relative overflow-hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          
+          <div class="lg:col-span-5 space-y-6">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-amberAccent/10 border border-amberAccent/20 text-xs font-semibold text-amberAccent">
+              <i data-lucide="hard-hat" class="w-3.5 h-3.5"></i>
+              <span>03. FIELD EXECUTION & SITE OPS</span>
+            </div>
+            
+            <h3 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+              OpsDesk: Real-Time Field Truth & Zero Blocker Tolerance
+            </h3>
+
+            <p class="text-slate-300 text-sm sm:text-base leading-relaxed">
+              Equip your site supervisors with a dedicated mobile-friendly workflow. Capture verified photo milestones, maintain the Schedule of Finishes (SOF), and resolve vendor blockers before they delay delivery.
+            </p>
+
+            <ul class="space-y-3 text-sm text-slate-300">
+              <li class="flex items-start gap-2.5">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-amberAccent mt-0.5 shrink-0"></i>
+                <span>Live Daily Site Feed: Verified photos, snag checklists, and progress logs.</span>
+              </li>
+              <li class="flex items-start gap-2.5">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-amberAccent mt-0.5 shrink-0"></i>
+                <span>One-click blocker escalation directly to project managers and vendors.</span>
+              </li>
+              <li class="flex items-start gap-2.5">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-amberAccent mt-0.5 shrink-0"></i>
+                <span>Handover Dockets: Clean snag sign-offs and warranty dockets for the client.</span>
+              </li>
+            </ul>
+
+            <div class="pt-2">
+              <button onclick="openSandbox('opsdesk')" class="px-5 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-hairline text-sm font-semibold text-white transition-all flex items-center gap-2">
+                <span>View OpsDesk In Action</span>
+                <i data-lucide="arrow-right" class="w-4 h-4 text-amberAccent"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Interactive Card Visual -->
+          <div class="lg:col-span-7 bg-obsidian rounded-xl border border-hairline p-5 shadow-xl">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-hairline">
+              <div class="flex items-center gap-2 text-xs font-mono text-slate-300">
+                <i data-lucide="smartphone" class="w-4 h-4 text-amberAccent"></i>
+                <span>Supervisor Mobile Live Stream · Site Feed</span>
+              </div>
+              <span class="text-xs font-mono text-emeraldAccent">● 4 Active On Site</span>
+            </div>
+
+            <div class="space-y-3 text-xs">
+              <div class="p-3 rounded-lg bg-surfaceCard border border-hairline flex items-start gap-3">
+                <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emeraldAccent shrink-0">
+                  <i data-lucide="camera" class="w-5 h-5"></i>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between">
+                    <span class="font-semibold text-white">Italian Statuario Marble Sealing Finished</span>
+                    <span class="text-[10px] font-mono text-slate-500">14:20</span>
+                  </div>
+                  <p class="text-slate-400 mt-0.5">3 coats applied, 48hr curing begun. Moisture test passed at 1.8%.</p>
+                </div>
+              </div>
+
+              <div class="p-3 rounded-lg bg-surfaceCard border border-hairline flex items-start gap-3">
+                <div class="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigoBright shrink-0">
+                  <i data-lucide="truck" class="w-5 h-5"></i>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between">
+                    <span class="font-semibold text-white">Custom Smoked Oak Veneer Consignment Received</span>
+                    <span class="text-[10px] font-mono text-slate-500">11:05</span>
+                  </div>
+                  <p class="text-slate-400 mt-0.5">14 sheets inspected against SOF specification. Stored in climate-controlled Room 2.</p>
+                </div>
+              </div>
+
+              <div class="p-3 rounded-lg bg-surfaceCard border border-hairline flex items-start gap-3">
+                <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amberAccent shrink-0">
+                  <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between">
+                    <span class="font-semibold text-white">Blocker Resolved: Dimmer Driver Voltage Sync</span>
+                    <span class="text-[10px] font-mono text-slate-500">09:15</span>
+                  </div>
+                  <p class="text-slate-400 mt-0.5">Electrician swapped 12V for 24V DALI protocol drivers. Sign-off recorded.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+
+    <!-- QUANTIFIED PROOF & IMPACT SECTION -->
+    <section id="impact" class="py-20 px-6 max-w-7xl mx-auto border-t border-hairline">
+      <div class="flex flex-col items-center text-center max-w-3xl mx-auto mb-16">
+        <span class="text-xs font-mono text-indigoBright uppercase tracking-widest mb-3">MEASURABLE OUTCOMES</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          Engineered for studios managing ₹2Cr to ₹50Cr annual pipelines.
+        </h2>
+        <p class="text-slate-400 mt-4 leading-relaxed">
+          Tervaro eliminates the three silent profit killers: unpriced client revisions, drawing misalignment on site, and stalled milestone payments.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <div class="p-6 rounded-2xl bg-surfaceDark border border-hairline relative">
+          <div class="text-3xl font-extrabold font-mono text-indigoBright tabular-nums">0%</div>
+          <h4 class="text-base font-bold text-white mt-2">Margin Dilution Guarantee</h4>
+          <p class="text-slate-400 text-xs sm:text-sm mt-2 leading-relaxed">
+            By connecting raw vendor rates directly to client proposal tiers, your studio never commits to a price before confirming current material costs.
+          </p>
+        </div>
+
+        <div class="p-6 rounded-2xl bg-surfaceDark border border-hairline relative">
+          <div class="text-3xl font-extrabold font-mono text-emeraldAccent tabular-nums">2.4x</div>
+          <h4 class="text-base font-bold text-white mt-2">Faster Milestone Collections</h4>
+          <p class="text-slate-400 text-xs sm:text-sm mt-2 leading-relaxed">
+            Site feeds with timestamped photo verification automatically substantiate payment requests, ending client dispute stalls.
+          </p>
+        </div>
+
+        <div class="p-6 rounded-2xl bg-surfaceDark border border-hairline relative">
+          <div class="text-3xl font-extrabold font-mono text-white tabular-nums">100%</div>
+          <h4 class="text-base font-bold text-white mt-2">Drawing-to-Site Traceability</h4>
+          <p class="text-slate-400 text-xs sm:text-sm mt-2 leading-relaxed">
+            Site teams only see stamped, active GFC drawings. Outdated revisions are automatically archived and locked.
+          </p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- CONVERSION CALL-TO-ACTION SECTION -->
+    <section class="py-24 px-6 max-w-5xl mx-auto text-center">
+      <div class="p-10 sm:p-16 rounded-3xl bg-gradient-to-b from-surfaceDark to-obsidian border border-hairlineBright relative overflow-hidden shadow-2xl">
+        <div class="ambient-glow-1" style="top: -20%; left: 30%; opacity: 0.3;"></div>
+        
+        <span class="text-xs font-mono text-indigoBright uppercase tracking-widest mb-3 inline-block">EXPERIENCE THE OPERATING SYSTEM</span>
+        
+        <h2 class="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight mb-6">
+          Ready to run your studio with total certainty?
+        </h2>
+
+        <p class="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto mb-10 leading-relaxed">
+          Test-drive the full workflow inside our interactive sandbox — no account creation or credit card required.
+        </p>
+
+        <div class="flex flex-wrap items-center justify-center gap-4">
+          <button onclick="openSandbox('studiodesk')" class="px-8 py-4 text-sm font-semibold text-white bg-indigoAccent hover:bg-indigo-500 rounded-xl transition-all shadow-xl shadow-indigoGlow hover:shadow-indigo-500/40 cursor-pointer flex items-center gap-3">
+            <span>Launch Interactive Sandbox Walkthrough</span>
+            <i data-lucide="play" class="w-4 h-4 fill-white"></i>
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- QUIET LUXURY EDITORIAL FOOTER -->
+  <footer class="border-t border-hairline py-12 px-6 bg-obsidian">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-slate-500">
+      
+      <div class="flex items-center gap-3">
+        <div class="w-6 h-6 rounded-md bg-indigoAccent flex items-center justify-center text-white font-bold text-xs">T</div>
+        <span class="font-bold text-slate-300 tracking-wider">TERVARO</span>
+        <span>·</span>
+        <span>The Studio Operating System</span>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-6">
+        <a href="#studiodesk" class="hover:text-slate-300 transition-colors">StudioDesk</a>
+        <a href="#designdesk" class="hover:text-slate-300 transition-colors">DesignDesk</a>
+        <a href="#opsdesk" class="hover:text-slate-300 transition-colors">OpsDesk</a>
+        <a href="#" onclick="alert('Terms of Service: Tervaro Studio OS Enterprise')" class="hover:text-slate-300 transition-colors">Terms</a>
+        <a href="#" onclick="alert('Privacy Policy: All client financial figures remain private to your studio tenant.')" class="hover:text-slate-300 transition-colors">Privacy</a>
+      </div>
+
+      <div class="font-mono text-slate-600">
+        © 2026 TERVARO INC. ALL RIGHTS RESERVED.
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- ======================================================== -->
+  <!-- FULLSCREEN INTERACTIVE SANDBOX WALKTHROUGH MODAL        -->
+  <!-- ======================================================== -->
+  <div id="sandbox-modal" class="fixed inset-0 z-50 hidden bg-obsidian/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+    
+    <div class="relative w-full max-w-4xl bg-surfaceDark border border-hairlineBright rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto">
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-hairline flex items-center justify-between bg-surfaceCard">
+        <div class="flex items-center gap-3">
+          <div class="w-7 h-7 rounded-lg bg-indigoAccent flex items-center justify-center text-white font-bold text-xs">
+            T
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white">Tervaro Interactive Sandbox</h3>
+            <span class="text-xs text-slate-400 font-mono">Live Simulation Mode · Project "Villa Solstice"</span>
+          </div>
+        </div>
+
+        <button onclick="closeSandbox()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Step Navigator -->
+      <div class="grid grid-cols-3 border-b border-hairline bg-obsidian/50 text-xs">
+        <button onclick="setSandboxStep(1)" id="step-nav-1" class="py-3 px-4 text-left border-b-2 border-indigoAccent font-semibold text-white flex items-center gap-2">
+          <span class="w-5 h-5 rounded-full bg-indigoAccent text-white flex items-center justify-center text-[10px] font-mono">1</span>
+          <span>StudioDesk: Proposal Tier</span>
+        </button>
+        <button onclick="setSandboxStep(2)" id="step-nav-2" class="py-3 px-4 text-left border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+          <span class="w-5 h-5 rounded-full bg-surfaceCard text-slate-400 flex items-center justify-center text-[10px] font-mono">2</span>
+          <span>DesignDesk: Gate Check</span>
+        </button>
+        <button onclick="setSandboxStep(3)" id="step-nav-3" class="py-3 px-4 text-left border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+          <span class="w-5 h-5 rounded-full bg-surfaceCard text-slate-400 flex items-center justify-center text-[10px] font-mono">3</span>
+          <span>OpsDesk: Site Milestone</span>
+        </button>
+      </div>
+
+      <!-- Modal Body (Dynamic Steps) -->
+      <div class="p-6">
+        
+        <!-- STEP 1: STUDIODESK SIMULATION -->
+        <div id="sandbox-step-1" class="space-y-6">
+          <div>
+            <span class="text-xs font-mono text-indigoBright">STEP 1 OF 3 · COMMERCIAL PRICING ENGINE</span>
+            <h4 class="text-lg font-bold text-white mt-1">Configure Proposal Tier & Verify Minimum Margin</h4>
+            <p class="text-xs text-slate-400 mt-1">Select a proposal tier below to simulate how Tervaro dynamically adjusts material rates while protecting your studio's 25% minimum margin threshold.</p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div onclick="selectSimTier('standard')" id="sim-tier-standard" class="sim-tier-card p-4 rounded-xl bg-surfaceCard border border-hairline cursor-pointer hover:border-slate-500 transition-all">
+              <span class="text-xs font-mono text-slate-400">TIER A</span>
+              <div class="text-lg font-bold text-white mt-1">Standard</div>
+              <div class="text-xl font-mono text-indigoBright mt-2">₹32,50,000</div>
+              <div class="text-xs text-emeraldAccent mt-1 font-mono">25.1% Gross Margin</div>
+            </div>
+
+            <div onclick="selectSimTier('elevated')" id="sim-tier-elevated" class="sim-tier-card p-4 rounded-xl bg-indigoAccent/10 border-2 border-indigoAccent cursor-pointer transition-all">
+              <div class="flex justify-between items-center">
+                <span class="text-xs font-mono text-indigoBright">TIER B</span>
+                <span class="text-[10px] bg-indigoAccent text-white px-1.5 py-0.5 rounded font-bold">RECOMMENDED</span>
+              </div>
+              <div class="text-lg font-bold text-white mt-1">Elevated Spec</div>
+              <div class="text-xl font-mono text-indigoBright mt-2">₹46,80,000</div>
+              <div class="text-xs text-emeraldAccent mt-1 font-mono">27.6% Gross Margin</div>
+            </div>
+
+            <div onclick="selectSimTier('luxury')" id="sim-tier-luxury" class="sim-tier-card p-4 rounded-xl bg-surfaceCard border border-hairline cursor-pointer hover:border-slate-500 transition-all">
+              <span class="text-xs font-mono text-slate-400">TIER C</span>
+              <div class="text-lg font-bold text-white mt-1">Luxury Turnkey</div>
+              <div class="text-xl font-mono text-indigoBright mt-2">₹68,40,000</div>
+              <div class="text-xs text-emeraldAccent mt-1 font-mono">31.2% Gross Margin</div>
+            </div>
+          </div>
+
+          <!-- Dynamic Output simulation box -->
+          <div class="p-4 rounded-xl bg-obsidian border border-hairline space-y-2 text-xs">
+            <div class="flex justify-between text-slate-300">
+              <span>Base Materials & Fabrication:</span>
+              <span id="sim-calc-materials" class="font-mono text-white">₹33,88,320</span>
+            </div>
+            <div class="flex justify-between text-slate-300">
+              <span>Studio Design Fee (Fixed 10%):</span>
+              <span id="sim-calc-fee" class="font-mono text-indigoBright">₹4,68,000</span>
+            </div>
+            <div class="flex justify-between text-slate-300">
+              <span>Estimated Studio Net Profit:</span>
+              <span id="sim-calc-profit" class="font-mono text-emeraldAccent font-semibold">₹12,91,680 (27.6%)</span>
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-2">
+            <button onclick="setSandboxStep(2)" class="px-5 py-2.5 rounded-xl bg-indigoAccent hover:bg-indigo-500 text-xs font-semibold text-white transition-all flex items-center gap-2 cursor-pointer">
+              <span>Lock Tier & Proceed to DesignDesk</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- STEP 2: DESIGNDESK SIMULATION -->
+        <div id="sandbox-step-2" class="hidden space-y-6">
+          <div>
+            <span class="text-xs font-mono text-emeraldAccent">STEP 2 OF 3 · DRAWING INTEGRITY & DESIGN GATE</span>
+            <h4 class="text-lg font-bold text-white mt-1">Review GFC Sheets & Execute Design Gate Freeze</h4>
+            <p class="text-xs text-slate-400 mt-1">Simulate signing off on the drawing release. The Advisory Design Gate protects the project from being mobilized before all technical specifications align with the BOQ.</p>
+          </div>
+
+          <div class="space-y-3">
+            <div class="p-3.5 rounded-xl bg-surfaceCard border border-hairline flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <i data-lucide="check-circle" class="w-5 h-5 text-emeraldAccent"></i>
+                <div>
+                  <div class="text-xs font-semibold text-white">Masonry & Civil Demolition Plan</div>
+                  <div class="text-[11px] text-slate-400 font-mono">Drawing: CIV-01 · Rev 2.0 Stamped</div>
+                </div>
+              </div>
+              <span class="text-xs font-mono text-emeraldAccent">Approved</span>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-surfaceCard border border-hairline flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <i data-lucide="check-circle" class="w-5 h-5 text-emeraldAccent"></i>
+                <div>
+                  <div class="text-xs font-semibold text-white">Full-Apartment Reflected Ceiling Plan (RCP)</div>
+                  <div class="text-[11px] text-slate-400 font-mono">Drawing: RCP-03 · Rev 1.4 Coordinated</div>
+                </div>
+              </div>
+              <span class="text-xs font-mono text-emeraldAccent">Approved</span>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-surfaceCard border border-hairline flex items-center justify-between" id="sim-gate-item">
+              <div class="flex items-center gap-3">
+                <i data-lucide="alert-circle" id="sim-gate-icon" class="w-5 h-5 text-amberAccent"></i>
+                <div>
+                  <div class="text-xs font-semibold text-white">Joinery & Hardware Master Schedule</div>
+                  <div class="text-[11px] text-slate-400 font-mono">Schedule: JNY-08 · Awaiting Principal Sign-Off</div>
+                </div>
+              </div>
+              <button onclick="approveSimGate()" id="sim-gate-btn" class="px-3 py-1.5 rounded-lg bg-indigoAccent hover:bg-indigo-500 text-xs font-semibold text-white transition-all cursor-pointer">
+                Sign Gate Approval
+              </button>
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center pt-2">
+            <button onclick="setSandboxStep(1)" class="px-4 py-2 rounded-xl bg-white/[0.04] text-xs font-medium text-slate-400 hover:text-white transition-all cursor-pointer">
+              Back to StudioDesk
+            </button>
+            <button onclick="setSandboxStep(3)" class="px-5 py-2.5 rounded-xl bg-indigoAccent hover:bg-indigo-500 text-xs font-semibold text-white transition-all flex items-center gap-2 cursor-pointer">
+              <span>Proceed to OpsDesk Site Feed</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- STEP 3: OPSDESK SIMULATION -->
+        <div id="sandbox-step-3" class="hidden space-y-6">
+          <div>
+            <span class="text-xs font-mono text-amberAccent">STEP 3 OF 3 · FIELD OPERATIONS & MILESTONES</span>
+            <h4 class="text-lg font-bold text-white mt-1">Site Progress Log & Milestone Payment Verification</h4>
+            <p class="text-xs text-slate-400 mt-1">See how the site supervisor logs progress from the field, instantly triggering client payment release notifications without manual reconciliation.</p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-obsidian border border-hairline space-y-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emeraldAccent animate-ping"></span>
+                <span class="text-xs font-semibold text-white">Live Site Event</span>
+              </div>
+              <span class="text-xs font-mono text-slate-400">Timestamp: Today, 15:45</span>
+            </div>
+
+            <div class="p-3 rounded-lg bg-surfaceCard border border-hairline flex items-center justify-between">
+              <div>
+                <div class="text-xs font-semibold text-white">Milestone 3: Carpentry Sub-Frame & Carcass Installation</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">85% of joinery installed on site · 12 photos logged</div>
+              </div>
+              <span class="text-xs font-mono text-emeraldAccent font-semibold">₹12,50,000 Ready for Invoicing</span>
+            </div>
+
+            <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-center gap-2.5">
+              <i data-lucide="shield-check" class="w-4 h-4 text-emeraldAccent"></i>
+              <span>Full lifecycle verified: StudioDesk (Budget) $\to$ DesignDesk (Specs) $\to$ OpsDesk (Execution).</span>
+            </div>
+          </div>
+
+          <div class="p-6 rounded-xl bg-surfaceCard border border-hairline text-center space-y-4">
+            <h5 class="text-sm font-bold text-white">You've completed the Tervaro Workflow Simulation!</h5>
+            <p class="text-xs text-slate-400 max-w-md mx-auto">
+              Ready to introduce this level of precision and peace of mind to your interior design studio?
+            </p>
+            <div class="flex justify-center gap-3">
+              <button onclick="closeSandbox()" class="px-5 py-2 rounded-xl bg-indigoAccent hover:bg-indigo-500 text-xs font-semibold text-white transition-all cursor-pointer">
+                Close Sandbox
+              </button>
+              <button onclick="alert('Demo Request Confirmed: Our team will reach out to schedule your personalized studio walkthrough.')" class="px-5 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-semibold text-white transition-all cursor-pointer">
+                Request Studio Onboarding
+              </button>
+            </div>
+          </div>
+
+          <div class="flex justify-start pt-2">
+            <button onclick="setSandboxStep(2)" class="px-4 py-2 rounded-xl bg-white/[0.04] text-xs font-medium text-slate-400 hover:text-white transition-all cursor-pointer">
+              Back to DesignDesk
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Interactive JavaScript Logic -->
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Hero Tab Switcher
+    function switchHeroTab(desk) {
+      // Hide all
+      document.getElementById('hero-view-studiodesk').classList.add('hidden');
+      document.getElementById('hero-view-designdesk').classList.add('hidden');
+      document.getElementById('hero-view-opsdesk').classList.add('hidden');
+
+      // Reset buttons
+      const buttons = document.querySelectorAll('.hero-tab-btn');
+      buttons.forEach(btn => {
+        btn.classList.remove('bg-indigoAccent', 'text-white');
+        btn.classList.add('text-slate-400');
+      });
+
+      // Activate chosen
+      document.getElementById('hero-view-' + desk).classList.remove('hidden');
+      const activeBtn = document.getElementById('hero-tab-' + desk);
+      activeBtn.classList.add('bg-indigoAccent', 'text-white');
+      activeBtn.classList.remove('text-slate-400');
+
+      lucide.createIcons();
+    }
+
+    // Sandbox Modal Functions
+    function openSandbox(stepDesk) {
+      const modal = document.getElementById('sandbox-modal');
+      modal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+
+      if (stepDesk === 'studiodesk') setSandboxStep(1);
+      else if (stepDesk === 'designdesk') setSandboxStep(2);
+      else if (stepDesk === 'opsdesk') setSandboxStep(3);
+      else setSandboxStep(1);
+
+      lucide.createIcons();
+    }
+
+    function closeSandbox() {
+      const modal = document.getElementById('sandbox-modal');
+      modal.classList.add('hidden');
+      document.body.style.overflow = 'auto';
+    }
+
+    function setSandboxStep(stepNum) {
+      document.getElementById('sandbox-step-1').classList.add('hidden');
+      document.getElementById('sandbox-step-2').classList.add('hidden');
+      document.getElementById('sandbox-step-3').classList.add('hidden');
+
+      // Nav indicators
+      for (let i = 1; i <= 3; i++) {
+        const nav = document.getElementById('step-nav-' + i);
+        if (i === stepNum) {
+          nav.classList.add('border-indigoAccent', 'font-semibold', 'text-white');
+          nav.classList.remove('border-transparent', 'text-slate-400');
+        } else {
+          nav.classList.remove('border-indigoAccent', 'font-semibold', 'text-white');
+          nav.classList.add('border-transparent', 'text-slate-400');
+        }
+      }
+
+      document.getElementById('sandbox-step-' + stepNum).classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    // Interactive Step 1 Tier Selector
+    function selectSimTier(tier) {
+      const cards = document.querySelectorAll('.sim-tier-card');
+      cards.forEach(c => {
+        c.classList.remove('bg-indigoAccent/10', 'border-2', 'border-indigoAccent');
+        c.classList.add('bg-surfaceCard', 'border', 'border-hairline');
+      });
+
+      const activeCard = document.getElementById('sim-tier-' + tier);
+      activeCard.classList.remove('bg-surfaceCard', 'border', 'border-hairline');
+      activeCard.classList.add('bg-indigoAccent/10', 'border-2', 'border-indigoAccent');
+
+      const matEl = document.getElementById('sim-calc-materials');
+      const feeEl = document.getElementById('sim-calc-fee');
+      const profitEl = document.getElementById('sim-calc-profit');
+
+      if (tier === 'standard') {
+        matEl.textContent = '₹24,37,500';
+        feeEl.textContent = '₹3,25,000';
+        profitEl.textContent = '₹8,12,500 (25.1%)';
+      } else if (tier === 'elevated') {
+        matEl.textContent = '₹33,88,320';
+        feeEl.textContent = '₹4,68,000';
+        profitEl.textContent = '₹12,91,680 (27.6%)';
+      } else if (tier === 'luxury') {
+        matEl.textContent = '₹47,05,920';
+        feeEl.textContent = '₹6,84,000';
+        profitEl.textContent = '₹21,34,080 (31.2%)';
+      }
+    }
+
+    // Interactive Step 2 Design Gate Approval
+    function approveSimGate() {
+      const btn = document.getElementById('sim-gate-btn');
+      const icon = document.getElementById('sim-gate-icon');
+      const item = document.getElementById('sim-gate-item');
+
+      btn.textContent = 'Signed & Cleared';
+      btn.classList.remove('bg-indigoAccent', 'hover:bg-indigo-500');
+      btn.classList.add('bg-emeraldAccent/20', 'text-emeraldAccent', 'cursor-default');
+      btn.disabled = true;
+
+      icon.outerHTML = '<i data-lucide="check-circle" class="w-5 h-5 text-emeraldAccent"></i>';
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

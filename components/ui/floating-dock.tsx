@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "../../lib/utils";
-import { ChevronUp } from '@/lib/lucide-shim';
+import { ChevronUp, ChevronDown } from '@/lib/lucide-shim';
 
 export interface FloatingDockItem {
   title: string;
@@ -35,7 +36,12 @@ export const FloatingDock = ({
         tooltipPosition={tooltipPosition}
         alwaysShowLabels={alwaysShowLabels}
       />
-      <FloatingDockMobile items={items} className={mobileClassName} alwaysShowLabels={alwaysShowLabels} />
+      <FloatingDockMobile
+        items={items}
+        className={mobileClassName}
+        tooltipPosition={tooltipPosition}
+        alwaysShowLabels={alwaysShowLabels}
+      />
     </>
   );
 };
@@ -43,16 +49,76 @@ export const FloatingDock = ({
 export const FloatingDockMobile = ({
   items,
   className,
+  tooltipPosition = "bottom",
 }: {
   items: FloatingDockItem[];
   className?: string;
+  tooltipPosition?: "top" | "bottom";
   alwaysShowLabels?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; maxHeight: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const place = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const menuWidth = Math.min(260, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(r.left, window.innerWidth - menuWidth - 12));
+    if (tooltipPosition === "bottom") {
+      const top = r.bottom + 8;
+      const maxHeight = Math.max(200, window.innerHeight - top - 16);
+      setPos({ top, left, maxHeight });
+    } else {
+      const bottom = window.innerHeight - r.top + 8;
+      const maxHeight = Math.max(200, r.top - 16);
+      setPos({ bottom, left, maxHeight });
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const close = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const reflow = () => place();
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    window.addEventListener("resize", reflow);
+    window.addEventListener("scroll", reflow, true);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+      window.removeEventListener("resize", reflow);
+      window.removeEventListener("scroll", reflow, true);
+    };
+  }, [open, tooltipPosition]);
+
+  const ChevronIcon = tooltipPosition === "bottom" ? ChevronDown : ChevronUp;
+
   return (
     <div className={cn("relative block md:hidden", className)}>
-      {open && (
-        <div className="absolute inset-x-0 bottom-full mb-2 flex flex-col gap-1.5 z-50 bg-white/95 backdrop-blur-md p-2 rounded-2xl border border-slate-200 shadow-xl min-w-[200px] animate-in fade-in slide-in-from-bottom-2 duration-200">
+      {open && pos && createPortal(
+        <div
+          ref={menuRef}
+          role="menu"
+          style={{
+            position: "fixed",
+            top: pos.top,
+            bottom: pos.bottom,
+            left: pos.left,
+            width: Math.min(260, window.innerWidth - 24),
+            maxHeight: pos.maxHeight,
+          }}
+          className="flex flex-col gap-1 z-[400] bg-white/98 backdrop-blur-md p-2 rounded-2xl border border-slate-200 shadow-[0_24px_60px_-20px_rgba(15,23,42,0.4)] overflow-y-auto custom-scrollbar"
+        >
           {items.map((item) => {
             const Content = (
               <div
@@ -98,17 +164,19 @@ export const FloatingDockMobile = ({
                 {item.onClick ? (
                   <button
                     type="button"
+                    role="menuitem"
                     onClick={() => {
                       item.onClick?.();
                       setOpen(false);
                     }}
-                    className="w-full outline-none"
+                    className="w-full outline-none cursor-pointer"
                   >
                     {Content}
                   </button>
                 ) : (
                   <a
                     href={item.href || "#"}
+                    role="menuitem"
                     onClick={() => setOpen(false)}
                     className="w-full outline-none"
                   >
@@ -118,15 +186,19 @@ export const FloatingDockMobile = ({
               </div>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
       <button
+        ref={btnRef}
         type="button"
+        aria-expanded={open}
+        aria-haspopup="menu"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs text-slate-700 hover:text-slate-900 font-semibold text-xs transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs text-slate-700 hover:text-slate-900 font-semibold text-xs transition-colors cursor-pointer"
       >
         <span>Project Hub</span>
-        <ChevronUp className={cn("h-4 w-4 transition-transform duration-200", open && "rotate-180")} />
+        <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200", open && "rotate-180")} />
       </button>
     </div>
   );

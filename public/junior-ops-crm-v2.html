@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFDS Studio OS — Junior Ops & Client Executive Desk (v2.0 Native Edition)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans, Playfair Display, JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#3D52A0',
+              dark: '#0A1B33',
+              accent: '#7091E6',
+              surface: '#F8FAFD',
+              card: '#FFFFFF',
+              border: '#E2E8F0'
+            },
+            ink: '#12182F',
+            lead: {
+              dev: '#1E40AF',
+              arch: '#6B21A8',
+              past: '#065F46',
+              insta: '#9A3412',
+              web: '#166534'
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            serif: ['"Playfair Display"', 'serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          },
+          boxShadow: {
+            'card': '0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.03)',
+            'float': '0 20px 40px -10px rgba(10, 27, 51, 0.12), 0 1px 3px rgba(10, 27, 51, 0.05)'
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #F8FAFD;
+      color: #12182F;
+      margin: 0;
+      overflow-x: hidden;
+    }
+    .tabular {
+      font-variant-numeric: tabular-nums;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#F8FAFD] text-[#12182F]">
+
+  <!-- TOP APP BANNER: VERSION 2.0 CONTROLLER & OPTION SWITCHER -->
+  <header class="sticky top-0 z-50 bg-[#0A1B33] text-white border-b border-indigo-950 px-4 sm:px-8 py-3 shadow-xl">
+    <div class="max-w-[1600px] mx-auto flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+      
+      <!-- Studio Identity & Version Tag -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-[#3D52A0] flex items-center justify-center text-white font-bold shadow-md">
+          <i data-lucide="compass" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-bold tracking-tight text-white uppercase">FFDS Studio OS</span>
+            <span class="text-[10px] px-2 py-0.5 rounded font-extrabold bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">Version 2.0</span>
+            <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">Studio-Native Design</span>
+          </div>
+          <p class="text-xs text-slate-300">Junior Ops &amp; Client Executive · Reassessed Intuitive Options Grounded in Real Screens</p>
+        </div>
+      </div>
+
+      <!-- 3 Real-System Option Buttons -->
+      <div class="flex items-center gap-2 overflow-x-auto max-w-full pb-1 lg:pb-0 scrollbar-none">
+        <span class="text-xs text-slate-400 hidden sm:inline mr-1">Select UI Option:</span>
+        <div class="inline-flex p-1 bg-slate-900 rounded-xl border border-slate-700">
+          <button onclick="setOption('opt1')" id="btn-opt1" class="opt-btn px-3 py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-[#12182F] shadow-sm flex items-center gap-1.5">
+            <i data-lucide="layers" class="w-3.5 h-3.5 text-[#3D52A0]"></i>
+            <span>Option 1: Native In-Flow (Enhanced Home &amp; Clients)</span>
+          </button>
+          <button onclick="setOption('opt2')" id="btn-opt2" class="opt-btn px-3 py-1.5 text-xs font-semibold rounded-lg transition-all text-slate-300 hover:text-white flex items-center gap-1.5">
+            <i data-lucide="layout" class="w-3.5 h-3.5"></i>
+            <span>Option 2: Executive Desk Segment in Clients</span>
+          </button>
+          <button onclick="setOption('opt3')" id="btn-opt3" class="opt-btn px-3 py-1.5 text-xs font-semibold rounded-lg transition-all text-slate-300 hover:text-white flex items-center gap-1.5">
+            <i data-lucide="sidebar" class="w-3.5 h-3.5"></i>
+            <span>Option 3: Contextual Ops Tray (Slide-Out)</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ======================================================== -->
+  <!-- MAIN SIMULATOR CONTAINER (MIRRORS REAL STUDIO APP)       -->
+  <!-- ======================================================== -->
+  <div class="flex-1 flex max-w-[1600px] w-full mx-auto">
+    
+    <!-- LEFT SIDEBAR (EXACT REPLICA OF REAL HEADER.TSX) -->
+    <aside class="w-64 bg-[#0A1B33] text-slate-300 border-r border-indigo-950 p-4 hidden md:flex flex-col justify-between shrink-0">
+      <div class="space-y-6">
+        <!-- Studio Logo -->
+        <div class="flex items-center gap-3 px-2 py-1">
+          <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-xs">
+            FF
+          </div>
+          <div>
+            <span class="font-bold text-white text-xs tracking-wide uppercase block">Form Factors</span>
+            <span class="text-[10px] text-slate-400">Design Studio OS</span>
+          </div>
+        </div>
+
+        <!-- Role Badge -->
+        <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+          <span class="text-[10px] uppercase font-bold text-slate-400 block">Logged In As</span>
+          <div class="flex items-center justify-between mt-1">
+            <span class="font-bold text-white">Ramesh K.</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-indigo-500/20 text-indigo-300">Junior Ops</span>
+          </div>
+        </div>
+
+        <!-- Navigation Menu -->
+        <div class="space-y-1 text-xs">
+          <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2 block mb-2">Studio</span>
+          
+          <button onclick="navigateToTab('home')" id="nav-home" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors font-semibold text-white bg-[#3D52A0]/40 border border-indigo-500/30">
+            <i data-lucide="home" class="w-4 h-4"></i>
+            <span>Home</span>
+          </button>
+          
+          <button onclick="navigateToTab('projects')" id="nav-projects" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors font-medium text-slate-400 hover:text-white hover:bg-slate-900">
+            <i data-lucide="building-2" class="w-4 h-4"></i>
+            <span>Projects</span>
+          </button>
+          
+          <button onclick="navigateToTab('design-review')" id="nav-design-review" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors font-medium text-slate-400 hover:text-white hover:bg-slate-900">
+            <i data-lucide="pen-tool" class="w-4 h-4"></i>
+            <span>Design Desk</span>
+          </button>
+          
+          <button onclick="navigateToTab('clients')" id="nav-clients" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors font-medium text-slate-400 hover:text-white hover:bg-slate-900">
+            <i data-lucide="users" class="w-4 h-4"></i>
+            <span class="flex-1">Clients</span>
+            <span class="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-indigo-600 text-white">4</span>
+          </button>
+
+          <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2 block pt-4 mb-2">Studio Admin</span>
+          
+          <button class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-slate-500 cursor-not-allowed">
+            <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+            <span>Reports (Locked)</span>
+          </button>
+          
+          <button class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-slate-500 cursor-not-allowed">
+            <i data-lucide="library" class="w-4 h-4"></i>
+            <span>Item Bank (Locked)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Tray Trigger Button in Sidebar -->
+      <div class="pt-4 border-t border-slate-800">
+        <button onclick="toggleOpsTray()" class="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white text-xs font-bold flex items-center justify-between transition-colors">
+          <div class="flex items-center gap-2">
+            <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i>
+            <span>Quick Ops Tray</span>
+          </div>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-600 text-white font-mono">3 Due</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN VIEW AREA -->
+    <main class="flex-1 p-4 sm:p-8 space-y-6 overflow-y-auto">
+
+      <!-- ======================================================== -->
+      <!-- OPTION 1: NATIVE IN-FLOW (EMBEDDED IN REAL SCREENS)     -->
+      <!-- ======================================================== -->
+      <div id="view-opt1" class="space-y-6">
+        
+        <!-- Explanation Banner -->
+        <div class="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-lg bg-[#3D52A0] text-white flex items-center justify-center font-bold">1</div>
+            <div>
+              <span class="font-bold text-indigo-950 block">Option 1: Native In-Flow (Zero New Tabs)</span>
+              <p class="text-slate-600 text-[11.5px]">Enriches the existing <strong>Home (StudioHomeOrbit)</strong> and <strong>Clients (ClientsDirectory)</strong> with Lead Source tags, 1-click WhatsApp follow-ups, and a 15-second inline touchpoint logger.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button onclick="setOpt1Tab('home')" id="opt1-tab-home" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#3D52A0] text-white shadow-sm">Home Screen View</button>
+            <button onclick="setOpt1Tab('clients')" id="opt1-tab-clients" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-200">Clients Screen View</button>
+          </div>
+        </div>
+
+        <!-- SUB-SCREEN 1A: ENHANCED HOME (STUDIO HOME ORBIT) -->
+        <div id="opt1-screen-home" class="space-y-6">
+          
+          <!-- Home Greeting Block (Exactly like StudioHomeOrbit) -->
+          <div class="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-card space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Welcome Back, Ramesh</span>
+                <h1 class="text-2xl sm:text-3xl font-bold text-[#12182F] font-serif">Today in the Studio</h1>
+                <p class="text-xs text-slate-500 mt-1">
+                  You have <strong class="text-[#3D52A0] font-bold">4 active projects</strong> assigned, and <strong class="text-rose-700 font-bold">3 client follow-ups</strong> need your attention today.
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="openQuickNoteModal()" class="px-3.5 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold shadow-sm flex items-center gap-1.5">
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                  <span>Log 15s Touchpoint</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Lead Source Attribution Strip (Lightweight & Clean) -->
+            <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
+              <span class="text-slate-400 text-[11px] font-semibold">Lead Source Portfolio:</span>
+              <span class="px-2.5 py-1 rounded-full bg-blue-50 text-blue-900 border border-blue-200 font-bold text-[11px]">Developer Handover (2)</span>
+              <span class="px-2.5 py-1 rounded-full bg-purple-50 text-purple-900 border border-purple-200 font-bold text-[11px]">Architect Referral (1)</span>
+              <span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-900 border border-emerald-200 font-bold text-[11px]">Past Client (1)</span>
+              <span class="px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 border border-amber-200 font-bold text-[11px]">Instagram (1)</span>
+            </div>
+          </div>
+
+          <!-- The Real Bento Layout (With Native 4th Tile: "Lead Follow-up Radar") -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <h2 class="text-base font-bold text-[#12182F] font-serif">Needs Your Attention Today</h2>
+              <span class="text-xs text-slate-400">3 urgent items · 1 can wait</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              
+              <!-- Tile 1: Oldest Waiting (Original System) -->
+              <div class="relative rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm hover:border-slate-300 transition-colors">
+                <span class="absolute left-0 top-0 bottom-0 w-[3px] bg-rose-500 rounded-l-2xl"></span>
+                <div class="flex items-center gap-1.5 text-slate-400">
+                  <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                  <span class="text-[9.5px] font-bold uppercase tracking-wider">Ignored Longest</span>
+                </div>
+                <div class="mt-2">
+                  <span class="font-bold text-sm text-[#12182F] block truncate">Greenwood Estate</span>
+                  <span class="text-slate-500 text-[11.5px] block truncate mt-0.5">Dr. Arvind · Invoice Overdue</span>
+                </div>
+                <div class="mt-3 flex items-center justify-between">
+                  <span class="text-[11px] font-semibold text-rose-700">idle 5 days</span>
+                  <button onclick="triggerAction('Sent WhatsApp nudge to Dr. Arvind')" class="text-[10px] font-bold text-[#3D52A0] hover:underline">1-Click Nudge →</button>
+                </div>
+              </div>
+
+              <!-- Tile 2: Most At Stake (Original System) -->
+              <div class="relative rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm hover:border-slate-300 transition-colors">
+                <span class="absolute left-0 top-0 bottom-0 w-[3px] bg-indigo-500 rounded-l-2xl"></span>
+                <div class="flex items-center gap-1.5 text-slate-400">
+                  <i data-lucide="wallet" class="w-3.5 h-3.5"></i>
+                  <span class="text-[9.5px] font-bold uppercase tracking-wider">Most To Do</span>
+                </div>
+                <div class="mt-2">
+                  <span class="font-bold text-sm text-[#12182F] block truncate">The Oberoi Penthouse</span>
+                  <span class="text-slate-500 text-[11.5px] block truncate mt-0.5">Kunal Shah · MoM Actions</span>
+                </div>
+                <div class="mt-3 flex items-center justify-between">
+                  <span class="text-[11px] font-semibold text-slate-500">3 actions open</span>
+                  <button onclick="triggerAction('MoM card copied for WhatsApp')" class="text-[10px] font-bold text-[#3D52A0] hover:underline">MoM Card →</button>
+                </div>
+              </div>
+
+              <!-- Tile 3: Quickest Win (Original System) -->
+              <div class="relative rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm hover:border-slate-300 transition-colors">
+                <span class="absolute left-0 top-0 bottom-0 w-[3px] bg-emerald-500 rounded-l-2xl"></span>
+                <div class="flex items-center gap-1.5 text-slate-400">
+                  <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+                  <span class="text-[9.5px] font-bold uppercase tracking-wider">Quickest Win</span>
+                </div>
+                <div class="mt-2">
+                  <span class="font-bold text-sm text-[#12182F] block truncate">Palm Grove Apt</span>
+                  <span class="text-slate-500 text-[11.5px] block truncate mt-0.5">Ananya Roy · Log UTR</span>
+                </div>
+                <div class="mt-3 flex items-center justify-between">
+                  <span class="text-[11px] font-semibold text-emerald-700">Receipt received</span>
+                  <button onclick="triggerAction('UTR logged & accounts notified')" class="text-[10px] font-bold text-emerald-700 hover:underline">Log UTR →</button>
+                </div>
+              </div>
+
+              <!-- Tile 4: NEW NATIVE OPS TILE: Lead Source Follow-up Radar -->
+              <div class="relative rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4 shadow-sm hover:border-indigo-300 transition-colors">
+                <span class="absolute left-0 top-0 bottom-0 w-[3px] bg-[#3D52A0] rounded-l-2xl"></span>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5 text-indigo-700">
+                    <i data-lucide="target" class="w-3.5 h-3.5"></i>
+                    <span class="text-[9.5px] font-bold uppercase tracking-wider">Lead Due Today</span>
+                  </div>
+                  <span class="text-[10px] px-1.5 py-0.2 rounded font-bold bg-blue-100 text-blue-800">Developer</span>
+                </div>
+                <div class="mt-2">
+                  <span class="font-bold text-sm text-[#12182F] block truncate">Villa Serene (Prestige)</span>
+                  <span class="text-slate-600 text-[11.5px] block truncate mt-0.5">Vikramaditya S. · Site Keys</span>
+                </div>
+                <div class="mt-3 flex items-center justify-between">
+                  <span class="text-[11px] font-semibold text-indigo-800">Due: 10:30 AM</span>
+                  <button onclick="triggerAction('Key pickup confirmed with guard')" class="text-[10px] font-bold text-[#3D52A0] hover:underline">Confirm Key →</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Today's EOD 1-Click Digest Bar -->
+          <div class="p-4 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                <i data-lucide="check" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <span class="font-bold text-[#12182F] block">Daily Output Scorecard: 19 Touchpoints Verified Today</span>
+                <span class="text-slate-400 text-[11px]">Attributed across Developer, Architect &amp; Referral channels</span>
+              </div>
+            </div>
+            <button onclick="copyEODDigestText()" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span>Copy WhatsApp EOD Digest</span>
+            </button>
+          </div>
+
+        </div>
+
+        <!-- SUB-SCREEN 1B: ENHANCED CLIENTS DIRECTORY (CLIENTS TAB) -->
+        <div id="opt1-screen-clients" class="space-y-6 hidden">
+          
+          <!-- Clients Header with Real Buckets + Native Lead Source Filter -->
+          <div class="space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 class="text-2xl font-bold text-[#12182F] font-serif">Client Directory</h2>
+                <p class="text-xs text-slate-500">Accounts aggregated from active projects with Lead Source attribution</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="openQuickNoteModal()" class="px-3.5 py-2 rounded-xl bg-[#3D52A0] text-white text-xs font-bold shadow-sm flex items-center gap-1.5">
+                  <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+                  <span>+ Quick Touchpoint Log</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Existing System Buckets (All, Active, Pipeline, Delivered) -->
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <span class="text-slate-400 text-[11px] font-semibold mr-1">Status:</span>
+              <button class="px-3 py-1.5 rounded-xl bg-[#12182F] text-white font-bold text-xs">All Accounts (4)</button>
+              <button class="px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-900 border border-indigo-200 font-semibold text-xs">Active Site (2)</button>
+              <button class="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 font-semibold text-xs">Pipeline / Onboarding (2)</button>
+              
+              <!-- NATIVE LEAD SOURCE PILLS (Added naturally right next to buckets) -->
+              <span class="text-slate-300 mx-2">|</span>
+              <span class="text-slate-400 text-[11px] font-semibold mr-1">Lead Source:</span>
+              <button onclick="filterSourceNative('all')" class="px-2.5 py-1 rounded-lg bg-slate-200 text-slate-800 font-bold text-[11px]">All Sources</button>
+              <button onclick="filterSourceNative('dev')" class="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-900 border border-blue-200 font-bold text-[11px]">Developer Handover</button>
+              <button onclick="filterSourceNative('arch')" class="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-900 border border-purple-200 font-bold text-[11px]">Architect Referral</button>
+              <button onclick="filterSourceNative('past')" class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-200 font-bold text-[11px]">Past Client</button>
+              <button onclick="filterSourceNative('insta')" class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-bold text-[11px]">Instagram</button>
+            </div>
+          </div>
+
+          <!-- Real Client Directory Cards (With Lead Source and Quick Actions) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            
+            <!-- Client Card 1 -->
+            <div class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card space-y-3 relative hover:border-slate-300 transition-colors">
+              <span class="absolute left-0 top-0 bottom-0 w-[4px] bg-blue-600 rounded-l-2xl"></span>
+              
+              <div class="flex items-start justify-between">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-base text-[#12182F]">Vikramaditya Sharma</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">Prestige Handover</span>
+                  </div>
+                  <span class="text-slate-500 text-xs">Villa Serene, Whitefield · Phase: Onboarding</span>
+                </div>
+                <span class="text-xs font-bold text-[#12182F] tabular">₹28.5 L</span>
+              </div>
+
+              <!-- Quick Touchpoint Strip -->
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+                <div class="flex justify-between text-[11px]">
+                  <span class="text-slate-400">Last Touch: WhatsApp (Yesterday)</span>
+                  <span class="text-amber-700 font-bold">Key Drop: TODAY</span>
+                </div>
+                <p class="text-slate-600 font-medium">Society NOC verified. Keys promised at security desk 10:30 AM.</p>
+              </div>
+
+              <!-- Action Bar -->
+              <div class="flex items-center justify-between pt-1">
+                <button onclick="openInlineLog('Vikramaditya Sharma')" class="text-slate-500 hover:text-[#3D52A0] font-bold text-xs flex items-center gap-1">
+                  <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                  <span>Quick Note (15s)</span>
+                </button>
+                <button onclick="triggerAction('Pre-approved WhatsApp template opened for Vikramaditya')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5">
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                  <span>1-Click WhatsApp</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Client Card 2 -->
+            <div class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card space-y-3 relative hover:border-slate-300 transition-colors">
+              <span class="absolute left-0 top-0 bottom-0 w-[4px] bg-purple-600 rounded-l-2xl"></span>
+              
+              <div class="flex items-start justify-between">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-base text-[#12182F]">Ananya Roy</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200">Ar. Sanjay Referral</span>
+                  </div>
+                  <span class="text-slate-500 text-xs">Palm Grove Apt 402 · Phase: Carcass Execution</span>
+                </div>
+                <span class="text-xs font-bold text-[#12182F] tabular">₹32.0 L</span>
+              </div>
+
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+                <div class="flex justify-between text-[11px]">
+                  <span class="text-slate-400">Last Touch: Call (Today 2 PM)</span>
+                  <span class="text-emerald-700 font-bold">UTR Logged</span>
+                </div>
+                <p class="text-slate-600 font-medium">NEFT ₹4,20,000 received for Milestone 2. Delighted with photo updates.</p>
+              </div>
+
+              <div class="flex items-center justify-between pt-1">
+                <button onclick="openInlineLog('Ananya Roy')" class="text-slate-500 hover:text-[#3D52A0] font-bold text-xs flex items-center gap-1">
+                  <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                  <span>Quick Note (15s)</span>
+                </button>
+                <button onclick="triggerAction('Receipt acknowledgment sent via WhatsApp')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5">
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                  <span>Send Receipt</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- OPTION 2: EXECUTIVE DESK SEGMENT IN CLIENTS TAB          -->
+      <!-- ======================================================== -->
+      <div id="view-opt2" class="space-y-6 hidden">
+        
+        <!-- Explanation Banner -->
+        <div class="p-4 rounded-2xl bg-purple-50 border border-purple-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-lg bg-purple-700 text-white flex items-center justify-center font-bold">2</div>
+            <div>
+              <span class="font-bold text-purple-950 block">Option 2: Dedicated Segment Inside Clients Tab</span>
+              <p class="text-slate-600 text-[11.5px]">Inside the existing <strong>Clients</strong> tab, provides a segmented sub-switch: <em>[1. Accounts Directory]</em> vs <em>[2. Coordinator Desk &amp; Lead Source Queue]</em>.</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded bg-purple-100 text-purple-800 font-bold font-mono">SEGMENTED WORKSPACE</span>
+        </div>
+
+        <!-- Segmented Navigation Header -->
+        <div class="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-card space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 class="text-xl font-bold text-[#12182F] font-serif">Clients &amp; Accounts</h2>
+              <p class="text-xs text-slate-500">Switch between standard account directory and your operational queue</p>
+            </div>
+            
+            <!-- Segment Pill Switcher -->
+            <div class="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200">
+              <button class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900">
+                1. Directory View
+              </button>
+              <button class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#3D52A0] text-white shadow-sm">
+                2. Coordinator Desk (Lead Radar)
+              </button>
+            </div>
+          </div>
+
+          <!-- Channel Attribution Ribbon -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs pt-2">
+            <div class="p-3 rounded-xl bg-blue-50/60 border border-blue-200 space-y-0.5">
+              <span class="text-[10px] uppercase font-bold text-blue-900">Developer Handover</span>
+              <div class="flex justify-between items-baseline">
+                <span class="text-base font-bold text-blue-950">2 Leads</span>
+                <span class="text-[11px] font-semibold text-blue-700">75% Close · ₹85L</span>
+              </div>
+            </div>
+            <div class="p-3 rounded-xl bg-purple-50/60 border border-purple-200 space-y-0.5">
+              <span class="text-[10px] uppercase font-bold text-purple-900">Architect Referral</span>
+              <div class="flex justify-between items-baseline">
+                <span class="text-base font-bold text-purple-950">1 Lead</span>
+                <span class="text-[11px] font-semibold text-purple-700">80% Close · ₹62L</span>
+              </div>
+            </div>
+            <div class="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200 space-y-0.5">
+              <span class="text-[10px] uppercase font-bold text-emerald-900">Past Client Referral</span>
+              <div class="flex justify-between items-baseline">
+                <span class="text-base font-bold text-emerald-950">1 Lead</span>
+                <span class="text-[11px] font-semibold text-emerald-700">100% Close · ₹45L</span>
+              </div>
+            </div>
+            <div class="p-3 rounded-xl bg-amber-50/60 border border-amber-200 space-y-0.5">
+              <span class="text-[10px] uppercase font-bold text-amber-900">Instagram / Web</span>
+              <div class="flex justify-between items-baseline">
+                <span class="text-base font-bold text-amber-950">1 Lead</span>
+                <span class="text-[11px] font-semibold text-amber-700">38% Close · ₹28L</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Priority Follow-up Queue Table -->
+        <div class="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-4 text-xs">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-[#12182F] text-sm">Today's Prioritized Follow-up Queue</span>
+            <span class="text-slate-400 text-[11px]">Ranked by Lead Source Urgency &amp; Idle Days</span>
+          </div>
+
+          <div class="space-y-2">
+            <!-- Row 1 -->
+            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0"></span>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-[#12182F]">Vikramaditya S.</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-900 font-bold">Developer Tie-up</span>
+                    <span class="text-rose-700 font-bold text-[10px]">Due in 1 hour</span>
+                  </div>
+                  <span class="text-slate-500 text-[11px]">Confirm key collection at Prestige Tower 3 security desk</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="triggerAction('Pickup task added')" class="px-3 py-1.5 rounded-lg bg-[#3D52A0] text-white font-bold text-xs">Confirm Pickup</button>
+              </div>
+            </div>
+
+            <!-- Row 2 -->
+            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"></span>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-[#12182F]">Dr. Arvind Swaminathan</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-bold">Instagram Lead</span>
+                    <span class="text-amber-800 font-bold text-[10px]">Invoice Overdue 5d</span>
+                  </div>
+                  <span class="text-slate-500 text-[11px]">Send gentle milestone 4 reminder regarding paint stage billing</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="triggerAction('Gentle WhatsApp reminder dispatched')" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-xs">Send Nudge</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- OPTION 3: CONTEXTUAL SLIDE-OUT OPS TRAY (EVERYWHERE)     -->
+      <!-- ======================================================== -->
+      <div id="view-opt3" class="space-y-6 hidden">
+        
+        <!-- Explanation Banner -->
+        <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-lg bg-emerald-700 text-white flex items-center justify-center font-bold">3</div>
+            <div>
+              <span class="font-bold text-emerald-950 block">Option 3: Contextual Slide-Out Ops Tray</span>
+              <p class="text-slate-600 text-[11.5px]">A persistent right-hand drawer accessible from <em>any screen</em> (BOQ editor, Drawing Tracker, Timeline) so the coordinator logs calls and handles follow-ups without leaving their current task.</p>
+            </div>
+          </div>
+          <button onclick="toggleOpsTray()" class="px-3.5 py-1.5 rounded-xl bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5">
+            <i data-lucide="sidebar" class="w-3.5 h-3.5"></i>
+            <span>Open Ops Tray Demo</span>
+          </button>
+        </div>
+
+        <!-- Demonstration Canvas (Simulating being inside a project) -->
+        <div class="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-card space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <span class="text-xs font-bold text-slate-400">Current Workspace Demo</span>
+              <h3 class="text-lg font-bold text-[#12182F]">Villa Serene · Drawing Tracker &amp; GFC Review</h3>
+            </div>
+            <button onclick="toggleOpsTray()" class="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-indigo-400"></i>
+              <span>Open Ops Tray (Drawer)</span>
+            </button>
+          </div>
+
+          <div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center text-slate-500 text-xs space-y-2">
+            <p class="font-bold text-slate-700">Notice how Option 3 preserves the full workspace:</p>
+            <p class="max-w-md mx-auto">The coordinator is reviewing drawing sheets or BOQ lines. An incoming call arrives from a client. Rather than navigating away to a separate CRM page, clicking the Ops Tray slides open their follow-up list and touchpoint logger instantly.</p>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- SLIDE-OUT OPS TRAY (USED BY OPTION 3 & SIDEBAR TRIGGER)  -->
+  <!-- ======================================================== -->
+  <div id="ops-tray" class="fixed inset-y-0 right-0 z-50 w-full sm:w-96 bg-white shadow-2xl border-l border-slate-200 transform translate-x-full transition-transform duration-300 flex flex-col justify-between">
+    <div class="p-5 space-y-4 overflow-y-auto">
+      
+      <!-- Tray Header -->
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-[#3D52A0] text-white flex items-center justify-center font-bold text-xs">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          </div>
+          <div>
+            <span class="font-bold text-sm text-[#12182F] block">Quick Ops Tray</span>
+            <span class="text-[10px] text-slate-400">Contextual Companion</span>
+          </div>
+        </div>
+        <button onclick="toggleOpsTray()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Quick 15s Log Strip -->
+      <div class="p-3.5 rounded-2xl bg-indigo-50/60 border border-indigo-200/80 space-y-2 text-xs">
+        <span class="font-bold text-indigo-950 uppercase text-[10px] block">15-Second Touchpoint Logger</span>
+        <select id="tray-client" class="w-full p-2 rounded-xl bg-white border border-slate-200 font-medium text-xs">
+          <option>Vikramaditya (Prestige Tie-up)</option>
+          <option>Ananya Roy (Architect Referral)</option>
+          <option>Kunal Shah (Past Client)</option>
+          <option>Dr. Arvind (Instagram)</option>
+        </select>
+        <input type="text" id="tray-notes" placeholder="Call summary (e.g. tile chosen, keys set)..." class="w-full p-2 rounded-xl bg-white border border-slate-200 font-medium text-xs">
+        <button onclick="saveTrayTouchpoint()" class="w-full py-1.5 rounded-xl bg-[#3D52A0] text-white font-bold text-xs shadow-sm">Save &amp; Log Output</button>
+      </div>
+
+      <!-- Today's 3 Urgent Items -->
+      <div class="space-y-2 text-xs">
+        <span class="font-bold text-slate-700 uppercase text-[10px] block">Pending Follow-ups Today (3)</span>
+        
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-[#12182F]">Villa Serene · Key Drop</span>
+            <span class="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-900 font-bold">Developer</span>
+          </div>
+          <p class="text-slate-500 text-[11px]">Confirm guard has keys by 10:30 AM.</p>
+          <button onclick="triggerAction('Guard contacted')" class="text-[10px] text-[#3D52A0] font-bold">Mark Done →</button>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-[#12182F]">Greenwood · Payment Follow-up</span>
+            <span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-bold">Instagram</span>
+          </div>
+          <p class="text-slate-500 text-[11px]">Milestone 4 overdue 5 days.</p>
+          <button onclick="triggerAction('WhatsApp payment reminder dispatched')" class="text-[10px] text-emerald-700 font-bold">1-Click WhatsApp →</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Tray Footer -->
+    <div class="p-4 border-t border-slate-100 bg-slate-50">
+      <button onclick="copyEODDigestText()" class="w-full py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5">
+        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+        <span>Copy EOD WhatsApp Digest</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 bg-[#0A1B33] text-white px-4 py-3 rounded-2xl shadow-2xl border border-indigo-500/30 text-xs font-semibold flex items-center gap-2 transform translate-y-24 transition-transform duration-300">
+    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toast-message">Action executed</span>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    let activeOption = 'opt1';
+
+    function setOption(opt) {
+      activeOption = opt;
+      document.querySelectorAll('.opt-btn').forEach(b => {
+        b.classList.remove('bg-white', 'text-[#12182F]', 'shadow-sm');
+        b.classList.add('text-slate-300');
+      });
+
+      const activeBtn = document.getElementById(`btn-${opt}`);
+      if (activeBtn) {
+        activeBtn.classList.add('bg-white', 'text-[#12182F]', 'shadow-sm');
+        activeBtn.classList.remove('text-slate-300');
+      }
+
+      document.getElementById('view-opt1').classList.add('hidden');
+      document.getElementById('view-opt2').classList.add('hidden');
+      document.getElementById('view-opt3').classList.add('hidden');
+
+      const targetView = document.getElementById(`view-${opt}`);
+      if (targetView) targetView.classList.remove('hidden');
+
+      triggerAction(`Switched to ${opt.toUpperCase()} prototype view`);
+    }
+
+    function setOpt1Tab(sub) {
+      const homeScreen = document.getElementById('opt1-screen-home');
+      const clientsScreen = document.getElementById('opt1-screen-clients');
+      const btnHome = document.getElementById('opt1-tab-home');
+      const btnClients = document.getElementById('opt1-tab-clients');
+
+      if (sub === 'home') {
+        homeScreen.classList.remove('hidden');
+        clientsScreen.classList.add('hidden');
+        btnHome.classList.add('bg-[#3D52A0]', 'text-white', 'shadow-sm');
+        btnHome.classList.remove('bg-white', 'text-slate-700');
+        btnClients.classList.remove('bg-[#3D52A0]', 'text-white', 'shadow-sm');
+        btnClients.classList.add('bg-white', 'text-slate-700');
+      } else {
+        homeScreen.classList.add('hidden');
+        clientsScreen.classList.remove('hidden');
+        btnClients.classList.add('bg-[#3D52A0]', 'text-white', 'shadow-sm');
+        btnClients.classList.remove('bg-white', 'text-slate-700');
+        btnHome.classList.remove('bg-[#3D52A0]', 'text-white', 'shadow-sm');
+        btnHome.classList.add('bg-white', 'text-slate-700');
+      }
+    }
+
+    function navigateToTab(tab) {
+      if (tab === 'home') {
+        setOption('opt1');
+        setOpt1Tab('home');
+      } else if (tab === 'clients') {
+        setOption('opt1');
+        setOpt1Tab('clients');
+      } else {
+        triggerAction(`Navigated to ${tab.toUpperCase()} screen`);
+      }
+    }
+
+    function toggleOpsTray() {
+      const tray = document.getElementById('ops-tray');
+      tray.classList.toggle('translate-x-full');
+    }
+
+    function triggerAction(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-message').innerText = msg;
+      toast.classList.remove('translate-y-24');
+      setTimeout(() => {
+        toast.classList.add('translate-y-24');
+      }, 2500);
+    }
+
+    function filterSourceNative(source) {
+      triggerAction(`Filtered client cards by Lead Source: ${source.toUpperCase()}`);
+    }
+
+    function openQuickNoteModal() {
+      triggerAction('Quick Touchpoint Logger opened! Ready to record interaction.');
+    }
+
+    function openInlineLog(client) {
+      triggerAction(`15s Note logger opened for ${client}`);
+    }
+
+    function saveTrayTouchpoint() {
+      const notes = document.getElementById('tray-notes').value || 'Interaction logged';
+      toggleOpsTray();
+      triggerAction(`Saved: "${notes}" with Lead Source attribution!`);
+    }
+
+    function copyEODDigestText() {
+      const text = `📊 FFDS STUDIO OS — EOD DIGEST\n👤 Ramesh K. (Junior Ops)\n📅 10 Oct 2026\n\n• Developer Tie-ups: Key pickup set at Prestige Villa Serene\n• Architect Referral: UTR HDFC0029418 verified for Palm Grove (₹4.2L)\n• Past Client: Dispatched Oberoi Walkthrough MoM within 2.5h\n• Instagram: Greenwood Milestone 4 followed up\n\nSLA: 97.1% on time | Assisted Collections: ₹14.2 L`;
+      navigator.clipboard.writeText(text).then(() => {
+        triggerAction('EOD Digest copied to clipboard for WhatsApp/Slack!');
+      }).catch(() => {
+        triggerAction('EOD Digest generated.');
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
