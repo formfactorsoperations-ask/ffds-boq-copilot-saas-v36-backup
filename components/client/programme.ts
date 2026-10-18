@@ -1,5 +1,5 @@
 import { ProjectSchedule } from '../../types';
-import { computeSchedule, ResolvedTask, toDayNum, toISO } from '../../lib/schedule';
+import { computeSchedule, isDesignGateTask, ResolvedTask, toDayNum, toISO } from '../../lib/schedule';
 import { ClientLifecycleSummary } from '../../services/clientPortalEngine';
 
 /**
@@ -185,6 +185,22 @@ export function buildProgramme(
    */
   const marks = new Map<number, ProgrammeMilestone[]>();
   /*
+    Site work the studio released ahead of the Design Gate. Its bars sit in
+    stage 5, but stage 5 is drawn starting after design ends, so without a mark
+    of its own the client would never see that demolition began in design.
+  */
+  const gateDay = result.tasks.find(isDesignGateTask)?.plannedStartDay;
+  const early: ProgrammeMilestone[] = result.tasks
+    .filter(t => t.earlyStart && t.behindDesignGate && (gateDay == null || t.plannedStartDay < gateDay))
+    .map(t => ({
+      id: `early-${t.id}`,
+      label: `${t.title} starts early`,
+      dateISO: t.plannedStartISO,
+      day: t.plannedStartDay,
+      done: t.status !== 'pending' || !!t.actualStartISO,
+      date: '',
+    }));
+  /*
     Stage windows come from the PLANNED dates, the same ones the studio's Gantt
     draws. `startDay`/`endDay` are the forecast -- unstarted work pulled to
     today -- so reading those here put the client's stages in a different place
@@ -299,6 +315,16 @@ export function buildProgramme(
    * the client can be shown without lying. A schedule the studio actually saved
    * is never touched — those are real dates and not ours to move.
    */
+  early.forEach(m => {
+    const n = ordered.find(x => {
+      const w = filled.get(x)!;
+      return m.day >= w.s && m.day <= w.e;
+    }) ?? (m.day < firstDay ? ordered[0] : ordered[ordered.length - 1]);
+    if (n === undefined) return;
+    if (!marks.has(n)) marks.set(n, []);
+    marks.get(n)!.push(m);
+  });
+
   let shift = 0;
   if (!published) {
     const activeStage = lifecycle.stages.find(s => s.status === 'active');

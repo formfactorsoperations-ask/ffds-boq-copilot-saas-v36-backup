@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import MilestoneIcon from './MilestoneIcon';
 import { newSequenceWarnings, SequenceWarning } from '../lib/scheduleBuilder';
 import { ProjectSchedule, ScheduleGate, ScheduleHold, ProjectContext } from '../types';
@@ -7,10 +8,12 @@ import { StepDeliverableChecklist } from './studio/StepDeliverableChecklist';
 import {
   computeSchedule, varianceReport, daysLostByReason, ineffectiveHolds, holdImpact,
   freezeBaseline, setTaskProgress, reorderTaskInLane, toDayNum, toISO, isWorkingDay, weekdayOf, GATE_LABEL,
-  workingDaysBetween, DEFAULT_CALENDAR,
+  workingDaysBetween, DEFAULT_CALENDAR, isHandoverTask, isDesignGateTask, gateHeldChain, releaseBeforeGate,
+  planStartAt, nextWorkingDay, type StartPlan,
   type ResolvedTask,
 } from '../lib/schedule';
 import { markersByDay, MARKER_LABEL } from '../lib/scheduleMarkers';
+import './projectHeader/projectHeader.css';
 import {
   Calendar, Pin, PauseCircle, AlertTriangle, Zap, Lock, Check, Circle, Play, Users, FileText, Printer, X, RefreshCw,
   Plus, Trash2, Clock, ShieldAlert, Pencil, ArrowUp, ArrowDown, HelpCircle, Info, ListChecks, MoreHorizontal,
@@ -154,6 +157,18 @@ export default function ScheduleGantt({
   const [editingStart, setEditingStart] = useState(false);
   const [editingHandover, setEditingHandover] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /*
+    Starting a stage before the Design Gate, waiting on a reason.
+
+    Reached three ways -- dragging the stage up among the design rows, setting
+    its start date earlier than the gate, or the button in the detail panel --
+    and all three ask the same question, because each one overrides the rule
+    that construction waits for the drawings. `chain` is everything that moves
+    with it: demolition cannot start early while site setup waits.
+  */
+  const [pendingRelease, setPendingRelease] = useState<
+    { taskId: string; title: string; chain: string[]; reason: string; startISO: string } | null
+  >(null);
 
   /*
     Dragging a row is the Predecessor dropdown, done faster.
@@ -178,6 +193,69 @@ export default function ScheduleGantt({
 
   const canDrag = (t: ResolvedTask) => !readOnly && !!onChange && t.kind !== 'milestone';
 
+  /*
+    Sliding a bar along the calendar.
+
+    Dragging a row moves a stage in the build order; dragging its bar moves it
+    in time. Left into the stage before it runs the two in parallel -- conduits
+    going in during the last days of demolition -- and the chip under the
+    pointer says, while the bar is still moving, what that does to the handover.
+    Nothing is saved until the bar is let go.
+  */
+  const [slide, setSlide] = useState<
+    { id: string; x0: number; days: number; x: number; y: number; plan: StartPlan | null } | null
+  >(null);
+  const slid = useRef(false);
+  const canSlide = (t: ResolvedTask) => !readOnly && !!onChange
+    && (t.kind === 'execution' || t.kind === 'procurement')
+    && !t.actualStartISO && t.status !== 'completed' && !t.pinned;
+  const slideBase = () => (schedule.tasks?.length ? schedule : { ...schedule, tasks: result.tasks as any });
+
+  const endSlide = (t: ResolvedTask) => {
+    const d = slide;
+    setSlide(null);
+    if (!d || d.id !== t.id || !d.plan || !onChange) return;
+    const asked = t.plannedStartDay + d.days;
+    const gate = d.plan.heldBy?.isDesignGate ? result.tasks.find(isDesignGateTask) : undefined;
+    if (gate && asked <= gate.plannedStartDay) {
+      // Asked for a day ahead of the gate: that is the start-before-the-gate question.
+      askReleaseBeforeGate(t.id, toISO(nextWorkingDay(schedule.calendar || DEFAULT_CALENDAR, asked)));
+      return;
+    }
+    if (d.plan.changed) onChange(d.plan.schedule);
+  };
+
+  /*
+    Work the gate holds can be dropped among the design rows or onto the gate
+    itself: that is the studio saying "this starts before the drawings are
+    done", and it is asked as that rather than refused as a cross-lane move.
+  */
+  const isBeforeGateDrop = (from: ResolvedTask, onto: ResolvedTask) =>
+    from.behindDesignGate && !from.earlyStart && (onto.kind === 'design' || isDesignGateTask(onto));
+
+  const askReleaseBeforeGate = (taskId: string, startISO = '') => {
+    const base = schedule.tasks?.length ? schedule.tasks : result.tasks;
+    const chain = gateHeldChain(base as any, taskId);
+    if (!chain.length) return;
+    const titleOf = (id: string) => base.find(t => t.id === id)?.title || id;
+    setPendingRelease({
+      taskId,
+      title: titleOf(taskId),
+      chain: chain.filter(id => id !== taskId).map(titleOf),
+      reason: '',
+      startISO,
+    });
+  };
+
+  const confirmRelease = () => {
+    if (!pendingRelease || !onChange || !pendingRelease.reason.trim()) return;
+    const base = schedule.tasks?.length ? schedule : { ...schedule, tasks: result.tasks as any };
+    onChange(releaseBeforeGate(base, pendingRelease.taskId, pendingRelease.reason.trim(), {
+      startISO: pendingRelease.startISO || undefined,
+    }));
+    setPendingRelease(null);
+  };
+
 
   /*
     A move the building does not allow gets a question, not a refusal.
@@ -201,6 +279,13 @@ export default function ScheduleGantt({
     setDragId(null);
     setDropTargetId(null);
     if (!source || !onChange) return;
+
+    const from = result.tasks.find(t => t.id === source);
+    const onto = result.tasks.find(t => t.id === targetId);
+    if (from && onto && isBeforeGateDrop(from, onto)) {
+      askReleaseBeforeGate(source);
+      return;
+    }
 
     const base = schedule.tasks?.length ? schedule.tasks : result.tasks;
     const next = reorderTaskInLane(base as any, source, targetId, position);
@@ -781,7 +866,8 @@ export default function ScheduleGantt({
                 onDragOver={e => {
                   const from = dragId && result.tasks.find(x => x.id === dragId);
                   // Only show a drop line where the drop would actually be taken.
-                  if (!from || from.id === t.id || from.kind !== t.kind || t.kind === 'milestone') return;
+                  if (!from || from.id === t.id) return;
+                  if (!isBeforeGateDrop(from, t) && (from.kind !== t.kind || t.kind === 'milestone')) return;
                   e.preventDefault();
                   e.dataTransfer.dropEffect = 'move';
                   // Top half drops above the row, bottom half below it.
@@ -792,7 +878,11 @@ export default function ScheduleGantt({
                 }}
                 onDragLeave={() => { if (dropTargetId === t.id) setDropTargetId(null); }}
                 onDrop={e => { e.preventDefault(); handleDrop(t.id); }}
-                title={canDrag(t) ? 'Drag to re-sequence within its lane' : undefined}
+                title={canDrag(t)
+                  ? (t.behindDesignGate && !t.earlyStart
+                      ? 'Drag to re-sequence, or up among the design stages to start it before the Design Gate'
+                      : 'Drag to re-sequence within its lane')
+                  : undefined}
                 className={`w-full h-9 px-3 flex items-center gap-2 border-b text-left text-xs transition-colors group ${
                   dropTargetId === t.id
                     ? (dropPos === 'before'
@@ -815,6 +905,22 @@ export default function ScheduleGantt({
                 )}
                 <span className="flex-1 truncate text-slate-800">{t.title}</span>
                 <StatusTags task={t} />
+                {t.earlyStart && t.behindDesignGate && (
+                  <span
+                    className={`${TAG_BASE} bg-[#3D52A0]/10 text-[#3D52A0] border-[#3D52A0]/20`}
+                    title={`Starts before the Design Gate: ${t.earlyStart.reason}`}
+                  >
+                    Early
+                  </span>
+                )}
+                {!!t.overlapDays && (
+                  <span
+                    className={`${TAG_BASE} bg-[#3D52A0]/10 text-[#3D52A0] border-[#3D52A0]/20`}
+                    title={`Starts ${t.overlapDays} working day${t.overlapDays === 1 ? '' : 's'} before the work before it finishes`}
+                  >
+                    Parallel
+                  </span>
+                )}
                 {t.pinned && <Pin className="w-3 h-3 text-slate-400 shrink-0" />}
                 {t.onCriticalPath && <Zap className="w-3 h-3 text-amber-500 shrink-0" />}
                 {!!t.heldBy.length && <PauseCircle className="w-3 h-3 text-rose-500 shrink-0" />}
@@ -983,14 +1089,38 @@ export default function ScheduleGantt({
                       );
                     })()
                   ) : (
-                    <button onClick={() => setSelectedId(t.id)}
+                    <button
+                      onClick={() => {
+                        if (slid.current) { slid.current = false; return; }
+                        setSelectedId(t.id);
+                      }}
+                      onPointerDown={e => {
+                        if (!canSlide(t) || e.button !== 0) return;
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        slid.current = false;
+                        setSlide({ id: t.id, x0: e.clientX, days: 0, x: e.clientX, y: e.clientY, plan: null });
+                      }}
+                      onPointerMove={e => {
+                        if (!slide || slide.id !== t.id) return;
+                        const days = Math.round((e.clientX - slide.x0) / PX[zoom]);
+                        if (days === slide.days) {
+                          setSlide({ ...slide, x: e.clientX, y: e.clientY });
+                          return;
+                        }
+                        slid.current = true;
+                        const plan = days === 0 ? null : planStartAt(slideBase(), t.id, t.plannedStartDay + days);
+                        setSlide({ ...slide, days, x: e.clientX, y: e.clientY, plan });
+                      }}
+                      onPointerUp={() => endSlide(t)}
+                      onPointerCancel={() => setSlide(null)}
                       title={`${t.title} (${t.workDays} working days: ${t.plannedStartISO} to ${t.plannedEndISO})${
                         t.overdueToStart ? ` — not started; earliest it can now begin is ${t.startISO}` : ''
-                      }`}
+                      }${canSlide(t) ? ' — drag left to start it earlier, alongside the work before it' : ''}`}
                       className={`gt-bar absolute top-2 h-5 rounded flex items-center justify-between px-1 text-[9px] font-bold text-white overflow-hidden gap-1${
                         t.onCriticalPath ? ' gt-bar--critical' : ''
-                      }`}
+                      }${canSlide(t) ? ' cursor-ew-resize' : ''}${slide?.id === t.id && slide.days !== 0 ? ' opacity-40' : ''}`}
                       style={{
+                        touchAction: canSlide(t) ? 'pan-y' : undefined,
                         left: left(t.plannedStartDay),
                         width: Math.max(px(t.plannedEndDay - t.plannedStartDay + 1), 6),
                         /* backgroundColor, not the `background` shorthand: the
@@ -1014,6 +1144,17 @@ export default function ScheduleGantt({
                       )}
                     </button>
                   )}
+
+                  {/* Where the bar would land if it were let go now. */}
+                  {slide?.id === t.id && slide.days !== 0 && (() => {
+                    const at = slide.plan?.changed ? slide.plan.startDay : t.plannedStartDay + slide.days;
+                    return (
+                      <div
+                        className="absolute top-2 h-5 rounded border-2 border-dashed border-[#3D52A0] bg-[#3D52A0]/10 pointer-events-none z-10"
+                        style={{ left: left(at), width: Math.max(px(t.plannedEndDay - t.plannedStartDay + 1), 6) }}
+                      />
+                    );
+                  })()}
 
                   {/* The dates, on the chart.
 
@@ -1231,6 +1372,78 @@ export default function ScheduleGantt({
                     </button>
                   </div>
 
+                  {/*
+                    Work the Design Gate holds back can be let go early, one
+                    stage at a time: demolition whose plan the client has
+                    already approved does not need to wait for the final
+                    drawings. Everything not released keeps waiting, so letting
+                    demolition go never lets the plumbing after it go too.
+                  */}
+                  {selected.behindDesignGate && (
+                    <div className="pt-3 border-t border-slate-100 mt-3 space-y-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Design Gate</p>
+                      {selected.earlyStart ? (
+                        <>
+                          <div className="rounded-xl border border-slate-200 px-3 py-2.5 space-y-1">
+                            <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#3D52A0]/10 text-[#3D52A0]">
+                              Starts before the gate
+                            </span>
+                            <p className="text-xs text-slate-700">{selected.earlyStart.reason}</p>
+                            <p className="text-[11px] text-slate-500">
+                              Released {new Date(selected.earlyStart.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              {selected.earlyStart.by ? ` by ${selected.earlyStart.by}` : ''}
+                            </p>
+                          </div>
+                          {selected.earlyStartHeldBy && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 space-y-2">
+                              <p className="text-[11px] text-amber-700">
+                                Still waits for {selected.earlyStartHeldBy.title}, which is held by the Design Gate.
+                                Release it as well for this stage to start early.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => onChange(releaseBeforeGate(
+                                  schedule, selected.earlyStartHeldBy!.id, selected.earlyStart!.reason,
+                                ))}
+                                className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
+                              >
+                                Release {selected.earlyStartHeldBy.title} too
+                              </button>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => onChange({
+                              ...schedule,
+                              tasks: schedule.tasks.map(t => {
+                                if (t.id !== selected.id) return t;
+                                const { earlyStart, ...rest } = t;
+                                return rest;
+                              }),
+                            })}
+                            className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
+                          >
+                            Wait for the Design Gate again
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-[11px] text-slate-500">
+                            Waits for the Design Gate. If the client has already approved this work, it can start
+                            sooner: use the button, set an earlier start date, or drag the row up among the design stages.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => askReleaseBeforeGate(selected.id)}
+                            className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
+                          >
+                            Start before the Design Gate
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   <div className="pt-3 border-t border-slate-100 mt-3 space-y-3">
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Edit Stage Properties</p>
@@ -1353,6 +1566,11 @@ export default function ScheduleGantt({
                       </div>
                     )}
 
+                    {isHandoverTask(selected) ? (
+                      <p className="text-[11px] text-slate-500">
+                        Handover always comes after every other stage, so it has no predecessor to choose.
+                      </p>
+                    ) : (
                     <div>
                       <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Predecessor / Dependency</label>
                       <select
@@ -1384,6 +1602,30 @@ export default function ScheduleGantt({
                         })}
                       </select>
                     </div>
+                    )}
+
+                    {selected.kind !== 'milestone' && !!selected.dependencies?.length && (
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Run in parallel (working days)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={selected.overlapDays || 0}
+                          onChange={e => {
+                            const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            onChange({
+                              ...schedule,
+                              tasks: schedule.tasks.map(t => t.id === selected.id ? { ...t, overlapDays: val || undefined } : t)
+                            });
+                          }}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none bg-slate-50 focus:bg-white focus:border-sky-300 font-medium"
+                        />
+                        <span className="text-[10px] text-slate-400 mt-0.5 block">
+                          Starts this many working days before its predecessor finishes. 0 waits for it to finish.
+                          Or drag the bar left on the chart.
+                        </span>
+                      </div>
+                    )}
 
                     {selected.kind !== 'milestone' && (
                       <div>
@@ -1393,6 +1635,13 @@ export default function ScheduleGantt({
                           value={selected.notBeforeISO || ""}
                           onChange={e => {
                             const val = e.target.value;
+                            /* A date ahead of the gate is a request to start before it, and is asked as one. */
+                            const gate = result.tasks.find(isDesignGateTask);
+                            if (val && gate && selected.behindDesignGate && !selected.earlyStart
+                              && toDayNum(val) <= gate.plannedStartDay) {
+                              askReleaseBeforeGate(selected.id, val);
+                              return;
+                            }
                             onChange({
                               ...schedule,
                               tasks: schedule.tasks.map(t => t.id === selected.id ? { ...t, notBeforeISO: val || undefined } : t)
@@ -1684,6 +1933,162 @@ export default function ScheduleGantt({
         </div>
       )}
 
+      {/*
+        What the slide does, while it is still a slide.
+
+        Read off the same engine the chart runs, so the number is the number:
+        how many working days the handover moves, what the stage now runs
+        alongside, and -- just as worth knowing -- when moving it saves nothing,
+        because it is not the stage holding up the finish.
+      */}
+      {slide && slide.days !== 0 && (() => {
+        const t = result.tasks.find(x => x.id === slide.id);
+        if (!t) return null;
+        const plan = slide.plan;
+        const at = plan?.changed ? plan.startDay : t.plannedStartDay + slide.days;
+        const asked = t.plannedStartDay + slide.days;
+        const gateAsk = !!plan?.heldBy?.isDesignGate && asked < (plan?.startDay ?? asked + 1);
+        const day = (d: number | null) => (d == null ? '—' : shortDate(toISO(d)));
+        const n = (k: number) => `${k} working day${k === 1 ? '' : 's'}`;
+        return createPortal(
+          <div
+            className="fixed z-[300] pointer-events-none w-72 rounded-xl border border-slate-200 bg-white shadow-2xl p-3 space-y-1.5 no-print"
+            style={{
+              left: Math.min(slide.x + 16, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 300),
+              top: slide.y + 18,
+            }}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              {t.title} · starts {day(at)}
+            </p>
+            {gateAsk ? (
+              <p className="text-xs font-semibold text-[#3D52A0]">
+                Waits for the Design Gate. Let go to start it before the gate.
+              </p>
+            ) : !plan?.changed ? (
+              <p className="text-xs text-slate-500">
+                {plan?.heldBy ? `Can't start before ${plan.heldBy.title} starts.` : 'No change.'}
+              </p>
+            ) : (
+              <>
+                {plan.savedWorkDays > 0 && (
+                  <p className="text-sm font-bold text-emerald-700">
+                    Saves {n(plan.savedWorkDays)}
+                    <span className="block text-[11px] font-semibold text-emerald-700">
+                      Handover {day(plan.finishBefore)} → {day(plan.finishAfter)}
+                    </span>
+                  </p>
+                )}
+                {plan.savedWorkDays === 0 && (
+                  <p className="text-xs font-semibold text-slate-700">
+                    Handover unchanged
+                    <span className="block text-[11px] font-normal text-slate-500">
+                      This stage is not what is holding up the finish.
+                    </span>
+                  </p>
+                )}
+                {plan.savedWorkDays < 0 && (
+                  <p className="text-sm font-bold text-amber-700">
+                    Handover {n(-plan.savedWorkDays)} later
+                    <span className="block text-[11px] font-semibold">
+                      {day(plan.finishBefore)} → {day(plan.finishAfter)}
+                    </span>
+                  </p>
+                )}
+                {plan.alongside.length > 0 && (
+                  <p className="text-[11px] text-slate-500">
+                    Runs alongside {plan.alongside.join(', ')}
+                    {plan.overlapDays > 0 ? ` for ${n(plan.overlapDays)}` : ''}
+                  </p>
+                )}
+                {plan.relinked.length > 0 && (
+                  <p className="text-[11px] text-amber-700">
+                    Starts without waiting for {plan.relinked.join(', ')}. The stages after it still wait.
+                  </p>
+                )}
+                {plan.heldBy && (
+                  <p className="text-[11px] text-slate-500">Can't go earlier than {plan.heldBy.title} allows.</p>
+                )}
+              </>
+            )}
+          </div>,
+          document.body,
+        );
+      })()}
+
+      {/*
+        Starting work before the Design Gate. Asked, with a reason, because it
+        overrides the one rule the gate exists for -- the reason is what the
+        studio and the client portal show for it afterwards.
+      */}
+      {pendingRelease && createPortal(
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 no-print" role="dialog" aria-label="Start before the Design Gate">
+          <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={() => setPendingRelease(null)} />
+          <div className="phd-pop relative w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
+            <div className="p-5 pb-3 border-b border-slate-100">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">Design Gate</p>
+                  <h3 className="font-bold text-slate-800 mt-1">Start {pendingRelease.title} before the gate?</h3>
+                </div>
+                <button type="button" onClick={() => setPendingRelease(null)} aria-label="Close"
+                  className="p-2 rounded-xl text-slate-500 hover:bg-slate-100"><X className="w-4 h-4" /></button>
+              </div>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-slate-500">
+                It will no longer wait for the drawings to be signed off. Everything else after the
+                Design Gate still waits for it.
+              </p>
+              {pendingRelease.chain.length > 0 && (
+                <div className="rounded-xl border border-slate-200 px-3 py-2.5">
+                  <p className="text-[11px] text-slate-500">
+                    It comes after {pendingRelease.chain.join(', ')}, so {pendingRelease.chain.length === 1 ? 'that starts' : 'those start'} early too.
+                  </p>
+                </div>
+              )}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                  Why it can start early
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={pendingRelease.reason}
+                  onChange={e => setPendingRelease(p => p && { ...p, reason: e.target.value })}
+                  onKeyDown={e => { if (e.key === 'Enter') confirmRelease(); }}
+                  placeholder="e.g. Client approved the demolition plan"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                  Start on
+                </label>
+                <input
+                  type="date"
+                  value={pendingRelease.startISO}
+                  onChange={e => setPendingRelease(p => p && { ...p, startISO: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">Leave empty to start as soon as the work before it allows.</p>
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+              <button type="button" onClick={() => setPendingRelease(null)}
+                className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="button" onClick={confirmRelease} disabled={!pendingRelease.reason.trim()}
+                className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50">
+                Start before the gate
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
     </div>
   );
 }
@@ -1797,8 +2202,7 @@ const ScheduleMechanicsIllustration: React.FC<IllustrationProps> = ({ schedule, 
   const finishStr = result.finishISO ? new Date(result.finishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
   const targetStr = schedule.targetHandoverISO ? new Date(schedule.targetHandoverISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
   const overrun = result.overrunWorkDays;
-  const isCompressed = result.compressionInfo?.compressionFactor && result.compressionInfo.compressionFactor < 1;
-  const compressionPercent = result.compressionInfo?.compressionFactor ? Math.round((1 - result.compressionInfo.compressionFactor) * 100) : 0;
+  const catchUpPercent = result.catchUp ? Math.round((1 - result.catchUp.factor) * 100) : 0;
 
   if (isPrintMode) {
     return (
@@ -1943,9 +2347,9 @@ const ScheduleMechanicsIllustration: React.FC<IllustrationProps> = ({ schedule, 
           </div>
 
           <p className="text-[11px] text-slate-500 leading-normal">
-            {isCompressed ? (
+            {result.catchUp ? (
               <span className="text-slate-800 font-semibold">
-                ⚡ <strong className="text-[#3D52A0]">Auto-Pacing Active:</strong> Remaining trades are auto-adjusted by {compressionPercent}% to ensure handover deadline is met.
+                <strong className="text-[#3D52A0]">Catch-up needed:</strong> holding the target handover means the remaining work runs about {catchUpPercent}% faster than planned.
               </span>
             ) : (
               <span>Your safety buffer protects the target handover date from minor on-site delays.</span>

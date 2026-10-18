@@ -1216,6 +1216,18 @@ export interface ScheduleTask {
     pinned?: boolean;
     milestoneLabel?: string;
     note?: string;
+    /**
+     * Work the studio has released to start before the Design Gate closes —
+     * demolition whose plan the client has already approved, say. Everything
+     * else downstream of the gate keeps waiting for it.
+     */
+    earlyStart?: { reason: string; at: number; by?: string };
+    /**
+     * Working days this task starts before its predecessors finish: electrical
+     * conduits going in during the last days of demolition. 0 or absent means
+     * it waits for them to finish. It never starts before they start.
+     */
+    overlapDays?: number;
 }
 
 /** A recorded disruption. Scope is per trade or the whole site. */

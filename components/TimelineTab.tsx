@@ -337,12 +337,11 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
 
   /*
     The same `computeSchedule` the chart runs, so the status band above can name
-    the compression instead of leaving the chart to announce it separately.
+    the catch-up instead of leaving the chart to announce it separately.
   */
   const compression = React.useMemo(() => {
     if (!projectSchedule.targetHandoverISO) return null;
-    const info = computeSchedule(projectSchedule).compressionInfo;
-    return info?.isCompressed ? info : null;
+    return computeSchedule(projectSchedule).catchUp || null;
   }, [projectSchedule]);
 
   const setProjectSchedule = async (next: ProjectSchedule) => {
@@ -872,10 +871,10 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
         together they cancelled out, and the second one read as good news for a
         project in trouble.
 
-        They are one sentence now, because they are one situation: what is late,
-        what the engine did about it, and what that cost. The arithmetic behind
-        the compression is a disclosure rather than a wall of figures, since it
-        explains a number rather than asking for a decision.
+        They are one sentence now, because they are one situation: what is late
+        and how far it has pushed the handover. The engine no longer compresses
+        anything to hide that; the arithmetic of catching up is a disclosure
+        rather than a wall of figures.
       */}
       {(delayedCount > 0 || compression || activeRequest) && (
         <div className="flex flex-col gap-3 mb-6">
@@ -892,9 +891,9 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                   {delayedCount > 0 && compression && ' '}
                   {compression && (
                     <span className="font-semibold">
-                      Trade durations have been compressed{' '}
-                      <strong className="font-extrabold">{Math.round((1 - compression.compressionFactor) * 100)}%</strong>
-                      {' '}to still hold the {new Date(projectSchedule.targetHandoverISO!).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} handover.
+                      Handover is now forecast{' '}
+                      <strong className="font-extrabold">{compression.shortfallDays} working days</strong>
+                      {' '}past the {new Date(projectSchedule.targetHandoverISO!).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} target.
                     </span>
                   )}
                 </p>
@@ -933,17 +932,19 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                     onClick={() => setShowCompressionDetail(v => !v)}
                     className="w-full flex items-center justify-between px-4 py-2 text-[10px] uppercase tracking-wider font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
                   >
-                    <span>How the dates were compressed</span>
+                    <span>What holding the target would take</span>
                     <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showCompressionDetail ? 'rotate-90' : ''}`} />
                   </button>
                   {showCompressionDetail && (
                     <div className="px-4 pb-4 space-y-2.5">
                       <p className="text-[11px] text-slate-600 leading-relaxed">
-                        Left alone the programme finished{' '}
+                        The programme now finishes{' '}
                         <strong className="text-slate-900">
-                          {new Date(compression.originalFinishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {new Date(compression.forecastFinishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </strong>
-                        , which is <strong className="text-slate-900">{compression.shortfallDays} working days</strong> past the target.
+                        . Holding the target means the remaining work runs about{' '}
+                        <strong className="text-slate-900">{Math.round((1 - compression.factor) * 100)}% faster</strong>
+                        {' '}than planned. Shorten the stages you can, or move the target.
                       </p>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {[
