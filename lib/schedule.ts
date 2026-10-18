@@ -174,7 +174,6 @@ export interface ResolvedTask extends ScheduleTask {
   /** Procurement only: the last day an order can be placed. */
   orderByISO?: string;
   slipDays: number;
-  originalWorkDays?: number;
   /*
     Working days this task's forecast has been pushed out purely because it is
     unfinished and time has passed — not because of a hold, a gate or a
@@ -184,6 +183,13 @@ export interface ResolvedTask extends ScheduleTask {
   driftDays: number;
   /** Started, not finished, and already past the day it was meant to end. */
   overrunning: boolean;
+  /** Work the Design Gate holds back: execution or procurement downstream of it. */
+  behindDesignGate: boolean;
+  /**
+   * Released to start early, but a predecessor is still waiting for the gate,
+   * so it cannot actually move. Named, so the studio can release that too.
+   */
+  earlyStartHeldBy?: { id: string; title: string };
   /** Neither started nor finished, and the day it should have begun has passed. */
   overdueToStart: boolean;
 
@@ -221,20 +227,127 @@ export interface ScheduleResult {
   criticalPath: string[];
   cycles: string[];
   totalSlipDays: number;
-  compressionInfo?: {
-    isCompressed: boolean;
-    compressionFactor: number;
+  /**
+   * Present when the forecast handover lands past the target: what it would
+   * take to get back. Reported, never applied — see the note in computeSchedule.
+   */
+  catchUp?: {
+    /** Remaining work would have to run at this fraction of its planned length. */
+    factor: number;
     shortfallDays: number;
     availableWorkingDays: number;
     requiredWorkingDays: number;
     sundaysCount: number;
     holidaysCount: number;
-    originalFinishISO: string;
+    forecastFinishISO: string;
   };
 }
 
+// ---------------------------------------------------------------------------
+// The two milestones the programme is built around
+// ---------------------------------------------------------------------------
+export const isDesignGateTask = (t: Pick<ScheduleTask, 'id' | 'kind' | 'title'>): boolean =>
+  t.kind === 'milestone' && (t.id === 'ms-design-gate' || /design\s*gate/i.test(t.title || ''));
+
+/* "Handover", "Final handover", "Handover & closeout" -- not "Pre-handover walkthrough". */
+export const isHandoverTask = (t: Pick<ScheduleTask, 'id' | 'kind' | 'title'>): boolean =>
+  t.kind === 'milestone' && (t.id === 'ms-handover' || /^\s*(final\s+|project\s+)?handover\b/i.test(t.title || ''));
+
+/** Everything reachable downstream of `roots` through the stored dependencies. */
+function downstreamOf(tasks: ScheduleTask[], roots: string[]): Set<string> {
+  const succ = new Map<string, string[]>();
+  tasks.forEach(t => (t.dependencies || []).forEach(d => {
+    if (!succ.has(d)) succ.set(d, []);
+    succ.get(d)!.push(t.id);
+  }));
+  const seen = new Set<string>();
+  const stack = [...roots];
+  while (stack.length) {
+    (succ.get(stack.pop()!) || []).forEach(n => {
+      if (seen.has(n)) return;
+      seen.add(n);
+      stack.push(n);
+    });
+  }
+  return seen;
+}
+
+interface EffectiveGraph {
+  deps: Map<string, string[]>;
+  behindGate: Set<string>;
+  earlyStartHeldBy: Map<string, { id: string; title: string }>;
+}
+
+/**
+ * The dependencies the schedule actually runs on, derived from the stored ones.
+ *
+ * Two milestones are rules rather than links, and storing them as links is how
+ * they broke.
+ *
+ * Handover is last. It was stored as depending on whichever trade the builder
+ * happened to create last, so a reorder, a deleted stage, a trade added later
+ * or an edited predecessor left it pointing at the middle of the job: the
+ * Design Gate moved and execution moved with it, but Handover stayed where it
+ * was. It now waits for every task that does not itself come after it.
+ *
+ * The Design Gate holds back execution — except work the studio has released
+ * early. Releasing demolition must not release everything chained after it,
+ * so unreleased execution and procurement downstream of the gate are tied to
+ * it directly, and a released task drops its link to the gate. On an intact
+ * chain the direct tie changes nothing; it only matters once something ahead
+ * of it has been let go.
+ *
+ * The stored dependencies are left alone: these are computed every time, so
+ * a saved schedule picks the rules up without being rewritten.
+ */
+function effectiveGraph(tasks: ScheduleTask[]): EffectiveGraph {
+  const deps = new Map(tasks.map(t => [t.id, [...(t.dependencies || [])]]));
+  const byId = new Map(tasks.map(t => [t.id, t]));
+
+  const gateIds = tasks.filter(isDesignGateTask).map(t => t.id);
+  const handoverIds = new Set(tasks.filter(isHandoverTask).map(t => t.id));
+  const behindGate = new Set<string>();
+  const earlyStartHeldBy = new Map<string, { id: string; title: string }>();
+
+  if (gateIds.length) {
+    const gate = gateIds[0];
+    downstreamOf(tasks, gateIds).forEach(id => {
+      const t = byId.get(id);
+      if (t && (t.kind === 'execution' || t.kind === 'procurement')) behindGate.add(id);
+    });
+    behindGate.forEach(id => {
+      const t = byId.get(id)!;
+      const own = deps.get(id)!;
+      if (t.earlyStart) {
+        deps.set(id, own.filter(d => !gateIds.includes(d)));
+      } else if (!own.includes(gate)) {
+        deps.set(id, [...own, gate]);
+      }
+    });
+    behindGate.forEach(id => {
+      const t = byId.get(id)!;
+      if (!t.earlyStart) return;
+      const holder = deps.get(id)!.map(d => byId.get(d))
+        .find(d => d && behindGate.has(d.id) && !d.earlyStart);
+      if (holder) earlyStartHeldBy.set(id, { id: holder.id, title: holder.title });
+    });
+  }
+
+  if (handoverIds.size) {
+    const after = downstreamOf(tasks, [...handoverIds]);
+    const before = tasks
+      .filter(t => !handoverIds.has(t.id) && !after.has(t.id))
+      .map(t => t.id);
+    handoverIds.forEach(id => {
+      deps.set(id, Array.from(new Set([...deps.get(id)!.filter(d => !handoverIds.has(d)), ...before])));
+    });
+  }
+
+  return { deps, behindGate, earlyStartHeldBy };
+}
+
 /** Kahn topological sort. A cycle is reported, never spun on. */
-function topoOrder(tasks: ScheduleTask[]): { order: string[]; cycles: string[] } {
+function topoOrder(tasks: ScheduleTask[], deps: Map<string, string[]>): { order: string[]; cycles: string[] } {
   const byId = new Map(tasks.map(t => [t.id, t]));
   const indeg = new Map<string, number>();
   const out = new Map<string, string[]>();
@@ -242,7 +355,7 @@ function topoOrder(tasks: ScheduleTask[]): { order: string[]; cycles: string[] }
     indeg.set(t.id, 0);
     out.set(t.id, []);
   });
-  tasks.forEach(t => (t.dependencies || []).forEach(d => {
+  tasks.forEach(t => (deps.get(t.id) || []).forEach(d => {
     if (!byId.has(d)) return;                       // dangling dep is ignored, not fatal
     indeg.set(t.id, (indeg.get(t.id) || 0) + 1);
     out.get(d)!.push(t.id);
@@ -307,7 +420,9 @@ function runSchedulePass(
   today: number
 ) {
   const byId = new Map(tasksToRun.map(t => [t.id, t]));
-  const { order, cycles } = topoOrder(tasksToRun);
+  const graph = effectiveGraph(tasksToRun);
+  const depsOf = (id: string) => graph.deps.get(id) || [];
+  const { order, cycles } = topoOrder(tasksToRun, graph.deps);
   const resolved = new Map<string, ResolvedTask>();
 
   const anchor = schedule.projectStartISO
@@ -326,7 +441,7 @@ function runSchedulePass(
     // other. See the note on `plannedStartDay`.
     let start = anchor;
     let pStart = anchor;
-    if (schedule.projectStartISO && (!t.dependencies || t.dependencies.length === 0)) {
+    if (schedule.projectStartISO && depsOf(id).length === 0) {
       start = toDayNum(schedule.projectStartISO);
       pStart = start;
     }
@@ -345,7 +460,7 @@ function runSchedulePass(
       pStart = Math.max(pStart, floor);
     }
 
-    (t.dependencies || []).forEach(dep => {
+    depsOf(id).forEach(dep => {
       const r = resolved.get(dep);
       if (r) {
         start = Math.max(start, r.endDay + 1);
@@ -471,6 +586,8 @@ function runSchedulePass(
       driftDays,
       overrunning,
       overdueToStart,
+      behindDesignGate: graph.behindGate.has(id),
+      earlyStartHeldBy: graph.earlyStartHeldBy.get(id),
       orderByISO: t.kind === 'procurement' && t.leadTimeDays
         ? toISO(start - t.leadTimeDays)
         : undefined,
@@ -486,6 +603,7 @@ function runSchedulePass(
       plannedStartISO: toISO(anchor), plannedEndISO: toISO(end),
       openGates: [], heldBy: [], floatDays: 0, onCriticalPath: false, slipDays: 0,
       driftDays: 0, overrunning: false, overdueToStart: false,
+      behindDesignGate: graph.behindGate.has(id),
     });
   });
 
@@ -494,7 +612,7 @@ function runSchedulePass(
 
   const successors = new Map<string, string[]>();
   all.forEach(r => successors.set(r.id, []));
-  all.forEach(r => (r.dependencies || []).forEach(d => successors.get(d)?.push(r.id)));
+  all.forEach(r => depsOf(r.id).forEach(d => successors.get(d)?.push(r.id)));
 
   const latestFinish = new Map<string, number>();
   [...order].reverse().forEach(id => {
@@ -554,96 +672,69 @@ function runSchedulePass(
 export function computeSchedule(schedule: ProjectSchedule, todayISO?: string): ScheduleResult {
   const cal = schedule.calendar || DEFAULT_CALENDAR;
   const hol = holidaySet(cal);
-  let tasks = schedule.tasks || [];
+  const tasks = schedule.tasks || [];
   const today = toDayNum(todayISO || toISO(Math.floor(Date.now() / MS_DAY)));
 
-  // Run the uncompressed pass first
-  const basePass = runSchedulePass(tasks, schedule, cal, hol, today);
+  const pass = runSchedulePass(tasks, schedule, cal, hol, today);
 
   const target = schedule.targetHandoverISO ? toDayNum(schedule.targetHandoverISO) : null;
-  const startDay = basePass.startDay;
-  const finishDay = basePass.finishDay;
-  /* Compression compares forecast against forecast -- see the note on it. */
-  const compressFrom = basePass.forecastStartDay;
+  const startDay = pass.startDay;
+  const finishDay = pass.finishDay;
+  /* Catch-up compares forecast against forecast -- see the note on forecastStartDay. */
+  const forecastFrom = pass.forecastStartDay;
 
-  let compressionInfo: ScheduleResult['compressionInfo'] = undefined;
+  /*
+    A late forecast is reported, not squeezed back onto the target.
 
-  if (target != null && finishDay != null && compressFrom != null && finishDay > target) {
-    // We have an overrun! Let's calculate working days and non-working days
-    const availableWorkingDays = workingDaysBetween(cal, compressFrom, target, hol);
-    const requiredWorkingDays = workingDaysBetween(cal, compressFrom, finishDay, hol);
-    const shortfallDays = requiredWorkingDays - availableWorkingDays;
+    This used to re-run the whole programme with every unfinished duration
+    scaled down until the finish fitted the target handover. The effect was a
+    Handover that would not move: each day the design ran late, the Design Gate
+    moved later and the trades after it quietly got shorter, so the studio
+    watched the gate slide while the handover sat still. Design steps were
+    scaled too, and the factor came from the forecast while the chart draws the
+    plan, so the dates it produced matched neither.
 
+    Durations are the studio's to change. The figures that used to drive the
+    squeeze are still worked out, as what catching up would take.
+  */
+  let catchUp: ScheduleResult['catchUp'] = undefined;
+  if (target != null && finishDay != null && forecastFrom != null && finishDay > target) {
+    const availableWorkingDays = workingDaysBetween(cal, forecastFrom, target, hol);
+    const requiredWorkingDays = workingDaysBetween(cal, forecastFrom, finishDay, hol);
     if (requiredWorkingDays > availableWorkingDays && availableWorkingDays > 0) {
-      const compressionFactor = availableWorkingDays / requiredWorkingDays;
-
-      // Count sundays and holidays in the window
       let sundaysCount = 0;
       let holidaysCount = 0;
-      const holidaysSetObj = holidaySet(cal);
-      for (let d = compressFrom; d <= target; d++) {
-        const wd = weekdayOf(d);
-        if (wd === 6) { // Sunday is index 6
-          sundaysCount++;
-        } else if (holidaysSetObj.has(d)) {
-          holidaysCount++;
-        }
+      for (let d = forecastFrom; d <= target; d++) {
+        if (weekdayOf(d) === 6) sundaysCount++;
+        else if (hol.has(d)) holidaysCount++;
       }
-
-      // Re-run schedule with compressed durations for all non-completed, non-milestone tasks
-      const compressedTasks = tasks.map(t => {
-        if (t.status === 'completed' || t.kind === 'milestone') {
-          return { ...t, originalWorkDays: t.workDays };
-        }
-        const compressedDays = Math.max(1, Math.round(t.workDays * compressionFactor));
-        return {
-          ...t,
-          originalWorkDays: t.workDays,
-          workDays: compressedDays,
-        };
-      });
-
-      const compressedPass = runSchedulePass(compressedTasks, schedule, cal, hol, today);
-      
-      compressionInfo = {
-        isCompressed: true,
-        compressionFactor,
-        shortfallDays,
+      catchUp = {
+        factor: availableWorkingDays / requiredWorkingDays,
+        shortfallDays: requiredWorkingDays - availableWorkingDays,
         availableWorkingDays,
         requiredWorkingDays,
         sundaysCount,
         holidaysCount,
-        originalFinishISO: toISO(finishDay),
-      };
-
-      return {
-        tasks: compressedPass.tasks.sort((a, b) => a.startDay - b.startDay || a.endDay - b.endDay),
-        startISO: compressedPass.startDay != null ? toISO(compressedPass.startDay) : null,
-        finishISO: compressedPass.finishDay != null ? toISO(compressedPass.finishDay) : null,
-        overrunWorkDays: target != null && compressedPass.finishDay != null
-          ? (compressedPass.finishDay > target ? workingDaysBetween(cal, target, compressedPass.finishDay, hol) - 1
-                                                : -(workingDaysBetween(cal, compressedPass.finishDay, target, hol) - 1))
-          : null,
-        criticalPath: compressedPass.criticalPath,
-        cycles: compressedPass.cycles,
-        totalSlipDays: compressedPass.totalSlipDays,
-        compressionInfo,
+        forecastFinishISO: toISO(finishDay),
       };
     }
   }
 
-  // Otherwise, return standard (uncompressed) schedule
+  /* Handover is the last row, whatever day anything else starts on. */
+  const last = (t: ResolvedTask) => (isHandoverTask(t) ? 1 : 0);
+
   return {
-    tasks: basePass.tasks.sort((a, b) => a.startDay - b.startDay || a.endDay - b.endDay),
+    tasks: pass.tasks.sort((a, b) => last(a) - last(b) || a.startDay - b.startDay || a.endDay - b.endDay),
     startISO: startDay != null ? toISO(startDay) : null,
     finishISO: finishDay != null ? toISO(finishDay) : null,
     overrunWorkDays: target != null && finishDay != null
       ? (finishDay > target ? workingDaysBetween(cal, target, finishDay, hol) - 1
                             : -(workingDaysBetween(cal, finishDay, target, hol) - 1))
       : null,
-    criticalPath: basePass.criticalPath,
-    cycles: basePass.cycles,
-    totalSlipDays: basePass.totalSlipDays,
+    criticalPath: pass.criticalPath,
+    cycles: pass.cycles,
+    totalSlipDays: pass.totalSlipDays,
+    catchUp,
   };
 }
 

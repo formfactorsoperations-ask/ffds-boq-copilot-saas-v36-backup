@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import MilestoneIcon from './MilestoneIcon';
 import { newSequenceWarnings, SequenceWarning } from '../lib/scheduleBuilder';
 import { ProjectSchedule, ScheduleGate, ScheduleHold, ProjectContext } from '../types';
@@ -7,7 +7,7 @@ import { StepDeliverableChecklist } from './studio/StepDeliverableChecklist';
 import {
   computeSchedule, varianceReport, daysLostByReason, ineffectiveHolds, holdImpact,
   freezeBaseline, setTaskProgress, reorderTaskInLane, toDayNum, toISO, isWorkingDay, weekdayOf, GATE_LABEL,
-  workingDaysBetween, DEFAULT_CALENDAR,
+  workingDaysBetween, DEFAULT_CALENDAR, isHandoverTask,
   type ResolvedTask,
 } from '../lib/schedule';
 import { markersByDay, MARKER_LABEL } from '../lib/scheduleMarkers';
@@ -154,6 +154,9 @@ export default function ScheduleGantt({
   const [editingStart, setEditingStart] = useState(false);
   const [editingHandover, setEditingHandover] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** The reason being typed for starting a stage before the Design Gate; null when not asking. */
+  const [earlyReason, setEarlyReason] = useState<string | null>(null);
+  useEffect(() => setEarlyReason(null), [selectedId]);
 
   /*
     Dragging a row is the Predecessor dropdown, done faster.
@@ -815,6 +818,14 @@ export default function ScheduleGantt({
                 )}
                 <span className="flex-1 truncate text-slate-800">{t.title}</span>
                 <StatusTags task={t} />
+                {t.earlyStart && t.behindDesignGate && (
+                  <span
+                    className={`${TAG_BASE} bg-[#3D52A0]/10 text-[#3D52A0] border-[#3D52A0]/20`}
+                    title={`Starts before the Design Gate: ${t.earlyStart.reason}`}
+                  >
+                    Early
+                  </span>
+                )}
                 {t.pinned && <Pin className="w-3 h-3 text-slate-400 shrink-0" />}
                 {t.onCriticalPath && <Zap className="w-3 h-3 text-amber-500 shrink-0" />}
                 {!!t.heldBy.length && <PauseCircle className="w-3 h-3 text-rose-500 shrink-0" />}
@@ -1231,6 +1242,121 @@ export default function ScheduleGantt({
                     </button>
                   </div>
 
+                  {/*
+                    Work the Design Gate holds back can be let go early, one
+                    stage at a time: demolition whose plan the client has
+                    already approved does not need to wait for the final
+                    drawings. Everything not released keeps waiting, so letting
+                    demolition go never lets the plumbing after it go too.
+                  */}
+                  {selected.behindDesignGate && (
+                    <div className="pt-3 border-t border-slate-100 mt-3 space-y-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Design Gate</p>
+                      {selected.earlyStart ? (
+                        <>
+                          <div className="rounded-xl border border-slate-200 px-3 py-2.5 space-y-1">
+                            <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#3D52A0]/10 text-[#3D52A0]">
+                              Starts before the gate
+                            </span>
+                            <p className="text-xs text-slate-700">{selected.earlyStart.reason}</p>
+                            <p className="text-[11px] text-slate-500">
+                              Released {new Date(selected.earlyStart.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              {selected.earlyStart.by ? ` by ${selected.earlyStart.by}` : ''}
+                            </p>
+                          </div>
+                          {selected.earlyStartHeldBy && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 space-y-2">
+                              <p className="text-[11px] text-amber-700">
+                                Still waits for {selected.earlyStartHeldBy.title}, which is held by the Design Gate.
+                                Release it as well for this stage to start early.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const heldId = selected.earlyStartHeldBy!.id;
+                                  const early = selected.earlyStart!;
+                                  onChange({
+                                    ...schedule,
+                                    tasks: schedule.tasks.map(t => t.id === heldId ? { ...t, earlyStart: { ...early, at: Date.now() } } : t),
+                                  });
+                                }}
+                                className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
+                              >
+                                Release {selected.earlyStartHeldBy.title} too
+                              </button>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => onChange({
+                              ...schedule,
+                              tasks: schedule.tasks.map(t => {
+                                if (t.id !== selected.id) return t;
+                                const { earlyStart, ...rest } = t;
+                                return rest;
+                              }),
+                            })}
+                            className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
+                          >
+                            Wait for the Design Gate again
+                          </button>
+                        </>
+                      ) : earlyReason !== null ? (
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                            Why it can start early
+                          </label>
+                          <input
+                            type="text"
+                            autoFocus
+                            value={earlyReason}
+                            onChange={e => setEarlyReason(e.target.value)}
+                            placeholder="e.g. Client approved the demolition plan"
+                            className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              disabled={!earlyReason.trim()}
+                              onClick={() => {
+                                onChange({
+                                  ...schedule,
+                                  tasks: schedule.tasks.map(t => t.id === selected.id
+                                    ? { ...t, earlyStart: { reason: earlyReason.trim(), at: Date.now() } }
+                                    : t),
+                                });
+                                setEarlyReason(null);
+                              }}
+                              className="flex-1 px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50"
+                            >
+                              Start before the gate
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEarlyReason(null)}
+                              className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-[11px] text-slate-500">
+                            Waits for the Design Gate. If the client has already approved this work, it can start sooner.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setEarlyReason('')}
+                            className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
+                          >
+                            Start before the Design Gate
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   <div className="pt-3 border-t border-slate-100 mt-3 space-y-3">
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Edit Stage Properties</p>
@@ -1353,6 +1479,11 @@ export default function ScheduleGantt({
                       </div>
                     )}
 
+                    {isHandoverTask(selected) ? (
+                      <p className="text-[11px] text-slate-500">
+                        Handover always comes after every other stage, so it has no predecessor to choose.
+                      </p>
+                    ) : (
                     <div>
                       <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Predecessor / Dependency</label>
                       <select
@@ -1384,6 +1515,7 @@ export default function ScheduleGantt({
                         })}
                       </select>
                     </div>
+                    )}
 
                     {selected.kind !== 'milestone' && (
                       <div>
@@ -1797,8 +1929,7 @@ const ScheduleMechanicsIllustration: React.FC<IllustrationProps> = ({ schedule, 
   const finishStr = result.finishISO ? new Date(result.finishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
   const targetStr = schedule.targetHandoverISO ? new Date(schedule.targetHandoverISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
   const overrun = result.overrunWorkDays;
-  const isCompressed = result.compressionInfo?.compressionFactor && result.compressionInfo.compressionFactor < 1;
-  const compressionPercent = result.compressionInfo?.compressionFactor ? Math.round((1 - result.compressionInfo.compressionFactor) * 100) : 0;
+  const catchUpPercent = result.catchUp ? Math.round((1 - result.catchUp.factor) * 100) : 0;
 
   if (isPrintMode) {
     return (
@@ -1943,9 +2074,9 @@ const ScheduleMechanicsIllustration: React.FC<IllustrationProps> = ({ schedule, 
           </div>
 
           <p className="text-[11px] text-slate-500 leading-normal">
-            {isCompressed ? (
+            {result.catchUp ? (
               <span className="text-slate-800 font-semibold">
-                ⚡ <strong className="text-[#3D52A0]">Auto-Pacing Active:</strong> Remaining trades are auto-adjusted by {compressionPercent}% to ensure handover deadline is met.
+                <strong className="text-[#3D52A0]">Catch-up needed:</strong> holding the target handover means the remaining work runs about {catchUpPercent}% faster than planned.
               </span>
             ) : (
               <span>Your safety buffer protects the target handover date from minor on-site delays.</span>
