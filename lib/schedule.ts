@@ -346,6 +346,61 @@ function effectiveGraph(tasks: ScheduleTask[]): EffectiveGraph {
   return { deps, behindGate, earlyStartHeldBy };
 }
 
+/**
+ * What releasing `taskId` early has to release with it: the task, and every
+ * stage ahead of it the Design Gate still holds. Upstream first.
+ *
+ * Demolition cannot start early while site setup in front of it waits for the
+ * gate, so moving demolition ahead of the gate means moving both. Empty when
+ * the task is not held by the gate at all.
+ */
+export function gateHeldChain(tasks: ScheduleTask[], taskId: string): string[] {
+  const gateIds = tasks.filter(isDesignGateTask).map(t => t.id);
+  if (!gateIds.length) return [];
+  const byId = new Map(tasks.map(t => [t.id, t]));
+  const behind = downstreamOf(tasks, gateIds);
+  const held = (id: string) => {
+    const t = byId.get(id);
+    return !!t && behind.has(id) && (t.kind === 'execution' || t.kind === 'procurement') && !t.earlyStart;
+  };
+  if (!held(taskId)) return [];
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const walk = (id: string) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    (byId.get(id)?.dependencies || []).filter(held).forEach(walk);
+    out.push(id);
+  };
+  walk(taskId);
+  return out;
+}
+
+/**
+ * Let a stage start before the Design Gate, with the stages ahead of it that
+ * the gate would otherwise still hold. `startISO`, when given, is the earliest
+ * the stage itself may begin.
+ */
+export function releaseBeforeGate(
+  schedule: ProjectSchedule,
+  taskId: string,
+  reason: string,
+  opts: { startISO?: string; at?: number } = {},
+): ProjectSchedule {
+  const chain = new Set(gateHeldChain(schedule.tasks || [], taskId));
+  if (!chain.size) return schedule;
+  const earlyStart = { reason, at: opts.at ?? Date.now() };
+  return {
+    ...schedule,
+    tasks: schedule.tasks.map(t => {
+      if (!chain.has(t.id)) return t;
+      const next = { ...t, earlyStart };
+      return t.id === taskId && opts.startISO ? { ...next, notBeforeISO: opts.startISO } : next;
+    }),
+  };
+}
+
 /** Kahn topological sort. A cycle is reported, never spun on. */
 function topoOrder(tasks: ScheduleTask[], deps: Map<string, string[]>): { order: string[]; cycles: string[] } {
   const byId = new Map(tasks.map(t => [t.id, t]));

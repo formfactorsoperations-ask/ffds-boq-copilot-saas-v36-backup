@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildScheduleFromProject } from '../../lib/scheduleBuilder';
-import { computeSchedule, reorderTaskInLane, type ScheduleResult } from '../../lib/schedule';
+import {
+  computeSchedule, reorderTaskInLane, gateHeldChain, releaseBeforeGate, toDayNum, type ScheduleResult,
+} from '../../lib/schedule';
 import { ProjectSchedule } from '../../types';
 import { buildProgramme } from '../../components/client/programme';
 
@@ -135,6 +137,27 @@ describe('Starting execution before the Design Gate', () => {
     expect(task(r, 'exec-paint-final').behindDesignGate).toBe(true);
     expect(task(r, 'design-1').behindDesignGate).toBe(false);
     expect(task(r, 'ms-handover').behindDesignGate).toBe(false);
+  });
+
+  it('moving demolition ahead of the gate takes site setup with it', () => {
+    const s = programme();
+    expect(gateHeldChain(s.tasks, 'exec-civil-demolition')).toEqual(['exec-site-prelims', 'exec-civil-demolition']);
+
+    const next = releaseBeforeGate(withDesignDays(s, 40), 'exec-civil-demolition', 'Plan approved', { startISO: '2026-09-01', at: 5 });
+    const r = computeSchedule(next, TODAY);
+    expect(task(r, 'exec-site-prelims').earlyStart).toEqual({ reason: 'Plan approved', at: 5 });
+    expect(task(r, 'exec-civil-demolition').earlyStartHeldBy).toBeUndefined();
+    expect(task(r, 'exec-civil-demolition').plannedStartDay).toBe(toDayNum('2026-09-01'));
+    expect(task(r, 'exec-civil-demolition').plannedStartDay).toBeLessThan(task(r, 'ms-design-gate').plannedStartDay);
+    expect(task(r, 'exec-plumb-concealed').plannedStartDay).toBeGreaterThan(task(r, 'ms-design-gate').plannedStartDay);
+  });
+
+  it('has nothing to release for design work or work already released', () => {
+    const s = programme();
+    expect(gateHeldChain(s.tasks, 'design-1')).toEqual([]);
+    const released = releaseBeforeGate(s, 'exec-site-prelims', 'Plan approved');
+    expect(gateHeldChain(released.tasks, 'exec-site-prelims')).toEqual([]);
+    expect(releaseBeforeGate(released, 'exec-site-prelims', 'again')).toBe(released);
   });
 
   it('changes nothing on a programme with nothing released', () => {

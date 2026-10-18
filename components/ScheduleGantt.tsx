@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import MilestoneIcon from './MilestoneIcon';
 import { newSequenceWarnings, SequenceWarning } from '../lib/scheduleBuilder';
 import { ProjectSchedule, ScheduleGate, ScheduleHold, ProjectContext } from '../types';
@@ -7,10 +8,11 @@ import { StepDeliverableChecklist } from './studio/StepDeliverableChecklist';
 import {
   computeSchedule, varianceReport, daysLostByReason, ineffectiveHolds, holdImpact,
   freezeBaseline, setTaskProgress, reorderTaskInLane, toDayNum, toISO, isWorkingDay, weekdayOf, GATE_LABEL,
-  workingDaysBetween, DEFAULT_CALENDAR, isHandoverTask,
+  workingDaysBetween, DEFAULT_CALENDAR, isHandoverTask, isDesignGateTask, gateHeldChain, releaseBeforeGate,
   type ResolvedTask,
 } from '../lib/schedule';
 import { markersByDay, MARKER_LABEL } from '../lib/scheduleMarkers';
+import './projectHeader/projectHeader.css';
 import {
   Calendar, Pin, PauseCircle, AlertTriangle, Zap, Lock, Check, Circle, Play, Users, FileText, Printer, X, RefreshCw,
   Plus, Trash2, Clock, ShieldAlert, Pencil, ArrowUp, ArrowDown, HelpCircle, Info, ListChecks, MoreHorizontal,
@@ -154,9 +156,18 @@ export default function ScheduleGantt({
   const [editingStart, setEditingStart] = useState(false);
   const [editingHandover, setEditingHandover] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  /** The reason being typed for starting a stage before the Design Gate; null when not asking. */
-  const [earlyReason, setEarlyReason] = useState<string | null>(null);
-  useEffect(() => setEarlyReason(null), [selectedId]);
+  /*
+    Starting a stage before the Design Gate, waiting on a reason.
+
+    Reached three ways -- dragging the stage up among the design rows, setting
+    its start date earlier than the gate, or the button in the detail panel --
+    and all three ask the same question, because each one overrides the rule
+    that construction waits for the drawings. `chain` is everything that moves
+    with it: demolition cannot start early while site setup waits.
+  */
+  const [pendingRelease, setPendingRelease] = useState<
+    { taskId: string; title: string; chain: string[]; reason: string; startISO: string } | null
+  >(null);
 
   /*
     Dragging a row is the Predecessor dropdown, done faster.
@@ -181,6 +192,37 @@ export default function ScheduleGantt({
 
   const canDrag = (t: ResolvedTask) => !readOnly && !!onChange && t.kind !== 'milestone';
 
+  /*
+    Work the gate holds can be dropped among the design rows or onto the gate
+    itself: that is the studio saying "this starts before the drawings are
+    done", and it is asked as that rather than refused as a cross-lane move.
+  */
+  const isBeforeGateDrop = (from: ResolvedTask, onto: ResolvedTask) =>
+    from.behindDesignGate && !from.earlyStart && (onto.kind === 'design' || isDesignGateTask(onto));
+
+  const askReleaseBeforeGate = (taskId: string, startISO = '') => {
+    const base = schedule.tasks?.length ? schedule.tasks : result.tasks;
+    const chain = gateHeldChain(base as any, taskId);
+    if (!chain.length) return;
+    const titleOf = (id: string) => base.find(t => t.id === id)?.title || id;
+    setPendingRelease({
+      taskId,
+      title: titleOf(taskId),
+      chain: chain.filter(id => id !== taskId).map(titleOf),
+      reason: '',
+      startISO,
+    });
+  };
+
+  const confirmRelease = () => {
+    if (!pendingRelease || !onChange || !pendingRelease.reason.trim()) return;
+    const base = schedule.tasks?.length ? schedule : { ...schedule, tasks: result.tasks as any };
+    onChange(releaseBeforeGate(base, pendingRelease.taskId, pendingRelease.reason.trim(), {
+      startISO: pendingRelease.startISO || undefined,
+    }));
+    setPendingRelease(null);
+  };
+
 
   /*
     A move the building does not allow gets a question, not a refusal.
@@ -204,6 +246,13 @@ export default function ScheduleGantt({
     setDragId(null);
     setDropTargetId(null);
     if (!source || !onChange) return;
+
+    const from = result.tasks.find(t => t.id === source);
+    const onto = result.tasks.find(t => t.id === targetId);
+    if (from && onto && isBeforeGateDrop(from, onto)) {
+      askReleaseBeforeGate(source);
+      return;
+    }
 
     const base = schedule.tasks?.length ? schedule.tasks : result.tasks;
     const next = reorderTaskInLane(base as any, source, targetId, position);
@@ -784,7 +833,8 @@ export default function ScheduleGantt({
                 onDragOver={e => {
                   const from = dragId && result.tasks.find(x => x.id === dragId);
                   // Only show a drop line where the drop would actually be taken.
-                  if (!from || from.id === t.id || from.kind !== t.kind || t.kind === 'milestone') return;
+                  if (!from || from.id === t.id) return;
+                  if (!isBeforeGateDrop(from, t) && (from.kind !== t.kind || t.kind === 'milestone')) return;
                   e.preventDefault();
                   e.dataTransfer.dropEffect = 'move';
                   // Top half drops above the row, bottom half below it.
@@ -795,7 +845,11 @@ export default function ScheduleGantt({
                 }}
                 onDragLeave={() => { if (dropTargetId === t.id) setDropTargetId(null); }}
                 onDrop={e => { e.preventDefault(); handleDrop(t.id); }}
-                title={canDrag(t) ? 'Drag to re-sequence within its lane' : undefined}
+                title={canDrag(t)
+                  ? (t.behindDesignGate && !t.earlyStart
+                      ? 'Drag to re-sequence, or up among the design stages to start it before the Design Gate'
+                      : 'Drag to re-sequence within its lane')
+                  : undefined}
                 className={`w-full h-9 px-3 flex items-center gap-2 border-b text-left text-xs transition-colors group ${
                   dropTargetId === t.id
                     ? (dropPos === 'before'
@@ -1272,14 +1326,9 @@ export default function ScheduleGantt({
                               </p>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const heldId = selected.earlyStartHeldBy!.id;
-                                  const early = selected.earlyStart!;
-                                  onChange({
-                                    ...schedule,
-                                    tasks: schedule.tasks.map(t => t.id === heldId ? { ...t, earlyStart: { ...early, at: Date.now() } } : t),
-                                  });
-                                }}
+                                onClick={() => onChange(releaseBeforeGate(
+                                  schedule, selected.earlyStartHeldBy!.id, selected.earlyStart!.reason,
+                                ))}
                                 className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
                               >
                                 Release {selected.earlyStartHeldBy.title} too
@@ -1301,53 +1350,15 @@ export default function ScheduleGantt({
                             Wait for the Design Gate again
                           </button>
                         </>
-                      ) : earlyReason !== null ? (
-                        <div className="space-y-2">
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                            Why it can start early
-                          </label>
-                          <input
-                            type="text"
-                            autoFocus
-                            value={earlyReason}
-                            onChange={e => setEarlyReason(e.target.value)}
-                            placeholder="e.g. Client approved the demolition plan"
-                            className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              disabled={!earlyReason.trim()}
-                              onClick={() => {
-                                onChange({
-                                  ...schedule,
-                                  tasks: schedule.tasks.map(t => t.id === selected.id
-                                    ? { ...t, earlyStart: { reason: earlyReason.trim(), at: Date.now() } }
-                                    : t),
-                                });
-                                setEarlyReason(null);
-                              }}
-                              className="flex-1 px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50"
-                            >
-                              Start before the gate
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEarlyReason(null)}
-                              className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
                       ) : (
                         <>
                           <p className="text-[11px] text-slate-500">
-                            Waits for the Design Gate. If the client has already approved this work, it can start sooner.
+                            Waits for the Design Gate. If the client has already approved this work, it can start
+                            sooner: use the button, set an earlier start date, or drag the row up among the design stages.
                           </p>
                           <button
                             type="button"
-                            onClick={() => setEarlyReason('')}
+                            onClick={() => askReleaseBeforeGate(selected.id)}
                             className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50"
                           >
                             Start before the Design Gate
@@ -1525,6 +1536,13 @@ export default function ScheduleGantt({
                           value={selected.notBeforeISO || ""}
                           onChange={e => {
                             const val = e.target.value;
+                            /* A date ahead of the gate is a request to start before it, and is asked as one. */
+                            const gate = result.tasks.find(isDesignGateTask);
+                            if (val && gate && selected.behindDesignGate && !selected.earlyStart
+                              && toDayNum(val) <= gate.plannedStartDay) {
+                              askReleaseBeforeGate(selected.id, val);
+                              return;
+                            }
                             onChange({
                               ...schedule,
                               tasks: schedule.tasks.map(t => t.id === selected.id ? { ...t, notBeforeISO: val || undefined } : t)
@@ -1814,6 +1832,79 @@ export default function ScheduleGantt({
             </div>
           </div>
         </div>
+      )}
+
+      {/*
+        Starting work before the Design Gate. Asked, with a reason, because it
+        overrides the one rule the gate exists for -- the reason is what the
+        studio and the client portal show for it afterwards.
+      */}
+      {pendingRelease && createPortal(
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 no-print" role="dialog" aria-label="Start before the Design Gate">
+          <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={() => setPendingRelease(null)} />
+          <div className="phd-pop relative w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
+            <div className="p-5 pb-3 border-b border-slate-100">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">Design Gate</p>
+                  <h3 className="font-bold text-slate-800 mt-1">Start {pendingRelease.title} before the gate?</h3>
+                </div>
+                <button type="button" onClick={() => setPendingRelease(null)} aria-label="Close"
+                  className="p-2 rounded-xl text-slate-500 hover:bg-slate-100"><X className="w-4 h-4" /></button>
+              </div>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-slate-500">
+                It will no longer wait for the drawings to be signed off. Everything else after the
+                Design Gate still waits for it.
+              </p>
+              {pendingRelease.chain.length > 0 && (
+                <div className="rounded-xl border border-slate-200 px-3 py-2.5">
+                  <p className="text-[11px] text-slate-500">
+                    It comes after {pendingRelease.chain.join(', ')}, so {pendingRelease.chain.length === 1 ? 'that starts' : 'those start'} early too.
+                  </p>
+                </div>
+              )}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                  Why it can start early
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={pendingRelease.reason}
+                  onChange={e => setPendingRelease(p => p && { ...p, reason: e.target.value })}
+                  onKeyDown={e => { if (e.key === 'Enter') confirmRelease(); }}
+                  placeholder="e.g. Client approved the demolition plan"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                  Start on
+                </label>
+                <input
+                  type="date"
+                  value={pendingRelease.startISO}
+                  onChange={e => setPendingRelease(p => p && { ...p, startISO: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">Leave empty to start as soon as the work before it allows.</p>
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+              <button type="button" onClick={() => setPendingRelease(null)}
+                className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="button" onClick={confirmRelease} disabled={!pendingRelease.reason.trim()}
+                className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50">
+                Start before the gate
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
 
     </div>
