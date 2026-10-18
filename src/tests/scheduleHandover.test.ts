@@ -152,6 +152,19 @@ describe('Starting execution before the Design Gate', () => {
     expect(task(r, 'exec-plumb-concealed').plannedStartDay).toBeGreaterThan(task(r, 'ms-design-gate').plannedStartDay);
   });
 
+  it('works for any trade, not just demolition: carpentry takes everything ahead of it', () => {
+    const s = withDesignDays(programme(), 40);
+    const chain = gateHeldChain(s.tasks, 'exec-carp-carcass');
+    expect(chain[chain.length - 1]).toBe('exec-carp-carcass');
+    expect(chain).toEqual(expect.arrayContaining(['exec-site-prelims', 'exec-civil-demolition', 'exec-elec-wiring']));
+
+    const r = computeSchedule(releaseBeforeGate(s, 'exec-carp-carcass', 'Kitchen design frozen'), TODAY);
+    const gate = task(r, 'ms-design-gate').plannedStartDay;
+    expect(task(r, 'exec-carp-carcass').plannedStartDay).toBeLessThan(gate);
+    // The work after carpentry still waits for the gate.
+    expect(task(r, 'exec-paint-first').plannedStartDay).toBeGreaterThan(gate);
+  });
+
   it('has nothing to release for design work or work already released', () => {
     const s = programme();
     expect(gateHeldChain(s.tasks, 'design-1')).toEqual([]);

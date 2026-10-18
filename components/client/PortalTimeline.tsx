@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import MilestoneIcon from '../MilestoneIcon';
 import { ChevronDown } from '@/lib/lucide-shim';
 import { PaymentMilestone, ProjectDecisionRecord } from '../../types';
@@ -94,6 +94,21 @@ const clusterMarks = (marks: Mark[], span: number): Cluster[] => {
 const fmt = (day: number) =>
   new Date(day * 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
+/** Width of the label column every track starts with (`w-[110px]`). */
+const TRACK_LABEL_PX = 110;
+/** One key date is two lines of text: the name and the day under it. */
+const KEY_DATE_ROW_PX = 26;
+const KEY_DATE_GAP_PX = 10;
+
+/**
+ * How wide a key-date label prints: flag and icon, then the longer of its two
+ * lines. An estimate from character counts -- the 10px bold name runs about
+ * 6.2px a character -- erring wide, because a gap costs nothing and an overlap
+ * is the bug.
+ */
+const keyDateWidth = (label: string, date: string): number =>
+  30 + Math.max(label.length * 6.2, (date.length + 12) * 5.4);
+
 /** "14 Sept" — a day on the chart, where the year is already obvious. */
 const dayShort = (day: number) =>
   new Date(day * 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -104,6 +119,27 @@ export default function PortalTimeline({
   const [focus, setFocus] = useState<{ key: string; title: string; detail: string } | null>(null);
   /** Which cluster has been dropped open. One at a time — this is a chart. */
   const [openCluster, setOpenCluster] = useState<string | null>(null);
+
+  /*
+    How wide the date lanes really are, in pixels.
+
+    Key-date labels are text, and whether two of them collide depends on how
+    long they are and how wide the chart is -- not on how far apart their dates
+    are as a share of the axis. Measured from the chart rather than the lane,
+    because the lanes are re-created on every render.
+  */
+  const chartRef = useRef<HTMLDivElement | null>(null);
+  const [laneWidth, setLaneWidth] = useState(610);
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el) return;
+    const measure = () => setLaneWidth(Math.max(200, el.clientWidth - TRACK_LABEL_PX));
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [programme.dated]);
 
   /**
    * The axis spans the programme *and* everything real that sits outside it.
@@ -303,10 +339,12 @@ export default function PortalTimeline({
     looking for. They do not belong inside a 38px stage row next to its date
     label; they are points, and they get their own lane.
 
-    `row` is a two-level collision pass: two flags closer together than a tenth
-    of the axis would print their labels on top of each other, so the later one
-    drops a line. Beyond two, they stack again from the top — three key dates in
-    one week is not a programme anyone is reading off a chart.
+    `row` packs the labels so none overlaps another. It used to be a two-row
+    pass that only compared how far apart the dates were, so a long label --
+    "Site Setup & Preliminaries starts early" -- ran straight through the
+    Design Gate ten days later, and a third close date landed back on the
+    first. Each label now takes the first row where its real width fits, and
+    the lane grows a row when none does.
   */
   /* Plain, not memoised: this sits below the "no dated programme" early
      return, and a hook here would be a conditional hook. It is two array
@@ -317,15 +355,21 @@ export default function PortalTimeline({
       .flatMap(s => s.milestones)
       .filter(m => m.day >= axis.start && m.day <= axis.end)
       .sort((a, b) => a.day - b.day);
-    let lastLeft = -Infinity;
-    let row = 0;
+    const rows: [number, number][][] = [];
     return all.map(m => {
       const left = pct(m.day);
-      if (left - lastLeft < 10) row = (row + 1) % 2; else row = 0;
-      lastLeft = left;
-      return { ...m, left, row };
+      const x = (left / 100) * laneWidth;
+      const w = keyDateWidth(m.label, m.date || dayShort(m.day));
+      // Lean away from the nearer edge, as before, so nothing runs off the chart.
+      const flip = x + w > laneWidth && x - w >= 0;
+      const span: [number, number] = flip ? [x - w, x] : [x, x + w];
+      let row = rows.findIndex(r => r.every(([a, b]) => span[1] + KEY_DATE_GAP_PX <= a || span[0] >= b + KEY_DATE_GAP_PX));
+      if (row < 0) { rows.push([]); row = rows.length - 1; }
+      rows[row].push(span);
+      return { ...m, left, row, flip };
     });
   })();
+  const keyDateRows = Math.max(1, ...keyDates.map(m => m.row + 1));
 
   /* The next one still ahead — the single date worth answering "when" with. */
   const nextKeyDate = keyDates.find(m => !m.done && m.day >= programme.todayDay);
@@ -360,7 +404,7 @@ export default function PortalTimeline({
 
       <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
         <div className="overflow-x-auto">
-          <div className="min-w-[720px] relative">
+          <div ref={chartRef} className="min-w-[720px] relative">
             {/* Month header, from the schedule's own span. */}
             <div className="flex border-b border-slate-100 bg-slate-50/70">
               <div className="w-[110px] shrink-0 px-3 py-2 text-[10px] font-bold text-slate-500 border-r border-slate-100">
@@ -400,6 +444,13 @@ export default function PortalTimeline({
                 // ("2. Scope & Ter"). Below the threshold the bar keeps its
                 // position and the name sits beside it.
                 const inside = width >= 14;
+                /*
+                  Near the right edge the name and dates read leftwards from
+                  the bar's end. Printed to the right they ran off the chart --
+                  the handover stage showed as "6." and "22 Fe".
+                */
+                const nameNearEnd = !inside && left + width > 72;
+                const datesNearEnd = left > 72;
                 /*
                   Where the stage stands, in the client's language.
 
@@ -481,7 +532,7 @@ export default function PortalTimeline({
                     </button>
                     {!inside && (
                       <span
-                        style={{ left: `calc(${left + width}% + 6px)` }}
+                        style={nameNearEnd ? { right: `calc(${100 - left}% + 6px)` } : { left: `calc(${left + width}% + 6px)` }}
                         className={`absolute top-1.5 h-5 flex items-center text-[10px] font-bold whitespace-nowrap pointer-events-none ${
                           s.status === 'pending' ? 'text-slate-400' : 'text-slate-600'
                         } ${dim(`st-${s.stageNumber}`)}`}
@@ -496,16 +547,25 @@ export default function PortalTimeline({
                         mouse — and nothing at all on a phone. */}
                     <span
                       style={{
-                        left: `${left}%`,
+                        ...(datesNearEnd ? { right: `${100 - (left + width)}%` } : { left: `${left}%` }),
                         color: s.runningLate ? '#d97706' : s.hasSchedule ? '#3D52A0' : '#cbd5e1',
                         /* Offset per stage so the column breathes instead of
                            pulsing in unison. */
                         ['--ff-delay' as string]: `-${(i * 430) % 5200}ms`,
                       } as React.CSSProperties}
-                      className={`ff-banner-wrap absolute top-[25px] pointer-events-none ${dim(`st-${s.stageNumber}`)}`}
+                      className={`ff-banner-wrap absolute top-[25px] pointer-events-none ${
+                        datesNearEnd ? 'flex-row-reverse' : ''
+                      } ${dim(`st-${s.stageNumber}`)}`}
                     >
                       <span className="ff-banner-pole" />
-                      <span className={`ff-banner text-[10px] font-semibold tabular-nums whitespace-nowrap ${
+                      <span
+                        /* Mirrored: pole on the right at the bar's end, swallowtail on the left. */
+                        style={datesNearEnd ? {
+                          clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 6px 50%)',
+                          padding: '2.5px 6px 2.5px 11px',
+                          transformOrigin: 'right center',
+                        } : undefined}
+                        className={`ff-banner text-[10px] font-semibold tabular-nums whitespace-nowrap ${
                         s.runningLate
                           ? 'bg-amber-50 text-amber-800'
                           : s.hasSchedule ? 'bg-slate-100 text-slate-500' : 'bg-slate-50 text-slate-300 italic'
@@ -540,7 +600,7 @@ export default function PortalTimeline({
                 nearer, so nothing runs off the chart. */}
             {keyDates.length > 0 && (
               <Track label="Key dates">
-                <div className="relative h-11">
+                <div className="relative" style={{ height: keyDateRows * KEY_DATE_ROW_PX + 4 }}>
                   {keyDates.map(m => {
                     const away = daysAway(m.day);
                     const detail = m.done
@@ -548,7 +608,7 @@ export default function PortalTimeline({
                       : `${fmt(m.day)}${away === 0 ? ' · today' : away > 0
                           ? ` · in ${away} day${away === 1 ? '' : 's'}`
                           : ` · ${-away} day${away === -1 ? '' : 's'} ago, not yet marked complete`}`;
-                    const flip = m.left > 78;
+                    const flip = m.flip;
                     /*
                       Grey for what is behind us, light green for what is ahead,
                       amber for a date that has passed without being marked
@@ -568,7 +628,7 @@ export default function PortalTimeline({
                         key={m.id}
                         onMouseEnter={on} onMouseLeave={off} onFocus={on} onBlur={off}
                         aria-label={`${m.label} — ${detail}`}
-                        style={{ left: `${m.left}%`, top: m.row === 0 ? 2 : 22, color: tone.pole }}
+                        style={{ left: `${m.left}%`, top: 2 + m.row * KEY_DATE_ROW_PX, color: tone.pole }}
                         className={`absolute z-10 flex items-start gap-1 cursor-default ${
                           flip ? 'flex-row-reverse -translate-x-full' : ''
                         } ${dim(`ms-${m.id}`)}`}
