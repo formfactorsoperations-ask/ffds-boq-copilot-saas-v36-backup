@@ -135,6 +135,17 @@ export function workingDaysBetween(cal: WorkCalendar, a: number, b: number, hol?
   return n;
 }
 
+/** Walk back N working days from `day` (the mirror of shiftByWorkingDays). */
+export function shiftBackWorkingDays(cal: WorkCalendar, day: number, workDays: number, hol?: Set<number>): number {
+  const holidays = hol || holidaySet(cal);
+  let d = day, moved = 0, guard = 0;
+  while (moved < workDays && guard++ < 3000) {
+    d--;
+    if (isWorkingDay(cal, d, holidays)) moved++;
+  }
+  return d;
+}
+
 /** Push a day forward by N working days (used when a hold is applied). */
 export function shiftByWorkingDays(cal: WorkCalendar, day: number, workDays: number, hol?: Set<number>): number {
   const holidays = hol || holidaySet(cal);
@@ -401,6 +412,156 @@ export function releaseBeforeGate(
   };
 }
 
+/** What moving a stage's start would do, worked out before anything is saved. */
+export interface StartPlan {
+  /** The schedule if the move is applied. */
+  schedule: ProjectSchedule;
+  changed: boolean;
+  /** Where the stage would start (planned). */
+  startDay: number;
+  overlapDays: number;
+  /** Stages it would run alongside, by title. */
+  alongside: string[];
+  /** Stages it would no longer wait for, by title. */
+  relinked: string[];
+  /** What stopped it going earlier, when something did. */
+  heldBy?: { id: string; title: string; isDesignGate: boolean };
+  finishBefore: number | null;
+  finishAfter: number | null;
+  /** Working days the handover moves earlier; negative when it moves later. */
+  savedWorkDays: number;
+}
+
+/**
+ * Plan a stage starting on `targetDay`, the way dragging its bar asks for.
+ *
+ * Earlier than its predecessors finish means running in parallel with them
+ * (`overlapDays`). Earlier than a predecessor even starts means it no longer
+ * waits for that stage at all, so it takes over that stage's own predecessors
+ * instead -- ceiling framing dragged back past concealed plumbing starts
+ * alongside the demolition the plumbing was waiting for. It stops at design
+ * work, at a milestone, and at the Design Gate unless it has been released
+ * early. Later than its predecessors allow sets an earliest start date.
+ *
+ * Only the dragged stage moves. The stages that followed it still wait for
+ * whatever it stopped waiting for: framing can go up early, but the boards are
+ * not closed over pipes that are not in yet. Without this the saving counted
+ * days that only exist if the ceiling is sealed over unfinished work.
+ */
+export function planStartAt(
+  schedule: ProjectSchedule, taskId: string, targetDay: number, todayISO?: string,
+): StartPlan {
+  const cal = schedule.calendar || DEFAULT_CALENDAR;
+  const hol = holidaySet(cal);
+  const tasks = schedule.tasks || [];
+  const base = computeSchedule(schedule, todayISO);
+  const resolved = new Map(base.tasks.map(t => [t.id, t]));
+  const stored = new Map(tasks.map(t => [t.id, t]));
+  const finishOf = (r: ScheduleResult) => {
+    const h = r.tasks.find(isHandoverTask);
+    if (h) return h.plannedStartDay;
+    return r.tasks.length ? Math.max(...r.tasks.map(t => t.plannedEndDay)) : null;
+  };
+  const finishBefore = finishOf(base);
+  const self = resolved.get(taskId);
+  const task = stored.get(taskId);
+  const none: StartPlan = {
+    schedule, changed: false, startDay: self?.plannedStartDay ?? targetDay, overlapDays: task?.overlapDays || 0,
+    alongside: [], relinked: [], finishBefore, finishAfter: finishBefore, savedWorkDays: 0,
+  };
+  if (!task || !self) return none;
+
+  let target = nextWorkingDay(cal, targetDay, hol);
+  let heldBy: StartPlan['heldBy'];
+  const holdAt = (day: number, r: ResolvedTask) => {
+    if (target < day) {
+      target = day;
+      heldBy = { id: r.id, title: r.title, isDesignGate: isDesignGateTask(r) };
+    }
+  };
+
+  // The gate still holds anything not released ahead of it.
+  const gate = base.tasks.find(isDesignGateTask);
+  if (gate && self.behindDesignGate && !task.earlyStart) {
+    holdAt(nextWorkingDay(cal, gate.plannedEndDay + 1, hol), gate);
+  }
+
+  let deps = [...(task.dependencies || [])];
+  const relinked: string[] = [];
+  for (let guard = 0; guard < 40; guard++) {
+    let moved = false;
+    const next: string[] = [];
+    deps.forEach(d => {
+      const r = resolved.get(d);
+      if (!r) return;                                   // dangling: drop it
+      if (r.kind === 'milestone') {
+        holdAt(nextWorkingDay(cal, r.plannedEndDay + 1, hol), r);
+        next.push(d);
+        return;
+      }
+      if (r.plannedStartDay <= target) { next.push(d); return; }
+      const up = (stored.get(d)?.dependencies || []).filter(x => x !== taskId);
+      if (r.kind === 'design' || !up.length) {
+        holdAt(r.plannedStartDay, r);
+        next.push(d);
+        return;
+      }
+      relinked.push(r.title);
+      next.push(...up);
+      moved = true;
+    });
+    deps = Array.from(new Set(next));
+    if (!moved) break;
+  }
+
+  const preds = deps.map(d => resolved.get(d)).filter((r): r is ResolvedTask => !!r);
+  const natural = preds.length
+    ? nextWorkingDay(cal, Math.max(...preds.map(r => r.plannedEndDay + 1)), hol)
+    : null;
+
+  let overlapDays = 0;
+  let notBeforeISO = task.notBeforeISO;
+  if (natural == null || target > natural) {
+    notBeforeISO = toISO(target);                       // later than it has to: a floor
+  } else {
+    if (target < natural) overlapDays = workingDaysBetween(cal, target, natural - 1, hol);
+    if (notBeforeISO && toDayNum(notBeforeISO) > target) notBeforeISO = undefined;
+  }
+
+  const sameDeps = deps.length === (task.dependencies || []).length
+    && deps.every(d => (task.dependencies || []).includes(d));
+  const changed = !sameDeps || overlapDays !== (task.overlapDays || 0) || notBeforeISO !== task.notBeforeISO;
+  if (!changed) return { ...none, heldBy, relinked };
+
+  const nextTask: ScheduleTask = { ...task, dependencies: deps, overlapDays: overlapDays || undefined, notBeforeISO };
+  const dropped = (task.dependencies || []).filter(d => !deps.includes(d) && resolved.has(d));
+  const nextSchedule = {
+    ...schedule,
+    tasks: tasks.map(t => {
+      if (t.id === taskId) return nextTask;
+      if (!dropped.length || !(t.dependencies || []).includes(taskId)) return t;
+      return { ...t, dependencies: Array.from(new Set([...(t.dependencies || []), ...dropped])) };
+    }),
+  };
+  const after = computeSchedule(nextSchedule, todayISO);
+  const finishAfter = finishOf(after);
+  const startDay = after.tasks.find(t => t.id === taskId)?.plannedStartDay ?? target;
+  const alongside = preds
+    .filter(r => r.kind !== 'milestone' && (after.tasks.find(t => t.id === r.id)?.plannedEndDay ?? -Infinity) >= startDay)
+    .map(r => r.title);
+
+  let savedWorkDays = 0;
+  if (finishBefore != null && finishAfter != null && finishBefore !== finishAfter) {
+    const span = workingDaysBetween(cal, Math.min(finishBefore, finishAfter), Math.max(finishBefore, finishAfter), hol) - 1;
+    savedWorkDays = finishAfter < finishBefore ? span : -span;
+  }
+
+  return {
+    schedule: nextSchedule, changed: true, startDay, overlapDays, alongside, relinked, heldBy,
+    finishBefore, finishAfter, savedWorkDays,
+  };
+}
+
 /** Kahn topological sort. A cycle is reported, never spun on. */
 function topoOrder(tasks: ScheduleTask[], deps: Map<string, string[]>): { order: string[]; cycles: string[] } {
   const byId = new Map(tasks.map(t => [t.id, t]));
@@ -515,11 +676,23 @@ function runSchedulePass(
       pStart = Math.max(pStart, floor);
     }
 
+    /*
+      Work run in parallel: a task with `overlapDays` starts that many working
+      days before its predecessor finishes, but never before the predecessor
+      itself starts. A milestone has no length to overlap.
+    */
+    const overlap = Math.max(0, Math.round(t.overlapDays || 0));
+    const after = (predStart: number, predEnd: number, isMilestone: boolean) => {
+      if (!overlap || isMilestone) return predEnd + 1;
+      const back = shiftBackWorkingDays(cal, nextWorkingDay(cal, predEnd + 1, hol), overlap, hol);
+      return Math.max(predStart, back);
+    };
     depsOf(id).forEach(dep => {
       const r = resolved.get(dep);
       if (r) {
-        start = Math.max(start, r.endDay + 1);
-        pStart = Math.max(pStart, r.plannedEndDay + 1);
+        const ms = r.kind === 'milestone';
+        start = Math.max(start, after(r.startDay, r.endDay, ms));
+        pStart = Math.max(pStart, after(r.plannedStartDay, r.plannedEndDay, ms));
       }
     });
 
@@ -673,7 +846,13 @@ function runSchedulePass(
   [...order].reverse().forEach(id => {
     const succ = successors.get(id) || [];
     const lf = succ.length
-      ? Math.min(...succ.map(s => (latestFinish.get(s) ?? finishDay!) - (resolved.get(s)?.workDays ? workSpanEnd(cal, resolved.get(s)!.startDay, resolved.get(s)!.workDays, hol) - resolved.get(s)!.startDay + 1 : 1)))
+      ? Math.min(...succ.map(s => {
+          const rs = resolved.get(s);
+          const base = (latestFinish.get(s) ?? finishDay!) - (rs?.workDays ? workSpanEnd(cal, rs.startDay, rs.workDays, hol) - rs.startDay + 1 : 1);
+          // A successor running in parallel lets this task finish that much later.
+          const lead = rs?.overlapDays && resolved.get(id)?.kind !== 'milestone' ? Math.round(rs.overlapDays) : 0;
+          return lead > 0 ? shiftByWorkingDays(cal, base, lead, hol) : base;
+        }))
       : (finishDay ?? 0);
     latestFinish.set(id, lf);
   });

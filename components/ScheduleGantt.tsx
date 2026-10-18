@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import MilestoneIcon from './MilestoneIcon';
 import { newSequenceWarnings, SequenceWarning } from '../lib/scheduleBuilder';
@@ -9,6 +9,7 @@ import {
   computeSchedule, varianceReport, daysLostByReason, ineffectiveHolds, holdImpact,
   freezeBaseline, setTaskProgress, reorderTaskInLane, toDayNum, toISO, isWorkingDay, weekdayOf, GATE_LABEL,
   workingDaysBetween, DEFAULT_CALENDAR, isHandoverTask, isDesignGateTask, gateHeldChain, releaseBeforeGate,
+  planStartAt, nextWorkingDay, type StartPlan,
   type ResolvedTask,
 } from '../lib/schedule';
 import { markersByDay, MARKER_LABEL } from '../lib/scheduleMarkers';
@@ -191,6 +192,38 @@ export default function ScheduleGantt({
   const [dropPos, setDropPos] = useState<'before' | 'after'>('before');
 
   const canDrag = (t: ResolvedTask) => !readOnly && !!onChange && t.kind !== 'milestone';
+
+  /*
+    Sliding a bar along the calendar.
+
+    Dragging a row moves a stage in the build order; dragging its bar moves it
+    in time. Left into the stage before it runs the two in parallel -- conduits
+    going in during the last days of demolition -- and the chip under the
+    pointer says, while the bar is still moving, what that does to the handover.
+    Nothing is saved until the bar is let go.
+  */
+  const [slide, setSlide] = useState<
+    { id: string; x0: number; days: number; x: number; y: number; plan: StartPlan | null } | null
+  >(null);
+  const slid = useRef(false);
+  const canSlide = (t: ResolvedTask) => !readOnly && !!onChange
+    && (t.kind === 'execution' || t.kind === 'procurement')
+    && !t.actualStartISO && t.status !== 'completed' && !t.pinned;
+  const slideBase = () => (schedule.tasks?.length ? schedule : { ...schedule, tasks: result.tasks as any });
+
+  const endSlide = (t: ResolvedTask) => {
+    const d = slide;
+    setSlide(null);
+    if (!d || d.id !== t.id || !d.plan || !onChange) return;
+    const asked = t.plannedStartDay + d.days;
+    const gate = d.plan.heldBy?.isDesignGate ? result.tasks.find(isDesignGateTask) : undefined;
+    if (gate && asked <= gate.plannedStartDay) {
+      // Asked for a day ahead of the gate: that is the start-before-the-gate question.
+      askReleaseBeforeGate(t.id, toISO(nextWorkingDay(schedule.calendar || DEFAULT_CALENDAR, asked)));
+      return;
+    }
+    if (d.plan.changed) onChange(d.plan.schedule);
+  };
 
   /*
     Work the gate holds can be dropped among the design rows or onto the gate
@@ -880,6 +913,14 @@ export default function ScheduleGantt({
                     Early
                   </span>
                 )}
+                {!!t.overlapDays && (
+                  <span
+                    className={`${TAG_BASE} bg-[#3D52A0]/10 text-[#3D52A0] border-[#3D52A0]/20`}
+                    title={`Starts ${t.overlapDays} working day${t.overlapDays === 1 ? '' : 's'} before the work before it finishes`}
+                  >
+                    Parallel
+                  </span>
+                )}
                 {t.pinned && <Pin className="w-3 h-3 text-slate-400 shrink-0" />}
                 {t.onCriticalPath && <Zap className="w-3 h-3 text-amber-500 shrink-0" />}
                 {!!t.heldBy.length && <PauseCircle className="w-3 h-3 text-rose-500 shrink-0" />}
@@ -1048,14 +1089,38 @@ export default function ScheduleGantt({
                       );
                     })()
                   ) : (
-                    <button onClick={() => setSelectedId(t.id)}
+                    <button
+                      onClick={() => {
+                        if (slid.current) { slid.current = false; return; }
+                        setSelectedId(t.id);
+                      }}
+                      onPointerDown={e => {
+                        if (!canSlide(t) || e.button !== 0) return;
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        slid.current = false;
+                        setSlide({ id: t.id, x0: e.clientX, days: 0, x: e.clientX, y: e.clientY, plan: null });
+                      }}
+                      onPointerMove={e => {
+                        if (!slide || slide.id !== t.id) return;
+                        const days = Math.round((e.clientX - slide.x0) / PX[zoom]);
+                        if (days === slide.days) {
+                          setSlide({ ...slide, x: e.clientX, y: e.clientY });
+                          return;
+                        }
+                        slid.current = true;
+                        const plan = days === 0 ? null : planStartAt(slideBase(), t.id, t.plannedStartDay + days);
+                        setSlide({ ...slide, days, x: e.clientX, y: e.clientY, plan });
+                      }}
+                      onPointerUp={() => endSlide(t)}
+                      onPointerCancel={() => setSlide(null)}
                       title={`${t.title} (${t.workDays} working days: ${t.plannedStartISO} to ${t.plannedEndISO})${
                         t.overdueToStart ? ` — not started; earliest it can now begin is ${t.startISO}` : ''
-                      }`}
+                      }${canSlide(t) ? ' — drag left to start it earlier, alongside the work before it' : ''}`}
                       className={`gt-bar absolute top-2 h-5 rounded flex items-center justify-between px-1 text-[9px] font-bold text-white overflow-hidden gap-1${
                         t.onCriticalPath ? ' gt-bar--critical' : ''
-                      }`}
+                      }${canSlide(t) ? ' cursor-ew-resize' : ''}${slide?.id === t.id && slide.days !== 0 ? ' opacity-40' : ''}`}
                       style={{
+                        touchAction: canSlide(t) ? 'pan-y' : undefined,
                         left: left(t.plannedStartDay),
                         width: Math.max(px(t.plannedEndDay - t.plannedStartDay + 1), 6),
                         /* backgroundColor, not the `background` shorthand: the
@@ -1079,6 +1144,17 @@ export default function ScheduleGantt({
                       )}
                     </button>
                   )}
+
+                  {/* Where the bar would land if it were let go now. */}
+                  {slide?.id === t.id && slide.days !== 0 && (() => {
+                    const at = slide.plan?.changed ? slide.plan.startDay : t.plannedStartDay + slide.days;
+                    return (
+                      <div
+                        className="absolute top-2 h-5 rounded border-2 border-dashed border-[#3D52A0] bg-[#3D52A0]/10 pointer-events-none z-10"
+                        style={{ left: left(at), width: Math.max(px(t.plannedEndDay - t.plannedStartDay + 1), 6) }}
+                      />
+                    );
+                  })()}
 
                   {/* The dates, on the chart.
 
@@ -1528,6 +1604,29 @@ export default function ScheduleGantt({
                     </div>
                     )}
 
+                    {selected.kind !== 'milestone' && !!selected.dependencies?.length && (
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Run in parallel (working days)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={selected.overlapDays || 0}
+                          onChange={e => {
+                            const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            onChange({
+                              ...schedule,
+                              tasks: schedule.tasks.map(t => t.id === selected.id ? { ...t, overlapDays: val || undefined } : t)
+                            });
+                          }}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none bg-slate-50 focus:bg-white focus:border-sky-300 font-medium"
+                        />
+                        <span className="text-[10px] text-slate-400 mt-0.5 block">
+                          Starts this many working days before its predecessor finishes. 0 waits for it to finish.
+                          Or drag the bar left on the chart.
+                        </span>
+                      </div>
+                    )}
+
                     {selected.kind !== 'milestone' && (
                       <div>
                         <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Earliest Start Date (Constraint)</label>
@@ -1833,6 +1932,89 @@ export default function ScheduleGantt({
           </div>
         </div>
       )}
+
+      {/*
+        What the slide does, while it is still a slide.
+
+        Read off the same engine the chart runs, so the number is the number:
+        how many working days the handover moves, what the stage now runs
+        alongside, and -- just as worth knowing -- when moving it saves nothing,
+        because it is not the stage holding up the finish.
+      */}
+      {slide && slide.days !== 0 && (() => {
+        const t = result.tasks.find(x => x.id === slide.id);
+        if (!t) return null;
+        const plan = slide.plan;
+        const at = plan?.changed ? plan.startDay : t.plannedStartDay + slide.days;
+        const asked = t.plannedStartDay + slide.days;
+        const gateAsk = !!plan?.heldBy?.isDesignGate && asked < (plan?.startDay ?? asked + 1);
+        const day = (d: number | null) => (d == null ? '—' : shortDate(toISO(d)));
+        const n = (k: number) => `${k} working day${k === 1 ? '' : 's'}`;
+        return createPortal(
+          <div
+            className="fixed z-[300] pointer-events-none w-72 rounded-xl border border-slate-200 bg-white shadow-2xl p-3 space-y-1.5 no-print"
+            style={{
+              left: Math.min(slide.x + 16, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 300),
+              top: slide.y + 18,
+            }}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              {t.title} · starts {day(at)}
+            </p>
+            {gateAsk ? (
+              <p className="text-xs font-semibold text-[#3D52A0]">
+                Waits for the Design Gate. Let go to start it before the gate.
+              </p>
+            ) : !plan?.changed ? (
+              <p className="text-xs text-slate-500">
+                {plan?.heldBy ? `Can't start before ${plan.heldBy.title} starts.` : 'No change.'}
+              </p>
+            ) : (
+              <>
+                {plan.savedWorkDays > 0 && (
+                  <p className="text-sm font-bold text-emerald-700">
+                    Saves {n(plan.savedWorkDays)}
+                    <span className="block text-[11px] font-semibold text-emerald-700">
+                      Handover {day(plan.finishBefore)} → {day(plan.finishAfter)}
+                    </span>
+                  </p>
+                )}
+                {plan.savedWorkDays === 0 && (
+                  <p className="text-xs font-semibold text-slate-700">
+                    Handover unchanged
+                    <span className="block text-[11px] font-normal text-slate-500">
+                      This stage is not what is holding up the finish.
+                    </span>
+                  </p>
+                )}
+                {plan.savedWorkDays < 0 && (
+                  <p className="text-sm font-bold text-amber-700">
+                    Handover {n(-plan.savedWorkDays)} later
+                    <span className="block text-[11px] font-semibold">
+                      {day(plan.finishBefore)} → {day(plan.finishAfter)}
+                    </span>
+                  </p>
+                )}
+                {plan.alongside.length > 0 && (
+                  <p className="text-[11px] text-slate-500">
+                    Runs alongside {plan.alongside.join(', ')}
+                    {plan.overlapDays > 0 ? ` for ${n(plan.overlapDays)}` : ''}
+                  </p>
+                )}
+                {plan.relinked.length > 0 && (
+                  <p className="text-[11px] text-amber-700">
+                    Starts without waiting for {plan.relinked.join(', ')}. The stages after it still wait.
+                  </p>
+                )}
+                {plan.heldBy && (
+                  <p className="text-[11px] text-slate-500">Can't go earlier than {plan.heldBy.title} allows.</p>
+                )}
+              </>
+            )}
+          </div>,
+          document.body,
+        );
+      })()}
 
       {/*
         Starting work before the Design Gate. Asked, with a reason, because it

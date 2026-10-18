@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildScheduleFromProject } from '../../lib/scheduleBuilder';
 import {
-  computeSchedule, reorderTaskInLane, gateHeldChain, releaseBeforeGate, toDayNum, type ScheduleResult,
+  computeSchedule, reorderTaskInLane, gateHeldChain, releaseBeforeGate, planStartAt, toDayNum, toISO,
+  type ScheduleResult,
 } from '../../lib/schedule';
 import { ProjectSchedule } from '../../types';
 import { buildProgramme } from '../../components/client/programme';
@@ -211,5 +212,80 @@ describe('Client portal programme', () => {
     const civil = marks.find(m => m.id === 'early-exec-civil-demolition')!;
     expect(civil.label).toBe('Civil & Demolition Works starts early');
     expect(civil.day).toBeLessThan(gate.day);
+  });
+});
+
+describe('Running stages in parallel', () => {
+  const FULL_BOQ: any[] = [...BOQ, { cat: 'False Ceiling', qty: 1, materials: 200, labor: 100 }];
+  const full = (): ProjectSchedule => {
+    const s = buildScheduleFromProject({ targetHandoverDate: '2027-02-15' } as any, FULL_BOQ, {
+      designSteps: [{ stepNumber: 1, title: 'Concept', startDate: '2026-08-01', durationDays: 10 }],
+    });
+    return { ...s, projectStartISO: '2026-08-01' };
+  };
+
+  it('starts a stage the given working days before its predecessor finishes', () => {
+    const s = full();
+    const r0 = computeSchedule(s, TODAY);
+    const civil = task(r0, 'exec-civil-demolition');
+    const withOverlap = { ...s, tasks: s.tasks.map(t => (t.id === 'exec-elec-conduit' ? { ...t, overlapDays: 3 } : t)) };
+    const r = computeSchedule(withOverlap, TODAY);
+    const conduit = task(r, 'exec-elec-conduit');
+    expect(conduit.plannedStartDay).toBeLessThan(civil.plannedEndDay + 1);
+    expect(conduit.plannedStartDay).toBeGreaterThan(civil.plannedStartDay);
+  });
+
+  it('never starts before its predecessor starts, however large the overlap', () => {
+    const s = full();
+    const r = computeSchedule({ ...s, tasks: s.tasks.map(t => (t.id === 'exec-elec-conduit' ? { ...t, overlapDays: 99 } : t)) }, TODAY);
+    expect(task(r, 'exec-elec-conduit').plannedStartDay).toBe(task(r, 'exec-civil-demolition').plannedStartDay);
+  });
+
+  it('dragging conduits into the end of demolition reports the days saved', () => {
+    const s = full();
+    const r0 = computeSchedule(s, TODAY);
+    const civil = task(r0, 'exec-civil-demolition');
+    const plan = planStartAt(s, 'exec-elec-conduit', civil.plannedEndDay - 2, TODAY);
+    expect(plan.changed).toBe(true);
+    expect(plan.overlapDays).toBeGreaterThan(0);
+    expect(plan.alongside).toContain('Civil & Demolition Works');
+    // Conduits share the critical path with plumbing here, so check the sign only.
+    expect(plan.savedWorkDays).toBeGreaterThanOrEqual(0);
+    expect(computeSchedule(plan.schedule, TODAY).tasks.find(t => t.id === 'exec-elec-conduit')!.plannedStartDay)
+      .toBe(plan.startDay);
+  });
+
+  it('dragging ceiling framing back past flooring runs it alongside demolition', () => {
+    const s = full();
+    const r0 = computeSchedule(s, TODAY);
+    const civil = task(r0, 'exec-civil-demolition');
+    const plan = planStartAt(s, 'exec-ceiling-framing', civil.plannedEndDay - 1, TODAY);
+    expect(plan.relinked.length).toBeGreaterThan(0);
+    expect(plan.alongside).toContain('Civil & Demolition Works');
+    expect(plan.startDay).toBeLessThanOrEqual(civil.plannedEndDay);
+    expect(plan.savedWorkDays).toBeGreaterThan(0);
+    const after = computeSchedule(plan.schedule, TODAY);
+    // The ceiling is still not closed before the concealed services are in.
+    const boarding = after.tasks.find(t => t.id === 'exec-ceiling-boarding')!;
+    expect(boarding.plannedStartDay).toBeGreaterThan(task(after, 'exec-plumb-concealed').plannedEndDay);
+    expect(task(after, 'ms-handover').plannedStartDay).toBeGreaterThan(
+      Math.max(...after.tasks.filter(t => t.id !== 'ms-handover').map(t => t.plannedEndDay)));
+  });
+
+  it('stops at the Design Gate for work not released early', () => {
+    const s = full();
+    const r0 = computeSchedule(s, TODAY);
+    const plan = planStartAt(s, 'exec-site-prelims', task(r0, 'ms-design-gate').plannedStartDay - 10, TODAY);
+    expect(plan.heldBy?.isDesignGate).toBe(true);
+    expect(plan.changed).toBe(false);
+  });
+
+  it('dragging later than the predecessors allow sets an earliest start', () => {
+    const s = full();
+    const r0 = computeSchedule(s, TODAY);
+    const later = task(r0, 'exec-paint-final').plannedStartDay + 10;
+    const plan = planStartAt(s, 'exec-paint-final', later, TODAY);
+    expect(plan.schedule.tasks.find(t => t.id === 'exec-paint-final')!.notBeforeISO).toBe(toISO(plan.startDay));
+    expect(plan.savedWorkDays).toBeLessThan(0);
   });
 });
