@@ -100,7 +100,16 @@ export const KindChip: React.FC<{ kind: LineKind; onClick?: () => void; title?: 
     : <span className={cls}>{body}</span>;
 };
 
-export const FromNotes: React.FC = () => (
+/*
+  A point that came from pasted notes or speech. It stays marked until a person
+  confirms it: by pressing the mark, or by clicking into the line to edit it.
+*/
+export const FromNotes: React.FC<{ onConfirm?: () => void }> = ({ onConfirm }) => onConfirm ? (
+  <button type="button" onClick={onConfirm} title="I have read this point and it is right"
+    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-[#3D52A0] bg-[#3D52A0]/10 hover:bg-[#3D52A0] hover:text-white shrink-0 whitespace-nowrap transition-colors">
+    <Sparkles className="w-3 h-3" />From notes · <Check className="w-3 h-3" />Looks right
+  </button>
+) : (
   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#3D52A0] shrink-0 whitespace-nowrap"><Sparkles className="w-3 h-3" />From notes · check</span>
 );
 
@@ -111,10 +120,11 @@ export const Avatar: React.FC<{ name: string; side?: string }> = ({ name, side }
   return <span aria-hidden className={`w-7 h-7 rounded-full grid place-items-center text-[10px] font-bold text-white shrink-0 ${bg}`}>{ini}</span>;
 };
 
-export const CheckRow: React.FC<{ c: SendCheck; i?: number }> = ({ c, i = 0 }) => (
+export const CheckRow: React.FC<{ c: SendCheck; i?: number; action?: React.ReactNode }> = ({ c, i = 0, action }) => (
   <li className="flex items-start gap-2 text-xs hud-row-in" style={{ animationDelay: `${i * 30}ms` }}>
     {c.ok ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertTriangle className={`w-4 h-4 shrink-0 ${c.blocking ? 'text-amber-600' : 'text-slate-400'}`} />}
-    <span className={c.ok ? 'text-slate-600' : c.blocking ? 'text-amber-800 font-semibold' : 'text-slate-500'}>{c.text}</span>
+    <span className={`flex-1 ${c.ok ? 'text-slate-600' : c.blocking ? 'text-amber-800 font-semibold' : 'text-slate-500'}`}>{c.text}</span>
+    {!c.ok && action}
   </li>
 );
 
@@ -151,7 +161,7 @@ export const MinutesShell: React.FC<{
 }> = ({ eyebrow, title, step, onClose, footer, children, label }) => (
   <div className="fixed inset-0 z-[300] flex items-stretch sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true" aria-label={label}>
     <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={onClose} />
-    <div className="phd-pop relative w-full max-w-[1360px] bg-[#F6F7FB] sm:rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col h-full sm:h-auto sm:max-h-[94vh]">
+    <div className="phd-pop relative w-full max-w-[1360px] bg-[#F6F7FB] sm:rounded-3xl border border-slate-200 shadow-2xl overflow-clip flex flex-col h-full sm:h-auto sm:max-h-[94vh]">
       <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex items-center gap-4">
         <div className="flex-1 min-w-0">
           <p className={BRAND_EYEBROW}>{eyebrow}</p>
@@ -160,7 +170,7 @@ export const MinutesShell: React.FC<{
         <div className="hidden md:block"><Steps on={step} /></div>
         <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-xl grid place-items-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="w-5 h-5" /></button>
       </div>
-      <div className="flex-1 overflow-y-auto">{children}</div>
+      <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
       {footer && <div className="bg-slate-50 border-t border-slate-100 px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3">{footer}</div>}
     </div>
   </div>

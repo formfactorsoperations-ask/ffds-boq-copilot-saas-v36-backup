@@ -87,6 +87,19 @@ export default function MinutesComposer(p: ComposerProps) {
   const removeTopic = (tid: string) => setC((x) => ({ ...x, topics: x.topics.filter((t) => t.id !== tid) }));
   const setCarried = (i: number, outcome: CarriedAction['outcome']) => setC((x) => ({ ...x, carried: (x.carried || []).map((k, j) => (j === i ? { ...k, outcome } : k)) }));
 
+  /* Scroll to the next line a check is about, inside the minutes, and light it up for a moment. */
+  const showNext = (need: 'notes' | 'owner' | 'due') => {
+    const el = document.querySelector<HTMLElement>(`[data-needs~="${need}"]`);
+    const box = el?.closest<HTMLElement>('.overflow-y-auto');
+    if (!el || !box) return;
+    const r = el.getBoundingClientRect();
+    const b = box.getBoundingClientRect();
+    box.scrollBy({ top: r.top - b.top - b.height / 2 + r.height / 2, behavior: 'smooth' });
+    el.classList.add('ring-2', 'ring-[#3D52A0]/40');
+    setTimeout(() => el.classList.remove('ring-2', 'ring-[#3D52A0]/40'), 1600);
+  };
+  const needOf = (text: string): 'notes' | 'owner' | 'due' | null =>
+    /from notes/.test(text) ? 'notes' : /no owner/.test(text) ? 'owner' : /no due date/.test(text) ? 'due' : null;
   const notesFor = (lineId: string) => (p.reviewNotes || []).filter((n) => n.lineId === lineId);
   const correctionFor = (lineId: string) => (p.corrections || []).find((k) => k.lineId === lineId);
   const generalNotes = (p.reviewNotes || []).filter((n) => !n.lineId);
@@ -217,7 +230,14 @@ export default function MinutesComposer(p: ComposerProps) {
             onChange={(e) => setC((x) => ({ ...x, nextMeeting: { ...(x.nextMeeting || {}), purpose: e.target.value } }))} />
         </Panel>
         <Panel icon={ShieldCheck} title="Before you send" blurb="Checked as you write">
-          <ul className="space-y-2">{checks.map((k, i) => <CheckRow key={k.text} c={k} i={i} />)}</ul>
+          <ul className="space-y-2">{checks.map((k, i) => (
+            <CheckRow key={k.text} c={k} i={i} action={needOf(k.text) ? (
+              <button type="button" className={`${linkBtn} shrink-0`} onClick={() => showNext(needOf(k.text)!)}>Show me</button>
+            ) : undefined} />
+          ))}</ul>
+          {checks.some((k) => !k.ok && /from notes/.test(k.text)) && (
+            <p className="text-[11px] text-slate-500 mt-3">Read each point marked <b className="text-[#3D52A0]">From notes</b>, then press <b>Looks right</b> on it, or click into it to correct it.</p>
+          )}
         </Panel>
       </div>
 
@@ -320,11 +340,17 @@ function LineEditor({ line, readOnly, people, meetingDate, notes, correction, on
   const ownerKey = line.owner ? `${line.owner.side}|${line.owner.name}` : '';
   const flag = (k: 'scope' | 'cost' | 'drawing') => onChange({ flags: { ...(line.flags || {}), [k]: !line.flags?.[k] } });
   return (
-    <div className={`rounded-xl border bg-white px-3 py-2.5 ${correction ? 'border-rose-300' : notes.length ? 'border-amber-300' : 'border-slate-200'}`}>
+    <div data-from-notes={line.fromNotes ? 'true' : undefined}
+      data-needs={[
+        line.fromNotes && 'notes',
+        line.kind === 'action' && line.text.trim() && !line.owner?.name?.trim() && 'owner',
+        line.kind === 'action' && line.text.trim() && !line.due && 'due',
+      ].filter(Boolean).join(' ') || undefined}
+      className={`rounded-xl border bg-white px-3 py-2.5 ${correction ? 'border-rose-300' : notes.length ? 'border-amber-300' : line.fromNotes ? 'border-[#3D52A0]/40' : 'border-slate-200'}`}>
       <div className="flex items-start gap-2.5">
         <span className="mt-1"><KindChip kind={line.kind} onClick={readOnly ? undefined : cycle} title={`${KIND_LABEL[line.kind]}. Tap to change`} /></span>
         <AutoText value={line.text} readOnly={readOnly} onFocus={opened} onChange={(text) => onChange({ text, fromNotes: false })} label={`${KIND_LABEL[line.kind]} text`} />
-        {line.fromNotes && <span className="mt-1"><FromNotes /></span>}
+        {line.fromNotes && <span className="mt-1"><FromNotes onConfirm={readOnly ? undefined : () => onChange({ fromNotes: false })} /></span>}
         {!readOnly && (
           <button type="button" onClick={onRemove} aria-label="Remove this line" className="p-1 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-slate-50"><Trash2 className="w-3.5 h-3.5" /></button>
         )}
