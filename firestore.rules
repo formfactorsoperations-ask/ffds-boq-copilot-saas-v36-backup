@@ -490,7 +490,8 @@ service cloud.firestore {
           && resource.data.get('status', '') in ['finalised', 'shared']
           && request.resource.data.get('status', '') == 'shared'
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['status', 'sharedAt', 'sentAt', 'sentBy', 'emailedAt', 'emailedTo', 'shareToken', 'trail', 'updatedAt'])
+               .hasOnly(['status', 'sharedAt', 'sentAt', 'sentBy', 'emailedAt', 'emailedTo', 'shareToken', 'trail', 'updatedAt', 'clientVisibility'])
+          && request.resource.data.get('clientVisibility', {}).get('state', 'published') == 'published'
           && request.resource.data.get('trail', []).size() >= resource.data.get('trail', []).size())
         ||
         /*

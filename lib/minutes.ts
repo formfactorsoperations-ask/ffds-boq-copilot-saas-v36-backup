@@ -182,6 +182,20 @@ export function isMinutesLead(roles: string | readonly string[] | null | undefin
 /** Whether minutes are in the new format. */
 export const isNewMinutes = (m: any): boolean => !!m && m.format === 2;
 
+/**
+ * Whether the client sees these minutes in the portal. New minutes show once
+ * they are sent -- approved but not yet sent stays with the studio -- and
+ * internal and vendor minutes never do. Older minutes keep their own
+ * published flag (lib/clientVisibility), passed in as `published`.
+ */
+export function clientMaySee(m: any, published: boolean): boolean {
+  if (!m) return false;
+  if (m.format === 2) {
+    return ['shared', 'acknowledged', 'correction_requested'].includes(String(m.status)) && !isLogOnly(m.meetingType);
+  }
+  return published;
+}
+
 /* ── Building blocks ─────────────────────────────────────────────────────── */
 
 let seq = 0;
@@ -671,7 +685,7 @@ export const flaggedCount = (topics: MinutesTopic[] | undefined) =>
 /* ── Where the minutes are ───────────────────────────────────────────────── */
 
 export type FlowStep = 0 | 1 | 2 | 3 | 4;
-export const FLOW_STEPS = ['Write', 'Review', 'Send', 'Confirmed'] as const;
+export const FLOW_STEPS = ['Write', 'Review', 'Send', 'Confirm'] as const;
 
 /** The step the minutes are at: 0 write, 1 review, 2 send, 3 waiting for the client, 4 confirmed. */
 export function flowStep(m: Pick<MinutesV2, 'status' | 'revisionStage'> & { meetingType?: string }): FlowStep {

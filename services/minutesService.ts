@@ -269,6 +269,8 @@ export async function markSent(studioId: string, projectId: string, mom: any, me
     sharedAt: now,
     sentAt: now,
     sentBy: signed(me, now),
+    /* What puts the minutes in the client's portal (lib/clientVisibility): without it the portal leaves them out. */
+    clientVisibility: { state: 'published', publishedAt: new Date(now).toISOString(), publishedBy: me.email },
     ...(emailedTo.length ? { emailedAt: now, emailedTo } : {}),
     ...(shareToken ? { shareToken } : {}),
     trail: withStep(mom.trail, step('sent', me, now, channels.join(' · '))),

@@ -95,7 +95,8 @@ describe('only a lead approves', () => {
 });
 
 describe('Client Relations sends approved minutes', () => {
-  const send = { status: 'shared', sharedAt: 9, sentAt: 9, sentBy: { email: 'cr@a.com', name: 'Anushka', at: 9 }, emailedTo: ['naik@x.in'], emailedAt: 9, updatedAt: 9 };
+  const send = { status: 'shared', sharedAt: 9, sentAt: 9, sentBy: { email: 'cr@a.com', name: 'Anushka', at: 9 }, emailedTo: ['naik@x.in'], emailedAt: 9, updatedAt: 9,
+    clientVisibility: { state: 'published', publishedAt: '2026-10-19T00:00:00Z', publishedBy: 'cr@a.com' } };
   it('sends, and sends again', async () => {
     await assertSucceeds(updateDoc(doc(cr(), M('approved')), { ...send, trail: [step('written'), step('approved', 5), step('sent', 9)] }));
     await assertSucceeds(updateDoc(doc(cr(), M('sent')), { ...send, trail: [step('written'), step('approved', 5), step('sent', 6), step('sent', 9)] }));
@@ -104,6 +105,7 @@ describe('Client Relations sends approved minutes', () => {
     await assertFails(updateDoc(doc(cr(), M('approved')), { ...send, summary: 'Rewritten after approval' }));
     await assertFails(updateDoc(doc(cr(), M('approved')), { ...send, trail: [] }));
     await assertFails(updateDoc(doc(cr(), M('approved')), { status: 'acknowledged' }));
+    await assertFails(updateDoc(doc(cr(), M('approved')), { ...send, clientVisibility: { state: 'hidden' }, trail: [step('written'), step('approved', 5), step('sent', 9)] }));
   });
   it('not older minutes, which a lead still shares', async () => {
     await assertFails(updateDoc(doc(cr(), M('legacyFinal')), { status: 'shared', sharedAt: 9 }));
