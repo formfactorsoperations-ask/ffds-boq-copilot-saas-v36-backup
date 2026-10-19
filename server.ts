@@ -86,6 +86,11 @@ async function startServer() {
     res.status(r.status).json(r.json);
   });
 
+  app.post("/api/structure-minutes", async (req, res) => {
+    const r = await apiTasks.structureMinutes(req.body);
+    res.status(r.status).json(r.json);
+  });
+
   app.post("/api/predict-handover-delays", async (req, res) => {
     const r = await apiTasks.predictHandoverDelays(req.body);
     res.status(r.status).json(r.json);

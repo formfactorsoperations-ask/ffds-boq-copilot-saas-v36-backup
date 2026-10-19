@@ -79,6 +79,21 @@ export default function OpsDeskSettings({ org, team, canEdit, onChange }: {
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
         <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-slate-800">New minutes flow</p>
+          <p className="text-xs text-slate-500">
+            Client Relations writes the minutes, the Ops Director approves or returns them with notes on the lines, Client Relations sends them,
+            and the client confirms or marks the line that is wrong. New minutes start this way when it is on; minutes already written open as before.
+          </p>
+        </div>
+        <button type="button" role="switch" aria-checked={s.newMinutes} aria-label="New minutes flow" disabled={!canEdit}
+          onClick={() => set({ newMinutes: !s.newMinutes })}
+          className={`w-11 h-6 rounded-full p-0.5 transition-colors disabled:opacity-50 ${s.newMinutes ? 'bg-[#3D52A0]' : 'bg-slate-300'}`}>
+          <span className="block w-5 h-5 rounded-full bg-white shadow-sm transition-transform" style={{ transform: s.newMinutes ? 'translateX(20px)' : undefined }} />
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-slate-800">The daily check</p>
           <p className="text-xs text-slate-500">Runs every morning at 9. It raises an escalation for each payment or decision with enough unanswered reminders.</p>
           {checking && <p className="flex items-center gap-2 text-xs text-slate-500 mt-1"><Dot tone="warn" live />Checking…</p>}

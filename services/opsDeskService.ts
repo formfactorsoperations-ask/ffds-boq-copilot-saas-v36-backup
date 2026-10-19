@@ -6,6 +6,7 @@
   read the follow-ups, escalations and minutes awaiting approval of the whole
   studio in one query each (collection groups, firestore.indexes.json).
 */
+import { revisionsWaiting } from './minutesService';
 import {
   collection, collectionGroup, doc, getDocs, limit, orderBy, query, setDoc, updateDoc, where,
 } from 'firebase/firestore';
@@ -82,7 +83,9 @@ export async function loadStudioOps(tenantId: string): Promise<{ followUps: Foll
         return { id: d.id, projectId: pid, projectName: m.reviewProjectName || '', status: m.status, meetingTitle: m.meetingTitle, momRef: m.momRef, meetingDate: m.meetingDate, raw: { id: d.id, ...m } };
       })).catch((e) => { console.warn('Ops Desk minutes', e?.code || e); return []; }),
   ]);
-  return { followUps: followUps as FollowUp[], escalations: escalations as Escalation[], moms };
+  /* Revisions answering a client's correction wait for approval too (lib/minutes.ts). */
+  const revisions = await revisionsWaiting(tenantId).catch(() => [] as OpsMom[]);
+  return { followUps: followUps as FollowUp[], escalations: escalations as Escalation[], moms: [...moms, ...revisions] };
 }
 
 export interface NewFollowUp {

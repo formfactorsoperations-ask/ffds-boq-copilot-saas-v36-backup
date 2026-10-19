@@ -45,6 +45,7 @@ const sendEmail: Local = async (body) => {
 
 const LOCAL: Record<string, Local> = {
   '/api/structure-mom': task('structureMom'),
+  '/api/structure-minutes': task('structureMinutes'),
   '/api/parse-mom': task('parseMom'),
   '/api/predict-handover-delays': task('predictHandoverDelays'),
   '/api/analyze-floorplan': task('analyzeFloorplan'),
