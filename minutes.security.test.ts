@@ -141,13 +141,14 @@ describe('the client confirms, or marks the lines that are wrong', () => {
     await assertFails(getDoc(doc(client(), M('draft'))));
     await assertFails(getDoc(doc(client(), M('waiting'))));
   });
-  it('confirms', async () => {
-    await assertSucceeds(updateDoc(doc(client(), M('sent')), { status: 'acknowledged', acknowledgedBy: 'Mr Naik', acknowledgedAt: 10, ackChannel: 'client_portal' }));
+  it('confirms, at the time it really is', async () => {
+    await assertFails(updateDoc(doc(client(), M('sent')), { status: 'acknowledged', acknowledgedBy: 'Mr Naik', acknowledgedAt: 10, ackChannel: 'client_portal' }));
+    await assertSucceeds(updateDoc(doc(client(), M('sent')), { status: 'acknowledged', acknowledgedBy: 'Mr Naik', acknowledgedAt: Date.now(), ackChannel: 'client_portal' }));
   });
   it('marks lines', async () => {
     await assertSucceeds(updateDoc(doc(client(), M('sent')), {
       status: 'correction_requested',
-      correctionRequest: { text: 'D1: U-shaped, not L.', by: 'Mr Naik', at: 10, lines: [{ lineId: 'd1', ref: 'D1', text: 'U-shaped, not L.' }] },
+      correctionRequest: { text: 'D1: U-shaped, not L.', by: 'Mr Naik', at: Date.now(), lines: [{ lineId: 'd1', ref: 'D1', text: 'U-shaped, not L.' }] },
     }));
   });
   it('within limits, and nothing else', async () => {
@@ -206,5 +207,32 @@ describe('part 2b: design reviews and follow-ups', () => {
       next: { text: 'Share the elevation.', ownerEmail: 'tanvi@a.com', ownerName: 'Tanvi', due: '2026-10-15' }, nextDone: false, manual: true };
     await assertSucceeds(setDoc(doc(od(), 'projects/p1/followUps/mom-x-a1'), f));
     await assertFails(setDoc(doc(od(), 'projects/p1/followUps/mom-x-a1'), { ...f, at: 9 }));
+  });
+});
+
+describe('part 3: a revision is written where the client cannot read it', () => {
+  const R = (id: string) => `${M(id)}/private/revision`;
+  it('Client Relations and the studio read and write it; the client never', async () => {
+    await assertSucceeds(setDoc(doc(cr(), R('fix')), { content: { topics }, reviewNotes: [] }));
+    await assertSucceeds(updateDoc(doc(cr(), M('fix')), { revisionStage: 'draft', trail: [step('written'), step('revision_started', 8)], updatedAt: 8 }));
+    await assertSucceeds(getDoc(doc(od(), R('fix'))));
+    await assertFails(getDoc(doc(client(), R('fix'))));
+  });
+});
+
+describe('part 3: bringing older minutes across', () => {
+  const marked = { format: 2, topics, carried: [], trail: [step('written')], approvedBy: { email: '', name: 'Approved before the new process', role: null, at: 1 }, migratedAt: 9, migrationRun: 'r1' };
+  it('a lead brings them across, keeps the original, and can undo', async () => {
+    await assertSucceeds(setDoc(doc(od(), `organizations/${STUDIO}/minutesMigration/r1/items/k1`), { momId: 'legacyFinal', original: { status: 'finalised' } }));
+    await assertSucceeds(updateDoc(doc(od(), M('legacyFinal')), marked));
+    await assertSucceeds(setDoc(doc(od(), M('legacyFinal')), { status: 'finalised', meetingType: 'client_meeting', decisions: [] }));
+  });
+  it('nobody else marks an approval', async () => {
+    await assertFails(updateDoc(doc(head(), M('legacyFinal')), marked));
+    await assertFails(updateDoc(doc(cr(), M('legacyFinal')), marked));
+  });
+  it('the client never reads the record of a run', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `organizations/${STUDIO}/minutesMigration/r1`), { at: 1 }); });
+    await assertFails(getDoc(doc(client(), `organizations/${STUDIO}/minutesMigration/r1`)));
   });
 });

@@ -135,7 +135,7 @@ export default function ProjectMinutes({ projectId, projectContext, stage, onClo
                       <span className="block text-sm font-semibold text-slate-800 truncate">{m.meetingTitle || meetingTypeLabel(m.meetingType)}</span>
                       <span className="block text-[11px] text-slate-500">{stageOf(m) ? STAGES[stageOf(m)] : meetingTypeLabel(m.meetingType)} · {m.meetingDate ? fmtShortDay(Number(m.meetingDate)) : ''}</span>
                     </span>
-                    {!isNewMinutes(m) && <Chip>Earlier format</Chip>}
+                    {(!isNewMinutes(m) || m.migratedAt) && <Chip>Earlier format</Chip>}
                     {chipOf(m)}
                   </button>
                 ))}

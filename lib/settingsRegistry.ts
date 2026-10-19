@@ -24,7 +24,8 @@ export type SectionId =
   | 'appearance'
   | 'system'
   | 'opsdesk'
-  | 'people';
+  | 'people'
+  | 'minutes';
 
 export interface SettingsSection {
   id: SectionId;
@@ -43,6 +44,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'system', label: 'Data & integrations', blurb: 'Calendar sync, backups and the audit trail' },
   { id: 'opsdesk', label: 'Ops Desk', blurb: 'When a payment is late, and who decides escalations' },
   { id: 'people', label: 'People', blurb: 'Working hours, leave, holidays, check-in location and who reports to whom' },
+  { id: 'minutes', label: 'Minutes', blurb: 'Bring older minutes into the new format, once' },
 ];
 
 /** How badly a missing value hurts. */

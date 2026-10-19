@@ -414,6 +414,10 @@ service cloud.firestore {
         and hidden only by the portal screen. The portal asks for these
         statuses by name (lib/meetingTypes CLIENT_MOM_STATUSES).
       */
+      /* A time a browser sent, as milliseconds, within ten minutes of the server's. */
+      function isNow(ms) {
+        return ms is number && ms > request.time.toMillis() - 600000 && ms < request.time.toMillis() + 600000;
+      }
       function isIssuedMinutes(st) {
         return st in ['finalised', 'shared', 'acknowledged', 'correction_requested'];
       }
@@ -434,7 +438,9 @@ service cloud.firestore {
           resource.data.get('status', '') in ['finalised', 'shared'] && (
             (request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['status', 'acknowledgedBy', 'acknowledgedAt', 'ackChannel']) &&
-             request.resource.data.status == 'acknowledged') ||
+             request.resource.data.status == 'acknowledged' &&
+             /* New minutes: the time of the confirmation is now, within ten minutes, not one the browser chose. */
+             (resource.data.get('format', 0) != 2 || isNow(request.resource.data.get('acknowledgedAt', 0)))) ||
             (request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['status', 'correctionRequest']) &&
              request.resource.data.status == 'correction_requested' &&
@@ -444,7 +450,8 @@ service cloud.firestore {
              request.resource.data.correctionRequest.text.size() <= 2000 &&
              // New minutes: the lines the client marked, each with what is wrong (lib/minutes.ts).
              request.resource.data.correctionRequest.get('lines', []) is list &&
-             request.resource.data.correctionRequest.get('lines', []).size() <= 50)
+             request.resource.data.correctionRequest.get('lines', []).size() <= 50 &&
+             (resource.data.get('format', 0) != 2 || isNow(request.resource.data.correctionRequest.get('at', 0))))
           );
       }
 

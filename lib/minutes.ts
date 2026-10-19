@@ -187,12 +187,14 @@ export const isNewMinutes = (m: any): boolean => !!m && m.format === 2;
 /**
  * Whether the client sees these minutes in the portal. New minutes show once
  * they are sent -- approved but not yet sent stays with the studio -- and
- * internal and vendor minutes never do. Older minutes keep their own
- * published flag (lib/clientVisibility), passed in as `published`.
+ * internal and vendor minutes never do. Older minutes, and older minutes
+ * brought into the new format, keep their own published flag
+ * (lib/clientVisibility), passed in as `published`.
  */
 export function clientMaySee(m: any, published: boolean): boolean {
   if (!m) return false;
-  if (m.format === 2) {
+  /* Older minutes brought into the new format (lib/minutesMigration) show exactly as they did before. */
+  if (m.format === 2 && !m.migratedAt) {
     return ['shared', 'acknowledged', 'correction_requested'].includes(String(m.status)) && !isLogOnly(m.meetingType);
   }
   return published;

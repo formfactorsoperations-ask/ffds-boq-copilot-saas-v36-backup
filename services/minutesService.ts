@@ -1,4 +1,4 @@
-import { collection, collectionGroup, doc, getDoc, getDocs, onSnapshot, query, runTransaction, setDoc, updateDoc, deleteField, where } from 'firebase/firestore';
+import { collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, runTransaction, setDoc, updateDoc, deleteField, where } from 'firebase/firestore';
 import { db } from './firebaseClient';
 import { apiFetch } from './apiFetch';
 import { calculateTimestamp } from './momService';
@@ -39,6 +39,28 @@ export const privateDoc = (studioId: string, projectId: string, momId: string) =
 async function writePrivate(studioId: string, projectId: string, momId: string, topics: MinutesContent['topics']) {
   const { priv } = splitPrivate(topics);
   await setDoc(privateDoc(studioId, projectId, momId), clean({ ...priv, updatedAt: Date.now() }));
+}
+
+/*
+  A revision answering a client's correction is written while the client can
+  still read the minutes document, so its working copy and the reviewer's
+  notes on it are kept beside the minutes, where no client rule reaches:
+  moms/{id}/private/revision. Revisions started before this was so kept them
+  on the minutes as `pendingRevision`; those are still read, and cleared on
+  approval.
+*/
+export const revisionDoc = (studioId: string, projectId: string, momId: string) =>
+  doc(db, `${momPath(studioId, projectId)}/${momId}/private`, 'revision');
+
+export interface RevisionPart { content?: MinutesContent | null; reviewNotes?: ReviewNote[]; reviewedTopics?: MinutesTopic[] | null }
+
+async function writeRevision(studioId: string, projectId: string, momId: string, part: RevisionPart) {
+  await setDoc(revisionDoc(studioId, projectId, momId), clean({ ...part, updatedAt: Date.now() }), { merge: true });
+}
+
+/** The working copy and notes of a revision, as they change; null when there is none. */
+export function watchRevision(studioId: string, projectId: string, momId: string, on: (r: RevisionPart | null) => void) {
+  return onSnapshot(revisionDoc(studioId, projectId, momId), (s) => on(s.exists() ? (s.data() as RevisionPart) : null), () => on(null));
 }
 
 /** The topics as the client may read them: studio-only lines taken out. */
@@ -134,7 +156,7 @@ export async function saveContent(studioId: string, projectId: string, momId: st
   const ref = minutesDoc(studioId, projectId, momId);
   await writePrivate(studioId, projectId, momId, c.topics);
   if (revision) {
-    await updateDoc(ref, { pendingRevision: clean({ ...c, topics: sharedTopics(c.topics), revisionNote: c.revisionNote ?? null }), updatedAt: Date.now() });
+    await writeRevision(studioId, projectId, momId, { content: { ...c, topics: sharedTopics(c.topics), revisionNote: c.revisionNote ?? null } });
     return;
   }
   await updateDoc(ref, { ...contentWrite(c), updatedAt: Date.now() });
@@ -157,7 +179,8 @@ export async function sendForApproval(studioId: string, projectId: string, mom: 
   const ref = minutesDoc(studioId, projectId, mom.id);
   await writePrivate(studioId, projectId, mom.id, c.topics);
   if (revision) {
-    await updateDoc(ref, clean({ ...review, pendingRevision: { ...c, topics: sharedTopics(c.topics), revisionNote: c.revisionNote ?? null }, revisionStage: 'pending_review', updatedAt: now }));
+    await writeRevision(studioId, projectId, mom.id, { content: { ...c, topics: sharedTopics(c.topics), revisionNote: c.revisionNote ?? null } });
+    await updateDoc(ref, clean({ ...review, revisionStage: 'pending_review', updatedAt: now }));
   } else {
     await updateDoc(ref, clean({ ...review, ...contentWrite(c), preparedBy: signed(me, now), status: 'pending_review', updatedAt: now }));
   }
@@ -168,11 +191,18 @@ export async function returnWithNotes(studioId: string, projectId: string, mom: 
   const now = Date.now();
   const revision = mom.revisionStage === 'pending_review';
   const seen = revision ? mom.pendingRevision?.topics : mom.topics;
+  const trail = withStep(mom.trail, step('returned', me, now, `${notes.length} note${notes.length === 1 ? '' : 's'}`));
+  if (revision) {
+    /* The client can read these minutes: the notes on a revision stay beside them. */
+    await writeRevision(studioId, projectId, mom.id, { reviewNotes: notes, reviewedTopics: seen || [] });
+    await updateDoc(minutesDoc(studioId, projectId, mom.id), clean({ revisionStage: 'draft', trail, updatedAt: now }));
+    return;
+  }
   await updateDoc(minutesDoc(studioId, projectId, mom.id), clean({
-    ...(revision ? { revisionStage: 'draft' } : { status: 'draft' }),
+    status: 'draft',
     reviewNotes: notes,
     reviewedTopics: seen || [],
-    trail: withStep(mom.trail, step('returned', me, now, `${notes.length} note${notes.length === 1 ? '' : 's'}`)),
+    trail,
     updatedAt: now,
   }));
 }
@@ -243,6 +273,7 @@ export async function approve(studioId: string, projectId: string, mom: any, me:
     const q = queued(issued);
     await updateDoc(ref, { ...contentWrite(q), ...clean(common), outbox: clean(outboxOf(q.topics)) });
   }
+  if (revision) await deleteDoc(revisionDoc(studioId, projectId, mom.id)).catch(() => undefined);
   await closeCarried(studioId, projectId, (content || mom).carried || []);
   if (opts.followUps) {
     const issued = content || (revision ? mom.pendingRevision : mom) || {};
@@ -332,8 +363,8 @@ export async function startRevision(studioId: string, projectId: string, mom: an
     topics: withQueueState(mom.topics || [], mom.actionItems), summary: mom.summary ?? null, carried: mom.carried || [],
     nextMeeting: mom.nextMeeting ?? null, attendees: mom.attendees || [], revisionNote: '',
   });
+  await writeRevision(studioId, projectId, mom.id, { content: working, reviewNotes: [], reviewedTopics: null });
   await updateDoc(minutesDoc(studioId, projectId, mom.id), clean({
-    pendingRevision: working,
     revisionStage: 'draft',
     trail: withStep(mom.trail, step('revision_started', me, now, `Revision ${Number(mom.rev || 0) + 1}`)),
     updatedAt: now,

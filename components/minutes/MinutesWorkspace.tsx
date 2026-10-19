@@ -17,7 +17,7 @@ import {
 } from '../../lib/minutes';
 import {
   watchMinutes, saveContent, sendForApproval, returnWithNotes, approve, markSent, startRevision, notesToTopics,
-  waitingForApproval, watchPrivate, saveToLog, type Me, type WaitingMinutes,
+  waitingForApproval, watchPrivate, watchRevision, saveToLog, type Me, type WaitingMinutes, type RevisionPart,
 } from '../../services/minutesService';
 import MinutesComposer, { type PersonOption } from './MinutesComposer';
 import MinutesReview, { type QueueRow } from './MinutesReview';
@@ -71,7 +71,8 @@ export default function MinutesWorkspace(props: Props) {
   const studioName: string = orgData?.orgName || 'Studio';
 
   const [at, setAt] = useState({ projectId: props.projectId, projectName: props.projectName || '', mom: props.mom });
-  const [mom, setMom] = useState<any>(props.mom);
+  /* The minutes document as stored; `mom` below adds a revision's working copy. */
+  const [doc0, setMom] = useState<any>(props.mom);
   const [editing, setEditing] = useState(false);
   const [sending, setSending] = useState(false);
   const [previewing, setPreviewing] = useState<MinutesContent | null>(null);
@@ -101,11 +102,33 @@ export default function MinutesWorkspace(props: Props) {
   useEffect(() => {
     let live = true;
     setVisit(null);
-    if (!mom?.meetingId || String(mom.meetingId).startsWith('ops-')) return;
-    getDoc(doc(db, `organizations/${props.studioId}/projects/${at.projectId}/siteVisits`, String(mom.meetingId)))
+    if (!doc0?.meetingId || String(doc0.meetingId).startsWith('ops-')) return;
+    getDoc(doc(db, `organizations/${props.studioId}/projects/${at.projectId}/siteVisits`, String(doc0.meetingId)))
       .then((s) => { if (live && s.exists()) setVisit(s.data()); }).catch(() => undefined);
     return () => { live = false; };
-  }, [props.studioId, at.projectId, mom?.meetingId]);
+  }, [props.studioId, at.projectId, doc0?.meetingId]);
+
+  /*
+    A revision's working copy and the notes on it are kept beside the minutes
+    (services/minutesService revisionDoc). Read here as part of the minutes,
+    so everything below sees one object; revisions from before keep theirs on
+    the minutes and are read from there.
+  */
+  const [revision, setRevision] = useState<{ part: RevisionPart | null; loaded: boolean }>({ part: null, loaded: false });
+  useEffect(() => {
+    setRevision({ part: null, loaded: false });
+    return watchRevision(props.studioId, at.projectId, at.mom.id, (part) => setRevision({ part, loaded: true }));
+  }, [props.studioId, at.projectId, at.mom.id]);
+  const rev = revision.part;
+  const mom = useMemo(() => {
+    if (!doc0?.revisionStage || !rev) return doc0;
+    return {
+      ...doc0,
+      pendingRevision: rev.content || doc0.pendingRevision || null,
+      reviewNotes: rev.reviewNotes || [],
+      reviewedTopics: rev.reviewedTopics || null,
+    };
+  }, [doc0, rev]);
 
   const reviewing = lead && (mom?.status === 'pending_review' || mom?.revisionStage === 'pending_review');
   useEffect(() => {
@@ -255,6 +278,14 @@ export default function MinutesWorkspace(props: Props) {
   );
 
   if (!mom) return null;
+
+  if (revising && !revision.loaded) {
+    return (
+      <MinutesShell label="Minutes" eyebrow={eyebrow} title={title} step={step} onClose={props.onClose}>
+        <p className="p-6 text-sm text-slate-500 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin text-[#3D52A0]" />Opening the revision…</p>
+      </MinutesShell>
+    );
+  }
 
   if (reviewing && !editing) {
     const rows: QueueRow[] = (queue.length ? queue : [{ id: mom.id, projectId: at.projectId, projectName: at.projectName, status: 'pending_review', meetingTitle: mom.meetingTitle, momRef: mom.momRef, raw: mom }])
