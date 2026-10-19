@@ -19,6 +19,8 @@ import {
 } from '@/lib/lucide-shim';
 import { MOM } from '../../types';
 import { clientVisibleAttendees, clientActionOwner } from '../../lib/clientPeople';
+import { isNewMinutes } from '../../lib/minutes';
+import ClientMinutesView from './ClientMinutesView';
 
 interface ClientMoMViewerModalProps {
     isOpen: boolean;
@@ -57,6 +59,15 @@ export const ClientMoMViewerModal: React.FC<ClientMoMViewerModalProps> = ({
     }, [mom, clientName]);
 
     if (!isOpen || !localMom) return null;
+
+    /* Minutes in the new format: confirm in one tap, or mark the line that is wrong (lib/minutes.ts). */
+    if (isNewMinutes(localMom)) {
+        return (
+            <ClientMinutesView mom={localMom} studioName={studioName} projectName={projectName} clientName={clientName}
+                studioId={studioId} projectId={projectId} onClose={onClose}
+                onChanged={(m) => { setLocalMom(m); onAcknowledgeSuccess?.(m); }} />
+        );
+    }
 
     const currentMom = localMom;
     const isAcknowledged = currentMom.status === 'acknowledged' || !!currentMom.acknowledgedAt;
