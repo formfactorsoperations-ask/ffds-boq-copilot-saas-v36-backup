@@ -17,7 +17,7 @@ import {
 } from '../../lib/minutes';
 import {
   watchMinutes, saveContent, sendForApproval, returnWithNotes, approve, markSent, startRevision, notesToTopics,
-  waitingForApproval, watchPrivate, watchRevision, saveToLog, projectMinutes, type Me, type WaitingMinutes, type RevisionPart,
+  waitingForApproval, watchPrivate, watchRevision, saveToLog, projectMinutes, RULES_HINT, type Me, type WaitingMinutes, type RevisionPart,
 } from '../../services/minutesService';
 import MinutesComposer, { type PersonOption } from './MinutesComposer';
 import MinutesReview, { type QueueRow } from './MinutesReview';
@@ -208,7 +208,7 @@ export default function MinutesWorkspace(props: Props) {
     setError(null);
     try { await fn(); } catch (e: any) {
       console.error(e);
-      setError(e?.code === 'permission-denied' ? 'You cannot do that on these minutes.' : e?.message || 'That did not go through. Check your connection and try again.');
+      setError(e?.code === 'permission-denied' ? `You cannot do that on these minutes. ${RULES_HINT}` : e?.message || 'That did not go through. Check your connection and try again.');
     } finally { setBusy(false); }
   };
 

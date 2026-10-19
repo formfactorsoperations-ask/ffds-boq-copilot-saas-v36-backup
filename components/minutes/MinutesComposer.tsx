@@ -65,6 +65,7 @@ export interface ComposerProps {
 export default function MinutesComposer(p: ComposerProps) {
   const [c, setC] = useState<MinutesContent>(() => ({ ...p.initial, topics: p.initial.topics?.length ? p.initial.topics : [emptyTopic('')] }));
   const [saved, setSaved] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [saveError, setSaveError] = useState<string | null>(null);
   const first = useRef(true);
   const latest = useRef(c);
   latest.current = c;
@@ -75,7 +76,12 @@ export default function MinutesComposer(p: ComposerProps) {
     if (p.readOnly) return;
     setSaved('saving');
     const t = setTimeout(() => {
-      p.onSave(latest.current).then(() => setSaved('saved')).catch(() => setSaved('error'));
+      p.onSave(latest.current).then(() => { setSaved('saved'); setSaveError(null); }).catch((e: any) => {
+        setSaved('error');
+        /* A refusal is not a connection problem: say what it is. */
+        setSaveError(e?.code === 'permission-denied' || e?.code === 'rules' ? 'Not saved: the database refused it.' : null);
+        console.warn('Minutes not saved:', e?.code || e);
+      });
     }, 900);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -261,19 +267,19 @@ export default function MinutesComposer(p: ComposerProps) {
       </div>
 
       {/* the footer row, rendered by the shell through a portal-less slot */}
-      <ComposerFooter saved={saved} readOnly={ro} onPreview={() => p.onPreview(latest.current)} primary={p.primary(c, ready)} />
+      <ComposerFooter saved={saved} saveError={saveError} readOnly={ro} onPreview={() => p.onPreview(latest.current)} primary={p.primary(c, ready)} />
     </div>
   );
 }
 
 /* The footer sits at the bottom of the grid on small screens, and is pinned by the shell on large ones. */
-function ComposerFooter({ saved, readOnly, onPreview, primary }: { saved: 'saved' | 'saving' | 'error'; readOnly: boolean; onPreview: () => void; primary: React.ReactNode }) {
+function ComposerFooter({ saved, saveError, readOnly, onPreview, primary }: { saved: 'saved' | 'saving' | 'error'; saveError?: string | null; readOnly: boolean; onPreview: () => void; primary: React.ReactNode }) {
   return (
     <div className="xl:col-span-3 sticky bottom-0 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 bg-slate-50 border-t border-slate-100 px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3">
       {!readOnly && (
         <span className="text-xs text-slate-500 inline-flex items-center gap-1.5" aria-live="polite">
           <span className={`w-2 h-2 rounded-full ${saved === 'saved' ? 'bg-emerald-500' : saved === 'saving' ? 'bg-amber-500' : 'bg-rose-500'}`} />
-          {saved === 'saved' ? 'Saved' : saved === 'saving' ? 'Saving…' : 'Not saved. Check your connection.'}
+          {saved === 'saved' ? 'Saved' : saved === 'saving' ? 'Saving…' : saveError || 'Not saved. Check your connection.'}
         </span>
       )}
       <span className="flex-1" />

@@ -36,9 +36,26 @@ function clean<T>(v: T): T {
 export const privateDoc = (studioId: string, projectId: string, momId: string) =>
   doc(db, `${momPath(studioId, projectId)}/${momId}/private`, 'studio');
 
+/**
+ * When the database refuses a write the new minutes need, the most likely
+ * reason is that the studio's Firestore rules from this release are not
+ * deployed yet. Say so, rather than blaming the connection.
+ */
+export const RULES_HINT = 'The database refused this. If the app was just updated, the Firestore rules for the new minutes may not be deployed yet: ask whoever deploys to run "firebase deploy --only firestore:rules".';
+
 async function writePrivate(studioId: string, projectId: string, momId: string, topics: MinutesContent['topics']) {
   const { priv } = splitPrivate(topics);
-  await setDoc(privateDoc(studioId, projectId, momId), clean({ ...priv, updatedAt: Date.now() }));
+  try {
+    await setDoc(privateDoc(studioId, projectId, momId), clean({ ...priv, updatedAt: Date.now() }));
+  } catch (e: any) {
+    /* Nothing studio-only to keep: a refusal here must not stop the minutes being saved or sent. */
+    if (e?.code === 'permission-denied' && !priv.lines.length && !priv.topics.length) {
+      console.warn('Studio-only lines not written (nothing to keep):', e?.code);
+      return;
+    }
+    if (e?.code === 'permission-denied') throw Object.assign(new Error(`Studio-only lines could not be saved. ${RULES_HINT}`), { code: 'rules' });
+    throw e;
+  }
 }
 
 /*
