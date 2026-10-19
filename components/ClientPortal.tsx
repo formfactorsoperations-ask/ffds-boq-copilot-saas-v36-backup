@@ -22,6 +22,7 @@ import { useTimelinePhases } from '../hooks/useTimelinePhases';
 import { useStepProgress } from '../hooks/useStepProgress';
 import { usePaymentRequests, usePaymentOverdueCheck } from '../hooks/usePaymentRequests';
 import { db, functions } from '../services/firebaseClient';
+import { personByEmail } from '../lib/clientContacts';
 import { recordClientSignoff, recordManualSignoff } from '../services/decisionsService';
 import ClientDecisionCard from './client/ClientDecisionCard';
 import ClientAccountMenu from './client/ClientAccountMenu';
@@ -5076,7 +5077,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                 mom={selectedMomForViewer}
                 studioName={studioCompanyName}
                 projectName={context.name || (projectData as any).name || (projectData as any).title || 'Project Workspace'}
-                clientName={context.clientName || 'Valued Client'}
+                clientName={personByEmail(context, currentUserAuth?.email)?.name || context.clientName || 'Valued Client'}
                 studioId={studioId}
                 projectId={projectData.id}
                 onAcknowledgeSuccess={(updatedMom) => {

@@ -30,6 +30,8 @@
   Pure functions, no imports from the app: shared by the screens and tests.
 */
 
+import { clientEmails } from './clientContacts';
+
 /* ── The shape ───────────────────────────────────────────────────────────── */
 
 export type LineKind = 'decision' | 'action' | 'note' | 'question';
@@ -577,8 +579,8 @@ export const correctionText = (lines: CorrectionLine[]) =>
  * project (the email field may hold several, separated by commas) and phone.
  */
 export function clientContactOf(ctx: any): { name: string; emails: string[]; phone: string | null } {
-  const emails = String(ctx?.clientEmail || '').split(/[,;\s]+/).map((e) => e.trim()).filter((e) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e));
-  return { name: String(ctx?.clientName || '').trim(), emails: [...new Set(emails)], phone: String(ctx?.clientPhone || '').trim() || null };
+  /* Everyone on the client's side gets the minutes by email (lib/clientContacts.ts); WhatsApp goes to the main contact. */
+  return { name: String(ctx?.clientName || '').trim(), emails: clientEmails(ctx), phone: String(ctx?.clientPhone || '').trim() || null };
 }
 
 /* ── Dates ───────────────────────────────────────────────────────────────── */

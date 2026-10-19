@@ -295,6 +295,10 @@ export function buildPortalView(
       name: ctx.name,
       clientName: c.clientName,
       clientEmail: c.clientEmail,
+      /* Everyone on the client's side, so the portal greets whoever signed in by name (lib/clientContacts.ts). */
+      clientContacts: Array.isArray(c.clientContacts)
+        ? c.clientContacts.map((p: any) => ({ id: p.id, name: p.name, role: p.role || null, email: p.email || null }))
+        : undefined,
       status: c.status,
       area: ctx.area,
       config: ctx.config,

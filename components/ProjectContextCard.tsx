@@ -7,6 +7,7 @@ import { isScopeBucket, realRooms, ensureScopeRooms, polishRoomNames, SCOPE_BUCK
 import { estimateRoomSizes, isAiAvailable } from '../services/geminiService';
 import { useOrg } from '../contexts/OrgContext';
 import TakeoffPanel from './TakeoffPanel';
+import ClientPeoplePanel from './clients/ClientPeoplePanel';
 import { 
   Sparkles, 
   Trash2, 
@@ -59,7 +60,8 @@ const THEME_OPTIONS = [
 const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ 
   projectContext, 
   setProjectContext,
-  hideExecutionControls = false
+  hideExecutionControls = false,
+  projectId,
 }) => {
   const { teamMembers } = useOrg();
   const siteSupervisors = teamMembers.filter(m => m.role === 'Site Supervisor');
@@ -319,7 +321,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Client Email Address</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Main contact's email</label>
                 <input 
                   type="email" 
                   value={projectContext.clientEmail || ''} 
@@ -337,6 +339,10 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   className="w-full px-4 py-3 bg-white/40 backdrop-blur-sm border border-slate-200 rounded-xl text-sm font-bold text-sky-950 focus:border-[#3D52A0] focus:bg-white focus:ring-1 focus:ring-[#3D52A0]/10 outline-none transition-all duration-200" 
                   placeholder="e.g. +91 98765 43210" 
                 />
+              </div>
+              {/* Everyone else on the client's side, each with their own portal login (lib/clientContacts.ts). */}
+              <div className="md:col-span-2">
+                <ClientPeoplePanel projectContext={projectContext} setProjectContext={setProjectContext as any} projectId={projectId} />
               </div>
               <div className="space-y-1 md:col-span-2">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
