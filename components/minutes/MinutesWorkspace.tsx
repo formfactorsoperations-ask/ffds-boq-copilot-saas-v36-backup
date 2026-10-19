@@ -4,6 +4,7 @@ import { Send, Check, Loader2, RotateCcw, Download, Clock, FileText, ShieldCheck
 import { db } from '../../services/firebaseClient';
 import { useOrg } from '../../contexts/OrgContext';
 import { primaryRole } from '../../lib/roles';
+import { opsSettingsOf } from '../../lib/opsDesk';
 import { getAi } from '../../services/aiClient';
 import { FLASH_MODEL } from '../../constants/aiModels';
 import { sendMomEmail } from '../../services/emailService';
@@ -126,6 +127,7 @@ export default function MinutesWorkspace(props: Props) {
   const chip = statusChip(mom || {}, reviewer);
   const step = flowStep(mom || {});
   const corrections = (mom?.correctionRequest?.lines || []) as any[];
+  const approveOpts = { projectName: at.projectName || mom?.reviewProjectName || '', followUps: opsSettingsOf(orgData).minutesFollowUps };
 
   /* Who can own an action: the people in the room, the studio, and the client. */
   const people: PersonOption[] = useMemo(() => {
@@ -192,6 +194,7 @@ export default function MinutesWorkspace(props: Props) {
     confirmedBy: mom?.status === 'acknowledged' && mom?.acknowledgedAt ? { name: mom.acknowledgedBy || clientName, at: mom.acknowledgedAt } : null,
     issuedAt: mom?.sentAt || mom?.approvedBy?.at || null,
     draft,
+    designReview: mom?.designReview || null,
   });
   const pdfOpts = (draft: boolean) => ({
     filename: pdfFilename(mom?.momRef, at.projectName, 'Minutes') + '.pdf',
@@ -268,13 +271,14 @@ export default function MinutesWorkspace(props: Props) {
           before={mergePrivate(revising ? mom.topics : mom.reviewedTopics || [], priv.part)}
           corrections={revising ? corrections : undefined}
           revisionNumber={revising ? Number(mom.rev || 0) + 1 : null}
+          designReview={mom.designReview || null}
           writtenBy={mom.preparedBy?.name || mom.reviewRequestedBy || 'Client Relations'}
           sentAt={mom.reviewRequestedAt || null}
           carriedFrom={(c.carried || [])[0]?.ref || null}
           onEdit={() => setEditing(true)}
           onReturn={(notes: ReviewNote[]) => returnWithNotes(props.studioId, at.projectId, mom, notes, me)}
           onApprove={async (myself) => {
-            await approve(props.studioId, at.projectId, mom, me);
+            await approve(props.studioId, at.projectId, mom, me, null, approveOpts);
             if (myself) setSending(true);
           }} />
         {hidden}{preview}
@@ -301,7 +305,7 @@ export default function MinutesWorkspace(props: Props) {
     ) : lead ? (
       <>
         <button type="button" className={btnPri} disabled={!ok || busy || ro} onClick={() => guard(async () => {
-          await approve(props.studioId, at.projectId, mom, me, x);
+          await approve(props.studioId, at.projectId, mom, me, x, approveOpts);
           setEditing(false);
           setSending(true);
         })}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Approve &amp; send</button>
@@ -316,7 +320,7 @@ export default function MinutesWorkspace(props: Props) {
         {errorBar}
         <MinutesComposer key={`${mom.id}:${mom.revisionStage || ''}:${ro}`}
           initial={c} meeting={meeting} people={people} readOnly={ro}
-          kinds={template?.kinds} logOnly={logOnly}
+          kinds={template?.kinds} logOnly={logOnly} designReview={mom.designReview || null}
           readOnlyNote={ro ? (
             <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900 hud-panel-in">
               <b>With {reviewer} for approval</b>{mom.reviewRequestedAt ? ` since ${new Date(mom.reviewRequestedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}` : ''}. You can read them; changes wait until they come back.

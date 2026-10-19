@@ -5,6 +5,7 @@ import { db } from '../../services/firebaseClient';
 import { clientView, cleanCorrections, correctionText, fmtShortDay, type ClientLine, type CorrectionLine } from '../../lib/minutes';
 import { downloadElementAsPdf, pdfFilename } from '../../lib/documentPdf';
 import { MinutesDocument } from '../minutes/MinutesDocument';
+import { DesignReviewRooms } from '../minutes/DesignReviewRooms';
 import { Chip, IconChip, EYEBROW, BRAND_EYEBROW, input, btnPri, btnSec } from '../minutes/MinutesBits';
 import '../projectHeader/projectHeader.css';
 
@@ -147,6 +148,12 @@ export default function ClientMinutesView({ mom, studioName, projectName, client
           )}
           {(mom.rev || 0) > 0 && mom.revisionNote && <p className="mx-4 sm:mx-6 mt-4 text-xs text-slate-700 rounded-lg bg-[#3D52A0]/5 border border-[#3D52A0]/20 px-3 py-2"><b>What changed:</b> {mom.revisionNote}</p>}
           {mom.summary && <p className="px-4 sm:px-6 pt-4 text-sm text-slate-700 leading-relaxed"><span className={EYEBROW}>In brief · </span>{mom.summary}</p>}
+          {mom.designReview?.rooms?.length > 0 && (
+            <div className="px-4 sm:px-6 pt-4 space-y-4"><DesignReviewRooms review={mom.designReview} forClient /></div>
+          )}
+          {mom.designReview && (view.agreed.length + view.next.length + view.notes.length) > 0 && (
+            <p className="px-4 sm:px-6 pt-5 text-sm font-bold text-slate-800">Also discussed</p>
+          )}
           {view.agreed.length > 0 && (<>
             <p className={`${EYEBROW} px-4 sm:px-6 pt-5 pb-1`}>What we agreed</p>
             <div className="divide-y divide-slate-100">{view.agreed.map((l, i) => row(l, i))}</div>
@@ -167,7 +174,7 @@ export default function ClientMinutesView({ mom, studioName, projectName, client
             {count === 0 && (
               <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
                 <input type="checkbox" checked={fair} onChange={(e) => setFair(e.target.checked)} className="w-4 h-4 mt-0.5 rounded border-slate-300 accent-[#3D52A0]" />
-                These minutes are a fair record of our meeting.
+                {mom.designReview ? 'What else was discussed is a fair record of our meeting.' : 'These minutes are a fair record of our meeting.'}
               </label>
             )}
             <div className="flex flex-wrap items-center gap-3">
@@ -193,7 +200,7 @@ export default function ClientMinutesView({ mom, studioName, projectName, client
           content={{ topics: mom.topics || [], summary: mom.summary, carried: mom.carried, nextMeeting: mom.nextMeeting, attendees: (mom.attendees || []).filter((a: any) => a.side !== 'vendor'), revisionNote: mom.revisionNote }}
           preparedBy={mom.preparedBy} approvedBy={mom.approvedBy}
           confirmedBy={confirmed && mom.acknowledgedAt ? { name: mom.acknowledgedBy || clientName, at: mom.acknowledgedAt } : null}
-          issuedAt={mom.sentAt || mom.approvedBy?.at || null} />
+          issuedAt={mom.sentAt || mom.approvedBy?.at || null} designReview={mom.designReview || null} />
       </div>
     </div>
   );

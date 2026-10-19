@@ -1,15 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FileText, Plus, ListChecks, CalendarClock, Pencil, X, Loader2, Check } from '@/lib/lucide-shim';
+import { FileText, Plus, ListChecks, CalendarClock, Pencil, X, Loader2, Check, Gavel } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { opsSettingsOf } from '../../lib/opsDesk';
 import { primaryRole } from '../../lib/roles';
-import { isNewMinutes, statusChip, templateById, STAGES, waitingFromMinutes, fmtShortDay, type ChipTone } from '../../lib/minutes';
+import { isNewMinutes, statusChip, templateById, STAGES, waitingFromMinutes, fmtShortDay, decisionsLog, type ChipTone } from '../../lib/minutes';
 import { meetingTypeLabel } from '../../lib/meetingTypes';
 import { projectMinutes, markFiled } from '../../services/minutesService';
 import { MomReviewModal } from '../ops/MomReviewModal';
 import { MomCaptureModal } from '../ops/MomCaptureModal';
 import { clientContactOf } from '../../lib/minutes';
-import { Panel, Chip, Seg, btnPri, btnSm, BRAND_EYEBROW } from './MinutesBits';
+import { Panel, Chip, Seg, KindChip, btnPri, btnSm, BRAND_EYEBROW } from './MinutesBits';
 
 /*
   THE PROJECT'S MINUTES (mockup 11).
@@ -18,7 +18,8 @@ import { Panel, Chip, Seg, btnPri, btnSm, BRAND_EYEBROW } from './MinutesBits';
   by stage. Older minutes sit alongside new ones, marked "Earlier format".
   Open actions are counted across all of them, the next meeting comes from
   the latest minutes, and design changes from the minutes are listed until
-  someone marks them on the sheets.
+  someone marks them on the sheets. The decisions log lists everything
+  agreed, across every issued minutes, newest first.
 */
 
 const ISSUED = ['finalised', 'shared', 'acknowledged', 'correction_requested'];
@@ -38,6 +39,7 @@ export default function ProjectMinutes({ projectId, projectContext, stage, onClo
   const newFlow = opsSettingsOf(orgData).newMinutes;
   const [moms, setMoms] = useState<any[] | null>(null);
   const [filter, setFilter] = useState<string>('all');
+  const [view, setView] = useState<'minutes' | 'decisions'>('minutes');
   const [open, setOpen] = useState<any | null>(null);
   const [writing, setWriting] = useState(false);
   const [filing, setFiling] = useState(false);
@@ -66,6 +68,7 @@ export default function ProjectMinutes({ projectId, projectContext, stage, onClo
   }, [moms]);
   const next = useMemo(() => (moms || []).find((m) => m.nextMeeting?.date)?.nextMeeting || null, [moms]);
   const changes = useMemo(() => waitingFromMinutes(moms || [], 'designChanges'), [moms]);
+  const decided = useMemo(() => decisionsLog(list), [list]);
 
   const markChanges = async () => {
     setFiling(true);
@@ -99,10 +102,29 @@ export default function ProjectMinutes({ projectId, projectContext, stage, onClo
           <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-xl grid place-items-center text-slate-400 hover:bg-slate-100"><X className="w-5 h-5" /></button>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 grid gap-5 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <Panel icon={FileText} title="Minutes" blurb={moms ? `${moms.length} in all, newest first` : 'Loading…'}>
+          <Panel icon={view === 'minutes' ? FileText : Gavel} title={view === 'minutes' ? 'Minutes' : 'Decisions log'}
+            blurb={!moms ? 'Loading…' : view === 'minutes' ? `${moms.length} in all, newest first` : 'Everything agreed in issued minutes, newest first'}
+            right={<Seg label="Show" value={view} onChange={setView} small options={[{ id: 'minutes', label: 'Minutes' }, { id: 'decisions', label: 'Decisions log' }]} />}>
             <Seg label="Stage" value={filter} onChange={setFilter} small
               options={[{ id: 'all', label: `All ${moms?.length || 0}` }, ...stagesHere.map((s) => ({ id: String(s), label: STAGES[s] || `Stage ${s}` }))]} />
-            {!moms ? <p className="mt-4 text-xs text-slate-500 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading the minutes…</p> : !list.length ? (
+            {view === 'decisions' && moms ? (
+              !decided.length ? <p className="mt-4 text-sm text-slate-500">Nothing agreed in issued minutes here yet.</p> : (
+                <div className="divide-y divide-slate-100 mt-3">
+                  {decided.map((d, i) => (
+                    <div key={`${d.momId}:${i}`} className="flex flex-wrap sm:flex-nowrap items-start gap-3 py-3 px-1 hud-row-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
+                      <span className="text-xs font-bold text-slate-500 w-8 tabular-nums mt-0.5">{d.ref}</span>
+                      <KindChip kind={d.kind} />
+                      <span className="flex-1 min-w-[180px]">
+                        <span className="block text-sm text-slate-800">{d.topic ? <b>{d.topic}: </b> : null}{d.text}</span>
+                        <span className="block text-[11px] text-slate-500">{d.momRef} · {d.meeting}{d.meetingDate ? ` · ${fmtShortDay(d.meetingDate)}` : ''}</span>
+                      </span>
+                      {d.earlier && <Chip>Earlier format</Chip>}
+                      {d.confirmed ? <Chip tone="emerald">Confirmed</Chip> : <Chip tone="amber">Not confirmed yet</Chip>}
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : !moms ? <p className="mt-4 text-xs text-slate-500 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading the minutes…</p> : !list.length ? (
               <p className="mt-4 text-sm text-slate-500">No minutes here yet.</p>
             ) : (
               <div className="divide-y divide-slate-100 mt-3">

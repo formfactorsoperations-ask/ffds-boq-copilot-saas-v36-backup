@@ -185,3 +185,26 @@ describe('part 2: studio-only lines, internal meetings, proposal minutes', () =>
     await assertSucceeds(updateDoc(doc(head(), M('sent')), { 'filed.s1': { at: 1, by: 'head@a.com' } }));
   });
 });
+
+describe('part 2b: design reviews and follow-ups', () => {
+  const review = { meetingId: 'dm1', heldAt: 5, presentedBy: 'Tanvi', attendees: '', confirmed: null,
+    rooms: [{ room: 'Kitchen', outcome: 'agreed', round: null, beyond: false, sheets: [], changes: [] }] };
+  it('Client Relations starts from a review, and cannot change it after', async () => {
+    await assertSucceeds(setDoc(doc(cr(), M('dr')), base({ designReview: review })));
+    await assertSucceeds(updateDoc(doc(cr(), M('dr')), { summary: 'Kitchen agreed.' }));
+    await assertFails(updateDoc(doc(cr(), M('dr')), { 'designReview.rooms': [] }));
+  });
+  it('Client Relations on the project reads the portal view, where the reviews are kept without fees', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'projects/p1/portalView/current'), { designRecord: [] }); });
+    await assertSucceeds(getDoc(doc(cr(), 'projects/p1/portalView/current')));
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'projects/p1/teamView/ops'), { tenantId: STUDIO, kind: 'ops', members: [], compressedData: 'x' }); });
+    await assertFails(getDoc(doc(cr(), 'projects/p1/portalView/current')));
+  });
+  it('the approver adds the studio\'s actions to the Ops Desk, once', async () => {
+    const f = { tenantId: STUDIO, projectId: 'p1', projectName: 'p1', at: 5, by: 'od@a.com', byName: 'Anish K', channel: 'meeting',
+      note: 'From the minutes MOM-2026-001: Share the elevation.', subject: null, outcome: 'info',
+      next: { text: 'Share the elevation.', ownerEmail: 'tanvi@a.com', ownerName: 'Tanvi', due: '2026-10-15' }, nextDone: false, manual: true };
+    await assertSucceeds(setDoc(doc(od(), 'projects/p1/followUps/mom-x-a1'), f));
+    await assertFails(setDoc(doc(od(), 'projects/p1/followUps/mom-x-a1'), { ...f, at: 9 }));
+  });
+});

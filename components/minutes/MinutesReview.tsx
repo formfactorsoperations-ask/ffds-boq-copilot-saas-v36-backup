@@ -2,8 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { ShieldCheck, MessageSquare, Undo2, Check, Loader2, Pencil, Trash2, X } from '@/lib/lucide-shim';
 import {
   allLines, checksOf, diffTopics, flaggedCount, newId, lineRefs, fmtShortDay, needsOwner,
-  type MinutesContent, type MinutesTopic, type ReviewNote, type CorrectionLine,
+  type MinutesContent, type MinutesTopic, type ReviewNote, type CorrectionLine, type DesignReviewRecord,
 } from '../../lib/minutes';
+import { DesignReviewRooms } from './DesignReviewRooms';
 import { Panel, Seg, KindChip, Avatar, Chip, CheckRow, EYEBROW, input, btnPri, btnSec, btnSm, linkBtn } from './MinutesBits';
 
 /*
@@ -27,6 +28,8 @@ export interface ReviewProps {
   carriedFrom?: string | null;
   corrections?: CorrectionLine[];
   revisionNumber?: number | null;
+  /** Design review minutes: the rooms from Design Desk, locked. */
+  designReview?: DesignReviewRecord | null;
   queue: QueueRow[];
   me: { email: string; name: string };
   onReturn: (notes: ReviewNote[]) => Promise<void>;
@@ -47,14 +50,14 @@ export default function MinutesReview(p: ReviewProps) {
   const refs = useMemo(() => lineRefs(p.content.topics), [p.content.topics]);
 
   const checks = useMemo(() => {
-    const base = checksOf(p.content).filter((c) => c.blocking);
+    const base = checksOf({ ...p.content, designReview: p.designReview }).filter((c) => c.blocking);
     const flagged = flaggedCount(p.content.topics);
     return [
       ...base,
       ...(flagged ? [{ ok: true, blocking: false, text: `${flagged} item${flagged === 1 ? '' : 's'} flagged for scope or cost` }] : []),
       ...(p.carriedFrom ? [{ ok: true, blocking: false, text: `Carried forward from ${p.carriedFrom}` }] : []),
     ];
-  }, [p.content, p.carriedFrom]);
+  }, [p.content, p.carriedFrom, p.designReview]);
 
   const addNote = (lineId: string | null, text: string) => {
     if (!text.trim()) return;
@@ -103,6 +106,7 @@ export default function MinutesReview(p: ReviewProps) {
         </div>
         {p.content.revisionNote && <p className="mt-4 text-xs rounded-lg bg-[#3D52A0]/5 border border-[#3D52A0]/20 px-3 py-2 text-slate-700"><b>What changed:</b> {p.content.revisionNote}</p>}
         {p.content.summary && <p className="mt-4 text-sm text-slate-700 leading-relaxed"><span className={EYEBROW}>In brief · </span>{p.content.summary}</p>}
+        {p.designReview && view === 'all' && <div className="mt-4 space-y-4"><DesignReviewRooms review={p.designReview} studio compact /></div>}
         <div className="mt-4 space-y-3">
           {p.content.topics.map((t, ti) => {
             const lines = t.lines.filter((l) => l.text.trim() && (view === 'all' || diff?.changed.has(l.id)));

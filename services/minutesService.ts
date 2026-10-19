@@ -4,8 +4,8 @@ import { apiFetch } from './apiFetch';
 import { calculateTimestamp } from './momService';
 import {
   toLegacy, withStep, openFromEarlier, fromStructured, queueScopeLines, withQueueState, splitPrivate, outboxOf,
-  templateById, templateTopics, type PrivatePart,
-  type MinutesContent, type MinutesTopic, type ReviewNote, type Signed, type TrailEntry, type CarriedAction,
+  templateById, templateTopics, designReviewFrom, emptyTopic, studioFollowUps, followUpId, type PrivatePart,
+  type DesignReviewRecord, type MinutesContent, type MinutesTopic, type ReviewNote, type Signed, type TrailEntry, type CarriedAction,
 } from '../lib/minutes';
 
 /*
@@ -81,6 +81,8 @@ export interface MeetingSeed {
   /** The template it starts from (lib/minutes MEETING_TEMPLATES), and the project's stage. */
   template?: string | null;
   stage?: number | null;
+  /** Design review minutes: the review held in Design Desk, which comes in locked. */
+  designReview?: DesignReviewRecord | null;
 }
 
 /**
@@ -115,7 +117,12 @@ export async function startMinutes(studioId: string, projectId: string, seed: Me
       preparedBy: signed(me, now),
       template: seed.template || null,
       stage: seed.stage ?? null,
-      ...contentWrite({ topics: templateById(seed.template) ? templateTopics(templateById(seed.template)!) : [], carried, attendees: seed.attendees, summary: null, nextMeeting: null }),
+      ...(seed.designReview ? { designReview: seed.designReview } : {}),
+      ...contentWrite({
+        /* From a design review the rooms are already recorded; the writer adds what was said around them. */
+        topics: seed.designReview ? [emptyTopic('Also discussed', now)] : templateById(seed.template) ? templateTopics(templateById(seed.template)!) : [],
+        carried, attendees: seed.attendees, summary: null, nextMeeting: null,
+      }),
     }));
     id = ref.id;
   });
@@ -177,7 +184,13 @@ export async function returnWithNotes(studioId: string, projectId: string, mom: 
  * Actions from the last meeting marked done or dropped are closed on the
  * minutes they came from.
  */
-export async function approve(studioId: string, projectId: string, mom: any, me: Me, content?: MinutesContent | null) {
+export interface ApproveOptions {
+  projectName?: string;
+  /** Studio actions also become follow-ups on their owners' Ops Desk (Studio settings → Ops Desk). */
+  followUps?: boolean;
+}
+
+export async function approve(studioId: string, projectId: string, mom: any, me: Me, content?: MinutesContent | null, opts: ApproveOptions = {}) {
   const now = Date.now();
   const ref = minutesDoc(studioId, projectId, mom.id);
   const revision = mom.revisionStage === 'pending_review' || mom.revisionStage === 'draft';
@@ -231,6 +244,40 @@ export async function approve(studioId: string, projectId: string, mom: any, me:
     await updateDoc(ref, { ...contentWrite(q), ...clean(common), outbox: clean(outboxOf(q.topics)) });
   }
   await closeCarried(studioId, projectId, (content || mom).carried || []);
+  if (opts.followUps) {
+    const issued = content || (revision ? mom.pendingRevision : mom) || {};
+    await addFollowUps(studioId, projectId, { ...mom, topics: sharedTopics(issued.topics || []) }, me, opts.projectName || mom.reviewProjectName || '', now);
+  }
+}
+
+/**
+ * The studio's actions onto their owners' Ops Desk, as follow-ups logged by
+ * the approver (lib/opsDesk FollowUp). One per action: approving a revision
+ * again finds the follow-up already there and leaves it.
+ */
+async function addFollowUps(studioId: string, projectId: string, mom: any, me: Me, projectName: string, now: number) {
+  for (const f of studioFollowUps(mom.topics)) {
+    try {
+      await setDoc(doc(db, `projects/${projectId}/followUps`, followUpId(mom.id, f.lineId)), {
+        tenantId: studioId,
+        projectId,
+        projectName,
+        at: now,
+        by: me.email,
+        byName: me.name,
+        channel: 'meeting',
+        note: `From the minutes ${mom.momRef || ''}: ${f.text}`.slice(0, 2000),
+        subject: null,
+        outcome: 'info',
+        next: { text: f.text, ownerEmail: f.ownerEmail, ownerName: f.ownerName, due: f.due },
+        nextDone: false,
+        manual: true,
+      });
+    } catch (e: any) {
+      /* Already there from an earlier approval (the rules refuse a second write), or not this person's to add. */
+      if (e?.code !== 'permission-denied') console.warn('Could not add a follow-up from the minutes', f.lineId, e);
+    }
+  }
 }
 
 /** Mark actions from earlier minutes done or dropped, on those minutes. */
@@ -378,4 +425,21 @@ export async function markFiled(studioId: string, projectId: string, momId: stri
 export async function projectMinutes(studioId: string, projectId: string): Promise<any[]> {
   const s = await getDocs(collection(db, momPath(studioId, projectId)));
   return s.docs.map((d) => ({ id: d.id, ...(d.data() as any) })).sort((a, b) => (Number(b.meetingDate) || 0) - (Number(a.meetingDate) || 0));
+}
+
+/**
+ * The project's design reviews held in Design Desk, newest first, as minutes
+ * keep them (lib/minutes designReviewFrom). A lead reads the meetings
+ * themselves; Client Relations, who may not see revision fees, reads the
+ * client-safe copy in the portal view.
+ */
+export async function loadDesignReviews(studioId: string, projectId: string): Promise<DesignReviewRecord[]> {
+  const pick = (list: any[]) => list.map(designReviewFrom).filter((r): r is DesignReviewRecord => !!r).sort((a, b) => b.heldAt - a.heldAt);
+  try {
+    const s = await getDocs(query(collection(db, `organizations/${studioId}/projects/${projectId}/designMeetings`), where('state', '==', 'CLOSED')));
+    return pick(s.docs.map((d) => ({ ...(d.data() as any), id: d.id })));
+  } catch {
+    const v = await getDoc(doc(db, 'projects', projectId, 'portalView', 'current')).catch(() => null);
+    return pick((v?.exists() ? (v.data() as any)?.designRecord : null) || []);
+  }
 }

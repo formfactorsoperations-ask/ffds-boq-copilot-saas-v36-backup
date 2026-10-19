@@ -5,10 +5,11 @@ import {
 } from '@/lib/lucide-shim';
 import {
   allLines, checksOf, readyToSend, emptyTopic, newLine, guessKind, needsOwner, quickDues, dueFromKey, keyOfDue, fmtShortDay,
-  KIND_LABEL, ALL_KINDS, ROUTE_LABEL, type CarriedAction, type LineKind, type MinutesContent, type MinutesLine, type MinutesTopic, type OwnerSide, type ReviewNote,
+  KIND_LABEL, ALL_KINDS, ROUTE_LABEL, type CarriedAction, type LineKind, type MinutesContent, type MinutesLine, type MinutesTopic, type OwnerSide, type ReviewNote, type DesignReviewRecord,
   type CorrectionLine,
 } from '../../lib/minutes';
 import { meetingTypeLabel } from '../../lib/meetingTypes';
+import { DesignReviewRooms, designReviewRoutes } from './DesignReviewRooms';
 import {
   Panel, Seg, KindChip, FromNotes, Avatar, CheckRow, Chip, EYEBROW, input, btnPri, btnSec, btnSm, linkBtn,
 } from './MinutesBits';
@@ -47,6 +48,8 @@ export interface ComposerProps {
   initialNotes?: string;
   readOnly?: boolean;
   readOnlyNote?: React.ReactNode;
+  /** Design review minutes: the review from Design Desk, shown locked above what is written. */
+  designReview?: DesignReviewRecord | null;
   /** Saves as you type; resolves when stored. */
   onSave: (c: MinutesContent) => Promise<void>;
   onNotesToPoints: (notes: string) => Promise<{ topics: MinutesTopic[]; summary: string }>;
@@ -75,7 +78,7 @@ export default function MinutesComposer(p: ComposerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [c]);
 
-  const checks = useMemo(() => checksOf({ ...c, topics: c.topics }), [c]);
+  const checks = useMemo(() => checksOf({ ...c, topics: c.topics, designReview: p.designReview }), [c, p.designReview]);
   const ready = readyToSend(checks);
   const ro = !!p.readOnly;
 
@@ -143,6 +146,7 @@ export default function MinutesComposer(p: ComposerProps) {
       {/* centre */}
       <div className="space-y-5 min-w-0">
         {p.readOnlyNote}
+        {p.designReview && <DesignReviewRooms review={p.designReview} studio compact />}
         {p.revision && (
           <Panel icon={RotateCcw} title={`Revision ${p.revision.number}`} blurb="The client keeps the minutes they have until this is approved and sent. Say what changed: it is printed on the minutes and put in the email.">
             <textarea className={`${input} min-h-[64px]`} disabled={ro} value={c.revisionNote || ''} placeholder="Handle finish corrected to antique brass (A2)."
@@ -233,7 +237,7 @@ export default function MinutesComposer(p: ComposerProps) {
           <input className={`${input} mt-2`} disabled={ro} value={c.nextMeeting?.purpose || ''} placeholder="Kids room laminate and handles, at the studio" aria-label="Next meeting purpose"
             onChange={(e) => setC((x) => ({ ...x, nextMeeting: { ...(x.nextMeeting || {}), purpose: e.target.value } }))} />
         </Panel>
-        <RoutesPanel topics={c.topics} logOnly={!!p.logOnly} />
+        <RoutesPanel topics={c.topics} logOnly={!!p.logOnly} review={p.designReview} />
         <Panel icon={ShieldCheck} title="Before you send" blurb="Checked as you write">
           <ul className="space-y-2">{checks.map((k, i) => (
             <CheckRow key={k.text} c={k} i={i} action={needOf(k.text) ? (
@@ -558,14 +562,23 @@ function BriefButton({ onWrite }: { onWrite: () => Promise<void> }) {
 
 /* ── Where this goes (mockup 9) ──────────────────────────────────────────── */
 
-function RoutesPanel({ topics, logOnly }: { topics: MinutesTopic[]; logOnly: boolean }) {
+function RoutesPanel({ topics, logOnly, review }: { topics: MinutesTopic[]; logOnly: boolean; review?: DesignReviewRecord | null }) {
   const counts = new Map<LineKind, number>();
   for (const t of topics) for (const l of t.lines) if (l.text.trim()) counts.set(l.kind, (counts.get(l.kind) || 0) + 1);
   const rows = ALL_KINDS.filter((k) => counts.get(k));
-  if (!rows.length) return null;
+  const fromReview = designReviewRoutes(review);
+  if (!rows.length && !fromReview.length) return null;
   return (
     <Panel icon={ArrowRight} title={logOnly ? 'Where this goes when saved' : 'Where this goes when approved'} blurb={logOnly ? 'Internal: saved to the project log, never sent to the client' : 'Nothing is copied by hand'}>
       <ul className="space-y-2 text-xs text-slate-700">
+        {fromReview.map((r) => (
+          <li key={r.what} className="flex items-start gap-2">
+            <b className="text-slate-800 tabular-nums w-5 text-right">{r.n}</b>
+            <KindChip kind="design_change" />
+            <ArrowRight className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+            <span className="min-w-0"><b className="text-slate-800">{r.what}</b>: {r.to}</span>
+          </li>
+        ))}
         {rows.map((k) => (
           <li key={k} className="flex items-center gap-2">
             <b className="text-slate-800 tabular-nums w-5 text-right">{counts.get(k)}</b>

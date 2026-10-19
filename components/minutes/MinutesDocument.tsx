@@ -1,5 +1,5 @@
 import React from 'react';
-import { lineRefs, allLines, fmtShortDay, splitPrivate, selectionText, type MinutesContent, type Signed, type CarriedAction } from '../../lib/minutes';
+import { lineRefs, allLines, fmtShortDay, splitPrivate, selectionText, type MinutesContent, type Signed, type CarriedAction, type DesignReviewRecord } from '../../lib/minutes';
 import { meetingTypeLabel } from '../../lib/meetingTypes';
 import { PDF_CONTENT_WIDTH_PX } from '../../lib/documentPdf';
 
@@ -31,6 +31,8 @@ export interface MinutesDocProps {
   issuedAt?: number | null;
   /** True before approval: the PDF is marked as a draft. */
   draft?: boolean;
+  /** Design review minutes: the rooms from Design Desk. Revision rounds and fees are never printed. */
+  designReview?: DesignReviewRecord | null;
 }
 
 const stamp = (ms: number) => new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
@@ -123,6 +125,33 @@ export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>
           {away.length > 0 && <><p className="font-bold text-slate-800 mb-0.5 mt-1">Apologies</p>{away.map((a) => <div key={a.name}>{a.name}</div>)}</>}
         </div>
       </div>
+
+      {(p.designReview?.rooms.length || 0) > 0 && (
+        <>
+          <H n={num()}>Rooms shown</H>
+          <p className="text-[10px] text-slate-500 mb-1.5">
+            As recorded at the design review{p.designReview!.heldAt ? ` on ${longDay(p.designReview!.heldAt)}` : ''}
+            {p.designReview!.confirmed ? `, confirmed by ${p.designReview!.confirmed.name} on ${stamp(p.designReview!.confirmed.at)}` : ''}. Changes are pinned on the drawings.
+          </p>
+          <table className="w-full text-[11px] text-slate-800">
+            <thead><tr className="text-[9px] uppercase tracking-[0.14em] text-slate-400 text-left"><th className="py-1 px-2 w-32">Room</th><th className="py-1 px-2 w-24">Outcome</th><th className="py-1 px-2">Drawings and changes</th></tr></thead>
+            <tbody>
+              {p.designReview!.rooms.map((r) => (
+                <tr key={r.room}>
+                  <td className={`${td} font-semibold`}>{r.room}</td>
+                  <td className={td}>{r.outcome === 'agreed' ? 'Agreed' : 'Changes asked'}</td>
+                  <td className={td}>
+                    <span className="text-slate-500">{r.sheets.map((x) => `${x.name} v${x.versionNo}`).join(' · ')}</span>
+                    {r.changes.map((c) => (
+                      <div key={c.n} className="mt-0.5"><b style={{ color: BRASS }}>{c.n}.</b> {c.text}{c.sheet ? <span className="text-slate-500"> · {c.sheet}</span> : null}</div>
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
 
       {decisions.length > 0 && (
         <>

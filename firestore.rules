@@ -479,7 +479,8 @@ service cloud.firestore {
       allow update: if isAssignedTeam(orgId, projectId, 'ops') && (
         (resource.data.get('status', '') in ['draft', 'pending_review']
           && request.resource.data.get('status', '') in ['draft', 'pending_review']
-          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['approvedBy']))
+          /* A design review comes in as the client agreed it in Design Desk, and stays so. */
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['approvedBy', 'designReview']))
         ||
         /*
           New minutes (lib/minutes.ts): once a lead has approved them, Client
@@ -674,7 +675,9 @@ service cloud.firestore {
         allow read: if isAuthenticated() && (
           isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
           isSuperAdmin() ||
-          (projectId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.projectIds)
+          (projectId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.projectIds) ||
+          /* Client Relations on the project: design review minutes start from the reviews recorded here, without the fees. */
+          isAssignedTeam(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId, projectId, 'ops')
         );
         allow write: if isAuthenticated() && (
           isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||

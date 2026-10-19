@@ -92,6 +92,23 @@ export default function OpsDeskSettings({ org, team, canEdit, onChange }: {
         </button>
       </div>
 
+      {s.newMinutes && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 hud-panel-in">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-slate-800">Actions from the minutes become follow-ups</p>
+            <p className="text-xs text-slate-500">
+              When minutes are approved, each studio action with an owner and a date also goes on that person's Ops Desk as a follow-up.
+              Actions for the client stay on the minutes, as before.
+            </p>
+          </div>
+          <button type="button" role="switch" aria-checked={s.minutesFollowUps} aria-label="Actions from the minutes become follow-ups" disabled={!canEdit}
+            onClick={() => set({ minutesFollowUps: !s.minutesFollowUps })}
+            className={`w-11 h-6 rounded-full p-0.5 transition-colors disabled:opacity-50 ${s.minutesFollowUps ? 'bg-[#3D52A0]' : 'bg-slate-300'}`}>
+            <span className="block w-5 h-5 rounded-full bg-white shadow-sm transition-transform" style={{ transform: s.minutesFollowUps ? 'translateX(20px)' : undefined }} />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-slate-800">The daily check</p>

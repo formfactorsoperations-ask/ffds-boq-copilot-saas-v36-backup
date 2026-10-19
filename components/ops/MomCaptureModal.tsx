@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { Loader2, Sparkles, FileText, CheckCircle2, X } from '@/lib/lucide-shim';
-import { templatesFor, defaultTemplate, templateById, isMinutesLead, STAGES } from '../../lib/minutes';
+import React, { useEffect, useState } from 'react';
+import { Loader2, Sparkles, FileText, CheckCircle2, X, NotebookPen } from '@/lib/lucide-shim';
+import {
+  templatesFor, defaultTemplate, templateById, isMinutesLead, STAGES, designReviewCounts, reviewsWithoutMinutes, fmtShortDay,
+  type DesignReviewRecord,
+} from '../../lib/minutes';
 import { meetingTypeLabel } from '../../lib/meetingTypes';
 import { opsSettingsOf } from '../../lib/opsDesk';
 import { primaryRole } from '../../lib/roles';
-import { startMinutes } from '../../services/minutesService';
+import { startMinutes, loadDesignReviews, projectMinutes } from '../../services/minutesService';
 import '../projectHeader/projectHeader.css';
 import { createMoMFromNotes, createEmptyMoM } from '../../services/momService';
 import { SiteVisit, MOM } from '../../types';
@@ -62,15 +65,27 @@ function StartNewMinutes({ visit, projectId, studioId, onClose, onSuccess }: Mom
   const [chosen, setChosen] = useState<string>(defaultTemplate(visit.type, stage, visit.title).id);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  /* Design reviews held in Design Desk that have no minutes yet (mockup 8): minutes start from one, rooms locked. */
+  const [reviews, setReviews] = useState<DesignReviewRecord[]>([]);
+  const [review, setReview] = useState<DesignReviewRecord | null>(null);
+  useEffect(() => {
+    let live = true;
+    Promise.all([loadDesignReviews(studioId, projectId), projectMinutes(studioId, projectId).catch(() => [])])
+      .then(([r, moms]) => { if (live) setReviews(reviewsWithoutMinutes(r, moms).slice(0, 4)); })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [studioId, projectId]);
 
   const start = () => {
-    const t = templateById(chosen) || defaultTemplate(visit.type, stage, visit.title);
+    const t = review ? templateById('design_review')! : templateById(chosen) || defaultTemplate(visit.type, stage, visit.title);
     const team: any[] = orgData?.team || teamMembers || [];
     const email = String(currentUserAuth?.email || '').toLowerCase();
     const mine = team.find((x) => String(x?.email || '').toLowerCase() === email);
     const me = { email, name: mine?.name || currentUserAuth?.displayName || email, role: mine?.title || primaryRole(roles) || null };
     const fromPeople = (visit.people || []).map((p) => ({ name: p.name || p.email, side: p.side, role: p.role || undefined, present: true }));
-    const named = fromPeople.length ? fromPeople : (visit.attendees || []).filter(Boolean).map((n) => {
+    /* From a review written up later, who was there is what Design Desk recorded. */
+    const invited = review && fromOps ? review.attendees.split(/,|&|\band\b/).map((n) => n.trim()).filter(Boolean) : visit.attendees || [];
+    const named = fromPeople.length ? fromPeople : invited.filter(Boolean).map((n) => {
       const m = team.find((x) => String(x?.name || '').toLowerCase() === String(n).toLowerCase());
       return m ? { name: n, side: 'ffds', role: m.title || m.role, present: true } : { name: n, side: 'client', present: true };
     });
@@ -79,17 +94,18 @@ function StartNewMinutes({ visit, projectId, studioId, onClose, onSuccess }: Mom
     setStarting(true);
     setError(null);
     startMinutes(studioId, projectId, {
-      meetingId: visit.id,
+      meetingId: review && fromOps ? `ops-design-${review.meetingId}` : visit.id,
       /* A meeting on the calendar keeps its own type; minutes written without one take the template's. */
       meetingType: fromOps ? t.meetingType : visit.type || t.meetingType,
       meetingTitle: fromOps ? t.name : visit.title || t.name,
-      meetingDate: visitMillis(visit),
+      meetingDate: review && fromOps ? review.heldAt : visitMillis(visit),
       durationMinutes: visit.durationMinutes || null,
       venue: visit.isVirtual ? (visit.googleMeetUrl ? 'Google Meet' : 'Online') : visit.location || null,
       attendees: attendees as any,
       notes: visit.notes || '',
       template: t.id,
-      stage: stage || null,
+      stage: stage || t.stage || null,
+      designReview: review,
     }, me, currentUserAuth?.uid || 'unknown')
       .then(onSuccess)
       .catch((e) => {
@@ -123,6 +139,32 @@ function StartNewMinutes({ visit, projectId, studioId, onClose, onSuccess }: Mom
                 <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-slate-800 truncate">{visit.title || 'Meeting'} · {day}</p><p className="text-[11px] text-slate-500">{(visit.attendees || []).length} people on the invite · {meetingTypeLabel(visit.type)}</p></div>
               </div>
             )}
+            {reviews.length > 0 && (
+              <div className="mt-2 space-y-2" role="radiogroup" aria-label="Design review">
+                {reviews.map((r, i) => {
+                  const n = designReviewCounts(r);
+                  const on = review?.meetingId === r.meetingId;
+                  return (
+                    <button key={r.meetingId} type="button" role="radio" aria-checked={on} onClick={() => setReview(on ? null : r)}
+                      className={`w-full text-left flex items-center gap-3 px-3 py-3 rounded-xl border hud-row-in ${on ? 'border-[#3D52A0] bg-[#3D52A0]/10 ring-1 ring-[#3D52A0]/30' : 'border-slate-200 hover:bg-slate-50'}`}
+                      style={{ animationDelay: `${i * 30}ms` }}>
+                      <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><NotebookPen className="w-4 h-4" /></span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-semibold text-slate-800 truncate">Design review in Design Desk · {r.heldAt ? fmtShortDay(r.heldAt) : ''}</span>
+                        <span className="block text-[11px] text-slate-500">{n.rooms} room{n.rooms === 1 ? '' : 's'} shown · {n.agreed} agreed, {n.withChanges} with changes{r.confirmed ? ` · confirmed by ${r.confirmed.name}` : ''}</span>
+                      </span>
+                      {i === 0 && <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#3D52A0]/10 text-[#3D52A0] shrink-0">Recommended</span>}
+                    </button>
+                  );
+                })}
+                {review && (
+                  <div className="rounded-xl bg-[#3D52A0]/5 border border-[#3D52A0]/20 px-3 py-2.5 flex gap-2 items-start hud-panel-in">
+                    <Sparkles className="w-4 h-4 text-[#3D52A0] mt-0.5 shrink-0" />
+                    <p className="text-xs text-slate-700">Every room, its outcome and each pinned change come in from the review, locked. You add only what was said around the drawings.</p>
+                  </div>
+                )}
+              </div>
+            )}
             <p className="text-[11px] text-slate-500 mt-3">A template only sets the starting topics and the kinds of line offered first. Anything can be added.</p>
             {error && <p className="mt-3 text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2" role="alert">{error}</p>}
           </div>
@@ -143,7 +185,7 @@ function StartNewMinutes({ visit, projectId, studioId, onClose, onSuccess }: Mom
         <div className="bg-slate-50 border-t border-slate-100 px-6 py-3 flex items-center gap-3 justify-end">
           <button type="button" onClick={onClose} disabled={starting} className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 disabled:opacity-50">Cancel</button>
           <button type="button" onClick={start} disabled={starting} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50">
-            {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Start {templateById(chosen)?.name.toLowerCase() || 'minutes'}
+            {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}{review ? 'Start from the design review' : `Start ${templateById(chosen)?.name.toLowerCase() || 'minutes'}`}
           </button>
         </div>
       </div>

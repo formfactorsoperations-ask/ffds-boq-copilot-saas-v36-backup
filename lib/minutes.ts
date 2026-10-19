@@ -167,6 +167,8 @@ export interface MinutesV2 extends MinutesContent {
   pendingRevision?: (MinutesContent & { revisionNote?: string | null }) | null;
   revisionStage?: 'draft' | 'pending_review' | null;
   previousRevisions?: any[];
+  /** Design review minutes: the review held in Design Desk, locked (designReviewFrom). */
+  designReview?: DesignReviewRecord | null;
 }
 
 /* ── Who may do what ─────────────────────────────────────────────────────── */
@@ -635,7 +637,7 @@ export interface SendCheck {
 }
 
 /** What the "Before you send" list says, as the minutes are written. */
-export function checksOf(m: Pick<MinutesV2, 'topics' | 'summary' | 'carried' | 'nextMeeting' | 'attendees'>): SendCheck[] {
+export function checksOf(m: Pick<MinutesV2, 'topics' | 'summary' | 'carried' | 'nextMeeting' | 'attendees'> & { designReview?: DesignReviewRecord | null }): SendCheck[] {
   const lines = allLines(m.topics).map((x) => x.line).filter((l) => l.text.trim());
   const owned = lines.filter((l) => l.kind === 'action');
   const noOwner = owned.filter((l) => !l.owner?.name?.trim()).length;
@@ -647,7 +649,10 @@ export function checksOf(m: Pick<MinutesV2, 'topics' | 'summary' | 'carried' | '
   const out: SendCheck[] = [
     lines.length
       ? { ok: true, text: `${plural(lines.length, 'point', 'points')} written`, blocking: true }
-      : { ok: false, text: 'No points written yet', blocking: true },
+      /* Design review minutes already hold the rooms; what was said around them may be nothing. */
+      : m.designReview?.rooms?.length
+        ? { ok: true, text: `${plural(m.designReview.rooms.length, 'room', 'rooms')} from the design review; nothing else written`, blocking: false }
+        : { ok: false, text: 'No points written yet', blocking: true },
     people
       ? { ok: true, text: `${plural(people, 'person', 'people')} marked present or away`, blocking: false }
       : { ok: false, text: 'Nobody marked as present', blocking: false },
@@ -875,3 +880,173 @@ export function quickDues(fromMs: number): { label: string; at: number }[] {
     { label: 'Next week', at: base + 7 * DAY },
   ];
 }
+
+/* ── Design review minutes (mockup 9) ────────────────────────────────────── */
+
+/*
+  Minutes of a design review start from the review already held in Design
+  Desk. Its rooms, outcomes and pinned changes come in as the client agreed
+  them and are locked: the writer adds only what was said around the
+  drawings ("Also discussed"), and the client confirms only that part.
+  Revision rounds show whether a room went past the included ones, never a
+  fee: billing stays with the leads in Design Desk.
+*/
+
+export interface DesignReviewRoom {
+  room: string;
+  outcome: 'agreed' | 'changes';
+  /** The room's client revision round, when known; null for an agreed room. */
+  round: number | null;
+  /** Past the rounds the studio's terms include. */
+  beyond: boolean;
+  sheets: { name: string; versionNo: number }[];
+  changes: { n: number; text: string; sheet: string | null }[];
+}
+
+export interface DesignReviewRecord {
+  meetingId: string;
+  heldAt: number;
+  presentedBy: string;
+  attendees: string;
+  /** The client's confirmation of the review, given in Design Desk or the portal. */
+  confirmed: { name: string; at: number; via: string } | null;
+  rooms: DesignReviewRoom[];
+}
+
+/**
+ * A held design review as minutes keep it. Takes the studio's meeting
+ * (lib/designMeeting DesignMeeting) or the client-safe copy in the portal view
+ * (PortalDesignMeeting), which is all Client Relations can read. Nothing about
+ * fees or billing is kept.
+ */
+export function designReviewFrom(m: any): DesignReviewRecord | null {
+  if (!m?.id || !Array.isArray(m.rooms)) return null;
+  if (m.state && m.state !== 'CLOSED') return null;
+  const included = Number.isFinite(Number(m.includedRounds)) && m.includedRounds != null ? Number(m.includedRounds) : null;
+  const rooms: DesignReviewRoom[] = [];
+  for (const r of m.rooms) {
+    if (r?.outcome !== 'agreed' && r?.outcome !== 'changes') continue;
+    const sheets = (r.sheets || []).map((s: any) => ({ id: String(s?.drawingId || ''), name: String(s?.name || 'Sheet'), versionNo: Number(s?.versionNo) || 0 }));
+    const sheetName = (id: unknown) => sheets.find((s: any) => s.id && s.id === String(id || ''))?.name || null;
+    const changes = r.outcome !== 'changes' ? [] : (r.changes || []).map((c: any, i: number) => typeof c === 'string'
+      ? { n: Number(r.pins?.[i]?.n) || i + 1, text: c, sheet: sheetName(r.pins?.[i]?.drawingId) }
+      : { n: Number(c?.n) || i + 1, text: String(c?.text || ''), sheet: sheetName(c?.drawingId) });
+    const round = r.outcome === 'changes' && Number(r.round) > 0 ? Number(r.round) : null;
+    rooms.push({
+      room: String(r.room || 'Room'),
+      outcome: r.outcome,
+      round,
+      beyond: round != null && included != null && round > included,
+      sheets: sheets.map(({ name, versionNo }: any) => ({ name, versionNo })),
+      changes: changes.filter((c: any) => c.text.trim()),
+    });
+  }
+  const conf = m.confirmation?.at ? { name: String(m.confirmation.name || 'The client'), at: Number(m.confirmation.at), via: String(m.confirmation.via || '') } : null;
+  return {
+    meetingId: String(m.id),
+    heldAt: Number(m.heldAt || m.closedAt || m.startedAt) || 0,
+    presentedBy: String(m.presentedBy || m.startedBy?.name || ''),
+    attendees: String(m.attendees || ''),
+    confirmed: conf,
+    rooms,
+  };
+}
+
+/** "6 rooms shown · 4 agreed, 2 with changes". */
+export function designReviewCounts(r: DesignReviewRecord | null | undefined) {
+  const rooms = r?.rooms || [];
+  const agreed = rooms.filter((x) => x.outcome === 'agreed').length;
+  return {
+    rooms: rooms.length,
+    agreed,
+    withChanges: rooms.length - agreed,
+    changes: rooms.reduce((n, x) => n + x.changes.length, 0),
+    beyond: rooms.filter((x) => x.beyond).length,
+  };
+}
+
+/** Design reviews that have no minutes yet, newest first. */
+export function reviewsWithoutMinutes(reviews: DesignReviewRecord[], moms: any[]): DesignReviewRecord[] {
+  const done = new Set((moms || []).map((m) => String(m?.designReview?.meetingId || '')).filter(Boolean));
+  return reviews.filter((r) => !done.has(r.meetingId)).sort((a, b) => b.heldAt - a.heldAt);
+}
+
+/* ── The decisions log ───────────────────────────────────────────────────── */
+
+export interface LoggedDecision {
+  momId: string;
+  momRef: string;
+  meeting: string;
+  meetingDate: number;
+  /** D1, S2, C3 as printed on those minutes; '' on minutes in the earlier format. */
+  ref: string;
+  kind: 'decision' | 'selection' | 'design_change';
+  topic: string;
+  text: string;
+  /** The client confirmed the minutes it is on. */
+  confirmed: boolean;
+  earlier: boolean;
+}
+
+/**
+ * Everything agreed, across the project's issued minutes, newest first:
+ * decisions, selections and design changes on minutes in the new format,
+ * and the decisions recorded on older minutes. Studio-only lines are never
+ * on the minutes document, so they never reach the log.
+ */
+export function decisionsLog(moms: any[]): LoggedDecision[] {
+  const out: LoggedDecision[] = [];
+  for (const m of moms || []) {
+    if (!ISSUED.includes(String(m?.status)) || isLogOnly(m?.meetingType)) continue;
+    const base = {
+      momId: String(m.id), momRef: String(m.momRef || ''), meeting: String(m.meetingTitle || ''),
+      meetingDate: Number(m.meetingDate) || 0, confirmed: m.status === 'acknowledged',
+    };
+    if (m.format === 2) {
+      const refs = lineRefs(m.topics);
+      for (const { line, topic } of allLines(m.topics)) {
+        if (line.kind !== 'decision' && line.kind !== 'selection' && line.kind !== 'design_change') continue;
+        const text = (line.kind === 'selection' ? selectionText(line) : line.text).trim();
+        if (text) out.push({ ...base, ref: refs[line.id] || '', kind: line.kind, topic: topic.title.trim(), text, earlier: false });
+      }
+    } else {
+      for (const d of m.decisions || []) {
+        const text = String(typeof d === 'string' ? d : d?.text || '').trim();
+        if (text) out.push({ ...base, ref: '', kind: 'decision', topic: '', text, earlier: true });
+      }
+    }
+  }
+  return out.sort((a, b) => b.meetingDate - a.meetingDate);
+}
+
+/* ── Actions onto the Ops Desk ───────────────────────────────────────────── */
+
+export interface ActionFollowUp {
+  lineId: string;
+  text: string;
+  ownerEmail: string;
+  ownerName: string;
+  /** YYYY-MM-DD, as the Ops Desk keeps due dates. */
+  due: string;
+}
+
+/**
+ * The studio's own open actions, each to be followed up on the Ops Desk by
+ * the person who owns it. Only actions with a studio owner who has a login
+ * and a date: anything else stays on the minutes' action list as before.
+ */
+export function studioFollowUps(topics: MinutesTopic[] | undefined): ActionFollowUp[] {
+  const out: ActionFollowUp[] = [];
+  for (const { line } of allLines(topics)) {
+    if (line.kind !== 'action' || isStudioOnly(line)) continue;
+    if (line.status === 'done' || line.status === 'cancelled') continue;
+    const email = String(line.owner?.email || '').trim().toLowerCase();
+    const text = line.text.trim();
+    if (line.owner?.side !== 'ffds' || !email || !line.due || !text) continue;
+    out.push({ lineId: line.id, text: text.slice(0, 300), ownerEmail: email, ownerName: String(line.owner.name || email), due: keyOfDue(line.due) });
+  }
+  return out;
+}
+
+/** A follow-up's id: one per action, so a revision approved again never adds a second. */
+export const followUpId = (momId: string, lineId: string) => `mom-${momId}-${lineId}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 140);

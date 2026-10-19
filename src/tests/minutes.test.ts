@@ -3,6 +3,7 @@ import {
   toLegacy, fromLegacy, fromStructured, lineRefs, checksOf, readyToSend, flowStep, statusChip, diffTopics,
   clientView, cleanCorrections, correctionText, openFromEarlier, guessKind, queueScopeLines, withQueueState,
   fullTrail, clientContactOf, isMinutesLead, dueFromKey, keyOfDue, quickDues,
+  designReviewFrom, designReviewCounts, reviewsWithoutMinutes, decisionsLog, studioFollowUps, followUpId, clientMaySee,
   type MinutesTopic, type MinutesLine,
 } from '../../lib/minutes';
 
@@ -277,5 +278,77 @@ describe('meetings across the project', () => {
       { kind: 'studio_only', text: 'Budget' },
     ] }] });
     expect(t[0].lines.map((l) => [l.kind, l.meta?.item ?? null, l.meta?.choice ?? null])).toEqual([['selection', 'Countertop', 'approved'], ['note', null, null]]);
+  });
+});
+
+describe('design review minutes', () => {
+  const meeting = {
+    id: 'dm1', state: 'CLOSED', closedAt: 5, startedAt: 1, attendees: 'Mr & Mrs Naik', includedRounds: 2,
+    startedBy: { name: 'Tanvi' }, confirmation: { via: 'portal', name: 'Prasad Naik', at: 6 },
+    rooms: [
+      { room: 'Kitchen', outcome: 'agreed', round: 0, changes: [], sheets: [{ drawingId: 'k', name: 'Kitchen plan', versionNo: 3 }], charge: null },
+      { room: 'Kids room', outcome: 'changes', round: 3, sheets: [{ drawingId: 's', name: 'Study unit', versionNo: 3 }],
+        changes: [{ n: 4, drawingId: 's', page: 0, shape: {}, text: 'Study table 1200 mm.' }], charge: { status: 'to_bill', fee: 5000 } },
+      { room: 'Guest', outcome: null, round: 0, changes: [], sheets: [] },
+    ],
+  };
+  it('keeps rooms, outcomes and changes, and no fee', () => {
+    const r = designReviewFrom(meeting)!;
+    expect(r.rooms.map((x) => [x.room, x.outcome, x.round, x.beyond])).toEqual([['Kitchen', 'agreed', null, false], ['Kids room', 'changes', 3, true]]);
+    expect(r.rooms[1].changes).toEqual([{ n: 4, text: 'Study table 1200 mm.', sheet: 'Study unit' }]);
+    expect(JSON.stringify(r)).not.toMatch(/fee|charge|5000/);
+    expect(r.confirmed).toEqual({ name: 'Prasad Naik', at: 6, via: 'portal' });
+    expect(designReviewCounts(r)).toEqual({ rooms: 2, agreed: 1, withChanges: 1, changes: 1, beyond: 1 });
+  });
+  it('reads the portal copy Client Relations can see', () => {
+    const r = designReviewFrom({ id: 'dm1', heldAt: 5, presentedBy: 'Tanvi', attendees: '', confirmation: null,
+      rooms: [{ room: 'Kids room', outcome: 'changes', sheets: [{ drawingId: 's', name: 'Study unit', versionNo: 3 }], changes: ['Study table 1200 mm.'], pins: [{ n: 4, drawingId: 's' }] }] })!;
+    expect(r.rooms[0]).toEqual({ room: 'Kids room', outcome: 'changes', round: null, beyond: false, sheets: [{ name: 'Study unit', versionNo: 3 }], changes: [{ n: 4, text: 'Study table 1200 mm.', sheet: 'Study unit' }] });
+  });
+  it('skips an open review, and reviews that already have minutes', () => {
+    expect(designReviewFrom({ ...meeting, state: 'OPEN' })).toBeNull();
+    const r = designReviewFrom(meeting)!;
+    expect(reviewsWithoutMinutes([r], [{ designReview: { meetingId: 'dm1' } }])).toEqual([]);
+  });
+  it('lets minutes with only the review through the checks', () => {
+    const r = designReviewFrom(meeting)!;
+    const base = { topics: [{ id: 't', title: 'Also discussed', lines: [] }], attendees: [{ name: 'A', side: 'client' }] };
+    expect(readyToSend(checksOf(base))).toBe(false);
+    expect(readyToSend(checksOf({ ...base, designReview: r }))).toBe(true);
+  });
+});
+
+describe('the decisions log', () => {
+  it('lists what was agreed on issued minutes, newest first, and older decisions too', () => {
+    const moms = [
+      { id: 'a', format: 2, status: 'acknowledged', momRef: 'M1', meetingDate: 1, topics: topics() },
+      { id: 'b', status: 'shared', momRef: 'M0', meetingDate: 2, decisions: [{ text: 'Wall to come down.' }] },
+      { id: 'c', format: 2, status: 'draft', meetingDate: 3, topics: topics() },
+      { id: 'd', format: 2, status: 'finalised', meetingType: 'internal_meeting', meetingDate: 4, topics: topics() },
+    ];
+    expect(decisionsLog(moms).map((d) => [d.momRef, d.ref, d.text, d.confirmed, d.earlier])).toEqual([
+      ['M0', '', 'Wall to come down.', false, true],
+      ['M1', 'D1', 'L-shaped kitchen approved.', true, false],
+    ]);
+  });
+});
+
+describe('actions onto the Ops Desk', () => {
+  it('takes the studio\'s open, owned and dated actions only', () => {
+    const t = topics();
+    t[0].lines[1].owner = { side: 'ffds', name: 'Tanvi', email: 'Tanvi@Studio.in' };
+    t[0].lines.push(line({ id: 'a3', kind: 'action', text: 'No date', owner: { side: 'ffds', name: 'Tanvi', email: 't@s.in' } }));
+    t[0].lines.push(line({ id: 'a4', kind: 'action', text: 'Done', owner: { side: 'ffds', name: 'Tanvi', email: 't@s.in' }, due: DUE, status: 'done' }));
+    expect(studioFollowUps(t)).toEqual([{ lineId: 'a1', text: 'Share the revised elevation.', ownerEmail: 'tanvi@studio.in', ownerName: 'Tanvi', due: '2026-10-15' }]);
+    expect(followUpId('m/1', 'a1')).toBe('mom-m_1-a1');
+  });
+});
+
+describe('what the client sees in the portal', () => {
+  it('shows new minutes once sent, never internal ones; older ones by their flag', () => {
+    expect(clientMaySee({ format: 2, status: 'finalised' }, true)).toBe(false);
+    expect(clientMaySee({ format: 2, status: 'shared' }, false)).toBe(true);
+    expect(clientMaySee({ format: 2, status: 'shared', meetingType: 'vendor_meeting' }, true)).toBe(false);
+    expect(clientMaySee({ status: 'shared' }, false)).toBe(false);
   });
 });
