@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, Sparkles, FileText, CheckCircle2 } from '@/lib/lucide-shim';
+import { opsSettingsOf } from '../../lib/opsDesk';
+import { primaryRole } from '../../lib/roles';
+import { startMinutes } from '../../services/minutesService';
+import '../projectHeader/projectHeader.css';
 import { createMoMFromNotes, createEmptyMoM } from '../../services/momService';
 import { SiteVisit, MOM } from '../../types';
 import { auth } from '../../services/firebaseClient';
@@ -14,7 +18,82 @@ interface MomCaptureModalProps {
   onSuccess: (momId: string) => void;
 }
 
-export function MomCaptureModal({ visit, projectId, studioId, projectContextName, onClose, onSuccess }: MomCaptureModalProps) {
+/*
+  With the new minutes flow on (Studio settings → Ops Desk), minutes start
+  straight from the meeting: who and when are filled in, and the writer lands
+  in the composer, where notes and speech become points. The notes form below
+  is the older way, kept until the new flow is complete.
+*/
+export function MomCaptureModal(props: MomCaptureModalProps) {
+  const { orgData } = useOrg() as any;
+  return opsSettingsOf(orgData).newMinutes ? <StartNewMinutes {...props} /> : <LegacyMomCaptureModal {...props} />;
+}
+
+function visitMillis(visit: SiteVisit): number {
+  const d: any = visit.date;
+  if (!d) return Date.now();
+  if (typeof d === 'number') return d;
+  if (typeof d?.toDate === 'function') return d.toDate().getTime();
+  const parsed = new Date(d).getTime();
+  if (isNaN(parsed)) return Date.now();
+  /* A date and a start time ("14:30"), in India's time. */
+  if (/^\d{1,2}:\d{2}$/.test(String(visit.startTime || '')) && typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    const t = new Date(`${d}T${String(visit.startTime).padStart(5, '0')}:00+05:30`).getTime();
+    return isNaN(t) ? parsed : t;
+  }
+  return parsed;
+}
+
+function StartNewMinutes({ visit, projectId, studioId, onClose, onSuccess }: MomCaptureModalProps) {
+  const { orgData, teamMembers, currentUserAuth, currentRole, currentRoles } = useOrg() as any;
+  const [error, setError] = useState<string | null>(null);
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    const team: any[] = orgData?.team || teamMembers || [];
+    const email = String(currentUserAuth?.email || '').toLowerCase();
+    const mine = team.find((t) => String(t?.email || '').toLowerCase() === email);
+    const me = { email, name: mine?.name || currentUserAuth?.displayName || email, role: mine?.title || primaryRole(currentRoles?.length ? currentRoles : [currentRole]) || null };
+    const fromPeople = (visit.people || []).map((p) => ({ name: p.name || p.email, side: p.side, role: p.role || undefined, present: true }));
+    const named = fromPeople.length ? fromPeople : (visit.attendees || []).filter(Boolean).map((n) => {
+      const t = team.find((x) => String(x?.name || '').toLowerCase() === String(n).toLowerCase());
+      return t ? { name: n, side: 'ffds', role: t.title || t.role, present: true } : { name: n, side: 'client', present: true };
+    });
+    const attendees = named.some((a) => a.side === 'ffds' && a.name.toLowerCase() === String(me.name).toLowerCase())
+      ? named : [...named, { name: me.name, side: 'ffds', role: me.role || undefined, present: true }];
+    startMinutes(studioId, projectId, {
+      meetingId: visit.id,
+      meetingType: visit.type || 'client_meeting',
+      meetingTitle: visit.title || 'Meeting',
+      meetingDate: visitMillis(visit),
+      durationMinutes: visit.durationMinutes || null,
+      venue: visit.isVirtual ? (visit.googleMeetUrl ? 'Google Meet' : 'Online') : visit.location || null,
+      attendees: attendees as any,
+      notes: visit.notes || '',
+    }, me, currentUserAuth?.uid || 'unknown')
+      .then(onSuccess)
+      .catch((e) => { console.error(e); setError(e?.code === 'permission-denied' ? 'You cannot write minutes on this project.' : 'The minutes could not be started. Check your connection and try again.'); });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" role="dialog" aria-label="Starting the minutes">
+      <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={error ? onClose : undefined} />
+      <div className="phd-pop relative w-full max-w-sm bg-white rounded-3xl border border-slate-200 shadow-2xl p-6 text-center">
+        {error ? (
+          <>
+            <p className="text-sm font-bold text-slate-800">{error}</p>
+            <button type="button" onClick={onClose} className="mt-4 px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">Close</button>
+          </>
+        ) : (
+          <p className="text-sm font-semibold text-slate-700 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin text-[#3D52A0]" />Starting the minutes from {visit.title || 'the meeting'}…</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LegacyMomCaptureModal({ visit, projectId, studioId, projectContextName, onClose, onSuccess }: MomCaptureModalProps) {
   const { teamMembers, orgData } = useOrg() as any;
   const [notes, setNotes] = useState(visit.notes || '');
   const [loading, setLoading] = useState(false);

@@ -15,6 +15,7 @@ import { auth, db as fsDb } from '../services/firebaseClient';
 import { collection, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { meetingTypeLabel, toMillis } from '../lib/meetingTypes';
 import { MomReviewModal } from './ops/MomReviewModal';
+import { clientContactOf } from '../lib/minutes';
 
 /*
   SCHEDULE A MEETING OR LOG A SITE VISIT.
@@ -383,6 +384,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
         projectId={projectId}
         studioId={studioId}
         projectContextName={projectName}
+        client={clientContactOf(projectContext)}
         onClose={() => { setReviewMom(null); onClose(); }}
       />
     );

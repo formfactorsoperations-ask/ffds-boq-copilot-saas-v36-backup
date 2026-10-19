@@ -362,14 +362,25 @@ const keepSelector = (opts: PdfOptions) => (opts.keepTogether ? `${KEEP_TOGETHER
  * `el` should be laid out at {@link PDF_CONTENT_WIDTH_PX}. It may sit off
  * screen: the clone is moved into view before it is drawn.
  */
-export async function downloadElementAsPdf(el: HTMLElement, opts: PdfOptions): Promise<void> {
+async function elementPdf(el: HTMLElement, opts: PdfOptions): Promise<any> {
   const { html2canvas, jsPDF } = await tools();
   if (document.fonts?.ready) await document.fonts.ready;
   const cap = await capture(el, html2canvas, keepSelector(opts));
   const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   addPages(pdf, cap, false);
   finishPages(pdf, opts);
-  pdf.save(opts.filename);
+  return pdf;
+}
+
+export async function downloadElementAsPdf(el: HTMLElement, opts: PdfOptions): Promise<void> {
+  (await elementPdf(el, opts)).save(opts.filename);
+}
+
+/** The same PDF, as base64 for an email attachment, and as a file to share. */
+export async function elementPdfFile(el: HTMLElement, opts: PdfOptions): Promise<{ base64: string; blob: Blob }> {
+  const pdf = await elementPdf(el, opts);
+  const uri: string = pdf.output('datauristring');
+  return { base64: uri.slice(uri.indexOf(',') + 1), blob: pdf.output('blob') };
 }
 
 /**

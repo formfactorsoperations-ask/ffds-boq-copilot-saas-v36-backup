@@ -17,6 +17,7 @@ import { CountUp, Dot } from '../ui/HudBits';
 import { MomReviewModal } from '../ops/MomReviewModal';
 import { MomCaptureModal } from '../ops/MomCaptureModal';
 import { handoverSlip } from '../../lib/opsAssist';
+import { clientContactOf } from '../../lib/minutes';
 import { CapturePanel, AskProjectPanel, MeetingPrepPanel } from './OpsAssist';
 import { clientPulse, askPrompts, careQueue, type AskKind, type Checklist, type ChecklistKind, type VisitRequest, type VisitStatus } from '../../lib/clientCare';
 import { PulseList, AskSheet, ChecklistsView, VisitsView, VisitSheet, askReasonOf, type PulseRow } from './ClientCare';
@@ -564,7 +565,9 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
       {deciding && <DecideEscalationPanel escalation={deciding} me={me} onClose={() => setDeciding(null)} onSaved={() => { setDeciding(null); load(); }} />}
       {reviewing && (
         <MomReviewModal mom={reviewing.raw} projectId={reviewing.projectId} studioId={tenantId}
-          projectContextName={reviewing.projectName || projectName(reviewing.projectId)} onClose={() => { setReviewing(null); load(); }} />
+          projectContextName={reviewing.projectName || projectName(reviewing.projectId)}
+          client={clientContactOf(projects.find((p) => String(p?.id) === reviewing.projectId)?.context)}
+          onClose={() => { setReviewing(null); load(); }} />
       )}
       {writingFor && (
         <MomCaptureModal
