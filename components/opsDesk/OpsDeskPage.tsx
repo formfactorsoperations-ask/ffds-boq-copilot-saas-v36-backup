@@ -456,7 +456,7 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
           {section === 'minutes' && (
             <Panel icon={FileText} title={isLead ? 'Minutes to approve' : 'Minutes'} blurb={isLead ? 'Minutes written by Client Relations. Read, edit if needed, then approve: that finalises them and opens the email to the client.' : 'Write the minutes of a client meeting and send them for approval. They reach the client only once a lead approves them.'}>
               <div className="space-y-4">
-                {!isLead && canWrite && (
+                {canWrite && (
                   <div className="max-w-sm">
                     <label htmlFor="mom-project" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Write minutes for</label>
                     <select id="mom-project" className={input} value={writingFor?.projectId || ''} onChange={(e) => setWritingFor(e.target.value ? { projectId: e.target.value, notes: '' } : null)}>
