@@ -7,6 +7,7 @@ import { updateCalendarEventNotes, syncSiteVisitToCalendar } from '../services/s
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import { MomCaptureModal } from '../components/ops/MomCaptureModal';
 import { MomReviewModal } from '../components/ops/MomReviewModal';
+import { clientContactOf } from '../lib/minutes';
 import { connectGoogleCalendar } from '../services/googleCalendarService';
 import { getCachedAccessToken } from '../services/authService';
 
@@ -134,6 +135,8 @@ export default function SiteVisitHistory({
            mom={moms.find(m => m.id === reviewMomId)!}
            projectId={projectId}
            studioId={studioId}
+           projectContextName={projectContext?.name || 'Project'}
+           client={clientContactOf(projectContext)}
            onClose={() => setReviewMomId(null)}
         />
       )}

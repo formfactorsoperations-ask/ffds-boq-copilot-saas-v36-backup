@@ -26,6 +26,7 @@ import { CountUp, Dot } from '../ui/HudBits';
 import StudioTeamSection from './StudioTeamSection';
 import ZohoBooksCard from './ZohoBooksCard';
 import OpsDeskSettings from './OpsDeskSettings';
+import MinutesMigration from './MinutesMigration';
 import PeopleSettings from './PeopleSettings';
 import ConsoleHeader from '../ui/ConsoleHeader';
 import {
@@ -35,7 +36,7 @@ import {
 import { TeamMember } from '../../types';
 import {
   Save, Building2, Users, CreditCard, Scale, Globe, Palette,
-  Database, Check, AlertTriangle, Upload, RotateCcw, Inbox, UserCheck,
+  Database, Check, AlertTriangle, Upload, RotateCcw, Inbox, UserCheck, FileText,
 } from '@/lib/lucide-shim';
 
 const SECTION_ICON: Record<SectionId, React.ComponentType<any>> = {
@@ -48,6 +49,7 @@ const SECTION_ICON: Record<SectionId, React.ComponentType<any>> = {
   system: Database,
   opsdesk: Inbox,
   people: UserCheck,
+  minutes: FileText,
 };
 
 /** Personalization lives in localStorage, not the org document — it is per device. */
@@ -581,6 +583,12 @@ export default function StudioSettingsConsole(props: {
           {activeSection === 'people' && (
             <Panel id="people" title="People" blurb={SETTINGS_SECTIONS[8].blurb} missing={0}>
               <PeopleSettings org={draft} canEdit={canEdit} onChange={(v) => setField('peopleDesk', v)} />
+            </Panel>
+          )}
+
+          {activeSection === 'minutes' && (
+            <Panel id="minutes" title="Minutes" blurb={SETTINGS_SECTIONS[9].blurb} missing={0}>
+              <MinutesMigration />
             </Panel>
           )}
 

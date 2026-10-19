@@ -22,6 +22,8 @@ import { useTimelinePhases } from '../hooks/useTimelinePhases';
 import { useStepProgress } from '../hooks/useStepProgress';
 import { usePaymentRequests, usePaymentOverdueCheck } from '../hooks/usePaymentRequests';
 import { db, functions } from '../services/firebaseClient';
+import { personByEmail } from '../lib/clientContacts';
+import { clientMaySee } from '../lib/minutes';
 import { recordClientSignoff, recordManualSignoff } from '../services/decisionsService';
 import ClientDecisionCard from './client/ClientDecisionCard';
 import ClientAccountMenu from './client/ClientAccountMenu';
@@ -574,7 +576,8 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                 list.sort((a, b) => toMillis(b.meetingDate) - toMillis(a.meetingDate));
                 setSyncedMoms(list.filter(m => {
                     if (!CLIENT_MOM_STATUSES.includes(m.status)) return false;
-                    if (!isVisibleToClient(m)) return false;
+                    /* New minutes show once sent; older ones by their published flag (lib/minutes clientMaySee). */
+                    if (!clientMaySee(m, isVisibleToClient(m))) return false;
                     const typeStr = String(m.meetingType || m.type || '').toLowerCase();
                     if (typeStr === 'internal_meeting' || typeStr === 'internal' || typeStr === 'vendor_meeting' || typeStr === 'vendor' || typeStr === 'internal_review') return false;
                     const titleStr = String(m.meetingTitle || m.title || '').toLowerCase();
@@ -1308,7 +1311,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             processedMomIds.add(momKey);
 
             // Guard: completely exclude any internal/vendor meeting notes or unshared drafts
-            if (!isVisibleToClient(mom)) return;
+            if (!clientMaySee(mom, isVisibleToClient(mom))) return;
             const mType = String(mom.meetingType || mom.type || '').toLowerCase();
             if (mType === 'internal' || mType === 'internal_meeting' || mType === 'vendor' || mType === 'vendor_meeting' || mType === 'internal_review') {
                 return;
@@ -5076,7 +5079,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                 mom={selectedMomForViewer}
                 studioName={studioCompanyName}
                 projectName={context.name || (projectData as any).name || (projectData as any).title || 'Project Workspace'}
-                clientName={context.clientName || 'Valued Client'}
+                clientName={personByEmail(context, currentUserAuth?.email)?.name || context.clientName || 'Valued Client'}
                 studioId={studioId}
                 projectId={projectData.id}
                 onAcknowledgeSuccess={(updatedMom) => {

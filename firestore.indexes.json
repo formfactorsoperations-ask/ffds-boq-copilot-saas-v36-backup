@@ -101,6 +101,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "moms",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "reviewTenantId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "revisionStage",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

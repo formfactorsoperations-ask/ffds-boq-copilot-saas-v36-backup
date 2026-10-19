@@ -152,6 +152,26 @@ service cloud.firestore {
       return !isReviewRecordPath(p) && (!p.matches('.*drawingTracker/[^/]+') || keepsReview());
     }
 
+    /*
+      Approving minutes in the new format (lib/minutes.ts, `format: 2`) is a
+      lead's: only an Owner, Admin or Ops Director may put a name on "approved
+      by", or move the minutes to approved. Everyone else on the staff writes
+      minutes as before, and older minutes are untouched by this.
+    */
+    function minutesApprovalOk(p) {
+      return !p.matches('(.*/)?moms/[^/]+') || request.resource == null || isStudioLead()
+        || (request.resource.data.get('format', 0) != 2 && (resource == null || resource.data.get('format', 0) != 2))
+        || (request.resource.data.get('approvedBy', null) == (resource == null ? null : resource.data.get('approvedBy', null))
+            && (!(request.resource.data.get('status', '') == 'finalised'
+                  && (resource == null || resource.data.get('status', '') != 'finalised'))
+                /* Internal and vendor meetings need no approval: anyone on the staff saves them to the log. */
+                || (isLogOnlyMeeting(request.resource.data.get('meetingType', ''))
+                    && (resource == null || resource.data.get('meetingType', '') == request.resource.data.get('meetingType', '')))));
+    }
+    function isLogOnlyMeeting(t) {
+      return t in ['internal_meeting', 'vendor_meeting', 'internal', 'vendor', 'internal_review', 'contractor_meeting'];
+    }
+
     // Check if the user's tenant ID matches the document's tenant ID
     function isSameTenant(docTenantId) {
       let t = getUserTenantId();
@@ -394,6 +414,10 @@ service cloud.firestore {
         and hidden only by the portal screen. The portal asks for these
         statuses by name (lib/meetingTypes CLIENT_MOM_STATUSES).
       */
+      /* A time a browser sent, as milliseconds, within ten minutes of the server's. */
+      function isNow(ms) {
+        return ms is number && ms > request.time.toMillis() - 600000 && ms < request.time.toMillis() + 600000;
+      }
       function isIssuedMinutes(st) {
         return st in ['finalised', 'shared', 'acknowledged', 'correction_requested'];
       }
@@ -414,14 +438,20 @@ service cloud.firestore {
           resource.data.get('status', '') in ['finalised', 'shared'] && (
             (request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['status', 'acknowledgedBy', 'acknowledgedAt', 'ackChannel']) &&
-             request.resource.data.status == 'acknowledged') ||
+             request.resource.data.status == 'acknowledged' &&
+             /* New minutes: the time of the confirmation is now, within ten minutes, not one the browser chose. */
+             (resource.data.get('format', 0) != 2 || isNow(request.resource.data.get('acknowledgedAt', 0)))) ||
             (request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['status', 'correctionRequest']) &&
              request.resource.data.status == 'correction_requested' &&
-             request.resource.data.correctionRequest.keys().hasOnly(['text', 'by', 'at']) &&
+             request.resource.data.correctionRequest.keys().hasOnly(['text', 'by', 'at', 'lines']) &&
              request.resource.data.correctionRequest.text is string &&
              request.resource.data.correctionRequest.text.size() > 0 &&
-             request.resource.data.correctionRequest.text.size() <= 2000)
+             request.resource.data.correctionRequest.text.size() <= 2000 &&
+             // New minutes: the lines the client marked, each with what is wrong (lib/minutes.ts).
+             request.resource.data.correctionRequest.get('lines', []) is list &&
+             request.resource.data.correctionRequest.get('lines', []).size() <= 50 &&
+             (resource.data.get('format', 0) != 2 || isNow(request.resource.data.correctionRequest.get('at', 0))))
           );
       }
 
@@ -449,10 +479,71 @@ service cloud.firestore {
     */
     match /projects/{projectId}/moms/{momId} {
       allow create: if isAssignedTeam(orgId, projectId, 'ops')
-        && request.resource.data.get('status', '') in ['draft', 'pending_review'];
-      allow update: if isAssignedTeam(orgId, projectId, 'ops')
-        && resource.data.get('status', '') in ['draft', 'pending_review']
-        && request.resource.data.get('status', '') in ['draft', 'pending_review'];
+        && request.resource.data.get('status', '') in ['draft', 'pending_review']
+        && !('approvedBy' in request.resource.data)
+        /* Proposal and negotiation minutes talk money: a lead writes them (lib/minutes MEETING_TEMPLATES). */
+        && !(request.resource.data.get('template', '') in ['proposal', 'negotiation']);
+      allow update: if isAssignedTeam(orgId, projectId, 'ops') && (
+        (resource.data.get('status', '') in ['draft', 'pending_review']
+          && request.resource.data.get('status', '') in ['draft', 'pending_review']
+          /* A design review comes in as the client agreed it in Design Desk, and stays so. */
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['approvedBy', 'designReview']))
+        ||
+        /*
+          New minutes (lib/minutes.ts): once a lead has approved them, Client
+          Relations sends them -- the status moves to shared and the send is
+          recorded, nothing else. The record of steps only grows.
+        */
+        (resource.data.get('format', 0) == 2
+          && resource.data.get('status', '') in ['finalised', 'shared']
+          && request.resource.data.get('status', '') == 'shared'
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'sharedAt', 'sentAt', 'sentBy', 'emailedAt', 'emailedTo', 'shareToken', 'trail', 'updatedAt', 'clientVisibility'])
+          && request.resource.data.get('clientVisibility', {}).get('state', 'published') == 'published'
+          && request.resource.data.get('trail', []).size() >= resource.data.get('trail', []).size())
+        ||
+        /*
+          An internal or vendor meeting needs no approval and never reaches
+          the client: Client Relations saves it straight to the log.
+        */
+        (resource.data.get('format', 0) == 2
+          && resource.data.get('status', '') == 'draft'
+          && request.resource.data.get('status', '') == 'finalised'
+          && isLogOnlyMeeting(resource.data.get('meetingType', ''))
+          && request.resource.data.get('meetingType', '') == resource.data.get('meetingType', '')
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['approvedBy']))
+        ||
+        /*
+          ...and answers a client's correction with a revision, written beside
+          the minutes the client has, up to sending it for approval. The
+          client's copy, its status and its approval stay as they are.
+        */
+        (resource.data.get('format', 0) == 2
+          && resource.data.get('status', '') == 'correction_requested'
+          && request.resource.data.get('status', '') == 'correction_requested'
+          && resource.data.get('revisionStage', 'draft') == 'draft'
+          && request.resource.data.get('revisionStage', '') in ['draft', 'pending_review']
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['pendingRevision', 'revisionStage', 'trail', 'updatedAt', 'reviewTenantId', 'reviewProjectId',
+                         'reviewProjectName', 'reviewRequestedBy', 'reviewRequestedAt'])
+          && request.resource.data.get('trail', []).size() >= resource.data.get('trail', []).size())
+        ||
+        /*
+          Ticking an action done (or open again) on issued minutes, from the
+          action tracker: the action list only, with the same actions in it.
+        */
+        (isIssuedMinutes(resource.data.get('status', ''))
+          && request.resource.data.get('status', '') == resource.data.get('status', '')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['actionItems', 'updatedAt'])
+          && request.resource.data.get('actionItems', []).size() == resource.data.get('actionItems', []).size())
+      );
+    }
+    /*
+      The studio's own lines of new minutes ("studio only", lib/minutes
+      splitPrivate), kept beside them. No client rule reaches here.
+    */
+    match /projects/{projectId}/moms/{momId}/private/{docId} {
+      allow read, write: if isAssignedTeam(orgId, projectId, 'ops');
     }
     /* The numbering the minutes take (services/momService). */
     match /sequences/{seqId} {
@@ -476,7 +567,7 @@ service cloud.firestore {
     match /{collectionId}/{document=**} {
          allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
          allow write: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
-           && reviewUntouched(string(document));
+           && reviewUntouched(string(document)) && minutesApprovalOk(string(document));
       }
     }
 
@@ -600,7 +691,9 @@ service cloud.firestore {
         allow read: if isAuthenticated() && (
           isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
           isSuperAdmin() ||
-          (projectId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.projectIds)
+          (projectId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.projectIds) ||
+          /* Client Relations on the project: design review minutes start from the reviews recorded here, without the fees. */
+          isAssignedTeam(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId, projectId, 'ops')
         );
         allow write: if isAuthenticated() && (
           isSameTenant(get(/databases/$(database)/documents/projects/$(projectId)).data.tenantId) ||
@@ -1084,7 +1177,8 @@ service cloud.firestore {
       allow list: if isAuthenticated() && (isSameTenant(resource.data.tenantId) || isSuperAdmin());
     }
     match /{path=**}/moms/{momId} {
-      allow list: if isAuthenticated() && resource.data.get('status', '') == 'pending_review'
+      allow list: if isAuthenticated()
+        && (resource.data.get('status', '') == 'pending_review' || resource.data.get('revisionStage', '') == 'pending_review')
         && isSameTenant(resource.data.get('reviewTenantId', ''));
     }
 

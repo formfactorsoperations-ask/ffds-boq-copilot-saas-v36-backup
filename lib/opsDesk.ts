@@ -94,10 +94,21 @@ export interface OpsSettings {
   escalationRecipients: string[];
   /** The studio's Google review link, put in the message asking a client for a review. */
   reviewLink: string;
+  /**
+   * The new minutes flow (lib/minutes.ts): write, approve, send, confirm. Off
+   * until it is complete; the current minutes screens work as before meanwhile.
+   */
+  newMinutes: boolean;
+  /**
+   * With the new minutes: each of the studio's actions, when the minutes are
+   * approved, also becomes a follow-up on its owner's Ops Desk. On unless a
+   * lead turns it off.
+   */
+  minutesFollowUps: boolean;
 }
 
 export const DEFAULT_OPS_SETTINGS: OpsSettings = {
-  paymentDueDays: 7, escalateAfterReminders: 2, escalateAfterDays: 7, escalationRecipients: [], reviewLink: '',
+  paymentDueDays: 7, escalateAfterReminders: 2, escalateAfterDays: 7, escalationRecipients: [], reviewLink: '', newMinutes: false, minutesFollowUps: true,
 };
 
 const clampInt = (v: unknown, lo: number, hi: number, dflt: number) => {
@@ -114,6 +125,8 @@ export function opsSettingsOf(org: any): OpsSettings {
     escalationRecipients: (Array.isArray(s.escalationRecipients) ? s.escalationRecipients : [])
       .map((e: any) => String(e || '').trim().toLowerCase()).filter(Boolean),
     reviewLink: /^https:\/\/\S{4,300}$/.test(String(s.reviewLink || '').trim()) ? String(s.reviewLink).trim() : '',
+    newMinutes: s.newMinutes === true,
+    minutesFollowUps: s.minutesFollowUps !== false,
   };
 }
 

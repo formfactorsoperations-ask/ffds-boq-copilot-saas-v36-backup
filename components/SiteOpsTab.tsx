@@ -164,6 +164,7 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
         {initialModule === "action-tracker" && (
           <MomActionTracker
             projectId={projectId}
+            projectContext={projectContext}
             studioId={orgData?.tenantId || "demo-tenant-01"}
             projectContextName={
               projectContext?.name ||

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { MOM, MOMActionItem } from "../../types";
 import {
   collection,
@@ -30,15 +30,54 @@ import {
   Gavel,
   CheckCircle,
   Check,
+  ListChecks,
 } from '@/lib/lucide-shim';
 import { MomReviewModal } from "./MomReviewModal";
+import { MomCaptureModal } from "./MomCaptureModal";
 import { useOrg } from "../../contexts/OrgContext";
 import { createEmptyMoM, createMoMFromNotes } from "../../services/momService";
+import { setActionDone } from "../../services/minutesService";
+import { opsSettingsOf } from "../../lib/opsDesk";
+import { CountUp, Dot } from "../ui/HudBits";
+import {
+  trackedActions, minutesStateLabel, audienceOf, statusChip, fmtShortDay, clientContactOf, AUDIENCE_LABEL,
+  type ActionLane, type ChipTone,
+} from "../../lib/minutes";
+import "../projectHeader/projectHeader.css";
+
+/*
+  MINUTES AND ACTIONS, for one project.
+
+  Actions from every issued minutes, grouped by who they wait on: the
+  studio, the client, a vendor. Each says which kind of meeting it came from
+  and where its minutes stand -- a client confirming the minutes agrees with
+  the record, it does not do the actions, so an action stays here until
+  someone ticks it done.
+*/
+
+const TAG: Record<ChipTone, string> = {
+  brand: "bg-[#3D52A0]/10 text-[#3D52A0]",
+  slate: "bg-slate-100 text-slate-600",
+  amber: "bg-amber-100 text-amber-700",
+  emerald: "bg-emerald-100 text-emerald-700",
+  rose: "bg-rose-100 text-rose-700",
+};
+const Tag: React.FC<{ tone: ChipTone; children: React.ReactNode }> = ({ tone, children }) => (
+  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${TAG[tone]}`}>{children}</span>
+);
+
+const OLD_STATUS: Record<string, { label: string; tone: ChipTone }> = {
+  draft: { label: "Draft", tone: "slate" }, pending_review: { label: "With a lead", tone: "amber" }, finalised: { label: "Finalised", tone: "brand" },
+  shared: { label: "Waiting for client", tone: "amber" }, acknowledged: { label: "Confirmed", tone: "emerald" }, correction_requested: { label: "Correction asked", tone: "rose" },
+};
+const chipOf = (m: any): { label: string; tone: ChipTone } => (m?.format === 2 ? statusChip(m) : OLD_STATUS[String(m?.status)] || OLD_STATUS.draft);
 
 interface MomActionTrackerProps {
   projectId: string;
   studioId: string;
   projectContextName?: string;
+  /** The project, for the client's contacts and the stage new minutes start in. */
+  projectContext?: any;
   onOpenMom?: (momId: string) => void;
 }
 
@@ -46,15 +85,18 @@ export function MomActionTracker({
   projectId,
   studioId,
   projectContextName,
+  projectContext,
   onOpenMom,
 }: MomActionTrackerProps) {
   const { orgData } = useOrg();
+  const newFlow = opsSettingsOf(orgData).newMinutes;
   const [moms, setMoms] = useState<MOM[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"actions" | "history">("actions");
-  const [filter, setFilter] = useState<
-    "all" | "open" | "overdue" | "client" | "studio"
-  >("open");
+  const [filter, setFilter] = useState<"all" | "open" | "overdue" | "client" | "studio" | "vendor" | "done">("open");
+  const [writing, setWriting] = useState(false);
+  const [ticking, setTicking] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [selectedMomId, setSelectedMomId] = useState<string | null>(null);
   const [momToDelete, setMomToDelete] = useState<MOM | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -85,24 +127,17 @@ export function MomActionTracker({
     return () => unsub();
   }, [projectId, studioId]);
 
-  const toggleActionStatus = async (
-    momId: string,
-    actionId: string,
-    currentStatus: string,
-  ) => {
-    const mom = moms.find((m) => m.id === momId);
+  const tick = async (mom: any, actionId: string, done: boolean, key: string) => {
     if (!mom) return;
-    const items = mom.actionItems || [];
-    const idx = items.findIndex((a) => a.id === actionId);
-    if (idx === -1) return;
-    const newItems = [...items];
-    newItems[idx].status = currentStatus === "open" ? "done" : "open";
-    await updateDoc(
-      doc(db, `organizations/${studioId}/projects/${projectId}/moms`, momId),
-      {
-        actionItems: newItems,
-      },
-    );
+    setTicking(key);
+    setError(null);
+    try {
+      await setActionDone(studioId, projectId, mom, actionId, done, { email: String(currentUser?.email || "").toLowerCase() });
+    } catch (e: any) {
+      setError(e?.code === "permission-denied" ? "You cannot change actions on these minutes." : "That did not save. Check your connection and try again.");
+    } finally {
+      setTicking(null);
+    }
   };
 
   const deleteMom = async (momId: string) => {
@@ -175,438 +210,230 @@ export function MomActionTracker({
     }
   };
 
-  const getFilteredActions = () => {
-    let allActions: { action: MOMActionItem; mom: MOM }[] = [];
-    moms.forEach((mom) => {
-      if (mom.status === "draft") return;
-      (mom.actionItems || []).forEach((a) => {
-        allActions.push({ action: a, mom });
-      });
-    });
-
-    const now = Date.now();
-
-    return allActions
-      .filter(({ action }) => {
-        if (searchQuery) {
-          const queryLower = searchQuery.toLowerCase();
-          const matchesText = action.text.toLowerCase().includes(queryLower);
-          const matchesOwner = (action.owner || "").toLowerCase().includes(queryLower);
-          if (!matchesText && !matchesOwner) return false;
-        }
-
-        if (filter === "open" && action.status !== "open") return false;
-        if (filter === "overdue") {
-          if (action.status !== "open") return false;
-          if (!action.dueDate || action.dueDate > now) return false;
-        }
-        if (filter === "client" && action.owner !== "client") return false;
-        if (filter === "studio" && action.owner === "client") return false;
-        return true;
-      })
-      .sort((a, b) => {
-        const tA = a.action.dueDate || 0;
-        const tB = b.action.dueDate || 0;
-        if (tA === tB) return b.mom.meetingDate - a.mom.meetingDate;
-        if (!tA) return 1;
-        if (!tB) return -1;
-        return tA - tB;
-      });
+  /* Every action on issued minutes, with who it waits on (lib/minutes trackedActions). */
+  const tracked = useMemo(() => trackedActions(moms as any[]), [moms]);
+  const open = tracked.filter((a) => !a.done);
+  const counts = {
+    studio: open.filter((a) => a.lane === "studio").length,
+    studioOverdue: open.filter((a) => a.lane === "studio" && a.overdue).length,
+    client: open.filter((a) => a.lane === "client").length,
+    clientOverdue: open.filter((a) => a.lane === "client" && a.overdue).length,
+    vendor: open.filter((a) => a.lane === "vendor").length,
+    overdue: open.filter((a) => a.overdue).length,
+    done: tracked.length - open.length,
   };
-
-  const filteredActions = getFilteredActions();
-  
-  // Total stats counts
-  const totalMoms = moms.length;
+  const toConfirm = moms.filter((m: any) => m.status === "shared" || m.status === "correction_requested").length;
+  const corrections = moms.filter((m: any) => m.status === "correction_requested").length;
   const draftMomsCount = moms.filter((m) => m.status === "draft").length;
-  const finalizedMomsCount = moms.filter((m) => m.status !== "draft").length;
-  
-  const openActionsCount = moms.reduce(
-    (acc, m) =>
-      m.status !== "draft" ? acc + (m.actionItems?.filter((a) => a.status === "open").length || 0) : acc,
-    0,
-  );
-  
-  const overdueActionsCount = moms.reduce((acc, m) => {
-    if (m.status === "draft") return acc;
-    const overdue = (m.actionItems || []).filter(
-      (a) => a.status === "open" && a.dueDate && a.dueDate < Date.now()
-    ).length;
-    return acc + overdue;
-  }, 0);
 
-  const totalDecisionsCount = moms.reduce(
-    (acc, m) => acc + (m.decisions?.length || 0),
-    0
-  );
+  const shown = tracked.filter((a) => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (![a.text, a.ownerName, a.momRef, a.meeting].some((x) => x.toLowerCase().includes(q))) return false;
+    }
+    switch (filter) {
+      case "open": return !a.done;
+      case "studio": return !a.done && a.lane === "studio";
+      case "client": return !a.done && a.lane === "client";
+      case "vendor": return !a.done && a.lane === "vendor";
+      case "overdue": return a.overdue;
+      case "done": return a.done;
+      default: return true;
+    }
+  });
+  const LANES: { id: ActionLane; label: string }[] = [
+    { id: "studio", label: "On the studio" },
+    { id: "client", label: "Waiting on the client" },
+    { id: "vendor", label: "With vendors" },
+  ];
+  const grouped = LANES.map((l) => ({ ...l, rows: shown.filter((a) => a.lane === l.id) })).filter((g) => g.rows.length);
+
+  const tiles: { id: typeof filter; label: string; value: number; sub: string; tone: "bad" | "warn" | "ok" }[] = [
+    { id: "studio", label: "On the studio", value: counts.studio, sub: counts.studioOverdue ? `${counts.studioOverdue} overdue` : counts.studio ? "Nothing overdue" : "Nothing waiting on the studio", tone: counts.studioOverdue ? "bad" : counts.studio ? "warn" : "ok" },
+    { id: "client", label: "Waiting on the client", value: counts.client, sub: counts.clientOverdue ? `${counts.clientOverdue} overdue` : counts.client ? "Nothing overdue" : "Nothing waiting on the client", tone: counts.clientOverdue ? "bad" : counts.client ? "warn" : "ok" },
+    { id: "overdue", label: "Overdue", value: counts.overdue, sub: counts.overdue ? "Past their date and still open" : "Everything is on time", tone: counts.overdue ? "bad" : "ok" },
+    { id: "open", label: "Minutes to confirm", value: toConfirm, sub: corrections ? `${corrections} with a correction asked` : toConfirm ? "Sent, not confirmed yet" : "Every sent minutes is confirmed", tone: corrections ? "bad" : toConfirm ? "warn" : "ok" },
+  ];
+
+  const segBtn = (on: boolean) => `px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${on ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 overflow-hidden relative min-h-[550px] flex flex-col font-sans">
-      
-      {/* Metric Dashboard Panels (Milky White, Gold / Navy Accents) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 border-b border-slate-200/60 bg-[#FAF9F6]/80 backdrop-blur-sm">
-        <div className="p-6 flex flex-col justify-between border-r border-slate-200/50">
-          <span className="text-xs uppercase font-extrabold tracking-widest text-[#B89047]">Minutes Recorded</span>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-3xl font-black text-slate-900 font-sans tracking-tight">{totalMoms}</span>
-            {draftMomsCount > 0 && (
-              <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200 font-bold uppercase tracking-wide">
-                {draftMomsCount} Drafts
-              </span>
-            )}
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative min-h-[550px] flex flex-col hud-panel-in">
+      <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-start gap-3 min-w-0">
+          <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><ListChecks className="w-4 h-4" /></span>
+          <div className="min-w-0">
+            <h2 className="font-bold text-slate-800">Minutes and actions</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Who owes what from every meeting. Confirming the minutes means the client agrees with the record; each action stays here until someone ticks it done.
+            </p>
           </div>
-          <span className="text-xs text-slate-400 mt-1 font-semibold">Recorded project protocols</span>
         </div>
-
-        <div className="p-6 flex flex-col justify-between border-r border-slate-200/50">
-          <span className="text-xs uppercase font-extrabold tracking-widest text-[#B89047]">Open Actions</span>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-3xl font-black text-slate-900 font-sans tracking-tight">{openActionsCount}</span>
-            <span className="w-2.5 h-2.5 rounded-full bg-[#3D52A0] animate-pulse"></span>
-          </div>
-          <span className="text-xs text-slate-400 mt-1 font-semibold">Pending action items</span>
-        </div>
-
-        <div className="p-6 flex flex-col justify-between border-r border-slate-200/50">
-          <span className="text-xs uppercase font-extrabold tracking-widest text-[#B89047]">Overdue Tasks</span>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className={`text-3xl font-black font-sans tracking-tight ${overdueActionsCount > 0 ? "text-red-600" : "text-slate-900"}`}>
-              {overdueActionsCount}
-            </span>
-            {overdueActionsCount > 0 && <AlertTriangle size={15} className="text-red-500" />}
-          </div>
-          <span className="text-xs text-slate-400 mt-1 font-semibold">Requires follow up</span>
-        </div>
-
-        <div className="p-6 flex flex-col justify-between">
-          <span className="text-xs uppercase font-extrabold tracking-widest text-[#B89047]">Decisions Logged</span>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-3xl font-black text-slate-900 font-sans tracking-tight">{totalDecisionsCount}</span>
-            <CheckCircle2 size={16} className="text-emerald-500" />
-          </div>
-          <span className="text-xs text-slate-400 mt-1 font-semibold">Aligned agreements</span>
-        </div>
-      </div>
-
-      {/* Controller & Search Actions Header */}
-      <div className="p-6 border-b border-slate-200/60 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            Minutes of Meetings & Actions
-            <span className="h-1.5 w-1.5 rounded-full bg-[#B89047]"></span>
-          </h2>
-          <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-2xl">
-            Review site meeting protocols, track task ownership, and share beautifully formatted PDFs with clients to keep alignment transparent.
-          </p>
-        </div>
-
         <div className="flex flex-wrap items-center gap-3">
-          {/* View Toggle - Segments Slider Accent */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/50">
-            <button
-              onClick={() => setViewMode("actions")}
-              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 ${viewMode === "actions" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-800"}`}
-            >
-              Action Item Tracker
-            </button>
-            <button
-              onClick={() => setViewMode("history")}
-              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 ${viewMode === "history" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-800"}`}
-            >
-              Minutes History
+          <div className="inline-flex p-1 rounded-xl bg-slate-100" role="tablist" aria-label="Show">
+            <button type="button" role="tab" aria-selected={viewMode === "actions"} className={segBtn(viewMode === "actions")} onClick={() => setViewMode("actions")}>Actions</button>
+            <button type="button" role="tab" aria-selected={viewMode === "history"} className={segBtn(viewMode === "history")} onClick={() => setViewMode("history")}>
+              Minutes{draftMomsCount ? ` · ${draftMomsCount} draft${draftMomsCount === 1 ? "" : "s"}` : ""}
             </button>
           </div>
-
-          {/* Record Button */}
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 hover:bg-[#334486] text-white hover:text-amber-400 px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-widest transition duration-200 shadow-sm border border-[#334486]"
-          >
-            <Plus size={14} />
-            Record Meeting
+          <button type="button" onClick={() => (newFlow ? setWriting(true) : setShowCreateModal(true))}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486]">
+            <Plus className="w-4 h-4" />Record meeting
           </button>
         </div>
       </div>
 
-      {/* Filter and Search Bar for Action Tracker */}
-      {viewMode === "actions" && (
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex flex-wrap gap-2">
-            <FilterButton active={filter === "open"} onClick={() => setFilter("open")}>
-              Open ({openActionsCount})
-            </FilterButton>
-            <FilterButton active={filter === "overdue"} onClick={() => setFilter("overdue")}>
-              Overdue ({overdueActionsCount})
-            </FilterButton>
-            <FilterButton active={filter === "client"} onClick={() => setFilter("client")}>
-              Client Action
-            </FilterButton>
-            <FilterButton active={filter === "studio"} onClick={() => setFilter("studio")}>
-              {studioName} Action
-            </FilterButton>
-            <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>
-              All Actions
-            </FilterButton>
-          </div>
-
-          <div className="relative w-full md:w-72">
-            <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search tasks, owners, refs..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-950/20 focus:border-[#334486] outline-none placeholder-slate-400 transition"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Inner Active Viewport */}
-      <div className="flex-1 overflow-y-auto">
-        {viewMode === "actions" ? (
-          filteredActions.length === 0 ? (
-            <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center">
-              <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center mb-4">
-                <CheckCircle2 size={24} className="text-emerald-500" />
-              </div>
-              <p className="font-bold text-sm text-slate-900 uppercase tracking-wider">Action list is clear</p>
-              <p className="text-xs mt-1.5 max-w-xs text-slate-400">No pending action items match your current selection or search filter.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-[#FAF9F6]/80 border-b border-slate-200/60 text-xs uppercase font-extrabold text-slate-500 tracking-wider">
-                  <tr>
-                    <th className="py-4 px-6 w-16 text-center">Done</th>
-                    <th className="py-4 px-6 min-w-[300px]">Task Description</th>
-                    <th className="py-4 px-6 w-36">Action Owner</th>
-                    <th className="py-4 px-6 w-36">Timeline</th>
-                    <th className="py-4 px-6 w-40">MOM Document</th>
-                    <th className="py-4 px-6 w-24 text-right">Reminder</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredActions.map(({ action, mom }) => {
-                    const isOverdue =
-                      action.status === "open" &&
-                      action.dueDate &&
-                      action.dueDate < Date.now();
-
-                    const isStudioOwner = action.owner !== "client";
-
-                    return (
-                      <tr
-                        key={`${mom.id}-${action.id}`}
-                        className="hover:bg-slate-50/60 transition-colors group"
-                      >
-                        {/* Status Checker */}
-                        <td className="py-4 px-6 text-center">
-                          <button
-                            onClick={() =>
-                              toggleActionStatus(mom.id, action.id, action.status)
-                            }
-                            className="inline-flex items-center justify-center transition-transform hover:scale-110 p-1 rounded-md hover:bg-slate-100"
-                            style={{ minWidth: "44px", minHeight: "44px" }}
-                          >
-                            {action.status === "done" ? (
-                              <CheckCircle size={20} className="text-[#B89047]" />
-                            ) : (
-                              <Circle size={20} className="text-slate-300 hover:text-slate-900" />
-                            )}
-                          </button>
-                        </td>
-
-                        {/* Task text */}
-                        <td className="py-4 px-6">
-                          <span
-                            className={`text-sm leading-relaxed font-semibold block ${action.status === "done" ? "line-through text-slate-400" : "text-slate-900"}`}
-                          >
-                            {action.text}
-                          </span>
-                          <div className="flex gap-2 mt-2">
-                            {action.flags?.scope && (
-                              <span className="inline-flex items-center px-2 py-0.5 bg-red-50 text-red-700 text-[10px] rounded border border-red-100 font-bold uppercase tracking-wider">
-                                Scope Impact
-                              </span>
-                            )}
-                            {action.flags?.siteCondition && (
-                              <span className="inline-flex items-center px-2 py-0.5 bg-amber-50 text-amber-800 text-[10px] rounded border border-amber-100 font-bold uppercase tracking-wider">
-                                Site Issue
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Owner */}
-                        <td className="py-4 px-6">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider border ${isStudioOwner ? "bg-sky-50 text-slate-900 border-sky-100" : "bg-amber-50/50 text-[#B89047] border-[#B89047]/20"}`}
-                          >
-                            {isStudioOwner ? studioName : "Client"}
-                          </span>
-                        </td>
-
-                        {/* Due Date */}
-                        <td className="py-4 px-6">
-                          {action.dueDate ? (
-                            <span
-                              className={`text-sm flex items-center gap-1.5 font-bold ${isOverdue ? "text-red-600 font-extrabold" : "text-slate-500"}`}
-                            >
-                              <Calendar size={13} className="shrink-0 text-slate-400" />
-                              {new Date(action.dueDate).toLocaleDateString("en-GB", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              })}
-                              {isOverdue && <AlertTriangle size={13} className="text-red-500 shrink-0" />}
-                            </span>
-                          ) : (
-                            <span className="text-slate-300 text-sm italic">Not set</span>
-                          )}
-                        </td>
-
-                        {/* Source Document Link */}
-                        <td className="py-4 px-6">
-                          <button
-                            onClick={() => setSelectedMomId(mom.id)}
-                            className="inline-flex items-center gap-1.5 text-slate-900 hover:text-[#B89047] text-sm font-bold uppercase tracking-wider transition"
-                          >
-                            <ExternalLink size={12} className="shrink-0 opacity-60 group-hover:opacity-100" />
-                            {mom.momRef}
-                          </button>
-                          <p className="text-xs text-slate-400 font-semibold mt-1">
-                            {new Date(mom.meetingDate).toLocaleDateString("en-GB")}
-                          </p>
-                        </td>
-
-                        {/* WA Reminder Nudge */}
-                        <td className="py-4 px-6 text-right">
-                          {action.status === "open" && action.owner === "client" ? (
-                            <a
-                              href={`https://wa.me/?text=${encodeURIComponent(`Dear Client,\n\nJust a gentle reminder regarding an outstanding action item from our project discussion on ${new Date(mom.meetingDate).toLocaleDateString("en-GB")} (${mom.momRef}):\n\n📌 *Pending Action:* ${action.text}\n\nThank you for helping us keep the execution timeline on track!`)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200/60 px-3.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition"
-                              style={{ minHeight: "36px" }}
-                            >
-                              <MessageCircle size={12} />
-                              Nudge
-                            </a>
-                          ) : (
-                            <span className="text-slate-300 text-xs italic">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )
-        ) : moms.length === 0 ? (
-          <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center">
-            <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center mb-4">
-              <FileText size={24} className="text-slate-300" />
-            </div>
-            <p className="font-bold text-sm text-slate-900 uppercase tracking-wider">No minutes recorded</p>
-            <p className="text-xs mt-1.5 max-w-xs text-slate-400">Record your first site meeting or client discussion to start tracking logs.</p>
-          </div>
-        ) : (
-          /* MOM History Cards Grid (Sober, Print-first Aesthetic) */
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-slate-50/50">
-            {moms.map((mom) => (
-              <div
-                key={mom.id}
-                className="bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md transition-all duration-200 flex flex-col justify-between group relative"
-              >
-                {/* Thin elegant top gold highlight bar only for finalized documents */}
-                {mom.status !== "draft" && (
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-[#B89047] rounded-t-2xl"></div>
-                )}
-
-                <div>
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="font-extrabold text-slate-900 tracking-tight text-base group-hover:text-[#B89047] transition-colors flex items-center gap-2">
-                        {mom.momRef}
-                        {mom.rev ? <span className="text-slate-400 font-bold text-sm">Rev {mom.rev}</span> : null}
-                        {mom.status === "draft" && (
-                          <span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded text-xs font-bold uppercase tracking-wider">
-                            Draft
-                          </span>
-                        )}
-                      </h3>
-                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5 mt-1.5">
-                        <Calendar size={11} className="text-slate-400" />
-                        {new Date(mom.meetingDate).toLocaleDateString("en-GB")}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider border ${
-                        mom.status === "acknowledged"
-                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                          : mom.status === "correction_requested"
-                            ? "bg-amber-50 text-amber-800 border-amber-300"
-                          : mom.status === "shared"
-                            ? "bg-sky-50 text-slate-900 border-sky-200"
-                            : mom.status === "finalised"
-                              ? "bg-blue-50 text-blue-800 border-blue-200"
-                              : "bg-slate-50 text-slate-500 border-slate-200"
-                      }`}
-                    >
-                      {mom.status === "correction_requested" ? "correction asked" : mom.status}
-                    </span>
-                  </div>
-
-                  <p className="text-sm font-bold text-slate-900 leading-relaxed mb-4 line-clamp-1">
-                    {mom.meetingTitle}
-                  </p>
-
-                  <div className="grid grid-cols-3 gap-2 py-3 px-4 bg-slate-50/80 border border-slate-200/50 rounded-xl text-center">
-                    <div className="flex flex-col">
-                      <span className="text-xs uppercase font-extrabold text-slate-400 tracking-wider">Decisions</span>
-                      <span className="text-base font-black text-slate-900 mt-1">
-                        {mom.decisions?.length || 0}
-                      </span>
-                    </div>
-                    <div className="flex flex-col border-x border-slate-200/60">
-                      <span className="text-xs uppercase font-extrabold text-slate-400 tracking-wider">Actions</span>
-                      <span className="text-base font-black text-slate-900 mt-1">
-                        {mom.actionItems?.length || 0}
-                      </span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-xs uppercase font-extrabold text-slate-400 tracking-wider">Open Tasks</span>
-                      <span className="text-base font-black text-[#B89047] mt-1">
-                        {mom.actionItems?.filter((a) => a.status === "open").length || 0}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
-                  <button
-                    onClick={() => setSelectedMomId(mom.id)}
-                    className="text-slate-900 hover:text-[#B89047] text-sm font-bold uppercase tracking-wider flex items-center gap-1.5 transition"
-                  >
-                    <ExternalLink size={13} />
-                    {mom.status === "draft" ? "Edit Minutes" : "View Details"}
-                  </button>
-                  <button
-                    onClick={() => deleteMom(mom.id)}
-                    className="text-slate-300 hover:text-red-600 transition-colors p-1.5 rounded-lg hover:bg-slate-100"
-                    title="Delete MoM"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
+      {viewMode === "actions" ? (
+        <div key="actions" className="hud-swap flex-1 flex flex-col">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-5 sm:p-6 pb-0 sm:pb-0">
+            {tiles.map((t, i) => (
+              <button key={t.label} type="button" onClick={() => { setFilter(t.id); if (t.label === "Minutes to confirm") setViewMode("history"); }}
+                className={`text-left rounded-2xl border bg-white p-4 hud-row-in transition-colors ${filter === t.id && t.label !== "Minutes to confirm" ? "border-[#3D52A0] ring-1 ring-[#3D52A0]/30" : "border-slate-200 hover:bg-slate-50"}`}
+                style={{ animationDelay: `${i * 30}ms` }}>
+                <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500"><Dot tone={t.tone} />{t.label}</span>
+                <CountUp value={t.value} className="block text-2xl font-black text-slate-800 tabular-nums mt-1.5" />
+                <span className="block text-[11px] text-slate-500 mt-0.5">{t.sub}</span>
+              </button>
             ))}
           </div>
-        )}
-      </div>
+
+          <div className="px-5 sm:px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="inline-flex flex-wrap p-1 rounded-xl bg-slate-100 self-start" role="tablist" aria-label="Which actions">
+              {([
+                ["open", `Open · ${open.length}`],
+                ["studio", `On the studio · ${counts.studio}`],
+                ["client", `On the client · ${counts.client}`],
+                ...(counts.vendor ? [["vendor", `Vendors · ${counts.vendor}`]] : []),
+                ["overdue", `Overdue · ${counts.overdue}`],
+                ["done", `Done · ${counts.done}`],
+              ] as [typeof filter, string][]).map(([id, label]) => (
+                <button key={id} type="button" role="tab" aria-selected={filter === id} className={segBtn(filter === id)} onClick={() => setFilter(id)}>{label}</button>
+              ))}
+            </div>
+            <div className="relative w-full md:w-64">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input type="text" placeholder="Search actions, people, refs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} aria-label="Search actions"
+                className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]" />
+            </div>
+          </div>
+
+          <div className="flex-1 px-5 sm:px-6 pb-6 space-y-5">
+            {loading ? (
+              <p className="text-xs text-slate-500 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading the minutes…</p>
+            ) : !grouped.length ? (
+              <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center">
+                <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto" />
+                <p className="text-sm font-semibold text-slate-800 mt-2">{filter === "done" ? "Nothing ticked done yet" : "Nothing waiting here"}</p>
+                <p className="text-xs text-slate-500 mt-1">{searchQuery ? "No action matches the search." : "Actions from sent minutes show here until someone ticks them done."}</p>
+              </div>
+            ) : grouped.map((g) => (
+              <section key={g.id}>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">{g.label} · {g.rows.length}</p>
+                <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
+                  {g.rows.map((a, i) => {
+                    const m = moms.find((x) => x.id === a.momId) as any;
+                    const state = minutesStateLabel(a.momStatus, a.from);
+                    const key = `${a.momId}:${a.actionId}`;
+                    return (
+                      <div key={key} className="grid grid-cols-[auto_minmax(0,1fr)] md:grid-cols-[auto_minmax(0,1fr)_150px_220px] gap-x-3 md:gap-x-4 gap-y-2 px-3 py-3 hud-row-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
+                        <button type="button" disabled={ticking === key} onClick={() => tick(m, a.actionId, !a.done, key)}
+                          aria-label={a.done ? `Open again: ${a.text}` : `Mark done: ${a.text}`} title={a.done ? "Open again" : "Mark done"}
+                          className="w-9 h-9 rounded-lg grid place-items-center hover:bg-slate-100 self-start shrink-0">
+                          {ticking === key ? <Loader2 className="w-5 h-5 animate-spin text-slate-400" /> : a.done ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <Circle className="w-5 h-5 text-slate-300" />}
+                        </button>
+                        <div className="min-w-0">
+                          <p className={`text-sm font-semibold ${a.done ? "line-through text-slate-400" : "text-slate-800"}`}>{a.text}</p>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <span className="text-xs text-slate-500">{a.ownerName}</span>
+                            <Tag tone={a.from === "client" ? "brand" : "slate"}>{AUDIENCE_LABEL[a.from]}</Tag>
+                            {a.flags?.scope && <Tag tone="rose">Scope</Tag>}
+                            {a.flags?.cost && <Tag tone="rose">Cost</Tag>}
+                            {a.flags?.siteCondition && <Tag tone="amber">Site issue</Tag>}
+                          </div>
+                        </div>
+                        <div className="col-start-2 md:col-start-auto text-xs md:pt-2">
+                          {a.due ? (
+                            <span className={`inline-flex items-center gap-1.5 font-semibold ${a.overdue ? "text-rose-700" : "text-slate-700"}`}>
+                              <Calendar className="w-3.5 h-3.5 text-slate-400" />{fmtShortDay(a.due)}{a.overdue ? " · overdue" : ""}
+                            </span>
+                          ) : <span className="text-slate-400">No date</span>}
+                        </div>
+                        <div className="col-start-2 md:col-start-auto flex flex-wrap items-center gap-2 md:justify-end md:pt-1">
+                          <div className="min-w-0 md:text-right">
+                            <button type="button" onClick={() => setSelectedMomId(a.momId)} className="inline-flex items-center gap-1 text-xs font-bold text-[#3D52A0] hover:text-[#334486]">
+                              <ExternalLink className="w-3 h-3" />{a.momRef || "Minutes"}
+                            </button>
+                            <span className="block mt-0.5"><Tag tone={state.tone}>{state.label}</Tag></span>
+                          </div>
+                          {!a.done && a.lane === "client" && (
+                            <a href={`https://wa.me/?text=${encodeURIComponent(`A gentle reminder from our meeting on ${new Date(a.meetingDate).toLocaleDateString("en-GB")} (${a.momRef}):\n\n${a.text}${a.due ? `\nDue ${fmtShortDay(a.due)}` : ""}\n\nThank you!`)}`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50">
+                              <MessageCircle className="w-3.5 h-3.5" />Nudge
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+            {error && <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2" role="alert">{error}</p>}
+          </div>
+        </div>
+      ) : (
+        <div key="history" className="hud-swap flex-1 p-5 sm:p-6">
+          {moms.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center">
+              <FileText className="w-6 h-6 text-slate-400 mx-auto" />
+              <p className="text-sm font-semibold text-slate-800 mt-2">No minutes yet</p>
+              <p className="text-xs text-slate-500 mt-1">Record your first meeting to start the list.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {moms.map((mom: any, i) => {
+                const chip = chipOf(mom);
+                const acts = (mom.actionItems || []).filter((a: any) => a.status !== "cancelled");
+                const openActs = acts.filter((a: any) => a.status !== "done").length;
+                return (
+                  <div key={mom.id} className="rounded-2xl border border-slate-200 bg-white p-5 flex flex-col gap-4 hud-row-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{mom.meetingTitle || "Meeting"}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          {mom.momRef}{mom.rev ? ` · revision ${mom.rev + 1}` : ""} · {mom.meetingDate ? fmtShortDay(Number(mom.meetingDate)) : ""}
+                        </p>
+                      </div>
+                      <Tag tone={chip.tone}>{chip.label}</Tag>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Tag tone={audienceOf(mom.meetingType) === "client" ? "brand" : "slate"}>{AUDIENCE_LABEL[audienceOf(mom.meetingType)]}</Tag>
+                      {mom.format !== 2 && <Tag tone="slate">Earlier format</Tag>}
+                    </div>
+                    <div className="grid grid-cols-3 rounded-xl border border-slate-200 divide-x divide-slate-100 text-center">
+                      {([["Decisions", (mom.decisions || []).length], ["Actions", acts.length], ["Still open", openActs]] as [string, number][]).map(([k, v]) => (
+                        <div key={k} className="py-2">
+                          <p className={`text-base font-black tabular-nums ${k === "Still open" && v ? "text-amber-700" : "text-slate-800"}`}>{v}</p>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{k}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                      <button type="button" onClick={() => setSelectedMomId(mom.id)} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#3D52A0] hover:text-[#334486]">
+                        <ExternalLink className="w-3.5 h-3.5" />{mom.status === "draft" ? "Carry on writing" : "Open the minutes"}
+                      </button>
+                      <button type="button" onClick={() => deleteMom(mom.id)} className="text-slate-300 hover:text-rose-600 p-1.5 rounded-lg hover:bg-slate-100" title="Delete these minutes" aria-label={`Delete ${mom.momRef}`}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Record / Create Minutes Dialog Overlay */}
       {showCreateModal && (
@@ -746,7 +573,17 @@ export function MomActionTracker({
           projectId={projectId}
           studioId={studioId}
           projectContextName={projectContextName}
+          client={projectContext ? clientContactOf(projectContext) : undefined}
           onClose={() => setSelectedMomId(null)}
+        />
+      )}
+
+      {writing && (
+        <MomCaptureModal
+          visit={{ id: `ops-${Date.now()}`, type: "client_meeting", title: "", date: Date.now(), notes: "", attendees: projectContext?.clientName ? [projectContext.clientName] : [], phaseStepNumber: Number(projectContext?.currentPhaseStep) || 0 } as any}
+          projectId={projectId} studioId={studioId} projectContextName={projectContextName || "Project"}
+          onClose={() => setWriting(false)}
+          onSuccess={(momId) => { setWriting(false); setSelectedMomId(momId); }}
         />
       )}
 

@@ -111,6 +111,63 @@ ${rawNotes}
   }
 }
 
+/**
+ * POST /api/structure-minutes
+ *
+ * Rough notes into minutes in the new format (lib/minutes.ts): topics, each a
+ * list of short lines, every line a decision, an action, a note or an open
+ * question. The studio checks every line before the minutes go anywhere.
+ */
+export async function structureMinutes(body: any): Promise<TaskResult> {
+  try {
+    const { projectName, knownAttendees, meetingDate, rawNotes } = body || {};
+    if (!rawNotes || typeof rawNotes !== "string") return reply(400, { error: "No notes were sent." });
+    const ai = getAi();
+    const prompt = `You turn an interior design studio's rough meeting notes into minutes. The studio is in India; the client is a homeowner.
+
+Group the points into short topics (a room or a subject: "Kitchen layout", "Master bedroom wardrobe", "Payments"). Under each topic, write each point as one short, plain sentence a homeowner would understand, and give it a kind:
+- "decision": something agreed or chosen
+- "action": something someone will do; give owner ("client", "ffds" for the studio, or "vendor"), ownerName if a person is named, and dueDateText if a date or day is stated
+- "question": something still open, to be answered; owner and dueDateText as for an action if stated
+- "note": anything else worth recording
+- "requirement": something the client wants in their home (mostly first meetings); give "room" and "priority" ("must" or "nice") if stated
+- "selection": a material, finish or product chosen; give "room", "item" (e.g. "Countertop") and "choice" ("approved", "on_hold" or "client_to_pick")
+- "design_change": a change to a drawing or design; give "room" and "sheet" if a drawing is named
+
+For actions and questions set flags: scope (new work not in the agreed scope), drawing (a drawing must change), cost (the cost likely changes), siteCondition (driven by something found at site).
+Never invent people, dates, amounts or promises that are not in the notes. Never write prices. If unsure between a decision and an action, make it an action.
+
+Return ONLY JSON, no markdown:
+{"topics":[{"title":"","lines":[{"kind":"decision|action|question|note|requirement|selection|design_change","text":"","owner":"client|ffds|vendor|","ownerName":"","dueDateText":"","room":"","item":"","priority":"","choice":"","sheet":"","flags":{"scope":false,"drawing":false,"cost":false,"siteCondition":false}}]}],"summary":"two plain sentences: what was agreed, what happens next"}
+
+Project: ${String(projectName || "").slice(0, 200)}
+Meeting date: ${String(meetingDate || "").slice(0, 20)}
+Who was there: ${String(knownAttendees || "").slice(0, 2000)}
+Notes:
+"""
+${rawNotes.slice(0, 20000)}
+"""`;
+    const call = async (retries = 1): Promise<any> => {
+      try {
+        const response = await ai.models.generateContent({
+          model: FLASH_MODEL,
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          config: { responseMimeType: "application/json", temperature: 0.2 },
+        });
+        const text = (response.text || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        return JSON.parse(text);
+      } catch (err) {
+        if (retries > 0) return call(retries - 1);
+        throw err;
+      }
+    };
+    return reply(200, { success: true, data: await call() });
+  } catch (error: any) {
+    console.error("Minutes structuring error:", error);
+    return reply(500, { error: error.message || "Could not read the notes." });
+  }
+}
+
 /** POST /api/predict-handover-delays */
 export async function predictHandoverDelays(body: any): Promise<TaskResult> {
   try {

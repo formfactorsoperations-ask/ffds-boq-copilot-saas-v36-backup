@@ -15,6 +15,10 @@ import { auth, db as fsDb } from '../services/firebaseClient';
 import { collection, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { meetingTypeLabel, toMillis } from '../lib/meetingTypes';
 import { MomReviewModal } from './ops/MomReviewModal';
+import { clientContactOf, defaultTemplate } from '../lib/minutes';
+import { opsSettingsOf } from '../lib/opsDesk';
+import { primaryRole } from '../lib/roles';
+import { startMinutes } from '../services/minutesService';
 
 /*
   SCHEDULE A MEETING OR LOG A SITE VISIT.
@@ -79,7 +83,9 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
   isOpen, onClose, projectId, studioId, defaultType, projectContext, currentPhaseStep, currentPhaseTitle, onSuccess,
 }) => {
   const { settings } = useStudioSettings(studioId);
-  const { orgData, teamMembers, currentUserAuth } = useOrg() as any;
+  const { orgData, teamMembers, currentUserAuth, currentRole, currentRoles } = useOrg() as any;
+  /* With the new minutes flow on, "Save & draft MoM" starts minutes in the new format (lib/minutes.ts). */
+  const newMinutes = opsSettingsOf(orgData).newMinutes;
   const { designersOn } = useProjectTeam() as any;
 
   const [hasCalendarToken, setHasCalendarToken] = useState(false);
@@ -310,7 +316,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
   const save = async (andDraft: boolean) => {
     const problem = validate();
     if (problem) { setError(problem); return; }
-    if (andDraft && !notes.trim()) { setError('Add the meeting notes first, then draft the MoM.'); return; }
+    if (andDraft && !newMinutes && !notes.trim()) { setError('Add the meeting notes first, then draft the MoM.'); return; }
     setError(null);
     setSaving(andDraft ? 'mom' : 'save');
     try {
@@ -349,6 +355,25 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
         return;
       }
 
+      if (newMinutes) {
+        const email = lc(currentUserAuth?.email);
+        const mine = team.find((t) => lc(t.email) === email);
+        const me = { email, name: mine?.name || currentUserAuth?.displayName || email, role: mine?.role || primaryRole(currentRoles?.length ? currentRoles : [currentRole]) || null };
+        const attendees = people.map(({ name, side, role }) => ({ name, side, role: role || undefined, present: true }));
+        if (!attendees.some((a) => a.side === 'ffds' && lc(a.name) === lc(me.name))) attendees.push({ name: me.name, side: 'ffds', role: me.role || undefined, present: true });
+        const momId = await startMinutes(studioId, projectId, {
+          meetingId: visitId, meetingType: type, meetingTitle: title.trim(),
+          meetingDate: new Date(`${date}T${startTime}:00`).getTime(), durationMinutes: finalDuration,
+          venue: isVirtual ? virtualLabel : location.trim(), attendees, notes,
+          template: defaultTemplate(type, currentPhaseStep, title).id, stage: currentPhaseStep || null,
+        }, me, auth.currentUser?.uid || 'unknown');
+        const fresh = await getDoc(doc(fsDb, `organizations/${studioId}/projects/${projectId}/moms`, momId));
+        onSuccess?.();
+        if (fresh.exists()) setReviewMom({ id: fresh.id, ...(fresh.data() as any) } as MOM);
+        else onClose();
+        return;
+      }
+
       const known = [
         people.filter((p) => p.side === 'client').length && `Client side: ${people.filter((p) => p.side === 'client').map((p) => p.name).join(', ')}`,
         people.filter((p) => p.side === 'ffds').length && `Studio side ("ffds"): ${people.filter((p) => p.side === 'ffds').map((p) => `${p.name}${p.role ? ` (${p.role})` : ''}`).join(', ')}`,
@@ -383,6 +408,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
         projectId={projectId}
         studioId={studioId}
         projectContextName={projectName}
+        client={clientContactOf(projectContext)}
         onClose={() => { setReviewMom(null); onClose(); }}
       />
     );
@@ -687,7 +713,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
             <button type="button" onClick={() => save(true)} disabled={!!saving}
               className="px-4 py-2 bg-white text-[#2C3C78] text-sm font-extrabold rounded-xl hover:bg-[#F2F4FD] transition disabled:opacity-60 flex items-center gap-2">
               {saving === 'mom' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              {saving === 'mom' ? 'Drafting MoM…' : 'Save & draft MoM'}
+              {saving === 'mom' ? (newMinutes ? 'Starting the minutes…' : 'Drafting MoM…') : (newMinutes ? 'Save & write minutes' : 'Save & draft MoM')}
             </button>
           </div>
         </div>

@@ -46,16 +46,33 @@ import {
 import { useOrg } from "../../contexts/OrgContext";
 import { isClientRelationsRole } from "../../lib/roleAccess";
 import { StudioDocumentShell } from "./documents/StudioDocumentShell";
+import { isNewMinutes } from "../../lib/minutes";
+import MinutesWorkspace, { type ClientContact } from "../minutes/MinutesWorkspace";
 
 interface MomReviewModalProps {
   mom: MOM;
   projectId: string;
   studioId: string;
   projectContextName?: string;
+  /** The project's client, for sending minutes in the new format. */
+  client?: ClientContact | null;
   onClose: () => void;
 }
 
-export function MomReviewModal({
+/*
+  Minutes in the new format (lib/minutes.ts) open in the new screens, whether
+  or not the switch is still on: their lines live in topics, which this older
+  screen does not edit. Everything older opens here as before.
+*/
+export function MomReviewModal(props: MomReviewModalProps) {
+  if (isNewMinutes(props.mom)) {
+    return <MinutesWorkspace mom={props.mom} projectId={props.projectId} studioId={props.studioId}
+      projectName={props.projectContextName} client={props.client} onClose={props.onClose} />;
+  }
+  return <LegacyMomReviewModal {...props} />;
+}
+
+function LegacyMomReviewModal({
   mom,
   projectId,
   studioId,

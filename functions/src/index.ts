@@ -639,6 +639,39 @@ export const resetClientPassword = onCall(withDiagnostics("resetClientPassword",
     return { uid: userRecord.uid, email: normalised, tempPassword };
 }));
 
+/**
+ * Take one project out of a client login: a person on the client's side who
+ * should no longer see the portal (lib/clientContacts.ts). Their login stays
+ * for any other project of the same studio; with none left, it opens nothing.
+ */
+export const revokeClientLogin = onCall(withDiagnostics("revokeClientLogin", async (request) => {
+    const { email, projectId, tenantId } = request.data || {};
+    if (!email || !projectId || !tenantId) {
+        throw new HttpsError("invalid-argument", "email, projectId and tenantId are required.");
+    }
+    await assertStudioCaller(request, tenantId);
+
+    const normalised = String(email).trim().toLowerCase();
+    let userRecord;
+    try {
+        userRecord = await admin.auth().getUserByEmail(normalised);
+    } catch (e: any) {
+        if (e?.code === "auth/user-not-found") return { email: normalised, removed: false };
+        throw e;
+    }
+    const userRef = db.collection("users").doc(userRecord.uid);
+    const snap = await userRef.get();
+    if (!snap.exists || snap.data()?.role !== "Client") {
+        throw new HttpsError("failed-precondition", "That email is not a client login.");
+    }
+    if (snap.data()?.tenantId !== tenantId) {
+        throw new HttpsError("permission-denied", "That client belongs to another studio.");
+    }
+    const before: string[] = snap.data()?.projectIds || [];
+    await userRef.set({ projectIds: before.filter((p) => p !== projectId), updatedAt: Date.now() }, { merge: true });
+    return { email: normalised, removed: before.includes(projectId) };
+}));
+
 /* ────────────────────────────────────────────────────────────────────────────
    THE CLIENT'S WRITE PATH
    ────────────────────────────────────────────────────────────────────────────

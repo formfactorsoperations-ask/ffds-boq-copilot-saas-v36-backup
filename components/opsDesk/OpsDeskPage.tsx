@@ -17,6 +17,7 @@ import { CountUp, Dot } from '../ui/HudBits';
 import { MomReviewModal } from '../ops/MomReviewModal';
 import { MomCaptureModal } from '../ops/MomCaptureModal';
 import { handoverSlip } from '../../lib/opsAssist';
+import { clientContactOf } from '../../lib/minutes';
 import { CapturePanel, AskProjectPanel, MeetingPrepPanel } from './OpsAssist';
 import { clientPulse, askPrompts, careQueue, type AskKind, type Checklist, type ChecklistKind, type VisitRequest, type VisitStatus } from '../../lib/clientCare';
 import { PulseList, AskSheet, ChecklistsView, VisitsView, VisitSheet, askReasonOf, type PulseRow } from './ClientCare';
@@ -455,7 +456,7 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
           {section === 'minutes' && (
             <Panel icon={FileText} title={isLead ? 'Minutes to approve' : 'Minutes'} blurb={isLead ? 'Minutes written by Client Relations. Read, edit if needed, then approve: that finalises them and opens the email to the client.' : 'Write the minutes of a client meeting and send them for approval. They reach the client only once a lead approves them.'}>
               <div className="space-y-4">
-                {!isLead && canWrite && (
+                {canWrite && (
                   <div className="max-w-sm">
                     <label htmlFor="mom-project" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Write minutes for</label>
                     <select id="mom-project" className={input} value={writingFor?.projectId || ''} onChange={(e) => setWritingFor(e.target.value ? { projectId: e.target.value, notes: '' } : null)}>
@@ -564,7 +565,9 @@ export default function OpsDeskPage({ projects, onOpenProject }: {
       {deciding && <DecideEscalationPanel escalation={deciding} me={me} onClose={() => setDeciding(null)} onSaved={() => { setDeciding(null); load(); }} />}
       {reviewing && (
         <MomReviewModal mom={reviewing.raw} projectId={reviewing.projectId} studioId={tenantId}
-          projectContextName={reviewing.projectName || projectName(reviewing.projectId)} onClose={() => { setReviewing(null); load(); }} />
+          projectContextName={reviewing.projectName || projectName(reviewing.projectId)}
+          client={clientContactOf(projects.find((p) => String(p?.id) === reviewing.projectId)?.context)}
+          onClose={() => { setReviewing(null); load(); }} />
       )}
       {writingFor && (
         <MomCaptureModal
