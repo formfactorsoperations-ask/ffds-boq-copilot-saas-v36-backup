@@ -52,6 +52,8 @@ beforeEach(async () => {
     await setDoc(doc(db, M('fixWaiting')), base({ status: 'correction_requested', approvedBy, revisionStage: 'pending_review', reviewTenantId: STUDIO, pendingRevision: { topics } }));
     await setDoc(doc(db, M('legacyWaiting')), { status: 'pending_review', meetingType: 'client_meeting', decisions: [] });
     await setDoc(doc(db, M('legacyFinal')), { status: 'finalised', meetingType: 'client_meeting', decisions: [] });
+    await setDoc(doc(db, M('internal')), base({ meetingType: 'internal_meeting' }));
+    await setDoc(doc(db, `${M('sent')}/private/studio`), { lines: [{ topicId: 't1', index: 1, line: { id: 'p', kind: 'studio_only', text: 'Budget hint' } }], topics: [] });
   });
 });
 
@@ -152,5 +154,32 @@ describe('the client confirms, or marks the lines that are wrong', () => {
     await assertFails(updateDoc(doc(client(), M('sent')), { status: 'correction_requested', correctionRequest: { text: 'x', by: 'N', at: 1, lines: 'D1' } }));
     await assertFails(updateDoc(doc(client(), M('sent')), { status: 'correction_requested', correctionRequest: { text: 'x', by: 'N', at: 1, note: 'extra' } }));
     await assertFails(updateDoc(doc(client(), M('sent')), { approvedBy: { name: 'Me' } }));
+  });
+});
+
+describe('part 2: studio-only lines, internal meetings, proposal minutes', () => {
+  const P = (id: string) => `${M(id)}/private/studio`;
+  it('studio-only lines are read and written by the studio, never by the client', async () => {
+    await assertSucceeds(getDoc(doc(cr(), P('sent'))));
+    await assertSucceeds(setDoc(doc(cr(), P('draft')), { lines: [], topics: [] }));
+    await assertSucceeds(getDoc(doc(head(), P('sent'))));
+    await assertFails(getDoc(doc(client(), P('sent'))));
+    await assertFails(setDoc(doc(client(), P('sent')), { lines: [] }));
+  });
+  it('Client Relations saves an internal meeting to the log, without approval', async () => {
+    await assertSucceeds(updateDoc(doc(cr(), M('internal')), { status: 'finalised', loggedAt: 5, trail: [step('written'), step('logged')] }));
+  });
+  it('but cannot turn a client meeting into an internal one to skip approval', async () => {
+    await assertFails(updateDoc(doc(cr(), M('draft')), { status: 'finalised', meetingType: 'internal_meeting' }));
+    await assertFails(updateDoc(doc(head(), M('waiting')), { status: 'finalised', meetingType: 'internal_meeting' }));
+    await assertSucceeds(updateDoc(doc(head(), M('internal')), { status: 'finalised', loggedAt: 5 }));
+  });
+  it('proposal and negotiation minutes are started by a lead only', async () => {
+    await assertFails(setDoc(doc(cr(), M('prop')), base({ template: 'proposal' })));
+    await assertFails(setDoc(doc(cr(), M('neg')), base({ template: 'negotiation' })));
+    await assertSucceeds(setDoc(doc(od(), M('prop')), base({ template: 'proposal' })));
+  });
+  it('anyone on the staff marks lines added where they belong', async () => {
+    await assertSucceeds(updateDoc(doc(head(), M('sent')), { 'filed.s1': { at: 1, by: 'head@a.com' } }));
   });
 });

@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Check, CheckCircle2, AlertTriangle, Gavel, ArrowRight, StickyNote, HelpCircle, Sparkles, X,
+  Check, CheckCircle2, AlertTriangle, Gavel, ArrowRight, StickyNote, HelpCircle, Sparkles, X, Pencil, ListChecks, Lock,
 } from '@/lib/lucide-shim';
 import { FLOW_STEPS, KIND_LABEL, type ChipTone, type LineKind, type SendCheck, type TrailEntry, stepLabel } from '../../lib/minutes';
 import '../projectHeader/projectHeader.css';
@@ -89,6 +89,10 @@ const KIND_STYLE: Record<LineKind, { icon: React.ComponentType<any>; cls: string
   action: { icon: ArrowRight, cls: TONE.amber },
   note: { icon: StickyNote, cls: TONE.slate },
   question: { icon: HelpCircle, cls: TONE.rose },
+  design_change: { icon: Pencil, cls: TONE.rose },
+  selection: { icon: CheckCircle2, cls: TONE.emerald },
+  requirement: { icon: ListChecks, cls: TONE.brand },
+  studio_only: { icon: Lock, cls: TONE.slate },
 };
 
 export const KindChip: React.FC<{ kind: LineKind; onClick?: () => void; title?: string }> = ({ kind, onClick, title }) => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { lineRefs, allLines, fmtShortDay, type MinutesContent, type Signed, type CarriedAction } from '../../lib/minutes';
+import { lineRefs, allLines, fmtShortDay, splitPrivate, selectionText, type MinutesContent, type Signed, type CarriedAction } from '../../lib/minutes';
 import { meetingTypeLabel } from '../../lib/meetingTypes';
 import { PDF_CONTENT_WIDTH_PX } from '../../lib/documentPdf';
 
@@ -53,8 +53,15 @@ const H: React.FC<{ n: string; children: React.ReactNode }> = ({ n, children }) 
 );
 
 export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>(function MinutesDocument(p, ref) {
-  const refs = lineRefs(p.content.topics);
-  const lines = allLines(p.content.topics).filter(({ line }) => line.text.trim());
+  /* Studio-only lines are never printed (lib/minutes splitPrivate). */
+  const topics = splitPrivate(p.content.topics).shared;
+  const refs = lineRefs(topics);
+  const lines = allLines(topics).filter(({ line }) => line.text.trim());
+  const selections = lines.filter(({ line }) => line.kind === 'selection');
+  const changes = lines.filter(({ line }) => line.kind === 'design_change');
+  const requirements = lines.filter(({ line }) => line.kind === 'requirement');
+  let section = 1;
+  const num = () => String(++section).padStart(2, '0');
   const decisions = lines.filter(({ line }) => line.kind === 'decision');
   const actions = lines.filter(({ line }) => refs[line.id]?.startsWith('A'));
   const notes = lines.filter(({ line }) => line.kind === 'note' || (line.kind === 'question' && !refs[line.id]));
@@ -119,7 +126,7 @@ export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>
 
       {decisions.length > 0 && (
         <>
-          <H n="02">Decisions</H>
+          <H n={num()}>Decisions</H>
           <table className="w-full text-[11px] text-slate-800"><tbody>
             {decisions.map(({ line, topic }) => (
               <tr key={line.id}><td className={`${td} w-10 font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td><td className={`${td} w-32 font-semibold`}>{topic.title}</td><td className={td}>{line.text}</td></tr>
@@ -130,7 +137,7 @@ export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>
 
       {(actions.length > 0 || stillOpen.length > 0) && (
         <>
-          <H n="03">Actions</H>
+          <H n={num()}>Actions</H>
           <table className="w-full text-[11px] text-slate-800">
             <thead><tr className="text-[9px] uppercase tracking-[0.14em] text-slate-400 text-left"><th className="py-1 px-2 w-10">#</th><th className="py-1 px-2">Action</th><th className="py-1 px-2 w-36">Owner</th><th className="py-1 px-2 w-24">Due</th></tr></thead>
             <tbody>
@@ -155,9 +162,49 @@ export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>
         </>
       )}
 
+      {requirements.length > 0 && (
+        <>
+          <H n={num()}>What you asked for</H>
+          <table className="w-full text-[11px] text-slate-800"><tbody>
+            {requirements.map(({ line, topic }) => (
+              <tr key={line.id}><td className={`${td} w-10 font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td><td className={`${td} w-32 font-semibold`}>{line.meta?.room || topic.title}</td>
+                <td className={td}>{line.text}{line.meta?.priority ? <span className="text-slate-500"> · {line.meta.priority === 'must' ? 'must have' : 'nice to have'}</span> : null}</td></tr>
+            ))}
+          </tbody></table>
+        </>
+      )}
+
+      {selections.length > 0 && (
+        <>
+          <H n={num()}>Selections</H>
+          <table className="w-full text-[11px] text-slate-800">
+            <thead><tr className="text-[9px] uppercase tracking-[0.14em] text-slate-400 text-left"><th className="py-1 px-2 w-10">#</th><th className="py-1 px-2 w-32">Room</th><th className="py-1 px-2">Choice</th><th className="py-1 px-2 w-28">Status</th></tr></thead>
+            <tbody>
+              {selections.map(({ line, topic }) => (
+                <tr key={line.id}><td className={`${td} font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td><td className={`${td} font-semibold`}>{line.meta?.room || topic.title}</td>
+                  <td className={td}>{selectionText({ ...line, meta: { ...line.meta, choice: null } })}</td>
+                  <td className={td}>{line.meta?.choice === 'approved' ? 'Approved' : line.meta?.choice === 'on_hold' ? 'On hold' : line.meta?.choice === 'client_to_pick' ? 'Client to pick' : ''}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {changes.length > 0 && (
+        <>
+          <H n={num()}>Design changes</H>
+          <table className="w-full text-[11px] text-slate-800"><tbody>
+            {changes.map(({ line, topic }) => (
+              <tr key={line.id}><td className={`${td} w-10 font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td><td className={`${td} w-32 font-semibold`}>{line.meta?.room || topic.title}</td>
+                <td className={td}>{line.text}{line.meta?.sheet ? <span className="text-slate-500"> · {line.meta.sheet}</span> : null}</td></tr>
+            ))}
+          </tbody></table>
+        </>
+      )}
+
       {notes.length > 0 && (
         <>
-          <H n="04">Also noted</H>
+          <H n={num()}>Also noted</H>
           <ul className="text-[11px] text-slate-700 space-y-1">
             {notes.map(({ line, topic }) => <li key={line.id}>{topic.title ? <b className="text-slate-800">{topic.title}: </b> : null}{line.kind === 'question' ? `Still open: ${line.text}` : line.text}</li>)}
           </ul>
@@ -166,7 +213,7 @@ export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>
 
       {closed.length > 0 && (
         <>
-          <H n={notes.length ? '05' : '04'}>Closed since the last meeting</H>
+          <H n={num()}>Closed since the last meeting</H>
           <ul className="text-[11px] text-slate-700 space-y-1">{closed.map((c, i) => <li key={i}>{c.text} ({c.ref}).</li>)}</ul>
         </>
       )}

@@ -8,6 +8,7 @@ import { estimateRoomSizes, isAiAvailable } from '../services/geminiService';
 import { useOrg } from '../contexts/OrgContext';
 import TakeoffPanel from './TakeoffPanel';
 import ClientPeoplePanel from './clients/ClientPeoplePanel';
+import MinutesInbox from './minutes/MinutesInbox';
 import { 
   Sparkles, 
   Trash2, 
@@ -412,6 +413,14 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   placeholder="e.g. Civil refresh to the entire flooring of the house and both bathrooms. Kitchen and wardrobes in modular. Keep the existing electricals."
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/40 backdrop-blur-sm text-sm text-sky-950 placeholder:text-slate-300 focus:border-[#3D52A0]/40 focus:outline-none focus:ring-1 focus:ring-[#3D52A0]/20 resize-y leading-relaxed"
                 />
+                {/* Requirements from approved discovery minutes, waiting to be added here (lib/minutes outboxOf). */}
+                <MinutesInbox projectId={projectId} kind="requirements" title="requirements" action="Add to the brief"
+                  onAdd={(items) => setProjectContext((prev) => ({
+                    ...prev,
+                    clientBrief: [String(prev.clientBrief || '').trim(), ...items.map(({ ref, item }) =>
+                      `${item.room ? `${item.room}: ` : ''}${item.text}${item.priority === 'must' ? ' (must have)' : item.priority === 'nice' ? ' (nice to have)' : ''} [${ref}]`)]
+                      .filter(Boolean).join('\n'),
+                  }))} />
                 {briefSuggestions.length > 0 && (
                   <div className="rounded-xl border border-[#3D52A0]/25 bg-sky-50/50 p-3 flex flex-col gap-2">
                     <div className="flex items-center justify-between gap-3 flex-wrap">

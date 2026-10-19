@@ -15,7 +15,7 @@ import { auth, db as fsDb } from '../services/firebaseClient';
 import { collection, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { meetingTypeLabel, toMillis } from '../lib/meetingTypes';
 import { MomReviewModal } from './ops/MomReviewModal';
-import { clientContactOf } from '../lib/minutes';
+import { clientContactOf, defaultTemplate } from '../lib/minutes';
 import { opsSettingsOf } from '../lib/opsDesk';
 import { primaryRole } from '../lib/roles';
 import { startMinutes } from '../services/minutesService';
@@ -365,6 +365,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
           meetingId: visitId, meetingType: type, meetingTitle: title.trim(),
           meetingDate: new Date(`${date}T${startTime}:00`).getTime(), durationMinutes: finalDuration,
           venue: isVirtual ? virtualLabel : location.trim(), attendees, notes,
+          template: defaultTemplate(type, currentPhaseStep, title).id, stage: currentPhaseStep || null,
         }, me, auth.currentUser?.uid || 'unknown');
         const fresh = await getDoc(doc(fsDb, `organizations/${studioId}/projects/${projectId}/moms`, momId));
         onSuccess?.();

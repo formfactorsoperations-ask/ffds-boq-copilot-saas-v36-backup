@@ -199,3 +199,83 @@ describe('the client and dates', () => {
     expect(quickDues(NOW).map((q) => [q.label, keyOfDue(q.at)])).toEqual([['Tomorrow', '2026-10-13'], ['Fri', '2026-10-16'], ['Next week', '2026-10-19']]);
   });
 });
+
+/* ── Part 2 ─────────────────────────────────────────────────────────────── */
+import {
+  splitPrivate, mergePrivate, outboxOf, waitingFromMinutes, templatesFor, defaultTemplate, isLogOnly, selectionText,
+} from '../../lib/minutes';
+
+const part2 = (): MinutesTopic[] => [
+  { id: 'k', title: 'Kitchen', lines: [
+    line({ id: 's1', kind: 'selection', text: 'Caesarstone Frosty Carrina, 20 mm', meta: { item: 'Countertop', choice: 'approved' } }),
+    line({ id: 'p1', kind: 'studio_only', text: 'Client hinted at a tighter budget.' }),
+    line({ id: 'r1', kind: 'requirement', text: 'Tall unit for oven', meta: { room: 'Kitchen', priority: 'must' } }),
+  ] },
+  { id: 'b', title: 'Budget', lines: [line({ id: 'p2', kind: 'studio_only', text: 'Budget band 25-30 L.' })] },
+  { id: 'w', title: 'Wardrobe', lines: [line({ id: 'c1', kind: 'design_change', text: 'Move wardrobe 150 mm', meta: { sheet: 'Bedroom plan' } })] },
+];
+
+describe('studio-only lines', () => {
+  it('never reach the minutes document, and come back where they were', () => {
+    const { shared, priv } = splitPrivate(part2());
+    expect(JSON.stringify(shared)).not.toContain('budget');
+    expect(JSON.stringify(shared)).not.toContain('Budget');
+    expect(shared.map((t) => t.id)).toEqual(['k', 'w']);
+    expect(mergePrivate(shared, priv)).toEqual(part2());
+  });
+  it('are left out of the older fields, the client view and the PDF refs', () => {
+    const legacy = toLegacy(part2());
+    expect(JSON.stringify(legacy)).not.toContain('tighter budget');
+    expect(legacy.decisions.map((d) => d.text)).toEqual(['Kitchen: Selected: Countertop: Caesarstone Frosty Carrina, 20 mm', 'Wardrobe: Design change: Move wardrobe 150 mm']);
+    const v = clientView(part2(), 'Studio', () => '');
+    expect(JSON.stringify(v)).not.toContain('budget');
+    expect(lineRefs(part2())).toEqual({ s1: 'S1', r1: 'R1', c1: 'C1' });
+  });
+});
+
+describe('where lines go', () => {
+  it('collects requirements, selections and design changes once approved', () => {
+    const o = outboxOf(part2());
+    expect(o.requirements).toEqual([{ lineId: 'r1', text: 'Tall unit for oven', room: 'Kitchen', priority: 'must' }]);
+    expect(o.selections).toEqual([{ lineId: 's1', text: 'Caesarstone Frosty Carrina, 20 mm', item: 'Countertop', room: 'Kitchen', choice: 'approved' }]);
+    expect(o.designChanges[0]).toMatchObject({ lineId: 'c1', sheet: 'Bedroom plan', room: 'Wardrobe' });
+    expect(selectionText(part2()[0].lines[0])).toBe('Countertop: Caesarstone Frosty Carrina, 20 mm');
+  });
+  it('offers each only until it is added, and only from issued minutes', () => {
+    const o = outboxOf(part2());
+    const moms = [
+      { id: 'm1', format: 2, status: 'shared', momRef: 'R1', outbox: o, filed: { s1: { at: 1 } } },
+      { id: 'm2', format: 2, status: 'draft', outbox: o },
+    ];
+    expect(waitingFromMinutes(moms, 'selections')).toEqual([]);
+    expect(waitingFromMinutes(moms, 'requirements').map((w) => [w.momId, w.item.lineId])).toEqual([['m1', 'r1']]);
+  });
+});
+
+describe('meetings across the project', () => {
+  it('puts this stage first, and keeps proposal minutes for leads', () => {
+    const forCr = templatesFor(4, false);
+    expect(forCr.slice(0, 2).map((t) => t.id)).toEqual(['design_review', 'material_selection']);
+    expect(forCr.some((t) => t.leadOnly)).toBe(false);
+    expect(templatesFor(3, true).slice(0, 2).map((t) => t.id)).toEqual(['proposal', 'negotiation']);
+  });
+  it('picks a template from the meeting type and stage', () => {
+    expect(defaultTemplate('internal_meeting', 4).id).toBe('internal');
+    expect(defaultTemplate('site_visit', 6).id).toBe('snag_walk');
+    expect(defaultTemplate('client_meeting', 1).id).toBe('discovery');
+    expect(isLogOnly('vendor_meeting')).toBe(true);
+    expect(isLogOnly('client_meeting')).toBe(false);
+  });
+  it('carries unanswered questions to the next minutes', () => {
+    const earlier = [{ id: 'm', status: 'acknowledged', format: 2, momRef: 'R', meetingDate: 1, actionItems: [],
+      topics: [{ id: 't', title: 'Living', lines: [line({ id: 'q', kind: 'question', text: 'AC drain behind the TV wall?' })] }] }];
+    expect(openFromEarlier(earlier).map((c) => [c.actionId, c.text, c.ownerName])).toEqual([['q', 'Open question: AC drain behind the TV wall?', 'To answer']]);
+  });
+  it('reads the new kinds from notes, never studio-only', () => {
+    const t = fromStructured({ topics: [{ title: 'Kitchen', lines: [
+      { kind: 'selection', text: 'Frosty Carrina', item: 'Countertop', room: 'Kitchen', choice: 'approved' },
+      { kind: 'studio_only', text: 'Budget' },
+    ] }] });
+    expect(t[0].lines.map((l) => [l.kind, l.meta?.item ?? null, l.meta?.choice ?? null])).toEqual([['selection', 'Countertop', 'approved'], ['note', null, null]]);
+  });
+});

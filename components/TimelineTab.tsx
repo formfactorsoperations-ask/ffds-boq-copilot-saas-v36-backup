@@ -59,6 +59,7 @@ import { StepDeliverableChecklist } from "./studio/StepDeliverableChecklist";
 import { useStepProgress } from "../hooks/useStepProgress";
 import { SiteVisitLogModal } from "./SiteVisitLogModal";
 import SiteVisitHistory from "../pages/SiteVisitHistory";
+import ProjectMinutes from "./minutes/ProjectMinutes";
 import { db as firestoreDb } from "../services/firebaseClient";
 import { doc, setDoc, collection, query, onSnapshot } from "firebase/firestore";
 import ScheduleGantt from "./ScheduleGantt";
@@ -129,6 +130,8 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   const [siteVisitModalOpen, setSiteVisitModalOpen] = useState(false);
   const [siteVisitType, setSiteVisitType] = useState<'site_visit'|'client_meeting'>('site_visit');
   const [showSiteVisitHistory, setShowSiteVisitHistory] = useState(false);
+  /* Every minutes of the project, by stage (components/minutes/ProjectMinutes). */
+  const [showProjectMinutes, setShowProjectMinutes] = useState(false);
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showScheduleResetModal, setShowScheduleResetModal] = useState(false);
@@ -858,6 +861,12 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
           >
             History
           </button>
+          <button
+            onClick={() => setShowProjectMinutes(true)}
+            className="text-[10px] uppercase tracking-wider font-bold text-slate-500 bg-transparent border border-transparent hover:bg-white hover:border-slate-200 px-3 py-2 rounded-xl transition-all cursor-pointer"
+          >
+            Minutes
+          </button>
         </div>
       </div>
 
@@ -1345,6 +1354,10 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
         )}
       </AnimatePresence>
 
+      {showProjectMinutes && safeProjectId && (
+        <ProjectMinutes projectId={safeProjectId} projectContext={projectContext} onClose={() => setShowProjectMinutes(false)}
+          stage={phases.find(p => p.stepProgress?.status === 'in_progress')?.stepProgress?.stepNumber || null} />
+      )}
       {showSiteVisitHistory && (
         <SiteVisitHistory 
           projectId={safeProjectId || ""}

@@ -1,5 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Loader2, Sparkles, FileText, CheckCircle2 } from '@/lib/lucide-shim';
+import React, { useState } from 'react';
+import { Loader2, Sparkles, FileText, CheckCircle2, X } from '@/lib/lucide-shim';
+import { templatesFor, defaultTemplate, templateById, isMinutesLead, STAGES } from '../../lib/minutes';
+import { meetingTypeLabel } from '../../lib/meetingTypes';
 import { opsSettingsOf } from '../../lib/opsDesk';
 import { primaryRole } from '../../lib/roles';
 import { startMinutes } from '../../services/minutesService';
@@ -44,50 +46,106 @@ function visitMillis(visit: SiteVisit): number {
   return parsed;
 }
 
+/*
+  "Which meeting are these minutes for?" (mockup 8). Minutes start from the
+  meeting that happened, with a template for its stage: the starting topics
+  and the kinds of line it mostly uses. This stage's meetings come first.
+  Proposal and negotiation minutes talk money, so only a lead starts them.
+*/
 function StartNewMinutes({ visit, projectId, studioId, onClose, onSuccess }: MomCaptureModalProps) {
   const { orgData, teamMembers, currentUserAuth, currentRole, currentRoles } = useOrg() as any;
+  const roles: string[] = currentRoles?.length ? currentRoles : [currentRole];
+  const lead = isMinutesLead(roles);
+  const fromOps = String(visit.id || '').startsWith('ops-');
+  const stage = Number(visit.phaseStepNumber) || 0;
+  const choices = templatesFor(stage, lead);
+  const [chosen, setChosen] = useState<string>(defaultTemplate(visit.type, stage, visit.title).id);
   const [error, setError] = useState<string | null>(null);
-  const started = useRef(false);
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
+  const [starting, setStarting] = useState(false);
+
+  const start = () => {
+    const t = templateById(chosen) || defaultTemplate(visit.type, stage, visit.title);
     const team: any[] = orgData?.team || teamMembers || [];
     const email = String(currentUserAuth?.email || '').toLowerCase();
-    const mine = team.find((t) => String(t?.email || '').toLowerCase() === email);
-    const me = { email, name: mine?.name || currentUserAuth?.displayName || email, role: mine?.title || primaryRole(currentRoles?.length ? currentRoles : [currentRole]) || null };
+    const mine = team.find((x) => String(x?.email || '').toLowerCase() === email);
+    const me = { email, name: mine?.name || currentUserAuth?.displayName || email, role: mine?.title || primaryRole(roles) || null };
     const fromPeople = (visit.people || []).map((p) => ({ name: p.name || p.email, side: p.side, role: p.role || undefined, present: true }));
     const named = fromPeople.length ? fromPeople : (visit.attendees || []).filter(Boolean).map((n) => {
-      const t = team.find((x) => String(x?.name || '').toLowerCase() === String(n).toLowerCase());
-      return t ? { name: n, side: 'ffds', role: t.title || t.role, present: true } : { name: n, side: 'client', present: true };
+      const m = team.find((x) => String(x?.name || '').toLowerCase() === String(n).toLowerCase());
+      return m ? { name: n, side: 'ffds', role: m.title || m.role, present: true } : { name: n, side: 'client', present: true };
     });
     const attendees = named.some((a) => a.side === 'ffds' && a.name.toLowerCase() === String(me.name).toLowerCase())
       ? named : [...named, { name: me.name, side: 'ffds', role: me.role || undefined, present: true }];
+    setStarting(true);
+    setError(null);
     startMinutes(studioId, projectId, {
       meetingId: visit.id,
-      meetingType: visit.type || 'client_meeting',
-      meetingTitle: visit.title || 'Meeting',
+      /* A meeting on the calendar keeps its own type; minutes written without one take the template's. */
+      meetingType: fromOps ? t.meetingType : visit.type || t.meetingType,
+      meetingTitle: fromOps ? t.name : visit.title || t.name,
       meetingDate: visitMillis(visit),
       durationMinutes: visit.durationMinutes || null,
       venue: visit.isVirtual ? (visit.googleMeetUrl ? 'Google Meet' : 'Online') : visit.location || null,
       attendees: attendees as any,
       notes: visit.notes || '',
+      template: t.id,
+      stage: stage || null,
     }, me, currentUserAuth?.uid || 'unknown')
       .then(onSuccess)
-      .catch((e) => { console.error(e); setError(e?.code === 'permission-denied' ? 'You cannot write minutes on this project.' : 'The minutes could not be started. Check your connection and try again.'); });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      .catch((e) => {
+        console.error(e);
+        setStarting(false);
+        setError(e?.code === 'permission-denied' ? (t.leadOnly ? 'Proposal and negotiation minutes are written by an Owner, Admin or Ops Director.' : 'You cannot write minutes on this project.') : 'The minutes could not be started. Check your connection and try again.');
+      });
+  };
 
+  const day = new Date(visitMillis(visit)).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" role="dialog" aria-label="Starting the minutes">
-      <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={error ? onClose : undefined} />
-      <div className="phd-pop relative w-full max-w-sm bg-white rounded-3xl border border-slate-200 shadow-2xl p-6 text-center">
-        {error ? (
-          <>
-            <p className="text-sm font-bold text-slate-800">{error}</p>
-            <button type="button" onClick={onClose} className="mt-4 px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">Close</button>
-          </>
-        ) : (
-          <p className="text-sm font-semibold text-slate-700 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin text-[#3D52A0]" />Starting the minutes from {visit.title || 'the meeting'}…</p>
-        )}
+    <div className="fixed inset-0 z-[300] flex items-stretch sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true" aria-label="Which meeting are these minutes for?">
+      <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={starting ? undefined : onClose} />
+      <div className="phd-pop relative w-full max-w-[1080px] bg-white sm:rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-full sm:max-h-[92vh]">
+        <div className="px-6 pt-5 pb-4 flex items-start gap-4">
+          <div className="flex-1">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">New minutes</p>
+            <h3 className="text-lg font-bold text-slate-800">Which meeting are these minutes for?</h3>
+            <p className="text-xs text-slate-500">{stage ? <>The project is in <b>{stage} · {STAGES[stage]}</b>, so those meetings come first.</> : 'Pick the kind of meeting; it sets the starting topics.'}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-xl grid place-items-center text-slate-400 hover:bg-slate-100"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6 grid gap-5 grid-cols-1 md:grid-cols-[1fr_1.4fr]">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">From the meeting that happened</p>
+            {fromOps ? (
+              <p className="rounded-xl border border-dashed border-slate-300 px-3 py-3 text-xs text-slate-500">Not from a meeting on the calendar. The minutes are dated today; the template names the meeting.</p>
+            ) : (
+              <div className="flex items-center gap-3 px-3 py-3 rounded-xl border border-[#3D52A0]/50 bg-[#3D52A0]/5 ring-1 ring-[#3D52A0]/20">
+                <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><FileText className="w-4 h-4" /></span>
+                <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-slate-800 truncate">{visit.title || 'Meeting'} · {day}</p><p className="text-[11px] text-slate-500">{(visit.attendees || []).length} people on the invite · {meetingTypeLabel(visit.type)}</p></div>
+              </div>
+            )}
+            <p className="text-[11px] text-slate-500 mt-3">A template only sets the starting topics and the kinds of line offered first. Anything can be added.</p>
+            {error && <p className="mt-3 text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2" role="alert">{error}</p>}
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Start from a template</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Template">
+              {choices.map((t, i) => (
+                <button key={t.id} type="button" role="radio" aria-checked={chosen === t.id} onClick={() => setChosen(t.id)}
+                  className={`text-left px-3 py-2 rounded-xl border hud-row-in ${chosen === t.id ? 'border-[#3D52A0] bg-[#3D52A0]/10 ring-1 ring-[#3D52A0]/30' : t.now ? 'border-[#3D52A0]/30 bg-[#3D52A0]/5 hover:bg-[#3D52A0]/10' : 'border-slate-200 hover:bg-slate-50'}`}
+                  style={{ animationDelay: `${i * 30}ms` }}>
+                  <span className="block text-sm font-semibold text-slate-800">{t.name}</span>
+                  <span className="block text-[11px] text-slate-500">{t.stage ? `Stage ${t.stage}` : 'Any stage'}{t.now ? ' · this stage' : ''}{t.client ? '' : ' · internal, no approval'}{t.leadOnly ? ' · leads only' : ''}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="bg-slate-50 border-t border-slate-100 px-6 py-3 flex items-center gap-3 justify-end">
+          <button type="button" onClick={onClose} disabled={starting} className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+          <button type="button" onClick={start} disabled={starting} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50">
+            {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Start {templateById(chosen)?.name.toLowerCase() || 'minutes'}
+          </button>
+        </div>
       </div>
     </div>
   );

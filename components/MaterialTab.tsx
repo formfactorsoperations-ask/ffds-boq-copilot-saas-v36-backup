@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import MinutesInbox from './minutes/MinutesInbox';
 import ConsoleHeader from './ui/ConsoleHeader';
 import Tabs from './ui/Tabs';
 import { assess, summarise, BUCKET_LABEL, ORDER_BLOCKING, Bucket } from '../lib/sofReadiness';
@@ -1509,6 +1510,21 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
             <datalist id="room-list">
                 {allRoomNames.map(room => <option key={room} value={room} />)}
             </datalist>
+
+            {/* Selections from approved minutes, waiting to be added (lib/minutes outboxOf). */}
+            <MinutesInbox projectId={projectId} kind="selections" title="selections" action="Add to Materials"
+                onAdd={(items) => setSelections(prev => [...prev, ...items.map(({ ref, item }) => ({
+                    ...getDefaultNewSelectionFields(),
+                    id: generateId(),
+                    roomId: item.room || '',
+                    itemName: item.item || item.text,
+                    category: 'From minutes',
+                    finishCode: item.item ? item.text : '',
+                    status: (item.choice === 'approved' ? 'locked' : item.choice === 'client_to_pick' ? 'sent_for_approval' : 'to_select') as any,
+                    leadTimeDays: 7,
+                    photos: [],
+                    notes: `From the minutes ${ref}`,
+                } as MaterialSelection))])} />
 
             {/*
               The schedule of finishes decides when procurement can start, so the

@@ -34,7 +34,10 @@ import { clientEmails } from './clientContacts';
 
 /* ── The shape ───────────────────────────────────────────────────────────── */
 
-export type LineKind = 'decision' | 'action' | 'note' | 'question';
+export type LineKind =
+  | 'decision' | 'action' | 'note' | 'question'
+  /* Part 2: each goes somewhere once the minutes are approved (ROUTE_LABEL). */
+  | 'design_change' | 'selection' | 'requirement' | 'studio_only';
 export type OwnerSide = 'client' | 'ffds' | 'vendor';
 
 export interface LineOwner {
@@ -58,6 +61,18 @@ export interface MinutesLine {
   status?: 'open' | 'done' | 'cancelled';
   /** A cost or scope action on its way into a Scope Revision (hooks/useMomScopeQueue). */
   scopeRequest?: any;
+  /**
+   * What a requirement, selection or design change is about: the room, the
+   * item chosen (a selection), how much it matters (a requirement), where a
+   * selection stands, the sheet a change is on.
+   */
+  meta?: {
+    room?: string | null;
+    item?: string | null;
+    priority?: 'must' | 'nice' | null;
+    choice?: 'approved' | 'on_hold' | 'client_to_pick' | null;
+    sheet?: string | null;
+  } | null;
 }
 
 export interface MinutesTopic {
@@ -79,7 +94,7 @@ export interface CarriedAction {
 
 export type TrailStep =
   | 'written' | 'sent_for_approval' | 'returned' | 'approved' | 'sent'
-  | 'confirmed' | 'correction_asked' | 'revision_started';
+  | 'confirmed' | 'correction_asked' | 'revision_started' | 'logged';
 
 export interface TrailEntry {
   step: TrailStep;
@@ -178,7 +193,26 @@ export function newId(prefix: string, now: number = Date.now()): string {
 
 export const KIND_LABEL: Record<LineKind, string> = {
   decision: 'Decision', action: 'Action', note: 'Note', question: 'Open question',
+  design_change: 'Design change', selection: 'Selection', requirement: 'Requirement', studio_only: 'Studio only',
 };
+
+/** Every kind, in the order they are offered. */
+export const ALL_KINDS: LineKind[] = ['decision', 'action', 'note', 'question', 'requirement', 'selection', 'design_change', 'studio_only'];
+
+/** Where each kind of line goes once the minutes are approved (mockup 7). */
+export const ROUTE_LABEL: Record<LineKind, string> = {
+  decision: 'Decisions in the minutes',
+  action: 'Action list',
+  design_change: 'Design changes list',
+  selection: 'Materials, once added',
+  requirement: 'Project brief, once added',
+  question: 'Next meeting',
+  note: 'Stays in the minutes',
+  studio_only: 'Never printed or shared',
+};
+
+/** Lines the client never sees, in any form. */
+export const isStudioOnly = (l: Pick<MinutesLine, 'kind'>) => l.kind === 'studio_only';
 
 export const needsOwner = (k: LineKind) => k === 'action' || k === 'question';
 
@@ -219,9 +253,15 @@ export function lineRefs(topics: MinutesTopic[] | undefined): Record<string, str
   const out: Record<string, string> = {};
   let d = 0;
   let a = 0;
+  let s = 0;
+  let r = 0;
+  let c = 0;
   for (const { line } of allLines(topics)) {
     if (line.kind === 'decision') out[line.id] = `D${++d}`;
     else if (line.kind === 'action' || (line.kind === 'question' && line.owner?.name)) out[line.id] = `A${++a}`;
+    else if (line.kind === 'selection') out[line.id] = `S${++s}`;
+    else if (line.kind === 'requirement') out[line.id] = `R${++r}`;
+    else if (line.kind === 'design_change') out[line.id] = `C${++c}`;
   }
   return out;
 }
@@ -241,6 +281,10 @@ export function toLegacy(topics: MinutesTopic[] | undefined, carried: CarriedAct
     const text = line.text.trim();
     if (!text) continue;
     const label = topic.title.trim() ? `${topic.title.trim()}: ` : '';
+    if (isStudioOnly(line)) continue;
+    if (line.kind === 'selection') { decisions.push({ id: line.id, text: `${label}Selected: ${selectionText(line)}` }); continue; }
+    if (line.kind === 'design_change') { decisions.push({ id: line.id, text: `${label}Design change: ${text}` }); continue; }
+    if (line.kind === 'requirement') { notes.push({ id: line.id, text: `${label}Requirement: ${text}` }); continue; }
     if (line.kind === 'decision') decisions.push({ id: line.id, text: `${label}${text}` });
     else if (line.kind === 'note') notes.push({ id: line.id, text: `${label}${text}` });
     else if (line.kind === 'question' && !line.owner?.name) notes.push({ id: line.id, text: `${label}Open question: ${text}` });
@@ -264,6 +308,13 @@ export function toLegacy(topics: MinutesTopic[] | undefined, carried: CarriedAct
     .filter((c) => c.outcome === 'open')
     .map((c) => ({ text: c.text, ref: c.ref, owner: c.ownerName || null }));
   return { decisions, actionItems, notes, carriedForward };
+}
+
+/** "Countertop: Caesarstone Frosty Carrina, 20 mm (approved)". */
+export function selectionText(l: MinutesLine): string {
+  const item = l.meta?.item?.trim();
+  const st = l.meta?.choice === 'on_hold' ? ' (on hold)' : l.meta?.choice === 'client_to_pick' ? ' (client to pick)' : '';
+  return `${item ? `${item}: ` : ''}${l.text.trim()}${st}`;
 }
 
 /**
@@ -299,8 +350,17 @@ export function fromStructured(data: any, anchorTitle = 'From your notes', now?:
   const toLine = (x: any): MinutesLine | null => {
     const text = String(x?.text || '').trim();
     if (!text) return null;
-    const kind: LineKind = ['decision', 'action', 'note', 'question'].includes(x?.kind) ? x.kind : 'note';
+    /* Never "studio_only" from notes: a person decides what the client must not see. */
+    const kind: LineKind = ['decision', 'action', 'note', 'question', 'requirement', 'selection', 'design_change'].includes(x?.kind) ? x.kind : 'note';
     const line: MinutesLine = { ...newLine(kind, text, now), fromNotes: true };
+    if (kind === 'requirement' || kind === 'selection' || kind === 'design_change') {
+      const str = (v: any) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 80) : null);
+      line.meta = {
+        room: str(x?.room), item: kind === 'selection' ? str(x?.item) : null, sheet: kind === 'design_change' ? str(x?.sheet) : null,
+        priority: kind === 'requirement' && (x?.priority === 'must' || x?.priority === 'nice') ? x.priority : null,
+        choice: kind === 'selection' && ['approved', 'on_hold', 'client_to_pick'].includes(x?.choice) ? x.choice : null,
+      };
+    }
     if (needsOwner(kind)) {
       const name = String(x?.ownerName || '').trim();
       line.owner = name ? { side: side(x?.owner), name } : null;
@@ -342,6 +402,177 @@ export function withQueueState(topics: MinutesTopic[], actionItems: any[] | unde
   return topics.map((t) => ({ ...t, lines: t.lines.map((l) => (byId.has(l.id) ? { ...l, scopeRequest: byId.get(l.id) } : l)) }));
 }
 
+/* ── Studio-only lines stay with the studio ────────────────────────────── */
+
+/*
+  A studio-only line ("client hinted at a tighter budget") is never printed,
+  never sent and never shown in the portal -- and is never stored on the
+  minutes document, which the client's login can read once they are issued.
+  It is kept in a private document beside the minutes
+  (moms/{id}/private/studio), with where it sat, and put back when the
+  studio reads or edits the minutes. A topic with only studio-only lines goes
+  there whole, title and all.
+*/
+export interface PrivatePart {
+  lines: { topicId: string; index: number; line: MinutesLine }[];
+  topics: { index: number; topic: MinutesTopic }[];
+}
+
+export const emptyPrivate = (): PrivatePart => ({ lines: [], topics: [] });
+
+/** The topics as stored on the minutes, and the studio's own part. */
+export function splitPrivate(topics: MinutesTopic[] | undefined): { shared: MinutesTopic[]; priv: PrivatePart } {
+  const shared: MinutesTopic[] = [];
+  const priv = emptyPrivate();
+  (topics || []).forEach((t, ti) => {
+    const lines = t.lines || [];
+    if (lines.length && lines.every(isStudioOnly)) {
+      priv.topics.push({ index: ti, topic: t });
+      return;
+    }
+    lines.forEach((l, li) => { if (isStudioOnly(l)) priv.lines.push({ topicId: t.id, index: li, line: l }); });
+    shared.push({ ...t, lines: lines.filter((l) => !isStudioOnly(l)) });
+  });
+  return { shared, priv };
+}
+
+/** The whole minutes again, each studio-only line back where it was. */
+export function mergePrivate(shared: MinutesTopic[] | undefined, priv: PrivatePart | null | undefined): MinutesTopic[] {
+  const out = (shared || []).map((t) => ({ ...t, lines: [...(t.lines || [])] }));
+  if (!priv) return out;
+  const known = new Set(allLines(out).map(({ line }) => line.id));
+  for (const p of [...(priv.lines || [])].sort((a, b) => a.index - b.index)) {
+    if (known.has(p.line.id)) continue;
+    const t = out.find((x) => x.id === p.topicId);
+    if (t) t.lines.splice(Math.min(p.index, t.lines.length), 0, p.line);
+    else out.push({ id: p.topicId, title: 'Studio only', lines: [p.line] });
+  }
+  for (const p of [...(priv.topics || [])].sort((a, b) => a.index - b.index)) {
+    if (out.some((t) => t.id === p.topic.id)) continue;
+    out.splice(Math.min(p.index, out.length), 0, p.topic);
+  }
+  return out;
+}
+
+/* ── Meetings across the whole project (mockups 7 and 8) ─────────────────── */
+
+export interface MeetingTemplate {
+  id: string;
+  name: string;
+  /** 1–6, the project stage it belongs to; 0 for any stage. */
+  stage: number;
+  /** The meeting type it saves as (lib/meetingTypes). */
+  meetingType: string;
+  /** Client meetings go through approval; internal and vendor ones save to the log. */
+  client: boolean;
+  /** Proposal and negotiation talk money: only an Owner, Admin or Ops Director writes them. */
+  leadOnly?: boolean;
+  /** The line kinds this meeting mostly uses, offered first. */
+  kinds: LineKind[];
+  /** The topics it starts with. */
+  topics: string[];
+  /** What its lines feed, in a few words. */
+  feeds: string;
+}
+
+export const STAGES = ['Any stage', 'Initial Consultation', 'Scope & Strategy', 'Proposal & Revisions', 'Agreement & Design', 'Execution & Site', 'Handover & Closeout'];
+
+export const MEETING_TEMPLATES: MeetingTemplate[] = [
+  { id: 'discovery', name: 'Discovery meeting', stage: 1, meetingType: 'client_meeting', client: true, kinds: ['requirement', 'note', 'question', 'studio_only'], topics: ['The family and how they live', 'Rooms and what they want', 'Timeline and possession'], feeds: 'Requirements → project brief' },
+  { id: 'measurement', name: 'Measurement survey', stage: 1, meetingType: 'measurement_survey', client: true, kinds: ['note', 'action', 'question'], topics: ['Site conditions', 'Services: electrical, plumbing, AC'], feeds: 'Site notes → brief' },
+  { id: 'scope_walkthrough', name: 'Scope walkthrough', stage: 2, meetingType: 'client_meeting', client: true, kinds: ['decision', 'requirement', 'question'], topics: ['Rooms in scope', 'Rooms out of scope'], feeds: 'Rooms in / out → scope' },
+  { id: 'internal_scope', name: 'Internal scope review', stage: 2, meetingType: 'internal_meeting', client: false, kinds: ['note', 'action', 'studio_only'], topics: ['Scope review'], feeds: 'Studio notes only' },
+  { id: 'proposal', name: 'Proposal presentation', stage: 3, meetingType: 'client_meeting', client: true, leadOnly: true, kinds: ['decision', 'question', 'action', 'studio_only'], topics: ['Options presented', 'What the client chose'], feeds: 'Option chosen → proposal' },
+  { id: 'negotiation', name: 'Negotiation call', stage: 3, meetingType: 'client_meeting', client: true, leadOnly: true, kinds: ['decision', 'action', 'studio_only'], topics: ['Revisions asked'], feeds: 'Revisions asked → proposal' },
+  { id: 'design_review', name: 'Design review', stage: 4, meetingType: 'client_meeting', client: true, kinds: ['decision', 'design_change', 'action', 'selection'], topics: ['Drawings reviewed'], feeds: 'Changes → design changes list' },
+  { id: 'material_selection', name: 'Material selection', stage: 4, meetingType: 'client_meeting', client: true, kinds: ['selection', 'decision', 'action'], topics: ['Kitchen', 'Wardrobes', 'Bathrooms'], feeds: 'Selections → Materials' },
+  { id: 'site_visit', name: 'Site visit', stage: 5, meetingType: 'site_visit', client: true, kinds: ['action', 'decision', 'question'], topics: ['Progress seen', 'Issues at site'], feeds: 'Actions → action list' },
+  { id: 'vendor_coordination', name: 'Vendor coordination', stage: 5, meetingType: 'vendor_meeting', client: false, kinds: ['action', 'note', 'studio_only'], topics: ['Work this week'], feeds: 'Studio notes only' },
+  { id: 'snag_walk', name: 'Snag walk', stage: 6, meetingType: 'site_visit', client: true, kinds: ['action', 'note'], topics: ['Snags by room'], feeds: 'Snags → action list' },
+  { id: 'handover', name: 'Handover meeting', stage: 6, meetingType: 'client_meeting', client: true, kinds: ['decision', 'action', 'note'], topics: ['Handed over', 'Still to finish'], feeds: 'Items → handover' },
+  { id: 'internal', name: 'Internal meeting', stage: 0, meetingType: 'internal_meeting', client: false, kinds: ['note', 'action', 'decision', 'studio_only'], topics: ['Discussion'], feeds: 'Studio notes only' },
+  { id: 'call', name: 'Call or chat', stage: 0, meetingType: 'client_meeting', client: true, kinds: ['decision', 'action', 'note', 'question'], topics: ['Discussion'], feeds: 'Lines as usual' },
+];
+
+export const templateById = (id: string | null | undefined) => MEETING_TEMPLATES.find((t) => t.id === id) || null;
+
+/** Templates for the picker: this stage's first, then the rest in stage order; the lead-only ones only for leads. */
+export function templatesFor(stage: number | null | undefined, lead: boolean): (MeetingTemplate & { now: boolean })[] {
+  const st = Number(stage) || 0;
+  return MEETING_TEMPLATES
+    .filter((t) => lead || !t.leadOnly)
+    .map((t) => ({ ...t, now: !!st && t.stage === st }))
+    .sort((a, b) => Number(b.now) - Number(a.now) || (a.stage || 9) - (b.stage || 9));
+}
+
+/** The template a meeting starts from when nobody chose one: by its type and the project's stage. */
+export function defaultTemplate(meetingType: string, stage: number | null | undefined, title?: string | null): MeetingTemplate {
+  const t = String(meetingType || '');
+  const st = Number(stage) || 0;
+  /* The meeting's own title says most: "Material selection with the Naiks". */
+  const words = String(title || '').toLowerCase();
+  const byTitle: [RegExp, string][] = [
+    [/material|selection|laminate|finish/, 'material_selection'], [/design review|drawing/, 'design_review'], [/snag/, 'snag_walk'],
+    [/handover/, 'handover'], [/discovery|first meeting/, 'discovery'], [/measure/, 'measurement'], [/scope/, 'scope_walkthrough'],
+    [/vendor|carpenter|contractor/, 'vendor_coordination'],
+  ];
+  for (const [rx, id] of byTitle) if (rx.test(words) && !/internal|vendor/.test(t)) return templateById(id)!;
+  if (/internal/.test(t)) return templateById('internal')!;
+  if (/vendor/.test(t)) return templateById('vendor_coordination')!;
+  if (/measurement/.test(t)) return templateById('measurement')!;
+  if (/site/.test(t)) return templateById(st >= 6 ? 'snag_walk' : 'site_visit')!;
+  if (st === 1) return templateById('discovery')!;
+  if (st === 2) return templateById('scope_walkthrough')!;
+  if (st === 4) return templateById('design_review')!;
+  if (st === 6) return templateById('handover')!;
+  return templateById('call')!;
+}
+
+/** The empty topics a template starts with. */
+export const templateTopics = (t: MeetingTemplate, now?: number): MinutesTopic[] => t.topics.map((title) => emptyTopic(title, now));
+
+/** Internal and vendor meetings: saved to the project log, never sent to the client. */
+export const isLogOnly = (meetingType: unknown) => /internal|vendor/.test(String(meetingType || ''));
+
+/* ── Where lines go once approved ────────────────────────────────────────── */
+
+export interface Outbox {
+  requirements: { lineId: string; text: string; room?: string | null; priority?: string | null }[];
+  selections: { lineId: string; text: string; item?: string | null; room?: string | null; choice?: string | null }[];
+  designChanges: { lineId: string; text: string; room?: string | null; sheet?: string | null }[];
+}
+
+/**
+ * Requirements, selections and design changes, as they wait to be added to
+ * the brief, Materials and the design changes list. Kept on the minutes when
+ * they are approved; each screen offers to add them, and marks each one added.
+ */
+export function outboxOf(topics: MinutesTopic[] | undefined): Outbox {
+  const out: Outbox = { requirements: [], selections: [], designChanges: [] };
+  for (const { line, topic } of allLines(topics)) {
+    const text = line.text.trim();
+    if (!text) continue;
+    const room = line.meta?.room?.trim() || topic.title.trim() || null;
+    if (line.kind === 'requirement') out.requirements.push({ lineId: line.id, text, room, priority: line.meta?.priority || null });
+    else if (line.kind === 'selection') out.selections.push({ lineId: line.id, text, item: line.meta?.item || null, room, choice: line.meta?.choice || null });
+    else if (line.kind === 'design_change') out.designChanges.push({ lineId: line.id, text, room, sheet: line.meta?.sheet || null });
+  }
+  return out;
+}
+
+/** What waits to be added from issued minutes, across a project. */
+export function waitingFromMinutes(moms: any[], kind: keyof Outbox): { momId: string; ref: string; meeting: string; item: any }[] {
+  const out: { momId: string; ref: string; meeting: string; item: any }[] = [];
+  for (const m of moms || []) {
+    if (m?.format !== 2 || !ISSUED.includes(String(m.status))) continue;
+    const filed = m.filed || {};
+    for (const item of m.outbox?.[kind] || []) {
+      if (!filed[item.lineId]) out.push({ momId: String(m.id), ref: String(m.momRef || ''), meeting: String(m.meetingTitle || ''), item });
+    }
+  }
+  return out;
+}
+
 /* ── From the last meeting ───────────────────────────────────────────────── */
 
 const ISSUED: string[] = ['finalised', 'shared', 'acknowledged', 'correction_requested'];
@@ -357,6 +588,14 @@ export function openFromEarlier(moms: any[], exceptId?: string): CarriedAction[]
     .filter((m) => m && m.id !== exceptId && ISSUED.includes(String(m.status)))
     .sort((a, b) => (Number(b.meetingDate) || 0) - (Number(a.meetingDate) || 0));
   for (const m of issued) {
+    /* Open questions without an owner go to the next meeting too (format 2 minutes only). */
+    for (const { line } of allLines(m.format === 2 ? m.topics : [])) {
+      if (line.kind !== 'question' || line.owner?.name || line.status === 'done' || line.status === 'cancelled' || !line.text.trim()) continue;
+      const key = line.text.trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ momId: String(m.id), ref: String(m.momRef || ''), actionId: line.id, text: `Open question: ${line.text.trim()}`, ownerName: 'To answer', due: null, outcome: null });
+    }
     for (const a of m.actionItems || []) {
       if (!a?.text || (a.status && a.status !== 'open')) continue;
       const key = String(a.text).trim().toLowerCase();
@@ -435,7 +674,8 @@ export type FlowStep = 0 | 1 | 2 | 3 | 4;
 export const FLOW_STEPS = ['Write', 'Review', 'Send', 'Confirmed'] as const;
 
 /** The step the minutes are at: 0 write, 1 review, 2 send, 3 waiting for the client, 4 confirmed. */
-export function flowStep(m: Pick<MinutesV2, 'status' | 'revisionStage'>): FlowStep {
+export function flowStep(m: Pick<MinutesV2, 'status' | 'revisionStage'> & { meetingType?: string }): FlowStep {
+  if (m.status === 'finalised' && isLogOnly(m.meetingType)) return 4;
   if (m.revisionStage === 'pending_review') return 1;
   if (m.revisionStage === 'draft') return 0;
   switch (m.status) {
@@ -451,7 +691,8 @@ export function flowStep(m: Pick<MinutesV2, 'status' | 'revisionStage'>): FlowSt
 export type ChipTone = 'slate' | 'amber' | 'brand' | 'emerald' | 'rose';
 
 /** The status chip: "Draft", "With Anish", "Waiting for client"… */
-export function statusChip(m: Pick<MinutesV2, 'status' | 'revisionStage' | 'reviewNotes'> & { trail?: TrailEntry[] }, reviewerName = 'the Ops Director'): { label: string; tone: ChipTone } {
+export function statusChip(m: Pick<MinutesV2, 'status' | 'revisionStage' | 'reviewNotes'> & { trail?: TrailEntry[]; meetingType?: string }, reviewerName = 'the Ops Director'): { label: string; tone: ChipTone } {
+  if (m.status === 'finalised' && isLogOnly(m.meetingType)) return { label: 'In the project log', tone: 'emerald' };
   if (m.revisionStage === 'pending_review') return { label: `Revision with ${reviewerName}`, tone: 'amber' };
   if (m.revisionStage === 'draft') return { label: 'Revision being written', tone: 'slate' };
   const last = (m.trail || [])[(m.trail || []).length - 1];
@@ -499,6 +740,7 @@ export function stepLabel(e: TrailEntry): string {
     case 'confirmed': return `Confirmed by ${who}`;
     case 'correction_asked': return `Correction asked by ${who}`;
     case 'revision_started': return `Revision started by ${who}`;
+    case 'logged': return `Saved to the project log by ${who}`;
     default: return who;
   }
 }
@@ -549,8 +791,12 @@ export function clientView(topics: MinutesTopic[] | undefined, studioName: strin
   for (const { line, topic } of allLines(topics)) {
     const text = line.text.trim();
     if (!text) continue;
+    if (isStudioOnly(line)) continue;
     const base = { lineId: line.id, ref: refs[line.id] || '', text, topic: topic.title };
-    if (line.kind === 'decision') agreed.push(base);
+    if (line.kind === 'selection') agreed.push({ ...base, text: selectionText(line) });
+    else if (line.kind === 'design_change') agreed.push({ ...base, text: `Change: ${text}${line.meta?.sheet ? ` (${line.meta.sheet})` : ''}` });
+    else if (line.kind === 'requirement') notes.push({ ...base, text: `${text}${line.meta?.priority === 'must' ? ' (must have)' : line.meta?.priority === 'nice' ? ' (nice to have)' : ''}` });
+    else if (line.kind === 'decision') agreed.push(base);
     else if (refs[line.id]) {
       const who = line.owner?.side === 'client' ? 'You' : studioName;
       next.push({ ...base, text: line.kind === 'question' ? `${text}` : text, owner: `${who}${line.due ? ` · by ${fmtDue(line.due)}` : ''}` });

@@ -11,12 +11,12 @@ import { buildWhatsAppURL } from '../../lib/whatsappUtils';
 import { publicAppOrigin } from '../../lib/publicUrl';
 import { downloadElementAsPdf, elementPdfFile, pdfFilename } from '../../lib/documentPdf';
 import {
-  allLines, flowStep, statusChip, isMinutesLead, fullTrail,
-  type MinutesContent, type ReviewNote,
+  allLines, flowStep, statusChip, isMinutesLead, fullTrail, mergePrivate, templateById, isLogOnly,
+  type MinutesContent, type ReviewNote, type PrivatePart,
 } from '../../lib/minutes';
 import {
   watchMinutes, saveContent, sendForApproval, returnWithNotes, approve, markSent, startRevision, notesToTopics,
-  waitingForApproval, type Me, type WaitingMinutes,
+  waitingForApproval, watchPrivate, saveToLog, type Me, type WaitingMinutes,
 } from '../../services/minutesService';
 import MinutesComposer, { type PersonOption } from './MinutesComposer';
 import MinutesReview, { type QueueRow } from './MinutesReview';
@@ -86,6 +86,16 @@ export default function MinutesWorkspace(props: Props) {
     return watchMinutes(props.studioId, at.projectId, at.mom.id, setMom, () => undefined);
   }, [props.studioId, at.projectId, at.mom.id]);
 
+  /*
+    The studio's own lines, kept beside the minutes (lib/minutes splitPrivate).
+    Nothing is edited until they have loaded, or saving would drop them.
+  */
+  const [priv, setPriv] = useState<{ part: PrivatePart | null; loaded: boolean }>({ part: null, loaded: false });
+  useEffect(() => {
+    setPriv({ part: null, loaded: false });
+    return watchPrivate(props.studioId, at.projectId, at.mom.id, (part) => setPriv({ part, loaded: true }));
+  }, [props.studioId, at.projectId, at.mom.id]);
+
   /* The meeting the minutes came from: its people carry their emails. */
   useEffect(() => {
     let live = true;
@@ -102,7 +112,12 @@ export default function MinutesWorkspace(props: Props) {
     waitingForApproval(orgData.tenantId).then(setQueue).catch(() => setQueue([]));
   }, [lead, orgData?.tenantId, mom?.status, mom?.revisionStage]);
 
-  const c = useMemo(() => content(mom), [mom]);
+  const c = useMemo(() => {
+    const x = content(mom);
+    return { ...x, topics: mergePrivate(x.topics, priv.part) };
+  }, [mom, priv.part]);
+  const template = templateById(mom?.template);
+  const logOnly = isLogOnly(mom?.meetingType);
   const revising = !!mom?.revisionStage;
   const reviewer = useMemo(() => {
     const od = team.find((t) => [t?.role, ...(t?.roles || [])].includes('Ops Director'));
@@ -250,7 +265,7 @@ export default function MinutesWorkspace(props: Props) {
       <MinutesShell label="Approve minutes" eyebrow="Ops Desk · Minutes to approve" title={title} step={step} onClose={props.onClose}>
         {errorBar}
         <MinutesReview key={mom.id} content={c} me={me} queue={rows}
-          before={revising ? mom.topics : mom.reviewedTopics || null}
+          before={mergePrivate(revising ? mom.topics : mom.reviewedTopics || [], priv.part)}
           corrections={revising ? corrections : undefined}
           revisionNumber={revising ? Number(mom.rev || 0) + 1 : null}
           writtenBy={mom.preparedBy?.name || mom.reviewRequestedBy || 'Client Relations'}
@@ -270,7 +285,20 @@ export default function MinutesWorkspace(props: Props) {
   const canWrite = mom.status === 'draft' || mom.revisionStage === 'draft' || (lead && editing);
   if (canWrite || mom.status === 'pending_review' || mom.revisionStage === 'pending_review') {
     const ro = !canWrite;
-    const ready = (x: MinutesContent, ok: boolean) => lead ? (
+    if (!priv.loaded) {
+      return (
+        <MinutesShell label="Write minutes" eyebrow={eyebrow} title={title} step={step} onClose={props.onClose}>
+          <p className="p-6 text-sm text-slate-500 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin text-[#3D52A0]" />Opening the minutes…</p>
+        </MinutesShell>
+      );
+    }
+    const ready = (x: MinutesContent, ok: boolean) => logOnly ? (
+      /* Internal and vendor meetings: no approval, never sent to the client. */
+      <button type="button" className={btnPri} disabled={!ok || busy || ro} onClick={() => guard(async () => {
+        await saveToLog(props.studioId, at.projectId, mom, x, me);
+        setEditing(false);
+      })}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Save to the log</button>
+    ) : lead ? (
       <>
         <button type="button" className={btnPri} disabled={!ok || busy || ro} onClick={() => guard(async () => {
           await approve(props.studioId, at.projectId, mom, me, x);
@@ -288,6 +316,7 @@ export default function MinutesWorkspace(props: Props) {
         {errorBar}
         <MinutesComposer key={`${mom.id}:${mom.revisionStage || ''}:${ro}`}
           initial={c} meeting={meeting} people={people} readOnly={ro}
+          kinds={template?.kinds} logOnly={logOnly}
           readOnlyNote={ro ? (
             <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900 hud-panel-in">
               <b>With {reviewer} for approval</b>{mom.reviewRequestedAt ? ` since ${new Date(mom.reviewRequestedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}` : ''}. You can read them; changes wait until they come back.
@@ -331,7 +360,8 @@ export default function MinutesWorkspace(props: Props) {
         </div>
         <div className="space-y-5 min-w-0">
           <Panel icon={ShieldCheck} title={chip.label} blurb={
-            mom.status === 'finalised' ? 'Approved. Send them to the client: the portal always, WhatsApp and email with the PDF.'
+            mom.status === 'finalised' && logOnly ? 'Saved to the project log. Internal and vendor minutes are never sent to the client.'
+            : mom.status === 'finalised' ? 'Approved. Send them to the client: the portal always, WhatsApp and email with the PDF.'
               : mom.status === 'shared' ? `Waiting for the client to confirm${waitingDays ? ` · ${waitingDays} day${waitingDays === 1 ? '' : 's'}` : ''}.`
                 : mom.status === 'acknowledged' ? `Confirmed by ${mom.acknowledgedBy || 'the client'}.`
                   : 'The client asked to correct the lines below. Answer with a revision; they keep these minutes until it is sent.'
@@ -344,7 +374,7 @@ export default function MinutesWorkspace(props: Props) {
               </ul>
             )}
             <div className="flex flex-wrap gap-2">
-              {mom.status === 'finalised' && <button type="button" className={btnPri} onClick={() => setSending(true)}><Send className="w-4 h-4" />Send to the client</button>}
+              {mom.status === 'finalised' && !logOnly && <button type="button" className={btnPri} onClick={() => setSending(true)}><Send className="w-4 h-4" />Send to the client</button>}
               {mom.status === 'shared' && <button type="button" className={btnSec} onClick={() => setSending(true)}><Send className="w-4 h-4" />Send again</button>}
               {mom.status === 'correction_requested' && (
                 <button type="button" className={btnPri} disabled={busy} onClick={() => guard(async () => { await startRevision(props.studioId, at.projectId, mom, me); })}>

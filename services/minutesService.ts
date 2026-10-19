@@ -1,9 +1,10 @@
-import { collection, collectionGroup, doc, getDoc, getDocs, onSnapshot, query, runTransaction, updateDoc, deleteField, where } from 'firebase/firestore';
+import { collection, collectionGroup, doc, getDoc, getDocs, onSnapshot, query, runTransaction, setDoc, updateDoc, deleteField, where } from 'firebase/firestore';
 import { db } from './firebaseClient';
 import { apiFetch } from './apiFetch';
 import { calculateTimestamp } from './momService';
 import {
-  toLegacy, withStep, openFromEarlier, fromStructured, queueScopeLines, withQueueState,
+  toLegacy, withStep, openFromEarlier, fromStructured, queueScopeLines, withQueueState, splitPrivate, outboxOf,
+  templateById, templateTopics, type PrivatePart,
   type MinutesContent, type MinutesTopic, type ReviewNote, type Signed, type TrailEntry, type CarriedAction,
 } from '../lib/minutes';
 
@@ -31,11 +32,24 @@ function clean<T>(v: T): T {
   return JSON.parse(JSON.stringify(v ?? null));
 }
 
-/** The content fields, with the older fields written from them. */
+/** The studio's own lines, kept beside the minutes where no client can read them (lib/minutes splitPrivate). */
+export const privateDoc = (studioId: string, projectId: string, momId: string) =>
+  doc(db, `${momPath(studioId, projectId)}/${momId}/private`, 'studio');
+
+async function writePrivate(studioId: string, projectId: string, momId: string, topics: MinutesContent['topics']) {
+  const { priv } = splitPrivate(topics);
+  await setDoc(privateDoc(studioId, projectId, momId), clean({ ...priv, updatedAt: Date.now() }));
+}
+
+/** The topics as the client may read them: studio-only lines taken out. */
+const sharedTopics = (topics: MinutesContent['topics']) => splitPrivate(topics).shared;
+
+/** The content fields, with the older fields written from them. Studio-only lines never go here. */
 function contentWrite(c: MinutesContent) {
-  const legacy = toLegacy(c.topics, c.carried || []);
+  const topics = sharedTopics(c.topics);
+  const legacy = toLegacy(topics, c.carried || []);
   return clean({
-    topics: c.topics,
+    topics,
     summary: c.summary ?? null,
     carried: c.carried || [],
     nextMeeting: c.nextMeeting ?? null,
@@ -64,6 +78,9 @@ export interface MeetingSeed {
   attendees: { name: string; side: string; role?: string; present?: boolean }[];
   /** Notes already taken on the meeting; offered in Quick capture. */
   notes?: string;
+  /** The template it starts from (lib/minutes MEETING_TEMPLATES), and the project's stage. */
+  template?: string | null;
+  stage?: number | null;
 }
 
 /**
@@ -96,7 +113,9 @@ export async function startMinutes(studioId: string, projectId: string, seed: Me
       aiGenerated: false,
       trail: [step('written', me, now)],
       preparedBy: signed(me, now),
-      ...contentWrite({ topics: [], carried, attendees: seed.attendees, summary: null, nextMeeting: null }),
+      template: seed.template || null,
+      stage: seed.stage ?? null,
+      ...contentWrite({ topics: templateById(seed.template) ? templateTopics(templateById(seed.template)!) : [], carried, attendees: seed.attendees, summary: null, nextMeeting: null }),
     }));
     id = ref.id;
   });
@@ -106,8 +125,9 @@ export async function startMinutes(studioId: string, projectId: string, seed: Me
 /** Save what is being written. A revision saves into its working copy; the client keeps the minutes they have. */
 export async function saveContent(studioId: string, projectId: string, momId: string, c: MinutesContent, revision: boolean) {
   const ref = minutesDoc(studioId, projectId, momId);
+  await writePrivate(studioId, projectId, momId, c.topics);
   if (revision) {
-    await updateDoc(ref, { pendingRevision: clean({ ...c, revisionNote: c.revisionNote ?? null }), updatedAt: Date.now() });
+    await updateDoc(ref, { pendingRevision: clean({ ...c, topics: sharedTopics(c.topics), revisionNote: c.revisionNote ?? null }), updatedAt: Date.now() });
     return;
   }
   await updateDoc(ref, { ...contentWrite(c), updatedAt: Date.now() });
@@ -128,8 +148,9 @@ export async function sendForApproval(studioId: string, projectId: string, mom: 
     trail: withStep(mom.trail, step('sent_for_approval', me, now, revision ? `Revision ${Number(mom.rev || 0) + 1}` : null)),
   };
   const ref = minutesDoc(studioId, projectId, mom.id);
+  await writePrivate(studioId, projectId, mom.id, c.topics);
   if (revision) {
-    await updateDoc(ref, clean({ ...review, pendingRevision: { ...c, revisionNote: c.revisionNote ?? null }, revisionStage: 'pending_review', updatedAt: now }));
+    await updateDoc(ref, clean({ ...review, pendingRevision: { ...c, topics: sharedTopics(c.topics), revisionNote: c.revisionNote ?? null }, revisionStage: 'pending_review', updatedAt: now }));
   } else {
     await updateDoc(ref, clean({ ...review, ...contentWrite(c), preparedBy: signed(me, now), status: 'pending_review', updatedAt: now }));
   }
@@ -174,7 +195,8 @@ export async function approve(studioId: string, projectId: string, mom: any, me:
     trail,
     updatedAt: now,
   };
-  const queued = (c: MinutesContent): MinutesContent => ({ ...c, topics: queueScopeLines(c.topics || [], me.email, now) });
+  if (content) await writePrivate(studioId, projectId, mom.id, content.topics);
+  const queued = (c: MinutesContent): MinutesContent => ({ ...c, topics: queueScopeLines(sharedTopics(c.topics || []), me.email, now) });
   if (revision) {
     const next: MinutesContent = queued(content || mom.pendingRevision || { topics: [] });
     const snapshot = clean({
@@ -185,6 +207,7 @@ export async function approve(studioId: string, projectId: string, mom: any, me:
     await updateDoc(ref, {
       ...contentWrite(next),
       ...clean(common),
+      outbox: clean(outboxOf(next.topics)),
       rev: Number(mom.rev || 0) + 1,
       revisedAt: now,
       revisedBy: me.email,
@@ -204,7 +227,8 @@ export async function approve(studioId: string, projectId: string, mom: any, me:
       topics: mom.topics || [], summary: mom.summary ?? null, carried: mom.carried || [],
       nextMeeting: mom.nextMeeting ?? null, attendees: mom.attendees || [],
     };
-    await updateDoc(ref, { ...contentWrite(queued(issued)), ...clean(common) });
+    const q = queued(issued);
+    await updateDoc(ref, { ...contentWrite(q), ...clean(common), outbox: clean(outboxOf(q.topics)) });
   }
   await closeCarried(studioId, projectId, (content || mom).carried || []);
 }
@@ -316,4 +340,40 @@ export async function waitingForApproval(tenantId: string): Promise<WaitingMinut
 /** Live minutes, as they move between people. */
 export function watchMinutes(studioId: string, projectId: string, momId: string, on: (m: any) => void, onError?: (e: any) => void) {
   return onSnapshot(minutesDoc(studioId, projectId, momId), (s) => { if (s.exists()) on({ id: s.id, ...(s.data() as any) }); }, onError);
+}
+
+/**
+ * Internal and vendor meetings: no approval and never sent to the client.
+ * Saved straight to the project's log, with a name and a time.
+ */
+export async function saveToLog(studioId: string, projectId: string, mom: any, c: MinutesContent, me: Me) {
+  const now = Date.now();
+  await writePrivate(studioId, projectId, mom.id, c.topics);
+  await updateDoc(minutesDoc(studioId, projectId, mom.id), clean({
+    ...contentWrite(c),
+    status: 'finalised',
+    loggedAt: now,
+    preparedBy: signed(me, now),
+    trail: withStep(mom.trail, step('logged', me, now)),
+    updatedAt: now,
+  }));
+}
+
+/** The studio's own lines, as they change. */
+export function watchPrivate(studioId: string, projectId: string, momId: string, on: (p: PrivatePart | null) => void) {
+  return onSnapshot(privateDoc(studioId, projectId, momId), (s) => on(s.exists() ? (s.data() as PrivatePart) : null), () => on(null));
+}
+
+/** Requirements, selections or design changes added where they belong: marked so they are not offered again. */
+export async function markFiled(studioId: string, projectId: string, momId: string, lineIds: string[], me: Me, where: string) {
+  const now = Date.now();
+  const patch: Record<string, any> = { updatedAt: now };
+  for (const id of lineIds) patch[`filed.${id}`] = { at: now, by: me.email, byName: me.name, where };
+  await updateDoc(minutesDoc(studioId, projectId, momId), patch);
+}
+
+/** Every minutes of one project, newest first. */
+export async function projectMinutes(studioId: string, projectId: string): Promise<any[]> {
+  const s = await getDocs(collection(db, momPath(studioId, projectId)));
+  return s.docs.map((d) => ({ id: d.id, ...(d.data() as any) })).sort((a, b) => (Number(b.meetingDate) || 0) - (Number(a.meetingDate) || 0));
 }

@@ -162,8 +162,14 @@ service cloud.firestore {
       return !p.matches('(.*/)?moms/[^/]+') || request.resource == null || isStudioLead()
         || (request.resource.data.get('format', 0) != 2 && (resource == null || resource.data.get('format', 0) != 2))
         || (request.resource.data.get('approvedBy', null) == (resource == null ? null : resource.data.get('approvedBy', null))
-            && !(request.resource.data.get('status', '') == 'finalised'
-                 && (resource == null || resource.data.get('status', '') != 'finalised')));
+            && (!(request.resource.data.get('status', '') == 'finalised'
+                  && (resource == null || resource.data.get('status', '') != 'finalised'))
+                /* Internal and vendor meetings need no approval: anyone on the staff saves them to the log. */
+                || (isLogOnlyMeeting(request.resource.data.get('meetingType', ''))
+                    && (resource == null || resource.data.get('meetingType', '') == request.resource.data.get('meetingType', '')))));
+    }
+    function isLogOnlyMeeting(t) {
+      return t in ['internal_meeting', 'vendor_meeting', 'internal', 'vendor', 'internal_review', 'contractor_meeting'];
     }
 
     // Check if the user's tenant ID matches the document's tenant ID
@@ -467,7 +473,9 @@ service cloud.firestore {
     match /projects/{projectId}/moms/{momId} {
       allow create: if isAssignedTeam(orgId, projectId, 'ops')
         && request.resource.data.get('status', '') in ['draft', 'pending_review']
-        && !('approvedBy' in request.resource.data);
+        && !('approvedBy' in request.resource.data)
+        /* Proposal and negotiation minutes talk money: a lead writes them (lib/minutes MEETING_TEMPLATES). */
+        && !(request.resource.data.get('template', '') in ['proposal', 'negotiation']);
       allow update: if isAssignedTeam(orgId, projectId, 'ops') && (
         (resource.data.get('status', '') in ['draft', 'pending_review']
           && request.resource.data.get('status', '') in ['draft', 'pending_review']
@@ -486,6 +494,17 @@ service cloud.firestore {
           && request.resource.data.get('trail', []).size() >= resource.data.get('trail', []).size())
         ||
         /*
+          An internal or vendor meeting needs no approval and never reaches
+          the client: Client Relations saves it straight to the log.
+        */
+        (resource.data.get('format', 0) == 2
+          && resource.data.get('status', '') == 'draft'
+          && request.resource.data.get('status', '') == 'finalised'
+          && isLogOnlyMeeting(resource.data.get('meetingType', ''))
+          && request.resource.data.get('meetingType', '') == resource.data.get('meetingType', '')
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['approvedBy']))
+        ||
+        /*
           ...and answers a client's correction with a revision, written beside
           the minutes the client has, up to sending it for approval. The
           client's copy, its status and its approval stay as they are.
@@ -500,6 +519,13 @@ service cloud.firestore {
                          'reviewProjectName', 'reviewRequestedBy', 'reviewRequestedAt'])
           && request.resource.data.get('trail', []).size() >= resource.data.get('trail', []).size())
       );
+    }
+    /*
+      The studio's own lines of new minutes ("studio only", lib/minutes
+      splitPrivate), kept beside them. No client rule reaches here.
+    */
+    match /projects/{projectId}/moms/{momId}/private/{docId} {
+      allow read, write: if isAssignedTeam(orgId, projectId, 'ops');
     }
     /* The numbering the minutes take (services/momService). */
     match /sequences/{seqId} {

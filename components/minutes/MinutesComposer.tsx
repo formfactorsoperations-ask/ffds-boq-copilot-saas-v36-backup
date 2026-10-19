@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Clock, MapPin, Users, RotateCcw, ListChecks, Sparkles, FileText, ShieldCheck, Plus, Trash2, CornerDownLeft,
-  Eye, Send, Check, CircleDot, Mic, MessageSquare, CalendarClock, Loader2, Pencil,
+  Eye, Send, Check, CircleDot, Mic, MessageSquare, CalendarClock, Loader2, Pencil, Lock, ArrowRight,
 } from '@/lib/lucide-shim';
 import {
   allLines, checksOf, readyToSend, emptyTopic, newLine, guessKind, needsOwner, quickDues, dueFromKey, keyOfDue, fmtShortDay,
-  KIND_LABEL, type CarriedAction, type LineKind, type MinutesContent, type MinutesLine, type MinutesTopic, type OwnerSide, type ReviewNote,
+  KIND_LABEL, ALL_KINDS, ROUTE_LABEL, type CarriedAction, type LineKind, type MinutesContent, type MinutesLine, type MinutesTopic, type OwnerSide, type ReviewNote,
   type CorrectionLine,
 } from '../../lib/minutes';
 import { meetingTypeLabel } from '../../lib/meetingTypes';
@@ -26,7 +26,7 @@ import {
 
 export interface PersonOption { name: string; side: OwnerSide; email?: string | null; role?: string | null }
 
-const KINDS: LineKind[] = ['decision', 'action', 'note', 'question'];
+
 const SIDE_LABEL: Record<string, string> = { client: 'Client', ffds: 'Studio', vendor: 'Vendor' };
 
 export interface ComposerProps {
@@ -39,6 +39,10 @@ export interface ComposerProps {
   /** What the client marked wrong, when this is a revision. */
   corrections?: CorrectionLine[];
   revision?: { number: number } | null;
+  /** The line kinds this meeting's template uses most, offered first. */
+  kinds?: LineKind[];
+  /** Internal and vendor meetings: saved to the log, never sent to the client. */
+  logOnly?: boolean;
   /** Notes taken on the meeting before the minutes were started. */
   initialNotes?: string;
   readOnly?: boolean;
@@ -171,7 +175,7 @@ export default function MinutesComposer(p: ComposerProps) {
             </div>
           </Panel>
         )}
-        <Panel icon={ListChecks} title="What was discussed" blurb="One card per topic. Each line is a decision, an action, a note or an open question"
+        <Panel icon={ListChecks} title="What was discussed" blurb="One card per topic. Tap a line's label to make it a decision, an action, a selection, a requirement, a studio-only note…"
           right={!ro ? <button type="button" className={`${btnSm}`} onClick={() => setC((x) => ({ ...x, topics: [...x.topics, emptyTopic('')] }))}><Plus className="w-3.5 h-3.5" />Topic</button> : undefined}>
           <div className="space-y-3">
             {c.topics.map((t, ti) => (
@@ -188,7 +192,7 @@ export default function MinutesComposer(p: ComposerProps) {
                 </div>
                 <div className="space-y-2">
                   {t.lines.map((l) => (
-                    <LineEditor key={l.id} line={l} readOnly={ro} people={peopleBySide} meetingDate={p.meeting.date}
+                    <LineEditor key={l.id} line={l} readOnly={ro} people={peopleBySide} meetingDate={p.meeting.date} kinds={p.kinds || ['decision', 'action', 'note', 'question']}
                       notes={notesFor(l.id)} correction={correctionFor(l.id)}
                       onChange={(patch) => setLine(t.id, l.id, patch)} onRemove={() => removeLine(t.id, l.id)} />
                   ))}
@@ -229,6 +233,7 @@ export default function MinutesComposer(p: ComposerProps) {
           <input className={`${input} mt-2`} disabled={ro} value={c.nextMeeting?.purpose || ''} placeholder="Kids room laminate and handles, at the studio" aria-label="Next meeting purpose"
             onChange={(e) => setC((x) => ({ ...x, nextMeeting: { ...(x.nextMeeting || {}), purpose: e.target.value } }))} />
         </Panel>
+        <RoutesPanel topics={c.topics} logOnly={!!p.logOnly} />
         <Panel icon={ShieldCheck} title="Before you send" blurb="Checked as you write">
           <ul className="space-y-2">{checks.map((k, i) => (
             <CheckRow key={k.text} c={k} i={i} action={needOf(k.text) ? (
@@ -327,14 +332,19 @@ function WhoWasThere({ attendees, readOnly, onChange }: {
 
 /* ── One line ────────────────────────────────────────────────────────────── */
 
-function LineEditor({ line, readOnly, people, meetingDate, notes, correction, onChange, onRemove }: {
+function LineEditor({ line, readOnly, people, meetingDate, notes, correction, onChange, onRemove, kinds }: {
   key?: React.Key; line: MinutesLine; readOnly: boolean; people: PersonOption[]; meetingDate: number;
   notes: ReviewNote[]; correction?: CorrectionLine; onChange: (p: Partial<MinutesLine>) => void; onRemove: () => void;
+  /** The kinds this meeting mostly uses, offered first. */
+  kinds: LineKind[];
 }) {
-  const cycle = () => {
-    const next = KINDS[(KINDS.indexOf(line.kind) + 1) % KINDS.length];
+  const [picking, setPicking] = useState(false);
+  const order = [...kinds, ...ALL_KINDS.filter((k) => !kinds.includes(k))];
+  const pick = (next: LineKind) => {
+    setPicking(false);
     onChange({ kind: next, ...(needsOwner(next) ? { owner: line.owner ?? null, due: line.due ?? null } : {}) });
   };
+  const meta = (patch: NonNullable<MinutesLine['meta']>) => onChange({ meta: { ...(line.meta || {}), ...patch } });
   /* Opening a point from notes is checking it. */
   const opened = () => { if (line.fromNotes && !readOnly) onChange({ fromNotes: false }); };
   const ownerKey = line.owner ? `${line.owner.side}|${line.owner.name}` : '';
@@ -348,13 +358,48 @@ function LineEditor({ line, readOnly, people, meetingDate, notes, correction, on
       ].filter(Boolean).join(' ') || undefined}
       className={`rounded-xl border bg-white px-3 py-2.5 ${correction ? 'border-rose-300' : notes.length ? 'border-amber-300' : line.fromNotes ? 'border-[#3D52A0]/40' : 'border-slate-200'}`}>
       <div className="flex items-start gap-2.5">
-        <span className="mt-1"><KindChip kind={line.kind} onClick={readOnly ? undefined : cycle} title={`${KIND_LABEL[line.kind]}. Tap to change`} /></span>
+        <span className="mt-1 relative">
+          <KindChip kind={line.kind} onClick={readOnly ? undefined : () => setPicking((x) => !x)} title={`${KIND_LABEL[line.kind]}. Tap to change`} />
+          {picking && (
+            <span role="menu" className="absolute left-0 top-7 z-20 w-56 rounded-xl border border-slate-200 bg-white shadow-xl p-1.5 phd-pop">
+              {order.map((k, i) => (
+                <button key={k} type="button" role="menuitem" onClick={() => pick(k)}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-slate-50 ${i === kinds.length ? 'mt-1 pt-2 border-t border-slate-100' : ''}`}>
+                  <KindChip kind={k} /><span className="text-[11px] text-slate-500 truncate">{ROUTE_LABEL[k]}</span>
+                </button>
+              ))}
+            </span>
+          )}
+        </span>
         <AutoText value={line.text} readOnly={readOnly} onFocus={opened} onChange={(text) => onChange({ text, fromNotes: false })} label={`${KIND_LABEL[line.kind]} text`} />
         {line.fromNotes && <span className="mt-1"><FromNotes onConfirm={readOnly ? undefined : () => onChange({ fromNotes: false })} /></span>}
         {!readOnly && (
           <button type="button" onClick={onRemove} aria-label="Remove this line" className="p-1 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-slate-50"><Trash2 className="w-3.5 h-3.5" /></button>
         )}
       </div>
+      {(line.kind === 'requirement' || line.kind === 'selection' || line.kind === 'design_change') && (
+        <div className="flex items-center gap-2 mt-2 flex-wrap sm:pl-[86px]">
+          <input disabled={readOnly} value={line.meta?.room || ''} onChange={(e) => meta({ room: e.target.value })} placeholder="Room" aria-label="Room"
+            className="w-32 px-2 py-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#3D52A0]/30" />
+          {line.kind === 'selection' && (
+            <input disabled={readOnly} value={line.meta?.item || ''} onChange={(e) => meta({ item: e.target.value })} placeholder="Item: countertop" aria-label="Item"
+              className="w-40 px-2 py-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#3D52A0]/30" />
+          )}
+          {line.kind === 'design_change' && (
+            <input disabled={readOnly} value={line.meta?.sheet || ''} onChange={(e) => meta({ sheet: e.target.value })} placeholder="Sheet: bedroom plan" aria-label="Sheet"
+              className="w-40 px-2 py-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#3D52A0]/30" />
+          )}
+          {line.kind === 'requirement' && (readOnly ? (line.meta?.priority ? <Chip>{line.meta.priority === 'must' ? 'Must have' : 'Nice to have'}</Chip> : null) : (
+            <Seg small label="How much it matters" value={line.meta?.priority || null} onChange={(v) => meta({ priority: v })}
+              options={[{ id: 'must', label: 'Must have' }, { id: 'nice', label: 'Nice to have' }]} />
+          ))}
+          {line.kind === 'selection' && (readOnly ? (line.meta?.choice ? <Chip tone={line.meta.choice === 'approved' ? 'emerald' : line.meta.choice === 'on_hold' ? 'amber' : 'brand'}>{line.meta.choice === 'approved' ? 'Approved' : line.meta.choice === 'on_hold' ? 'On hold' : 'Client to pick'}</Chip> : null) : (
+            <Seg small label="Where it stands" value={line.meta?.choice || null} onChange={(v) => meta({ choice: v })}
+              options={[{ id: 'approved', label: 'Approved' }, { id: 'on_hold', label: 'On hold' }, { id: 'client_to_pick', label: 'Client to pick' }]} />
+          ))}
+        </div>
+      )}
+      {line.kind === 'studio_only' && <p className="mt-1.5 sm:pl-[86px] text-[11px] text-slate-500 inline-flex items-center gap-1"><Lock className="w-3 h-3" />Never printed, never sent, never shown in the portal.</p>}
       {needsOwner(line.kind) && (
         <div className="flex items-center gap-2 mt-2 flex-wrap sm:pl-[86px]">
           <label className="sr-only" htmlFor={`own-${line.id}`}>Who does it</label>
@@ -508,5 +553,28 @@ function BriefButton({ onWrite }: { onWrite: () => Promise<void> }) {
       setBusy(true);
       try { await onWrite(); } catch { /* the field stays as it was */ } finally { setBusy(false); }
     }}>{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}Write it from the points</button>
+  );
+}
+
+/* ── Where this goes (mockup 9) ──────────────────────────────────────────── */
+
+function RoutesPanel({ topics, logOnly }: { topics: MinutesTopic[]; logOnly: boolean }) {
+  const counts = new Map<LineKind, number>();
+  for (const t of topics) for (const l of t.lines) if (l.text.trim()) counts.set(l.kind, (counts.get(l.kind) || 0) + 1);
+  const rows = ALL_KINDS.filter((k) => counts.get(k));
+  if (!rows.length) return null;
+  return (
+    <Panel icon={ArrowRight} title={logOnly ? 'Where this goes when saved' : 'Where this goes when approved'} blurb={logOnly ? 'Internal: saved to the project log, never sent to the client' : 'Nothing is copied by hand'}>
+      <ul className="space-y-2 text-xs text-slate-700">
+        {rows.map((k) => (
+          <li key={k} className="flex items-center gap-2">
+            <b className="text-slate-800 tabular-nums w-5 text-right">{counts.get(k)}</b>
+            <KindChip kind={k} />
+            <ArrowRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="truncate">{ROUTE_LABEL[k]}</span>
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }
