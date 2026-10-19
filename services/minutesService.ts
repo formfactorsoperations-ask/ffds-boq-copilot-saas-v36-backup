@@ -115,7 +115,7 @@ export async function startMinutes(studioId: string, projectId: string, seed: Me
   const earlier = await getDocs(collection(db, momPath(studioId, projectId)))
     .then((s) => s.docs.map((d) => ({ id: d.id, ...(d.data() as any) })))
     .catch(() => [] as any[]);
-  const carried = openFromEarlier(earlier);
+  const carried = openFromEarlier(earlier, undefined, seed.meetingType);
   const now = Date.now();
   let id = '';
   await runTransaction(db, async (tx) => {
@@ -473,4 +473,17 @@ export async function loadDesignReviews(studioId: string, projectId: string): Pr
     const v = await getDoc(doc(db, 'projects', projectId, 'portalView', 'current')).catch(() => null);
     return pick((v?.exists() ? (v.data() as any)?.designRecord : null) || []);
   }
+}
+
+/**
+ * An action ticked done, or opened again, on the action tracker. Written to
+ * the action list the tracker and the Ops Desk read; a revision carries it
+ * into the lines (lib/minutes withQueueState). Who and when are kept on it.
+ */
+export async function setActionDone(studioId: string, projectId: string, mom: any, actionId: string, done: boolean, me: { email: string }) {
+  const now = Date.now();
+  const items = (mom.actionItems || []).map((a: any) => (String(a.id) === actionId
+    ? { ...a, status: done ? 'done' : 'open', doneAt: done ? now : null, doneBy: done ? me.email : null }
+    : a));
+  await updateDoc(minutesDoc(studioId, projectId, mom.id), clean({ actionItems: items, updatedAt: now }));
 }

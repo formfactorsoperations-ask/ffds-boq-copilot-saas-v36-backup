@@ -33,6 +33,8 @@ export interface MinutesDocProps {
   draft?: boolean;
   /** Design review minutes: the rooms from Design Desk. Revision rounds and fees are never printed. */
   designReview?: DesignReviewRecord | null;
+  /** On screen only: lines the client asked to correct, with what they wrote. Never printed. */
+  marks?: Record<string, string>;
 }
 
 const stamp = (ms: number) => new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
@@ -74,6 +76,9 @@ export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>
   const closed = (p.content.carried || []).filter((c: CarriedAction) => c.outcome === 'done');
   const stillOpen = (p.content.carried || []).filter((c: CarriedAction) => c.outcome === 'open');
   const td = 'py-1.5 px-2 align-top border-b border-slate-200';
+  /* A line the client marked: tinted, with what they wrote under it. */
+  const markRow = (id: string) => (p.marks?.[id] ? 'bg-rose-50' : '');
+  const markNote = (id: string) => (p.marks?.[id] ? <div className="mt-1 text-[10px] font-semibold text-rose-700">Client: “{p.marks[id]}”</div> : null);
   const owner = (o?: { side: string; name: string } | null) => (o ? (o.side === 'vendor' ? `${p.studio.name} site team` : `${o.name}${o.side === 'ffds' ? ' (studio)' : ''}`) : '');
 
   return (
@@ -158,7 +163,7 @@ export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>
           <H n={num()}>Decisions</H>
           <table className="w-full text-[11px] text-slate-800"><tbody>
             {decisions.map(({ line, topic }) => (
-              <tr key={line.id}><td className={`${td} w-10 font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td><td className={`${td} w-32 font-semibold`}>{topic.title}</td><td className={td}>{line.text}</td></tr>
+              <tr key={line.id} className={markRow(line.id)}><td className={`${td} w-10 font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td><td className={`${td} w-32 font-semibold`}>{topic.title}</td><td className={td}>{line.text}{markNote(line.id)}</td></tr>
             ))}
           </tbody></table>
         </>
@@ -171,9 +176,9 @@ export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>
             <thead><tr className="text-[9px] uppercase tracking-[0.14em] text-slate-400 text-left"><th className="py-1 px-2 w-10">#</th><th className="py-1 px-2">Action</th><th className="py-1 px-2 w-36">Owner</th><th className="py-1 px-2 w-24">Due</th></tr></thead>
             <tbody>
               {actions.map(({ line }) => (
-                <tr key={line.id}>
+                <tr key={line.id} className={markRow(line.id)}>
                   <td className={`${td} font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td>
-                  <td className={td}>{line.kind === 'question' ? `To answer: ${line.text}` : line.text}</td>
+                  <td className={td}>{line.kind === 'question' ? `To answer: ${line.text}` : line.text}{markNote(line.id)}</td>
                   <td className={`${td} font-semibold`}>{owner(line.owner)}</td>
                   <td className={`${td} tabular-nums`}>{line.due ? fmtShortDay(line.due) : ''}</td>
                 </tr>
@@ -196,8 +201,8 @@ export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>
           <H n={num()}>What you asked for</H>
           <table className="w-full text-[11px] text-slate-800"><tbody>
             {requirements.map(({ line, topic }) => (
-              <tr key={line.id}><td className={`${td} w-10 font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td><td className={`${td} w-32 font-semibold`}>{line.meta?.room || topic.title}</td>
-                <td className={td}>{line.text}{line.meta?.priority ? <span className="text-slate-500"> · {line.meta.priority === 'must' ? 'must have' : 'nice to have'}</span> : null}</td></tr>
+              <tr key={line.id} className={markRow(line.id)}><td className={`${td} w-10 font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td><td className={`${td} w-32 font-semibold`}>{line.meta?.room || topic.title}</td>
+                <td className={td}>{line.text}{line.meta?.priority ? <span className="text-slate-500"> · {line.meta.priority === 'must' ? 'must have' : 'nice to have'}</span> : null}{markNote(line.id)}</td></tr>
             ))}
           </tbody></table>
         </>
@@ -210,8 +215,8 @@ export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>
             <thead><tr className="text-[9px] uppercase tracking-[0.14em] text-slate-400 text-left"><th className="py-1 px-2 w-10">#</th><th className="py-1 px-2 w-32">Room</th><th className="py-1 px-2">Choice</th><th className="py-1 px-2 w-28">Status</th></tr></thead>
             <tbody>
               {selections.map(({ line, topic }) => (
-                <tr key={line.id}><td className={`${td} font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td><td className={`${td} font-semibold`}>{line.meta?.room || topic.title}</td>
-                  <td className={td}>{selectionText({ ...line, meta: { ...line.meta, choice: null } })}</td>
+                <tr key={line.id} className={markRow(line.id)}><td className={`${td} font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td><td className={`${td} font-semibold`}>{line.meta?.room || topic.title}</td>
+                  <td className={td}>{selectionText({ ...line, meta: { ...line.meta, choice: null } })}{markNote(line.id)}</td>
                   <td className={td}>{line.meta?.choice === 'approved' ? 'Approved' : line.meta?.choice === 'on_hold' ? 'On hold' : line.meta?.choice === 'client_to_pick' ? 'Client to pick' : ''}</td></tr>
               ))}
             </tbody>
@@ -224,8 +229,8 @@ export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>
           <H n={num()}>Design changes</H>
           <table className="w-full text-[11px] text-slate-800"><tbody>
             {changes.map(({ line, topic }) => (
-              <tr key={line.id}><td className={`${td} w-10 font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td><td className={`${td} w-32 font-semibold`}>{line.meta?.room || topic.title}</td>
-                <td className={td}>{line.text}{line.meta?.sheet ? <span className="text-slate-500"> · {line.meta.sheet}</span> : null}</td></tr>
+              <tr key={line.id} className={markRow(line.id)}><td className={`${td} w-10 font-bold`} style={{ color: BRASS }}>{refs[line.id]}</td><td className={`${td} w-32 font-semibold`}>{line.meta?.room || topic.title}</td>
+                <td className={td}>{line.text}{line.meta?.sheet ? <span className="text-slate-500"> · {line.meta.sheet}</span> : null}{markNote(line.id)}</td></tr>
             ))}
           </tbody></table>
         </>
@@ -235,7 +240,7 @@ export const MinutesDocument = React.forwardRef<HTMLDivElement, MinutesDocProps>
         <>
           <H n={num()}>Also noted</H>
           <ul className="text-[11px] text-slate-700 space-y-1">
-            {notes.map(({ line, topic }) => <li key={line.id}>{topic.title ? <b className="text-slate-800">{topic.title}: </b> : null}{line.kind === 'question' ? `Still open: ${line.text}` : line.text}</li>)}
+            {notes.map(({ line, topic }) => <li key={line.id} className={markRow(line.id)}>{topic.title ? <b className="text-slate-800">{topic.title}: </b> : null}{line.kind === 'question' ? `Still open: ${line.text}` : line.text}{markNote(line.id)}</li>)}
           </ul>
         </>
       )}

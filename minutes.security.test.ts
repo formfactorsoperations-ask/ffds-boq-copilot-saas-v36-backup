@@ -236,3 +236,16 @@ describe('part 3: bringing older minutes across', () => {
     await assertFails(getDoc(doc(client(), `organizations/${STUDIO}/minutesMigration/r1`)));
   });
 });
+
+describe('the action tracker', () => {
+  const items = [{ id: 'a1', text: 'Send renders', owner: 'ffds', status: 'done', doneAt: 9, doneBy: 'cr@a.com' }];
+  it('Client Relations ticks an action done on sent minutes, and changes nothing else', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), M('sent')), { actionItems: [{ id: 'a1', text: 'Send renders', owner: 'ffds', status: 'open' }] });
+    });
+    await assertSucceeds(updateDoc(doc(cr(), M('sent')), { actionItems: items, updatedAt: 9 }));
+    await assertFails(updateDoc(doc(cr(), M('sent')), { actionItems: items, summary: 'Rewritten' }));
+    await assertFails(updateDoc(doc(cr(), M('sent')), { actionItems: [...items, ...items] }));
+    await assertFails(updateDoc(doc(client(), M('sent')), { actionItems: items }));
+  });
+});

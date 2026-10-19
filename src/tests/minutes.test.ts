@@ -4,6 +4,7 @@ import {
   clientView, cleanCorrections, correctionText, openFromEarlier, guessKind, queueScopeLines, withQueueState,
   fullTrail, clientContactOf, isMinutesLead, dueFromKey, keyOfDue, quickDues,
   designReviewFrom, designReviewCounts, reviewsWithoutMinutes, decisionsLog, studioFollowUps, followUpId, clientMaySee,
+  trackedActions, minutesStateLabel,
   type MinutesTopic, type MinutesLine,
 } from '../../lib/minutes';
 
@@ -350,5 +351,53 @@ describe('what the client sees in the portal', () => {
     expect(clientMaySee({ format: 2, status: 'shared' }, false)).toBe(true);
     expect(clientMaySee({ format: 2, status: 'shared', meetingType: 'vendor_meeting' }, true)).toBe(false);
     expect(clientMaySee({ status: 'shared' }, false)).toBe(false);
+  });
+});
+
+describe('what carries into the next minutes', () => {
+  const issued = (id: string, meetingType: string, text: string, date: number) => ({
+    id, format: 2, status: 'shared', momRef: id, meetingType, meetingDate: date, topics: [],
+    actionItems: [{ id: `${id}a`, text, owner: 'ffds', ownerName: 'Tanvi', status: 'open' }],
+  });
+  const moms = [
+    issued('c1', 'client_meeting', 'Send the revised elevation.', 3),
+    issued('i1', 'internal_meeting', 'Check the vendor quote margin.', 2),
+    issued('v1', 'vendor_meeting', 'Carpenter to start Monday.', 1),
+  ];
+  it('a client meeting carries only what was agreed with the client', () => {
+    expect(openFromEarlier(moms, undefined, 'client_meeting').map((k) => [k.text, k.from])).toEqual([['Send the revised elevation.', 'client']]);
+    expect(openFromEarlier(moms, undefined, 'site_visit').map((k) => k.from)).toEqual(['client']);
+  });
+  it('an internal meeting sees everything, each tagged', () => {
+    expect(openFromEarlier(moms, undefined, 'internal_meeting').map((k) => k.from)).toEqual(['client', 'internal', 'vendor']);
+  });
+  it('a vendor meeting sees vendor and internal actions', () => {
+    expect(openFromEarlier(moms, undefined, 'vendor_meeting').map((k) => k.from)).toEqual(['internal', 'vendor']);
+  });
+});
+
+describe('the action tracker', () => {
+  const NOW2 = 1000;
+  const moms = [
+    { id: 'a', status: 'acknowledged', momRef: 'M1', meetingType: 'client_meeting', meetingDate: 1, actionItems: [
+      { id: 'x', text: 'Finalise the laminate', owner: 'client', ownerName: 'Mr Naik', dueDate: 500, status: 'open' },
+      { id: 'y', text: 'Send renders', owner: 'ffds', ownerName: 'Tanvi', dueDate: 2000, status: 'done' },
+    ] },
+    { id: 'b', status: 'finalised', momRef: 'M2', meetingType: 'internal_meeting', meetingDate: 2, actionItems: [{ id: 'z', text: 'Check margin', owner: 'ffds', status: 'open' }] },
+    { id: 'c', status: 'draft', momRef: 'M3', actionItems: [{ id: 'q', text: 'Not yet', owner: 'ffds', status: 'open' }] },
+    { id: 'd', status: 'pending_review', momRef: 'M4', actionItems: [{ id: 'r', text: 'Not yet either', owner: 'ffds', status: 'open' }] },
+  ];
+  it('lists issued minutes only, who each waits on, open first', () => {
+    expect(trackedActions(moms, NOW2).map((a) => [a.actionId, a.lane, a.from, a.overdue, a.done])).toEqual([
+      ['x', 'client', 'client', true, false], ['z', 'studio', 'internal', false, false], ['y', 'studio', 'client', false, true],
+    ]);
+  });
+  it('says confirming the minutes is not doing the actions', () => {
+    expect(minutesStateLabel('acknowledged', 'client').label).toBe('Client confirmed the minutes');
+    expect(minutesStateLabel('finalised', 'internal').label).toBe('In the project log');
+  });
+  it('a revision keeps actions ticked done on the tracker', () => {
+    const t = withQueueState([{ id: 't', title: '', lines: [line({ id: 'y', kind: 'action', text: 'Send renders', status: 'open' })] }], [{ id: 'y', status: 'done' }]);
+    expect(t[0].lines[0].status).toBe('done');
   });
 });

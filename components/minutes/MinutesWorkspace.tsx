@@ -12,17 +12,18 @@ import { buildWhatsAppURL } from '../../lib/whatsappUtils';
 import { publicAppOrigin } from '../../lib/publicUrl';
 import { downloadElementAsPdf, elementPdfFile, pdfFilename } from '../../lib/documentPdf';
 import {
-  allLines, flowStep, statusChip, isMinutesLead, fullTrail, mergePrivate, templateById, isLogOnly,
+  allLines, flowStep, statusChip, isMinutesLead, fullTrail, mergePrivate, templateById, isLogOnly, audienceOf, carriesFrom,
   type MinutesContent, type ReviewNote, type PrivatePart,
 } from '../../lib/minutes';
 import {
   watchMinutes, saveContent, sendForApproval, returnWithNotes, approve, markSent, startRevision, notesToTopics,
-  waitingForApproval, watchPrivate, watchRevision, saveToLog, type Me, type WaitingMinutes, type RevisionPart,
+  waitingForApproval, watchPrivate, watchRevision, saveToLog, projectMinutes, type Me, type WaitingMinutes, type RevisionPart,
 } from '../../services/minutesService';
 import MinutesComposer, { type PersonOption } from './MinutesComposer';
 import MinutesReview, { type QueueRow } from './MinutesReview';
 import MinutesSendSheet, { type SendChoice } from './MinutesSendSheet';
 import { MinutesDocument } from './MinutesDocument';
+import { ClientCorrections } from './ClientCorrections';
 import { MinutesShell, Panel, Trail, Chip, btnPri, btnSec, BRAND_EYEBROW } from './MinutesBits';
 
 /*
@@ -136,10 +137,29 @@ export default function MinutesWorkspace(props: Props) {
     waitingForApproval(orgData.tenantId).then(setQueue).catch(() => setQueue([]));
   }, [lead, orgData?.tenantId, mom?.status, mom?.revisionStage]);
 
+  /*
+    Drafts started before carried actions were tagged with the meeting they
+    came from: tag them now from the project's minutes, and drop what this
+    meeting does not carry (an internal action never reaches a client's
+    minutes). Saved with the next edit.
+  */
+  const untagged = !!doc0 && doc0.status === 'draft' && !doc0.revisionStage && (doc0.carried || []).some((k: any) => !k.from);
+  const [sourceTypes, setSourceTypes] = useState<Record<string, string> | null>(null);
+  useEffect(() => {
+    if (!untagged) return;
+    projectMinutes(props.studioId, at.projectId)
+      .then((list) => setSourceTypes(Object.fromEntries(list.map((m) => [String(m.id), String(m.meetingType || '')]))))
+      .catch(() => setSourceTypes({}));
+  }, [untagged, props.studioId, at.projectId]);
+
   const c = useMemo(() => {
     const x = content(mom);
-    return { ...x, topics: mergePrivate(x.topics, priv.part) };
-  }, [mom, priv.part]);
+    const into = audienceOf(mom?.meetingType);
+    const carried = sourceTypes && untagged
+      ? (x.carried || []).map((k) => (k.from ? k : { ...k, from: audienceOf(sourceTypes[k.momId]) })).filter((k) => carriesFrom(into, k.from!))
+      : x.carried;
+    return { ...x, carried, topics: mergePrivate(x.topics, priv.part) };
+  }, [mom, priv.part, sourceTypes, untagged]);
   const template = templateById(mom?.template);
   const logOnly = isLogOnly(mom?.meetingType);
   const revising = !!mom?.revisionStage;
@@ -320,7 +340,7 @@ export default function MinutesWorkspace(props: Props) {
   const canWrite = mom.status === 'draft' || mom.revisionStage === 'draft' || (lead && editing);
   if (canWrite || mom.status === 'pending_review' || mom.revisionStage === 'pending_review') {
     const ro = !canWrite;
-    if (!priv.loaded) {
+    if (!priv.loaded || (untagged && !sourceTypes)) {
       return (
         <MinutesShell label="Write minutes" eyebrow={eyebrow} title={title} step={step} onClose={props.onClose}>
           <p className="p-6 text-sm text-slate-500 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin text-[#3D52A0]" />Opening the minutes…</p>
@@ -360,6 +380,7 @@ export default function MinutesWorkspace(props: Props) {
           reviewNotes={mom.reviewNotes || []}
           corrections={revising ? corrections : undefined}
           revision={revising ? { number: Number(mom.rev || 0) + 1 } : null}
+          issuedTopics={revising ? mom.topics || [] : undefined}
           initialNotes={!revising && !allLines(mom.topics).length ? mom.rawNotes || '' : ''}
           onSave={(x) => saveContent(props.studioId, at.projectId, mom.id, x, revising)}
           onNotesToPoints={(notes) => notesToTopics({
@@ -391,22 +412,21 @@ export default function MinutesWorkspace(props: Props) {
       {errorBar}
       <div className="grid gap-5 p-4 sm:p-5 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 overflow-x-auto hud-panel-in">
-          <MinutesDocument {...docProps(c, false)} />
+          <MinutesDocument {...docProps(c, false)} marks={mom.status === 'correction_requested' ? Object.fromEntries(corrections.map((k: any) => [k.lineId, k.text])) : undefined} />
         </div>
         <div className="space-y-5 min-w-0">
-          <Panel icon={ShieldCheck} title={chip.label} blurb={
+          <Panel icon={ShieldCheck} title={mom.status === 'correction_requested' ? 'The client asked for a correction' : chip.label} blurb={
             mom.status === 'finalised' && logOnly ? 'Saved to the project log. Internal and vendor minutes are never sent to the client.'
             : mom.status === 'finalised' ? 'Approved. Send them to the client: the portal always, WhatsApp and email with the PDF.'
               : mom.status === 'shared' ? `Waiting for the client to confirm${waitingDays ? ` · ${waitingDays} day${waitingDays === 1 ? '' : 's'}` : ''}.`
                 : mom.status === 'acknowledged' ? `Confirmed by ${mom.acknowledgedBy || 'the client'}.`
-                  : 'The client asked to correct the lines below. Answer with a revision; they keep these minutes until it is sent.'
-          } right={<Chip tone={chip.tone}>{chip.label}</Chip>}>
+                  : `Answer with revision ${Number(mom.rev || 0) + 1}. Until it is sent, the client keeps reading these minutes as they are.`
+          } right={mom.status === 'correction_requested' ? undefined : <Chip tone={chip.tone}>{chip.label}</Chip>}>
             {mom.status === 'correction_requested' && (
-              <ul className="space-y-2 mb-3">
-                {(corrections.length ? corrections : [{ lineId: '', ref: '', text: mom.correctionRequest?.text || '' }]).map((k: any, i: number) => (
-                  <li key={i} className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-900"><b>{k.ref || 'The client'}:</b> {k.text}</li>
-                ))}
-              </ul>
+              <div className="mb-4">
+                <ClientCorrections corrections={corrections} note={mom.correctionRequest?.text || null}
+                  by={mom.correctionRequest?.by || clientName || null} at={mom.correctionRequest?.at || null} topics={mom.topics || []} />
+              </div>
             )}
             <div className="flex flex-wrap gap-2">
               {mom.status === 'finalised' && !logOnly && <button type="button" className={btnPri} onClick={() => setSending(true)}><Send className="w-4 h-4" />Send to the client</button>}

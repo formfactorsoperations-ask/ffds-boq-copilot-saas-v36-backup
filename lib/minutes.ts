@@ -90,6 +90,27 @@ export interface CarriedAction {
   ownerName: string;
   due?: number | null;
   outcome: 'done' | 'open' | 'drop' | null;
+  /** The kind of meeting it came from: client actions never surface in internal talk, and the other way round. */
+  from?: MeetingAudience | null;
+}
+
+/** Who a meeting is with: the client, the studio alone, or a vendor. */
+export type MeetingAudience = 'client' | 'internal' | 'vendor';
+export const AUDIENCE_LABEL: Record<MeetingAudience, string> = { client: 'Client meeting', internal: 'Internal', vendor: 'Vendor' };
+export const audienceOf = (meetingType: unknown): MeetingAudience =>
+  /vendor/.test(String(meetingType || '')) ? 'vendor' : /internal/.test(String(meetingType || '')) ? 'internal' : 'client';
+
+/**
+ * Which earlier meetings' open actions a new meeting picks up. Minutes for a
+ * client meeting carry only what was agreed with the client: an internal or
+ * vendor action is the studio's business and never reaches the client's
+ * minutes. An internal meeting sees everything; a vendor meeting sees vendor
+ * and internal actions.
+ */
+export function carriesFrom(into: MeetingAudience, from: MeetingAudience): boolean {
+  if (into === 'client') return from === 'client';
+  if (into === 'vendor') return from !== 'client';
+  return true;
 }
 
 export type TrailStep =
@@ -417,7 +438,16 @@ export function queueScopeLines(topics: MinutesTopic[], by: string | null, now: 
 /** Where the queue has moved an action on since (added, dismissed), back onto its line. */
 export function withQueueState(topics: MinutesTopic[], actionItems: any[] | undefined): MinutesTopic[] {
   const byId = new Map((actionItems || []).filter((a) => a?.scopeRequest).map((a) => [String(a.id), a.scopeRequest]));
-  return topics.map((t) => ({ ...t, lines: t.lines.map((l) => (byId.has(l.id) ? { ...l, scopeRequest: byId.get(l.id) } : l)) }));
+  /* An action ticked done on the tracker (older fields only) stays done in a revision. */
+  const status = new Map((actionItems || []).filter((a) => a?.status === 'done' || a?.status === 'cancelled').map((a) => [String(a.id), a.status]));
+  return topics.map((t) => ({
+    ...t,
+    lines: t.lines.map((l) => {
+      let x = byId.has(l.id) ? { ...l, scopeRequest: byId.get(l.id) } : l;
+      if (status.has(l.id) && l.kind === 'action') x = { ...x, status: status.get(l.id) };
+      return x;
+    }),
+  }));
 }
 
 /* ── Studio-only lines stay with the studio ────────────────────────────── */
@@ -597,22 +627,27 @@ const ISSUED: string[] = ['finalised', 'shared', 'acknowledged', 'correction_req
 
 /**
  * Open actions from the project's earlier issued minutes, newest minutes
- * first, each once. Minutes being written (this one) are left out.
+ * first, each once, tagged with the kind of meeting they came from. Minutes
+ * being written (this one) are left out, and so are meetings this one does
+ * not carry from (carriesFrom): with no meeting type given, everything.
  */
-export function openFromEarlier(moms: any[], exceptId?: string): CarriedAction[] {
+export function openFromEarlier(moms: any[], exceptId?: string, forMeetingType?: string | null): CarriedAction[] {
   const out: CarriedAction[] = [];
   const seen = new Set<string>();
+  const into = forMeetingType ? audienceOf(forMeetingType) : null;
   const issued = (moms || [])
     .filter((m) => m && m.id !== exceptId && ISSUED.includes(String(m.status)))
+    .filter((m) => !into || carriesFrom(into, audienceOf(m.meetingType)))
     .sort((a, b) => (Number(b.meetingDate) || 0) - (Number(a.meetingDate) || 0));
   for (const m of issued) {
+    const from = audienceOf(m.meetingType);
     /* Open questions without an owner go to the next meeting too (format 2 minutes only). */
     for (const { line } of allLines(m.format === 2 ? m.topics : [])) {
       if (line.kind !== 'question' || line.owner?.name || line.status === 'done' || line.status === 'cancelled' || !line.text.trim()) continue;
       const key = line.text.trim().toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ momId: String(m.id), ref: String(m.momRef || ''), actionId: line.id, text: `Open question: ${line.text.trim()}`, ownerName: 'To answer', due: null, outcome: null });
+      out.push({ momId: String(m.id), ref: String(m.momRef || ''), actionId: line.id, text: `Open question: ${line.text.trim()}`, ownerName: 'To answer', due: null, outcome: null, from });
     }
     for (const a of m.actionItems || []) {
       if (!a?.text || (a.status && a.status !== 'open')) continue;
@@ -622,7 +657,7 @@ export function openFromEarlier(moms: any[], exceptId?: string): CarriedAction[]
       out.push({
         momId: String(m.id), ref: String(m.momRef || ''), actionId: String(a.id || ''), text: String(a.text),
         ownerName: String(a.ownerName || (a.owner === 'client' ? 'Client' : a.owner === 'vendor' ? 'Vendor' : 'Studio')),
-        due: typeof a.dueDate === 'number' ? a.dueDate : null, outcome: null,
+        due: typeof a.dueDate === 'number' ? a.dueDate : null, outcome: null, from,
       });
     }
   }
@@ -1052,3 +1087,63 @@ export function studioFollowUps(topics: MinutesTopic[] | undefined): ActionFollo
 
 /** A follow-up's id: one per action, so a revision approved again never adds a second. */
 export const followUpId = (momId: string, lineId: string) => `mom-${momId}-${lineId}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 140);
+
+/* ── The action tracker ──────────────────────────────────────────────────── */
+
+/** Who an action waits on. */
+export type ActionLane = 'studio' | 'client' | 'vendor';
+
+export interface TrackedAction {
+  momId: string;
+  momRef: string;
+  meeting: string;
+  meetingDate: number;
+  /** Where the minutes it is on stand: confirming the minutes is not doing the action. */
+  momStatus: string;
+  from: MeetingAudience;
+  actionId: string;
+  text: string;
+  lane: ActionLane;
+  ownerName: string;
+  due: number | null;
+  done: boolean;
+  overdue: boolean;
+  flags: { scope?: boolean; siteCondition?: boolean; cost?: boolean; drawing?: boolean };
+}
+
+/**
+ * Every action on the project's issued minutes (drafts and minutes waiting
+ * for approval are not commitments yet), each with who it waits on, the kind
+ * of meeting it came from, and where its minutes stand. Open first, by due
+ * date; done last.
+ */
+export function trackedActions(moms: any[], now = Date.now()): TrackedAction[] {
+  const out: TrackedAction[] = [];
+  for (const m of moms || []) {
+    if (!ISSUED.includes(String(m?.status))) continue;
+    for (const a of m.actionItems || []) {
+      if (!a?.text || a.status === 'cancelled') continue;
+      const lane: ActionLane = a.owner === 'client' ? 'client' : a.owner === 'vendor' ? 'vendor' : 'studio';
+      const due = typeof a.dueDate === 'number' ? a.dueDate : null;
+      const done = a.status === 'done';
+      out.push({
+        momId: String(m.id), momRef: String(m.momRef || ''), meeting: String(m.meetingTitle || ''), meetingDate: Number(m.meetingDate) || 0,
+        momStatus: String(m.status), from: audienceOf(m.meetingType), actionId: String(a.id || ''), text: String(a.text),
+        lane, ownerName: String(a.ownerName || (lane === 'client' ? 'Client' : lane === 'vendor' ? 'Vendor' : 'Studio')),
+        due, done, overdue: !done && !!due && due < now, flags: a.flags || {},
+      });
+    }
+  }
+  return out.sort((a, b) => Number(a.done) - Number(b.done) || (a.due || Infinity) - (b.due || Infinity) || b.meetingDate - a.meetingDate);
+}
+
+/** What the tracker shows about the minutes an action is on. */
+export function minutesStateLabel(momStatus: string, from: MeetingAudience): { label: string; tone: ChipTone } {
+  if (from !== 'client') return { label: 'In the project log', tone: 'slate' };
+  switch (momStatus) {
+    case 'acknowledged': return { label: 'Client confirmed the minutes', tone: 'emerald' };
+    case 'correction_requested': return { label: 'Client asked for a correction', tone: 'rose' };
+    case 'shared': return { label: 'Minutes not confirmed yet', tone: 'amber' };
+    default: return { label: 'Minutes not sent yet', tone: 'slate' };
+  }
+}

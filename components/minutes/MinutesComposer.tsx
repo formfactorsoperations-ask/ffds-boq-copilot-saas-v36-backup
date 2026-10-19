@@ -5,11 +5,12 @@ import {
 } from '@/lib/lucide-shim';
 import {
   allLines, checksOf, readyToSend, emptyTopic, newLine, guessKind, needsOwner, quickDues, dueFromKey, keyOfDue, fmtShortDay,
-  KIND_LABEL, ALL_KINDS, ROUTE_LABEL, type CarriedAction, type LineKind, type MinutesContent, type MinutesLine, type MinutesTopic, type OwnerSide, type ReviewNote, type DesignReviewRecord,
+  KIND_LABEL, ALL_KINDS, ROUTE_LABEL, type CarriedAction, type LineKind, type MinutesContent, type MinutesLine, type MinutesTopic, type OwnerSide, type ReviewNote, type DesignReviewRecord, AUDIENCE_LABEL,
   type CorrectionLine,
 } from '../../lib/minutes';
 import { meetingTypeLabel } from '../../lib/meetingTypes';
 import { DesignReviewRooms, designReviewRoutes } from './DesignReviewRooms';
+import { ClientCorrections } from './ClientCorrections';
 import {
   Panel, Seg, KindChip, FromNotes, Avatar, CheckRow, Chip, EYEBROW, input, btnPri, btnSec, btnSm, linkBtn,
 } from './MinutesBits';
@@ -40,6 +41,8 @@ export interface ComposerProps {
   /** What the client marked wrong, when this is a revision. */
   corrections?: CorrectionLine[];
   revision?: { number: number } | null;
+  /** A revision: the minutes as the client read them, to quote the lines they marked. */
+  issuedTopics?: MinutesTopic[];
   /** The line kinds this meeting's template uses most, offered first. */
   kinds?: LineKind[];
   /** Internal and vendor meetings: saved to the log, never sent to the client. */
@@ -149,6 +152,10 @@ export default function MinutesComposer(p: ComposerProps) {
         {p.designReview && <DesignReviewRooms review={p.designReview} studio compact />}
         {p.revision && (
           <Panel icon={RotateCcw} title={`Revision ${p.revision.number}`} blurb="The client keeps the minutes they have until this is approved and sent. Say what changed: it is printed on the minutes and put in the email.">
+            {(p.corrections || []).length > 0 && (
+              <div className="mb-3"><ClientCorrections corrections={p.corrections || []} topics={p.issuedTopics || c.topics} /></div>
+            )}
+            <p className={`${EYEBROW} mb-1`}>What changed</p>
             <textarea className={`${input} min-h-[64px]`} disabled={ro} value={c.revisionNote || ''} placeholder="Handle finish corrected to antique brass (A2)."
               onChange={(e) => setC((x) => ({ ...x, revisionNote: e.target.value }))} aria-label="What changed in this revision" />
           </Panel>
@@ -160,7 +167,7 @@ export default function MinutesComposer(p: ComposerProps) {
           </div>
         )}
         {(c.carried || []).length > 0 && (
-          <Panel icon={RotateCcw} title="From the last meeting" blurb="Mark what happened to each open action since"
+          <Panel icon={RotateCcw} title="From the last meeting" blurb={p.logOnly ? 'Open actions from every kind of meeting. Mark what happened to each since' : 'Open actions from earlier client meetings. Mark what happened to each since'}
             right={<Chip tone={(c.carried || []).some((k) => !k.outcome) ? 'amber' : 'emerald'}>{(c.carried || []).filter((k) => k.outcome !== 'done' && k.outcome !== 'drop').length} open</Chip>}>
             <div className="divide-y divide-slate-100 -mx-1">
               {(c.carried || []).map((k, i) => (
@@ -168,7 +175,10 @@ export default function MinutesComposer(p: ComposerProps) {
                   <CircleDot className="w-4 h-4 text-slate-400 shrink-0" />
                   <div className="flex-1 min-w-[180px]">
                     <p className="text-sm text-slate-800">{k.text}</p>
-                    <p className="text-[11px] text-slate-500">{k.ownerName}{k.due ? ` · was due ${fmtShortDay(k.due)}` : ''}{k.ref ? ` · ${k.ref}` : ''}</p>
+                    <p className="text-[11px] text-slate-500 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                      {k.from && <Chip tone={k.from === 'client' ? 'brand' : 'slate'}>{AUDIENCE_LABEL[k.from]}</Chip>}
+                      <span>{k.ownerName}{k.due ? ` · was due ${fmtShortDay(k.due)}` : ''}{k.ref ? ` · ${k.ref}` : ''}</span>
+                    </p>
                   </div>
                   {ro ? <Chip tone={k.outcome === 'done' ? 'emerald' : k.outcome === 'drop' ? 'slate' : 'amber'}>{k.outcome === 'done' ? 'Done' : k.outcome === 'drop' ? 'Dropped' : 'Still open'}</Chip> : (
                     <Seg small label={`What happened to: ${k.text}`} value={k.outcome} onChange={(v) => setCarried(i, v)}
