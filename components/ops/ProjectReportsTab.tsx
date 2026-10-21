@@ -308,7 +308,7 @@ const ProjectReportsTab: React.FC<Props> = ({
             title="Documents"
             sub={docs.dueCount === 0
               ? 'None due at this stage'
-              : `${docs.completeCount} of ${docs.dueCount} signed`}
+              : `${docs.completeCount} of ${docs.dueCount} signed off by the client`}
             icon={<FileCheck className="w-4 h-4" />}
           >
             <DocumentMeter report={docs} variant="panel" />

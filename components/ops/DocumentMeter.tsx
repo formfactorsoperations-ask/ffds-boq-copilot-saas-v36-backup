@@ -21,7 +21,8 @@ import {
  * The ring was being asked to carry six independent facts at once, which is a
  * job it cannot do gracefully at 78px.
  *
- * So the ring now answers one question -- how much of this is signed -- as a
+ * So the ring now answers one question -- how much of this the client has
+ * signed off (signed, or confirmed where a confirmation is all that is owed) -- as a
  * single smooth sweep with a gradient and a soft bloom. Which document is
  * where is carried entirely by the named list beside it, where it was already
  * legible. One colour at a time: green when everything is in, rose when the
@@ -112,13 +113,16 @@ const StatusIcon: React.FC<{ status: DocStatus; className?: string }> = ({ statu
   }
 };
 
+/* A document the client confirms is never called "Signed", and nothing sent
+   is called done: the word names what the client still owes. */
 const wordFor = (s: DocSlot): string =>
-  s.status === 'complete' ? 'Signed'
+  s.status === 'complete' ? (s.signOff === 'confirmation' ? 'Confirmed' : 'Signed')
   : s.status === 'not_due' ? 'Not due'
   : s.status === 'missing' ? 'Not issued'
   : s.status === 'attention' ? 'Needs attention'
-  : s.status === 'draft' ? 'In draft'
-  : 'In review';
+  : s.status === 'draft' ? 'Not sent yet'
+  : s.signOff === 'confirmation' ? 'Awaiting confirmation'
+  : 'Awaiting signature';
 
 const DocumentMeter: React.FC<Props> = ({ projectContext, report, variant = 'card', className = '' }) => {
   const doc = report || buildDocumentCompleteness(projectContext);
@@ -242,21 +246,28 @@ const DocumentMeter: React.FC<Props> = ({ projectContext, report, variant = 'car
         {/* ── The six, by name ─────────────────────────────────────────── */}
         <div className="min-w-0 flex-1 grid grid-cols-2 gap-x-3 gap-y-1">
           {slots.map((s, i) => (
+            /* The tick animation sits on a wrapper. `.hud-tick` also sets
+               display: inline-block, which beat `flex` on the row itself and
+               stacked every icon above its name. */
             <div
               key={s.kind}
-              title={`${s.label} — ${s.detail}`}
-              className="flex items-center gap-1.5 min-w-0 hud-tick"
+              className="min-w-0 hud-tick"
               style={{ animationDelay: `${200 + i * 60}ms` }}
             >
-              <StatusIcon status={s.status} />
-              <span className={`text-[10.5px] truncate ${
-                s.status === 'not_due' ? 'text-slate-500'
-                : s.status === 'complete' ? 'text-slate-800 font-medium'
-                : s.kind === 'execution_agreement' ? 'text-slate-900 font-bold'
-                : 'text-slate-900 font-semibold'
-              }`}>
-                {s.short}
-              </span>
+              <div
+                title={`${s.label} — ${s.detail}`}
+                className="flex items-center gap-1.5 min-w-0"
+              >
+                <StatusIcon status={s.status} />
+                <span className={`text-[10.5px] truncate ${
+                  s.status === 'not_due' ? 'text-slate-500'
+                  : s.status === 'complete' ? 'text-slate-800 font-medium'
+                  : s.kind === 'execution_agreement' ? 'text-slate-900 font-bold'
+                  : 'text-slate-900 font-semibold'
+                }`}>
+                  {s.short}
+                </span>
+              </div>
             </div>
           ))}
         </div>
