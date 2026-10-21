@@ -19,8 +19,8 @@ export interface ClientMilestone {
   name: string;
   percentage: number | null;
   status: string;
-  /** What the client owes at this milestone, to the rupee, as their portal shows it. */
-  owed: number;
+  /** What the client owes at this milestone, to the rupee, as their portal shows it. Null where amounts are hidden. */
+  owed: number | null;
   invoiceNumber: string | null;
   invoiceDate: string | null;
   /** The planned date, when the studio set one. */
@@ -29,10 +29,13 @@ export interface ClientMilestone {
 
 /** The client's side of the money: what they were quoted, have paid and still owe. Nothing of the studio's side. */
 export interface ClientMoney {
-  projectValue: number;
-  totalPaid: number;
-  balanceDue: number;
+  /** Null, with the three below, where amounts are hidden (withoutAmounts). */
+  projectValue: number | null;
+  totalPaid: number | null;
+  balanceDue: number | null;
   milestones: ClientMilestone[];
+  /** True when the figures were taken out: the milestones are there to chase by name and invoice. */
+  amountsHidden?: boolean;
 }
 
 const num = (v: any) => (typeof v === "number" && isFinite(v) ? v : 0);
@@ -70,4 +73,19 @@ export function clientMoneyOf(project: any): ClientMoney | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The same milestones with every figure taken out: what Client Relations
+ * chases a payment with. The name, status, invoice number and dates stay.
+ */
+export function withoutAmounts(money: ClientMoney | null | undefined): ClientMoney | null {
+  if (!money) return null;
+  return {
+    projectValue: null,
+    totalPaid: null,
+    balanceDue: null,
+    amountsHidden: true,
+    milestones: money.milestones.map((m) => ({ ...m, owed: null, percentage: null })),
+  };
 }

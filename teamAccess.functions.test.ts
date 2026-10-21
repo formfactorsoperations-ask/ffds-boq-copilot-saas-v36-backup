@@ -105,12 +105,13 @@ afterAll(async () => {
 });
 
 describe('the copies the server makes', () => {
-  it('gives Client Relations the client money and no costs', async () => {
+  it('gives Client Relations the payment milestones without amounts, and no costs', async () => {
     const ops = await waitFor(() => read('projects/p1/teamView/ops'));
     expect(ops.members).toEqual(['cr@t.com']);
     const view = inflate(ops.compressedData);
     expect(view.clientMoney.milestones[0]).toMatchObject({ id: 'e1', status: 'invoiced', invoiceNumber: 'FF-114' });
-    expect(view.clientMoney.milestones[0].owed).toBeGreaterThan(0);
+    expect(view.clientMoney.milestones[0].owed).toBeNull();
+    expect(view.clientMoney.balanceDue).toBeNull();
     const json = JSON.stringify(view);
     for (const w of ['baseRate', 'billablePercent', 'procurement', 'budget']) expect(json, w).not.toContain(w);
   }, 60000);

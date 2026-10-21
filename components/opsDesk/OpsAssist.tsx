@@ -322,16 +322,18 @@ const SUGGESTED = [
   'What did we promise at the last meeting?',
 ];
 
-export function AskProjectPanel({ projects, rawProjects, waiting, tenantId }: {
+export function AskProjectPanel({ projects, rawProjects, waiting, tenantId, initialQuestion }: {
   projects: DeskProject[];
   rawProjects: any[];
   waiting: WaitingItem[];
   tenantId: string;
+  /** A question brought from elsewhere on the desk (the first-week guide's "Ask the desk"). */
+  initialQuestion?: string;
 }) {
   const [projectId, setProjectId] = useState(projects[0]?.id || '');
   const raw = rawProjects.find((p) => String(p?.id) === projectId) || null;
   const { brief, loading } = useBrief(tenantId, raw, waiting);
-  const [question, setQuestion] = useState('');
+  const [question, setQuestion] = useState(initialQuestion || '');
   const [asking, setAsking] = useState(false);
   const [answers, setAnswers] = useState<{ q: string; a: Answer }[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -492,7 +494,9 @@ export function MeetingPrepPanel({ projects, rawProjects, waiting, tenantId, can
             <Card n={2} title="Money" empty="No payment schedule on this project.">
               {brief.money ? (
                 <div className="flex flex-col gap-1">
-                  <p className="text-[13px] text-slate-700">Paid <b className="font-bold text-slate-800 tabular-nums">{inr(brief.money.totalPaid)}</b> of {inr(brief.money.projectValue)} · {inr(brief.money.balanceDue)} still to come</p>
+                  {brief.money.amountsHidden || brief.money.totalPaid == null
+                    ? <p className="text-[13px] text-slate-700">{brief.money.milestones.filter((m) => m.status === 'paid').length} of {brief.money.milestones.length} milestones paid</p>
+                    : <p className="text-[13px] text-slate-700">Paid <b className="font-bold text-slate-800 tabular-nums">{inr(brief.money.totalPaid)}</b> of {inr(brief.money.projectValue ?? 0)} · {inr(brief.money.balanceDue ?? 0)} still to come</p>}
                   {prep.moneyLine && <p className="text-xs text-slate-500">{prep.moneyLine}</p>}
                 </div>
               ) : null}

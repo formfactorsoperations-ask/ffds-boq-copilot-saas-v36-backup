@@ -802,9 +802,21 @@ service cloud.firestore {
           && request.resource.data.channel in ['call', 'whatsapp', 'email', 'meeting', 'other']
           && request.resource.data.outcome in ['reminded', 'no_answer', 'replied', 'promised', 'info']
           && request.resource.data.note is string && request.resource.data.note.size() <= 2000;
-        allow update: if mayWriteOps()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nextDone', 'nextDoneAt', 'nextDoneBy'])
-          && request.resource.data.nextDoneBy == myEmail();
+        /*
+          Its next step ticked off, or moved to another day (closing the day,
+          lib/opsTeam.ts): only the date of an open step changes, in the
+          mover's name. What was said stays as written.
+        */
+        allow update: if mayWriteOps() && ((
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nextDone', 'nextDoneAt', 'nextDoneBy'])
+            && request.resource.data.nextDoneBy == myEmail()
+          ) || (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['next', 'nextMovedAt', 'nextMovedBy'])
+            && resource.data.next != null && resource.data.nextDone == false
+            && request.resource.data.next.diff(resource.data.next).affectedKeys().hasOnly(['due'])
+            && request.resource.data.next.due is string && request.resource.data.next.due.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+            && request.resource.data.nextMovedBy == myEmail()
+          ));
         allow delete: if false;
       }
       match /escalations/{eid} {
@@ -1191,6 +1203,115 @@ service cloud.firestore {
     // ========================================================================
     // FALLBACK
     // ========================================================================
+
+    /*
+      LEADS (lib/leads.ts): enquiries before they are projects.
+
+      Client Relations add and work their own, and may ask a lead to open the
+      project; they never see anyone else's, never hand one to someone else,
+      and never mark one won (that happens when a lead opens the project).
+      The leads -- Owner, Admin, Ops Director -- see and change all of their
+      studio's, and only they delete one. The budget the client said is part
+      of the lead, for both to see.
+    */
+    function myTenant() {
+      return getUserData().get('tenantId', '');
+    }
+    function myRoleIs(roles) {
+      return getUserData().get('role', '') in roles;
+    }
+    function isDeskLead(tenantId) {
+      return isSuperAdmin() || (tenantId != null && myTenant() == tenantId && myRoleIs(['Owner', 'Admin', 'Ops Director']));
+    }
+    function isDeskCR(tenantId) {
+      return tenantId != null && myTenant() == tenantId && myRoleIs(['Client Relations']);
+    }
+    function leadShapeOk(d) {
+      return d.keys().hasOnly(['tenantId', 'createdAt', 'createdBy', 'createdByName', 'ownerEmail', 'ownerName', 'people', 'home', 'source',
+               'sourceNote', 'enquiry', 'stage', 'lostReason', 'know', 'next', 'touches', 'firstTouchAt', 'lastTouchAt', 'openRequest',
+               'projectId', 'updatedAt', 'updatedBy'])
+        && d.tenantId is string && d.ownerEmail is string && d.ownerEmail.size() > 3
+        && d.stage in ['new', 'talking', 'meeting', 'measured', 'proposal', 'won', 'lost']
+        && d.people is list && d.people.size() >= 1 && d.people.size() <= 8
+        && d.touches is list && d.touches.size() <= 300
+        && d.enquiry is string && d.enquiry.size() <= 2000
+        && d.updatedBy == myEmail();
+    }
+    match /leads/{leadId} {
+      allow read: if isAuthenticated() && (
+        isDeskLead(resource.data.tenantId)
+        || (isDeskCR(resource.data.tenantId) && resource.data.ownerEmail == myEmail())
+      );
+      allow create: if isAuthenticated() && leadShapeOk(request.resource.data)
+        && request.resource.data.createdBy == myEmail()
+        && request.resource.data.projectId == null
+        && request.resource.data.stage != 'won'
+        && (isDeskLead(request.resource.data.tenantId)
+            || (isDeskCR(request.resource.data.tenantId) && request.resource.data.ownerEmail == myEmail()));
+      allow update: if isAuthenticated() && leadShapeOk(request.resource.data)
+        && request.resource.data.tenantId == resource.data.tenantId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (isDeskLead(resource.data.tenantId) || (
+          isDeskCR(resource.data.tenantId)
+          && resource.data.ownerEmail == myEmail()
+          && request.resource.data.ownerEmail == resource.data.ownerEmail
+          && request.resource.data.projectId == resource.data.projectId
+          && request.resource.data.stage != 'won'
+        ));
+      allow delete: if isAuthenticated() && isDeskLead(resource.data.tenantId);
+    }
+
+    /*
+      Each person's own desk (lib/opsTeam.ts): how far through the first-week
+      guide they are, and what they moved to a later day. One record each,
+      named {tenantId}__{email}, written by that person only; their leads
+      read it for the team view.
+    */
+    function isDeskMember(tenantId) {
+      return tenantId != null && myTenant() == tenantId && myRoleIs(['Owner', 'Admin', 'Ops Director', 'Client Relations', 'Super Admin']);
+    }
+    match /opsPeople/{docId} {
+      allow read: if isAuthenticated() && (
+        (docId == myTenant() + '__' + myEmail() && isDeskMember(myTenant()))
+        || (resource != null && isDeskLead(resource.data.tenantId))
+      );
+      allow create, update: if isAuthenticated()
+        && docId == request.resource.data.tenantId + '__' + myEmail()
+        && isDeskMember(request.resource.data.tenantId)
+        && request.resource.data.email == myEmail()
+        && request.resource.data.keys().hasOnly(['tenantId', 'email', 'name', 'startedAt', 'guide', 'guideHiddenUntil', 'snoozes', 'updatedAt'])
+        && request.resource.data.guide is map && request.resource.data.snoozes is map
+        && request.resource.data.snoozes.size() <= 200;
+      allow delete: if false;
+    }
+
+    /*
+      Closing the day (lib/opsTeam.ts): what was closed, what rolled to another
+      day, and a note for the lead. Named {tenantId}__{email}__{day}; written
+      by that person, read by them and their leads.
+    */
+    match /opsDays/{docId} {
+      allow read: if isAuthenticated() && resource != null && (
+        (resource.data.email == myEmail() && isDeskMember(resource.data.tenantId))
+        || isDeskLead(resource.data.tenantId)
+      );
+      allow create, update: if isAuthenticated()
+        && docId == request.resource.data.tenantId + '__' + myEmail() + '__' + request.resource.data.day
+        && isDeskMember(request.resource.data.tenantId)
+        && request.resource.data.email == myEmail()
+        && request.resource.data.keys().hasOnly(['tenantId', 'email', 'name', 'day', 'closed', 'rolled', 'note', 'at', 'readBy'])
+        && request.resource.data.day is string && request.resource.data.day.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.resource.data.note is string && request.resource.data.note.size() <= 1000
+        && request.resource.data.closed is list && request.resource.data.closed.size() <= 60
+        && request.resource.data.rolled is list && request.resource.data.rolled.size() <= 60
+        && (resource == null || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['readBy']));
+      /* A lead marks a note read, and changes nothing else. */
+      allow update: if isAuthenticated() && isDeskLead(resource.data.tenantId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+        && request.resource.data.readBy is list && request.resource.data.readBy.size() <= 20;
+      allow delete: if false;
+    }
 
     /*
       People (lib/peopleDesk.ts): attendance, leave requests and the journal of

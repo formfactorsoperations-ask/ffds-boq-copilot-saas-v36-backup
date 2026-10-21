@@ -17,7 +17,7 @@ describe('settings', () => {
   it('defaults and clamps', () => {
     expect(opsSettingsOf(null)).toEqual(DEFAULT_OPS_SETTINGS);
     expect(opsSettingsOf({ opsDesk: { paymentDueDays: 15, escalateAfterReminders: 0, escalationRecipients: [' A@x.in '] } }))
-      .toEqual({ paymentDueDays: 15, escalateAfterReminders: 2, escalateAfterDays: 7, escalationRecipients: ['a@x.in'], reviewLink: '', newMinutes: false, minutesFollowUps: true });
+      .toEqual({ paymentDueDays: 15, escalateAfterReminders: 2, escalateAfterDays: 7, escalationRecipients: ['a@x.in'], reviewLink: '', newMinutes: false, minutesFollowUps: true, playbooks: {} });
   });
   it('escalates to the Owners and Admins unless the studio chose people', () => {
     const team = [

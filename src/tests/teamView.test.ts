@@ -39,13 +39,16 @@ describe('the Client Relations copy', () => {
   const view = opsViewOf(project);
   const json = JSON.stringify(view);
 
-  it('keeps the client and the client-facing money', () => {
+  it('keeps the client and the payment milestones, with no amounts', () => {
     expect(view.context.clientName).toBe('Mrs Kapoor');
     expect(view.clientMoney.milestones.map((m: any) => [m.id, m.status, m.invoiceNumber])).toEqual([
       ['d1', 'paid', 'FF-101'], ['e1', 'invoiced', 'FF-114'],
     ]);
-    expect(view.clientMoney.milestones[1].owed).toBeGreaterThan(0);
-    expect(view.clientMoney.balanceDue).toBeGreaterThan(0);
+    expect(view.clientMoney.amountsHidden).toBe(true);
+    expect(view.clientMoney.milestones.map((m: any) => [m.owed, m.percentage])).toEqual([[null, null], [null, null]]);
+    expect([view.clientMoney.projectValue, view.clientMoney.totalPaid, view.clientMoney.balanceDue]).toEqual([null, null, null]);
+    /* The studio's own screens still work the figures out from the full project. */
+    expect(clientMoneyOf(project)!.balanceDue).toBeGreaterThan(0);
   });
 
   it('drops costs, margins, rates and the billable split', () => {

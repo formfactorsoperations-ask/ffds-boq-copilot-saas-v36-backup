@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { opsSettingsOf, escalationRecipientsOf, type OpsSettings } from '../../lib/opsDesk';
+import { DEFAULT_PLAYBOOKS, playbookOf, type PlaybookKind } from '../../lib/opsTeam';
 import { runDailyCheckNow } from '../../services/opsDeskService';
 import { Check, Plus } from '@/lib/lucide-shim';
 import { Dot } from '../ui/HudBits';
 
 /*
   Studio settings → Ops Desk: when a payment counts as late, who hears of an
-  escalation, and when the daily check raises one by itself (lib/opsDesk).
-  Saved with the rest of the studio record by the settings screen.
+  escalation, and when the daily check raises one by itself (lib/opsDesk); and
+  the playbooks behind the ? on each row of the desk (lib/opsTeam). Saved with
+  the rest of the studio record by the settings screen.
 */
 export default function OpsDeskSettings({ org, team, canEdit, onChange }: {
   org: any;
@@ -20,6 +22,16 @@ export default function OpsDeskSettings({ org, team, canEdit, onChange }: {
   const chosen = s.escalationRecipients;
   const people = team.filter((m) => m?.email && m.role !== 'Client');
   const [checking, setChecking] = useState(false);
+  const [book, setBook] = useState<PlaybookKind>('payment');
+  const pb = playbookOf(book, s);
+  const setBook_ = (patch: Partial<{ steps: string[]; dont: string }>) => {
+    const next = { steps: pb.steps, dont: pb.dont, ...patch };
+    const base = DEFAULT_PLAYBOOKS[book];
+    const same = next.steps.join('\n') === base.steps.join('\n') && next.dont === base.dont;
+    const rest = { ...s.playbooks };
+    delete rest[book];
+    set({ playbooks: same ? rest : { ...rest, [book]: next } });
+  };
   const [checked, setChecked] = useState<string | null>(null);
 
   const set = (patch: Partial<OpsSettings>) => onChange({ ...s, ...patch });
@@ -108,6 +120,35 @@ export default function OpsDeskSettings({ org, team, canEdit, onChange }: {
           </button>
         </div>
       )}
+
+      <div className="rounded-xl border border-slate-200 px-4 py-3 flex flex-col gap-3">
+        <div>
+          <p className="text-sm font-bold text-slate-800">Playbooks</p>
+          <p className="text-xs text-slate-500">What the ? on each row of the Ops Desk says: the steps for that kind of work, and one thing not to do. One step per line.</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {(Object.keys(DEFAULT_PLAYBOOKS) as PlaybookKind[]).map((k) => (
+            <button key={k} type="button" onClick={() => setBook(k)} aria-pressed={book === k}
+              className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${book === k ? 'border-[#3D52A0] bg-[#3D52A0] text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}>
+              {DEFAULT_PLAYBOOKS[k].title.replace(/^Waiting on client: /, '').replace(/^an? /i, '').replace(/^./, (c) => c.toUpperCase())}{s.playbooks[k] ? ' ·' : ''}
+            </button>
+          ))}
+        </div>
+        <label className="flex flex-col gap-1.5">
+          <span className={label}>Steps</span>
+          <textarea key={`${book}-steps`} rows={5} disabled={!canEdit} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] disabled:bg-slate-50"
+            defaultValue={pb.steps.join('\n')} onBlur={(e) => setBook_({ steps: e.target.value.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 8) })} />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className={label}>Do not</span>
+          <input key={`${book}-dont`} disabled={!canEdit} maxLength={300} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] disabled:bg-slate-50"
+            defaultValue={pb.dont} onBlur={(e) => setBook_({ dont: e.target.value.trim() })} />
+        </label>
+        <p className="text-[11px] text-slate-500">
+          {pb.custom ? 'Your studio’s own.' : 'The desk’s own, until you change it.'}{' '}
+          {pb.custom && canEdit && <button type="button" className="font-bold text-[#3D52A0]" onClick={() => { const rest = { ...s.playbooks }; delete rest[book]; set({ playbooks: rest }); }}>Go back to the desk’s own</button>}
+        </p>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
         <div className="min-w-0 flex-1">
