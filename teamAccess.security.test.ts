@@ -35,6 +35,7 @@ beforeEach(async () => {
 
     await setDoc(doc(db, `organizations/${STUDIO}`), { orgName: 'Studio A', team: [] });
     await setDoc(doc(db, `organizations/${STUDIO}/settings/general`), { theme: 'x' });
+    await setDoc(doc(db, `studios/${STUDIO}/settings/main`), { designProcess: { steps: [] }, emailTemplateLibrary: [] });
     for (const p of ['p1', 'p2']) {
       await setDoc(doc(db, `projects/${p}`), { tenantId: STUDIO, context: { name: p, margin: 0.3 } });
       await setDoc(doc(db, `organizations/${STUDIO}/projects/${p}`), { tenantId: STUDIO });
@@ -118,6 +119,13 @@ describe('Client Relations', () => {
     await assertSucceeds(getDoc(doc(cr(), `organizations/${STUDIO}`)));
     await assertSucceeds(getDoc(doc(cr(), `organizations/${STUDIO}/settings/general`)));
     await assertFails(updateDoc(doc(cr(), `organizations/${STUDIO}`), { projectDesigners: { p2: ['cr@a.com'] } }));
+  });
+  it("reads the studio's own templates and process, and cannot change them", async () => {
+    await assertSucceeds(getDoc(doc(cr(), `studios/${STUDIO}/settings/main`)));
+    await assertSucceeds(getDoc(doc(sup(), `studios/${STUDIO}/settings/main`)));
+    await assertFails(updateDoc(doc(cr(), `studios/${STUDIO}/settings/main`), { emailTemplateLibrary: [{ key: 'x' }] }));
+    await assertFails(getDoc(doc(as('crOther', 'cr@b.com'), `studios/${STUDIO}/settings/main`)));
+    await assertFails(getDoc(doc(vendor(), `studios/${STUDIO}/settings/main`)));
   });
 });
 
