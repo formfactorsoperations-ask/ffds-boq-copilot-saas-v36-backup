@@ -189,6 +189,33 @@ question, gives the answer in plain sentences and names what it read
 person, through the studio's server-side AI proxy: money only for finance
 roles, a designer's own projects only.
 
+### Ops Desk motion (approved 21 Oct 2026)
+
+The owner asked for the Ops Desk to stop looking static and to work for a team
+of Client Relations people, not one (mockups OD1 to OD7 and L1 to L4, approved
+19 Oct 2026). It uses the People motion kit (`components/people/PeopleBits.tsx`,
+`peopleStyles.ts`) with the same fonts and colours. Shared pieces are in
+`components/opsDesk/DeskBits.tsx`.
+
+- The rail is grouped (Clients, Meetings, Records, Team for the leads, Help) in a
+  white card, with a highlight that slides between items (`layoutId`).
+- Sections turn up into place in depth (`deskSectionV`); cards rise with
+  `cardV`; lists rise row by row (`listV`, `rowV`).
+- "Up next" is a glass card (`pp-glass`, `pp-glow`) that tilts to the pointer
+  (`Tilt`); when it is done, it flips away and the next one flips in.
+- Icon chips are `IconTile`s that turn on hover; the main button of a screen
+  is `pp-press`.
+- The day is a `Ring` in the header; a ticked next step draws a `DoneTick`;
+  closing the day ends with `Confetti`.
+- Rows open in place (height and fade); the playbook and the client panel
+  slide in from the right with a slight turn.
+- The first-week guide's steps flip like coins when done (`Coin`), and "Show
+  me" puts a spotlight on the real button.
+- Leads: columns turn in one after another, cards tilt, and a card glides to
+  its new column when its stage changes.
+- Everything stops under `prefers-reduced-motion`. No new fonts, no new accent
+  colours, no half-pixel sizes.
+
 ### Times
 
 Times people read are on the 12-hour clock ("9:42 AM"), through `clock12` in

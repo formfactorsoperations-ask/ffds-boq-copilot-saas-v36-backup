@@ -9,6 +9,7 @@ import { Type } from '@google/genai';
 import { getAi, aiIsReachable } from './aiClient';
 import { FLASH_MODEL } from '../constants/aiModels';
 import { opsViewOf } from '../functions/src/teamViewStrip';
+import { clientMoneyOf } from '../lib/clientMoney';
 import {
   ASK_INSTRUCTIONS, CAPTURE_INSTRUCTIONS, PREP_INSTRUCTIONS, briefForPrompt, normaliseCapture,
   type Capture, type ProjectBrief,
@@ -17,9 +18,13 @@ import { ASK_STUDIO_INSTRUCTIONS } from '../lib/studioAsk';
 
 export const assistAvailable = (): boolean => aiIsReachable();
 
-/** The copy of a project the assist may read: Client Relations already holds it; anyone else's is made here. */
+/**
+ * The copy of a project the assist may read: Client Relations already holds
+ * theirs, with no amounts in it; a lead's is made here, with the client's side
+ * of the money (the Ops Desk is open to Client Relations and the leads only).
+ */
 export function safeProjectView(project: any): any {
-  return project?._teamView === 'ops' ? project : opsViewOf(project);
+  return project?._teamView === 'ops' ? project : { ...opsViewOf(project), clientMoney: clientMoneyOf(project) };
 }
 
 const parse = <T,>(text: string | undefined, fallback: T): T => {

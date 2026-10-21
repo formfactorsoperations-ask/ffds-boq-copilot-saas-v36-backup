@@ -61,7 +61,7 @@ export interface ProjectBrief {
   location: string | null;
   targetHandover: string | null;
   timeline: { phase: string; startDay: number; days: number }[];
-  money: { projectValue: number; totalPaid: number; balanceDue: number; milestones: Pick<ClientMilestone, 'name' | 'status' | 'owed' | 'invoiceNumber' | 'invoiceDate' | 'date'>[] } | null;
+  money: { projectValue: number | null; totalPaid: number | null; balanceDue: number | null; amountsHidden: boolean; milestones: Pick<ClientMilestone, 'name' | 'status' | 'owed' | 'invoiceNumber' | 'invoiceDate' | 'date'>[] } | null;
   waiting: { label: string; kind: 'payment' | 'decision'; days: number; overdueDays: number; amount: number | null; reminders: number; slipDays: number }[];
   decisions: { text: string; status: string; room: string | null }[];
   actions: BriefAction[];
@@ -115,7 +115,7 @@ export function buildProjectBrief(view: any, inputs: BriefInputs, waiting: Waiti
       phase: clip(t?.phaseName || t?.phase || '', 60), startDay: Number(t?.startDay) || 0, days: Number(t?.durationDays) || 0,
     })),
     money: money ? {
-      projectValue: money.projectValue, totalPaid: money.totalPaid, balanceDue: money.balanceDue,
+      projectValue: money.projectValue, totalPaid: money.totalPaid, balanceDue: money.balanceDue, amountsHidden: !!money.amountsHidden,
       milestones: money.milestones.map((m) => ({ name: m.name, status: m.status, owed: m.owed, invoiceNumber: m.invoiceNumber, invoiceDate: m.invoiceDate, date: m.date })),
     } : null,
     waiting: waiting.filter((w) => w.projectId === String(view?.id || '')).map((w) => ({
@@ -258,6 +258,7 @@ Rules:
 - Answer in two to four plain sentences. Name dates and amounts exactly as the record has them.
 - If the record does not say, answer "The records don't say." and suggest who to ask (the designer or a lead).
 - The record has no costs, margins or vendor rates. If asked about them, say they are not part of this record.
+- When money.amountsHidden is true the record has no amounts at all: never state or guess a figure; name the milestone and its invoice instead.
 - sources: the parts of the record you used, as short labels (e.g. "Payments", "Decision: Master bath tiles", "MoM-2026-014", "Follow-up 9 Oct").
 - reply: a short message the executive could send the client with the answer, or "" if the answer is not for the client.`;
 

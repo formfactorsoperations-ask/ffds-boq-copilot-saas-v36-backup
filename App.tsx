@@ -1900,6 +1900,43 @@ export default function App() {
   };
 
   /**
+   * Open a project from a lead on the Ops Desk (lib/leads leadToProject).
+   *
+   * Only a lead -- Owner, Admin, Ops Director -- does this: a project carries
+   * the studio's fees and money. Unlike a blank new project it is saved at
+   * once, because the auto-save skips a project's first appearance and the
+   * Ops Desk hands it straight to Client Relations. The person stays on the
+   * desk; the project is in the library and opens from the lead.
+   */
+  const handleCreateFromLead = async (fromLead: Record<string, any>): Promise<string> => {
+    if (!seesStudioFinance(currentRole)) throw new Error("Only an Owner, Admin or Ops Director opens a project.");
+    const newId = generateId();
+    const project: FullProjectData = {
+      id: newId,
+      architecture: 'canonical',
+      lastModified: Date.now(),
+      context: {
+        ...DEFAULT_CONTEXT,
+        scopeFlow: { enabled: true, enabledAt: Date.now(), enabledBy: currentUserAuth?.displayName || currentUserAuth?.email || "Studio" },
+        ...fromLead,
+      } as ProjectContext,
+      tiers: [],
+      activeTierId: null,
+      activeProject: null,
+      materials: [],
+      timeline: [],
+      leadProfile: DEFAULT_LEAD_PROFILE,
+      decisionBrainOutput: null,
+    } as FullProjectData;
+    await db.saveProject(project);
+    setProjectLibrary((prev) => [project, ...prev]);
+    if (orgData?.tenantId) {
+      initCommunicationLog(newId, orgData.tenantId).catch((err) => console.error("Could not start the communication log:", err));
+    }
+    return newId;
+  };
+
+  /**
    * Issue a fresh portal link for a project and email it to the client.
    *
    * Minting a new token invalidates the previous link, which is what you want
@@ -3109,6 +3146,7 @@ export default function App() {
                         const p = projectLibrary.find((x) => x.id === id);
                         if (p) handleOpenProject(p, tab);
                       }}
+                      onCreateFromLead={handleCreateFromLead}
                     />
                   )}
                   {activeTab === "people" && <PeoplePage projects={visibleProjects} />}
@@ -3859,6 +3897,7 @@ export default function App() {
                         const p = projectLibrary.find((x) => x.id === id);
                         if (p) handleOpenProject(p, tab);
                       }}
+                      onCreateFromLead={handleCreateFromLead}
                     />
                   )}
                   {activeTab === "people" && <PeoplePage projects={visibleProjects} />}

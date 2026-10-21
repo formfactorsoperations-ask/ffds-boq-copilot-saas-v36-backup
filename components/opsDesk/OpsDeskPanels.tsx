@@ -51,7 +51,7 @@ export const Seg: React.FC<{ value: string; options: { id: string; label: string
 
 /* ── Log a follow-up, with a message to copy ───────────────────────────── */
 
-export interface LogPrefill { projectId?: string; subjectKey?: string; nextDue?: string }
+export interface LogPrefill { projectId?: string; subjectKey?: string; nextDue?: string; channel?: Channel; outcome?: Outcome }
 
 export function LogFollowUpPanel({ projects, waiting, team, me, tenantId, studioName, prefill, onClose, onSaved }: {
   projects: DeskProject[];
@@ -84,8 +84,8 @@ export function LogFollowUpPanel({ projects, waiting, team, me, tenantId, studio
   const shown = message ?? draft;
   const [copied, setCopied] = useState(false);
 
-  const [channel, setChannel] = useState<Channel>('whatsapp');
-  const [outcome, setOutcome] = useState<Outcome>(item ? 'reminded' : 'info');
+  const [channel, setChannel] = useState<Channel>(prefill?.channel || 'whatsapp');
+  const [outcome, setOutcome] = useState<Outcome>(prefill?.outcome || (item ? 'reminded' : 'info'));
   const [note, setNote] = useState('');
   const [nextText, setNextText] = useState('');
   const [nextOwner, setNextOwner] = useState(me.email);
@@ -151,7 +151,7 @@ export function LogFollowUpPanel({ projects, waiting, team, me, tenantId, studio
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-7 h-7 rounded-lg bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center"><MessageCircle className="w-3.5 h-3.5" /></span>
           <span className="text-sm font-bold text-slate-800">Message to send</span>
-          {item?.kind === 'payment' && item.amount ? <span className="text-xs text-slate-500">{inr(item.amount)} · due {item.dueKey}</span> : null}
+          {item?.kind === 'payment' && item.amount != null && item.amount > 0 ? <span className="text-xs text-slate-500">{inr(item.amount)} · due {item.dueKey}</span> : null}
           <span className="ml-auto"><Seg label="Tone" value={tone} onChange={(t) => { setTone(t); setMessage(null); }}
             options={[{ id: 'gentle', label: 'Gentle' }, { id: 'clear', label: 'Clear' }, { id: 'firm', label: 'Firm' }]} /></span>
         </div>

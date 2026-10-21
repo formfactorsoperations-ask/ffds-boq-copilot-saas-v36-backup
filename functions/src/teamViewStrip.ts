@@ -8,16 +8,18 @@
   adds back only what its own work needs.
 */
 import { designViewOf, scrub } from "./designViewStrip";
-import { clientMoneyOf } from "../../lib/clientMoney";
+import { clientMoneyOf, withoutAmounts } from "../../lib/clientMoney";
 
 export { clientMoneyOf };
 
 /**
- * What Client Relations may see: the Designer's copy, plus the client's own
- * money. Contacts, timeline, decisions and drawings are in the copy already.
+ * What Client Relations may see: the Designer's copy, plus the client's
+ * payment milestones by name, status and invoice, so they can chase them, with
+ * no amounts (the owner, 21 Oct 2026: no financials for the ops team).
+ * Contacts, timeline, decisions and drawings are in the copy already.
  */
 export function opsViewOf(project: any): any {
-  return { ...designViewOf(project), clientMoney: clientMoneyOf(project) };
+  return { ...designViewOf(project), clientMoney: withoutAmounts(clientMoneyOf(project)) };
 }
 
 /** The site work a Supervisor reports on. The order list and its costs are not part of it. */

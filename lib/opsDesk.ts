@@ -105,11 +105,31 @@ export interface OpsSettings {
    * lead turns it off.
    */
   minutesFollowUps: boolean;
+  /**
+   * The studio's own playbooks for each kind of work on the desk, written by
+   * the leads in Studio settings → Ops Desk (lib/opsTeam.ts has the defaults
+   * and the kinds). Only what a lead changed is kept.
+   */
+  playbooks: Record<string, { steps: string[]; dont: string }>;
 }
 
 export const DEFAULT_OPS_SETTINGS: OpsSettings = {
   paymentDueDays: 7, escalateAfterReminders: 2, escalateAfterDays: 7, escalationRecipients: [], reviewLink: '', newMinutes: false, minutesFollowUps: true,
+  playbooks: {},
 };
+
+/* A playbook as stored: up to eight short steps and one "do not". */
+function cleanPlaybooks(v: any): OpsSettings['playbooks'] {
+  const out: OpsSettings['playbooks'] = {};
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+  for (const [k, p] of Object.entries(v).slice(0, 20)) {
+    if (!/^[a-z_]{2,20}$/.test(k) || !p || typeof p !== 'object') continue;
+    const steps = (Array.isArray((p as any).steps) ? (p as any).steps : []).map((x: any) => String(x || '').trim().slice(0, 300)).filter(Boolean).slice(0, 8);
+    const dont = String((p as any).dont || '').trim().slice(0, 300);
+    if (steps.length || dont) out[k] = { steps, dont };
+  }
+  return out;
+}
 
 const clampInt = (v: unknown, lo: number, hi: number, dflt: number) => {
   const n = Math.round(Number(v));
@@ -127,6 +147,7 @@ export function opsSettingsOf(org: any): OpsSettings {
     reviewLink: /^https:\/\/\S{4,300}$/.test(String(s.reviewLink || '').trim()) ? String(s.reviewLink).trim() : '',
     newMinutes: s.newMinutes === true,
     minutesFollowUps: s.minutesFollowUps !== false,
+    playbooks: cleanPlaybooks(s.playbooks),
   };
 }
 
@@ -203,7 +224,7 @@ export function paymentWaiting(project: { id: string; name: string }, money: Cli
     out.push({
       key: paymentKey(m.id), kind: 'payment', projectId: project.id, projectName: project.name,
       label: m.invoiceNumber ? `${m.name} (${m.invoiceNumber})` : m.name,
-      since, days: Math.max(0, daysBetween(since, now)), amount: m.owed, dueKey, overdueDays, reminders: 0, lastChaseAt: null,
+      since, days: Math.max(0, daysBetween(since, now)), amount: m.owed ?? undefined, dueKey, overdueDays, reminders: 0, lastChaseAt: null,
     });
   }
   return out;
@@ -276,7 +297,9 @@ export function withChases(items: WaitingItem[], followUps: FollowUp[]): Waiting
 export type QueueGroup = 'overdue' | 'today' | 'week' | 'later';
 export type QueueKind = 'next' | 'payment' | 'decision' | 'mom_review' | 'escalation_open' | 'escalation_decided'
   /* Client care (lib/clientCare.ts). */
-  | 'visit' | 'documents' | 'checklist' | 'ask';
+  | 'visit' | 'documents' | 'checklist' | 'ask'
+  /* Leads (lib/leads.ts): one to call or chase, and one a lead is asked to open as a project. */
+  | 'lead' | 'lead_open';
 
 export interface QueueItem {
   id: string;
@@ -381,7 +404,7 @@ export function buildQueue(input: QueueInput): QueueItem[] {
   const order: Record<QueueGroup, number> = { overdue: 0, today: 1, week: 2, later: 3 };
   /* Within a day: what needs a decision, then money, then the rest. */
   const weight: Record<QueueKind, number> = {
-    escalation_open: 0, escalation_decided: 1, payment: 2, decision: 3, visit: 4, mom_review: 5, next: 6, documents: 7, checklist: 8, ask: 9,
+    escalation_open: 0, escalation_decided: 1, payment: 2, lead: 3, lead_open: 3, decision: 4, visit: 5, mom_review: 6, next: 7, documents: 8, checklist: 9, ask: 10,
   };
   return items.sort((a, b) => order[a.group] - order[b.group] || String(a.due || '').localeCompare(String(b.due || ''))
     || weight[a.kind] - weight[b.kind] || a.title.localeCompare(b.title));
