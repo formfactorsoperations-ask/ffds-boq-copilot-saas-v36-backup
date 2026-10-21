@@ -23,9 +23,9 @@ interface Props {
  */
 const PageTitleBlock: React.FC<Props> = ({ route }) => {
   const meta = getPageMeta(route);
-  const { badge, vitals, views, actions } = usePageHeaderSlots();
+  const { badge, vitals, views, actions, hidden } = usePageHeaderSlots();
 
-  if (!meta) return null;
+  if (!meta || hidden) return null;
 
   const hasTail = Boolean(views || actions);
   const hasVitals = Boolean(vitals && vitals.length);

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FileUp, Inbox, LayoutGrid, Loader2, PenTool, Presentation, Send } from 'lucide-react';
 import { LayoutGroup, motion } from 'framer-motion';
 import { useOrg } from '../../contexts/OrgContext';
+import { usePageHeader } from '../../contexts/PageHeaderContext';
 import { canReview, canRunMeeting, canSetAudience, canUpload, stateOf } from '../../lib/drawingReview';
 import type { DesignMeeting } from '../../lib/designMeeting';
 import { attention, projectLook, pushRecent, reviewQueue, statsOf, suggestions as pickSuggestions, type Suggestion, type Viewer } from '../../lib/designDesk';
@@ -284,16 +285,22 @@ function Desk({ projects, activeProjectId }: Props) {
     return () => { window.removeEventListener('dragenter', enter); window.removeEventListener('dragleave', leave); window.removeEventListener('dragover', over); window.removeEventListener('drop', drop); };
   }, [open, !!live, uploader]);
 
+  /* A sheet under review or a meeting in progress has the screen to itself, without the page title. */
+  const fullScreen = !!(open || live);
+  usePageHeader({ hidden: fullScreen }, [fullScreen]);
+
   const current = infos.find((p) => p.id === project);
   const forYouCount = attention(scope, viewer);
   const openMeeting = (meetings || []).some((m) => m.state === 'OPEN');
-  const segBtn = (on: boolean) => `relative inline-flex min-h-[38px] items-center gap-1.5 rounded-[9px] px-4 text-[13.5px] font-bold transition-colors ${on ? 'text-[#17191E]' : 'text-[#4F535C] hover:text-[#17191E]'}`;
+  const segBtn = (on: boolean) => `relative inline-flex min-h-[42px] items-center gap-1.5 rounded-[14px] px-4 text-sm font-bold transition-colors ${on ? 'text-[#17191E]' : 'text-[#4F535C] hover:text-[#17191E]'}`;
   /* The white pill glides to the chosen view. */
-  const pill = (on: boolean) => on && <motion.span layoutId="dd-view-pill" className="absolute inset-0 rounded-[9px] bg-white shadow-[0_1px_2px_rgba(23,25,30,0.12)]" transition={{ type: 'spring', stiffness: 520, damping: 40 }} />;
+  const pill = (on: boolean) => on && <motion.span layoutId="dd-view-pill" className="absolute inset-0 rounded-[14px] bg-white shadow-[0_1px_2px_rgba(23,25,30,0.12)]" transition={{ type: 'spring', stiffness: 520, damping: 40 }} />;
   const segIn = 'relative z-[1] inline-flex items-center gap-1.5';
 
   return (
-    <div className="mx-auto w-full max-w-[1360px] px-4 pb-36 pt-6 text-[#17191E] md:px-5">
+    /* The overview runs full width under the shell's title row, as Projects does; a sheet or a
+       meeting keeps its own centred stage. */
+    <div className={`w-full pb-36 text-[#17191E] ${open || live ? 'mx-auto max-w-[1360px] px-4 pt-6 md:px-5' : ''}`}>
       {live && !open ? (
         <MeetingMode key={live.id} orgId={orgId} projectId={project} projectName={projectOf(project).name} look={projectOf(project)}
           meeting={live} meetings={meetings || []}
@@ -309,10 +316,10 @@ function Desk({ projects, activeProjectId }: Props) {
         />
       ) : (
         <>
-          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-3">
-            <h1 className="flex-auto font-display text-[30px] font-semibold tracking-tight">Design Desk</h1>
+          {/* Named by the shell's title row, like Projects; this is the bar under it. */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
             <LayoutGroup id="dd-views">
-              <div className="inline-flex gap-0.5 rounded-xl bg-[#EBEBE5] p-[3px]" role="tablist" aria-label="Design Desk views">
+              <div className="inline-flex gap-0.5 rounded-[1.25rem] bg-[#EBEBE5] p-1" role="tablist" aria-label="Design Desk views">
                 <button type="button" role="tab" aria-selected={tab === 'foryou'} onClick={() => setTab('foryou')} className={segBtn(tab === 'foryou')}>
                   {pill(tab === 'foryou')}<span className={segIn}><Inbox size={16} />For you{forYouCount > 0 && <span className="text-[12px] text-[#3A3FB8]">{forYouCount}</span>}</span>
                 </button>
@@ -328,7 +335,7 @@ function Desk({ projects, activeProjectId }: Props) {
             </LayoutGroup>
             {uploader && (
               <button type="button" onClick={() => setAdd([])} title="Or drop PDFs anywhere on this page"
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-[#DCDCD5] bg-white px-[18px] text-[14px] font-bold transition hover:border-[#A9AAA2] active:scale-[.98]">
+                className="inline-flex h-[50px] items-center gap-2 rounded-[1.25rem] border border-[#DCDCD5] bg-white px-5 text-sm font-bold shadow-sm transition hover:-translate-y-px hover:border-[#A9AAA2] active:scale-[.98] motion-reduce:transform-none">
                 <FileUp size={16} />Add PDFs
               </button>
             )}

@@ -10,7 +10,7 @@ import {
   monthGrid, shiftMonth, awayOn, dayKind, monthReport, attendanceCsv, todayOf,
 } from '../../lib/peopleView';
 import { usePeople, runPeople, fetchPeopleMonth } from '../../services/peopleService';
-import ConsoleHeader from '../ui/ConsoleHeader';
+import { StudioBar, BarStrip, BarButton } from '../ui/StudioBar';
 import { CountUp, Dot } from '../ui/HudBits';
 import MyDayCard from './MyDayCard';
 import { LeaveSheet, CorrectionSheet } from './PeopleSheets';
@@ -76,7 +76,9 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   if (!snapshot) {
     return (
       <div className="pb-28">
-        <ConsoleHeader title="People" state={error ? 'Not available' : 'Loading'} tone={error ? 'bad' : 'warn'} live={!error} blurb="Your day, your leave, and who is in." />
+        <StudioBar className="mb-6">
+          <BarStrip label="Leave left"><span className="text-xs font-semibold text-slate-500">{error ? 'Not available' : 'Loading…'}</span></BarStrip>
+        </StudioBar>
         {error ? <Panel icon={Users} title="People could not open" blurb={error}><button type="button" className={btnSec} onClick={refresh}><RefreshCw className="w-4 h-4" />Try again</button></Panel>
           : <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6"><div className="space-y-2">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 rounded-xl" />)}</div><Skeleton className="h-64 rounded-3xl" /></div>}
       </div>
@@ -102,32 +104,26 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
 
   return (
     <div className="pb-28">
-      <ConsoleHeader
-        title="People"
-        state={session?.checkOut ? 'Day complete' : session ? 'Checked in' : 'Not checked in'}
-        tone={session ? 'ok' : 'warn'}
-        live={!!session && !session.checkOut}
-        blurb={approver ? 'Your day and your leave, and your people: their attendance, approvals and the monthly report.' : 'Check in and out, your attendance and leave, and who is away.'}
-        actions={<>
-          <button type="button" className={btnPri} onClick={() => setLeaveOpen({})}><Plus className="w-4 h-4" />Apply for leave</button>
-          <button type="button" className={btnSec} onClick={refresh} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh</button>
-        </>}
-        panel={bal ? (
-          <Tilt max={6} glare={false} className="w-full md:w-[290px]">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Leave left · {fyLabel(fy)}</div>
-            <div className="mt-3 flex items-center justify-between gap-2">
-              {(['PL', 'SL', 'CL'] as const).map((t, i) => (
-                <motion.div key={t} initial={{ opacity: 0, y: 8, rotateY: -90 }} animate={{ opacity: 1, y: 0, rotateY: 0 }} transition={{ delay: 0.1 + i * 0.1, duration: 0.6, ease: EASE }} style={{ transformPerspective: 600 }} className="flex flex-col items-center gap-1">
-                  <Ring value={bal[t].entitled ? bal[t].available / bal[t].entitled : 0} size={64} stroke={6} tone={bal[t].available <= 1 ? 'warn' : 'brand'} label={`${LEAVE_LABELS[t]}: ${bal[t].available} left`}>
-                    <span className="text-sm font-black text-slate-800 tabular-nums"><CountUp value={bal[t].available} /></span>
-                  </Ring>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t}</span>
-                </motion.div>
-              ))}
-            </div>
-          </Tilt>
-        ) : undefined}
-      />
+      {/* Named by the shell's title row, like Projects; this is the bar under it. */}
+      <StudioBar className="mb-6">
+        <BarStrip label={bal ? `Leave left · ${fyLabel(fy)}` : 'Your day'}>
+          {bal && (['PL', 'SL', 'CL'] as const).map((t, i) => (
+            <motion.div key={t} initial={{ opacity: 0, y: 6, rotateY: -90 }} animate={{ opacity: 1, y: 0, rotateY: 0 }} transition={{ delay: 0.1 + i * 0.1, duration: 0.6, ease: EASE }} style={{ transformPerspective: 600 }}
+              className="flex items-center gap-1.5 pl-1 pr-2.5 py-0.5 rounded-full border border-slate-200 bg-slate-50">
+              <Ring value={bal[t].entitled ? bal[t].available / bal[t].entitled : 0} size={30} stroke={3} tone={bal[t].available <= 1 ? 'warn' : 'brand'} label={`${LEAVE_LABELS[t]}: ${bal[t].available} left`}>
+                <span className="block text-[10px] leading-none font-black text-slate-800 tabular-nums"><CountUp value={bal[t].available} /></span>
+              </Ring>
+              <span className="text-[11px] font-bold text-slate-700">{LEAVE_LABELS[t]}</span>
+            </motion.div>
+          ))}
+          <span className="ml-auto flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <Dot tone={session ? 'ok' : 'warn'} live={!!session && !session.checkOut} />
+            {session?.checkOut ? 'Day complete' : session ? 'Checked in' : 'Not checked in'}
+          </span>
+        </BarStrip>
+        <BarButton onClick={refresh} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh</BarButton>
+        <BarButton primary onClick={() => setLeaveOpen({})}><Plus className="w-4 h-4" />Apply for leave</BarButton>
+      </StudioBar>
 
       <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6 items-start">
         <nav aria-label="People sections" className="lg:sticky lg:top-4 flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible">
