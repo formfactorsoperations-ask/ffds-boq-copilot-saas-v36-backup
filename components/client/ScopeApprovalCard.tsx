@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Check, CheckCircle2, Loader2, AlertTriangle } from '@/lib/lucide-shim';
+import { Check, CheckCircle2, Loader2, AlertTriangle, Undo2, ShieldCheck, Lock, MessageSquareText } from '@/lib/lucide-shim';
 import type { DocumentIssue } from '../../types';
 import { clientTotals, totalsNote } from '../../lib/scopeTotals';
 import { workbookForIssue, downloadWorkbook } from '../../lib/scopeWorkbook';
 import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
 import { agreedViaPhrase } from '../../lib/scopeAgreement';
+import { CHANGE_NOTE_MIN, CHANGE_NOTE_MAX, CHANGE_TOPICS, ScopeChangeTopic, isSentBack, topicLabels } from '../../lib/scopeChangeRequest';
 
 /*
   APPROVE IN THE PORTAL — the whole Scope Revision (or the first Detailed BOQ)
@@ -14,6 +15,11 @@ import { agreedViaPhrase } from '../../lib/scopeAgreement';
   and the changed items, download the Excel, tick one box with their name and
   approve. The server records the approval against their login (see the
   approveIssue action), so nothing on this card can fake who or when.
+
+  A Scope Revision they do not agree with is sent back instead, with their
+  note (lib/scopeChangeRequest): recorded the same way, and changing nothing in
+  force. The approved scope and the payments stay as they are until the studio
+  sends a new version and the client approves that.
 */
 
 /* The portal listens for this and records it for the studio (client sessions only). */
@@ -44,10 +50,17 @@ interface Props {
   studioAddress?: string | null;
   defaultName?: string;
   onApprove: (issueId: string, name: string, contentHash: string) => Promise<void>;
+  /* Sending a Scope Revision back for changes. Absent: the card offers approval only. */
+  onRequestChanges?: (issueId: string, input: { name: string; message: string; topics: ScopeChangeTopic[] }, contentHash: string) => Promise<void>;
+  /* The earlier version of this revision the client sent back, which this one answers. */
+  previous?: DocumentIssue | null;
   onSeeChanges?: () => void;
 }
 
-export default function ScopeApprovalCard({ issue, studioName, studioAddress, defaultName, onApprove, onSeeChanges }: Props) {
+const when = (t?: string | number | null) =>
+  t ? new Date(t).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+
+export default function ScopeApprovalCard({ issue, studioName, studioAddress, defaultName, onApprove, onRequestChanges, previous, onSeeChanges }: Props) {
   const s: any = issue.snapshot || {};
   const revision = issue.kind === 'scope_revision';
   const before = revision ? Number(s.v1?.total) || 0 : null;
@@ -63,6 +76,10 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
   const agreed = !issue.clientSignature && issue.recordedApproval ? issue.recordedApproval : null;
   const approved = !!(issue.clientSignature || agreed);
   const d: any = issue.clientSignature || {};
+  /* Sent back for changes: with the studio, and not theirs to approve any more. */
+  const sentBack = revision && isSentBack(issue) ? issue.changesRequested! : null;
+  const canSendBack = revision && !!onRequestChanges;
+  const asked = previous?.changesRequested || null;
 
   const [ack, setAck] = useState(false);
   const [name, setName] = useState(defaultName && defaultName !== 'Client' && defaultName !== 'Valued Client' ? defaultName : '');
@@ -70,6 +87,9 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
   const [dl, setDl] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [mode, setMode] = useState<'approve' | 'changes'>('approve');
+  const [note, setNote] = useState('');
+  const [topics, setTopics] = useState<ScopeChangeTopic[]>([]);
 
   const download = async () => {
     setDl(true);
@@ -101,14 +121,30 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
     }
   };
 
+  const sendBack = async () => {
+    if (note.trim().length < CHANGE_NOTE_MIN || name.trim().length < 2) {
+      setError(note.trim().length < CHANGE_NOTE_MIN ? 'Tell the studio what you would like changed.' : 'Type your name.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await onRequestChanges!(issue.id, { name: name.trim(), message: note.trim(), topics }, issue.contentHash);
+    } catch (e: any) {
+      setError(e?.message || 'Your request could not be sent. Please try again, or tell your studio.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const title = revision ? `Scope Revision ${s.number ?? issue.version}` : `Detailed BOQ v${s.version ?? issue.version}`;
   const shown = showAll ? changed : changed.slice(0, 6);
 
   return (
-    <section className={`rounded-3xl border bg-white shadow-2xs overflow-hidden ${approved ? 'border-emerald-200' : 'border-[#3D52A0]/30'}`} aria-labelledby={`approve-${issue.id}`}>
+    <section className={`rounded-3xl border bg-white shadow-2xs overflow-hidden ${approved ? 'border-emerald-200' : sentBack ? 'border-amber-200' : 'border-[#3D52A0]/30'}`} aria-labelledby={`approve-${issue.id}`}>
       <div className="px-5 sm:px-6 pt-5 pb-4 flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100">
         <div>
-          <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">{agreed ? 'Agreed' : approved ? 'Approved' : 'For your approval'}</div>
+          <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">{agreed ? 'Agreed' : approved ? 'Approved' : sentBack ? 'With the studio for changes' : 'For your approval'}</div>
           <h3 id={`approve-${issue.id}`} className="text-[19px] font-bold tracking-tight text-slate-900 mt-0.5">{title}</h3>
         </div>
         <span className="text-[12px] text-slate-500">{issue.reference} · issued {day(issue.issuedAt)}</span>
@@ -191,25 +227,108 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
               <div className="text-emerald-800 mt-0.5">{revision ? 'The revised BOQ is your scope once the studio applies it, and your payment schedule follows.' : 'This BOQ is your scope.'}</div>
             </div>
           </div>
+        ) : sentBack ? (
+          <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-4 text-sm text-slate-700 space-y-3">
+            <div className="flex gap-2.5">
+              <Undo2 className="w-5 h-5 shrink-0 text-amber-700" />
+              <div>
+                <div className="font-bold text-slate-800">You sent this back for changes{sentBack.at ? ` on ${when(sentBack.at)}` : ''}.</div>
+                <div className="text-xs text-slate-500 mt-0.5">{studioName} is revising it and will send you a new version to approve.</div>
+              </div>
+            </div>
+            <blockquote className="rounded-xl bg-white border border-amber-200 px-3.5 py-3">
+              {topicLabels(sentBack.topics).length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {topicLabels(sentBack.topics).map((t) => <span key={t} className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700">{t}</span>)}
+                </div>
+              )}
+              <p className="text-sm text-slate-800 whitespace-pre-line">{sentBack.message}</p>
+              <footer className="text-[11px] text-slate-500 mt-1.5">{sentBack.name}{sentBack.email ? ` · ${sentBack.email}` : ''}{sentBack.via === 'studio_device' ? ' · taken in person by the studio' : ''}</footer>
+            </blockquote>
+            <div className="flex gap-2 text-xs text-slate-600">
+              <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-700" />
+              <span>Until you approve a new version, the BOQ you approved{before ? ` (${inr(before)})` : ''} stays your scope. Work and payments continue on it, and nothing in this revision is built or billed.</span>
+            </div>
+            <p className="text-[11px] text-slate-500">Changed your mind? Tell {studioName}: they can send this version to you again to approve.</p>
+          </div>
         ) : (
           <div className="rounded-2xl border-[1.5px] border-[#3D52A0] bg-[#F8F9FE] p-4 space-y-3">
-            <label className="flex items-start gap-2.5 text-[13.5px] text-slate-800 cursor-pointer">
-              <input type="checkbox" checked={ack} onChange={(e) => { setAck(e.target.checked); setError(null); }} className="mt-0.5 w-[18px] h-[18px] accent-[#3D52A0] shrink-0" />
-              <span>
-                I have reviewed {revision ? `the revised BOQ (v${s.v2?.version}, ${inr(after)} before design fee and GST)` : `the BOQ (${inr(after)} before design fee and GST)`} and approve it as my project's scope.
-              </span>
-            </label>
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="grid gap-1 text-[12px] text-slate-500">
-                Your name
-                <input value={name} onChange={(e) => { setName(e.target.value); setError(null); }} autoComplete="name" className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-[14px] text-slate-900 w-[260px] max-w-full outline-none focus:ring-2 focus:ring-[#3D52A0]/30" />
-              </label>
-              <button type="button" onClick={approve} disabled={busy} className="px-4 py-2.5 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-60 text-white text-[13px] font-bold cursor-pointer flex items-center gap-2">
-                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} {revision ? 'Approve revision' : 'Approve BOQ'}
-              </button>
-            </div>
-            {error && <p role="alert" className="text-[12.5px] text-rose-800 flex items-start gap-1.5"><AlertTriangle className="w-4 h-4 shrink-0 mt-px" />{error}</p>}
-            <p className="text-[11.5px] text-slate-500">Recorded with your name, your portal login, the time and the document's fingerprint. No signature drawing needed.</p>
+            {asked && (
+              <div className="rounded-xl bg-white border border-slate-200 px-3.5 py-2.5 text-xs text-slate-600 flex gap-2">
+                <MessageSquareText className="w-4 h-4 shrink-0 text-[#3D52A0]" />
+                <span>This version answers the changes you asked for{asked.at ? ` on ${day(asked.at)}` : ''}: <span className="text-slate-800">“{asked.message.length > 180 ? `${asked.message.slice(0, 180)}…` : asked.message}”</span></span>
+              </div>
+            )}
+            {canSendBack && (
+              <div className="inline-flex p-1 rounded-xl bg-slate-100" role="tablist" aria-label="Your decision">
+                {([['approve', 'Approve'], ['changes', 'Ask for changes']] as const).map(([k, label]) => (
+                  <button key={k} type="button" role="tab" aria-selected={mode === k} onClick={() => { setMode(k); setError(null); }}
+                    className={`px-3.5 py-1.5 rounded-lg text-sm font-bold cursor-pointer transition-colors ${mode === k ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {mode === 'approve' || !canSendBack ? (
+              <div key="approve" className="space-y-3 hud-swap">
+                <label className="flex items-start gap-2.5 text-[13.5px] text-slate-800 cursor-pointer">
+                  <input type="checkbox" checked={ack} onChange={(e) => { setAck(e.target.checked); setError(null); }} className="mt-0.5 w-[18px] h-[18px] accent-[#3D52A0] shrink-0" />
+                  <span>
+                    I have reviewed {revision ? `the revised BOQ (v${s.v2?.version}, ${inr(after)} before design fee and GST)` : `the BOQ (${inr(after)} before design fee and GST)`} and approve it as my project's scope.
+                  </span>
+                </label>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="grid gap-1 text-[12px] text-slate-500">
+                    Your name
+                    <input value={name} onChange={(e) => { setName(e.target.value); setError(null); }} autoComplete="name" className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-[14px] text-slate-900 w-[260px] max-w-full outline-none focus:ring-2 focus:ring-[#3D52A0]/30" />
+                  </label>
+                  <button type="button" onClick={approve} disabled={busy} className="px-4 py-2.5 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-60 text-white text-[13px] font-bold cursor-pointer flex items-center gap-2">
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} {revision ? 'Approve revision' : 'Approve BOQ'}
+                  </button>
+                </div>
+                {error && <p role="alert" className="text-[12.5px] text-rose-800 flex items-start gap-1.5"><AlertTriangle className="w-4 h-4 shrink-0 mt-px" />{error}</p>}
+                <p className="text-[11.5px] text-slate-500">Recorded with your name, your portal login, the time and the document's fingerprint. No signature drawing needed.</p>
+              </div>
+            ) : (
+              <div key="changes" className="space-y-3 hud-swap">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">What is it about?</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CHANGE_TOPICS.map((t) => {
+                      const on = topics.includes(t.value);
+                      return (
+                        <button key={t.value} type="button" aria-pressed={on}
+                          onClick={() => setTopics((cur) => (on ? cur.filter((x) => x !== t.value) : [...cur, t.value]))}
+                          className={`px-3 py-1.5 rounded-full border text-xs font-bold cursor-pointer transition-colors ${on ? 'bg-[#3D52A0]/10 text-[#3D52A0] border-[#3D52A0]/30' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <label className="grid gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">What would you like changed?</span>
+                  <textarea value={note} onChange={(e) => { setNote(e.target.value.slice(0, CHANGE_NOTE_MAX)); setError(null); }} rows={4}
+                    placeholder="For example: keep the master bedroom wardrobe as it was in the version I approved, and recheck the living room false ceiling area."
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-800 outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] resize-y" />
+                </label>
+                <ul className="rounded-xl bg-white border border-slate-200 divide-y divide-slate-100 text-xs text-slate-600">
+                  <li className="flex gap-2 px-3.5 py-2.5"><ShieldCheck className="w-4 h-4 shrink-0 text-emerald-700" /><span><b className="text-slate-800">Nothing you have approved changes.</b> The BOQ you approved{before ? ` (${inr(before)})` : ''} stays your scope, and work and payments continue on it.</span></li>
+                  <li className="flex gap-2 px-3.5 py-2.5"><Undo2 className="w-4 h-4 shrink-0 text-[#3D52A0]" /><span>{studioName} revises it and sends you a complete new version to approve. A revision is approved or sent back as a whole, not item by item.</span></li>
+                  <li className="flex gap-2 px-3.5 py-2.5"><Lock className="w-4 h-4 shrink-0 text-slate-400" /><span>Once sent back, this version can no longer be approved. Your note is recorded with your name, your portal login, the time and the document's fingerprint, and shared with {studioName}.</span></li>
+                </ul>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="grid gap-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Your name</span>
+                    <input value={name} onChange={(e) => { setName(e.target.value); setError(null); }} autoComplete="name" className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-800 w-[260px] max-w-full outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]" />
+                  </label>
+                  <button type="button" onClick={sendBack} disabled={busy} className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 disabled:opacity-50 cursor-pointer flex items-center gap-2">
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />} Send back to {studioName}
+                  </button>
+                </div>
+                {error && <p role="alert" className="text-xs text-rose-700 flex items-start gap-1.5"><AlertTriangle className="w-4 h-4 shrink-0" />{error}</p>}
+              </div>
+            )}
           </div>
         )}
       </div>

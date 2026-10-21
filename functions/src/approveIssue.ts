@@ -1,5 +1,6 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { signIssue, hashSnapshot } from "../../services/documentIssueEngine";
+import { sentBackBlock } from "../../lib/scopeChangeRequest";
 
 /**
  * Approving a Scope Revision or a Detailed BOQ in the portal.
@@ -37,6 +38,9 @@ export function approveIssuePatch(
         if (issue.clientSignature || issue.recordedApproval) {
             throw new HttpsError("already-exists", "This document is already approved.");
         }
+        /* Sent back for changes: the studio sends a revised version to approve instead. */
+        const block = sentBackBlock(issue);
+        if (block) throw new HttpsError("failed-precondition", block);
         if (issue.clientVisibility?.state !== "published") {
             throw new HttpsError("failed-precondition", "This document has not been shared with you yet.");
         }

@@ -68,6 +68,12 @@ function mergeDocuments(mine: any, theirs: any): any {
     if (!next.clientSignature && !next.recordedApproval && other.recordedApproval) {
       next = { ...next, recordedApproval: other.recordedApproval, clientVisibility: other.clientVisibility ?? next.clientVisibility };
     }
+    /*
+      A revision the client sent back for changes is theirs, like a signature:
+      once made it stands, or the studio's next auto-save would erase it and the
+      version would read as still waiting for their approval.
+    */
+    if (!next.changesRequested && other.changesRequested) next = { ...next, changesRequested: other.changesRequested };
     /* Excel downloads are written by the server: the fuller record wins. */
     if ((other.clientDownloads?.length || 0) > (next.clientDownloads?.length || 0)) next = { ...next, clientDownloads: other.clientDownloads };
     return next;

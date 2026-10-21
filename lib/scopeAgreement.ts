@@ -45,7 +45,8 @@ export function recordAgreement(issueId: string, a: AgreementInput) {
       documents: {
         ...prev.documents,
         issues: prev.documents.issues.map((i) =>
-          i.id === issueId && !i.clientSignature && !i.recordedApproval
+          /* Not on a version the client sent back for changes: they said they did not agree to it. */
+          i.id === issueId && !i.clientSignature && !i.recordedApproval && !i.changesRequested
             ? {
                 ...i,
                 recordedApproval: { approvedAt: a.approvedAt, recordedBy: a.recordedBy, recordedAt: Date.now(), note: a.note.trim(), how: a.how },

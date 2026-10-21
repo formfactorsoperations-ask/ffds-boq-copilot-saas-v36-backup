@@ -24,6 +24,9 @@ export type ClientAction =
   /* Approving a Scope Revision or Detailed BOQ in the portal. The server writes
      the record (name typed here; login, time, address and fingerprint its own). */
   | { type: 'approveIssue'; issueId: string; name: string; contentHash?: string }
+  /* Sending a Scope Revision back for changes instead of approving it. Recorded
+     by the server like an approval; see lib/scopeChangeRequest.ts. */
+  | { type: 'requestIssueChanges'; issueId: string; name: string; message: string; topics?: string[]; contentHash?: string }
   /* The client downloaded a scope document's Excel or approval record. */
   | { type: 'documentDownload'; issueId: string; format: 'excel' | 'record' }
   | {

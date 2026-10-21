@@ -93,6 +93,9 @@ function describe(before: any, after: any): ReconcileFinding[] {
     if (i.clientSignature && !was.clientSignature) {
       push('Document', issueLabel(i), `signed by the client${on(i.clientSignature?.signedAt || i.clientSignature?.at)}`);
     }
+    if (i.changesRequested && !was.changesRequested) {
+      push('Document', issueLabel(i), `sent back for changes by the client${on(i.changesRequested?.at)} — “${quote(i.changesRequested?.message)}”`);
+    }
   });
 
   const queriesWas = (before?.documents?.queries || []).length;
