@@ -4,11 +4,13 @@
   names them; a lead (Owner, Admin, Ops Director) reads the studio's.
 */
 import { collection, deleteDoc, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { Type } from '@google/genai';
-import { db } from './firebaseClient';
+import { db, functions } from './firebaseClient';
 import { getAi, aiIsReachable } from './aiClient';
 import { FLASH_MODEL } from '../constants/aiModels';
-import { blankPerson, readChat, type Lead, type LeadDraft, type LeadStage, type LeadTouch, type TouchKind } from '../lib/leads';
+import { blankPerson, readChat, type Lead, type LeadDraft, type LeadStage, type LeadTouch, type Match, type TouchKind } from '../lib/leads';
+import type { Enquiry } from '../lib/leadForm';
 
 const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 const clip = (v: any, n: number) => String(v ?? '').trim().slice(0, n);
@@ -162,4 +164,42 @@ export async function readLeadChat(text: string): Promise<ChatRead> {
   } catch {
     return fallback;
   }
+}
+
+/* ── The duplicate check across the whole studio (functions/src/leads.ts) ── */
+
+/** A match from the server: names, stage and owner only; `mine` when this person can open it. */
+export interface StudioMatch extends Match { mine: boolean; ownerName?: string; stageLabel?: string; title?: string; source?: string }
+
+/**
+ * Earlier leads and clients anywhere in the studio with this phone or email,
+ * including leads this person cannot open. Null when the check could not run
+ * (not deployed yet, offline): the screen keeps its own check meanwhile.
+ */
+export async function studioMatches(people: { phone: string; email: string }[], ignoreLeadId?: string): Promise<StudioMatch[] | null> {
+  if (!functions) return null;
+  try {
+    const res: any = await httpsCallable(functions, 'leadMatches', { timeout: 30000 })({ people: people.slice(0, 8), ignoreLeadId: ignoreLeadId || '' });
+    return Array.isArray(res?.data?.matches) ? res.data.matches : [];
+  } catch (e: any) {
+    console.warn('Duplicate check', e?.code || e);
+    return null;
+  }
+}
+
+/* ── The public enquiry form (lib/leadForm.ts) ──────────────────────────── */
+
+export interface FormDoor { open: boolean; name?: string | null; logo?: string | null; phone?: string | null; email?: string | null }
+
+/** The studio's name and logo for a form link, or `open: false` when the link is not live. */
+export async function formDoor(token: string): Promise<FormDoor> {
+  if (!functions) return { open: false };
+  const res: any = await httpsCallable(functions, 'leadForm', { timeout: 20000 })({ action: 'door', token });
+  return res?.data || { open: false };
+}
+
+export async function sendEnquiry(token: string, enquiry: Enquiry): Promise<{ ok: boolean; reason?: string; problems?: string[]; name?: string | null }> {
+  if (!functions) return { ok: false, reason: 'offline' };
+  const res: any = await httpsCallable(functions, 'leadForm', { timeout: 30000 })({ action: 'submit', token, enquiry });
+  return res?.data || { ok: false, reason: 'closed' };
 }

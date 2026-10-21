@@ -251,7 +251,7 @@ const wantsStrictMode = (() => {
   catch { return true; }
 })();
 
-const appTree = (
+const studioTree = (
     <ErrorBoundary>
       <React.Suspense fallback={
         <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#f8fafc] select-none overflow-hidden relative">
@@ -314,5 +314,21 @@ const appTree = (
       </React.Suspense>
     </ErrorBoundary>
 );
+
+/*
+  The studio's public enquiry form (components/opsDesk/EnquiryPage.tsx), from a
+  link on its website or Instagram: `?enquire=<token>`. It is for the public,
+  so it opens on its own, with no sign-in and none of the studio app loaded.
+*/
+const pageParams = new URLSearchParams(window.location.search);
+const enquireToken = pageParams.get('enquire');
+const EnquiryPage = React.lazy(() => import('./components/opsDesk/EnquiryPage'));
+const appTree = enquireToken ? (
+  <ErrorBoundary>
+    <React.Suspense fallback={null}>
+      <EnquiryPage token={enquireToken} embed={pageParams.get('embed') === '1'} source={pageParams.get('src')} />
+    </React.Suspense>
+  </ErrorBoundary>
+) : studioTree;
 
 root.render(wantsStrictMode ? <React.StrictMode>{appTree}</React.StrictMode> : appTree);

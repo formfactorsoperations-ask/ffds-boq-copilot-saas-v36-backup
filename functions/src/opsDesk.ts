@@ -23,10 +23,10 @@ import { escalationRecipientsOf, opsSettingsOf, sweepCandidates, type FollowUp }
 */
 
 const db = () => admin.firestore();
-const SECRETS = ["RESEND_API_KEY", "EMAIL_FROM"];
+export const SECRETS = ["RESEND_API_KEY", "EMAIL_FROM"];
 const DAY = 86400000;
 
-async function sendMail(to: string[], subject: string, html: string): Promise<{ sandbox: boolean }> {
+export async function sendMail(to: string[], subject: string, html: string): Promise<{ sandbox: boolean }> {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     logger.warn("[opsDesk] RESEND_API_KEY not configured. Email simulated.", { to, subject });
@@ -44,7 +44,7 @@ async function sendMail(to: string[], subject: string, html: string): Promise<{ 
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 
-function card(title: string, rows: [string, string][], footer: string): string {
+export function card(title: string, rows: [string, string][], footer: string): string {
   return `<div style="font-family:Arial,sans-serif;max-width:560px;color:#0F172A">
     <h2 style="font-size:18px;margin:0 0 12px">${esc(title)}</h2>
     <table style="border-collapse:collapse;font-size:14px">${rows.map(([k, v]) =>
