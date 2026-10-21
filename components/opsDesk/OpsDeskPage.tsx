@@ -458,7 +458,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
               onDelete={async (l) => { try { await deleteLead(l.id); setLeads((ls) => ls.filter((x) => x.id !== l.id)); setLeadOpen(null); } catch { setError('The lead was not deleted. Try again.'); } }}
               onOpenProject={setConverting} />
           ) : (
-            <LeadsBoard onOpen={setLeadOpen} onAdd={() => setAdding({ paste: false })} onPaste={() => setAdding({ paste: true })} />
+            <LeadsBoard onOpen={setLeadOpen} onAdd={() => setAdding({ paste: false })} onPaste={() => setAdding({ paste: true })} onMoved={replaceLead} />
           ))}
 
           {section === 'team' && isLead && (

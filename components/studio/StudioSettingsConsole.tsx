@@ -573,6 +573,7 @@ export default function StudioSettingsConsole(props: {
             <Panel id="opsdesk" title="Ops Desk" blurb={SETTINGS_SECTIONS[7].blurb} missing={0}>
               <OpsDeskSettings
                 org={draft}
+                tenantId={tenantId}
                 team={(draft.team as TeamMember[]) || []}
                 canEdit={canEdit}
                 onChange={(v) => setField('opsDesk', v)}

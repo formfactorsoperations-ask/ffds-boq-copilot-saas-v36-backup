@@ -239,7 +239,13 @@ of Client Relations people, not one (mockups OD1 to OD7 and L1 to L4, approved
 - The first-week guide's steps flip like coins when done (`Coin`), and "Show
   me" puts a spotlight on the real button.
 - Leads: columns turn in one after another, cards tilt, and a card glides to
-  its new column when its stage changes.
+  its new column when its stage changes. A card can be dragged to another
+  stage with a mouse, trackpad or pen: it lifts and tilts, the column under it
+  lights up with "Drop here". On touch screens the stage is changed on the
+  lead's page, so dragging never fights the page's scroll.
+- The public enquiry form (`EnquiryPage.tsx`, `?enquire=`) is one glass card
+  in the same type and colours, with the studio's logo, rows that rise in, and
+  the done tick and confetti once sent.
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent
   colours, no half-pixel sizes.
 

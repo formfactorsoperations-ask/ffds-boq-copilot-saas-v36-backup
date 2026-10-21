@@ -111,11 +111,22 @@ export interface OpsSettings {
    * and the kinds). Only what a lead changed is kept.
    */
   playbooks: Record<string, { steps: string[]; dont: string }>;
+  /** The public enquiry form (lib/leadForm.ts). */
+  leadForm: LeadFormSettings;
+}
+
+export interface LeadFormSettings {
+  enabled: boolean;
+  /** `{tenantId}.{random}`: names the studio and proves the link was issued by it. */
+  token: string;
+  /** Who new enquiries go to. Empty: the Client Relations person with the fewest new leads. */
+  ownerEmail: string;
 }
 
 export const DEFAULT_OPS_SETTINGS: OpsSettings = {
   paymentDueDays: 7, escalateAfterReminders: 2, escalateAfterDays: 7, escalationRecipients: [], reviewLink: '', newMinutes: false, minutesFollowUps: true,
   playbooks: {},
+  leadForm: { enabled: false, token: '', ownerEmail: '' },
 };
 
 /* A playbook as stored: up to eight short steps and one "do not". */
@@ -148,6 +159,11 @@ export function opsSettingsOf(org: any): OpsSettings {
     newMinutes: s.newMinutes === true,
     minutesFollowUps: s.minutesFollowUps !== false,
     playbooks: cleanPlaybooks(s.playbooks),
+    leadForm: {
+      enabled: s.leadForm?.enabled === true,
+      token: /^[A-Za-z0-9_-]{1,80}\.[A-Za-z0-9]{16,64}$/.test(String(s.leadForm?.token || '')) ? String(s.leadForm.token) : '',
+      ownerEmail: String(s.leadForm?.ownerEmail || '').trim().toLowerCase(),
+    },
   };
 }
 

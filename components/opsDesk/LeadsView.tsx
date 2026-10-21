@@ -1,22 +1,23 @@
-import React, { useMemo, useState } from 'react';
-import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, LayoutGroup, motion, useDragControls } from 'framer-motion';
 import {
   UserPlus, Phone, MessageCircle, CalendarCheck, Ruler, FileText, Plus, Trophy, ThumbsDown, Filter, Check, X, AlertTriangle, Target,
-  Hourglass, CircleCheck, CircleDot, Clock, Sparkles, MapPin, Building2, Wallet, AtSign, Send, ArrowLeft, Trash2, Search, Lock, ShieldCheck,
+  Hourglass, CircleCheck, CircleDot, Clock, Sparkles, Globe, MapPin, Building2, Wallet, AtSign, Send, ArrowLeft, Trash2, Search, Lock, ShieldCheck,
 } from '@/lib/lucide-shim';
 import { Dot, CountUp } from '../ui/HudBits';
-import { Glide, IconTile, Tilt, DoneTick, listV, rowV } from '../people/PeopleBits';
+import { Glide, IconTile, Tilt, DoneTick, Notice, listV, rowV } from '../people/PeopleBits';
 import { dayKey, addDays } from '../../lib/opsDesk';
 import {
   BOARD_STAGES, LEAD_STAGES, LEAD_SOURCES, SCOPES, LOST_REASONS, FIRST_CALL_MINUTES, QUIET_DAYS, QUIET_DAYS_LEAD,
-  leadName, homeLine, leadUrgency, waitedLabel, sourceLabel, mainPerson, findMatches, conversionLines, leadStats, lostReasons,
+  leadName, homeLine, leadUrgency, waitedLabel, sourceLabel, mainPerson, findMatches, conversionLines, leadStats, lostReasons, phoneKey, emailKey,
   blankDraft, blankPerson, draftProblems, isOpen,
   type Lead, type LeadDraft, type LeadStage, type LeadSource, type TouchKind, type FirstStep,
 } from '../../lib/leads';
-import { createLead, saveLead, withTouch, readLeadChat } from '../../services/leadsService';
+import { createLead, saveLead, withTouch, readLeadChat, studioMatches, type StudioMatch } from '../../services/leadsService';
 import { btnPri, btnSec, btnSm, input, Label } from './OpsDeskPanels';
 import { useDesk, Panel, Chip, Avatar, Empty, EYEBROW, BRAND_EYEBROW, fmtDay, fmtWhen, dialable, waLink, cardV } from './DeskBits';
 import type { Person } from './OpsDeskPanels';
+import { FormLinkSheet } from './FormLink';
 import '../projectHeader/projectHeader.css';
 
 /*
@@ -33,12 +34,44 @@ const STAGE_ICON: Record<LeadStage, React.ComponentType<any>> = {
 
 /* ── L1: the board ───────────────────────────────────────────────────────── */
 
-export function LeadsBoard({ onOpen, onAdd, onPaste }: { onOpen: (id: string) => void; onAdd: () => void; onPaste: () => void }) {
+export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: string) => void; onAdd: () => void; onPaste: () => void; onMoved: (l: Lead) => void }) {
   const d = useDesk();
+  /*
+    Drag a card to another stage (with a mouse, trackpad or pen; on a phone,
+    open the lead and tap its stage, so dragging never fights the page's
+    scroll). The card lifts, the column under it lights up, and on letting go
+    the lead moves at once and is saved, with the move in its touches. A
+    person drags only the leads they may change.
+  */
+  const [dragFrom, setDragFrom] = useState<LeadStage | null>(null);
+  const [over, setOver] = useState<LeadStage | null>(null);
+  const [moved, setMoved] = useState<{ text: string; tone: 'ok' | 'bad' } | null>(null);
+  const canMove = (l: Lead) => d.canWrite && (d.isLead || l.ownerEmail === d.me.email) && isOpen(l);
+  const stageAt = (x: number, y: number): LeadStage | null => {
+    const el = document.elementsFromPoint(x, y).find((e) => (e as HTMLElement).dataset?.stage) as HTMLElement | undefined;
+    return (el?.dataset.stage as LeadStage) || null;
+  };
+  const drop = async (l: Lead, to: LeadStage | null) => {
+    setDragFrom(null);
+    setOver(null);
+    if (!to || to === l.stage || !canMove(l)) return;
+    const label = LEAD_STAGES.find((s) => s.id === to)?.label || to;
+    const next = withTouch({ ...l, stage: to }, { kind: 'stage', text: `Moved to ${label}` }, d.me);
+    onMoved(next);
+    try {
+      onMoved(await saveLead(next, d.me.email));
+      setMoved({ text: `${leadName(l)} moved to ${label}.`, tone: 'ok' });
+    } catch {
+      onMoved(l);
+      setMoved({ text: `${leadName(l)} could not be moved. Only its owner, or a lead, can change it.`, tone: 'bad' });
+    }
+    window.setTimeout(() => setMoved(null), 3200);
+  };
   const [view, setView] = useState<'board' | 'list'>('board');
   const [whose, setWhose] = useState<'mine' | 'everyone'>(d.isLead ? 'everyone' : 'mine');
   const [source, setSource] = useState<LeadSource | 'all'>('all');
   const [search, setSearch] = useState('');
+  const [formOpen, setFormOpen] = useState(false);
   const stats = leadStats(d.leads, d.now);
   const shown = d.leads.filter((l) => (whose === 'everyone' || l.ownerEmail === d.me.email) && (source === 'all' || l.source === source));
   const toCall = shown.filter((l) => isOpen(l) && !l.firstTouchAt).length;
@@ -61,10 +94,12 @@ export function LeadsBoard({ onOpen, onAdd, onPaste }: { onOpen: (id: string) =>
         <div className="flex flex-wrap items-center gap-2">
           {d.canWrite && <button type="button" data-tour="lead-board" className={`${btnPri} pp-press`} onClick={onAdd}><UserPlus className="w-4 h-4" />Add a lead</button>}
           {d.canWrite && <button type="button" className={btnSec} onClick={onPaste}><MessageCircle className="w-4 h-4" />From a WhatsApp chat</button>}
+          <button type="button" className={btnSec} onClick={() => setFormOpen(true)}><Globe className="w-4 h-4" />Website form link</button>
           {toCall > 0 && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 ml-1"><Dot tone="warn" live />{toCall} to call now</span>}
         </div>
       </Panel>
 
+      <AnimatePresence>{moved && <Notice text={moved.text} tone={moved.tone} onClose={() => setMoved(null)} />}</AnimatePresence>
       <div className="flex flex-wrap items-center gap-3">
         <Glide id="lead-view" label="View" value={view} onChange={setView} options={[{ id: 'board', label: 'Board' }, { id: 'list', label: 'List' }]} />
         {d.isLead && <Glide id="lead-whose" label="Whose" value={whose} onChange={setWhose} options={[{ id: 'mine', label: 'Mine' }, { id: 'everyone', label: 'Everyone' }]} />}
@@ -76,7 +111,7 @@ export function LeadsBoard({ onOpen, onAdd, onPaste }: { onOpen: (id: string) =>
           </select>
         </label>
         <span className="flex-1" />
-        <span className="text-xs text-slate-500">Won and lost leads move to the list, and stay searchable.</span>
+        <span className="text-xs text-slate-500">{view === 'board' ? 'Drag a card to move it to another stage. ' : ''}Won and lost leads move to the list, and stay searchable.</span>
       </div>
 
       <AnimatePresence mode="wait">
@@ -88,12 +123,20 @@ export function LeadsBoard({ onOpen, onAdd, onPaste }: { onOpen: (id: string) =>
                   const list = shown.filter((l) => l.stage === st);
                   const Icon = STAGE_ICON[st];
                   return (
-                    <motion.div key={st} initial={{ opacity: 0, y: 20, rotateY: -12 }} animate={{ opacity: 1, y: 0, rotateY: 0 }} transition={{ delay: ci * 0.06, duration: 0.45 }}
-                      style={{ transformPerspective: 1000 }} className="rounded-2xl bg-slate-100/70 border border-slate-200 p-2.5 min-w-0">
+                    <motion.div key={st} data-stage={st} initial={{ opacity: 0, y: 20, rotateY: -12 }}
+                      animate={{ opacity: 1, y: 0, rotateY: 0, scale: over === st && dragFrom !== st ? 1.015 : 1 }} transition={{ delay: dragFrom ? 0 : ci * 0.06, duration: dragFrom ? 0.2 : 0.45 }}
+                      style={{ transformPerspective: 1000, position: 'relative', zIndex: dragFrom === st ? 30 : 'auto' }}
+                      className={`rounded-2xl border p-2.5 min-w-0 transition-colors ${over === st && dragFrom !== st ? 'bg-[#3D52A0]/5 border-[#3D52A0]/40 ring-2 ring-[#3D52A0]/20' : 'bg-slate-100/70 border-slate-200'}`}>
                       <p className="flex items-center gap-2 px-1 pb-2 text-sm font-bold text-slate-800"><Icon className="w-4 h-4 text-slate-400" />{LEAD_STAGES.find((s) => s.id === st)?.label}
                         <span className="ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full bg-white text-slate-600 tabular-nums">{list.length}</span></p>
                       <motion.div variants={listV} initial="hidden" animate="show" className="flex flex-col gap-2">
-                        {list.map((l) => <LeadCard key={l.id} lead={l} onOpen={() => onOpen(l.id)} />)}
+                        {list.map((l) => (
+                          <LeadCard key={l.id} lead={l} onOpen={() => onOpen(l.id)} draggable={canMove(l)}
+                            onDragStart={() => setDragFrom(l.stage)} onDragOver={(x, y) => setOver(stageAt(x, y))} onDrop={(x, y) => drop(l, stageAt(x, y))} />
+                        ))}
+                        {dragFrom && dragFrom !== st && over === st && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 44 }} className="rounded-xl border-2 border-dashed border-[#3D52A0]/40 text-xs font-bold text-[#3D52A0] grid place-items-center">Drop here</motion.div>
+                        )}
                         {st === 'new' && d.canWrite && (
                           <button type="button" onClick={onAdd} className="rounded-xl border-2 border-dashed border-slate-300 px-3 py-2.5 text-xs font-bold text-slate-500 flex items-center gap-1.5 hover:border-[#3D52A0]/40 hover:text-[#3D52A0] transition-colors">
                             <Plus className="w-3.5 h-3.5" />Add a lead
@@ -127,21 +170,35 @@ export function LeadsBoard({ onOpen, onAdd, onPaste }: { onOpen: (id: string) =>
         <span className="w-px h-4 bg-slate-200" />
         <ThumbsDown className="w-4 h-4 text-slate-400" /><span><b className="text-slate-800">Lost:</b> {stats.lost.length}{stats.lost.length ? ` · ${lostReasons(stats.lost)}` : ''}</span>
       </motion.div>
+      {formOpen && <FormLinkSheet onClose={() => setFormOpen(false)} />}
     </div>
   );
 }
 
-const LeadCard: React.FC<{ lead: Lead; onOpen: () => void }> = ({ lead: l, onOpen }) => {
+const LeadCard: React.FC<{
+  lead: Lead; onOpen: () => void; draggable: boolean;
+  onDragStart: () => void; onDragOver: (x: number, y: number) => void; onDrop: (x: number, y: number) => void;
+}> = ({ lead: l, onOpen, draggable, onDragStart, onDragOver, onDrop }) => {
   const d = useDesk();
+  const controls = useDragControls();
+  /* A drag ends with a click on the card under the pointer: that click must not open the lead. */
+  const dragged = useRef(false);
   const u = leadUrgency(l, d.now);
   const chip = !l.firstTouchAt && u.waitedMin != null
     ? <Chip tone={u.waitedMin >= FIRST_CALL_MINUTES ? 'rose' : 'amber'}>{waitedLabel(u.waitedMin)}</Chip>
     : l.source === 'referral' ? <Chip tone="brand">Referral</Chip>
       : l.stage === 'measured' ? <Chip tone="emerald">{l.openRequest ? 'Asked to open' : 'Ready'}</Chip> : null;
   return (
-    <motion.div variants={rowV} layoutId={`lead-${l.id}`}>
+    <motion.div variants={rowV} layoutId={`lead-${l.id}`} style={{ position: 'relative' }}
+      drag={draggable} dragControls={controls} dragListener={false} dragSnapToOrigin dragMomentum={false} dragElastic={0.9}
+      onPointerDown={(e) => { if (draggable && e.pointerType !== 'touch') controls.start(e); }}
+      onDragStart={() => { dragged.current = true; onDragStart(); }}
+      onDrag={(_, info) => onDragOver(info.point.x - window.scrollX, info.point.y - window.scrollY)}
+      onDragEnd={(_, info) => { onDrop(info.point.x - window.scrollX, info.point.y - window.scrollY); window.setTimeout(() => { dragged.current = false; }, 0); }}
+      whileDrag={{ scale: 1.06, rotate: -2.5, rotateX: 10, zIndex: 50, boxShadow: '0 24px 40px -18px rgba(61, 82, 160, 0.55)', cursor: 'grabbing' }}
+      className={draggable ? 'cursor-grab rounded-xl' : 'rounded-xl'}>
       <Tilt max={6} className="rounded-xl">
-        <button type="button" onClick={onOpen} className="w-full text-left rounded-xl bg-white border border-slate-200 shadow-sm p-3 hover:border-[#3D52A0]/40 transition-colors">
+        <button type="button" onClick={() => { if (!dragged.current) onOpen(); }} className="w-full text-left rounded-xl bg-white border border-slate-200 shadow-sm p-3 hover:border-[#3D52A0]/40 transition-colors">
           <span className="flex items-start gap-2"><span className="text-sm font-bold text-slate-800 flex-1 min-w-0 truncate">{leadName(l)}</span>{chip}</span>
           <span className="block text-[11px] text-slate-500 mt-0.5 truncate">{homeLine(l.home) || 'Home not filled in'}</span>
           <span className="block text-[11px] text-slate-500 truncate">{sourceLabel(l.source)}{l.sourceNote ? ` · ${l.sourceNote}` : ''}</span>
@@ -198,7 +255,35 @@ export function AddLeadSheet({ owners, paste, onClose, onCreated, onOpenExisting
   const [notThem, setNotThem] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const matches = useMemo(() => findMatches(draft.people, d.leads, d.projects.map((p) => p.raw)).filter((m) => !notThem.includes(m.id)), [draft.people, d.leads, d.projects, notThem]);
+  /*
+    "We may know them": at once from what this person can see, then from the
+    whole studio (functions/src/leads.ts leadMatches), which also finds
+    another person's lead or a client this person is not assigned to.
+  */
+  const local = useMemo(() => findMatches(draft.people, d.leads, d.projects.map((p) => p.raw)), [draft.people, d.leads, d.projects]);
+  const contactKey = draft.people.map((p) => `${phoneKey(p.phone)}|${emailKey(p.email)}`).join(',');
+  const [remote, setRemote] = useState<StudioMatch[]>([]);
+  const [checking, setChecking] = useState(false);
+  useEffect(() => {
+    const people = draft.people.map((p) => ({ phone: p.phone, email: p.email })).filter((p) => phoneKey(p.phone) || emailKey(p.email).includes('@'));
+    if (!people.length) { setRemote([]); return; }
+    let live = true;
+    const t = window.setTimeout(async () => {
+      setChecking(true);
+      const r = await studioMatches(people);
+      if (live) { if (r) setRemote(r); setChecking(false); }
+    }, 700);
+    return () => { live = false; window.clearTimeout(t); };
+  }, [contactKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const matches: StudioMatch[] = useMemo(() => {
+    const out: StudioMatch[] = local.map((m) => ({ ...m, mine: true }));
+    for (const r of remote) {
+      const i = out.findIndex((m) => m.kind === r.kind && m.id === r.id);
+      if (i >= 0) out[i] = { ...r, ...out[i], ownerName: r.ownerName, mine: true };
+      else out.push(r);
+    }
+    return out.filter((m) => !notThem.includes(m.id)).slice(0, 4);
+  }, [local, remote, notThem]);
   const problems = draftProblems(draft);
   const set = (patch: Partial<LeadDraft>) => setDraft({ ...draft, ...patch });
   const setPerson = (i: number, patch: Partial<LeadDraft['people'][number]>) => set({ people: draft.people.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
@@ -328,15 +413,18 @@ export function AddLeadSheet({ owners, paste, onClose, onCreated, onOpenExisting
             </div>
 
             <div className="flex flex-col gap-3">
+              {checking && !matches.length && <p className="flex items-center gap-2 text-[11px] text-slate-500"><Dot tone="warn" live />Checking the studio’s leads and clients…</p>}
               <AnimatePresence>
                 {matches.map((m) => (
                   <motion.div key={m.id} initial={{ opacity: 0, rotateX: -30, y: -6 }} animate={{ opacity: 1, rotateX: 0, y: 0 }} exit={{ opacity: 0, height: 0 }} style={{ transformPerspective: 800 }}
                     className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5">
                     <p className="text-sm font-bold text-amber-900 inline-flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" />We may know them</p>
-                    <p className="text-xs text-amber-900 mt-1"><b>{m.name}</b>, same {m.by}, {m.detail}</p>
-                    <div className="flex gap-2 mt-2">
-                      {m.kind === 'lead' && <button type="button" className={btnSm} onClick={() => onOpenExisting(m.id)}>Open it again</button>}
-                      {m.kind === 'client' && <button type="button" className={btnSm} onClick={() => d.act.openClient(m.id)}>See the client</button>}
+                    <p className="text-xs text-amber-900 mt-1"><b>{m.name}</b>, same {m.by}, {m.detail}{m.kind === 'lead' && m.ownerName && !m.mine ? ` ${m.ownerName} has this lead.` : ''}</p>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      {m.kind === 'lead' && m.mine && <button type="button" className={btnSm} onClick={() => onOpenExisting(m.id)}>Open it again</button>}
+                      {m.kind === 'lead' && !m.mine && <span className="text-[11px] font-semibold text-amber-900">Check with {m.ownerName ? m.ownerName.split(' ')[0] : 'its owner'} before adding it again.</span>}
+                      {m.kind === 'client' && m.mine && d.projects.some((p) => p.id === m.id) && <button type="button" className={btnSm} onClick={() => d.act.openClient(m.id)}>See the client</button>}
+                      {m.kind === 'client' && !m.mine && <span className="text-[11px] font-semibold text-amber-900">A client of the studio: check with a lead.</span>}
                       <button type="button" className={btnSm} onClick={() => setNotThem([...notThem, m.id])}>It is someone else</button>
                     </div>
                   </motion.div>

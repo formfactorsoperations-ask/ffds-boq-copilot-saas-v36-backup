@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { opsSettingsOf, escalationRecipientsOf, type OpsSettings } from '../../lib/opsDesk';
 import { DEFAULT_PLAYBOOKS, playbookOf, type PlaybookKind } from '../../lib/opsTeam';
+import { FormLinkPanel } from '../opsDesk/FormLink';
 import { runDailyCheckNow } from '../../services/opsDeskService';
 import { Check, Plus } from '@/lib/lucide-shim';
 import { Dot } from '../ui/HudBits';
@@ -11,8 +12,9 @@ import { Dot } from '../ui/HudBits';
   the playbooks behind the ? on each row of the desk (lib/opsTeam). Saved with
   the rest of the studio record by the settings screen.
 */
-export default function OpsDeskSettings({ org, team, canEdit, onChange }: {
+export default function OpsDeskSettings({ org, tenantId, team, canEdit, onChange }: {
   org: any;
+  tenantId?: string;
   team: { email?: string; name?: string; role?: string; roles?: string[] }[];
   canEdit: boolean;
   onChange: (next: OpsSettings) => void;
@@ -120,6 +122,11 @@ export default function OpsDeskSettings({ org, team, canEdit, onChange }: {
           </button>
         </div>
       )}
+
+      <div className="flex flex-col gap-2">
+        <p className={label}>Website enquiry form</p>
+        <FormLinkPanel settings={s.leadForm} tenantId={String(tenantId || org?.tenantId || '')} team={team} canEdit={canEdit} onChange={(leadForm) => set({ leadForm })} />
+      </div>
 
       <div className="rounded-xl border border-slate-200 px-4 py-3 flex flex-col gap-3">
         <div>
