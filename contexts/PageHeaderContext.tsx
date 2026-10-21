@@ -18,6 +18,8 @@ export interface PageHeaderSlots {
   /** View switcher, actions — rendered right-aligned in that order. */
   views?: React.ReactNode;
   actions?: React.ReactNode;
+  /** Hides the title row while the page shows a full-screen view of its own (a sheet under review). */
+  hidden?: boolean;
 }
 
 interface Ctx {
@@ -35,6 +37,7 @@ function isSlotsEqual(a: PageHeaderSlots, b: PageHeaderSlots): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
   if (a.badge !== b.badge) return false;
+  if (!!a.hidden !== !!b.hidden) return false;
 
   const aVitals = a.vitals;
   const bVitals = b.vitals;

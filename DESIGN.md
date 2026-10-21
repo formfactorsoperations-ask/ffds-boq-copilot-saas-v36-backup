@@ -44,6 +44,7 @@ different, fix it before shipping.
 
 - **Page header:** `components/ui/ConsoleHeader.tsx`. It provides the glass card, title, state light,
   drawn rule and blurb, with a `panel` for figures and `actions` for buttons. Do not build a separate header.
+  The top-bar tabs are the exception: see "Top tabs open the same way" below.
 - **Section rail:** copy the Studio settings rail.
   - Each item: `px-3 py-2.5 rounded-xl text-sm font-semibold`.
   - Active item: `bg-[#3D52A0] text-white shadow-sm hud-rail-active`.
@@ -90,6 +91,32 @@ Use only the motion classes that already exist; do not write new keyframes.
 
 Sentence case. Write to the person using the screen, in the studio's own words (clients, projects,
 minutes, payments). Buttons say exactly what they do ("Save to the log", "Send for approval").
+
+## Top tabs open the same way (approved 21 Oct 2026)
+
+Home, Projects, Design Desk, Ops Desk, People, Clients and Reports are the tabs in the top bar, and
+the owner asked that moving between them should not feel like moving between apps.
+
+- **Title row.** The shell names the page (`PageTitleBlock`, from `components/pageMeta.ts`): the title,
+  a one-line subtitle and a rule under them. Add the route to `pageMeta.ts`; never put an `h1` or a
+  `ConsoleHeader` at the top of one of these tabs. A page adds a badge, figures or buttons to that row
+  with `usePageHeader`, and hides it (`hidden: true`) only while it shows a full-screen view of its own,
+  such as a sheet under review in Design Desk.
+- **The bar under it.** `components/ui/StudioBar.tsx`, copied from Projects: a white strip on the left
+  (`BarStrip`, with a small label and `BarChip` counts that take you to what they count) and the page's
+  buttons on the right (`BarButton`, the main one `primary` and last).
+- **Then a toolbar** where the page has filters: `pt-1 pb-3 border-b border-slate-200/50`, filters on
+  the left, search or refresh on the right.
+- Design Desk keeps its own colours (ink, paper and its indigo), by the owner's choice. Its layout
+  follows the rules above.
+- People and the Ops Desk keep their motion kits inside the bar (rings, the gliding choice, `pp-press`).
+
+### Margins on project cards
+
+A project card's margin is covered (two dots) until someone points at it or tabs to it; a click
+keeps it showing until the next click and never opens the project
+(`components/projects/MarginReveal.tsx`). The figure rolls up and comes into focus on a plain
+300ms transition, and stays still under reduced motion.
 
 ## People motion (approved 11 Oct 2026)
 
@@ -205,7 +232,7 @@ of Client Relations people, not one (mockups OD1 to OD7 and L1 to L4, approved
   (`Tilt`); when it is done, it flips away and the next one flips in.
 - Icon chips are `IconTile`s that turn on hover; the main button of a screen
   is `pp-press`.
-- The day is a `Ring` in the header; a ticked next step draws a `DoneTick`;
+- The day is a small `Ring` in the bar under the title; a ticked next step draws a `DoneTick`;
   closing the day ends with `Confetti`.
 - Rows open in place (height and fade); the playbook and the client panel
   slide in from the right with a slight turn.

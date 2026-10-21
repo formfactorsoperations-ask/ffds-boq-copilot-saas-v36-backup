@@ -24,7 +24,7 @@ import {
 } from '../../services/opsPeopleService';
 import { useProjectTeam } from '../../services/projectTeam';
 import { LogFollowUpPanel, RaiseEscalationPanel, DecideEscalationPanel, btnPri, btnSec, btnSm, input, type DeskProject, type LogPrefill, type Person } from './OpsDeskPanels';
-import ConsoleHeader from '../ui/ConsoleHeader';
+import { StudioBar, BarStrip, BarChip, BarButton } from '../ui/StudioBar';
 import { CountUp, Dot } from '../ui/HudBits';
 import { Glide, Ring, Notice, listV, rowV } from '../people/PeopleBits';
 import { MomReviewModal } from '../ops/MomReviewModal';
@@ -387,57 +387,51 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
   return (
     <DeskProvider value={desk}>
     <div className="pb-28">
-      <ConsoleHeader
-        title="Ops Desk"
-        state={loading ? 'Loading' : overdue ? `${overdue} overdue` : dueToday ? `${dueToday} due today` : 'Up to date'}
-        tone={overdue ? 'bad' : dueToday ? 'warn' : 'ok'}
-        live={loading || overdue > 0}
-        blurb={loading ? 'Loading your desk…' : due
-          ? `${hello}, ${firstName(me.name)}. ${due} thing${due === 1 ? '' : 's'} need${due === 1 ? 's' : ''} you today across ${isLead ? 'the studio’s' : 'your'} ${clientsWord}. Start with the one at the top: it is the one that costs the most if it waits.`
-          : `${hello}, ${firstName(me.name)}. Nothing is due today across ${isLead ? 'the studio’s' : 'your'} ${clientsWord}.`}
-        tabs={isLead ? (
+      {/* Named by the shell's title row, like Projects; this is the bar under it. */}
+      <StudioBar className="mb-4">
+        <BarStrip label="Your day">
+          <Ring value={ring.ratio} size={34} stroke={4} tone={ring.total && ring.done === ring.total ? 'ok' : 'brand'} label={`${ring.done} of ${ring.total} done today`}>
+            <span className="block text-[10px] leading-none font-black text-slate-800 tabular-nums"><CountUp value={ring.done} />/{ring.total}</span>
+          </Ring>
+          <span className="text-xs font-semibold text-slate-700 mr-1">
+            {loading ? 'Loading your desk…' : due
+              ? `${hello}, ${firstName(me.name)}. Start with the one at the top.`
+              : `${hello}, ${firstName(me.name)}. Nothing is due today across ${isLead ? 'the studio’s' : 'your'} ${clientsWord}.`}
+          </span>
+          {!loading && (
+            <>
+              <BarChip n={overdue} word="overdue" tone="bad" onClick={() => go('today')} />
+              <BarChip n={dueToday} word="due today" tone="warn" onClick={() => go('today')} />
+              <BarChip n={atRisk} word={atRisk === 1 ? 'client at risk' : 'clients at risk'} tone="bad" onClick={() => go('pulse')} />
+              <BarChip n={done.length} word="done today" tone="ok" onClick={() => go('today')} />
+            </>
+          )}
+        </BarStrip>
+        {canWrite && (
+          <>
+            <BarButton onClick={() => setCapturing(true)}><Mic className="w-4 h-4" />Capture a chat or call</BarButton>
+            <BarButton data-tour="lead" onClick={() => setAdding({ paste: false })}><UserPlus className="w-4 h-4" />Add a lead</BarButton>
+            <BarButton data-tour="escalate" onClick={() => setEscFor({})}><Flag className="w-4 h-4" />Raise an escalation</BarButton>
+            {!isLead && <BarButton onClick={() => setClosing(true)}><Sunset className="w-4 h-4" />Close my day</BarButton>}
+            <BarButton primary data-tour="log" className="pp-press" onClick={() => setLogFor({})}><Plus className="w-4 h-4" />Log a follow-up</BarButton>
+          </>
+        )}
+      </StudioBar>
+
+      {/* The toolbar, as on Projects: which projects the desk is looking at, and a refresh. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1 pb-3 mb-6 border-b border-slate-200/50">
+        {isLead ? (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Projects</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mr-1">Projects:</span>
             <Glide id="desk-scope" label="Which projects" value={scope} onChange={setScope}
               options={DESK_SCOPES.map((s) => ({ id: s.id, label: `${s.label} ${counts[s.id]}` }))} />
           </div>
-        ) : undefined}
-        actions={canWrite ? (
-          <>
-            <button type="button" data-tour="log" className={`${btnPri} pp-press`} onClick={() => setLogFor({})}><Plus className="w-4 h-4" />Log a follow-up</button>
-            <button type="button" className={btnSec} onClick={() => setCapturing(true)}><Mic className="w-4 h-4" />Capture a chat or call</button>
-            <button type="button" data-tour="lead" className={btnSec} onClick={() => setAdding({ paste: false })}><UserPlus className="w-4 h-4" />Add a lead</button>
-            <button type="button" data-tour="escalate" className={btnSec} onClick={() => setEscFor({})}><Flag className="w-4 h-4" />Raise an escalation</button>
-            {!isLead && <button type="button" className={btnSec} onClick={() => setClosing(true)}><Sunset className="w-4 h-4" />Close my day</button>}
-            <button type="button" className={btnSec} onClick={load} disabled={loading} aria-label="Refresh"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
-          </>
-        ) : undefined}
-        panel={
-          <div className="w-full md:w-[290px]">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Your day</div>
-            <div className="mt-3 flex items-center gap-4">
-              <Ring value={ring.ratio} size={84} stroke={9} tone={ring.total && ring.done === ring.total ? 'ok' : 'brand'} label={`${ring.done} of ${ring.total} done today`}>
-                <span className="text-lg font-black text-slate-800 tabular-nums"><CountUp value={ring.done} />/{ring.total}</span>
-              </Ring>
-              <motion.div variants={listV} initial="hidden" animate="show" className="flex-1 flex flex-col gap-0.5">
-                {([
-                  ['Overdue', overdue, 'today', 'bad'],
-                  ['Due today', dueToday, 'today', 'warn'],
-                  ['Clients at risk', atRisk, 'pulse', 'bad'],
-                  ['Done today', done.length, 'today', 'ok'],
-                ] as [string, number, Section, 'bad' | 'warn' | 'ok'][]).map(([label, k, target, tone]) => (
-                  <motion.button variants={rowV} key={label} type="button" onClick={() => go(target)}
-                    className="w-full flex items-center gap-2 px-2 py-1 rounded-lg text-left transition-colors hover:bg-slate-100">
-                    <Dot tone={k || label === 'Done today' ? tone : 'ok'} />
-                    <span className="text-xs font-semibold text-slate-700 flex-1">{label}</span>
-                    <span className="text-xs font-black text-slate-800 tabular-nums"><CountUp value={k} /></span>
-                  </motion.button>
-                ))}
-              </motion.div>
-            </div>
-          </div>
-        }
-      />
+        ) : <span />}
+        <button type="button" onClick={load} disabled={loading} aria-label="Refresh" title="Refresh"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-800 hover:border-slate-400 transition-colors disabled:opacity-50">
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />Refresh
+        </button>
+      </div>
 
       <AnimatePresence>{notice && <div className="mb-4"><Notice text={notice} onClose={() => setNotice(null)} /></div>}</AnimatePresence>
 

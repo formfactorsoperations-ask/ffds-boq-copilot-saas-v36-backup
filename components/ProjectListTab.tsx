@@ -32,6 +32,7 @@ import { buildDocumentCompleteness, DocumentCompleteness } from "../lib/document
 import { Lock, ArrowRight, CheckSquare, ChevronDown, ChevronUp, Flag, History } from '@/lib/lucide-shim';
 import ProjectStatusTransitionModal from "./ProjectStatusTransitionModal";
 import { CardContainer, CardBody, CardItem } from "./ui/3d-card";
+import MarginReveal from "./projects/MarginReveal";
 
 interface ProjectListTabProps {
   projects: FullProjectData[];
@@ -1765,18 +1766,16 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                                 {formatClientValue(total)}
                                               </p>
                                             </div>
+                                            {/* Covered until pointed at or clicked: the
+                                                grid is often on screen with a client in the room. */}
                                             {showFinance && (
-                                            <div className="text-right">
-                                              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mb-0.5">
-                                                Margin
-                                              </p>
-                                              <p className="text-sm font-semibold text-slate-700 leading-none">
-                                                {tier.summary.blendedGm?.toFixed(0) ||
-                                                  tier.summary.totalGm?.toFixed(0) ||
-                                                  0}
-                                                %
-                                              </p>
-                                            </div>
+                                              <MarginReveal
+                                                value={Number(
+                                                  tier.summary.blendedGm?.toFixed(0) ||
+                                                    tier.summary.totalGm?.toFixed(0) ||
+                                                    0,
+                                                )}
+                                              />
                                             )}
                                           </div>
                                         );
