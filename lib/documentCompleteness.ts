@@ -1,5 +1,6 @@
 import { ProjectContext, ClientDocumentKind, DocumentState } from '../types';
 import { resolveDocumentState, getCurrentIssue } from '../services/documentIssueEngine';
+import { isVisibleToClient } from './clientVisibility';
 
 // ============================================================================
 // DOCUMENT COMPLETENESS
@@ -16,12 +17,19 @@ import { resolveDocumentState, getCurrentIssue } from '../services/documentIssue
 //      would put every project permanently in the red, and a meter that is
 //      always red is a meter nobody reads.
 //
-//   2. NOT EVERY DOCUMENT IS SIGNED. Only terms, the execution agreement and
-//      the handover docket carry an agreement record; the snag list carries the
-//      client's signature on the issue itself. The payment schedule and the
-//      onboarding kit are ISSUED and never signed -- `spineModel` calls marking
-//      those "signature pending" a phantom task, and it was. For those two,
-//      issued IS complete.
+//   2. NOT EVERY DOCUMENT IS SIGNED, BUT EVERY ONE IS SIGNED OFF. Terms, the
+//      execution agreement, the snag list and the handover docket take the
+//      client's signature. The payment schedule and the onboarding kit take a
+//      one-tick confirmation instead (`documentReleaseEngine` calls this
+//      'acknowledge' mode), written onto the issue the same way. Neither is
+//      done until the client has done their part. This used to count those two
+//      as complete the moment they were sent, so the card said "signed" about
+//      documents the client had never confirmed, and disagreed with the
+//      Documents board and the client's own portal about the same project.
+//
+//   3. STAGED IS NOT SENT. An issue ops has prepared but not yet published is
+//      invisible to the client, so it is still on the studio's desk. The
+//      Documents board already reads it that way; so does this.
 //
 // State itself is not recomputed here. `resolveDocumentState` already handles
 // addenda, reissue-after-signature, open queries and re-reads; duplicating that
@@ -32,10 +40,13 @@ import { resolveDocumentState, getCurrentIssue } from '../services/documentIssue
 export type DocStatus =
   | 'not_due'    // lifecycle has not reached it
   | 'missing'    // due, never issued
-  | 'draft'      // being prepared
-  | 'issued'     // with the client, signature still owed
+  | 'draft'      // being prepared, or staged but not published
+  | 'issued'     // with the client, signature or confirmation still owed
   | 'attention'  // queried, or amended after signing
-  | 'complete';  // signed, executed, or issued where no signature is owed
+  | 'complete';  // signed, executed, or confirmed by the client
+
+/** What the client owes on the document: a signature, or a confirmation. */
+export type SignOff = 'signature' | 'confirmation';
 
 export interface DocSlot {
   kind: ClientDocumentKind;
@@ -44,7 +55,7 @@ export interface DocSlot {
   /** One word, for the ring's label list. */
   short: string;
   dueStage: number;
-  needsSignature: boolean;
+  signOff: SignOff;
   state: DocumentState;
   status: DocStatus;
   detail: string;
@@ -69,28 +80,41 @@ interface DocDef {
   label: string;
   short: string;
   dueStage: number;
-  needsSignature: boolean;
+  signOff: SignOff;
 }
 
 /* Stages mirror spineModel's STAGE_OF_DOCUMENT. The snag list is absent there
    (it is cast rather than fully keyed); it gates handover, so it sits at 6. */
 export const DOCUMENT_SLOTS: DocDef[] = [
-  { kind: 'terms_docket',        label: 'Terms of engagement', short: 'Terms',      dueStage: 2, needsSignature: true  },
-  { kind: 'payment_schedule',    label: 'Payment schedule',    short: 'Payment',    dueStage: 2, needsSignature: false },
-  { kind: 'onboarding_kit',      label: 'Onboarding kit',      short: 'Onboarding', dueStage: 2, needsSignature: false },
-  { kind: 'execution_agreement', label: 'Execution agreement', short: 'Contract',   dueStage: 4, needsSignature: true  },
-  { kind: 'snag_list',           label: 'Snag list',           short: 'Snags',      dueStage: 6, needsSignature: true  },
-  { kind: 'handover_docket',     label: 'Handover docket',     short: 'Handover',   dueStage: 6, needsSignature: true  },
+  { kind: 'terms_docket',        label: 'Terms of engagement', short: 'Terms',      dueStage: 2, signOff: 'signature'    },
+  { kind: 'payment_schedule',    label: 'Payment schedule',    short: 'Payment',    dueStage: 2, signOff: 'confirmation' },
+  { kind: 'onboarding_kit',      label: 'Onboarding kit',      short: 'Onboarding', dueStage: 2, signOff: 'confirmation' },
+  { kind: 'execution_agreement', label: 'Execution agreement', short: 'Contract',   dueStage: 4, signOff: 'signature'    },
+  { kind: 'snag_list',           label: 'Snag list',           short: 'Snags',      dueStage: 6, signOff: 'signature'    },
+  { kind: 'handover_docket',     label: 'Handover docket',     short: 'Handover',   dueStage: 6, signOff: 'signature'    },
 ];
 
-const STATE_WORD: Record<DocumentState, string> = {
-  draft: 'Not issued',
-  issued: 'Issued, unopened',
-  viewed: 'Read by the client',
-  queried: 'Client has raised a query',
-  amended: 'Amended since signature',
-  signed: 'Signed',
-  executed: 'Signed and counter-signed',
+/* Says what the client still owes, not only where the document sits, so a
+   tooltip or headline never reads as finished while a sign-off is outstanding. */
+const STATE_WORD: Record<SignOff, Record<DocumentState, string>> = {
+  signature: {
+    draft: 'Not issued',
+    issued: 'Sent, not yet opened or signed',
+    viewed: 'Read by the client, not yet signed',
+    queried: 'Client has raised a query',
+    amended: 'Amended since signature, signature owed again',
+    signed: 'Signed by the client',
+    executed: 'Signed and counter-signed',
+  },
+  confirmation: {
+    draft: 'Not issued',
+    issued: 'Sent, not yet opened or confirmed',
+    viewed: 'Read by the client, not yet confirmed',
+    queried: 'Client has raised a query',
+    amended: 'Reissued since confirmation, confirmation owed again',
+    signed: 'Confirmed by the client',
+    executed: 'Confirmed by the client',
+  },
 };
 
 /** Worst first, so the headline names the thing that actually matters. */
@@ -111,16 +135,24 @@ export function buildDocumentCompleteness(
     const issue = context ? getCurrentIssue(context, def.kind) : null;
     const due = stage >= def.dueStage;
 
+    /* Mirrors the Documents board's "staged" test: only a stored issue can be
+       staged, and a signed one is settled whatever happens to it next. */
+    const stored = !!issue && (context?.documents?.issues || []).some(i => i.id === issue.id);
+    const staged = stored && !isVisibleToClient(issue as any)
+      && state !== 'signed' && state !== 'executed';
+
     let status: DocStatus;
     if (!due) {
       status = 'not_due';
     } else if (state === 'signed' || state === 'executed') {
       status = 'complete';
+    } else if (staged) {
+      status = 'draft';
     } else if (state === 'queried' || state === 'amended') {
       status = 'attention';
     } else if (state === 'issued' || state === 'viewed') {
-      // Issued is the finish line for anything the client never signs.
-      status = def.needsSignature ? 'issued' : 'complete';
+      // With the client. Sent is not signed off, whichever kind of sign-off it is.
+      status = 'issued';
     } else {
       // 'draft' -- an issue exists only if the studio started one.
       status = issue ? 'draft' : 'missing';
@@ -130,7 +162,9 @@ export function buildDocumentCompleteness(
       ? `Not due until stage ${def.dueStage}`
       : status === 'missing'
         ? 'Due now, not issued'
-        : STATE_WORD[state];
+        : staged
+          ? 'Prepared, not yet published to the client'
+          : STATE_WORD[def.signOff][state];
 
     return { ...def, state, status, detail };
   });
