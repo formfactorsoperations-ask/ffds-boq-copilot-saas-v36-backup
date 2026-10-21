@@ -2411,6 +2411,15 @@ export interface DocumentIssue {
      * rather than carrying a copy of it.
      */
     signedVia?: string | null;
+
+    /**
+     * The client sent this Scope Revision back for changes instead of
+     * approving it (lib/scopeChangeRequest). Written by the server with their
+     * login, time and the fingerprint they read. A version sent back cannot be
+     * approved, recorded as agreed or applied; the studio reopens the draft
+     * and issues a new version.
+     */
+    changesRequested?: import('./lib/scopeChangeRequest').ScopeChangeRequest | null;
 }
 
 /** Proof the signatory actually engaged with the record. */

@@ -6,6 +6,7 @@ import { issueIsApproved } from '../../services/documentIssueEngine';
 import type { ScopeRevisionSnapshot, ScopeChangeRoom } from '../../lib/scopeDocuments';
 import type { DetailedBoqSnapshot } from '../../lib/detailedBoq';
 import ScopeApprovalCard, { ExcelDownloadButton } from './ScopeApprovalCard';
+import { isSentBack, previousSentBack, ScopeChangeTopic } from '../../lib/scopeChangeRequest';
 import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
 
 /**
@@ -26,6 +27,8 @@ interface Props {
     instead of being signed in the reading room.
   */
   onApproveIssue?: (issueId: string, name: string, contentHash: string) => Promise<void>;
+  /* Sending a Scope Revision back for changes instead (lib/scopeChangeRequest). */
+  onRequestChanges?: (issueId: string, input: { name: string; message: string; topics: ScopeChangeTopic[] }, contentHash: string) => Promise<void>;
   studioName?: string;
   studioAddress?: string | null;
   clientName?: string;
@@ -46,7 +49,7 @@ const TAG_TONE: Record<string, string> = {
   REDESIGNED: 'bg-violet-50 text-violet-800 border-violet-200',
 };
 
-export default function PortalScopePanel({ context, onOpenDocument, onApproveIssue, studioName = 'Studio', studioAddress, clientName }: Props) {
+export default function PortalScopePanel({ context, onOpenDocument, onApproveIssue, onRequestChanges, studioName = 'Studio', studioAddress, clientName }: Props) {
   const [view, setView] = useState<'hub' | 'changes'>('hub');
   const [openRoom, setOpenRoom] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
@@ -54,10 +57,22 @@ export default function PortalScopePanel({ context, onOpenDocument, onApproveIss
   const issues = (context.documents?.issues || []).filter(i => !i.withdrawnAt && isVisibleToClient(i as any));
   const boqs = issues.filter(i => i.kind === 'detailed_boq').sort((a, b) => b.version - a.version);
   const revisions = issues.filter(i => i.kind === 'scope_revision').sort((a, b) => b.version - a.version);
-  /* A revision the client agreed to with the studio (recorded) is not waiting on them. */
-  const pending = revisions.find(r => !r.clientSignature && !r.recordedApproval) || null;
-  const doneLabel = (r: { clientSignature?: any; recordedApproval?: any }) =>
-    r.recordedApproval && !r.clientSignature
+  /* A revision the client agreed to with the studio (recorded), or sent back for changes, is not waiting on them. */
+  const pending = revisions.find(r => !r.clientSignature && !r.recordedApproval && !r.changesRequested) || null;
+  /*
+    The last revision they sent back for changes, while the studio revises it.
+    Withdrawn ones count: the studio withdraws it to edit, and the client should
+    still see that it is with the studio until a newer version arrives.
+  */
+  const allIssues = context.documents?.issues || [];
+  const sentBack = pending ? null : allIssues
+    .filter(i => i.kind === 'scope_revision' && isVisibleToClient(i as any) && isSentBack(i))
+    .filter(i => !revisions.some(r => r.id !== i.id && (r.issuedAt || 0) > (i.issuedAt || 0)))
+    .sort((a, b) => (b.issuedAt || 0) - (a.issuedAt || 0))[0] || null;
+  const doneLabel = (r: { clientSignature?: any; recordedApproval?: any; changesRequested?: any }) =>
+    isSentBack(r as any)
+      ? `sent back for changes ${day(r.changesRequested.at)}`
+      : r.recordedApproval && !r.clientSignature
       ? `agreed ${day(r.recordedApproval.approvedAt)}`
       : `${approveHere || r.clientSignature?.signatureType === 'portal_approval' ? 'approved' : 'signed'} ${day(r.clientSignature?.signedAt)}`;
   const inForce = boqs.find(issueIsApproved) || null;
@@ -240,7 +255,7 @@ export default function PortalScopePanel({ context, onOpenDocument, onApproveIss
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-bold text-slate-900">Scope revision {rev.number} · {sgn(rev.change)} · {pending ? `awaiting your ${ask}` : doneLabel(latestRevision as any)}</div>
-                <div className="text-[11.5px] text-slate-500">{pending ? `Nothing in the revised BOQ is built until you ${approveHere ? 'approve' : 'sign'} it.` : 'The revised BOQ is your scope.'}</div>
+                <div className="text-[11.5px] text-slate-500">{pending ? `Nothing in the revised BOQ is built until you ${approveHere ? 'approve' : 'sign'} it.` : isSentBack(latestRevision) ? `With ${studioName} for changes. The BOQ you approved stays your scope.` : 'The revised BOQ is your scope.'}</div>
               </div>
               {approveHere
                 ? <ExcelDownloadButton issue={latestRevision} studioName={studioName} label="Download Excel" />
@@ -258,6 +273,7 @@ export default function PortalScopePanel({ context, onOpenDocument, onApproveIss
   const chain = [
     ...boqs.slice().reverse().map(b => ({ id: b.id, label: `v${b.version} ${issueIsApproved(b) ? 'approved' : 'issued'}`, sub: `${day((b.recordedApproval?.approvedAt) || (b.clientSignature as any)?.signedAt || b.issuedAt)} · ${lakh(b.snapshot?.total || 0)}`, state: issueIsApproved(b) ? 'done' : 'now' })),
     ...(pending && rev ? [{ id: 'pending', label: `v${rev.v2.version} issued`, sub: `${day(rev.issuedOn)} · ${lakh(rev.v2.total)}`, state: 'now' }] : []),
+    ...(sentBack?.snapshot?.v2 ? [{ id: 'sent-back', label: `v${sentBack.snapshot.v2.version} sent back`, sub: `${day(sentBack.changesRequested!.at)} · with the studio`, state: 'now' }] : []),
   ];
 
   const DocRow: React.FC<{ tag: string; title: string; sub: string; pill?: { t: string; tone: string }; actions: React.ReactNode; muted?: boolean }> = ({ tag, title, sub, pill, actions, muted }) => (
@@ -282,12 +298,17 @@ export default function PortalScopePanel({ context, onOpenDocument, onApproveIss
 
       {approveHere && pending && (
         <ScopeApprovalCard issue={pending} studioName={studioName} studioAddress={studioAddress} defaultName={clientName}
-          onApprove={onApproveIssue!} onSeeChanges={() => setView('changes')} />
+          onApprove={onApproveIssue!} onRequestChanges={onRequestChanges} previous={previousSentBack(allIssues, pending)}
+          onSeeChanges={() => setView('changes')} />
+      )}
+      {approveHere && sentBack && (
+        <ScopeApprovalCard issue={sentBack} studioName={studioName} studioAddress={studioAddress} onApprove={onApproveIssue!}
+          onSeeChanges={!sentBack.withdrawnAt ? () => setView('changes') : undefined} />
       )}
       {approveHere && pendingBoq && (
         <ScopeApprovalCard issue={pendingBoq} studioName={studioName} studioAddress={studioAddress} defaultName={clientName} onApprove={onApproveIssue!} />
       )}
-      {approveHere && !pending && latestRevision && ((latestRevision.clientSignature as any)?.signatureType === 'portal_approval' || (!latestRevision.clientSignature && latestRevision.recordedApproval)) && (
+      {approveHere && !pending && !sentBack && latestRevision && ((latestRevision.clientSignature as any)?.signatureType === 'portal_approval' || (!latestRevision.clientSignature && latestRevision.recordedApproval)) && (
         <ScopeApprovalCard issue={latestRevision} studioName={studioName} studioAddress={studioAddress} onApprove={onApproveIssue!} onSeeChanges={() => setView('changes')} />
       )}
 
@@ -338,7 +359,7 @@ export default function PortalScopePanel({ context, onOpenDocument, onApproveIss
           );
         })}
         {!pending && revisions.map(r => (
-          <DocRow key={r.id} tag="Δ" muted title={`Scope revision ${r.snapshot?.number || r.version} · ${r.reference}`} sub={`${r.clientSignature || r.recordedApproval ? doneLabel(r as any).replace(/^./, c => c.toUpperCase()) : `Issued ${day(r.issuedAt)}`} · ${sgn(r.snapshot?.change || 0)}`}
+          <DocRow key={r.id} tag="Δ" muted title={`Scope revision ${r.snapshot?.number || r.version} · ${r.reference}`} sub={`${r.clientSignature || r.recordedApproval || r.changesRequested ? doneLabel(r as any).replace(/^./, c => c.toUpperCase()) : `Issued ${day(r.issuedAt)}`} · ${sgn(r.snapshot?.change || 0)}`}
             actions={<>
               <button onClick={() => setView('changes')} className="px-3 py-2 rounded-xl border border-slate-200 text-[12px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">What changed</button>
               {approveHere

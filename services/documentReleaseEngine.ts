@@ -986,6 +986,8 @@ export function documentStatusLabel(
     case 'executed':
       return 'Fully executed';
     case 'queried':
+      /* A scope revision is "queried" when the client sent it back for changes. */
+      if (kind === 'scope_revision') return audience === 'client' ? 'With the studio for changes' : 'Sent back for changes';
       return audience === 'client' ? 'Your question is with the studio' : 'Question open';
     case 'amended':
       return audience === 'client' ? 'Updated — please review' : 'Re-issued';

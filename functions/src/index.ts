@@ -41,6 +41,8 @@ import * as pako from "pako";
 import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";
 import { recordDocumentView, signIssue } from "../../services/documentIssueEngine";
 import { approveIssuePatch } from "./approveIssue";
+import { requestChangesPatchForServer } from "./requestIssueChanges";
+import { isSentBack } from "../../lib/scopeChangeRequest";
 import { downloadPatch } from "./scopeTrail";
 import { raiseQuery } from "../../services/documentQueryEngine";
 import { buildPortalView } from "../../lib/portalProjection";
@@ -779,7 +781,14 @@ function patchFor(action: any, actor: string, meta: ActorMeta = {}): (prev: any)
             return buildSignoffPatch(action.docType, action.docket, { surface: "client_portal" });
 
         case "signIssue":
-            return signIssue(action.issueId, action.docket);
+            /* A version the client sent back for changes is the studio's to revise, not anyone's to sign. */
+            return (prev: any) => {
+                const target = (prev?.documents?.issues || []).find((i: any) => i.id === action.issueId);
+                if (isSentBack(target)) {
+                    throw new HttpsError("failed-precondition", "You sent this version back for changes. The studio will send you a revised version to approve.");
+                }
+                return signIssue(action.issueId, action.docket)(prev);
+            };
 
         case "raiseQuery":
             return raiseQuery({
@@ -898,6 +907,10 @@ function patchFor(action: any, actor: string, meta: ActorMeta = {}): (prev: any)
         case "approveIssue":
             /* The server writes the approval record itself; see approveIssue.ts. */
             return approveIssuePatch(action.issueId, action.name, action.contentHash, meta);
+
+        case "requestIssueChanges":
+            /* A Scope Revision sent back for changes; see lib/scopeChangeRequest.ts. */
+            return requestChangesPatchForServer(action, meta);
 
         default:
             throw new HttpsError("invalid-argument", `Unknown action: ${String(action?.type)}`);

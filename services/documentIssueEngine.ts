@@ -590,7 +590,8 @@ export function resolveDocumentState(
   const openQuery = (context.documents?.queries || []).some(
     q => q.issueId === issue.id && q.status === 'open'
   );
-  if (openQuery) return 'queried';
+  // Sent back for changes (a scope revision): the ball is with the studio, as with a question.
+  if (openQuery || issue.changesRequested) return 'queried';
 
   const lastViewed = context.documents?.lastViewedAt?.[kind] || 0;
 

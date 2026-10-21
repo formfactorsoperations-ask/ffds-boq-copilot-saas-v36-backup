@@ -39,6 +39,7 @@ import { workbookForIssue, downloadWorkbook, toBase64, buildRevisionWorkbook, re
 import { sendScopeEmail } from '../../services/emailService';
 import { publicAppOrigin } from '../../lib/publicUrl';
 import { AGREED_VIA, AgreedVia, agreedViaPhrase, approvalLabel, approvalOf, recordAgreement } from '../../lib/scopeAgreement';
+import { isSentBack, previousSentBack, sentBackHistory, topicLabels } from '../../lib/scopeChangeRequest';
 
 /**
  * SCOPE REVISION — one screen for changing a signed scope.
@@ -286,6 +287,9 @@ export default function ScopeWorkspace({
         const signer = /@/.test(currentUser) ? studioName : `${currentUser}\n${studioName}`;
         /* Agreed already and recorded by the studio: the email is for their records, not a request. */
         const agreed = issue.recordedApproval;
+        /* Answers a version they sent back for changes: say so, so it does not read as the same one again. */
+        const answered = revision && !agreed ? previousSentBack(next.documents?.issues, issue)?.changesRequested : null;
+        const answeredOn = answered ? new Date(answered.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' }) : '';
         const agreedLine = agreed
           ? `As agreed${agreedViaPhrase(agreed.how) ? ` ${agreedViaPhrase(agreed.how)}` : ''} on ${new Date(agreed.approvedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}, `
           : '';
@@ -294,10 +298,13 @@ export default function ScopeWorkspace({
           cc,
           subject: agreed
             ? `Your ${revision ? 'revised ' : ''}BOQ, as agreed: ${s.projectName}`
+            : answered ? `Your revised BOQ, updated as you asked: ${s.projectName}`
             : revision ? `Your revised BOQ is ready: ${s.projectName}` : `Your BOQ for approval: ${s.projectName}`,
           greeting: first ? `Dear ${first},` : 'Hello,',
           intro: agreed
             ? `${agreedLine}we have updated your BOQ for ${s.projectName}.${revision ? ` ${changed} item${changed === 1 ? '' : 's'} changed.` : ''} The full ${revision ? 'revised ' : ''}BOQ is attached as an Excel file for your records. There is nothing for you to sign.`
+            : answered
+            ? `Thank you for your notes of ${answeredOn}. We have revised your BOQ for ${s.projectName} to answer them: ${changed} item${changed === 1 ? '' : 's'} changed against the BOQ you approved, and the full revised BOQ is attached as an Excel file. Please review it and approve it in your portal, or send it back again if anything is still not right.`
             : revision
             ? `We have updated your BOQ for ${s.projectName}. ${changed} item${changed === 1 ? '' : 's'} changed, and the full revised BOQ is attached as an Excel file.`
             : `Your detailed BOQ for ${s.projectName} is ready for your approval. It is attached as an Excel file, with every item and its specification.`,
@@ -519,12 +526,18 @@ export default function ScopeWorkspace({
     flash('ok', `Scope Revision ${rec.number} applied. ${v2Snapshot.reference} is the scope in force at ${inr2(priced)}. The next Payment Schedule version is staged as a draft — release it from Documents for the client to confirm.`);
   };
 
-  const withdraw = (rec: ScopeRevisionRecord) => {
+  /*
+    Back to a draft the studio can edit. Also how a version the client sent back
+    for changes is reopened: the issue keeps their request and stays in history
+    (so the next version can say what it answers), and nothing in force moves --
+    the scope, the payment schedule and the financials change only on apply.
+  */
+  const withdraw = (rec: ScopeRevisionRecord, reason = 'Withdrawn by the studio before signature') => {
     const at = Date.now();
     setProjectContext(prev => ({
       ...prev,
       documents: prev.documents
-        ? { ...prev.documents, issues: prev.documents.issues.map(i => (i.id === rec.issueId ? { ...i, withdrawnAt: at, withdrawnReason: 'Withdrawn by the studio before signature' } : i)) }
+        ? { ...prev.documents, issues: prev.documents.issues.map(i => (i.id === rec.issueId && !i.clientSignature && !i.recordedApproval ? { ...i, withdrawnAt: at, withdrawnReason: reason } : i)) }
         : prev.documents,
       scopeRevisions: (prev.scopeRevisions || []).map(r => (r.id === rec.id ? { ...r, status: 'draft', issueId: null, updatedAt: at } : r)),
     }));
@@ -555,6 +568,7 @@ export default function ScopeWorkspace({
     if (!issue) return 'Not issued';
     if (issue.clientSignature) return `Signed ${day((issue.clientSignature as any).signedAt)}`;
     if (issue.recordedApproval) return `Agreed ${day(issue.recordedApproval.approvedAt)} (recorded)`;
+    if (issue.changesRequested) return `Sent back for changes ${day(issue.changesRequested.at)}`;
     if (!isVisibleToClient(issue as any)) return 'Staged — not in their portal yet';
     const st = resolveDocumentState(ctx, issue.kind);
     return st === 'viewed' ? 'Opened by the client' : st === 'queried' ? 'The client has a question' : 'In the client’s portal';
@@ -592,6 +606,7 @@ export default function ScopeWorkspace({
           orgName={orgName}
           onApply={() => apply(open)}
           onWithdraw={() => withdraw(open)}
+          onReopen={() => withdraw(open, 'Sent back by the client for changes; reopened by the studio to revise')}
           onDiscard={() => discard(open)}
           onSign={id => setSignFor({ id, kind: 'scope_revision' })}
           onOpenIssue={setPreviewIssue}
@@ -803,6 +818,8 @@ interface EditorProps {
   orgName?: string;
   onApply: () => void;
   onWithdraw: () => void;
+  /* Reopens a version the client sent back for changes. */
+  onReopen: () => void;
   onDiscard: () => void;
   onSign: (issueId: string) => void;
   onOpenIssue: (i: DocumentIssue) => void;
@@ -817,7 +834,7 @@ type RecordAgreementFn = (issueId: string, a: { approvedAt: number; how: AgreedV
 
 function RevisionEditor({
   rec, base, v1, issue, bank, bankMap, ctx, setProjectContext, saveRecord, currentUser, orgName,
-  onApply, onWithdraw, onDiscard, onSign, onOpenIssue, stateOf, momQueue, onSendToClient, onRecordAgreement, sendingId,
+  onApply, onWithdraw, onReopen, onDiscard, onSign, onOpenIssue, stateOf, momQueue, onSendToClient, onRecordAgreement, sendingId,
 }: EditorProps) {
   const [totalsOpts, setTotalsOpts] = useState<ClientTotalsOptions>(() => defaultTotalsOptions(ctx));
   const [issueTo, setIssueTo] = useState(ctx.clientEmail || '');
@@ -839,6 +856,11 @@ function RevisionEditor({
   const signedByClient = !!(issue?.clientSignature || issue?.recordedApproval);
   const approval = approvalOf(issue);
   const stage = rec.status === 'draft' ? 0 : signedByClient ? 2 : 1;
+  /* The client sent the issued version back: theirs to revise, not to sign, record or send again as it is. */
+  const sentBack = rec.status === 'issued' && isSentBack(issue) ? issue!.changesRequested! : null;
+  /* Every time the client sent this revision back, newest first: what the studio revises from. */
+  const asked = useMemo(() => sentBackHistory(ctx.documents?.issues, rec.number), [ctx.documents?.issues, rec.number]);
+  const [olderAsks, setOlderAsks] = useState(false);
 
   const [filter, setFilter] = useState<Filter>('changed');
   const [query, setQuery] = useState('');
@@ -1054,7 +1076,7 @@ function RevisionEditor({
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs px-5 sm:px-6 py-5">
         <div className="flex flex-col lg:flex-row lg:items-start gap-4">
           <div className="flex-1 min-w-0">
-            <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">Scope revision {rec.number} · {['Draft', 'Issued', approval?.kind === 'recorded' ? 'Agreed' : 'Approved'][stage]}</div>
+            <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">Scope revision {rec.number} · {sentBack ? 'Sent back by the client' : ['Draft', 'Issued', approval?.kind === 'recorded' ? 'Agreed' : 'Approved'][stage]}</div>
             <h2 className="text-[26px] leading-tight font-bold tracking-tight text-slate-900 mt-1">Revising Detailed BOQ v{vOf(v1)}</h2>
             <p className="text-[12.5px] text-slate-500 mt-1">
               Scope in force <b className="text-slate-800">{inr2(result.v1Total)}</b> · {v1.recordedApproval ? `approved ${day(v1.recordedApproval.approvedAt)}` : v1.clientSignature ? 'signed' : 'approved with its revision'} · {v1.reference} · started {day(rec.createdAt)}
@@ -1084,7 +1106,10 @@ function RevisionEditor({
             {editable && (
               <button onClick={() => setIssueOpen(true)} disabled={blocked} title={blocked ? checks.find(c => c.level === 'block')?.text : ''} className="px-4 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:bg-slate-300 text-white text-[12.5px] font-bold cursor-pointer flex items-center gap-1.5 shadow-sm"><PenLine className="w-4 h-4" /> Issue to client</button>
             )}
-            {rec.status === 'issued' && !signedByClient && issue && (
+            {sentBack && (
+              <button onClick={onReopen} className="px-4 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] text-white text-sm font-bold cursor-pointer flex items-center gap-1.5 shadow-sm"><Pencil className="w-4 h-4" /> Reopen to revise</button>
+            )}
+            {rec.status === 'issued' && !signedByClient && !sentBack && issue && (
               <>
                 <button onClick={() => onSign(issue.id)} className="px-3.5 py-2 rounded-xl border border-slate-200 text-[12.5px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-1.5"><PenLine className="w-4 h-4" /> Client signing on this device</button>
                 <button onClick={onWithdraw} className="px-3.5 py-2 rounded-xl text-[12.5px] font-bold text-slate-500 hover:bg-slate-100 cursor-pointer flex items-center gap-1.5"><Undo2 className="w-4 h-4" /> Withdraw & edit</button>
@@ -1095,7 +1120,54 @@ function RevisionEditor({
             )}
           </div>
         </div>
-        {!editable && (
+        {sentBack && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 space-y-2.5 sw-in">
+            <div className="flex items-start gap-2 text-sm text-slate-800">
+              <Undo2 className="w-4 h-4 mt-0.5 shrink-0 text-amber-700" />
+              <span><b>{sentBack.name}</b> sent {rec.reference || 'this revision'} back for changes on {new Date(sentBack.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}{sentBack.via === 'studio_device' ? `, in person (taken by ${sentBack.witnessedBy || 'the studio'})` : ' in the portal'}.</span>
+            </div>
+            <blockquote className="rounded-lg bg-white border border-amber-200 px-3.5 py-2.5">
+              {topicLabels(sentBack.topics).length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {topicLabels(sentBack.topics).map(t => <span key={t} className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700">{t}</span>)}
+                </div>
+              )}
+              <p className="text-sm text-slate-800 whitespace-pre-line">{sentBack.message}</p>
+            </blockquote>
+            <p className="text-xs text-slate-600">
+              Nothing in force has changed: the scope stays {v1.reference} at {inr2(result.v1Total)}, and the payment schedule and financials stay as they are. This version can no longer be approved or recorded as agreed. Reopen the draft, make the changes, and issue it again for their approval.
+            </p>
+            <p className="text-[11px] text-slate-500">Recorded with their name{sentBack.email ? ` (${sentBack.email})` : ''}, {sentBack.via === 'portal' ? 'portal login, ' : ''}the time and the fingerprint of the version they read.</p>
+          </div>
+        )}
+        {editable && asked.length > 0 && (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 space-y-2 sw-in">
+            <div className="flex items-start gap-2">
+              <MessageSquareText className="w-4 h-4 mt-0.5 shrink-0 text-[#3D52A0]" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-slate-800">What the client asked for</div>
+                <div className="text-xs text-slate-500">{asked[0].request.name} sent {asked[0].issue.reference} back on {day(asked[0].request.at)}. Revise the draft, then issue it again: their portal and email say this version answers their notes.</div>
+              </div>
+            </div>
+            {(olderAsks ? asked : asked.slice(0, 1)).map(({ issue: was, request }) => (
+              <blockquote key={was.id} className="rounded-lg bg-white border border-slate-200 px-3.5 py-2.5">
+                {topicLabels(request.topics).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-1.5">
+                    {topicLabels(request.topics).map(t => <span key={t} className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#3D52A0]/10 text-[#3D52A0]">{t}</span>)}
+                  </div>
+                )}
+                <p className="text-sm text-slate-800 whitespace-pre-line">{request.message}</p>
+                <footer className="text-[11px] text-slate-500 mt-1">{request.name} · {day(request.at)} · on {was.reference} issued {day(was.issuedAt)}</footer>
+              </blockquote>
+            ))}
+            {asked.length > 1 && (
+              <button onClick={() => setOlderAsks(v => !v)} className="text-xs font-bold text-[#3D52A0] hover:underline cursor-pointer">
+                {olderAsks ? 'Show the latest only' : `Show all ${asked.length} times it was sent back`}
+              </button>
+            )}
+          </div>
+        )}
+        {!editable && !sentBack && (
           <div className={`mt-4 rounded-xl px-3.5 py-2.5 text-[12.5px] border flex items-start gap-2 ${signedByClient ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-[#3D52A0]/[0.05] border-[#3D52A0]/20 text-slate-700'}`}>
             {signedByClient ? <Check className="w-4 h-4 mt-0.5 shrink-0" /> : <Lock className="w-4 h-4 mt-0.5 shrink-0 text-[#3D52A0]" />}
             <span>
@@ -1107,7 +1179,7 @@ function RevisionEditor({
             </span>
           </div>
         )}
-        {!editable && issue && onSendToClient && (
+        {!editable && !sentBack && issue && onSendToClient && (
           <ClientSendPanel issue={issue} defaultTo={ctx.clientEmail || ''} studioName={orgName || 'Studio'} sending={sendingId === issue.id}
             onSend={(to, cc) => onSendToClient(issue.id, to, cc)}
             onRecord={onRecordAgreement && issue.kind === 'scope_revision' ? (a, to, cc) => onRecordAgreement(issue.id, a, to, cc) : undefined} />

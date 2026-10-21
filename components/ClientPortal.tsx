@@ -74,6 +74,7 @@ import {
     agreementKindFor,
     signIssue
 } from '../services/documentIssueEngine';
+import { requestChangesPatch, ScopeChangeTopic } from '../lib/scopeChangeRequest';
 import { raiseQuery, getOpenQueries } from '../services/documentQueryEngine';
 import { ClientDocumentKind } from '../types';
 
@@ -637,6 +638,29 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         }));
     };
 
+    /*
+      Sending a Scope Revision back for changes instead of approving it.
+
+      Same two paths as approving: from the client's own portal the server
+      writes the record and this waits for it; from the studio's preview it is
+      a request taken in person on a studio device, saved with the project.
+      Either way only the issue and a client message change -- nothing in
+      force (lib/scopeChangeRequest).
+    */
+    const requestScopeChanges = async (issueId: string, input: { name: string; message: string; topics: ScopeChangeTopic[] }, contentHash: string) => {
+        const meta = source === 'client'
+            ? { via: 'portal' as const, email: currentUserAuth?.email || null }
+            : { via: 'studio_device' as const, witnessedBy: currentUserAuth?.displayName || currentUserAuth?.email || 'studio staff' };
+        const patch = requestChangesPatch(issueId, { ...input, contentHash }, meta);
+        if (source === 'client') {
+            await submitClientAction(projectData.id, { type: 'requestIssueChanges', issueId, ...input, contentHash });
+            /* Recorded by the server; show it here without waiting for the next load. */
+            try { setProjectContext(patch); } catch (e) { console.warn('Sent back, but not shown here until the page reloads', e); }
+            return;
+        }
+        setProjectContext(patch);
+    };
+
     const persistClientAction = (action: ClientAction) => {
         if (source !== 'client') return;
         submitClientAction(projectData.id, action).catch((err: any) => {
@@ -954,7 +978,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
           who came in through the overview never saw that anything needed them.
         */
         const scopeActions = (context.documents?.issues || [])
-            .filter((i: any) => !i.withdrawnAt && !i.clientSignature && !i.recordedApproval && i.clientVisibility?.state === 'published'
+            .filter((i: any) => !i.withdrawnAt && !i.clientSignature && !i.recordedApproval && !i.changesRequested && i.clientVisibility?.state === 'published'
                 && (i.kind === 'scope_revision' || (i.kind === 'detailed_boq' && i.snapshot?.approval?.mode === 'for_signature')))
             .map((i: any) => {
                 const s: any = i.snapshot || {};
@@ -1040,7 +1064,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     /* A published scope revision the client has not signed yet. */
     const pendingScopeRevisions = useMemo(
         () => (context.documents?.issues || []).filter(i =>
-            i.kind === 'scope_revision' && !i.withdrawnAt && !i.clientSignature
+            i.kind === 'scope_revision' && !i.withdrawnAt && !i.clientSignature && !i.changesRequested
             && i.clientVisibility?.state === 'published').length,
         [context],
     );
@@ -3993,6 +4017,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                     context={context}
                                     onOpenDocument={openDocument}
                                     onApproveIssue={approveScopeIssue}
+                                    onRequestChanges={requestScopeChanges}
                                     studioName={studioCompanyName}
                                     studioAddress={(projectData?.context as any)?.portalStudio?.address || orgData?.officeAddress || null}
                                     clientName={context.clientName}
