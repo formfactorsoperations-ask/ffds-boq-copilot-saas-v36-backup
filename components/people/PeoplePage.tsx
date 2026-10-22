@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useNoteArrivals } from '../notify/NotifyContext';
 import {
   Sunrise, Fingerprint, TreePalm, Stamp, CalendarDays, Contact, ChartColumn, Plus, RefreshCw, ChevronLeft, ChevronRight, MapPin, Download, Check, X, Search,
   PartyPopper, Inbox, Users, Sparkles, Wrench, History, RotateCcw,
@@ -72,6 +73,8 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
     const t = window.setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 60000);
     return () => window.clearInterval(t);
   }, [approving]);
+  /* And at once, when a note says someone checked in or asked for leave: the arrivals board and approvals catch up (components/notify). The minute's refresh stays for what no note covers. */
+  useNoteArrivals((n) => n.kind.startsWith('people.'), () => refresh());
 
   if (!snapshot) {
     return (

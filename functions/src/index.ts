@@ -37,6 +37,8 @@ export { leadForm, leadMatches } from "./leads";
 export { peopleSnapshot, peopleCommand } from "./peopleDesk";
 export { peopleImport } from "./peopleImport";
 import { confirmMeetingByClient, portalSheetFor } from "./designMeeting";
+import { notify } from "./notify";
+import { clientActionDraft, siteDraft } from "../../lib/notify";
 import * as pako from "pako";
 import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";
 import { recordDocumentView, signIssue } from "../../services/documentIssueEngine";
@@ -948,6 +950,9 @@ export const submitClientAction = onCall({ cors: true }, async (request) => {
             uid, email: email || null, ip: forwarded || request.rawRequest?.ip || null, userAgent: String(headers["user-agent"] || ""),
         });
         logger.info("Client confirmed a design meeting", { projectId, meetingId: action.meetingId });
+        const projectName = String((await db.collection("projects").doc(projectId).get()).data()?.context?.name || "") || null;
+        await notify({ tenantId: profile.tenantId, projectId, actorEmail: email },
+            [clientActionDraft(action, { actor, projectId, projectName })]);
         return { ok: true, designRecord };
     }
 
@@ -960,6 +965,8 @@ export const submitClientAction = onCall({ cors: true }, async (request) => {
       the more likely loser: it is one write against a stream of them.
     */
     const viewRef = ref.collection("portalView").doc("current");
+    /* Read inside the transaction, for the notes written once it has committed. */
+    let saved: { tenantId: string; projectName: string | null; project: any } | null = null;
 
     await db.runTransaction(async (tx) => {
         // Every read before any write — a transaction requires it.
@@ -996,6 +1003,7 @@ export const submitClientAction = onCall({ cors: true }, async (request) => {
         if (tenantId) {
             tx.set(db.collection(`organizations/${tenantId}/projects`).doc(projectId), payload);
         }
+        saved = tenantId ? { tenantId, projectName: String(nextContext?.name || "") || null, project } : null;
 
         /*
           Rebuild the client's own copy, so their action is there when they come
@@ -1048,6 +1056,12 @@ export const submitClientAction = onCall({ cors: true }, async (request) => {
     });
 
     logger.info("Client action applied", { projectId, type: action?.type });
+    /* The studio hears at once: whoever looks after this client, and the leads for what is theirs (lib/notify). */
+    if (saved) {
+        const s = saved as { tenantId: string; projectName: string | null; project: any };
+        await notify({ tenantId: s.tenantId, projectId, actorEmail: email, project: s.project },
+            [clientActionDraft(action, { actor, projectId, projectName: s.projectName })]);
+    }
     return { ok: true };
 });
 
@@ -1088,6 +1102,7 @@ export const siteAction = onCall({ cors: true }, async (request) => {
     }
     const author = String(profile.displayName || profile.name || "Site Supervisor").slice(0, 80);
 
+    let siteProject: any = null;
     /* In a transaction for the same reason as a client's action: the studio may be saving this project too. */
     await db.runTransaction(async (tx) => {
         const snap = await tx.get(ref);
@@ -1102,11 +1117,14 @@ export const siteAction = onCall({ cors: true }, async (request) => {
             throw e;
         }
         const payload = writeableProject(next, wasCompressed, stored);
+        siteProject = project;
         tx.set(ref, payload);
         // Both stored copies, as submitClientAction explains.
         tx.set(db.collection(`organizations/${projectTenant}/projects`).doc(projectId), payload);
     });
 
     logger.info("Site action applied", { projectId, type: action?.type, role });
+    await notify({ tenantId: projectTenant, projectId, actorEmail: email, project: siteProject },
+        [siteDraft(action, { projectId, projectName: String(siteProject?.context?.name || "") || null, actor: author })]);
     return { ok: true };
 });

@@ -32,6 +32,9 @@ import { roleLabel } from '../lib/roles';
 import { FFDSLogo } from './FFDSLogo';
 import { db } from '../services/dbService';
 import CloudConfigModal from './CloudConfigModal';
+import NotifyBell from './notify/NotifyBell';
+import { useInbox } from './notify/NotifyContext';
+import { Count } from './notify/NotifyBits';
 
 interface SidebarProps {
   activeTab: string;
@@ -137,6 +140,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, [adminMenu, userMenu]);
 
   const { orgData, currentRole, currentRoles, currentUserAuth } = useOrg();
+  /* The badges on the tabs: a red number when someone is waiting on you there, a dot for something new (lib/notify). */
+  const inbox = useInbox();
+  const tabBadge = (id: string, className: string) => {
+    const c = inbox?.byTab[id];
+    return c ? <Count needs={c.needs} unread={c.unread} className={className} /> : null;
+  };
   /* "Admin + Design Head" when they hold several roles. */
   const roleText = currentRoles?.length ? roleLabel(currentRoles) : String(currentRole || '');
   
@@ -326,6 +335,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <span className={`relative tracking-tight ${quiet ? 'hidden 2xl:inline' : 'hidden sm:inline'}`}>
           {tab.label}
         </span>
+        {tabBadge(tab.id, '-top-1 -right-1 z-20')}
       </button>
     );
   };
@@ -427,6 +437,9 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
           );
         })()}
+
+        {/* Everything that reached you (components/notify). */}
+        <NotifyBell />
 
         {/* Account — the second reactor */}
         <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
@@ -567,6 +580,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
                     <span className="truncate">{tab.label}</span>
+                    <span className="relative ml-auto w-5 h-5">{tabBadge(tab.id, 'top-0.5 right-0')}</span>
                   </button>
                 );
               })}

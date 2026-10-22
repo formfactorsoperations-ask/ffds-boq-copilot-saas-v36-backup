@@ -2,8 +2,10 @@ import { onCall, HttpsError, type FunctionsErrorCode } from "firebase-functions/
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { requireStaff, rateLimiter } from "./guards";
+import { notify } from "./notify";
+import { peopleDrafts } from "../../lib/notify";
 import {
-  DomainError, addDays, businessDate, execute, peopleOf, personByEmail, policyOf, scopeSnapshot, validateConfiguration,
+  DomainError, addDays, businessDate, execute, isLate, peopleOf, personByEmail, policyOf, scopeSnapshot, validateConfiguration,
   type Attendance, type Command, type Event, type Person, type Policy, type RequestRecord, type Snapshot, type Store,
 } from "../../lib/peopleDesk";
 
@@ -151,14 +153,23 @@ export const peopleCommand = onCall({ cors: true }, async (request) => {
         events: prior.exists ? [prior.data() as Event] : [],
       };
       const event = execute(store, ctx.me.id, command, now);
-      if (prior.exists) return { replay: true };
+      if (prior.exists) return { replay: true, event: null as Event | null };
 
       tx.set(evRef, plain(event));
       if (event.session) tx.set(db().doc(`${root}/attendance/${event.session.id}`), plain(event.session));
       if (event.request) tx.set(db().doc(`${root}/requests/${event.request.id}`), plain(event.request));
       tx.set(ledgerRef, { revision: Number(ledger.data()?.revision || 0) + 1, updatedAt: now }, { merge: true });
-      return { replay: false };
+      return { replay: false, event };
     });
+
+    /* Their lead hears at once: a check-in or check-out, a request to decide, or the decision (lib/notify). A retried command was told the first time. */
+    if (!outcome.replay && outcome.event) {
+      const ev = outcome.event;
+      const employee = ctx.people.find((p) => p.id === (ev.request?.employeeId || ev.session?.employeeId)) || ctx.me;
+      const late = command.action === "checkin" && !!ev.session && isLate(ev.session, ctx.policy);
+      await notify({ tenantId: ctx.tenantId, actorEmail: ctx.me.email || null },
+        peopleDrafts({ action: command.action, session: ev.session, request: ev.request }, { actor: ctx.me, employee, people: ctx.people, timezone: ctx.policy.timezone, late }));
+    }
 
     return { ok: true, replay: outcome.replay, snapshot: await snapshotFor(ctx, now) };
   } catch (e) {

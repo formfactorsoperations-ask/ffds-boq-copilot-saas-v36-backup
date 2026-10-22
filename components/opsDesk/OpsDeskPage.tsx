@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNoteArrivals } from '../notify/NotifyContext';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Inbox, Clock, IndianRupee, ListChecks, Flag, FileText, Plus, RefreshCw, Check, Phone, MessageCircle, Mail, Users, Mic, Search, CalendarClock,
@@ -137,9 +138,13 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
   const [notice, setNotice] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
 
+  /* A reload because a note arrived is quiet: no spinner, no "Loading" in the bar. */
+  const quietLoad = useRef(false);
   const load = useCallback(async () => {
     if (!tenantId) return;
-    setLoading(true);
+    const spin = !quietLoad.current;
+    quietLoad.current = false;
+    if (spin) setLoading(true);
     setError(null);
     try {
       const per = await Promise.all(deskProjects.map((p) => loadProjectOps(tenantId, p, isLead)));
@@ -173,11 +178,18 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
     } catch (e: any) {
       setError('Some of the desk could not be loaded. Refresh to try again.');
     } finally {
-      setLoading(false);
+      if (spin) setLoading(false);
     }
   }, [tenantId, isLead, deskProjects, myEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
+
+  /* A client's reply, an escalation or a new enquiry: the desk catches up at once, once for a burst (components/notify). */
+  const arrival = useRef<number | null>(null);
+  useNoteArrivals((n) => /^(client|ops|lead|site)\./.test(n.kind), () => {
+    if (arrival.current) window.clearTimeout(arrival.current);
+    arrival.current = window.setTimeout(() => { arrival.current = null; quietLoad.current = true; load(); }, 700);
+  });
 
   /* For a lead, the studio-wide records are cut to the projects in scope, so Dummy work stays apart. */
   const fu = useMemo(() => (isLead ? followUps.filter((f) => ids.has(f.projectId)) : followUps), [followUps, ids, isLead]);

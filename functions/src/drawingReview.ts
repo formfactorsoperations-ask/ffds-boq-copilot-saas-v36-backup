@@ -1,4 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { notify } from "./notify";
+import { reviewDraft } from "../../lib/notify";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { isTeamViewMember } from "./teamView";
@@ -531,6 +533,22 @@ async function setAudience(actor: Actor, orgId: string, projectId: string, drawi
 
 /* --------------------------------------------------------- the callable */
 
+/*
+  Whoever is waiting hears at once (lib/notify): the Design Head when a sheet
+  is sent for review, its designer when it is approved or comes back. After
+  the change has committed, and passing its result straight through.
+*/
+async function told<T>(kind: "submit" | "approve" | "return" | "clientReturn", actor: Actor, orgId: string, projectId: string,
+  drawingRef: FirebaseFirestore.DocumentReference, result: T): Promise<T> {
+  const d: any = (await drawingRef.get().catch(() => null))?.data() || {};
+  const review: any = (result as any)?.review || d.review || {};
+  await notify({ tenantId: orgId, projectId, actorEmail: actor.email }, [reviewDraft(kind, {
+    projectId, projectName: actor.projectName, sheet: String(d.name || ""), actor: actor.name,
+    designerEmail: review.designer?.email || null, reason: kind === "submit" ? null : review.reason || null,
+  })]);
+  return result;
+}
+
 export const drawingReview = onCall({ cors: true, memory: "1GiB", timeoutSeconds: 120 }, async (request) => {
   const input: Input = request.data || {};
   const { orgId, projectId, drawingId, action } = input;
@@ -548,14 +566,14 @@ export const drawingReview = onCall({ cors: true, memory: "1GiB", timeoutSeconds
         return { ok: true };
       }
       case "finalize": return await finalize(actor, orgId, projectId, drawingId, input);
-      case "submit": return await submit(actor, drawingRef, input);
+      case "submit": return await told("submit", actor, orgId, projectId, drawingRef, await submit(actor, drawingRef, input));
       case "withdraw": return await withdraw(actor, drawingRef, input);
-      case "approve": return await decide(actor, drawingRef, input, "approve");
-      case "return": return await decide(actor, drawingRef, input, "return");
+      case "approve": return await told("approve", actor, orgId, projectId, drawingRef, await decide(actor, drawingRef, input, "approve"));
+      case "return": return await told("return", actor, orgId, projectId, drawingRef, await decide(actor, drawingRef, input, "return"));
       case "mark": return await mark(actor, drawingRef, input);
       case "audience": return await setAudience(actor, orgId, projectId, drawingId, drawingRef, input);
       case "remove": return await removeVersion(actor, drawingRef, input);
-      case "clientReturn": return await clientDecide(actor, drawingRef, input, "clientReturn");
+      case "clientReturn": return await told("clientReturn", actor, orgId, projectId, drawingRef, await clientDecide(actor, drawingRef, input, "clientReturn"));
       case "clientKeep": return await clientDecide(actor, drawingRef, input, "clientKeep");
       default: throw new HttpsError("invalid-argument", "Unknown action.");
     }

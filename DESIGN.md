@@ -249,6 +249,35 @@ of Client Relations people, not one (mockups OD1 to OD7 and L1 to L4, approved
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent
   colours, no half-pixel sizes.
 
+### Notifications motion (approved 22 Oct 2026)
+
+The owner chose four of the fifteen notification patterns in the round-two
+mockups (badges on the tabs, the bell's inbox, one bar for "needs you", live
+changes in place), the bar in glass, with "more animations and 3D". These
+appear on every screen, so their kit is allowed everywhere they appear; the
+screens around them keep their own motion. Pieces are in `components/notify/`,
+styles in `notifyStyles.ts` (added to the page when first imported, like
+`peopleStyles.ts`), and they reuse the People kit (`IconTile`, `Tilt`,
+`DoneTick`, `Glide`, `pp-press`). Who is told what is in `lib/notify.ts`.
+
+- Only "needs you" interrupts. Plain updates are counted and listed, never shown
+  as a pop-up.
+- Counts: a rose number (`nt-count`, with a breathing halo) when someone is
+  waiting on you; a brand dot (`nt-dot`) when there is only something new to
+  read. A count turns over in 3D when it changes (`nt-flip`). It changes the
+  moment a note lands and never waits for an animation.
+- The bell is the brushed-metal bell of the project hub; one 3D swing when a
+  note lands (`nt-ring`). Its list opens like a card folding down, rows turn in
+  one after another, a burst of check-ins folds into one row of faces.
+- The "needs you" bar is frosted glass (`nt-glass`, with `nt-orb` glows and a
+  passing `nt-sheen`), rises from below in 3D, tilts to the pointer (`Tilt`),
+  and turns over when a newer note replaces it. One at a time; it never takes
+  the keyboard or covers the middle of the page.
+- Live in place: a chip that turns in beside the page title (`LiveStamp`), glows
+  once (`nt-live`) and leaves on its own.
+- Same fonts and colours as everywhere: brand, slate, rose/amber/emerald for
+  state. Everything stops under `prefers-reduced-motion`.
+
 ### Times
 
 Times people read are on the 12-hour clock ("9:42 AM"), through `clock12` in
