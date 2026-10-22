@@ -152,12 +152,15 @@ function around<T>(list: T[]): T[] {
   fold over when a digit changes, the colon pulsing, and AM or PM. The chip
   leans toward the mouse. All of it holds still under prefers-reduced-motion.
 */
+/* The clock shows minutes, so it re-renders only when the minute turns (an unchanged value skips the render). */
+const thisMinute = () => Math.floor(Date.now() / 60000) * 60000;
 const DateClock: React.FC = () => {
-  const [now, setNow] = useState(() => new Date());
+  const [at, setAt] = useState(thisMinute);
   useEffect(() => {
-    const t = window.setInterval(() => setNow(new Date()), 1000);
+    const t = window.setInterval(() => setAt(thisMinute()), 1000);
     return () => window.clearInterval(t);
   }, []);
+  const now = new Date(at);
   const [clock, ampm] = clock12(now.toISOString()).split(' ');
   const [h, m] = clock.split(':');
   const hh = h.padStart(2, '0');

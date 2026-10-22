@@ -1,6 +1,7 @@
 
 import { apiFetch } from './apiFetch';
-import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import type { GenerateContentResponse } from "@google/genai";
+import { Type } from "./aiSchema";
 import { getAi, aiIsReachable } from './aiClient';
 import { Item, BoqItem, AIStrategy, Room, MarginSuggestion, ProjectContext, CommandAction, AggregatedCategory, FullBoqItem, QuantitySuggestion, ProposalTier, ComparisonRow, AIGeneratedBoqItem, VisionAnalysisResult, TimelinePhase, MaterialSuggestion, AiComparisonResult, AIStatus, LeadProfile, DecisionBrainOutput, ProposalWriterOutput, AuditResult, ValueEngineeringSuggestion, ProfitabilityHotspot, ProjectTask, GeneratedRender, LumpsumBreakdownItem, SiteUpdateRecord, ProjectDecisionRecord } from '../types';
 import { id as generateId, formatCurrency, calculateSellPrice } from '../lib/utils';

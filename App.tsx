@@ -15,9 +15,6 @@ import { PageHeaderProvider } from "./contexts/PageHeaderContext";
 import { BackgroundBeamsWithCollision } from "./components/ui/background-beams-with-collision";
 import StudioHomeOrbit from "./components/StudioHomeOrbit";
 import StudioFooter from "./components/home/StudioFooter";
-import DataPrivacyPage from "./components/studio/DataPrivacyPage";
-import SupportDeskPage from "./components/studio/SupportDeskPage";
-import TermsOfUsePage from "./components/studio/TermsOfUsePage";
 import { readLastTabs, recordLastTab, LastTabs } from "./services/lastVisitedTabs";
 import { readAttentionState, writeAttentionEntry, AttentionState, AttentionEntry } from "./services/attentionState";
 import { buildProjectTemplate } from "./lib/cloneProject";
@@ -103,6 +100,11 @@ const ScopeAdditionsModule = lazyWithRetry(() => import("./components/ops/ScopeA
 const SupervisorMobileApp = lazyWithRetry(() => import("./components/SupervisorMobileApp"));
 const OpsDeskPage = lazyWithRetry(() => import("./components/opsDesk/OpsDeskPage"));
 const PeoplePage = lazyWithRetry(() => import("./components/people/PeoplePage"));
+/* Whole tabs, loaded when first opened rather than with the app (each renders inside the tab's Suspense). */
+const DesignDeskTab = lazyWithRetry(() => import("./components/drawingReview/DesignDeskTab"));
+const DataPrivacyPage = lazyWithRetry(() => import("./components/studio/DataPrivacyPage"));
+const SupportDeskPage = lazyWithRetry(() => import("./components/studio/SupportDeskPage"));
+const TermsOfUsePage = lazyWithRetry(() => import("./components/studio/TermsOfUsePage"));
 
 import {
   FullProjectData,
@@ -124,7 +126,7 @@ import {
   SOFItem,
   ExecutionBundleStatus,
 } from "./types";
-import { db, hydrateProjectDetail, projectFromDoc } from "./services/dbService";
+import { db, dbWriteCount, hydrateProjectDetail, projectFromDoc } from "./services/dbService";
 import { mergeClientOwned } from "./lib/clientOwned";
 import { db as firestoreDb } from "./services/firebaseClient";
 import { normaliseAddition, scopeAdditionsPath } from "./lib/scopeAdditions";
@@ -138,7 +140,6 @@ import { seesStudioFinance, FINANCE_TABS, isLimitedRole, limitedMayOpen, limited
 import { functions as firebaseFunctions } from "./services/firebaseClient";
 import { httpsCallable } from "firebase/functions";
 import { roleLabel } from "./lib/roles";
-import DesignDeskTab from "./components/drawingReview/DesignDeskTab";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth as firebaseAuth } from "./services/firebaseClient";
 import PortalPublishControls from "./components/ops/PortalPublishControls";
@@ -177,7 +178,6 @@ const DEFAULT_LEAD_PROFILE: LeadProfile = {
 
 export default function App() {
   // Global State
-  console.log("App.tsx is rendering...");
   const { orgData, currentUserAuth, currentRole, currentRoles, setCurrentRole, teamMembers } = useOrg();
   const [activeTab, setActiveTab] = useState("home");
   const [showWizardOverride, setShowWizardOverride] = useState(false);
@@ -441,6 +441,34 @@ export default function App() {
     activeIdRef.current = activeInternalId;
   }, [activeInternalId]);
 
+  /*
+    The project library, read once for every start-up step that asks for it.
+
+    Start-up asked three times within a second or two -- init, the tenant
+    check and the sign-in refresh below -- and each read every project in the
+    studio and inflated it. What db.getProjects returns depends only on who
+    is signed in, the studio and the role (dbService reads the last two from
+    localStorage), so a read already made for the same three, with no write
+    since, is shared for half a minute rather than repeated. A change of any
+    of them, or any save or delete, reads afresh. Sharing the same array also
+    lets React skip the re-render when the second step sets it again.
+  */
+  const libraryRead = useRef<{ key: string; at: number; projects: Promise<FullProjectData[]> } | null>(null);
+  const readProjects = (): Promise<FullProjectData[]> => {
+    let tenant = "", role = "";
+    try {
+      tenant = String(JSON.parse(localStorage.getItem("ffds_org_context") || "{}")?.tenantId || "");
+      role = localStorage.getItem("ffds_current_role") || "";
+    } catch { /* storage off: the key still names who is signed in */ }
+    const key = [firebaseAuth?.currentUser?.uid || "", tenant, role, dbWriteCount()].join("|");
+    const last = libraryRead.current;
+    if (last && last.key === key && Date.now() - last.at < 30000) return last.projects;
+    const projects = db.getProjects();
+    libraryRead.current = { key, at: Date.now(), projects };
+    projects.catch(() => { if (libraryRead.current?.projects === projects) libraryRead.current = null; });
+    return projects;
+  };
+
   // --- INITIALIZATION ---
   useEffect(() => {
     const init = async () => {
@@ -650,7 +678,7 @@ export default function App() {
           timeoutWrapper(db.getBank(), 5000),
           timeoutWrapper(db.getDraftBank(), 5000),
           timeoutWrapper(db.getTemplates(), 5000),
-          timeoutWrapper(db.getProjects(), 8000)
+          timeoutWrapper(readProjects(), 8000)
         ]);
 
         if (bankResult.status === 'fulfilled') {
@@ -958,7 +986,7 @@ export default function App() {
           db.getBank(),
           db.getDraftBank(),
           db.getTemplates(),
-          db.getProjects()
+          readProjects()
         ]);
 
         if (bankResult.status === 'fulfilled') setBank(bankResult.value);
@@ -1026,7 +1054,7 @@ export default function App() {
   useEffect(() => {
     if (!authProfile?.uid || authProfile.role === "Client" || !isDataLoaded) return;
     let live = true;
-    db.getProjects().then((fetched) => {
+    readProjects().then((fetched) => {
       if (!live) return;
       setProjectLibrary((current) => {
         // Keep an open project's unsaved copy, as the Projects tab refresh does.
@@ -2981,7 +3009,6 @@ export default function App() {
     );
   }
 
-  console.log("App render returned JSX!");
   return (
     <PageHeaderProvider route={activeTab}>
       <div className={`min-h-screen overflow-x-hidden relative ${isProjectTab && hasProjectData ? "md:h-screen md:overflow-hidden" : ""}`}>
