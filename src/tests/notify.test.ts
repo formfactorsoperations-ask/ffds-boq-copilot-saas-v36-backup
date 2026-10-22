@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ALWAYS_KINDS, DEFAULT_PREFS, cleanPrefs, counted, interrupts, isQuiet, portalDrafts,
-  approversOf, clientActionDraft, escalationDraft, foldGroups, foldedTitle, initialsOf, isOpen, leadDraft,
+  approversOf, clientActionDraft, decisionDraft, escalationDraft, foldGroups, foldedTitle, initialsOf, isOpen, leadDraft,
   peopleDrafts, resolveAudience, reviewDraft, siteDraft, stamp, tabCounts, type Stored,
 } from '../../lib/notify';
 import type { Person } from '../../lib/peopleDesk';
@@ -79,6 +79,25 @@ describe('client portal actions', () => {
   it('a question about a finish goes to the project\'s Designer and Client Relations, and the Owners and Admins', () => {
     const d = clientActionDraft({ type: 'querySelection', question: 'Matte or gloss?' }, project)!;
     expect(resolveAudience(d.to, { team, assigned: ['arjun@ff.in', 'kabir@ff.in'] }).sort()).toEqual(['arjun@ff.in', 'kabir@ff.in', 'tanvi@ff.in', 'vikram@ff.in']);
+  });
+});
+
+describe('a client answering a decision in the portal', () => {
+  const was = { status: 'drawing_sent', title: 'Kitchen Decision', roomName: 'Kitchen', projectName: 'Harmony 704', clientName: 'Mr Prasad Naik' };
+  it('an approval is counted for the project\'s people and the Ops Director, and opens the decision', () => {
+    const d = decisionDraft(was, { ...was, status: 'signed', signoff: { type: 'approved', clientNameEntered: 'Mr Prasad Naik' } }, { projectId: 'p1' })!;
+    expect(d).toMatchObject({ kind: 'client.approved', level: 'update', title: 'Mr Prasad Naik approved a decision: Kitchen Decision', route: 'record-decision', projectId: 'p1' });
+    expect(resolveAudience(d.to, { team, assigned: ['riya@ff.in', 'arjun@ff.in'] }).sort()).toEqual(['arjun@ff.in', 'meera@ff.in', 'riya@ff.in', 'tanvi@ff.in', 'vikram@ff.in']);
+  });
+  it('a question waits on the studio, with the client\'s words', () => {
+    const d = decisionDraft(was, { ...was, status: 'disputed', signoff: { type: 'queried', clientNameEntered: 'Mr Prasad Naik', queryText: 'Can the island be 10 cm longer?' } }, { projectId: 'p1' })!;
+    expect(d).toMatchObject({ kind: 'client.query', level: 'needs', action: 'Answer', line: '“Can the island be 10 cm longer?”' });
+  });
+  it('tells nobody for an entry Ops made by hand, or a save that does not change the answer', () => {
+    expect(decisionDraft(was, { ...was, status: 'signed', signoff: { clientNameEntered: 'Manual Ops Entry', ipAddress: 'Internal' } }, { projectId: 'p1' })).toBeNull();
+    const signed = { ...was, status: 'signed', signoff: { clientNameEntered: 'Mr Prasad Naik' } };
+    expect(decisionDraft(signed, { ...signed, studioReply: 'x' }, { projectId: 'p1' })).toBeNull();
+    expect(decisionDraft(null, { ...was, status: 'drawing_sent' }, { projectId: 'p1' })).toBeNull();
   });
 });
 

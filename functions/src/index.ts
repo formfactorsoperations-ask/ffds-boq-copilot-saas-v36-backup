@@ -37,7 +37,7 @@ export { leadForm, leadMatches } from "./leads";
 export { peopleSnapshot, peopleCommand } from "./peopleDesk";
 export { peopleImport } from "./peopleImport";
 /* "New for you" in the client portal: a note for each thing the studio releases (lib/notify.ts portalDrafts). */
-export { onPortalViewWritten } from "./portalNotify";
+export { onPortalViewWritten, onDecisionAnswered } from "./portalNotify";
 import { confirmMeetingByClient, portalSheetFor } from "./designMeeting";
 import { notify } from "./notify";
 import { clientActionDraft, siteDraft } from "../../lib/notify";

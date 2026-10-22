@@ -262,6 +262,24 @@ export function siteDraft(action: any, p: { projectId: string; projectName: stri
 
 /* ── Leads ───────────────────────────────────────────────────────────────── */
 
+/**
+ * A client answered a decision in their portal (decisionsService.recordClientSignoff),
+ * from the change to projects/{p}/decisions/{d}. Approving is an update; a
+ * question waits on the studio. An entry Ops made by hand tells nobody.
+ */
+export function decisionDraft(before: any, after: any, p: { projectId: string }): Draft | null {
+  if (!after || before?.status === after.status || !['signed', 'disputed'].includes(after.status)) return null;
+  const s = after.signoff || {};
+  if (s.ipAddress === 'Internal' || s.clientNameEntered === 'Manual Ops Entry') return null;
+  const who = clip(s.clientNameEntered || after.clientName, 60) || 'The client';
+  const what = clip(after.title || after.decisionText, 70) || 'a decision';
+  const base = { area: 'clients' as NoteArea, projectId: p.projectId, projectName: clip(after.projectName, 80) || null, actor: who, group: null, route: 'record-decision' };
+  if (after.status === 'signed') {
+    return { ...base, kind: 'client.approved', level: 'update', title: `${who} approved a decision: ${what}`, line: [after.roomName, 'Approved in the client portal'].filter(Boolean).join(' · '), action: null, to: { project: ['ops', 'design'], roles: ['Ops Director'] } };
+  }
+  return { ...base, kind: 'client.query', level: 'needs', title: `${who} asked about a decision: ${what}`, line: quote(s.queryText) || 'Asked a question in the client portal', action: 'Answer', to: { project: ['ops', 'design'], roles: ['Ops Director'] } };
+}
+
 /** A website enquiry: to the person the studio's rules made its owner (lib/leadForm ownerFor), and the Ops Director. */
 export function leadDraft(e: { name?: string; wants?: string; home?: string }, ownerEmail: string): Draft {
   const bits = [e.wants, e.home].map((x) => clip(x, 50)).filter(Boolean).join(' · ');

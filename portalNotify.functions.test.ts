@@ -45,6 +45,9 @@ beforeAll(async () => {
     await setDoc(doc(db, 'users/client_a'), { email: 'naik@home.in', role: 'Client', tenantId: 'studio_p', projectIds: [P] });
     await setDoc(doc(db, 'users/client_b'), { email: 'other@home.in', role: 'Client', tenantId: 'studio_p', projectIds: ['someone_else'] });
     await setDoc(doc(db, 'users/staff_a'), { email: 'riya@ff.in', role: 'Client Relations', tenantId: 'studio_p', projectIds: [P] });
+    await setDoc(doc(db, 'organizations/studio_p'), { team: [{ email: 'meera@ff.in', role: 'Ops Director' }, { email: 'Anish@ff.in', role: 'Ops Director', roles: ['Admin'] }] });
+    await setDoc(doc(db, `projects/${P}`), { tenantId: 'studio_p', isCompressed: true, compressedData: 'x' });
+    await setDoc(doc(db, `projects/${P}/decisions/d1`), { status: 'drawing_sent', title: 'Kitchen Decision', roomName: 'Kitchen', projectName: 'Harmony 704', clientName: 'Mr Prasad Naik', studioId: 'demo-tenant-01' });
     /* A phone that has gone away: sending to it fails, and the note is written all the same. */
     await setDoc(doc(db, 'portalInbox/client_a/devices/d1'), { token: 'not-a-real-token', platform: 'Android · Chrome', at: 1 });
   });
@@ -87,4 +90,19 @@ describe('New for you', () => {
     await new Promise((r) => setTimeout(r, 4000));
     expect((await notes('client_a')).length).toBe(3);
   }, 20000);
+
+  it('a client approving a decision tells the studio, by its project\'s studio, not the decision\'s old default', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `projects/${P}/decisions/d1`), { status: 'signed', title: 'Kitchen Decision', roomName: 'Kitchen', projectName: 'Harmony 704', studioId: 'demo-tenant-01', signoff: { type: 'approved', clientNameEntered: 'Mr Prasad Naik' } }, { merge: true });
+    });
+    const inbox = async (email: string) => {
+      let out: any[] = [];
+      await env.withSecurityRulesDisabled(async (ctx) => { out = (await getDocs(collection(ctx.firestore(), `inbox/${email}/notes`))).docs.map((d) => d.data()); });
+      return out;
+    };
+    const got = await until(() => inbox('meera@ff.in'), (n) => n.length >= 1);
+    expect(got.map((n) => n.title)).toEqual(['Mr Prasad Naik approved a decision: Kitchen Decision']);
+    expect(got[0]).toMatchObject({ tenantId: 'studio_p', route: 'record-decision', projectId: P });
+    expect((await inbox('anish@ff.in')).length).toBe(1);
+  }, 40000);
 });
