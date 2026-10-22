@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Pin } from '@/lib/lucide-shim';
 import type { HomeFeeds } from './useHomeFeeds';
@@ -23,7 +23,14 @@ import './homeStyles';
 
   My day (check in and out) is always pin 01. The studio's worklist ("Needs your attention") and the week ahead
   (inside "Coming up") live here too, so nothing of the day sits below it.
+
+  On first load each feed lands at its own time, and every one can move the
+  pins. So My day holds pin 01 from the first frame (its card loads in place),
+  and the other pins wait until all of them have their data, or SETTLE_MS at
+  most, then drop in once, in their final order.
 */
+
+const SETTLE_MS = 4000;
 
 const DISPLAY = { fontFamily: 'var(--font-display)' } as const;
 /* The pin colours in order: brass, indigo, rose, sage, periwinkle, navy (Home's materials, lightened for paper). */
@@ -49,9 +56,11 @@ export default function DayBoard({ feeds, projects, attention, onNavigate }: {
   feeds: HomeFeeds; projects: any[]; attention: AttentionFeed | null; onNavigate: (tab: string) => void;
 }) {
   const { who, desk, reviewer, people, visitsOn, rows, visits, viewer, names } = feeds;
-  const { snapshot } = usePeople(people);
-  const team = useMemo(() => (people && snapshot ? teamToday(snapshot) : undefined), [people, snapshot]);
-  const checkin = useMemo(() => (people && snapshot?.me ? checkInOf(snapshot) : undefined), [people, snapshot]);
+  const { snapshot, error } = usePeople(people);
+  /* null while People loads, so the pins keep their place; left out when it cannot be read. */
+  const onPeople = people && !(error && !snapshot);
+  const team = useMemo(() => (onPeople ? (snapshot ? teamToday(snapshot) : null) : undefined), [onPeople, snapshot]);
+  const checkin = useMemo(() => (onPeople ? (snapshot?.me ? checkInOf(snapshot) : null) : undefined), [onPeople, snapshot]);
   const counts = useMemo(() => (attention ? {
     blocked: attention.rows.filter((r) => r.worst === 'blocker').length,
     due: attention.rows.filter((r) => r.worst === 'due').length,
@@ -63,7 +72,12 @@ export default function DayBoard({ feeds, projects, attention, onNavigate }: {
   const today = businessDate(new Date());
   const sites = useMemo(() => projects.map((p: any) => String(p?.context?.name || '')).filter(Boolean), [projects]);
   const wide = useWide(1024);
+  const [settled, setSettled] = useState(false);
+  useEffect(() => { if (day.ready) setSettled(true); }, [day.ready]);
+  useEffect(() => { const t = window.setTimeout(() => setSettled(true), SETTLE_MS); return () => window.clearTimeout(t); }, []);
   if (!day.pins.length) return null;
+  /* Until it settles only My day shows: it is always first, so it never moves. */
+  const pins = settled ? day.pins : day.pins.filter((p) => p.kind === 'checkin');
 
   const toDesk = () => onNavigate('design-review');
   const widget = (p: DayPin) =>
@@ -72,15 +86,19 @@ export default function DayBoard({ feeds, projects, attention, onNavigate }: {
       : p.kind === 'meetings' ? <ComingUpWidget index={0} list={visits} today={today} milestones={importantDates} onAll={mayOpenStudioTab('ops-desk', who) ? () => onNavigate('ops-desk') : undefined} />
       : p.kind === 'checkin' ? <MyDayCard variant="pin" sites={sites} onOpenPeople={() => onNavigate('people')} />
       : p.kind === 'attention' ? <AttentionWidget index={0} {...attention!} />
-      : <TeamWidget index={0} t={team!} onAll={() => onNavigate('people')} />;
+      : team ? <TeamWidget index={0} t={team} onAll={() => onNavigate('people')} />
+      : <div className="pp-shimmer h-40 rounded-2xl" />;
 
   return (
     <section aria-label="Your day, in order" className="hs-paper rounded-[28px] border border-[#E3E8F4] overflow-hidden px-3 sm:px-6 pt-9 pb-12">
       <header className="relative z-10 text-center mb-6">
         <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Your day, in order</p>
-        <h2 className="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight text-[#0A1B33]" style={DISPLAY}>{dayTitle(day.toDo)}</h2>
+        <h2 className="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight text-[#0A1B33]" style={DISPLAY}>
+          {settled ? dayTitle(day.toDo) : <span className="pp-shimmer inline-block align-middle h-7 w-72 max-w-full rounded-full" aria-label="Loading your day" />}
+        </h2>
       </header>
-      <Board pins={day.pins} wide={wide} render={widget} />
+      {pins.length ? <Board pins={pins} wide={wide} render={widget} />
+        : <div className="max-w-[480px] mx-auto pp-shimmer h-64 rounded-[26px]" aria-hidden="true" />}
     </section>
   );
 }

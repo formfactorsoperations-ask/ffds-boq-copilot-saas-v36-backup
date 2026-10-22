@@ -1935,6 +1935,14 @@ const sessionRole = (): string => {
 const viewOnlySession = (): boolean =>
   ['Designer', 'Client Relations', 'Site Supervisor', 'Vendor'].includes(sessionRole());
 
+/*
+  How many writes this session has sent. A read shared between callers
+  (App's project library at start-up) is reused only while this has not
+  moved, so nothing saved or deleted can be undone by a cached read.
+*/
+let writeCount = 0;
+export const dbWriteCount = (): number => writeCount;
+
 function viewOnlyGuard<T extends object>(svc: T): T {
   return new Proxy(svc, {
     get(target, prop, receiver) {
@@ -1945,6 +1953,7 @@ function viewOnlyGuard<T extends object>(svc: T): T {
           console.info(`View-only session: ${String(prop)} was not saved.`);
           return Promise.resolve();
         }
+        writeCount++;
         return (value as Function).apply(target, args);
       };
     },

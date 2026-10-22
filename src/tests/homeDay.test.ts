@@ -77,3 +77,12 @@ test('where the working day stands, from the People snapshot', () => {
   expect(checkInOf(at({ availability: [{ employeeId: 'e1', start: today, end: today, status: 'Approved', mode: 'Away' }] })).state).toBe('off');
   expect(checkInOf(at({ availability: [{ employeeId: 'e1', start: today, end: today, status: 'Approved', mode: 'WFH' }] })).state).toBe('out');
 });
+
+test('the board is ready only once no pin is still loading', () => {
+  expect(dayOrder({ rows: null, viewer: designer, checkin: null, team: team() }).ready).toBe(false);
+  expect(dayOrder({ rows: [], viewer: designer, checkin: null, team: team() }).ready).toBe(false);
+  /* My day keeps pin 01 while People loads. */
+  expect(dayOrder({ rows: [], viewer: designer, checkin: null, attention: { blocked: 1, due: 0 } }).pins[0]).toEqual({ kind: 'checkin', weight: 200, why: '' });
+  expect(dayOrder({ rows: [], viewer: designer, checkin: { state: 'out' }, team: team() }).ready).toBe(true);
+  expect(dayOrder({}).ready).toBe(true);
+});
