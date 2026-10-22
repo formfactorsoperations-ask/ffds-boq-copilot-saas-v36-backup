@@ -8,8 +8,7 @@ import { logSiteVisit } from '../services/siteVisitService';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import { useOrg } from '../contexts/OrgContext';
 import { useProjectTeam } from '../services/projectTeam';
-import { connectGoogleCalendar } from '../services/googleCalendarService';
-import { getCachedAccessToken } from '../services/authService';
+import { connectGoogleCalendar, isGoogleCalendarConnected, GoogleCalendarError } from '../services/googleCalendarService';
 import { createMoMFromNotes } from '../services/momService';
 import { auth, db as fsDb } from '../services/firebaseClient';
 import { collection, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -158,7 +157,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
   /* ---------------------------------------------------------------- reset on open */
   useEffect(() => {
     if (!isOpen) return;
-    setHasCalendarToken(!!getCachedAccessToken());
+    setHasCalendarToken(isGoogleCalendarConnected());
     setType(defaultType);
     setTitle('');
     setDate(new Date().toISOString().split('T')[0]);
@@ -270,7 +269,7 @@ export const SiteVisitLogModal: React.FC<SiteVisitLogModalProps> = ({
       if (await connectGoogleCalendar()) setHasCalendarToken(true);
     } catch (e: any) {
       const code = e?.code || '';
-      setError(code === 'auth/popup-blocked'
+      setError(e instanceof GoogleCalendarError ? e.message : code === 'auth/popup-blocked'
         ? 'Your browser blocked the Google pop-up. Allow pop-ups for this site and try again.'
         : code === 'auth/cancelled-popup-request' || code === 'auth/popup-closed-by-user'
           ? 'Google sign-in was cancelled.'

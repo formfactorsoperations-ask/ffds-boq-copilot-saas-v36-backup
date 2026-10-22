@@ -8,8 +8,7 @@ import { useStudioSettings } from '../hooks/useStudioSettings';
 import { MomCaptureModal } from '../components/ops/MomCaptureModal';
 import { MomReviewModal } from '../components/ops/MomReviewModal';
 import { clientContactOf } from '../lib/minutes';
-import { connectGoogleCalendar } from '../services/googleCalendarService';
-import { getCachedAccessToken } from '../services/authService';
+import { connectGoogleCalendar, isGoogleCalendarConnected, GoogleCalendarError } from '../services/googleCalendarService';
 
 export default function SiteVisitHistory({ 
   projectId, 
@@ -190,7 +189,7 @@ function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, 
   const handleRetrySync = async () => {
     setIsRetrying(true);
     try {
-      if (!getCachedAccessToken()) {
+      if (!isGoogleCalendarConnected()) {
          const success = await connectGoogleCalendar();
          if (!success) {
            alert("Could not connect to Google Calendar.");
@@ -203,8 +202,8 @@ function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, 
       try {
         await syncSiteVisitToCalendar(visit.id, visit, projectId, studioId, projectContext, settings);
       } catch (err: any) {
-        if (err.message && (err.message.includes('401') || err.message.includes('403'))) {
-          // Token expired or was revoked. connectGoogleCalendar() handles the popup.
+        if (err instanceof GoogleCalendarError && err.needsReconnect) {
+          // Token expired, or was never given calendar access. connectGoogleCalendar() handles the popup.
           const success = await connectGoogleCalendar();
           if (success) {
             await syncSiteVisitToCalendar(visit.id, visit, projectId, studioId, projectContext, settings);
