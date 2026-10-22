@@ -89,7 +89,7 @@ export const Count: React.FC<{ needs: number; unread?: number; className?: strin
 };
 
 /**
- * The studio's brushed-metal bell (HubAlertsBell's), with a clapper that lags the body.
+ * The studio's brushed-metal bell (first drawn for the project hub's alerts), with a clapper that lags the body.
  *
  * Its gradients get ids of their own. With one shared id, the bell in the
  * phone header (hidden on a desktop) came first in the page, Chrome resolved

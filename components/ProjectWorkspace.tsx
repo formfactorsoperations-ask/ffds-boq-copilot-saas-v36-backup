@@ -16,7 +16,7 @@ import PageTitleBlock from './PageTitleBlock';
 import { LogOut, Home, Building2, Users, BarChart3, Library, CreditCard } from '@/lib/lucide-shim';
 import ProjectStatusTransitionModal from './ProjectStatusTransitionModal';
 import { FloatingDock, FloatingDockItem } from './ui/floating-dock';
-import HubAlertsBell from './ops/HubAlertsBell';
+import { useHubAlerts } from './ops/useHubAlerts';
 import NotifyBell from './notify/NotifyBell';
 import LiveStamp from './notify/LiveStamp';
 import { useInbox } from './notify/NotifyContext';
@@ -230,6 +230,7 @@ export function ProjectWorkspace({
   const isDesigner = isDesignerRole(currentRole);
   /* Client Relations works like a Designer here: its own allow-list, all of it look-only for now. */
   const isLimited = isLimitedRole(currentRole);
+  const hubAlerts = useHubAlerts(projectId, projectContext);
   const limitedHome = limitedHomeTab(currentRole);
   /* R1 in the header mockups: on a Designer's tabs, "view" marks the ones
      they can only look at. The Drawing Tracker, which they work in, has none. */
@@ -678,15 +679,11 @@ export function ProjectWorkspace({
           */}
           <div className="ml-auto shrink-0 flex items-center gap-2">
             <LiveStamp match={(n) => n.projectId === projectId} className="hidden lg:inline-flex" />
-            {/* The studio's alerts lead to screens a Designer does not have. */}
-            {!isLimited && (
-              <HubAlertsBell
-                projectId={projectId}
-                projectContext={projectContext}
-                onGoTo={setActiveTab}
-              />
-            )}
-            <NotifyBell />
+            {/* One bell: what reached you, and first what this project is waiting on. Those alerts lead to screens a Designer does not have. */}
+            <NotifyBell project={!isLimited ? {
+              name: [projectContext?.name || 'This project', projectContext?.clientName].filter(Boolean).join(' · '),
+              alerts: hubAlerts.alerts, onGo: setActiveTab, onDismiss: hubAlerts.dismiss,
+            } : undefined} />
           </div>
 
           {/*

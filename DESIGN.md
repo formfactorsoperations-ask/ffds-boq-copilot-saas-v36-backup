@@ -267,7 +267,9 @@ styles in `notifyStyles.ts` (added to the page when first imported, like
   read. A count turns over in 3D when it changes (`nt-flip`). It changes the
   moment a note lands and never waits for an animation.
 - The bell is the brushed-metal bell of the project hub; one 3D swing when a
-  note lands (`nt-ring`). Its list opens like a card folding down, rows turn in
+  note lands (`nt-ring`). There is one bell on any screen: inside a project, what
+  that project is waiting on (`useHubAlerts`, which used to be a second bell
+  beside it) is the bell's first section, "On this project", and counts on it. Its list opens like a card folding down, rows turn in
   one after another, a burst of check-ins folds into one row of faces.
 - The "needs you" bar is frosted glass (`nt-glass`, with `nt-orb` glows and a
   passing `nt-sheen`), rises from below in 3D, tilts to the pointer (`Tilt`),

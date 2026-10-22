@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Check, Monitor, RotateCcw, SlidersHorizontal, X } from '@/lib/lucide-shim';
 import { type Stored } from '../../lib/notify';
+import type { HubAlert } from '../../lib/hubAlerts';
 import { DoneTick, Glide, EASE } from '../people/PeopleBits';
 import { useInbox, useNoteArrivals, type Folded } from './NotifyContext';
 import { AlarmClock, BellGlyph, Count, Faces, NoteTile, SNOOZES, ago, titleOf } from './NotifyBits';
@@ -26,6 +27,24 @@ const markOffered = () => { try { window.localStorage.setItem(OFFER_KEY, 'done')
 */
 
 type View = 'inbox' | 'done';
+
+/**
+ * Inside a project, what that project is waiting on (components/ops/useHubAlerts):
+ * the bell's first section, "On this project", counted on the bell. They lead to
+ * the screen that owns each one and send nothing.
+ */
+export interface ProjectAlerts {
+  name: string;
+  alerts: HubAlert[];
+  onGo: (route: string) => void;
+  onDismiss: (id: string) => void;
+}
+
+const ALERT_TONE: Record<string, string> = {
+  portal: 'bg-rose-50 text-rose-700 border-rose-100',
+  client: 'bg-amber-50 text-amber-800 border-amber-100',
+  money: 'bg-[#3D52A0]/10 text-[#3D52A0] border-[#3D52A0]/20',
+};
 
 const groupName = (n: Stored) => n.projectName || (n.area === 'team' ? 'People' : n.kind.startsWith('lead.') ? 'Leads' : 'Studio');
 
@@ -110,7 +129,7 @@ const Row: React.FC<{ n: Folded | Stored; view: View; onOpen: () => void }> = ({
   );
 };
 
-export default function NotifyBell({ className = '' }: { className?: string }) {
+export default function NotifyBell({ className = '', project }: { className?: string; project?: ProjectAlerts }) {
   const inbox = useInbox();
   const still = useReducedMotion();
   const [open, setOpen] = useState(false);
@@ -122,15 +141,26 @@ export default function NotifyBell({ className = '' }: { className?: string }) {
   const btn = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
 
-  useNoteArrivals(() => true, () => {
+  const ring = () => {
     setRinging(false);
     requestAnimationFrame(() => setRinging(true));
     window.setTimeout(() => setRinging(false), 760);
-  });
+  };
+  useNoteArrivals(() => true, ring);
+  /* And when something new turns up on this project, never on a re-render. */
+  const alertKey = (project?.alerts || []).map((a) => a.id).join('|');
+  const knownAlerts = useRef<string | null>(null);
+  useEffect(() => {
+    if (knownAlerts.current !== null && alertKey && alertKey !== knownAlerts.current) ring();
+    knownAlerts.current = alertKey;
+  }, [alertKey]);
 
   const place = () => {
     const r = btn.current?.getBoundingClientRect();
-    if (r) setAt({ top: r.bottom + 10, right: Math.max(8, window.innerWidth - r.right - 4) });
+    if (!r) return;
+    /* Under the bell, but never past either edge: on a phone the bell may sit well in from the right. */
+    const width = Math.min(400, window.innerWidth - 16);
+    setAt({ top: r.bottom + 10, right: Math.min(Math.max(8, window.innerWidth - r.right - 4), window.innerWidth - width - 8) });
   };
   useLayoutEffect(() => { if (open) place(); }, [open]);
   useEffect(() => {
@@ -148,6 +178,9 @@ export default function NotifyBell({ className = '' }: { className?: string }) {
 
   if (!inbox) return null;
   const list = view === 'inbox' ? inbox.open : inbox.done.slice(0, 40);
+  const alerts = view === 'inbox' ? project?.alerts || [] : [];
+  const waiting = project?.alerts.length || 0;
+  const count = inbox.unread + waiting;
   const open_ = (n: Folded | Stored) => {
     const members: Stored[] = (n as Folded).members || [n];
     if (members.length > 1) inbox.read(members.map((m) => m.id));
@@ -158,10 +191,10 @@ export default function NotifyBell({ className = '' }: { className?: string }) {
   return (
     <>
       <button ref={btn} type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="dialog"
-        aria-label={inbox.unread ? `Notifications, ${inbox.unread} unread` : 'Notifications'} title="Notifications"
+        aria-label={count ? `Notifications, ${count} for you` : 'Notifications'} title="Notifications"
         className={`relative w-10 h-10 shrink-0 grid place-items-center rounded-xl hover:bg-sky-50 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30 ${ringing ? 'nt-ring' : ''} ${className}`}>
         <BellGlyph />
-        <Count needs={inbox.unread} className="top-0.5 right-0" label={`${inbox.unread} unread`} />
+        <Count needs={count} className="top-0.5 right-0" label={`${count} for you`} />
       </button>
 
       {open && at && createPortal(
@@ -199,7 +232,33 @@ export default function NotifyBell({ className = '' }: { className?: string }) {
                 <button type="button" aria-label="Not now" title="Not now" onClick={() => { markOffered(); setOffer(false); }} className="shrink-0 p-1 rounded-lg text-slate-400 hover:text-slate-700"><X className="w-3.5 h-3.5" /></button>
               </div>
             )}
-            {!list.length ? (
+            {alerts.length > 0 && (
+              <div>
+                <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex justify-between gap-3">
+                  <span className="truncate">On this project · {project!.name}</span><span>{alerts.length}</span>
+                </p>
+                <ul className="divide-y divide-slate-100">
+                  {alerts.map((a, i) => (
+                    <li key={a.id} className="hud-row-in flex gap-3 px-4 py-3" style={{ animationDelay: `${i * 35}ms` }}>
+                      <div className="flex-1 min-w-0">
+                        <span className={`inline-block text-[10px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded border ${ALERT_TONE[a.kind] || ALERT_TONE.portal}`}>{a.label}</span>
+                        <p className="text-sm font-semibold text-slate-800 mt-1">{a.title}</p>
+                        <p className="text-xs text-slate-500">{a.detail}</p>
+                        {a.when && <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">{a.when}</p>}
+                        <div className="flex items-center gap-2 mt-2">
+                          <button type="button" onClick={() => { setOpen(false); project!.onGo(a.goTo); }}
+                            className="pp-press px-3 py-1.5 rounded-lg bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486]">{a.cta}</button>
+                          <button type="button" onClick={() => project!.onDismiss(a.id)}
+                            className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50">Dismiss</button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <p className="px-4 pb-2 text-[11px] text-slate-500">Nothing here is sent to your client. Review it, then release from the Client Portal tab.</p>
+              </div>
+            )}
+            {!list.length && alerts.length ? null : !list.length ? (
               <div className="px-6 py-10 flex flex-col items-center text-center gap-2">
                 <DoneTick size={44} />
                 <p className="font-bold text-slate-800 mt-1">{view === 'inbox' ? 'All caught up' : 'Nothing done yet'}</p>

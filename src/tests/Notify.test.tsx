@@ -75,7 +75,7 @@ describe('notifications in the app', () => {
     setup();
     serve([note('a'), checkin('b', 'Arjun Rao')]);
     expect(screen.getByTestId('tabs').textContent).toBe('ops-desk:1/0 people:0/1');
-    expect(screen.getByRole('button', { name: 'Notifications, 2 unread' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Notifications, 2 for you' })).toBeTruthy();
     expect(document.title).toBe('(2) StudioDesk');
   });
 
@@ -119,7 +119,7 @@ describe('notifications in the app', () => {
     setup();
     const t = Date.now();
     serve([note('m', { at: t }), { ...checkin('k1', 'Arjun Rao'), at: t - 3000 }, { ...checkin('k2', 'Kabir Shah'), at: t - 2000 }, { ...checkin('k3', 'Neha Kulkarni'), at: t - 1000 }]);
-    fireEvent.click(screen.getByRole('button', { name: /Notifications, \d unread/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Notifications, \d for you/ }));
     const panel = screen.getByRole('dialog', { name: 'Notifications' });
     expect(within(panel).getByText('Harmony 704')).toBeTruthy();
     expect(within(panel).getByText('3 people checked in')).toBeTruthy();
@@ -269,6 +269,35 @@ describe('step 3: phones, catch-up and the client portal', () => {
     expect(sinceAway([two[0]], t - 5 * 3600000, t)).toBeNull();
     expect(sinceAway(two, t - 5 * 3600000, t)?.map((n) => n.id)).toEqual(['a', 'b']);
     expect(awaySummary([{ area: 'clients', level: 'needs' }, { area: 'clients', level: 'update' }], true)).toEqual(['1 waiting for you', '1 update']);
+  });
+});
+
+describe('one bell inside a project', () => {
+  const alert = { id: 'a1', kind: 'client', label: 'From the client', title: 'Your client asked about Laminate', detail: '“E2E test selection” — still unanswered.', when: '14 days ago', goTo: 'materials', cta: 'Reply on SOF & Selections', severity: 1 } as any;
+
+  it('counts what the project is waiting on with your notes, and lists it first', async () => {
+    const onGo = vi.fn(), onDismiss = vi.fn();
+    render(<NotifyProvider box="inbox/riya@ff.in" onOpen={vi.fn()}><NotifyBell project={{ name: 'New Project · ABC test client', alerts: [alert], onGo, onDismiss }} /></NotifyProvider>);
+    serve([note('m1')]);
+    const bell = screen.getByRole('button', { name: 'Notifications, 2 for you' });
+    fireEvent.click(bell);
+    const panel = await screen.findByRole('dialog', { name: 'Notifications' });
+    expect(within(panel).getByText(/On this project · New Project · ABC test client/)).toBeTruthy();
+    const text = panel.textContent || '';
+    expect(text.indexOf('Your client asked about Laminate')).toBeLessThan(text.indexOf('Mr Prasad Naik sent you a message'));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Dismiss' }));
+    expect(onDismiss).toHaveBeenCalledWith('a1');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reply on SOF & Selections' }));
+    expect(onGo).toHaveBeenCalledWith('materials');
+  });
+
+  it('with nothing else, the project\'s alerts are the list, not "All caught up"', async () => {
+    render(<NotifyProvider box="inbox/riya@ff.in" onOpen={vi.fn()}><NotifyBell project={{ name: 'Harmony 704', alerts: [alert], onGo: vi.fn(), onDismiss: vi.fn() }} /></NotifyProvider>);
+    serve([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications, 1 for you' }));
+    const panel = await screen.findByRole('dialog', { name: 'Notifications' });
+    expect(within(panel).queryByText('All caught up')).toBeNull();
+    expect(within(panel).getByText('Your client asked about Laminate')).toBeTruthy();
   });
 });
 
