@@ -8,7 +8,7 @@ import {
 import { logFollowUp, raiseEscalation, decideEscalation } from '../../services/opsDeskService';
 import { handoverSlip } from '../../lib/opsAssist';
 
-export interface DeskProject { id: string; name: string; clientName: string; targetHandover?: string | null }
+export interface DeskProject { id: string; name: string; clientName: string; targetHandover?: string | null; clientEmail?: string }
 export interface Person { email: string; name: string }
 
 /* ── The app's modal and controls (DESIGN.md) ──────────────────────────── */

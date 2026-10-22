@@ -58,17 +58,20 @@ function useDeskRows(orgId: string, reviewer: boolean, projectIds: string[], on:
   return all;
 }
 
-function useUpcoming(projectIds: string[], on: boolean): Upcoming[] | null {
+/* The Ops Desk's bookings and the meetings logged on the projects themselves. */
+function useUpcoming(orgId: string, projectIds: string[], names: Map<string, string>, on: boolean): Upcoming[] | null {
   const [list, setList] = useState<Upcoming[] | null>(null);
   const key = projectIds.join('|');
   useEffect(() => {
     if (!on) return;
     let live = true;
-    const load = () => loadVisits(projectIds).then((v) => { if (live) setList(upcoming(v, businessDate(new Date()))); }).catch(() => { if (live) setList([]); });
+    const load = () => loadVisits(projectIds, orgId || undefined)
+      .then((v) => { if (live) setList(upcoming(v.map((x) => (x.projectName ? x : { ...x, projectName: names.get(x.projectId) || '' })), businessDate(new Date()))); })
+      .catch(() => { if (live) setList([]); });
     load();
     const t = window.setInterval(load, 5 * 60000);
     return () => { live = false; window.clearInterval(t); };
-  }, [key, on]);
+  }, [orgId, key, on]); // eslint-disable-line react-hooks/exhaustive-deps
   return list;
 }
 
@@ -85,7 +88,7 @@ export function useHomeFeeds(projects: any[], role: string, roles?: string[]): H
   const ids = useMemo(() => projects.filter(LIVE).map((p: any) => String(p.id)), [projects]);
   const names = useMemo(() => new Map(projects.map((p: any) => [String(p.id), String(p?.context?.name || p?.name || 'Project')])), [projects]);
   const rows = useDeskRows(orgId, reviewer, ids, desk);
-  const visits = useUpcoming(ids, visitsOn);
+  const visits = useUpcoming(orgId, ids, names, visitsOn);
   const viewer = useMemo(() => ({ reviewer, email }), [reviewer, email]);
   return { who, orgId, email, desk, reviewer, people, visitsOn, viewer, rows, visits, names };
 }
