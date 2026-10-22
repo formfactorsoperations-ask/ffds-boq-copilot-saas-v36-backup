@@ -175,6 +175,8 @@ describe('a sheet through review', () => {
     expect(rounds.map((r) => r.status).sort()).toEqual(['APPROVED', 'CHANGES_REQUESTED']);
     const events = (await list(`${DT}/d1/reviewEvents`)).map((e) => e.type).sort();
     expect(events).toEqual(['approved', 'returned', 'submitted', 'submitted', 'uploaded', 'uploaded']);
+    /* A drawing for the client: the Design Head's approval is the studio's, so the Drawings table waits for the client. */
+    expect((await read(`${DT}/d1`)).approvedAt ?? null).toBeNull();
   });
 
   it('the final file sits where no browser can write, and the upload is cleared away', async () => {
