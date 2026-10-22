@@ -89,9 +89,11 @@
     <!--
       The manifest makes "Add to Home Screen" install StudioDesk as an app. On an
       iPhone that is the only way a web app may send phone notifications
-      (components/notify/notifyPush.ts).
+      (components/notify/notifyPush.ts). With credentials, because a browser
+      fetches a manifest without cookies by default, and a password-protected
+      preview then answers with its sign-in page instead of the file.
     -->
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <title>TheStudioDesk</title>
     
     <!-- Fonts -->
