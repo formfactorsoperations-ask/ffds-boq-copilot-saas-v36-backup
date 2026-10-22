@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   mirrorIdOf, requestIdOfMirror, mirrorFields, mirrorWrite, deskPatchFromMirror, deskPatchFromMinutes, mirrorVisitOf, logDayMillis,
+  designCopyIdOf, designCopyWrite, isPlaceholderMeetingId, minutesMeetingFields, logTypeOf, minutedIds,
 } from '../../lib/meetingSync';
+import { leadMeeting, type Lead } from '../../lib/leads';
 import { fromSiteVisit, type VisitRequest } from '../../lib/clientCare';
 
 const NOW = new Date('2026-10-22T10:00:00+05:30').getTime();
@@ -105,5 +107,66 @@ describe('the project\'s copy, back on the desk', () => {
 
   it('starts the minutes from the copy, so they are tied to the meeting', () => {
     expect(mirrorVisitOf(req())).toMatchObject({ id: 'desk-v1', type: 'client_meeting', title: 'BOQ discussion', date: '2026-10-24', startTime: '16:30' });
+  });
+});
+
+describe('meetings held elsewhere, in the project\'s log', () => {
+  const started = new Date('2026-10-20T15:00:00+05:30').getTime();
+  const design = (over: any = {}) => ({
+    id: 'dm1', state: 'OPEN', startedAt: started, closedAt: null, attendees: 'Mr Rao, Mrs Rao', startedBy: { name: 'Kabir', email: 'kabir@s.in' },
+    rooms: [{ room: 'Living' }, { room: 'Kitchen' }], ...over,
+  });
+
+  it('logs a Design Desk review under the id its minutes use, and follows it to its close', () => {
+    expect(designCopyIdOf('dm1')).toBe('ops-design-dm1');
+    const w = designCopyWrite(design(), null, NOW)!;
+    expect(w.kind).toBe('create');
+    expect(w.data).toMatchObject({
+      type: 'client_meeting', title: 'Design review: Living, Kitchen', date: logDayMillis('2026-10-20'), startTime: '15:00',
+      durationMinutes: 60, status: 'active', source: 'design_desk', designMeetingId: 'dm1', location: 'Design Desk', attendees: ['Mr Rao', 'Mrs Rao'],
+    });
+    const copy = stored(w.data);
+    expect(designCopyWrite(design({ state: 'CLOSED', closedAt: started + 95 * 60000 }), copy, NOW)).toEqual({ kind: 'update', data: { durationMinutes: 95 } });
+    expect(designCopyWrite(design({ state: 'CANCELLED' }), copy, NOW)!.data).toMatchObject({ status: 'cancelled', cancelReason: 'Cancelled on the Design Desk.' });
+    /* Logged once: a copy deleted on the project is not put back, and a review cancelled before it was logged is not logged. */
+    expect(designCopyWrite(design({ meetingLogged: true }), null, NOW)).toBeNull();
+    expect(designCopyWrite(design({ state: 'CANCELLED' }), null, NOW)).toBeNull();
+  });
+
+  it('logs the meeting minutes were written for when nobody logged it, once', () => {
+    expect(isPlaceholderMeetingId('ops-1729')).toBe(true);
+    expect(isPlaceholderMeetingId('ops-design-dm1')).toBe(false);
+    expect(isPlaceholderMeetingId('desk-v1')).toBe(false);
+    expect(isPlaceholderMeetingId('abc')).toBe(false);
+    const at = new Date('2026-10-21T11:30:00+05:30').getTime();
+    const f = minutesMeetingFields({ meetingId: 'ops-1729', meetingType: 'internal', meetingTitle: 'Weekly sync', meetingDate: at, meetingEnd: at + 45 * 60000, momRef: 'MOM-2026-041', venue: 'Studio', attendees: [{ name: 'Riya' }, 'Kabir'] }, NOW)!;
+    expect(f).toMatchObject({ type: 'internal_meeting', title: 'Weekly sync', date: logDayMillis('2026-10-21'), startTime: '11:30', durationMinutes: 45, location: 'Studio', attendees: ['Riya', 'Kabir'], source: 'minutes', status: 'active' });
+    expect(minutesMeetingFields({ meetingId: 'ops-1729', meetingLogged: true }, NOW)).toBeNull();
+    expect(minutesMeetingFields({ meetingId: 'sv-real' }, NOW)).toBeNull();
+    expect(logTypeOf('client')).toBe('client_meeting');
+    expect(logTypeOf('measurement_survey')).toBe('measurement_survey');
+  });
+
+  it('knows which meetings have minutes, a design review\'s included', () => {
+    const ids = minutedIds([{ meetingId: 'sv1' }, { meetingId: 'sv2', designReview: { meetingId: 'dm1' } }, {}]);
+    expect([...ids].sort()).toEqual(['ops-design-dm1', 'sv1', 'sv2']);
+  });
+});
+
+describe('a meeting booked with a lead', () => {
+  const lead = (next: any, over: any = {}): Lead => ({
+    id: 'l1', tenantId: 's', createdAt: 1, createdBy: 'riya@s.in', createdByName: 'Riya', ownerEmail: 'riya@s.in', ownerName: 'Riya',
+    people: [{ id: 'p', name: 'Anil Mehta', role: '', phone: '', email: 'anil@x.in', main: true }], home: { type: '', where: '', possession: '', budget: '', scope: [] } as any,
+    source: 'website' as any, sourceNote: '', enquiry: '', stage: 'meeting', lostReason: null, know: {} as any, next, touches: [], firstTouchAt: null, lastTouchAt: null,
+    openRequest: null, projectId: null, updatedAt: 5, updatedBy: 'riya@s.in', ...over,
+  });
+
+  it('is on Meetings & visits, opened on the lead, with its Meet link', () => {
+    const v = leadMeeting(lead({ kind: 'meeting', text: 'Studio meeting', due: '2026-10-24', time: '11:00', mode: 'video', meetUrl: 'https://meet.google.com/a', calendarEventId: 'e', calendarAccount: 'x@g.com' }))!;
+    expect(v).toMatchObject({ id: 'lead:l1', projectId: '', projectName: 'Lead · Anil Mehta', status: 'confirmed', slot: { date: '2026-10-24', time: '11:00' }, mode: 'video', meetUrl: 'https://meet.google.com/a', source: 'lead', leadId: 'l1' });
+    expect(leadMeeting(lead({ kind: 'meeting', text: 'Studio meeting', due: '2026-10-24' }))).toMatchObject({ status: 'requested', slot: null, mode: 'in_person' });
+    expect(leadMeeting(lead({ kind: 'call', text: 'Call', due: '2026-10-24' }))).toBeNull();
+    expect(leadMeeting(lead(null))).toBeNull();
+    expect(leadMeeting(lead({ kind: 'meeting', text: 'x', due: '2026-10-24', time: '11:00' }, { stage: 'lost' }))).toBeNull();
   });
 });

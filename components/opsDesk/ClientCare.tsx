@@ -287,9 +287,11 @@ const STATUS_TINT: Record<VisitStatus, string> = {
   done: 'bg-emerald-100 text-emerald-700', cancelled: 'bg-slate-100 text-slate-600',
 };
 
-export function VisitsView({ visits, projects, canWrite, onAct, now }: {
+export function VisitsView({ visits, projects, canWrite, onAct, onOpenLead, now }: {
   visits: VisitRequest[]; projects: DeskProject[]; canWrite: boolean; now: number;
   onAct: (v: VisitRequest, to: VisitStatus) => void;
+  /** A meeting booked with a lead is changed on the lead. */
+  onOpenLead?: (leadId: string) => void;
 }) {
   const today = dayKey(now);
   const name = (id: string) => projects.find((p) => p.id === id)?.name || '';
@@ -316,9 +318,12 @@ export function VisitsView({ visits, projects, canWrite, onAct, now }: {
                     <p className="text-sm font-semibold text-slate-800">{visitLabel(v.kind)}{v.purpose ? `: ${v.purpose}` : ''}</p>
                     <p className="text-xs text-slate-500"><b className="font-semibold text-slate-700">{v.projectName || name(v.projectId)}</b> · {slotText(v.slot)} · {VISIT_MODES.find((m) => m.id === v.mode)?.label}
                       {v.reschedules ? ` · moved ${v.reschedules} time${v.reschedules === 1 ? '' : 's'}` : ''}</p>
-                    <p className="text-[11px] text-slate-500">{v.source === 'project' ? `Logged on the project's timeline · ${fmtWhen(v.createdAt)}` : `Asked for by the ${v.requestedBy} · logged by ${v.createdByName} · ${fmtWhen(v.createdAt)}`}</p>
+                    <p className="text-[11px] text-slate-500">{v.source === 'project' ? `Logged on the project's timeline · ${fmtWhen(v.createdAt)}`
+                      : v.source === 'lead' ? `Booked with a lead · owner ${v.createdByName}`
+                      : `Asked for by the ${v.requestedBy} · logged by ${v.createdByName} · ${fmtWhen(v.createdAt)}`}</p>
                   </div>
                   {v.source === 'project' && <span className={`${chip} bg-slate-100 text-slate-600`}>On the project</span>}
+                  {v.source === 'lead' && <span className={`${chip} bg-[#3D52A0]/10 text-[#3D52A0]`}>Lead</span>}
                   <span className={`${chip} ${STATUS_TINT[v.status]}`}>{VISIT_STATUS_LABEL[v.status]}</span>
                   {open && v.meetUrl && (
                     <a href={v.meetUrl} target="_blank" rel="noopener noreferrer" className={btnSm}><Video className="w-3.5 h-3.5" />Join</a>
@@ -326,7 +331,10 @@ export function VisitsView({ visits, projects, canWrite, onAct, now }: {
                   {open && canWrite && v.source === 'project' && v.slot && v.slot.date >= today && (
                     <button type="button" className={btnSm} onClick={() => onAct(v, 'confirmed')}>Message</button>
                   )}
-                  {open && canWrite && v.source !== 'project' && (
+                  {v.source === 'lead' && onOpenLead && v.leadId && (
+                    <button type="button" className={btnSm} onClick={() => onOpenLead(v.leadId!)}>Open lead</button>
+                  )}
+                  {open && canWrite && !v.source && (
                     <div className="flex flex-wrap gap-2">
                       {(v.status === 'requested' || v.status === 'rescheduled') && <button type="button" className={btnSm} onClick={() => onAct(v, 'confirmed')}><Check className="w-3.5 h-3.5" />Confirm</button>}
                       {v.status === 'confirmed' && <button type="button" className={btnSm} onClick={() => onAct(v, 'done')}><Check className="w-3.5 h-3.5" />Done</button>}

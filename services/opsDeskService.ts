@@ -13,7 +13,8 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebaseClient';
 import { callGoogleCalendarAPI } from './googleCalendarService';
-import { requestIdOfMirror } from '../lib/meetingSync';
+import { minutedIds, requestIdOfMirror } from '../lib/meetingSync';
+import { isClientFacingMeeting } from '../lib/meetingTypes';
 import type { Escalation, EscalationCategory, FollowUp, NextStep, Outcome, Channel, Subject } from '../lib/opsDesk';
 import { fromSiteVisit, materialise, type Checklist, type ChecklistKind, type VisitRequest } from '../lib/clientCare';
 
@@ -44,7 +45,8 @@ const rows = (snap: any) => snap.docs.map((d: any) => ({ id: d.id, ...d.data() }
 /*
   The meetings and visits logged on the project itself (its timeline, services/siteVisitService),
   which the desk used not to read at all: a meeting booked there never showed up here. One with
-  minutes written (a mom whose meetingId is the meeting) is done, whatever the clock says.
+  minutes written (a mom whose meetingId is the meeting, or a design review's minutes) is done,
+  whatever the clock says.
 */
 const projectVisits = async (tenantId: string, project: { id: string; name: string }) => {
   const base = `organizations/${tenantId}/projects/${project.id}`;
@@ -52,11 +54,13 @@ const projectVisits = async (tenantId: string, project: { id: string; name: stri
     getDocs(collection(db!, `${base}/siteVisits`)).then(rows),
     getDocs(collection(db!, `${base}/moms`)).then(rows).catch(() => [] as any[]),
   ]);
-  const minuted = new Set((moms as any[]).map((m) => String(m.meetingId || '')).filter(Boolean));
+  const minuted = minutedIds(moms as any[]);
   const now = Date.now();
   return (visits as any[])
     /* A desk booking's copy (lib/meetingSync) is already on the desk as the booking itself. */
     .filter((r) => !requestIdOfMirror(r))
+    /* Client care: the meetings and visits with the client, not the studio's internal or vendor ones. */
+    .filter((r) => isClientFacingMeeting(r.type))
     .map((r) => fromSiteVisit(r, project, tenantId, now, minuted.has(String(r.id)))).filter(Boolean) as VisitRequest[];
 };
 

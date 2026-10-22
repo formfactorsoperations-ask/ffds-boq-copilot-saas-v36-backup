@@ -342,8 +342,12 @@ export interface VisitRequest {
   meetUrl?: string | null;
   calendarEventId?: string | null;
   calendarAccount?: string | null;
-  /** 'project': a meeting or visit logged on the project itself (siteVisits), shown here and changed there. */
-  source?: 'project';
+  /**
+   * 'project': a meeting or visit logged on the project itself (siteVisits), shown here and changed there.
+   * 'lead': a meeting booked with a lead (lib/leads leadMeeting), changed on the lead.
+   */
+  source?: 'project' | 'lead';
+  leadId?: string;
 }
 
 export const VISIT_KINDS: { id: VisitKind; label: string }[] = [

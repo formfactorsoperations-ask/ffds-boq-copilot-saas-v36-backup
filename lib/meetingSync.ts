@@ -174,3 +174,125 @@ export function mirrorVisitOf(r: Pick<VisitRequest, 'id' | 'kind' | 'purpose' | 
     phaseStepNumber: 0,
   };
 }
+
+/* ── Meetings held elsewhere, in the project's log ───────────────────────── */
+
+/*
+  Two more kinds of meeting used to be missing from the project's log, and so
+  from the Ops Desk:
+    - a design review held on the Design Desk (designMeetings), and
+    - minutes written for a meeting nobody logged (from Meeting prep, the
+      Minutes tab or the action tracker), whose meetingId is a placeholder
+      "ops-{time}" that pointed at nothing.
+  The server adds each to the log once (functions/src/meetingSync.ts) and
+  marks its source `meetingLogged`, so a copy deleted on the project stays
+  deleted. The copy's id is the one the minutes already use, so the two pair.
+*/
+
+export const designCopyIdOf = (designMeetingId: string) => `ops-design-${designMeetingId}`;
+/** A placeholder meeting id that minutes were started with, with no meeting behind it. */
+export const isPlaceholderMeetingId = (id: unknown) => /^ops-/.test(String(id || '')) && !/^ops-design-/.test(String(id || ''));
+
+const istParts = (ms: number) => {
+  const iso = new Date(ms + 5.5 * 3600000).toISOString();
+  return { day: iso.slice(0, 10), time: iso.slice(11, 16) };
+};
+
+/** The log's type for a meeting type the minutes carry. */
+export function logTypeOf(meetingType: unknown): string {
+  const t = String(meetingType || '').toLowerCase();
+  if (t === 'internal_meeting' || t === 'internal' || t === 'internal_review') return 'internal_meeting';
+  if (t === 'vendor_meeting' || t === 'vendor' || t === 'contractor_meeting') return 'vendor_meeting';
+  if (t === 'site_visit' || t === 'site_coordination') return 'site_visit';
+  if (t === 'measurement_survey') return 'measurement_survey';
+  return 'client_meeting';
+}
+
+/** A design review on the Design Desk, as the project's log keeps it. Null when it should not be there. */
+export function designCopyFields(m: any): Record<string, any> | null {
+  if (!m?.id || !Number(m.startedAt) || !['OPEN', 'CLOSED', 'CANCELLED'].includes(String(m.state))) return null;
+  const { day, time } = istParts(Number(m.startedAt));
+  const rooms = (Array.isArray(m.rooms) ? m.rooms : []).map((r: any) => String(r?.room || '')).filter(Boolean);
+  const minutes = m.closedAt && Number(m.closedAt) > Number(m.startedAt) ? Math.max(15, Math.round((Number(m.closedAt) - Number(m.startedAt)) / 60000)) : 60;
+  return {
+    type: 'client_meeting',
+    title: `Design review${rooms.length ? `: ${rooms.slice(0, 4).join(', ')}${rooms.length > 4 ? ` and ${rooms.length - 4} more` : ''}` : ''}`.slice(0, 300),
+    date: logDayMillis(day),
+    startTime: time,
+    durationMinutes: minutes,
+    status: m.state === 'CANCELLED' ? 'cancelled' : 'active',
+    designMeetingId: String(m.id),
+    source: 'design_desk',
+  };
+}
+
+export function designCopyCreateFields(m: any, now: number): Record<string, any> {
+  const names = String(m?.attendees || '').split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean).slice(0, 20);
+  return {
+    phaseStepNumber: 0, phaseTitle: '', attendees: names, attendeeEmails: names.map(() => ''),
+    notes: `Held on the Design Desk${m?.startedBy?.name ? ` by ${m.startedBy.name}` : ''}.`,
+    location: 'Design Desk', isVirtual: false, meetingMode: 'in_person', meetingLink: null,
+    loggedBy: String(m?.startedBy?.email || ''), loggedAt: now,
+    googleCalendarEventId: null, googleMeetUrl: null, calendarSynced: false, calendarSyncError: null,
+    linkedSofItemIds: [], linkedDecisionIds: [], momData: null,
+  };
+}
+
+/** What to write to a design review's copy: the whole copy once, then only what changed. */
+export function designCopyWrite(m: any, existing: Record<string, any> | null, now: number):
+  { kind: 'create'; data: Record<string, any> } | { kind: 'update'; data: Record<string, any> } | null {
+  const want = designCopyFields(m);
+  if (!want) return null;
+  if (!existing) {
+    if (m.meetingLogged || want.status === 'cancelled') return null;
+    return { kind: 'create', data: { ...designCopyCreateFields(m, now), ...want } };
+  }
+  const diff: Record<string, any> = {};
+  for (const [k, v] of Object.entries(want)) {
+    const have = k === 'date' ? millisOf(existing.date) : existing[k];
+    if (!same(have, v)) diff[k] = v;
+  }
+  if (diff.status === 'cancelled') Object.assign(diff, { cancelledAt: now, cancelReason: 'Cancelled on the Design Desk.' });
+  return Object.keys(diff).length ? { kind: 'update', data: diff } : null;
+}
+
+/** The meeting minutes were written for, when nobody logged it. Null when they need none. */
+export function minutesMeetingFields(mom: any, now: number): Record<string, any> | null {
+  if (!mom || mom.meetingLogged || !isPlaceholderMeetingId(mom.meetingId)) return null;
+  const at = Number(mom.meetingDate) || Number(mom.createdAt) || now;
+  const { day, time } = istParts(at);
+  const end = Number(mom.meetingEnd);
+  const people = (Array.isArray(mom.attendees) ? mom.attendees : []).map((a: any) => (typeof a === 'string' ? a : String(a?.name || ''))).filter(Boolean).slice(0, 30);
+  return {
+    type: logTypeOf(mom.meetingType),
+    title: String(mom.meetingTitle || 'Meeting').slice(0, 300),
+    date: logDayMillis(day),
+    startTime: time,
+    durationMinutes: end > at ? Math.round((end - at) / 60000) : 60,
+    phaseStepNumber: Number(mom.stage) || 0,
+    phaseTitle: '',
+    attendees: people,
+    attendeeEmails: people.map(() => ''),
+    notes: `Logged from its minutes${mom.momRef ? ` (${mom.momRef})` : ''}.`,
+    location: String(mom.venue || ''),
+    isVirtual: false,
+    meetingMode: 'in_person',
+    meetingLink: null,
+    loggedBy: String(mom.preparedBy?.email || mom.createdBy || ''),
+    loggedAt: now,
+    googleCalendarEventId: null, googleMeetUrl: null, calendarSynced: false, calendarSyncError: null,
+    linkedSofItemIds: [], linkedDecisionIds: [], momData: null,
+    status: 'active',
+    source: 'minutes',
+  };
+}
+
+/** The log ids a project's minutes stand for: their meeting, and a design review they came from. */
+export function minutedIds(moms: any[]): Set<string> {
+  const out = new Set<string>();
+  for (const m of moms || []) {
+    if (m?.meetingId) out.add(String(m.meetingId));
+    if (m?.designReview?.meetingId) out.add(designCopyIdOf(String(m.designReview.meetingId)));
+  }
+  return out;
+}

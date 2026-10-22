@@ -1908,7 +1908,9 @@ export interface SiteVisit {
     meetingLink?: string | null;
     /** Booked on the Ops Desk: the booking it is kept in step with (lib/meetingSync). */
     visitRequestId?: string | null;
-    source?: 'ops_desk';
+    /** Where a meeting the studio did not log here came from (lib/meetingSync). */
+    source?: 'ops_desk' | 'design_desk' | 'minutes';
+    designMeetingId?: string;
 }
 
 export interface MaterialLogItem {

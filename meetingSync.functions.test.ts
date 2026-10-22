@@ -104,4 +104,39 @@ describe('a meeting booked on the Ops Desk', () => {
     await new Promise((r) => setTimeout(r, 2000));
     expect(await read('projects/p1/visitRequests/own')).toBeNull();
   });
+
+  it('stays deleted from the log when deleted there', async () => {
+    await write((db) => setDoc(doc(db, 'projects/p1/visitRequests/v6'), booking()));
+    await waitFor(() => read(`${LOG}/desk-v6`));
+    await write((db) => deleteDoc(doc(db, `${LOG}/desk-v6`)));
+    await waitFor(async () => (await read('projects/p1/visitRequests/v6'))?.status === 'cancelled');
+    expect(await read(`${LOG}/desk-v6`)).toBeNull();
+  });
+});
+
+describe('meetings held elsewhere', () => {
+  const ORG = `organizations/${STUDIO}/projects/p1`;
+
+  it('a Design Desk review is logged when it starts, and follows its close', async () => {
+    const startedAt = Date.parse('2026-10-20T15:00:00+05:30');
+    await write((db) => setDoc(doc(db, `${ORG}/designMeetings/dm1`), { state: 'OPEN', rev: 1, startedAt, closedAt: null, attendees: 'Mr Rao', rooms: [{ room: 'Living' }], startedBy: { name: 'Kabir', email: 'k@m.com' } }));
+    const copy = await waitFor(() => read(`${LOG}/ops-design-dm1`));
+    expect(copy).toMatchObject({ type: 'client_meeting', title: 'Design review: Living', startTime: '15:00', source: 'design_desk', status: 'active' });
+    expect((await waitFor(async () => { const m = await read(`${ORG}/designMeetings/dm1`); return m?.meetingLogged && m; })).rev).toBe(1);
+    await write((db) => updateDoc(doc(db, `${ORG}/designMeetings/dm1`), { state: 'CLOSED', closedAt: startedAt + 80 * 60000, rev: 2 }));
+    await waitFor(async () => (await read(`${LOG}/ops-design-dm1`))?.durationMinutes === 80);
+  });
+
+  it('minutes written for a meeting nobody logged put the meeting in the log, once', async () => {
+    const at = Date.parse('2026-10-21T11:30:00+05:30');
+    await write((db) => setDoc(doc(db, `${ORG}/moms/m9`), { meetingId: 'ops-1729', meetingType: 'client_meeting', meetingTitle: 'Tile selection', meetingDate: at, momRef: 'MOM-2026-041', status: 'draft' }));
+    const copy = await waitFor(() => read(`${LOG}/ops-1729`));
+    expect(copy).toMatchObject({ type: 'client_meeting', title: 'Tile selection', startTime: '11:30', source: 'minutes' });
+    await waitFor(async () => (await read(`${ORG}/moms/m9`))?.meetingLogged);
+    /* Deleted from the log, it stays deleted when the minutes change again. */
+    await write((db) => deleteDoc(doc(db, `${LOG}/ops-1729`)));
+    await write((db) => updateDoc(doc(db, `${ORG}/moms/m9`), { status: 'pending_review' }));
+    await new Promise((r) => setTimeout(r, 2500));
+    expect(await read(`${LOG}/ops-1729`)).toBeNull();
+  });
 });

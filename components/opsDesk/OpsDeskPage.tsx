@@ -17,7 +17,7 @@ import {
   DESK_SCOPES, inDeskScope, scopeCounts, doneToday, dayRing, withSnoozes, liveSnoozes, teamRows, personQueue, weekNumbers, guideProgress,
   type DeskScope, type GuideStep, type GuideStepId,
 } from '../../lib/opsTeam';
-import { leadQueue, leadToProject, isOpen as leadIsOpen, type Lead } from '../../lib/leads';
+import { leadQueue, leadToProject, leadMeeting, isOpen as leadIsOpen, type Lead } from '../../lib/leads';
 import { loadProjectOps, loadStudioOps, markNextDone, closeEscalation, logFollowUp, type OpsMom } from '../../services/opsDeskService';
 import { loadLeads, saveLead, withTouch, deleteLead } from '../../services/leadsService';
 import {
@@ -230,7 +230,11 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
     /* "Later today" sends a row to the end of its day; the order is otherwise the desk's. */
     return shown.map((q, i) => ({ q, i })).sort((a, b) => order[a.q.group] - order[b.q.group] || Number(bumped.includes(a.q.id)) - Number(bumped.includes(b.q.id)) || a.i - b.i).map((x) => x.q);
   }, [now, myEmail, isLead, fu, waiting, mm, esc, careItems, leads, record?.snoozes, bumped]);
-  const allVisits = useMemo(() => Object.values(care).flatMap((c: ProjectCare) => c.visits), [care]);
+  /* The projects' meetings and visits, and the meetings booked with leads (lib/leads leadMeeting). */
+  const allVisits = useMemo(() => [
+    ...Object.values(care).flatMap((c: ProjectCare) => c.visits),
+    ...(leads.map(leadMeeting).filter(Boolean) as VisitRequest[]),
+  ], [care, leads]);
   const done = useMemo(() => doneToday(fu, myEmail, now), [fu, myEmail, now]);
   const ring = dayRing(queue, done);
 
@@ -668,7 +672,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
               <div className="flex flex-col gap-4">
                 {canWrite && <button type="button" className={`${btnSec} self-start`} onClick={() => setVisitAct({ visit: null, to: null })}><Plus className="w-4 h-4" />Log a request</button>}
                 {canWrite && <CalendarAccountBar onError={setError} />}
-                {loading && !allVisits.length ? <Loading /> : <VisitsView visits={allVisits} projects={deskProjects as DeskProject[]} canWrite={canWrite} now={now} onAct={(visit, to) => setVisitAct({ visit, to })} />}
+                {loading && !allVisits.length ? <Loading /> : <VisitsView visits={allVisits} projects={deskProjects as DeskProject[]} canWrite={canWrite} now={now} onAct={(visit, to) => setVisitAct({ visit, to })} onOpenLead={openLead} />}
               </div>
             </Panel>
           )}
