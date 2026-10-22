@@ -19,8 +19,7 @@ import {
   Activity
 } from 'lucide-react';
 import { fetchUpcomingVisitsFromCalendar } from '../services/siteVisitService';
-import { getCachedAccessToken } from '../services/authService';
-import { connectGoogleCalendar } from '../services/googleCalendarService';
+import { connectGoogleCalendar, isGoogleCalendarConnected, GoogleCalendarError } from '../services/googleCalendarService';
 
 export const SiteActivityWidget = ({ 
   projectId, 
@@ -44,7 +43,7 @@ export const SiteActivityWidget = ({
   const [visits, setVisits] = useState<SiteVisit[]>([]);
   const [upcomingGcalEvents, setUpcomingGcalEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hasToken, setHasToken] = useState(!!getCachedAccessToken());
+  const [hasToken, setHasToken] = useState(isGoogleCalendarConnected());
 
   useEffect(() => {
     if (!projectId?.trim() || !studioId?.trim()) return;
@@ -76,8 +75,8 @@ export const SiteActivityWidget = ({
   const handleConnect = async () => {
     try {
       if (await connectGoogleCalendar()) setHasToken(true);
-    } catch {
-      alert("Failed to connect Google Calendar");
+    } catch (e) {
+      alert(e instanceof GoogleCalendarError ? e.message : "Failed to connect Google Calendar");
     }
   };
 

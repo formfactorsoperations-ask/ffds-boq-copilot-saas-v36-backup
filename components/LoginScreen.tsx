@@ -6,7 +6,6 @@ import { auth, db } from '../services/firebaseClient';
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, User, updatePassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { syncStudioAccess, NO_STUDIO_MESSAGE } from '../services/studioAccess';
-import { setCachedAccessToken } from '../services/authService';
 import { StudioDeskLogo, TervaroMark } from './brand/StudioDeskLogo';
 import { BRAND } from '../lib/brand';
 import { signInMessage } from '../lib/signInErrors';
@@ -153,13 +152,9 @@ export default function LoginScreen({ onLoginOps, mustSetPasswordFor, onPassword
         setIsLoading(true);
         try {
             const provider = new GoogleAuthProvider();
-            // Removed calendar scope here to prevent login failures during API propagation
+            // No calendar scope here, so this token can't call Google Calendar and isn't cached for it:
+            // calendar access comes from Connect Google Calendar (services/googleCalendarService.ts).
             const userCredential = await signInWithPopup(auth, provider);
-            
-            const credential = GoogleAuthProvider.credentialFromResult(userCredential);
-            if (credential?.accessToken) {
-                setCachedAccessToken(credential.accessToken);
-            }
             
             const user = userCredential.user;
             
