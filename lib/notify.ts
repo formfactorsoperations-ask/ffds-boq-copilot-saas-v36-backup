@@ -90,6 +90,8 @@ export const AREA_TAB: Record<NoteArea, string> = {
 };
 
 const LEADS = ['Owner', 'Admin', 'Ops Director'];
+/** Told of every studio-wide note, whatever it is addressed to. */
+const OVERSEERS = ['Owner', 'Admin', 'Super Admin'];
 const clip = (s: unknown, n = 140) => {
   const t = String(s ?? '').replace(/\s+/g, ' ').trim();
   return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t;
@@ -297,6 +299,10 @@ export function resolveAudience(
     const pool = seat === 'site' ? [...site, ...assigned] : assigned;
     const role = seat === 'ops' ? 'Client Relations' : seat === 'design' ? 'Designer' : 'Site Supervisor';
     for (const e of pool) if (has(e, role)) out.add(e);
+  }
+  /* The studio's Owners and Admins hear everything the studio hears (a Super Admin sits on the team as Admin, functions/src/access.ts). Notes for one person stay theirs. */
+  if ((to.roles || []).length || (to.project || []).length) {
+    for (const m of team) if (rolesOfRow(m).some((r) => OVERSEERS.includes(r))) out.add(inboxKey(m.email));
   }
   for (const e of to.emails || []) out.add(inboxKey(e));
   const actor = inboxKey(p.actorEmail || '');

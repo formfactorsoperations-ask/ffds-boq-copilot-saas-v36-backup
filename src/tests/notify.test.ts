@@ -19,12 +19,20 @@ const team = [
 const project = { actor: 'Mr Prasad Naik', projectId: 'p1', projectName: 'Harmony 704' };
 
 describe('who is told', () => {
-  it('a client message goes to Client Relations on the project and the Ops Director, nobody else', () => {
+  it('a client message goes to Client Relations on the project, the Ops Director, and the studio\'s Owners and Admins', () => {
     const d = clientActionDraft({ type: 'sendMessage', text: 'Please keep the wardrobe in walnut.' }, project)!;
     expect(d.level).toBe('needs');
     expect(d.route).toBe('comms-tracker');
     const to = resolveAudience(d.to, { team, assigned: ['riya@ff.in', 'arjun@ff.in'] });
-    expect(to.sort()).toEqual(['meera@ff.in', 'riya@ff.in']);
+    expect(to.sort()).toEqual(['meera@ff.in', 'riya@ff.in', 'tanvi@ff.in', 'vikram@ff.in']);
+  });
+
+  it('a Super Admin on the team hears every studio-wide note, but not notes meant for one person', () => {
+    const withSuper = [...team, { id: 'tm-sa', name: 'Anish K', email: 'anish@ff.in', role: 'Ops Director', roles: ['Super Admin'] }];
+    expect(resolveAudience({ roles: ['Design Head'] }, { team: withSuper })).toContain('anish@ff.in');
+    expect(resolveAudience({ project: ['site'] }, { team: withSuper, site: ['sanjay@ff.in'] })).toContain('anish@ff.in');
+    expect(resolveAudience({ emails: ['riya@ff.in'] }, { team: withSuper })).toEqual(['riya@ff.in']);
+    expect(resolveAudience({ roles: ['Design Head'] }, { team: withSuper, actorEmail: 'anish@ff.in' })).not.toContain('anish@ff.in');
   });
 
   it('reads a person\'s extra roles, lowercases addresses and never includes clients', () => {
@@ -34,7 +42,7 @@ describe('who is told', () => {
 
   it('never tells the person who made the change', () => {
     const to = resolveAudience({ roles: ['Ops Director', 'Owner'] }, { team, actorEmail: 'MEERA@ff.in' });
-    expect(to).toEqual(['vikram@ff.in']);
+    expect(to.sort()).toEqual(['tanvi@ff.in', 'vikram@ff.in']);
   });
 
   it('drops addresses that are not on the team', () => {
@@ -44,7 +52,7 @@ describe('who is told', () => {
   it('finds Site Supervisors by the site list as well as the assignment', () => {
     const d = siteDraft({ type: 'resolveBlocker', blockerId: 'b1' }, { ...project, actor: 'Meera Das' })!;
     const to = resolveAudience(d.to, { team, assigned: ['riya@ff.in'], site: ['sanjay@ff.in'], actorEmail: 'meera@ff.in' });
-    expect(to.sort()).toEqual(['riya@ff.in', 'sanjay@ff.in']);
+    expect(to.sort()).toEqual(['riya@ff.in', 'sanjay@ff.in', 'tanvi@ff.in', 'vikram@ff.in']);
   });
 });
 
@@ -68,9 +76,9 @@ describe('client portal actions', () => {
     expect(line.startsWith('“')).toBe(true);
   });
 
-  it('a question about a finish goes to the project\'s Designer and Client Relations', () => {
+  it('a question about a finish goes to the project\'s Designer and Client Relations, and the Owners and Admins', () => {
     const d = clientActionDraft({ type: 'querySelection', question: 'Matte or gloss?' }, project)!;
-    expect(resolveAudience(d.to, { team, assigned: ['arjun@ff.in', 'kabir@ff.in'] }).sort()).toEqual(['arjun@ff.in', 'kabir@ff.in']);
+    expect(resolveAudience(d.to, { team, assigned: ['arjun@ff.in', 'kabir@ff.in'] }).sort()).toEqual(['arjun@ff.in', 'kabir@ff.in', 'tanvi@ff.in', 'vikram@ff.in']);
   });
 });
 
@@ -130,9 +138,9 @@ describe('the other server calls', () => {
     expect(siteDraft({ type: 'material' }, { ...project, actor: 'Sanjay K' })).toBeNull();
   });
 
-  it('a website enquiry goes to its owner and the Ops Director', () => {
+  it('a website enquiry goes to its owner, the Ops Director, and the Owners and Admins', () => {
     const d = leadDraft({ name: 'Aditi Joshi', wants: 'Kitchen, Wardrobes', home: '3 BHK, Baner' }, 'Riya@ff.in');
-    expect(resolveAudience(d.to, { team }).sort()).toEqual(['meera@ff.in', 'riya@ff.in']);
+    expect(resolveAudience(d.to, { team }).sort()).toEqual(['meera@ff.in', 'riya@ff.in', 'tanvi@ff.in', 'vikram@ff.in']);
     expect(d.line).toBe('Kitchen, Wardrobes · 3 BHK, Baner');
   });
 });
