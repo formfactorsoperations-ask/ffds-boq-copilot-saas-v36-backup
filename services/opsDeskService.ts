@@ -42,13 +42,19 @@ const rows = (snap: any) => snap.docs.map((d: any) => ({ id: d.id, ...d.data() }
 
 /*
   The meetings and visits logged on the project itself (its timeline, services/siteVisitService),
-  which the desk used not to read at all: a meeting booked there never showed up here.
+  which the desk used not to read at all: a meeting booked there never showed up here. One with
+  minutes written (a mom whose meetingId is the meeting) is done, whatever the clock says.
 */
-const projectVisits = (tenantId: string, project: { id: string; name: string }) =>
-  getDocs(collection(db!, `organizations/${tenantId}/projects/${project.id}/siteVisits`)).then((snap) => {
-    const now = Date.now();
-    return (rows(snap) as any[]).map((r) => fromSiteVisit(r, project, tenantId, now)).filter(Boolean) as VisitRequest[];
-  });
+const projectVisits = async (tenantId: string, project: { id: string; name: string }) => {
+  const base = `organizations/${tenantId}/projects/${project.id}`;
+  const [visits, moms] = await Promise.all([
+    getDocs(collection(db!, `${base}/siteVisits`)).then(rows),
+    getDocs(collection(db!, `${base}/moms`)).then(rows).catch(() => [] as any[]),
+  ]);
+  const minuted = new Set((moms as any[]).map((m) => String(m.meetingId || '')).filter(Boolean));
+  const now = Date.now();
+  return (visits as any[]).map((r) => fromSiteVisit(r, project, tenantId, now, minuted.has(String(r.id)))).filter(Boolean) as VisitRequest[];
+};
 
 /** One project's follow-ups, escalations, client decisions and minutes. */
 export async function loadProjectOps(tenantId: string, project: { id: string; name: string }, decisionsOnly = false): Promise<ProjectOps> {
