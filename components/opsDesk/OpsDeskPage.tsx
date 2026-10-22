@@ -35,6 +35,7 @@ import { handoverSlip } from '../../lib/opsAssist';
 import { clientContactOf } from '../../lib/minutes';
 import { CapturePanel, AskProjectPanel, MeetingPrepPanel } from './OpsAssist';
 import { CalendarAccountBar } from './MeetLink';
+import { mirrorVisitOf } from '../../lib/meetingSync';
 import { clientPulse, askPrompts, careQueue, type AskKind, type Checklist, type ChecklistKind, type VisitRequest, type VisitStatus } from '../../lib/clientCare';
 import { PulseList, AskSheet, ChecklistsView, VisitsView, VisitSheet, askReasonOf, type PulseRow } from './ClientCare';
 import {
@@ -238,7 +239,8 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
   const [escFor, setEscFor] = useState<LogPrefill | null>(null);
   const [deciding, setDeciding] = useState<Escalation | null>(null);
   const [reviewing, setReviewing] = useState<OpsMom | null>(null);
-  const [writingFor, setWritingFor] = useState<{ projectId: string; notes: string } | null>(null);
+  /* `visit`: the desk booking's meeting in the project's log (lib/meetingSync), so the minutes are tied to it. */
+  const [writingFor, setWritingFor] = useState<{ projectId: string; notes: string; visit?: ReturnType<typeof mirrorVisitOf> } | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [askFor, setAskFor] = useState<{ projectId: string; kind: AskKind } | null>(null);
   const [visitAct, setVisitAct] = useState<{ visit: VisitRequest | null; to: VisitStatus | null; projectId?: string } | null>(null);
@@ -726,7 +728,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
             setVisitAct(null);
             go('visits');
             load();
-            if (r.status === 'done' && canWrite) setWritingFor({ projectId: r.projectId, notes: r.notes });
+            if (r.status === 'done' && canWrite) setWritingFor({ projectId: r.projectId, notes: r.notes, visit: r.visit ? mirrorVisitOf(r.visit) : undefined });
           }} />
       )}
       {deciding && <DecideEscalationPanel escalation={deciding} me={me} onClose={() => setDeciding(null)} onSaved={() => { setDeciding(null); load(); }} />}
@@ -738,7 +740,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
       )}
       {writingFor && (
         <MomCaptureModal
-          visit={{ id: `ops-${Date.now()}`, type: 'client_meeting', title: 'Client meeting', date: Date.now(), notes: writingFor.notes, attendees: [] } as any}
+          visit={(writingFor.visit ? { ...writingFor.visit, notes: writingFor.notes } : { id: `ops-${Date.now()}`, type: 'client_meeting', title: 'Client meeting', date: Date.now(), notes: writingFor.notes, attendees: [] }) as any}
           projectId={writingFor.projectId} studioId={tenantId} projectContextName={projectName(writingFor.projectId)}
           onClose={() => setWritingFor(null)}
           onSuccess={async (momId) => {

@@ -353,7 +353,7 @@ export function VisitSheet({ projects, visit, to, prefillProjectId, me, tenantId
   prefillProjectId?: string;
   me: Person; tenantId: string; studioName: string;
   onClose: () => void;
-  onSaved: (v: { projectId: string; status: VisitStatus; notes: string }) => void;
+  onSaved: (v: { projectId: string; status: VisitStatus; notes: string; visit?: VisitRequest }) => void;
 }) {
   const creating = !visit;
   const [projectId, setProjectId] = useState(visit?.projectId || prefillProjectId || projects[0]?.id || '');
@@ -378,14 +378,16 @@ export function VisitSheet({ projects, visit, to, prefillProjectId, me, tenantId
   /* Google Calendar and Meet (components/opsDesk/MeetLink.tsx): a new event, the event moved, or taken off. */
   const calendars = useCalendarAccounts();
   const fromDesk = !visit?.source;
-  const eventAccount = fromDesk && visit?.calendarEventId ? visit.calendarAccount || null : null;
+  /* An event sent from the project (lib/meetingSync) has no account here: it is moved and cancelled there. */
+  const hasEvent = fromDesk && !!visit?.calendarEventId;
+  const eventAccount = hasEvent ? visit!.calendarAccount || null : null;
   const slotMoved = !!slot && !!visit?.slot && (visit.slot.date !== slot.date || visit.slot.time !== slot.time);
   const calMode: 'create' | 'move' | 'remove' | null =
     !fromDesk ? null
     : creating ? (slot ? 'create' : null)
-    : sameSlot ? (mode === 'video' && !visit?.meetUrl ? 'create' : null)
+    : sameSlot ? (mode === 'video' && !visit?.meetUrl && !hasEvent ? 'create' : null)
     : to === 'cancelled' ? (eventAccount ? 'remove' : null)
-    : needsSlot ? (eventAccount ? (slotMoved ? 'move' : null) : slot ? 'create' : null)
+    : needsSlot ? (hasEvent ? (eventAccount && slotMoved ? 'move' : null) : slot ? 'create' : null)
     : null;
   const [calOn, setCalOn] = useState(() => (eventAccount ? true : (visit?.mode || 'in_person') === 'video'));
   useEffect(() => { if (creating) setCalOn(mode === 'video'); }, [mode, creating]);
@@ -406,7 +408,7 @@ export function VisitSheet({ projects, visit, to, prefillProjectId, me, tenantId
     : creating ? 'Log a meeting or visit request'
     : sameSlot ? 'Message about this visit'
     : to === 'confirmed' ? 'Confirm the time' : to === 'rescheduled' ? 'Put a new time to the client' : to === 'done' ? 'Mark it done' : 'Cancel the request';
-  const result = () => ({ projectId: project?.id || projectId, status: target, notes: `${visitLabel(kind)}${purpose ? `: ${purpose}` : ''}${slot ? `, ${slotText(slot)}` : ''}${note.trim() ? `\n\n${note.trim()}` : ''}` });
+  const result = () => ({ projectId: project?.id || projectId, status: target, visit: visit ? { ...visit, slot: slot || visit.slot } : undefined, notes: `${visitLabel(kind)}${purpose ? `: ${purpose}` : ''}${slot ? `, ${slotText(slot)}` : ''}${note.trim() ? `\n\n${note.trim()}` : ''}` });
 
   /** The calendar part of a save. Signing in comes first, so the browser lets its window open. */
   const runCalendar = async (): Promise<{ cal: VisitCalendar | null; removed: boolean } | null> => {

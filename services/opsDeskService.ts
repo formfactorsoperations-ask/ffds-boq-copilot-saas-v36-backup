@@ -13,6 +13,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebaseClient';
 import { callGoogleCalendarAPI } from './googleCalendarService';
+import { requestIdOfMirror } from '../lib/meetingSync';
 import type { Escalation, EscalationCategory, FollowUp, NextStep, Outcome, Channel, Subject } from '../lib/opsDesk';
 import { fromSiteVisit, materialise, type Checklist, type ChecklistKind, type VisitRequest } from '../lib/clientCare';
 
@@ -53,7 +54,10 @@ const projectVisits = async (tenantId: string, project: { id: string; name: stri
   ]);
   const minuted = new Set((moms as any[]).map((m) => String(m.meetingId || '')).filter(Boolean));
   const now = Date.now();
-  return (visits as any[]).map((r) => fromSiteVisit(r, project, tenantId, now, minuted.has(String(r.id)))).filter(Boolean) as VisitRequest[];
+  return (visits as any[])
+    /* A desk booking's copy (lib/meetingSync) is already on the desk as the booking itself. */
+    .filter((r) => !requestIdOfMirror(r))
+    .map((r) => fromSiteVisit(r, project, tenantId, now, minuted.has(String(r.id)))).filter(Boolean) as VisitRequest[];
 };
 
 /** One project's follow-ups, escalations, client decisions and minutes. */

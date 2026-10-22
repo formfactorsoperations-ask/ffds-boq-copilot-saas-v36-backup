@@ -248,7 +248,7 @@ function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, 
            <div>
              <h3 className="font-bold text-slate-900">{visit.title}</h3>
              <div className="flex items-center gap-2 mt-0.5 mt-1 text-xs font-semibold text-slate-500 tracking-wide uppercase">
-                <span>Phase: {visit.phaseTitle} (Step {visit.phaseStepNumber})</span>
+                <span>{visit.source === 'ops_desk' && !visit.phaseTitle ? 'Booked on the Ops Desk' : `Phase: ${visit.phaseTitle} (Step ${visit.phaseStepNumber})`}</span>
                 {visit.status === 'cancelled' && <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded">Cancelled</span>}
              </div>
            </div>
@@ -382,6 +382,18 @@ function VisitCard({ visit, mom, settings, projectId, studioId, projectContext, 
                     className="px-3 py-1 bg-white text-slate-700 rounded-md border shadow-sm hover:bg-slate-50 disabled:opacity-50 font-bold text-xs"
                   >
                     {isRetrying ? 'Retrying...' : 'Retry Calendar Sync'}
+                  </button>
+                </div>
+              ) : visit.source === 'ops_desk' ? (
+                /* Booked on the Ops Desk without a calendar invite: nothing is syncing. */
+                <div className="flex flex-col items-start gap-2 w-full">
+                  <span className="text-xs font-medium text-slate-500">Not on Google Calendar</span>
+                  <button
+                    onClick={handleRetrySync}
+                    disabled={isRetrying}
+                    className="px-3 py-1 bg-white text-slate-700 rounded-md border shadow-sm hover:bg-slate-50 disabled:opacity-50 font-bold text-xs"
+                  >
+                    {isRetrying ? 'Adding...' : 'Add to Calendar'}
                   </button>
                 </div>
               ) : (

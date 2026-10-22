@@ -1906,6 +1906,9 @@ export interface SiteVisit {
     meetingMode?: 'in_person' | 'google_meet' | 'link' | 'phone';
     /** A Zoom / Teams link, when meetingMode is 'link'. */
     meetingLink?: string | null;
+    /** Booked on the Ops Desk: the booking it is kept in step with (lib/meetingSync). */
+    visitRequestId?: string | null;
+    source?: 'ops_desk';
 }
 
 export interface MaterialLogItem {
