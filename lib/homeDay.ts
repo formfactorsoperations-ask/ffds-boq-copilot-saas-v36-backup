@@ -105,8 +105,11 @@ const loading = (kind: PinKind, i: DayInput) =>
     : kind === 'attention' ? !i.attention : !i.rows || !i.viewer;
 const DONE: Record<string, string> = { done: 'Day done', off: 'Day off' };
 
-/** The pins this person sees, heaviest first; equal weights keep the usual order. */
-export function dayOrder(i: DayInput): { pins: DayPin[]; toDo: number } {
+/**
+ * The pins this person sees, heaviest first; equal weights keep the usual order.
+ * `ready` once no pin is still loading, so the order will not shift as data lands.
+ */
+export function dayOrder(i: DayInput): { pins: DayPin[]; toDo: number; ready: boolean } {
   const shown = ORDER.filter((k) =>
     k === 'sheets' ? i.rows !== undefined
       : k === 'reviews' ? i.rows !== undefined && !!i.reviewer
@@ -124,7 +127,7 @@ export function dayOrder(i: DayInput): { pins: DayPin[]; toDo: number } {
   })
     .sort((a, b) => b.weight - a.weight || ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
   const todo = (p: DayPin) => p.weight >= TO_DO && (p.kind !== 'checkin' || i.checkin?.state === 'out');
-  return { pins, toDo: pins.filter(todo).length };
+  return { pins, toDo: pins.filter(todo).length, ready: shown.every((k) => !loading(k, i)) };
 }
 
 const WORD = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six'];
