@@ -15,7 +15,7 @@ import {
     LayoutGrid, List, AlertTriangle, X, Zap, Edit3, Trash2, PenTool
 } from '@/lib/lucide-shim';
 import { openInDesignReview } from '../../services/drawingReviewService';
-import { STATE_LABEL } from '../../lib/drawingReview';
+import { STATE_LABEL, stateOf, trackerPatch, isApprovedSheet } from '../../lib/drawingReview';
 import { classifyRevisionCause, RevisionClassification } from '../../services/geminiService';
 import { useOrg } from '../../contexts/OrgContext';
 import { isDesignerRole } from '../../lib/roleAccess';
@@ -53,6 +53,9 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
     const signedInDesigner = isDesignerRole(currentRole);
     const [userRole, setUserRole] = useState<'owner' | 'designer'>(() => signedInDesigner ? 'designer' : 'owner');
     useEffect(() => { if (signedInDesigner) setUserRole('designer'); }, [signedInDesigner]);
+    /* Who may write an approval into the table: the studio, not a Designer or a Viewer (firestore.rules). */
+    const canCatchUpRef = useRef(false);
+    canCatchUpRef.current = !signedInDesigner && currentRole !== 'Viewer';
     
     // View grouping mode: 'list' | 'grouped'
     const [viewMode, setViewMode] = useState<'list' | 'grouped'>('grouped');
@@ -193,6 +196,21 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                 }
                 return d;
             });
+            /*
+              A sheet the Design Desk approved before the Desk wrote its
+              approvals into the table (drawingReview: trackerPatch) still
+              reads unapproved here. The studio's screen catches it up, once;
+              the next snapshot then agrees and writes nothing.
+            */
+            if (canCatchUpRef.current) {
+                data.forEach(d => {
+                    if (stateOf(d.review) !== 'APPROVED') return;
+                    const patch = trackerPatch(d, d.review);
+                    if (!patch) return;
+                    updateDoc(doc(db, `organizations/${orgId}/projects/${projectId}/drawingTracker`, d.id), patch as any)
+                        .catch(err => console.error("Could not catch up the Design Desk approval on", d.id, err));
+                });
+            }
             setDrawings(data);
             setLoading(false);
         });
@@ -790,6 +808,17 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         if (d.gfc?.status === 'superseded') return 'Superseded';
         if (d.isGapFlagged && (d.currentRound === 0 || d.rounds.length === 0 || d.rounds.every(r => r.status === 'not_started'))) return 'Missing';
         if (d.approvedAt) return 'Approved';
+        /*
+          Once a sheet is on the Design Desk, the Desk says where it is: the
+          table and the Desk read the same status, always.
+        */
+        if (d.review?.versionNo) {
+            const s = stateOf(d.review);
+            if (s === 'APPROVED') return 'Approved';
+            if (s === 'IN_REVIEW') return 'Studio Review';
+            if (s === 'CHANGES_REQUESTED') return 'Returned';
+            if (s === 'DRAFT') return 'In Progress';
+        }
         if (d.pendingReview) return 'Studio Review';
 
         const latestRound = d.rounds.find(r => r.roundNumber === d.currentRound);
@@ -837,8 +866,8 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
     const isOwner = userRole === 'owner';
     const issues = drawings.filter(d => d.isGapFlagged);
-    const completedCount = (drawings || []).filter(d => d.approvedAt !== null).length;
-    const readyForGfcCount = (drawings || []).filter(d => d.approvedAt !== null && (!d.gfc || d.gfc.status !== 'issued')).length;
+    const completedCount = (drawings || []).filter(d => isApprovedSheet(d)).length;
+    const readyForGfcCount = (drawings || []).filter(d => d.approvedAt != null && (!d.gfc || d.gfc.status !== 'issued')).length;
 
     // Derived Scope Tracks logic
     const uniqueTriggers = Array.from(new Set<string>(drawings.flatMap(d => d.boqTriggers)));
@@ -902,8 +931,8 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         for (const f of FILTERS) if (f.key !== 'All') c[f.key] = 0;
         for (const d of drawings) {
             const st = statusOf(d);
-            // A submitted round needs the studio, not the Designer who sent it.
-            if (st === 'Client Review' || st === 'Site Hold' || d.isGapFlagged || (st === 'Studio Review' && isOwner)) c['Action Required']++;
+            // A submitted round needs the studio, not the Designer who sent it; a returned one, the Designer.
+            if (st === 'Client Review' || st === 'Site Hold' || d.isGapFlagged || (st === 'Studio Review' && isOwner) || (st === 'Returned' && !isOwner)) c['Action Required']++;
             if (st === 'Studio Review') c['Studio Review']++;
             if (st === 'Not Started') c['Not Started']++;
             if (st === 'Client Review') c['Client Review']++;
@@ -938,7 +967,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
         // Pill filter
         if (filter === 'All') return true;
-        if (filter === 'Action Required') return status === 'Client Review' || status === 'Site Hold' || d.isGapFlagged || (status === 'Studio Review' && isOwner);
+        if (filter === 'Action Required') return status === 'Client Review' || status === 'Site Hold' || d.isGapFlagged || (status === 'Studio Review' && isOwner) || (status === 'Returned' && !isOwner);
         if (filter === 'Studio Review') return status === 'Studio Review';
         if (filter === 'Not Started') return status === 'Not Started';
         if (filter === 'Client Review') return status === 'Client Review';
@@ -1114,6 +1143,10 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs"><User className="w-3.5 h-3.5 text-[#2E7D6B]" />Client Review</span>;
             case 'Site Hold':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs"><AlertCircle className="w-3.5 h-3.5 text-rose-700" />Rejected / Hold</span>;
+            case 'Returned':
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs"><AlertCircle className="w-3.5 h-3.5 text-amber-600" />Returned</span>;
+            case 'In Progress':
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs"><PenTool className="w-3.5 h-3.5 text-slate-500" />In Progress</span>;
             case 'Studio Review':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 shadow-2xs"><Send className="w-3.5 h-3.5 text-indigo-600" />{isOwner ? 'Ready for your review' : 'With studio for review'}</span>;
             default:
@@ -2263,7 +2296,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         const roomDrawings = filteredDrawings.filter(d => (d.roomName || 'General / Project-Wide') === roomKey);
                         if (roomDrawings.length === 0) return null;
 
-                        const triggerApprovedCount = roomDrawings.filter(d => d.approvedAt !== null).length;
+                        const triggerApprovedCount = roomDrawings.filter(d => isApprovedSheet(d)).length;
                         const triggerGfcCount = roomDrawings.filter(d => d.gfc?.status === 'issued').length;
                         const progressPct = Math.round((triggerApprovedCount / roomDrawings.length) * 100);
 

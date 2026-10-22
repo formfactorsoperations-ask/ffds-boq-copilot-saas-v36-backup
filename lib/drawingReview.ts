@@ -241,6 +241,69 @@ export function laneOf(summary?: Partial<ReviewSummary> | null): DeskLane {
   return 'desk';
 }
 
+/* ------------------------------------------------------ the Drawings table */
+
+/** The tracker's own fields that the Drawings table, room progress, GFC and the design gate read (types.ts). */
+export interface TrackerRound {
+  roundNumber: number;
+  issuedAt: number | null;
+  issuedBy: string | null;
+  clientFeedbackSubmittedAt: number | null;
+  status: string;
+}
+export interface TrackerFields {
+  currentRound?: number;
+  approvedAt?: number | null;
+  rounds?: TrackerRound[];
+  gfc?: { status: string; [k: string]: unknown } | null;
+}
+
+/** Approved, whichever side said so: the table, or a Design Desk approval the table has not caught up with. */
+export const isApprovedSheet = (d?: (TrackerFields & { review?: Partial<ReviewSummary> | null }) | null) =>
+  d?.approvedAt != null || stateOf(d?.review) === 'APPROVED';
+
+/*
+  THE DRAWINGS TABLE FOLLOWS THE DESIGN DESK.
+
+  The table, its room progress, the GFC release and the design gate read a
+  drawing's `approvedAt` and its rounds. The Desk wrote only `review`, so a
+  sheet signed off on the Desk still read "Not Started" in the table. Now every
+  time the Desk moves a sheet, the function writes this patch with it, in the
+  same transaction:
+    - approved on the Desk: approved in the table, on its current round;
+    - moved off approved (returned, the client's changes sent back, a new PDF
+      sent in): no longer approved, and a released GFC is superseded, as the
+      table's own Pending does.
+  Returns null when the table already agrees.
+*/
+export function trackerPatch(
+  d: TrackerFields | null | undefined,
+  review: Partial<ReviewSummary> | null | undefined,
+  now = Date.now(),
+): Partial<TrackerFields> | null {
+  const state = stateOf(review);
+  if (state === 'NONE') return null;
+  const rounds = Array.isArray(d?.rounds) ? d!.rounds : [];
+  const n = Math.max(1, Number(d?.currentRound) || 0);
+  const current = rounds.find((r) => r.roundNumber === n);
+
+  if (state === 'APPROVED') {
+    if (d?.approvedAt != null && current?.status === 'approved') return null;
+    const at = review?.decidedAt || now;
+    const next = current
+      ? rounds.map((r) => (r.roundNumber === n ? { ...r, status: 'approved', clientFeedbackSubmittedAt: r.clientFeedbackSubmittedAt || at } : r))
+      : [...rounds, { roundNumber: n, issuedAt: review?.submittedAt || at, issuedBy: review?.designer?.name || null, clientFeedbackSubmittedAt: at, status: 'approved' }]
+          .sort((a, b) => a.roundNumber - b.roundNumber);
+    return { approvedAt: d?.approvedAt ?? at, currentRound: n, rounds: next };
+  }
+
+  if (d?.approvedAt == null && current?.status !== 'approved' && d?.gfc?.status !== 'issued') return null;
+  const patch: Partial<TrackerFields> = { approvedAt: null };
+  if (current?.status === 'approved') patch.rounds = rounds.map((r) => (r.roundNumber === n ? { ...r, status: 'in_review' } : r));
+  if (d?.gfc?.status === 'issued') patch.gfc = { ...d.gfc, status: 'superseded' };
+  return patch;
+}
+
 /* ------------------------------------------------------------- validation */
 
 const clamp01 = (n: unknown) => typeof n === 'number' && Number.isFinite(n) && n >= -0.05 && n <= 1.05;

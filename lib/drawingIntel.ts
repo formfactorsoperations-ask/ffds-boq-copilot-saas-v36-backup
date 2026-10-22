@@ -1,4 +1,5 @@
 import { DrawingTrackerItem, DrawingRevision, DrawingRound } from '../types';
+import { isApprovedSheet } from './drawingReview';
 
 /*
   What the drawing tracker knows but has never said out loud.
@@ -66,7 +67,7 @@ export function turnaroundOf(d: DrawingTrackerItem, now = Date.now()): Turnaroun
         ? answered.reduce((sum, r) => sum + daysBetween(msOf(r.issuedAt), msOf(r.clientFeedbackSubmittedAt)), 0) / answered.length
         : null;
 
-    if (d.approvedAt) {
+    if (isApprovedSheet(d)) {
         return { state: 'approved', daysWithClient: 0, meanResponseDays, answeredRounds: answered.length, currentRound: d.currentRound || rounds.length };
     }
 
@@ -233,7 +234,7 @@ export interface DateRisk {
 
 export function dateRisk(d: DrawingTrackerItem, now = Date.now(), dueSoonDays = 7): DateRisk {
     const priority = (d.priority || 'normal') as 'high' | 'normal' | 'low';
-    if (d.approvedAt) return { state: 'done', daysToTarget: null, priority };
+    if (isApprovedSheet(d)) return { state: 'done', daysToTarget: null, priority };
     if (!d.targetDate) return { state: 'no_date', daysToTarget: null, priority };
 
     const target = new Date(d.targetDate + 'T00:00:00').getTime();

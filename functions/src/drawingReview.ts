@@ -7,7 +7,7 @@ import { isTeamViewMember } from "./teamView";
 import { createHash } from "crypto";
 import { PLATFORM_OWNER_EMAILS } from "./guards";
 import {
-  allowed, refusal, canReview, canUpload, canSetAudience, cleanShape, cleanText, guessAudience, storeShape, clientPending,
+  allowed, refusal, canReview, canUpload, canSetAudience, cleanShape, cleanText, guessAudience, storeShape, clientPending, trackerPatch,
   uploadPrefix, versionsPrefix, safeId, MAX_PDF_BYTES, MAX_THUMB_BYTES,
   type ReviewSummary, type ReviewPerson, type ReviewVersion, type ReviewRound, type ReviewMark, type ReviewEvent,
 } from "../../lib/drawingReview";
@@ -230,7 +230,7 @@ async function finalize(actor: Actor, orgId: string, projectId: string, drawingI
         if (m.data().status === "FIXED") tx.update(m.ref, { fixedInVersionNo: n });
       });
       tx.set(drawingRef.collection("reviewVersions").doc(versionId), version);
-      tx.update(drawingRef, { ...patch, review: next });
+      tx.update(drawingRef, { ...patch, ...trackerPatch(data, next, now), review: next });
       events.forEach((e) => tx.set(drawingRef.collection("reviewEvents").doc(), e));
       return { versionId, versionNo: n, review: next };
     });
@@ -259,7 +259,7 @@ async function submit(actor: Actor, drawingRef: FirebaseFirestore.DocumentRefere
     const note = cleanText(input.note, 500);
     tx.set(roundRef, { id: roundRef.id, attempt, versionId: s.versionId, versionNo: s.versionNo, submittedBy: person(actor), submittedAt: now, status: "OPEN" } as ReviewRound);
     const next: ReviewSummary = { ...s, projectName: actor.projectName ?? s.projectName ?? null, state: "IN_REVIEW", rev: s.rev + 1, openRoundId: roundRef.id, attempts: attempt, submittedAt: now, updatedAt: now };
-    tx.update(drawingRef, { review: next, pendingReview: legacyPending(data, now, actor.name) });
+    tx.update(drawingRef, { ...trackerPatch(data, next, now), review: next, pendingReview: legacyPending(data, now, actor.name) });
     tx.set(drawingRef.collection("reviewEvents").doc(), { type: "submitted", at: now, by: person(actor), versionNo: s.versionNo, roundId: roundRef.id, text: note } as ReviewEvent);
     return { review: next };
   });
@@ -275,7 +275,7 @@ async function withdraw(actor: Actor, drawingRef: FirebaseFirestore.DocumentRefe
     const now = Date.now();
     tx.update(drawingRef.collection("reviewRounds").doc(s.openRoundId), { status: "WITHDRAWN", decidedBy: person(actor), decidedAt: now });
     const next: ReviewSummary = { ...s, state: "DRAFT", rev: s.rev + 1, openRoundId: null, submittedAt: null, updatedAt: now };
-    tx.update(drawingRef, { review: next, pendingReview: null });
+    tx.update(drawingRef, { ...trackerPatch(snap.data(), next, now), review: next, pendingReview: null });
     tx.set(drawingRef.collection("reviewEvents").doc(), { type: "withdrawn", at: now, by: person(actor), versionNo: s.versionNo, roundId: s.openRoundId } as ReviewEvent);
     return { review: next };
   });
@@ -308,7 +308,7 @@ async function decide(actor: Actor, drawingRef: FirebaseFirestore.DocumentRefere
       ...s, state: kind === "approve" ? "APPROVED" : "CHANGES_REQUESTED", rev: s.rev + 1, openRoundId: null,
       decidedBy: person(actor), decidedAt: now, reason: reason || null, selfApproved: kind === "approve" && selfApproved, updatedAt: now,
     };
-    tx.update(drawingRef, { review: next, pendingReview: null });
+    tx.update(drawingRef, { ...trackerPatch(snap.data(), next, now), review: next, pendingReview: null });
     tx.set(drawingRef.collection("reviewEvents").doc(), {
       type: kind === "approve" ? "approved" : "returned", at: now, by: person(actor), versionNo: s.versionNo, roundId: s.openRoundId,
       text: kind === "approve" ? (selfApproved ? "Self-approved" : reason) : reason || `${marks.size} note${marks.size === 1 ? "" : "s"} on the sheet`,
@@ -457,7 +457,7 @@ async function removeVersion(actor: Actor, drawingRef: FirebaseFirestore.Documen
       });
     }
     tx.delete(verRef);
-    tx.update(drawingRef, { review: next });
+    tx.update(drawingRef, { ...trackerPatch(snap.data(), next, now), review: next });
     tx.set(drawingRef.collection("reviewEvents").doc(), { type: "removed", at: now, by: person(actor), versionNo: v.n, text: v.fileName } as ReviewEvent);
     return { review: next, files: [v.pdfPath, v.thumbPath].filter(Boolean) as string[] };
   });
@@ -491,7 +491,7 @@ async function clientDecide(actor: Actor, drawingRef: FirebaseFirestore.Document
         decidedBy: person(actor), decidedAt: now, reason: reason || "Changes the client asked for at the design meeting.", selfApproved: false,
         clientChanges: { ...s.clientChanges, pending: false }, updatedAt: now,
       };
-      tx.update(drawingRef, { review: next, pendingReview: null });
+      tx.update(drawingRef, { ...trackerPatch(snap.data(), next, now), review: next, pendingReview: null });
       tx.set(drawingRef.collection("reviewEvents").doc(), { type: "returned", at: now, by: person(actor), versionNo: s.versionNo, text: reason || `${open.length} change${open.length === 1 ? "" : "s"} from the design meeting` } as ReviewEvent);
       return { review: next };
     }
@@ -503,7 +503,7 @@ async function clientDecide(actor: Actor, drawingRef: FirebaseFirestore.Document
       ...s, rev: s.rev + 1, marksTotal: left.length, marksOpen: left.filter((m) => m.status === "OPEN").length,
       clientChanges: { ...s.clientChanges, pending: false }, updatedAt: now,
     };
-    tx.update(drawingRef, { review: next });
+    tx.update(drawingRef, { ...trackerPatch(snap.data(), next, now), review: next });
     tx.set(drawingRef.collection("reviewEvents").doc(), {
       type: "clientKept", at: now, by: person(actor), versionNo: s.versionNo,
       text: (reason ? `${reason} · ` : "") + client.map((d) => `“${(d.data() as ReviewMark).text}”`).join(", ").slice(0, 900),

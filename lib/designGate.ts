@@ -1,4 +1,5 @@
 import { ProjectContext, DesignGateItem, DesignGateState, DrawingTrackerItem } from '../types';
+import { isApprovedSheet } from './drawingReview';
 
 // ============================================================================
 // Design Gate — pure logic. No I/O, no React. Everything the component and the
@@ -36,7 +37,7 @@ function drawingsFromCtx(ctx: ProjectContext | null | undefined): DrawingTracker
 }
 
 const isApprovedDrawing = (d: any) =>
-  d?.approvedAt != null || d?.status === 'Approved' || d?.status === 'approved';
+  isApprovedSheet(d) || d?.status === 'Approved' || d?.status === 'approved';
 
 const matchesAny = (d: any, terms: string[]) =>
   terms.some(t => String(d?.id || '').toLowerCase().includes(t) || String(d?.name || '').toLowerCase().includes(t));
