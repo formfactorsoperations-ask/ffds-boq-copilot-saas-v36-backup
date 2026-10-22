@@ -34,6 +34,7 @@ import AssignProjectsModal from '../projectHeader/AssignProjectsModal';
 import { handoverSlip } from '../../lib/opsAssist';
 import { clientContactOf } from '../../lib/minutes';
 import { CapturePanel, AskProjectPanel, MeetingPrepPanel } from './OpsAssist';
+import { CalendarAccountBar } from './MeetLink';
 import { clientPulse, askPrompts, careQueue, type AskKind, type Checklist, type ChecklistKind, type VisitRequest, type VisitStatus } from '../../lib/clientCare';
 import { PulseList, AskSheet, ChecklistsView, VisitsView, VisitSheet, askReasonOf, type PulseRow } from './ClientCare';
 import {
@@ -113,6 +114,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
       id: String(p.id),
       name: String(p.context?.name || 'Project'),
       clientName: String(p.context?.clientName || p.context?.client?.name || ''),
+      clientEmail: clientContactOf(p.context).emails[0] || '',
       status: String(p.context?.status || ''),
       targetHandover: (p.context?.targetHandoverDate as string | undefined) || null,
       money: seesMoney ? money : withoutAmounts(money),
@@ -660,9 +662,10 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
           )}
 
           {section === 'visits' && (
-            <Panel icon={CalendarCheck} title="Meetings & visits" blurb="Every meeting and site visit a client asked for, or the studio needs: agree a time, confirm it, move it, and close it out with the minutes.">
+            <Panel icon={CalendarCheck} title="Meetings & visits" blurb="Every meeting and site visit a client asked for, or the studio needs, and the ones logged on each project's timeline: agree a time, confirm it, move it, and close it out with the minutes.">
               <div className="flex flex-col gap-4">
                 {canWrite && <button type="button" className={`${btnSec} self-start`} onClick={() => setVisitAct({ visit: null, to: null })}><Plus className="w-4 h-4" />Log a request</button>}
+                {canWrite && <CalendarAccountBar onError={setError} />}
                 {loading && !allVisits.length ? <Loading /> : <VisitsView visits={allVisits} projects={deskProjects as DeskProject[]} canWrite={canWrite} now={now} onAct={(visit, to) => setVisitAct({ visit, to })} />}
               </div>
             </Panel>

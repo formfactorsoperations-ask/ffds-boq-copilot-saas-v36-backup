@@ -12,8 +12,9 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebaseClient';
+import { callGoogleCalendarAPI } from './googleCalendarService';
 import type { Escalation, EscalationCategory, FollowUp, NextStep, Outcome, Channel, Subject } from '../lib/opsDesk';
-import { materialise, type Checklist, type ChecklistKind, type VisitRequest } from '../lib/clientCare';
+import { fromSiteVisit, materialise, type Checklist, type ChecklistKind, type VisitRequest } from '../lib/clientCare';
 
 const DAY = 86400000;
 const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -25,7 +26,7 @@ export interface ProjectOps {
   escalations: Escalation[];
   decisions: any[];
   moms: OpsMom[];
-  /** Client care (lib/clientCare.ts): the project's checklists, as saved, and its meeting and visit requests. */
+  /** Client care (lib/clientCare.ts): the project's checklists, as saved, and its meeting and visit requests, with the meetings logged on the project. */
   checklists: Partial<Record<ChecklistKind, Checklist>>;
   visits: VisitRequest[];
 }
@@ -39,6 +40,16 @@ const careOf = (checkRows: any[], visitRows: any[]) => {
 
 const rows = (snap: any) => snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
 
+/*
+  The meetings and visits logged on the project itself (its timeline, services/siteVisitService),
+  which the desk used not to read at all: a meeting booked there never showed up here.
+*/
+const projectVisits = (tenantId: string, project: { id: string; name: string }) =>
+  getDocs(collection(db!, `organizations/${tenantId}/projects/${project.id}/siteVisits`)).then((snap) => {
+    const now = Date.now();
+    return (rows(snap) as any[]).map((r) => fromSiteVisit(r, project, tenantId, now)).filter(Boolean) as VisitRequest[];
+  });
+
 /** One project's follow-ups, escalations, client decisions and minutes. */
 export async function loadProjectOps(tenantId: string, project: { id: string; name: string }, decisionsOnly = false): Promise<ProjectOps> {
   if (!db) return { followUps: [], escalations: [], decisions: [], moms: [], checklists: {}, visits: [] };
@@ -47,7 +58,8 @@ export async function loadProjectOps(tenantId: string, project: { id: string; na
   const care = Promise.all([
     safe(getDocs(collection(db, `projects/${pid}/checklists`)).then(rows), []),
     safe(getDocs(collection(db, `projects/${pid}/visitRequests`)).then(rows), []),
-  ]).then(([c, v]) => careOf(c, v));
+    safe(projectVisits(tenantId, project), []),
+  ]).then(([c, v, logged]) => careOf(c, [...v, ...logged]));
   /* A lead reads the rest studio-wide (loadStudioOps); decisions and client care are per project. */
   if (decisionsOnly) {
     const [decisions, cared] = await Promise.all([safe(getDocs(collection(db, `projects/${pid}/decisions`)).then(rows), []), care]);
@@ -170,17 +182,57 @@ export async function createVisit(v: NewVisit): Promise<string> {
   await setDoc(doc(db!, `projects/${v.projectId}/visitRequests`, id), v);
   return id;
 }
-export async function updateVisit(projectId: string, id: string, patch: Pick<VisitRequest, 'status' | 'slot' | 'reschedules' | 'history' | 'updatedAt' | 'updatedBy'>): Promise<void> {
+export type VisitPatch = Partial<Pick<VisitRequest, 'status' | 'slot' | 'reschedules' | 'history' | 'updatedAt' | 'updatedBy' | 'meetUrl' | 'calendarEventId' | 'calendarAccount'>>;
+export async function updateVisit(projectId: string, id: string, patch: VisitPatch): Promise<void> {
   await updateDoc(doc(db!, `projects/${projectId}/visitRequests`, id), patch);
 }
 
 /**
  * Meetings, site visits and measurements booked on these projects, for the
- * Home widget. A project this person may not read is skipped quietly.
+ * Home widget, with those logged on the project when the studio is known.
+ * A project this person may not read is skipped quietly.
  */
-export async function loadVisits(projectIds: string[]): Promise<VisitRequest[]> {
+export async function loadVisits(projectIds: string[], tenantId?: string): Promise<VisitRequest[]> {
   if (!db) return [];
-  const lists = await Promise.all(projectIds.slice(0, 40).map((pid) =>
-    getDocs(collection(db!, `projects/${pid}/visitRequests`)).then((snap) => rows(snap) as VisitRequest[]).catch(() => [] as VisitRequest[])));
+  const lists = await Promise.all(projectIds.slice(0, 40).map((pid) => Promise.all([
+    getDocs(collection(db!, `projects/${pid}/visitRequests`)).then((snap) => rows(snap) as VisitRequest[]).catch(() => [] as VisitRequest[]),
+    tenantId ? projectVisits(tenantId, { id: pid, name: '' }).catch(() => [] as VisitRequest[]) : Promise.resolve([] as VisitRequest[]),
+  ]).then(([a, b]) => [...a, ...b])));
   return lists.flat();
+}
+
+/*
+  A request's Google Calendar event, in the calendar of the account it was
+  booked from (services/googleCalendarService): created with a Meet link for a
+  video call, moved with the request, and taken off when it is cancelled.
+  Guests hear about each change from Google.
+*/
+export interface VisitCalendar { meetUrl: string | null; calendarEventId: string; calendarAccount: string }
+
+const meetOf = (ev: any): string | null =>
+  ev?.hangoutLink || (ev?.conferenceData?.entryPoints || []).find((e: any) => e?.entryPointType === 'video')?.uri || null;
+
+export async function bookVisitCalendar(account: string, event: any, withGuests: boolean): Promise<VisitCalendar> {
+  const send = withGuests ? 'all' : 'none';
+  const made = await callGoogleCalendarAPI('POST', `/calendars/primary/events?conferenceDataVersion=1&sendUpdates=${send}`, event, account);
+  let meetUrl = meetOf(made);
+  /* Google can take a moment to make the Meet room. */
+  if (!meetUrl && event.conferenceData) {
+    await new Promise((r) => setTimeout(r, 1500));
+    meetUrl = meetOf(await callGoogleCalendarAPI('GET', `/calendars/primary/events/${encodeURIComponent(made.id)}`, undefined, account).catch(() => null));
+  }
+  return { meetUrl, calendarEventId: String(made.id), calendarAccount: account };
+}
+
+export async function moveVisitCalendar(account: string, eventId: string, patch: any): Promise<void> {
+  await callGoogleCalendarAPI('PATCH', `/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`, patch, account);
+}
+
+export async function cancelVisitCalendar(account: string, eventId: string): Promise<void> {
+  try {
+    await callGoogleCalendarAPI('DELETE', `/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`, undefined, account);
+  } catch (e: any) {
+    /* Already gone from the calendar: nothing left to take off. */
+    if (!/API Error: (404|410)\b/.test(String(e?.message || ''))) throw e;
+  }
 }

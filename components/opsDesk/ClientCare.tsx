@@ -1,15 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import '../projectHeader/projectHeader.css';
-import { Check, Copy, Plus, CalendarCheck, Star, Gift, Users, MapPin, Ruler, MessageCircle } from '@/lib/lucide-shim';
+import { Check, Copy, Plus, CalendarCheck, Star, Gift, Users, MapPin, Ruler, MessageCircle, Video } from '@/lib/lucide-shim';
 import { dayKey } from '../../lib/opsDesk';
 import {
   BAND_LABEL, CHECKLIST_META, STATE_LABEL, VISIT_KINDS, VISIT_MODES, VISIT_STATUS_LABEL, ASK_SUBJECT, DOCS_SUBJECT,
   materialise, progressOf, setItem, addItem, checklistHints, documentsMessage, moveVisit, visitMessage, visitLabel, slotText, askMessage,
+  visitCalendarEvent, visitCalendarMove, guestEmails,
   type AskKind, type AskPrompt, type Checklist, type ChecklistKind, type ItemState, type Pulse, type PulseBand,
   type Slot, type VisitKind, type VisitMode, type VisitRequest, type VisitStatus,
 } from '../../lib/clientCare';
 import type { ClientMoney } from '../../lib/clientMoney';
-import { createVisit, logFollowUp, saveChecklist, updateVisit } from '../../services/opsDeskService';
+import {
+  createVisit, logFollowUp, saveChecklist, updateVisit, bookVisitCalendar, moveVisitCalendar, cancelVisitCalendar, type VisitCalendar,
+} from '../../services/opsDeskService';
+import { addCalendarAccount, isCalendarAccountLive } from '../../services/googleCalendarService';
+import { CalendarStep, MeetLinkRow, calendarError, useCalendarAccounts } from './MeetLink';
 import { Sheet, Label, Seg, input, btnPri, btnSec, btnSm, type DeskProject, type Person } from './OpsDeskPanels';
 import { CountUp, Dot } from '../ui/HudBits';
 
@@ -311,10 +316,17 @@ export function VisitsView({ visits, projects, canWrite, onAct, now }: {
                     <p className="text-sm font-semibold text-slate-800">{visitLabel(v.kind)}{v.purpose ? `: ${v.purpose}` : ''}</p>
                     <p className="text-xs text-slate-500"><b className="font-semibold text-slate-700">{v.projectName || name(v.projectId)}</b> · {slotText(v.slot)} · {VISIT_MODES.find((m) => m.id === v.mode)?.label}
                       {v.reschedules ? ` · moved ${v.reschedules} time${v.reschedules === 1 ? '' : 's'}` : ''}</p>
-                    <p className="text-[11px] text-slate-500">Asked for by the {v.requestedBy} · logged by {v.createdByName} · {fmtWhen(v.createdAt)}</p>
+                    <p className="text-[11px] text-slate-500">{v.source === 'project' ? `Logged on the project's timeline · ${fmtWhen(v.createdAt)}` : `Asked for by the ${v.requestedBy} · logged by ${v.createdByName} · ${fmtWhen(v.createdAt)}`}</p>
                   </div>
+                  {v.source === 'project' && <span className={`${chip} bg-slate-100 text-slate-600`}>On the project</span>}
                   <span className={`${chip} ${STATUS_TINT[v.status]}`}>{VISIT_STATUS_LABEL[v.status]}</span>
-                  {open && canWrite && (
+                  {open && v.meetUrl && (
+                    <a href={v.meetUrl} target="_blank" rel="noopener noreferrer" className={btnSm}><Video className="w-3.5 h-3.5" />Join</a>
+                  )}
+                  {open && canWrite && v.source === 'project' && v.slot && v.slot.date >= today && (
+                    <button type="button" className={btnSm} onClick={() => onAct(v, 'confirmed')}>Message</button>
+                  )}
+                  {open && canWrite && v.source !== 'project' && (
                     <div className="flex flex-wrap gap-2">
                       {(v.status === 'requested' || v.status === 'rescheduled') && <button type="button" className={btnSm} onClick={() => onAct(v, 'confirmed')}><Check className="w-3.5 h-3.5" />Confirm</button>}
                       {v.status === 'confirmed' && <button type="button" className={btnSm} onClick={() => onAct(v, 'done')}><Check className="w-3.5 h-3.5" />Done</button>}
@@ -361,46 +373,151 @@ export function VisitSheet({ projects, visit, to, prefillProjectId, me, tenantId
   const target: VisitStatus = creating ? (agreed ? 'confirmed' : 'requested') : (to as VisitStatus);
   const slot: Slot | null = date && time ? { date, time } : null;
   const needsSlot = target === 'confirmed' || target === 'rescheduled';
-  const msgKind = target === 'rescheduled' ? 'reschedule' : target === 'confirmed' ? 'confirm' : null;
-  const message = msgKind && slot && project
-    ? visitMessage(msgKind, { kind, mode, purpose, slot }, { clientName: project.clientName, projectName: project.name, senderName: me.name, studioName })
-    : '';
   const sameSlot = !creating && to === 'confirmed' && visit?.status === 'confirmed';
 
-  const title = creating ? 'Log a meeting or visit request'
+  /* Google Calendar and Meet (components/opsDesk/MeetLink.tsx): a new event, the event moved, or taken off. */
+  const calendars = useCalendarAccounts();
+  const fromDesk = !visit?.source;
+  const eventAccount = fromDesk && visit?.calendarEventId ? visit.calendarAccount || null : null;
+  const slotMoved = !!slot && !!visit?.slot && (visit.slot.date !== slot.date || visit.slot.time !== slot.time);
+  const calMode: 'create' | 'move' | 'remove' | null =
+    !fromDesk ? null
+    : creating ? (slot ? 'create' : null)
+    : sameSlot ? (mode === 'video' && !visit?.meetUrl ? 'create' : null)
+    : to === 'cancelled' ? (eventAccount ? 'remove' : null)
+    : needsSlot ? (eventAccount ? (slotMoved ? 'move' : null) : slot ? 'create' : null)
+    : null;
+  const [calOn, setCalOn] = useState(() => (eventAccount ? true : (visit?.mode || 'in_person') === 'video'));
+  useEffect(() => { if (creating) setCalOn(mode === 'video'); }, [mode, creating]);
+  const [account, setAccount] = useState(eventAccount || calendars.active || '');
+  useEffect(() => { if (!account && calendars.active) setAccount(calendars.active); }, [calendars.active, account]);
+  const [guests, setGuests] = useState(project?.clientEmail || '');
+  useEffect(() => { if (creating) setGuests(project?.clientEmail || ''); }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* Once booked with a Meet link, the sheet shows it to copy before it closes. */
+  const [booked, setBooked] = useState<VisitCalendar | null>(null);
+  const meetUrl = booked?.meetUrl || visit?.meetUrl || null;
+
+  const msgKind = target === 'rescheduled' ? 'reschedule' : target === 'confirmed' ? 'confirm' : null;
+  const message = msgKind && slot && project
+    ? visitMessage(msgKind, { kind, mode, purpose, slot, meetUrl }, { clientName: project.clientName, projectName: project.name, senderName: me.name, studioName })
+    : '';
+
+  const title = booked ? 'Booked, with a Meet link'
+    : creating ? 'Log a meeting or visit request'
     : sameSlot ? 'Message about this visit'
     : to === 'confirmed' ? 'Confirm the time' : to === 'rescheduled' ? 'Put a new time to the client' : to === 'done' ? 'Mark it done' : 'Cancel the request';
+  const result = () => ({ projectId: project?.id || projectId, status: target, notes: `${visitLabel(kind)}${purpose ? `: ${purpose}` : ''}${slot ? `, ${slotText(slot)}` : ''}${note.trim() ? `\n\n${note.trim()}` : ''}` });
+
+  /** The calendar part of a save. Signing in comes first, so the browser lets its window open. */
+  const runCalendar = async (): Promise<{ cal: VisitCalendar | null; removed: boolean } | null> => {
+    if (!calMode || !calOn) return { cal: null, removed: false };
+    let acct = calMode === 'create' ? account : eventAccount;
+    if (!isCalendarAccountLive(acct)) {
+      const signed = await addCalendarAccount(acct || undefined);
+      if (acct && signed.email !== acct) {
+        setError(`You signed in as ${signed.email}, but ${calMode === 'create' ? 'the meeting was to be created from' : 'the event is on'} ${acct}. Sign in as ${acct}, or untick the calendar box.`);
+        return null;
+      }
+      acct = signed.email;
+      if (calMode === 'create') setAccount(acct);
+    }
+    if (calMode === 'create') {
+      const list = guestEmails(guests);
+      const event = visitCalendarEvent({ kind, mode, purpose: purpose.trim(), slot }, {
+        projectName: project!.name, clientName: project!.clientName, guests: list, requestId: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
+      });
+      return { cal: await bookVisitCalendar(acct!, event, list.length > 0), removed: false };
+    }
+    if (calMode === 'move') await moveVisitCalendar(acct!, visit!.calendarEventId!, visitCalendarMove(slot!));
+    if (calMode === 'remove') await cancelVisitCalendar(acct!, visit!.calendarEventId!);
+    return { cal: null, removed: calMode === 'remove' };
+  };
 
   const save = async () => {
     if (!project) return;
     setSaving(true);
     setError(null);
+    let done: { cal: VisitCalendar | null; removed: boolean } | null;
+    try {
+      done = await runCalendar();
+    } catch (e: any) {
+      setError(`${calendarError(e)} Untick the calendar box to save without it.`);
+      setSaving(false);
+      return;
+    }
+    if (!done) { setSaving(false); return; }
+    const { cal, removed } = done;
+    const calFields = cal ? { meetUrl: cal.meetUrl, calendarEventId: cal.calendarEventId, calendarAccount: cal.calendarAccount }
+      : removed ? { calendarEventId: null } : {};
     const now = Date.now();
     try {
-      if (creating) {
+      if (sameSlot) {
+        if (cal) await updateVisit(visit!.projectId, visit!.id, { ...calFields, updatedAt: now, updatedBy: me.email.toLowerCase() });
+      } else if (creating) {
         const ev = { at: now, by: me.email.toLowerCase(), byName: me.name, status: target, slot, note: note.trim().slice(0, 300) };
         await createVisit({
           tenantId, projectId: project.id, projectName: project.name, kind, mode, purpose: purpose.trim().slice(0, 300), requestedBy,
           status: target, slot, reschedules: 0, history: [ev], createdAt: now, createdBy: me.email.toLowerCase(), createdByName: me.name,
-          updatedAt: now, updatedBy: me.email.toLowerCase(),
+          updatedAt: now, updatedBy: me.email.toLowerCase(), ...calFields,
         });
       } else {
         const r = moveVisit(visit!, target, { slot: needsSlot ? slot : undefined, note }, me, now);
         if ('error' in r) { setError(r.error); setSaving(false); return; }
-        await updateVisit(visit!.projectId, visit!.id, r.patch);
+        await updateVisit(visit!.projectId, visit!.id, { ...r.patch, ...calFields });
       }
-      onSaved({ projectId: project.id, status: target, notes: `${visitLabel(kind)}${purpose ? `: ${purpose}` : ''}${slot ? `, ${slotText(slot)}` : ''}${note.trim() ? `\n\n${note.trim()}` : ''}` });
     } catch (e: any) {
+      /* Not saved: take back the event just made, so the calendar does not hold a meeting the desk has no record of. */
+      if (cal) cancelVisitCalendar(cal.calendarAccount, cal.calendarEventId).catch(() => {});
       setError(saveError(e));
       setSaving(false);
+      return;
     }
+    if (cal?.meetUrl) { setBooked(cal); setSaving(false); return; }
+    onSaved(result());
   };
+
+  const calendarStep = calMode && !booked && (
+    <CalendarStep id="v-cal" on={calOn} onToggle={setCalOn} video={mode === 'video'} account={account} onAccount={setAccount} onError={setError}
+      fixed={calMode === 'create' ? null : eventAccount}
+      label={calMode === 'move' ? 'Move it on Google Calendar too' : calMode === 'remove' ? 'Take it off Google Calendar' : mode === 'video' ? 'Create a Google Meet link and put it on Google Calendar' : 'Put it on Google Calendar'}
+      guests={calMode === 'create' ? guests : undefined} onGuests={calMode === 'create' ? setGuests : undefined} />
+  );
+
+  if (booked) {
+    return (
+      <Sheet eyebrow="Meetings & visits" title={title} sub={`${project?.name || ''} · ${visitLabel(kind)}${purpose ? `: ${purpose}` : ''} · ${slotText(slot)}`}
+        onClose={() => onSaved(result())}
+        footer={<button type="button" className={btnPri} onClick={() => onSaved(result())}><Check className="w-4 h-4" />Done</button>}>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-col gap-3 hud-row-in">
+          <p className="text-sm font-bold text-slate-800">Google Meet link</p>
+          <MeetLinkRow url={booked.meetUrl!} onError={setError} />
+          <p className="text-[11px] text-slate-500">On {booked.calendarAccount}'s calendar{guestEmails(guests).length ? `; Google has emailed the invite to ${guestEmails(guests).join(', ')}` : ''}.</p>
+        </div>
+        {sameSlot && visit?.slot ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-col gap-3 hud-row-in">
+            <p className="text-sm font-bold text-slate-800">Message to send</p>
+            <MessagePair visit={{ ...visit, meetUrl: booked.meetUrl }} project={project} me={me} studioName={studioName} onError={setError} />
+          </div>
+        ) : message ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-col gap-3 hud-row-in">
+            <p className="text-sm font-bold text-slate-800">Message to send</p>
+            <textarea aria-label="Message" readOnly className={`${input} min-h-[130px] leading-relaxed`} value={message} />
+            <button type="button" className={`${btnSec} self-start`} onClick={() => copy(message)}>{copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}{copied ? 'Copied' : 'Copy message'}</button>
+          </div>
+        ) : null}
+        <ErrorLine text={error} />
+      </Sheet>
+    );
+  }
 
   return (
     <Sheet eyebrow="Meetings & visits" title={title}
       sub={creating ? 'Requested by the client, or wanted by the studio. Confirm a time now if it is already agreed.' : `${visit!.projectName} · ${visitLabel(visit!.kind)}${visit!.purpose ? `: ${visit!.purpose}` : ''} · ${slotText(visit!.slot)}`}
       onClose={onClose}
-      footer={sameSlot ? <button type="button" className={btnSec} onClick={onClose}>Close</button> : <>
+      footer={sameSlot ? <>
+        <button type="button" className={btnSec} onClick={onClose}>Close</button>
+        {calMode === 'create' && calOn && <button type="button" className={btnPri} onClick={save} disabled={saving}><Video className="w-4 h-4" />{saving ? 'Creating…' : 'Create the Meet link'}</button>}
+      </> : <>
         <button type="button" className={btnSec} onClick={onClose}>Back</button>
         <button type="button" className={btnPri} onClick={save} disabled={saving || !project || (needsSlot && !slot) || (creating && !purpose.trim())}>
           <Check className="w-4 h-4" />{saving ? 'Saving…' : creating ? 'Save the request' : to === 'cancelled' ? 'Cancel it' : to === 'done' ? 'Mark done' : to === 'rescheduled' ? 'Save the new time' : 'Confirm'}
@@ -440,17 +557,23 @@ export function VisitSheet({ projects, visit, to, prefillProjectId, me, tenantId
           <div><Label htmlFor="v-time">Time</Label><input id="v-time" type="time" className={input} value={time} onChange={(e) => setTime(e.target.value)} /></div>
         </div>
       )}
+      {creating && !slot && mode === 'video' && <p className="text-[11px] text-slate-500">Add a date and a time to create a Google Meet link with it.</p>}
       {!sameSlot && (
         <div>
           <Label htmlFor="v-note">{to === 'cancelled' ? 'Why' : to === 'rescheduled' ? 'Why it moved' : 'Note'}</Label>
           <input id="v-note" className={input} maxLength={300} placeholder={to === 'done' ? 'Optional: anything to remember' : 'Optional'} value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
       )}
+      {calendarStep}
+      {!sameSlot && meetUrl && <MeetLinkRow url={meetUrl} onError={setError} />}
       {(message || sameSlot) && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-col gap-3 hud-row-in">
           <p className="text-sm font-bold text-slate-800">Message to send</p>
           {sameSlot && visit?.slot ? (
-            <MessagePair visit={visit} project={project} me={me} studioName={studioName} onError={setError} />
+            <>
+              {meetUrl && <MeetLinkRow url={meetUrl} onError={setError} />}
+              <MessagePair visit={visit} project={project} me={me} studioName={studioName} onError={setError} />
+            </>
           ) : (
             <>
               <textarea aria-label="Message" readOnly className={`${input} min-h-[130px] leading-relaxed`} value={message} />

@@ -3,6 +3,7 @@ import {
   clientPulse, moodOf, toneOf, heardFromClient, isPraise, bandOf, PULSE_START,
   materialise, progressOf, setItem, addItem, checklistHints, documentsMessage,
   moveVisit, visitMessage, slotText, askState, askPrompts, askMessage, careQueue,
+  fromSiteVisit, visitCalendarEvent, visitCalendarMove, guestEmails,
   type VisitRequest, type PulseInputs, type CareProject,
 } from '../../lib/clientCare';
 import { buildQueue, opsSettingsOf, type FollowUp, type WaitingItem, type Escalation } from '../../lib/opsDesk';
@@ -233,5 +234,50 @@ describe('client care on the desk', () => {
     expect(careQueue([proj({ checklists: { onboarding: c } })], [], false, NOW)).toEqual([]);
     const q = buildQueue({ now: NOW, me: 'riya@s.in', isLead: true, followUps: [], waiting: [], moms: [], escalations: [], extra: care });
     expect(q.map((x) => x.kind)).toEqual(['checklist', 'ask']);
+  });
+});
+
+describe('meetings logged on the project', () => {
+  const p = { id: 'p1', name: 'Unique Vistas' };
+  const ts = (iso: string) => ({ toMillis: () => new Date(iso).getTime() });
+
+  it('show on the desk: ahead is confirmed, past is done, cancelled stays cancelled', () => {
+    const ahead = fromSiteVisit({ id: 'sv1', type: 'client_meeting', title: 'Kitchen review', date: ts('2026-10-14T00:00:00Z'), startTime: '16:30', isVirtual: true, meetingMode: 'google_meet', googleMeetUrl: 'https://meet.google.com/abc-defg-hij', status: 'active', loggedAt: ts('2026-10-10T09:00:00Z') }, p, 's', NOW)!;
+    expect(ahead).toMatchObject({ id: 'project:sv1', projectId: 'p1', projectName: 'Unique Vistas', kind: 'meeting', mode: 'video', purpose: 'Kitchen review', status: 'confirmed', slot: { date: '2026-10-14', time: '16:30' }, meetUrl: 'https://meet.google.com/abc-defg-hij', source: 'project' });
+    expect(fromSiteVisit({ id: 'sv2', type: 'site_visit', title: 'Walk', date: '2026-10-09', startTime: '10:00' }, p, 's', NOW)).toMatchObject({ kind: 'site_visit', mode: 'in_person', status: 'done', slot: { date: '2026-10-09', time: '10:00' }, meetUrl: null });
+    expect(fromSiteVisit({ id: 'sv3', type: 'measurement_survey', title: 'Measure', date: ts('2026-10-20T00:00:00Z'), status: 'cancelled' }, p, 's', NOW)).toMatchObject({ kind: 'measurement', status: 'cancelled', slot: { date: '2026-10-20', time: '10:00' } });
+    expect(fromSiteVisit({ id: 'sv4', type: 'vendor_meeting', isVirtual: true, meetingMode: 'phone', date: { seconds: new Date('2026-10-12T04:30:00Z').getTime() / 1000 } }, p, 's', NOW)).toMatchObject({ mode: 'call', status: 'confirmed' });
+    expect(fromSiteVisit({}, p, 's', NOW)).toBeNull();
+  });
+
+  it('come up on the queue the day before, and in the client care counts, like a desk booking', () => {
+    const v = fromSiteVisit({ id: 'sv1', type: 'client_meeting', title: 'Kitchen review', date: '2026-10-12', startTime: '11:00' }, p, 's', NOW)!;
+    const q = careQueue([{ id: 'p1', name: 'Unique Vistas', status: 'execution', targetHandover: null, checklists: {}, visits: [v], prompts: [] }], [], false, NOW);
+    expect(q.map((x) => x.title)).toEqual(['Tomorrow: Meeting · Kitchen review']);
+  });
+});
+
+describe('google calendar and meet', () => {
+  const v = { kind: 'meeting' as const, mode: 'video' as const, purpose: 'review the kitchen', slot: { date: '2026-10-14', time: '23:30' } };
+
+  it('books the time in India, with a Meet link for a video call and the guests invited', () => {
+    const ev = visitCalendarEvent(v, { projectName: 'Kapoor Villa', clientName: 'Mr Kapoor', guests: ['a@b.in', 'nope'], requestId: 'r1' });
+    expect(ev.summary).toBe('Meeting: Kapoor Villa · review the kitchen');
+    expect(ev.start).toEqual({ dateTime: '2026-10-14T23:30:00+05:30', timeZone: 'Asia/Kolkata' });
+    expect(ev.end).toEqual({ dateTime: '2026-10-15T00:30:00+05:30', timeZone: 'Asia/Kolkata' });
+    expect(ev.attendees).toEqual([{ email: 'a@b.in' }]);
+    expect(ev.conferenceData.createRequest).toEqual({ requestId: 'r1', conferenceSolutionKey: { type: 'hangoutsMeet' } });
+    expect(visitCalendarEvent({ ...v, mode: 'in_person' }, { projectName: 'K', clientName: '', guests: [], requestId: 'r2', place: 'Site' })).not.toHaveProperty('conferenceData');
+    expect(() => visitCalendarEvent({ ...v, slot: null }, { projectName: 'K', clientName: '', guests: [], requestId: 'r3' })).toThrow();
+    expect(visitCalendarMove({ date: '2026-10-15', time: '09:00' })).toEqual({ start: { dateTime: '2026-10-15T09:00:00+05:30', timeZone: 'Asia/Kolkata' }, end: { dateTime: '2026-10-15T10:00:00+05:30', timeZone: 'Asia/Kolkata' } });
+  });
+
+  it('reads a typed guest list, and puts the link in the message', () => {
+    expect(guestEmails('A@b.in, c@d.com; a@b.in  junk')).toEqual(['a@b.in', 'c@d.com']);
+    const ctx = { clientName: 'Mr Kapoor', projectName: 'Kapoor Villa', senderName: 'Riya', studioName: 'FFDS' };
+    const msg = visitMessage('confirm', { ...v, meetUrl: 'https://meet.google.com/abc-defg-hij' }, ctx);
+    expect(msg).toContain('on a video call to review the kitchen.');
+    expect(msg).toContain('Join here: https://meet.google.com/abc-defg-hij');
+    expect(visitMessage('confirm', v, ctx)).toContain('(we will share the link)');
   });
 });

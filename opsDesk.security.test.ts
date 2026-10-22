@@ -228,4 +228,33 @@ describe('meeting and site visit requests', () => {
     await assertFails(updateDoc(ref(), { status: 'cancelled', history: [...h4, ev('done'), ev('cancelled')], updatedAt: 6, updatedBy: 'cr@a.com' }));
     await assertFails(deleteDoc(doc(admin(), 'projects/p1/visitRequests/v1')));
   });
+
+  it('include the meetings logged on the project, which Client Relations reads on an assigned project', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      for (const p of ['p1', 'p2']) await setDoc(doc(ctx.firestore(), `organizations/${STUDIO}/projects/${p}/siteVisits/s1`), { type: 'client_meeting', title: 'Kitchen review' });
+    });
+    await assertSucceeds(getDocs(collection(cr(), `organizations/${STUDIO}/projects/p1/siteVisits`)));
+    await assertFails(getDocs(collection(cr(), `organizations/${STUDIO}/projects/p2/siteVisits`)));
+    await assertSucceeds(getDocs(collection(admin(), `organizations/${STUDIO}/projects/p2/siteVisits`)));
+  });
+
+  it('carry the Google Meet link and calendar event they were booked with', async () => {
+    const meet = { meetUrl: 'https://meet.google.com/abc-defg-hij', calendarEventId: 'ev1', calendarAccount: 'studio@gmail.com' };
+    await assertSucceeds(setDoc(doc(cr(), 'projects/p1/visitRequests/m1'), visitReq('cr@a.com', meet)));
+    await assertFails(setDoc(doc(cr(), 'projects/p1/visitRequests/m2'), visitReq('cr@a.com', { ...meet, meetUrl: 'javascript:alert(1)' })));
+    await assertFails(setDoc(doc(cr(), 'projects/p1/visitRequests/m3'), visitReq('cr@a.com', { ...meet, calendarEventId: 5 })));
+    await assertFails(setDoc(doc(cr(), 'projects/p1/visitRequests/m4'), visitReq('cr@a.com', { hangout: 'x' })));
+
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'projects/p1/visitRequests/v1'), visitReq('cr@a.com')); });
+    const ref = () => doc(cr(), 'projects/p1/visitRequests/v1');
+    const h1 = visitReq('cr@a.com').history;
+    /* Added to an open request on its own, the status and history as they are... */
+    await assertSucceeds(updateDoc(ref(), { ...meet, updatedAt: 2, updatedBy: 'cr@a.com' }));
+    await assertFails(updateDoc(ref(), { meetUrl: 'ftp://x', updatedAt: 2, updatedBy: 'cr@a.com' }));
+    await assertFails(updateDoc(ref(), { purpose: 'x', meetUrl: 'https://meet.google.com/x', updatedAt: 2, updatedBy: 'cr@a.com' }));
+    await assertFails(updateDoc(ref(), { status: 'cancelled', meetUrl: 'https://meet.google.com/x', updatedAt: 2, updatedBy: 'cr@a.com' }));
+    /* ...or with a move, and taken off when it is cancelled. */
+    await assertSucceeds(updateDoc(ref(), { status: 'cancelled', calendarEventId: null, history: [...h1, ev('cancelled')], updatedAt: 3, updatedBy: 'cr@a.com' }));
+    await assertFails(updateDoc(ref(), { meetUrl: 'https://meet.google.com/y', updatedAt: 4, updatedBy: 'cr@a.com' }));
+  });
 });

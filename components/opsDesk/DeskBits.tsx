@@ -29,6 +29,7 @@ export interface DeskProjectFull {
   id: string;
   name: string;
   clientName: string;
+  clientEmail: string;
   status: string;
   targetHandover: string | null;
   money: ClientMoney | null;

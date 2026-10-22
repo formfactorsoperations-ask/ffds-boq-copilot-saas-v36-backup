@@ -338,6 +338,12 @@ export interface VisitRequest {
   createdByName: string;
   updatedAt: number;
   updatedBy: string;
+  /** The Google Meet link, and the calendar event it came with (and whose calendar it is in). */
+  meetUrl?: string | null;
+  calendarEventId?: string | null;
+  calendarAccount?: string | null;
+  /** 'project': a meeting or visit logged on the project itself (siteVisits), shown here and changed there. */
+  source?: 'project';
 }
 
 export const VISIT_KINDS: { id: VisitKind; label: string }[] = [
@@ -391,15 +397,89 @@ const niceTime = (t: string) => {
 export const slotText = (s: Slot | null | undefined) => (validSlot(s) ? `${niceDay(s.date)}, ${niceTime(s.time)}` : 'time to be agreed');
 
 /** The message to send at each step: proposing or confirming a time, a new time, or the day-before reminder. */
-export function visitMessage(kind: 'confirm' | 'reschedule' | 'reminder', v: Pick<VisitRequest, 'kind' | 'mode' | 'purpose' | 'slot'>, ctx: { clientName: string; projectName: string; senderName: string; studioName: string; place?: string }): string {
+export function visitMessage(kind: 'confirm' | 'reschedule' | 'reminder', v: Pick<VisitRequest, 'kind' | 'mode' | 'purpose' | 'slot'> & { meetUrl?: string | null }, ctx: { clientName: string; projectName: string; senderName: string; studioName: string; place?: string }): string {
   const what = visitLabel(v.kind).toLowerCase();
-  const how = v.mode === 'video' ? ' on a video call (we will share the link)' : v.mode === 'call' ? ' on a phone call' : ctx.place ? ` at ${ctx.place}` : v.kind === 'meeting' ? ' at our studio' : ' at the site';
+  const link = v.mode === 'video' && v.meetUrl ? v.meetUrl : '';
+  const how = v.mode === 'video' ? (link ? ' on a video call' : ' on a video call (we will share the link)') : v.mode === 'call' ? ' on a phone call' : ctx.place ? ` at ${ctx.place}` : v.kind === 'meeting' ? ' at our studio' : ' at the site';
   const purpose = v.purpose ? ` to ${v.purpose.replace(/^to\s+/i, '').replace(/\.$/, '')}` : '';
+  const join = link ? `\n\nJoin here: ${link}` : '';
   const sign = `\n\nRegards,\n${ctx.senderName}${ctx.studioName ? `\n${ctx.studioName}` : ''}`;
   const hi = `Hi ${ctx.clientName || 'there'},`;
-  if (kind === 'confirm') return `${hi}\n\nConfirming our ${what} for ${ctx.projectName} on ${slotText(v.slot)}${how}${purpose}. Do let me know if that time stops working for you.${sign}`;
-  if (kind === 'reschedule') return `${hi}\n\nWe need to move our ${what} for ${ctx.projectName}. Would ${slotText(v.slot)}${how} work for you instead? Sorry for the change.${sign}`;
-  return `${hi}\n\nA reminder of our ${what} for ${ctx.projectName} tomorrow, ${slotText(v.slot)}${how}${purpose}. See you then.${sign}`;
+  if (kind === 'confirm') return `${hi}\n\nConfirming our ${what} for ${ctx.projectName} on ${slotText(v.slot)}${how}${purpose}. Do let me know if that time stops working for you.${join}${sign}`;
+  if (kind === 'reschedule') return `${hi}\n\nWe need to move our ${what} for ${ctx.projectName}. Would ${slotText(v.slot)}${how} work for you instead? Sorry for the change.${join}${sign}`;
+  return `${hi}\n\nA reminder of our ${what} for ${ctx.projectName} tomorrow, ${slotText(v.slot)}${how}${purpose}. See you then.${join}${sign}`;
+}
+
+/* ── Meetings logged on the project, and the calendar ───────────────────── */
+
+const msOf = (d: any): number | null => {
+  if (d == null || d === '') return null;
+  if (typeof d === 'number') return d;
+  if (typeof d === 'string') { const t = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d}T12:00:00+05:30` : d); return Number.isNaN(t) ? null : t; }
+  if (d instanceof Date) return d.getTime();
+  if (typeof d.toMillis === 'function') return d.toMillis();
+  if (typeof d.seconds === 'number') return d.seconds * 1000;
+  return null;
+};
+
+/**
+ * A meeting or visit logged on the project (organizations/{studio}/projects/{id}/siteVisits,
+ * services/siteVisitService.ts), as the Ops Desk lists it. It is changed on the project,
+ * so the desk only shows it: confirmed while it is ahead, done once its day has passed.
+ */
+export function fromSiteVisit(raw: any, project: { id: string; name: string }, tenantId: string, now: number): VisitRequest | null {
+  if (!raw?.id) return null;
+  const at = msOf(raw.date);
+  const day = isDayKey(raw.date) ? raw.date : at != null ? dayKey(at) : null;
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(raw.startTime || '')) ? String(raw.startTime) : '10:00';
+  const slot: Slot | null = day ? { date: day, time } : null;
+  const type = String(raw.type || '');
+  const kind: VisitKind = type === 'site_visit' ? 'site_visit' : type === 'measurement_survey' ? 'measurement' : 'meeting';
+  const mode: VisitMode = raw.isVirtual ? (raw.meetingMode === 'phone' ? 'call' : 'video') : 'in_person';
+  const status: VisitStatus = raw.status === 'cancelled' ? 'cancelled' : slot && slot.date < dayKey(now) ? 'done' : 'confirmed';
+  const logged = msOf(raw.loggedAt) ?? at ?? now;
+  const meetUrl = String(raw.googleMeetUrl || raw.meetingLink || '') || null;
+  return {
+    id: `project:${raw.id}`, tenantId, projectId: project.id, projectName: project.name,
+    kind, mode, purpose: clip(raw.title, 300), requestedBy: 'studio', status, slot, reschedules: 0, history: [],
+    createdAt: logged, createdBy: String(raw.loggedBy || ''), createdByName: String(raw.loggedBy || 'the project'),
+    updatedAt: msOf(raw.cancelledAt) ?? logged, updatedBy: String(raw.loggedBy || ''),
+    meetUrl: mode === 'video' ? meetUrl : null, calendarEventId: raw.googleCalendarEventId || null, calendarAccount: null, source: 'project',
+  };
+}
+
+const plainEmail = (e: string) => /^[A-Z0-9._%+-]+@([A-Z0-9-]+\.)+[A-Z]{2,}$/i.test(e);
+/** The addresses in a typed guest list, valid and once each. */
+export const guestEmails = (text: string) => [...new Set(String(text || '').split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(plainEmail))];
+
+/** A time in India as Google Calendar takes it: 2026-10-14T11:00:00+05:30. */
+const istStamp = (ms: number) => `${new Date(ms + 5.5 * 3600000).toISOString().slice(0, 19)}+05:30`;
+
+/**
+ * The Google Calendar event for a visit: its title, the client's details, the
+ * time in India, its guests, and a request for a Meet link when it is a video call.
+ */
+export function visitCalendarEvent(v: Pick<VisitRequest, 'kind' | 'mode' | 'purpose' | 'slot'>, ctx: { projectName: string; clientName: string; guests: string[]; minutes?: number; place?: string; requestId: string }): any {
+  if (!validSlot(v.slot)) throw new Error('A visit needs a date and a time to go on the calendar.');
+  const start = new Date(`${v.slot.date}T${v.slot.time}:00+05:30`).getTime();
+  const end = start + (ctx.minutes || 60) * 60000;
+  const body: any = {
+    summary: `${visitLabel(v.kind)}: ${ctx.projectName}${v.purpose ? ` · ${clip(v.purpose, 80)}` : ''}`,
+    description: `Project: ${ctx.projectName}\nClient: ${ctx.clientName || 'N/A'}${v.purpose ? `\nFor: ${v.purpose}` : ''}\n\nBooked from the Ops Desk, TheStudioDesk`,
+    start: { dateTime: istStamp(start), timeZone: 'Asia/Kolkata' },
+    end: { dateTime: istStamp(end), timeZone: 'Asia/Kolkata' },
+    attendees: ctx.guests.filter(plainEmail).map((email) => ({ email })),
+  };
+  if (v.mode === 'in_person' && ctx.place) body.location = ctx.place;
+  if (v.mode === 'video') body.conferenceData = { createRequest: { requestId: ctx.requestId, conferenceSolutionKey: { type: 'hangoutsMeet' } } };
+  return body;
+}
+
+/** Moving a visit's calendar event to a new time: the start and end only. */
+export function visitCalendarMove(slot: Slot, minutes = 60): any {
+  if (!validSlot(slot)) throw new Error('Choose a date and a time first.');
+  const start = new Date(`${slot.date}T${slot.time}:00+05:30`).getTime();
+  return { start: { dateTime: istStamp(start), timeZone: 'Asia/Kolkata' }, end: { dateTime: istStamp(start + minutes * 60000), timeZone: 'Asia/Kolkata' } };
 }
 
 /* ── Reviews and referrals ───────────────────────────────────────────────── */

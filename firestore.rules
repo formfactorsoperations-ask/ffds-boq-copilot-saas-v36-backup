@@ -977,11 +977,19 @@ service cloud.firestore {
           || (a == 'confirmed' && b in ['rescheduled', 'done', 'cancelled'])
           || (a == 'rescheduled' && b in ['rescheduled', 'confirmed', 'cancelled']);
       }
+      /* The Google Meet link and calendar event a request was booked with (services/opsDeskService), each optional. */
+      function visitCalendarOk(d) {
+        return (d.get('meetUrl', null) == null || (d.meetUrl is string && d.meetUrl.size() <= 300 && d.meetUrl.matches('https://.+')))
+          && (d.get('calendarEventId', null) == null || (d.calendarEventId is string && d.calendarEventId.size() <= 1024))
+          && (d.get('calendarAccount', null) == null || (d.calendarAccount is string && d.calendarAccount.size() <= 320));
+      }
       match /visitRequests/{vid} {
         allow read: if ownsParentProject();
         allow create: if mayWriteOps()
           && request.resource.data.keys().hasOnly(['tenantId', 'projectId', 'projectName', 'kind', 'mode', 'purpose', 'requestedBy',
-               'status', 'slot', 'reschedules', 'history', 'createdAt', 'createdBy', 'createdByName', 'updatedAt', 'updatedBy'])
+               'status', 'slot', 'reschedules', 'history', 'createdAt', 'createdBy', 'createdByName', 'updatedAt', 'updatedBy',
+               'meetUrl', 'calendarEventId', 'calendarAccount'])
+          && visitCalendarOk(request.resource.data)
           && request.resource.data.tenantId == parentTenant()
           && request.resource.data.projectId == projectId
           && request.resource.data.createdBy == myEmail()
@@ -994,12 +1002,17 @@ service cloud.firestore {
           && request.resource.data.purpose is string && request.resource.data.purpose.size() <= 300
           && request.resource.data.history is list && request.resource.data.history.size() == 1;
         allow update: if mayWriteOps()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'slot', 'reschedules', 'history', 'updatedAt', 'updatedBy'])
           && request.resource.data.updatedBy == myEmail()
-          && visitMove(resource.data.status, request.resource.data.status)
-          && request.resource.data.reschedules >= resource.data.reschedules
-          && request.resource.data.history is list
-          && request.resource.data.history.size() == resource.data.history.size() + 1;
+          && visitCalendarOk(request.resource.data)
+          && ((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'slot', 'reschedules', 'history', 'updatedAt', 'updatedBy',
+                                                                                  'meetUrl', 'calendarEventId', 'calendarAccount'])
+               && visitMove(resource.data.status, request.resource.data.status)
+               && request.resource.data.reschedules >= resource.data.reschedules
+               && request.resource.data.history is list
+               && request.resource.data.history.size() == resource.data.history.size() + 1)
+            /* A Meet link added to an open request, its status and history as they are. */
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt', 'updatedBy', 'meetUrl', 'calendarEventId', 'calendarAccount'])
+               && resource.data.status in ['requested', 'confirmed', 'rescheduled']));
         allow delete: if false;
       }
 
