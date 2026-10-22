@@ -1,4 +1,4 @@
-import { stateOf, guessAudience, cleanShape, cleanText, type MarkShape, type ReviewPerson, type ReviewSummary } from './drawingReview';
+import { stateOf, guessAudience, cleanShape, cleanText, type MarkShape, type ReviewPerson, type ReviewSummary, type ClientAgreement } from './drawingReview';
 
 /*
   DESIGN MEETINGS: presenting approved rooms to the client.
@@ -218,6 +218,27 @@ export function presentableRooms(drawings: RoomDrawing[]): PresentableRoom[] {
     out.push({ room, ready: !blocker, why, sheets });
   });
   return out.sort((a, b) => Number(b.ready) - Number(a.ready) || (a.room === GENERAL_ROOM ? 1 : b.room === GENERAL_ROOM ? -1 : a.room.localeCompare(b.room)));
+}
+
+/* ------------------------------------------------------------ the client's agreement */
+
+/**
+ * Each sheet the client agreed at a held meeting, on the version they saw:
+ * the latest agreement per drawing. The Drawings table reads it to count a
+ * client drawing as approved (lib/drawingReview: finalApprovalAt).
+ */
+export function agreementsFrom(meetings: Pick<DesignMeeting, 'state' | 'rooms' | 'id' | 'closedAt'>[]): Record<string, ClientAgreement> {
+  const out: Record<string, ClientAgreement> = {};
+  meetings.forEach((m) => {
+    if (m.state !== 'CLOSED' || !m.closedAt) return;
+    m.rooms.forEach((r) => {
+      if (r.outcome !== 'agreed') return;
+      r.sheets.forEach((sh) => {
+        if (!out[sh.drawingId] || out[sh.drawingId].at < m.closedAt!) out[sh.drawingId] = { meetingId: m.id, at: m.closedAt!, versionNo: sh.versionNo };
+      });
+    });
+  });
+  return out;
 }
 
 /* ------------------------------------------------------------ revision rounds per room */

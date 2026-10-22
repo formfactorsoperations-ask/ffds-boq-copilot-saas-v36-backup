@@ -15,7 +15,9 @@ import {
     LayoutGrid, List, AlertTriangle, X, Zap, Edit3, Trash2, PenTool
 } from '@/lib/lucide-shim';
 import { openInDesignReview } from '../../services/drawingReviewService';
-import { STATE_LABEL, stateOf, trackerPatch, isApprovedSheet } from '../../lib/drawingReview';
+import { STATE_LABEL, stateOf, trackerPatch, isApprovedSheet, finalApprovalAt, strayApprovalPatch, clientPending, type ClientAgreement } from '../../lib/drawingReview';
+import { agreementsFrom } from '../../lib/designMeeting';
+import { watchMeetings } from '../../services/designMeetingService';
 import { classifyRevisionCause, RevisionClassification } from '../../services/geminiService';
 import { useOrg } from '../../contexts/OrgContext';
 import { isDesignerRole } from '../../lib/roleAccess';
@@ -196,26 +198,42 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                 }
                 return d;
             });
-            /*
-              A sheet the Design Desk approved before the Desk wrote its
-              approvals into the table (drawingReview: trackerPatch) still
-              reads unapproved here. The studio's screen catches it up, once;
-              the next snapshot then agrees and writes nothing.
-            */
-            if (canCatchUpRef.current) {
-                data.forEach(d => {
-                    if (stateOf(d.review) !== 'APPROVED') return;
-                    const patch = trackerPatch(d, d.review);
-                    if (!patch) return;
-                    updateDoc(doc(db, `organizations/${orgId}/projects/${projectId}/drawingTracker`, d.id), patch as any)
-                        .catch(err => console.error("Could not catch up the Design Desk approval on", d.id, err));
-                });
-            }
             setDrawings(data);
             setLoading(false);
         });
         return () => unsub();
     }, [projectId, orgId]);
+
+    /* What the client agreed at the project's design meetings: a client drawing is approved only then. */
+    const [agreements, setAgreements] = useState<Record<string, ClientAgreement>>({});
+    useEffect(() => {
+        if (!projectId) return;
+        return watchMeetings(orgId, projectId, list => setAgreements(agreementsFrom(list)), () => setAgreements({}));
+    }, [projectId, orgId]);
+
+    /*
+      Sheets approved before the Desk and the design meetings wrote their
+      approvals into the table (lib/drawingReview: trackerPatch) are caught up
+      from the studio's screen, once; the next snapshot then agrees and writes
+      nothing. The approvals an earlier version of this wrote too early are
+      taken back first (strayApprovalPatch). Only ever towards what the Desk
+      and the client said: an approval the studio set by hand is left alone.
+    */
+    const caughtUp = useRef(new Set<string>());
+    useEffect(() => {
+        if (!canCatchUpRef.current || !db) return;
+        drawings.forEach(d => {
+            const agreement = agreements[d.id];
+            const patch = strayApprovalPatch(d, d.review)
+                ?? (finalApprovalAt(d.review, agreement) != null ? trackerPatch(d, d.review, agreement) : null);
+            if (!patch) return;
+            const key = `${d.id}:${JSON.stringify(patch)}`;
+            if (caughtUp.current.has(key)) return;
+            caughtUp.current.add(key);
+            updateDoc(doc(db, `organizations/${orgId}/projects/${projectId}/drawingTracker`, d.id), patch as any)
+                .catch(err => console.error("Could not bring the Design Desk status into the table for", d.id, err));
+        });
+    }, [drawings, agreements, projectId, orgId]);
 
     useEffect(() => {
         if (!projectId || fullBoq.length === 0) return;
@@ -814,7 +832,9 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         */
         if (d.review?.versionNo) {
             const s = stateOf(d.review);
-            if (s === 'APPROVED') return 'Approved';
+            if (finalApprovalAt(d.review, agreements[d.id]) != null) return 'Approved';
+            /* The Design Head's approval on a client drawing is the studio's; the client has not agreed yet. */
+            if (s === 'APPROVED') return clientPending(d.review) ? 'Client Changes' : 'Ready for Client';
             if (s === 'IN_REVIEW') return 'Studio Review';
             if (s === 'CHANGES_REQUESTED') return 'Returned';
             if (s === 'DRAFT') return 'In Progress';
@@ -866,7 +886,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
     const isOwner = userRole === 'owner';
     const issues = drawings.filter(d => d.isGapFlagged);
-    const completedCount = (drawings || []).filter(d => isApprovedSheet(d)).length;
+    const completedCount = (drawings || []).filter(d => isApprovedSheet(d, agreements[d.id])).length;
     const readyForGfcCount = (drawings || []).filter(d => d.approvedAt != null && (!d.gfc || d.gfc.status !== 'issued')).length;
 
     // Derived Scope Tracks logic
@@ -931,8 +951,8 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         for (const f of FILTERS) if (f.key !== 'All') c[f.key] = 0;
         for (const d of drawings) {
             const st = statusOf(d);
-            // A submitted round needs the studio, not the Designer who sent it; a returned one, the Designer.
-            if (st === 'Client Review' || st === 'Site Hold' || d.isGapFlagged || (st === 'Studio Review' && isOwner) || (st === 'Returned' && !isOwner)) c['Action Required']++;
+            // A submitted round, one ready for the client or the client's changes need the studio; a returned one, the Designer.
+            if (st === 'Client Review' || st === 'Site Hold' || d.isGapFlagged || ((st === 'Studio Review' || st === 'Ready for Client' || st === 'Client Changes') && isOwner) || (st === 'Returned' && !isOwner)) c['Action Required']++;
             if (st === 'Studio Review') c['Studio Review']++;
             if (st === 'Not Started') c['Not Started']++;
             if (st === 'Client Review') c['Client Review']++;
@@ -942,7 +962,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         }
         return c;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [drawings, isOwner]);
+    }, [drawings, agreements, isOwner]);
 
     const stats = {
         total: drawings.length,
@@ -967,7 +987,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
         // Pill filter
         if (filter === 'All') return true;
-        if (filter === 'Action Required') return status === 'Client Review' || status === 'Site Hold' || d.isGapFlagged || (status === 'Studio Review' && isOwner) || (status === 'Returned' && !isOwner);
+        if (filter === 'Action Required') return status === 'Client Review' || status === 'Site Hold' || d.isGapFlagged || ((status === 'Studio Review' || status === 'Ready for Client' || status === 'Client Changes') && isOwner) || (status === 'Returned' && !isOwner);
         if (filter === 'Studio Review') return status === 'Studio Review';
         if (filter === 'Not Started') return status === 'Not Started';
         if (filter === 'Client Review') return status === 'Client Review';
@@ -1145,6 +1165,10 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs"><AlertCircle className="w-3.5 h-3.5 text-rose-700" />Rejected / Hold</span>;
             case 'Returned':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs"><AlertCircle className="w-3.5 h-3.5 text-amber-600" />Returned</span>;
+            case 'Ready for Client':
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs"><CheckCircle2 className="w-3.5 h-3.5 text-[#2E7D6B]" />Ready for client</span>;
+            case 'Client Changes':
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs"><User className="w-3.5 h-3.5 text-amber-600" />Client changes</span>;
             case 'In Progress':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs"><PenTool className="w-3.5 h-3.5 text-slate-500" />In Progress</span>;
             case 'Studio Review':
@@ -1599,7 +1623,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 title="Open in Design Desk"
                                 className="mt-0.5 block max-w-full truncate text-left text-[10.5px] font-semibold text-[#5B5BD6] hover:underline"
                             >
-                                v{d.review.versionNo} · {STATE_LABEL[d.review.state]}{d.review.state === 'CHANGES_REQUESTED' && d.review.marksOpen ? ` · ${d.review.marksOpen} open` : ''}
+                                v{d.review.versionNo} · {d.review.state === 'APPROVED' ? 'Design Head approved' : STATE_LABEL[d.review.state]}{d.review.state === 'CHANGES_REQUESTED' && d.review.marksOpen ? ` · ${d.review.marksOpen} open` : ''}
                             </button>
                         )}
                     </div>
@@ -2296,7 +2320,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         const roomDrawings = filteredDrawings.filter(d => (d.roomName || 'General / Project-Wide') === roomKey);
                         if (roomDrawings.length === 0) return null;
 
-                        const triggerApprovedCount = roomDrawings.filter(d => isApprovedSheet(d)).length;
+                        const triggerApprovedCount = roomDrawings.filter(d => isApprovedSheet(d, agreements[d.id])).length;
                         const triggerGfcCount = roomDrawings.filter(d => d.gfc?.status === 'issued').length;
                         const progressPct = Math.round((triggerApprovedCount / roomDrawings.length) * 100);
 

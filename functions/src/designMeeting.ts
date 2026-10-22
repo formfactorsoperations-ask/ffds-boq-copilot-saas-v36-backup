@@ -3,7 +3,7 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { resolveActor, person, type Actor } from "./drawingReview";
 import {
-  canRunMeeting, canSetAudience, cleanText, storeShape, safeId,
+  canRunMeeting, canSetAudience, cleanText, storeShape, safeId, trackerPatch,
   type ReviewSummary, type ReviewMark, type ReviewEvent,
 } from "../../lib/drawingReview";
 import {
@@ -168,6 +168,9 @@ async function close(actor: Actor, orgId: string, projectId: string, input: Inpu
         const mine = r.changes.filter((c) => c.drawingId === sh.drawingId);
         if (r.outcome === "agreed" || !mine.length) {
           tx.set(dref.collection("reviewEvents").doc(), { type: "client", at: now, by, versionNo: sh.versionNo, text: r.outcome === "agreed" ? "Agreed with the client at the design meeting" : "Shown at the design meeting; the client's changes were on other sheets of the room" } as ReviewEvent);
+          /* The client agreed the room: its sheets are approved in the Drawings table (lib/drawingReview: finalApprovalAt). */
+          const patch = r.outcome === "agreed" ? trackerPatch(drawingSnaps.get(sh.drawingId)!.data(), s, { meetingId: m.id, at: now, versionNo: sh.versionNo }, now) : null;
+          if (patch) tx.update(dref, patch);
           continue;
         }
         let seq = s.marksSeq || 0;

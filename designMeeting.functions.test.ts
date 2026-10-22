@@ -90,6 +90,7 @@ beforeAll(async () => {
     await setDoc(doc(db, `${DT}/l1`), { id: 'l1', name: 'Living Room Layout', roomName: 'Living Room' });
     await setDoc(doc(db, `${DT}/lp`), { id: 'lp', name: 'Furniture Layout', roomName: 'General / Project-Wide' });
     await setDoc(doc(db, `${DT}/d1`), { id: 'd1', name: 'Dining Crockery Unit', roomName: 'Dining' });
+    await setDoc(doc(db, `${DT}/s1`), { id: 's1', name: 'Electrical Services Plan', roomName: 'Services' });
   });
   await makeUser('designer', 'riya@m.com', { tenantId: STUDIO, role: 'Designer', displayName: 'Riya' });
   await makeUser('head', 'mayuri@m.com', { tenantId: STUDIO, role: 'Design Head', displayName: 'Mayuri' });
@@ -113,6 +114,11 @@ describe('a design meeting', { timeout: 60000 }, () => {
     expect(await code(users.head.meet({ action: 'start', rooms: ['Kitchen'] }))).toBe('functions/failed-precondition');
     k1Version = (await approved('k1', 'k1')).versionId;
     await approved('k2', 'k2');
+    /* In the Drawings table: the studio-only sheet is approved by the Design Head; the client's wait for the client. */
+    const s1 = await approved('s1', 's1');
+    expect((await read(`${DT}/s1`)).approvedAt).toBe(s1.decidedAt);
+    expect((await read(`${DT}/s1`)).rounds).toEqual([expect.objectContaining({ roundNumber: 1, status: 'approved', clientFeedbackSubmittedAt: null })]);
+    expect((await read(`${DT}/k1`)).approvedAt ?? null).toBeNull();
     expect(await code(users.head.meet({ action: 'start', rooms: ['Living Room'] }))).toBe('functions/failed-precondition');
   });
 
@@ -208,6 +214,15 @@ describe('a design meeting', { timeout: 60000 }, () => {
     expect((await read(`${P}/designMeetings/${m.meeting.id}`)).state).toBe('CANCELLED');
     const again = await users.head.meet({ action: 'start', rooms: ['Living Room'] });
     expect(again.meeting.state).toBe('OPEN');
+  });
+
+  it('a room the client agrees is approved in the Drawings table, dated by the meeting', async () => {
+    const open = (await list(`${P}/designMeetings`)).find((m) => m.state === 'OPEN');
+    await users.head.meet({ action: 'room', meetingId: open.id, room: 'Living Room', outcome: 'agreed' });
+    const res = await users.head.meet({ action: 'close', meetingId: open.id });
+    const l1 = await read(`${DT}/l1`);
+    expect(l1.approvedAt).toBe(res.meeting.closedAt);
+    expect(l1.rounds).toEqual([expect.objectContaining({ roundNumber: 1, status: 'approved', clientFeedbackSubmittedAt: res.meeting.closedAt })]);
   });
 
   const SIGNATURE = `data:image/png;base64,${'iVBORw0KGgo'.padEnd(400, 'A')}`;

@@ -258,27 +258,55 @@ export interface TrackerFields {
   gfc?: { status: string; [k: string]: unknown } | null;
 }
 
-/** Approved, whichever side said so: the table, or a Design Desk approval the table has not caught up with. */
-export const isApprovedSheet = (d?: (TrackerFields & { review?: Partial<ReviewSummary> | null }) | null) =>
-  d?.approvedAt != null || stateOf(d?.review) === 'APPROVED';
+/** The client agreed a sheet's room at a design meeting, on this version (lib/designMeeting: agreementsFrom). */
+export interface ClientAgreement {
+  meetingId: string;
+  at: number;
+  versionNo: number;
+}
+
+/*
+  WHEN A DRAWING IS APPROVED.
+
+  The Design Head approving a sheet is the studio's sign-off, not the
+  client's. So:
+    - a studio-only drawing (carpentry details, services) is approved when
+      the Design Head approves it: the client never sees it;
+    - a drawing for the client is approved when the client agrees its room
+      at a design meeting, on the version the Design Head approved. Until
+      then it is ready for the client, not approved.
+  Client changes waiting on the sheet mean it is not approved either way.
+  Returns when it was approved, or null.
+*/
+export function finalApprovalAt(review: Partial<ReviewSummary> | null | undefined, agreement?: ClientAgreement | null): number | null {
+  if (stateOf(review) !== 'APPROVED' || clientPending(review)) return null;
+  if (review!.audience === 'studio') return review!.decidedAt || review!.updatedAt || null;
+  return agreement && agreement.versionNo === review!.versionNo ? agreement.at : null;
+}
+
+/** Approved, whichever side said so: the table, or a final approval the table has not caught up with. */
+export const isApprovedSheet = (d?: (TrackerFields & { review?: Partial<ReviewSummary> | null }) | null, agreement?: ClientAgreement | null) =>
+  d?.approvedAt != null || finalApprovalAt(d?.review, agreement) != null;
 
 /*
   THE DRAWINGS TABLE FOLLOWS THE DESIGN DESK.
 
   The table, its room progress, the GFC release and the design gate read a
-  drawing's `approvedAt` and its rounds. The Desk wrote only `review`, so a
-  sheet signed off on the Desk still read "Not Started" in the table. Now every
-  time the Desk moves a sheet, the function writes this patch with it, in the
-  same transaction:
-    - approved on the Desk: approved in the table, on its current round;
-    - moved off approved (returned, the client's changes sent back, a new PDF
-      sent in): no longer approved, and a released GFC is superseded, as the
-      table's own Pending does.
-  Returns null when the table already agrees.
+  drawing's `approvedAt` and its rounds. The Desk wrote only `review`, so the
+  two drifted apart. Now every time the Desk or a design meeting moves a
+  sheet, the function writes this patch with it, in the same transaction:
+    - finally approved (above): approved in the table, on its current round,
+      with the client's answer dated only when the client gave one;
+    - back in work on the Desk (returned, the client's changes sent back, a
+      new PDF sent in): no longer approved, and a released GFC is
+      superseded, as the table's own Pending does.
+  A sheet the Design Head approved that waits for the client is left as the
+  studio set it. Returns null when the table already agrees.
 */
 export function trackerPatch(
   d: TrackerFields | null | undefined,
   review: Partial<ReviewSummary> | null | undefined,
+  agreement?: ClientAgreement | null,
   now = Date.now(),
 ): Partial<TrackerFields> | null {
   const state = stateOf(review);
@@ -287,21 +315,47 @@ export function trackerPatch(
   const n = Math.max(1, Number(d?.currentRound) || 0);
   const current = rounds.find((r) => r.roundNumber === n);
 
-  if (state === 'APPROVED') {
+  const at = finalApprovalAt(review, agreement);
+  if (at != null) {
     if (d?.approvedAt != null && current?.status === 'approved') return null;
-    const at = review?.decidedAt || now;
+    /* Only the client's agreement is a client answer; a studio-only sheet never went to the client. */
+    const answered = review!.audience === 'studio' ? null : at;
     const next = current
-      ? rounds.map((r) => (r.roundNumber === n ? { ...r, status: 'approved', clientFeedbackSubmittedAt: r.clientFeedbackSubmittedAt || at } : r))
-      : [...rounds, { roundNumber: n, issuedAt: review?.submittedAt || at, issuedBy: review?.designer?.name || null, clientFeedbackSubmittedAt: at, status: 'approved' }]
+      ? rounds.map((r) => (r.roundNumber === n ? { ...r, status: 'approved', clientFeedbackSubmittedAt: r.clientFeedbackSubmittedAt ?? answered } : r))
+      : [...rounds, { roundNumber: n, issuedAt: answered, issuedBy: null, clientFeedbackSubmittedAt: answered, status: 'approved' }]
           .sort((a, b) => a.roundNumber - b.roundNumber);
     return { approvedAt: d?.approvedAt ?? at, currentRound: n, rounds: next };
   }
+  if (state === 'APPROVED') return null;
 
   if (d?.approvedAt == null && current?.status !== 'approved' && d?.gfc?.status !== 'issued') return null;
   const patch: Partial<TrackerFields> = { approvedAt: null };
   if (current?.status === 'approved') patch.rounds = rounds.map((r) => (r.roundNumber === n ? { ...r, status: 'in_review' } : r));
   if (d?.gfc?.status === 'issued') patch.gfc = { ...d.gfc, status: 'superseded' };
   return patch;
+}
+
+/*
+  The first version of this sync, run from the studio's screen, approved
+  every sheet the Design Head had approved and dated a client answer that
+  never came. Its writes carry one mark: the approval and the client's answer
+  both at the Design Head's decision time, to the millisecond, which a
+  person setting a status by hand does not produce. This takes them back
+  to what they were; trackerPatch then sets what is right. Null when the
+  drawing does not carry that mark.
+*/
+export function strayApprovalPatch(d: TrackerFields | null | undefined, review: Partial<ReviewSummary> | null | undefined): Partial<TrackerFields> | null {
+  const decided = review?.decidedAt;
+  if (!decided || d?.approvedAt !== decided) return null;
+  const rounds = Array.isArray(d?.rounds) ? d!.rounds : [];
+  const marked = rounds.find((r) => r.status === 'approved' && r.clientFeedbackSubmittedAt === decided);
+  if (!marked) return null;
+  /* A round it added has the designer's send-in as its issue; one that was already there gets its status back. */
+  const added = marked.issuedAt === (review!.submittedAt || decided) && marked.issuedBy === (review!.designer?.name || null);
+  const next = added
+    ? rounds.filter((r) => r !== marked)
+    : rounds.map((r) => (r === marked ? { ...r, status: 'not_started', clientFeedbackSubmittedAt: null } : r));
+  return added ? { approvedAt: null, rounds: next, currentRound: next.reduce((mx, r) => Math.max(mx, r.roundNumber), 0) } : { approvedAt: null, rounds: next };
 }
 
 /* ------------------------------------------------------------- validation */

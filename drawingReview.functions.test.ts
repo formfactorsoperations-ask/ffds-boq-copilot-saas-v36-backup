@@ -175,10 +175,8 @@ describe('a sheet through review', () => {
     expect(rounds.map((r) => r.status).sort()).toEqual(['APPROVED', 'CHANGES_REQUESTED']);
     const events = (await list(`${DT}/d1/reviewEvents`)).map((e) => e.type).sort();
     expect(events).toEqual(['approved', 'returned', 'submitted', 'submitted', 'uploaded', 'uploaded']);
-    /* The Drawings table reads the same: approved, on its current round. */
-    const after = await read(`${DT}/d1`);
-    expect(after.approvedAt).toBe(res.review.decidedAt);
-    expect(after.rounds).toEqual([expect.objectContaining({ roundNumber: 1, status: 'approved' })]);
+    /* A drawing for the client: the Design Head's approval is the studio's, so the Drawings table waits for the client. */
+    expect((await read(`${DT}/d1`)).approvedAt ?? null).toBeNull();
   });
 
   it('the final file sits where no browser can write, and the upload is cleared away', async () => {
@@ -201,8 +199,6 @@ describe('a sheet through review', () => {
     await users.designer.upload(path, pdf('v3'), 'application/pdf');
     const sent = await users.designer.call({ drawingId: 'd1', action: 'finalize', uploadPath: path, fileName: 'kitchen-v3.pdf', submit: true });
     expect(sent.review.versionNo).toBe(3);
-    /* A new PDF sent in: the table no longer reads the sheet as approved. */
-    expect((await read(`${DT}/d1`)).approvedAt).toBeNull();
     const back = await users.designer.call({ drawingId: 'd1', action: 'withdraw', expectedRev: sent.review.rev });
     expect(back.review.state).toBe('DRAFT');
   });
@@ -213,7 +209,6 @@ describe('a sheet through review', () => {
     const res = await users.designer.call({ drawingId: 'd1', action: 'remove', expectedRev: d.review.rev, versionId: d.review.versionId });
     expect(res.review.versionNo).toBe(2);
     expect(res.review.state).toBe('APPROVED');
-    expect((await read(`${DT}/d1`)).approvedAt).toBe(res.review.decidedAt);
     expect((await list(`${DT}/d1/reviewVersions`)).map((v) => v.n).sort()).toEqual([1, 2]);
     expect((await list(`${DT}/d1/reviewEvents`)).some((e) => e.type === 'removed')).toBe(true);
   });
