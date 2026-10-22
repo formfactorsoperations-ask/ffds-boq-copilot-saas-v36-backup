@@ -291,10 +291,15 @@ export async function recordClientSignoff(token: string, type: 'approved' | 'que
         data = querySnapshot.docs[0].data();
     }
     
-    if (data.tokenExpiresAt && data.tokenExpiresAt.toDate() < new Date()) {
-        throw new Error("Signoff token has expired.");
-    }
-    
+    /*
+      No expiry check here. `tokenExpiresAt` (30 days from the drawing) was for
+      the old emailed sign-off link, which anyone holding it could open. This is
+      only called from the client portal, where the client is signed in and the
+      rules admit them by that sign-in and their project (firestore.rules,
+      isDecisionClient), not by the token. Checking it here left every decision
+      older than a month impossible to answer, with nothing the studio could do.
+    */
+
     const newStatus = type === 'approved' ? 'signed' : 'disputed';
     
     await updateDoc(targetDocRef, {

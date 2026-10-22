@@ -136,7 +136,7 @@ import { issuePortalAccess, projectIdFromToken } from "./services/portalAccessSe
 import { readPortalView } from "./services/portalViewService";
 import { syncStudioAccess, portalDoor } from "./services/studioAccess";
 import { publishProjectDirectory } from "./services/projectTeam";
-import { seesStudioFinance, FINANCE_TABS, isLimitedRole, limitedMayOpen, limitedHomeTab, STUDIO_TABS, visibleToRole } from "./lib/roleAccess";
+import { seesStudioFinance, FINANCE_TABS, isLimitedRole, limitedMayOpen, limitedHomeTab, mayOpenStudioTab, STUDIO_TABS, visibleToRole } from "./lib/roleAccess";
 import { functions as firebaseFunctions } from "./services/firebaseClient";
 import { httpsCallable } from "firebase/functions";
 import { roleLabel } from "./lib/roles";
@@ -158,6 +158,12 @@ import { SaveIcon, UploadIcon, NewFileIcon } from "./components/Icons";
 import Card from "./components/shared/Card";
 import { publicAppOrigin } from "./lib/publicUrl";
 import { releasePortal } from "./services/portalRelease";
+import { NotifyProvider } from "./components/notify/NotifyContext";
+import NotifyBell from "./components/notify/NotifyBell";
+import NeedsYouBar from "./components/notify/NeedsYouBar";
+import CatchUp from "./components/notify/CatchUp";
+import { PORTAL_OPEN_EVENT } from "./components/notify/NotifyContext";
+import { STUDIO_ROUTES, staffBox, clientBox, type Stored } from "./lib/notify";
 
 // Default Empty Context
 const DEFAULT_CONTEXT: ProjectContext = {
@@ -2722,6 +2728,25 @@ export default function App() {
 
   const hasProjectData = !!activeInternalId;
 
+  /*
+    A note opens the screen that owns it (lib/notify): a studio tab, or a tab
+    inside its project, and only one this person may open; otherwise the
+    nearest one they can.
+  */
+  const openNoteTarget = (n: Stored) => {
+    const roles = currentRoles?.length ? currentRoles : currentRole;
+    if (STUDIO_ROUTES.has(n.route) || !n.projectId) {
+      const tab = STUDIO_ROUTES.has(n.route) ? n.route : "home";
+      setActiveTab(mayOpenStudioTab(tab, roles) && limitedMayOpen(roles, tab) ? tab : "home");
+      return;
+    }
+    const project = visibleProjects.find((p) => p.id === n.projectId);
+    if (!project) { setActiveTab("projects"); return; }
+    const tab = limitedMayOpen(roles, n.route) ? n.route : limitedHomeTab(roles);
+    if (activeInternalId === project.id && isProjectTab) setActiveTab(tab);
+    else handleOpenProject(project, tab);
+  };
+
   // Top Header layout (sidebar width is 0px)
   const sidebarWidth = '0px';
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
@@ -2910,7 +2935,12 @@ export default function App() {
   }
 
   if (appMode === "client" && clientPortalProject) {
+    /* "New for you" (lib/notify.ts portalDrafts): the client's own notes, opened on the portal's tab that owns each. */
     return (
+      <NotifyProvider box={clientBox(currentUserAuth?.uid)} audience="client"
+        onOpen={(n) => window.dispatchEvent(new CustomEvent(PORTAL_OPEN_EVENT, { detail: n.route }))}>
+      <NeedsYouBar />
+      <CatchUp />
       <ClientPortal
         projectData={clientPortalProject}
         bank={bank}
@@ -2932,6 +2962,7 @@ export default function App() {
           setClientPortalProject(updatedProject);
         }}
       />
+      </NotifyProvider>
     );
   }
 
@@ -2941,6 +2972,9 @@ export default function App() {
     );
 
     return (
+      <NotifyProvider box={staffBox(currentUserAuth?.email)} onOpen={() => {}}>
+      <NeedsYouBar />
+      <CatchUp />
       <SupervisorMobileApp
         projects={projectLibrary.filter((p) => {
           if (
@@ -2987,6 +3021,7 @@ export default function App() {
           }
         }}
       />
+      </NotifyProvider>
     );
   }
 
@@ -3011,6 +3046,9 @@ export default function App() {
 
   return (
     <PageHeaderProvider route={activeTab}>
+      <NotifyProvider box={staffBox(currentUserAuth?.email)} onOpen={openNoteTarget}>
+      <NeedsYouBar />
+      <CatchUp />
       <div className={`min-h-screen overflow-x-hidden relative ${isProjectTab && hasProjectData ? "md:h-screen md:overflow-hidden" : ""}`}>
         {/* Global Background Beams with Collision Animation */}
         <div className="fixed inset-0 pointer-events-none z-[50] overflow-hidden">
@@ -3043,6 +3081,7 @@ export default function App() {
             >
               FORM FACTORS DESIGN STUDIO
             </button>
+            <NotifyBell />
           </div>
 
           <div
@@ -4631,6 +4670,7 @@ export default function App() {
       <OfflineIndicator />
         </div>
     </div>
+      </NotifyProvider>
     </PageHeaderProvider>
   );
 }

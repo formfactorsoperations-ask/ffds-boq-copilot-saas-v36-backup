@@ -27,6 +27,8 @@ import { clientMaySee } from '../lib/minutes';
 import { recordClientSignoff, recordManualSignoff } from '../services/decisionsService';
 import ClientDecisionCard from './client/ClientDecisionCard';
 import ClientAccountMenu from './client/ClientAccountMenu';
+import NotifyBell from './notify/NotifyBell';
+import { PORTAL_OPEN_EVENT } from './notify/NotifyContext';
 import { buildClientBoqRows, groupClientBoq, ClientBoqRow } from '../lib/clientBoq';
 import { submitClientAction, ClientAction } from '../services/clientPortalActions';
 import { isVisibleToClient } from '../lib/clientVisibility';
@@ -351,6 +353,19 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
      * a scroll.
      */
     const [designScopeTab, setDesignScopeTab] = useState<'drawings' | 'scope' | 'record'>('drawings');
+    /* A "New for you" note opens the lens that owns it (App.tsx, lib/notify.ts portalDrafts). */
+    useEffect(() => {
+        const LENS = new Set<PortalTab>(['overview', 'timeline', 'decisions', 'documents', 'financials', 'approvals', 'roadmap', 'feed', 'designs', 'materials', 'scope', 'designScope']);
+        const open = (e: Event) => {
+            const route = String((e as CustomEvent<string>).detail || '');
+            const [tab, sub] = route.split(':');
+            if (!LENS.has(tab as PortalTab)) { setActiveTab('overview'); return; }
+            setActiveTab(tab as PortalTab);
+            if (tab === 'designScope' && (sub === 'record' || sub === 'scope' || sub === 'drawings')) setDesignScopeTab(sub);
+        };
+        window.addEventListener(PORTAL_OPEN_EVENT, open);
+        return () => window.removeEventListener(PORTAL_OPEN_EVENT, open);
+    }, []);
 
     /* The design meetings held, from the projection; updated in place when the client confirms one. */
     const [designRecord, setDesignRecord] = useState<PortalDesignMeeting[]>(() => (projectData as any).designRecord || []);
@@ -2241,6 +2256,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                       signed in as, and a way to change the password their
                       studio generated for them. The studio's own preview has
                       no such session, so it keeps the plain button. */}
+                  {source === 'client' && <NotifyBell className="w-9 h-9" />}
                   {onLogout && (source === 'client' ? (
                     <ClientAccountMenu
                       clientName={(context as any)?.clientName}

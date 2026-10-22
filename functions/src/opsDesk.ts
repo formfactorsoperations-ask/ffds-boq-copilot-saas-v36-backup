@@ -5,6 +5,8 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { PLATFORM_OWNER_EMAILS } from "./guards";
 import { escalationRecipientsOf, opsSettingsOf, sweepCandidates, type FollowUp } from "../../lib/opsDesk";
+import { escalationDraft } from "../../lib/notify";
+import { notify } from "./notify";
 
 /*
   THE OPS DESK'S SERVER SIDE (lib/opsDesk.ts has the rules of it).
@@ -69,6 +71,9 @@ export const onEscalationWritten = onDocumentWritten(
     if (!before && after.status === "open") {
       const org = (await db().doc(`organizations/${after.tenantId}`).get()).data();
       const to = escalationRecipientsOf(org);
+      /* In their StudioDesk first, the email after (lib/notify). */
+      await notify({ tenantId: after.tenantId, projectId: String(event.params.projectId), actorEmail: after.raisedBy || null, org },
+        [escalationDraft(after, "raised", { projectId: String(event.params.projectId), leads: to, projectOps: [] })]);
       if (!to.length) {
         await ref.update({ notifiedTo: [], notifiedAt: Date.now(), notifyNote: "Nobody to tell: choose people in Studio settings → Ops Desk." });
         return;
@@ -89,6 +94,8 @@ export const onEscalationWritten = onDocumentWritten(
 
     if (before?.status === "open" && after.status === "decided") {
       const to = after.auto ? await opsMembers(String(event.params.projectId)) : [String(after.raisedBy || "")].filter(Boolean);
+      await notify({ tenantId: after.tenantId, projectId: String(event.params.projectId), actorEmail: after.decidedBy || null },
+        [escalationDraft(after, "decided", { projectId: String(event.params.projectId), leads: [], projectOps: to })]);
       if (!to.length) return;
       try {
         await sendMail(to, `Decided: ${after.title} · ${after.projectName}`, card(

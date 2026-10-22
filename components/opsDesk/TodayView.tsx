@@ -14,6 +14,7 @@ import { leadName, mainPerson } from '../../lib/leads';
 import { btnPri, btnSec, btnSm } from './OpsDeskPanels';
 import { useDesk, seenSteps, Panel, Chip, Empty, Loading, EYEBROW, BRAND_EYEBROW, fmtDay, fmtTime, dialable, cardV } from './DeskBits';
 import '../projectHeader/projectHeader.css';
+import WaitingOnYou from '../notify/WaitingOnYou';
 
 /*
   TODAY (mockups OD1 and OD2): the desk opens on what to do now. "Up next" is
@@ -80,6 +81,8 @@ export function TodayView() {
             </div>
           </motion.div>
         )}
+        {/* Someone waiting on you right now, with how long (components/notify). */}
+        <WaitingOnYou />
         <Panel icon={Inbox} title="Today, in order" tour="today"
           blurb={d.isLead ? 'Escalations to decide and minutes to approve come first, then your own. Every row says why it is here; the ? explains the kind of work.' : 'Overdue first, then today. Every row says why it is here; the ? explains the kind of work.'}>
           <TodayList queue={open} done={d.done} />

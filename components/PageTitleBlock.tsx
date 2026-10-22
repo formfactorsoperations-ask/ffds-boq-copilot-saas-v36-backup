@@ -1,6 +1,8 @@
 import React from 'react';
 import { getPageMeta } from './pageMeta';
 import { usePageHeaderSlots } from '../contexts/PageHeaderContext';
+import LiveStamp from './notify/LiveStamp';
+import { AREA_TAB } from '../lib/notify';
 import WavyText from './ui/WavyText';
 import FlipText from './ui/flip-text';
 
@@ -57,6 +59,9 @@ const PageTitleBlock: React.FC<Props> = ({ route }) => {
           }`}
         />
       )}
+
+      {/* A change on this screen as it happens: who did what, just now (components/notify). */}
+      <LiveStamp match={(n) => n.route === route || AREA_TAB[n.area] === route} />
 
       {hasVitals && (
         <div className="flex items-center flex-wrap gap-y-1">

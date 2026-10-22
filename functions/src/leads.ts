@@ -6,6 +6,8 @@ import * as pako from "pako";
 import { createHash, timingSafeEqual } from "crypto";
 import { requireStaff, rateLimiter } from "./guards";
 import { sendMail, card, SECRETS } from "./opsDesk";
+import { notify } from "./notify";
+import { leadDraft } from "../../lib/notify";
 import { storedProject } from "./designViewStrip";
 import { findMatches, homeLine, leadName, LEAD_STAGES, sourceLabel, type Lead } from "../../lib/leads";
 import {
@@ -124,6 +126,7 @@ export const leadForm = onCall({ cors: true, secrets: SECRETS, timeoutSeconds: 3
   const lead = leadFromEnquiry(e, { tenantId, owner, now, id: ref.id });
   await ref.set(lead);
   logger.info("leadForm: lead added", { tenantId, leadId: ref.id, owner: owner.email });
+  await notify({ tenantId, org }, [leadDraft({ name: e.name, wants: e.scope.join(", "), home: homeLine(lead.home) }, owner.email)]);
 
   /* The owner hears at once: a new enquiry should be called within the hour. */
   try {

@@ -16,7 +16,11 @@ import PageTitleBlock from './PageTitleBlock';
 import { LogOut, Home, Building2, Users, BarChart3, Library, CreditCard } from '@/lib/lucide-shim';
 import ProjectStatusTransitionModal from './ProjectStatusTransitionModal';
 import { FloatingDock, FloatingDockItem } from './ui/floating-dock';
-import HubAlertsBell from './ops/HubAlertsBell';
+import { useHubAlerts } from './ops/useHubAlerts';
+import NotifyBell from './notify/NotifyBell';
+import LiveStamp from './notify/LiveStamp';
+import { useInbox } from './notify/NotifyContext';
+import { Count } from './notify/NotifyBits';
 
 const WORKSPACE_STATUS_MAP: Record<
   string,
@@ -226,6 +230,7 @@ export function ProjectWorkspace({
   const isDesigner = isDesignerRole(currentRole);
   /* Client Relations works like a Designer here: its own allow-list, all of it look-only for now. */
   const isLimited = isLimitedRole(currentRole);
+  const hubAlerts = useHubAlerts(projectId, projectContext);
   const limitedHome = limitedHomeTab(currentRole);
   /* R1 in the header mockups: on a Designer's tabs, "view" marks the ones
      they can only look at. The Drawing Tracker, which they work in, has none. */
@@ -234,6 +239,11 @@ export function ProjectWorkspace({
   const hiddenForRole = (item: any): boolean =>
     (!seesStudioFinance(currentRole) && !!item?.money) ||
     (isLimited && !limitedMayOpen(currentRole, item?.route));
+
+  /* Notes on this project, by the screen they open: a red number where someone is waiting on you, a dot for something new (lib/notify). */
+  const inbox = useInbox();
+  const noted = inbox?.forProject(projectId) || {};
+  const notedIn = (routes: string[]) => routes.reduce((t, r) => ({ needs: t.needs + (noted[r]?.needs || 0), unread: t.unread + (noted[r]?.unread || 0) }), { needs: 0, unread: 0 });
 
   const renderNavItem = (item: any, isLockedStage: boolean, isHub: boolean = false) => {
     if (hiddenForRole(item)) return null;
@@ -522,6 +532,7 @@ export function ProjectWorkspace({
                           NOW
                         </span>
                       )}
+                      {(() => { const c = notedIn(openableItems.map(i => i.route)); return <Count needs={c.needs} unread={c.unread} className="-top-1 -right-1 z-10" />; })()}
                     </button>
 
                     {/* Hover Dropdown */}
@@ -553,6 +564,7 @@ export function ProjectWorkspace({
                                 <span className="flex items-center gap-1.5">
                                   {item.label}
                                   {accessBadge(item.route) && <Eye className="w-3.5 h-3.5 text-amber-600" aria-label="Read-only" />}
+                                  <span className="relative w-4 h-4"><Count needs={noted[item.route]?.needs || 0} unread={noted[item.route]?.unread || 0} className="-top-0.5 left-0" /></span>
                                 </span>
                                 {isActiveItem && <div className="w-1.5 h-1.5 rounded-full bg-[#3D52A0] shrink-0" />}
                               </button>
@@ -592,6 +604,7 @@ export function ProjectWorkspace({
                 >
                   {isActive && <div className="w-1.5 h-1.5 rounded-full bg-cyan-300 shrink-0" />}
                   <span className="tracking-tight">{item.label}</span>
+                  <Count needs={noted[item.route]?.needs || 0} unread={noted[item.route]?.unread || 0} className="-top-1.5 -right-1.5 z-10" />
                   {accessBadge(item.route) && (
                     <span
                       title="Read-only for you"
@@ -658,13 +671,19 @@ export function ProjectWorkspace({
             screen that owns the decision, so the Client Portal tab stays the
             only thing that can reach a client.
           */}
-          {/* The studio's alerts lead to screens a Designer does not have. */}
-          <div className={`ml-auto shrink-0 ${isLimited ? 'hidden' : ''}`}>
-            <HubAlertsBell
-              projectId={projectId}
-              projectContext={projectContext}
-              onGoTo={setActiveTab}
-            />
+          {/*
+            A change to this project as it happens (components/notify): a
+            chip that turns in beside the alerts, and the bell for everything
+            that reached you, here because the studio's top bar is hidden
+            inside a project.
+          */}
+          <div className="ml-auto shrink-0 flex items-center gap-2">
+            <LiveStamp match={(n) => n.projectId === projectId} className="hidden lg:inline-flex" />
+            {/* One bell: what reached you, and first what this project is waiting on. Those alerts lead to screens a Designer does not have. */}
+            <NotifyBell project={!isLimited ? {
+              name: [projectContext?.name || 'This project', projectContext?.clientName].filter(Boolean).join(' · '),
+              alerts: hubAlerts.alerts, onGo: setActiveTab, onDismiss: hubAlerts.dismiss,
+            } : undefined} />
           </div>
 
           {/*
@@ -675,7 +694,7 @@ export function ProjectWorkspace({
             tabs are, instead of a yellow bar across every screen.
           */}
           {isDesigner && (
-            <div className="phd-pop ml-auto shrink-0 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 shadow-2xs">
+            <div className="phd-pop shrink-0 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 shadow-2xs">
               <div className="grid gap-1 text-[11.5px] leading-tight">
                 <span className="flex items-center gap-1.5 text-slate-700">
                   <Pencil className="w-3.5 h-3.5 text-[#1F4D45]" />
@@ -699,7 +718,7 @@ export function ProjectWorkspace({
           )}
           {/* Client Relations: the same note. Their own tools -- the Ops Desk and the follow-up log -- come next. */}
           {isLimited && !isDesigner && (
-            <div className="phd-pop ml-auto shrink-0 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 shadow-2xs">
+            <div className="phd-pop shrink-0 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 shadow-2xs">
               <span className="flex items-center gap-1.5 text-[11.5px] leading-tight text-slate-600">
                 <Eye className="w-3.5 h-3.5 text-amber-600" />
                 <b className="text-slate-900">Read-only:</b> Client Comms, Timeline, Decisions, Drawings, Design Gate, Brief &amp; Site
