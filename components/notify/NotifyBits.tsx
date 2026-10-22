@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import {
   AlarmClock, AlertTriangle, BadgeCheck, CalendarCheck, CalendarDays, Check, CircleHelp, Clock, DoorOpen, FileSignature,
   HardHat, LogOut, MessageSquare, Palette, PenTool, Sparkles, Undo2, UserPlus, Gavel,
@@ -77,31 +77,42 @@ export const Count: React.FC<{ needs: number; unread?: number; className?: strin
   return null;
 };
 
-/** The studio's brushed-metal bell (HubAlertsBell's), with a clapper that lags the body. */
-export const BellGlyph: React.FC<{ size?: number }> = ({ size = 24 }) => (
+/**
+ * The studio's brushed-metal bell (HubAlertsBell's), with a clapper that lags the body.
+ *
+ * Its gradients get ids of their own. With one shared id, the bell in the
+ * phone header (hidden on a desktop) came first in the page, Chrome resolved
+ * every bell's fill to that hidden gradient, and the top bar's bell painted
+ * nothing at all.
+ */
+export const BellGlyph: React.FC<{ size?: number }> = ({ size = 24 }) => {
+  const id = useId().replace(/[^A-Za-z0-9_-]/g, '');
+  const body = `nt-bell-body-${id}`, sheen = `nt-bell-sheen-${id}`;
+  return (
   <svg width={size} height={size} viewBox="0 0 44 44" aria-hidden="true" className="block overflow-visible">
     <defs>
-      <linearGradient id="nt-bell-body" x1="14%" y1="4%" x2="86%" y2="96%">
+      <linearGradient id={body} x1="14%" y1="4%" x2="86%" y2="96%">
         <stop offset="0" stopColor="#E8ECF7" />
         <stop offset="52%" stopColor="#A9B4D4" />
         <stop offset="100%" stopColor="#5C6894" />
       </linearGradient>
-      <radialGradient id="nt-bell-sheen" cx="32%" cy="22%" r="52%">
+      <radialGradient id={sheen} cx="32%" cy="22%" r="52%">
         <stop offset="0" stopColor="#fff" stopOpacity=".75" />
         <stop offset="100%" stopColor="#fff" stopOpacity="0" />
       </radialGradient>
     </defs>
     <g className="nt-bell-body">
-      <circle cx="22" cy="6.4" r="2.7" fill="url(#nt-bell-body)" />
-      <path d="M22 8C15 8 9.5 13.5 9.5 20.5V27L6 32.5h32L34.5 27v-6.5C34.5 13.5 29 8 22 8Z" fill="url(#nt-bell-body)" />
-      <path d="M22 8C15 8 9.5 13.5 9.5 20.5V27L6 32.5h32L34.5 27v-6.5C34.5 13.5 29 8 22 8Z" fill="url(#nt-bell-sheen)" />
+      <circle cx="22" cy="6.4" r="2.7" fill={`url(#${body})`} />
+      <path d="M22 8C15 8 9.5 13.5 9.5 20.5V27L6 32.5h32L34.5 27v-6.5C34.5 13.5 29 8 22 8Z" fill={`url(#${body})`} />
+      <path d="M22 8C15 8 9.5 13.5 9.5 20.5V27L6 32.5h32L34.5 27v-6.5C34.5 13.5 29 8 22 8Z" fill={`url(#${sheen})`} />
       <path d="M15 14.5c1.6-3 4.2-4.7 7-4.9" stroke="#fff" strokeOpacity=".7" strokeWidth="1.7" strokeLinecap="round" fill="none" />
     </g>
     <g className="nt-bell-clap">
-      <circle cx="22" cy="36" r="3.1" fill="url(#nt-bell-body)" />
+      <circle cx="22" cy="36" r="3.1" fill={`url(#${body})`} />
     </g>
   </svg>
-);
+  );
+};
 
 /** The title of a row, with a folded burst counted. */
 export const titleOf = (n: Stored & { count?: number }) => foldedTitle({ kind: n.kind, title: n.title, count: n.count || 1 });

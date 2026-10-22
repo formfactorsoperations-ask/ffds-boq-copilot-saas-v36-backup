@@ -26,6 +26,7 @@ import NotifyBell from '../../components/notify/NotifyBell';
 import NeedsYouBar from '../../components/notify/NeedsYouBar';
 import NotifySettings from '../../components/notify/NotifySettings';
 import WaitingOnYou from '../../components/notify/WaitingOnYou';
+import { BellGlyph } from '../../components/notify/NotifyBits';
 
 const note = (id: string, over: Partial<Stored> = {}): Stored => ({
   ...stamp({ kind: 'client.message', area: 'clients', level: 'needs', title: 'Mr Prasad Naik sent you a message', line: '“Walnut, not oak.”', projectId: 'p1', projectName: 'Harmony 704', route: 'comms-tracker', action: 'Reply', actor: 'Mr Prasad Naik', group: null, to: {} }, Date.now()),
@@ -177,5 +178,16 @@ describe('away from the page, and each person\'s settings', () => {
     expect(within(rows[0]).getByText(/^waiting 3[45]:/).className).toContain('rose');
     expect(within(rows[1]).getByText(/^waiting [12]:/).className).toContain('slate');
     expect(screen.getByText(/2 waiting · longest 3[45]:/)).toBeTruthy();
+  });
+});
+
+describe('the bell glyph', () => {
+  it('gives each bell its own gradients, so a hidden bell earlier in the page cannot blank the visible one', () => {
+    const { container } = render(<><div hidden><BellGlyph /></div><BellGlyph /></>);
+    const ids = [...container.querySelectorAll('linearGradient')].map((g) => g.id);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+    const second = container.querySelectorAll('svg')[1];
+    expect(second.querySelector('path')!.getAttribute('fill')).toBe(`url(#${ids[1]})`);
   });
 });
