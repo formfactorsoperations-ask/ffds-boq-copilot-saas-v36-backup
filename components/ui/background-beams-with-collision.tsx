@@ -1,6 +1,6 @@
 import { cn } from "../../lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 
 export const BackgroundBeamsWithCollision = ({
   children,
@@ -11,6 +11,29 @@ export const BackgroundBeamsWithCollision = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const parentRef = useRef<HTMLDivElement>(null);
+  const checks = useRef(new Set<CollisionCheck>());
+
+  /*
+    One clock for every beam. Each beam used to poll on its own every 40ms
+    and measure the floor and the frame each time: eight beams, three layout
+    reads apiece, 25 times a second, on every screen of the app. Now the floor
+    and the frame are measured once a tick, every beam reads its own box in
+    the same pass, and nothing runs while the tab is hidden.
+  */
+  useEffect(() => {
+    const tick = () => {
+      if (document.hidden || !checks.current.size || !containerRef.current || !parentRef.current) return;
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const parentRect = parentRef.current.getBoundingClientRect();
+      checks.current.forEach((check) => check(containerRect, parentRect));
+    };
+    const t = window.setInterval(tick, 100);
+    return () => window.clearInterval(t);
+  }, []);
+  const register = useCallback((check: CollisionCheck) => {
+    checks.current.add(check);
+    return () => { checks.current.delete(check); };
+  }, []);
 
   const beams = [
     {
@@ -83,8 +106,7 @@ export const BackgroundBeamsWithCollision = ({
         <CollisionMechanism
           key={index + "-collision-beam"}
           beamOptions={beam}
-          containerRef={containerRef}
-          parentRef={parentRef}
+          register={register}
         />
       ))}
 
@@ -112,16 +134,18 @@ interface BeamOptions {
   repeatDelay?: number;
 }
 
+type CollisionCheck = (containerRect: DOMRect, parentRect: DOMRect) => void;
+
 interface CollisionMechanismProps {
-  containerRef: React.RefObject<HTMLDivElement | null>;
-  parentRef: React.RefObject<HTMLDivElement | null>;
+  /** Joins the shared clock; returns how to leave it. */
+  register: (check: CollisionCheck) => () => void;
   beamOptions?: BeamOptions;
 }
 
 const CollisionMechanism = React.forwardRef<
   HTMLDivElement,
   CollisionMechanismProps
->(({ parentRef, containerRef, beamOptions = {} }: CollisionMechanismProps, ref) => {
+>(({ register, beamOptions = {} }: CollisionMechanismProps, ref) => {
   const beamRef = useRef<HTMLDivElement>(null);
   const [collision, setCollision] = useState<{
     detected: boolean;
@@ -134,38 +158,27 @@ const CollisionMechanism = React.forwardRef<
   const [cycleCollisionDetected, setCycleCollisionDetected] = useState(false);
 
   useEffect(() => {
-    const checkCollision = () => {
-      if (
-        beamRef.current &&
-        containerRef.current &&
-        parentRef.current &&
-        !cycleCollisionDetected
-      ) {
-        const beamRect = beamRef.current.getBoundingClientRect();
-        const containerRect = containerRef.current.getBoundingClientRect();
-        const parentRect = parentRef.current.getBoundingClientRect();
+    if (cycleCollisionDetected) return;
+    return register((containerRect, parentRect) => {
+      if (!beamRef.current) return;
+      const beamRect = beamRef.current.getBoundingClientRect();
 
-        if (beamRect.bottom >= containerRect.top) {
-          const relativeX =
-            beamRect.left - parentRect.left + beamRect.width / 2;
-          const relativeY = containerRect.top - parentRect.top;
+      if (beamRect.bottom >= containerRect.top) {
+        const relativeX =
+          beamRect.left - parentRect.left + beamRect.width / 2;
+        const relativeY = containerRect.top - parentRect.top;
 
-          setCollision({
-            detected: true,
-            coordinates: {
-              x: relativeX,
-              y: relativeY,
-            },
-          });
-          setCycleCollisionDetected(true);
-        }
+        setCollision({
+          detected: true,
+          coordinates: {
+            x: relativeX,
+            y: relativeY,
+          },
+        });
+        setCycleCollisionDetected(true);
       }
-    };
-
-    const animationInterval = setInterval(checkCollision, 40);
-
-    return () => clearInterval(animationInterval);
-  }, [cycleCollisionDetected, containerRef, parentRef]);
+    });
+  }, [cycleCollisionDetected, register]);
 
   useEffect(() => {
     if (collision.detected && collision.coordinates) {

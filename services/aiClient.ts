@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 
 const MAX_RETRIES = 3;
 
@@ -93,6 +92,13 @@ const browserShim = () => ({
   },
 });
 
+/*
+  The SDK is handed in by server.ts rather than imported here, so the browser
+  bundle, which only ever uses the shim, never carries it (about 1.2 MB).
+*/
+let GenAiSdk: (new (opts: { apiKey: string }) => any) | null = null;
+export const provideGenAiSdk = (sdk: new (opts: { apiKey: string }) => any): void => { GenAiSdk = sdk; };
+
 export const getAi = (): any => {
   const apiKey =
     typeof process !== "undefined"
@@ -100,7 +106,8 @@ export const getAi = (): any => {
       : "";
 
   if (apiKey) {
-    const ai = new GoogleGenAI({ apiKey });
+    if (!GenAiSdk) throw new Error("The Gemini SDK was not provided: call provideGenAiSdk(GoogleGenAI) at server start.");
+    const ai = new GenAiSdk({ apiKey });
     const original = ai.models.generateContent;
     ai.models.generateContent = async (params: any) =>
       withRetry(() => original.call(ai.models, params));

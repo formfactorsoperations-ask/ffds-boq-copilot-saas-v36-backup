@@ -5,9 +5,13 @@ import path from "path";
 import { createServer as createViteServer, loadEnv } from "vite";
 import { requireAccount } from "./lib/requireAccount";
 import * as apiTasks from "./services/apiTasks";
-import { getAi } from "./services/aiClient";
+import { GoogleGenAI } from "@google/genai";
+import { getAi, provideGenAiSdk } from "./services/aiClient";
 import { classifyRoom, defaultCeiling } from "./lib/takeoff";
 import { FLASH_MODEL } from "./constants/aiModels";
+
+/* The real Gemini client lives only here, on the server (services/aiClient.ts keeps it out of the browser bundle). */
+provideGenAiSdk(GoogleGenAI);
 
 /*
   The server reads .env for itself.

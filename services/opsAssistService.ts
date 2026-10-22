@@ -5,7 +5,7 @@
   only the project brief, which is built from the copy of the project without
   the studio's money.
 */
-import { Type } from '@google/genai';
+import { Type } from './aiSchema';
 import { getAi, aiIsReachable } from './aiClient';
 import { FLASH_MODEL } from '../constants/aiModels';
 import { opsViewOf } from '../functions/src/teamViewStrip';

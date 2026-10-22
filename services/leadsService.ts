@@ -5,7 +5,7 @@
 */
 import { collection, deleteDoc, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { Type } from '@google/genai';
+import { Type } from './aiSchema';
 import { db, functions } from './firebaseClient';
 import { getAi, aiIsReachable } from './aiClient';
 import { FLASH_MODEL } from '../constants/aiModels';

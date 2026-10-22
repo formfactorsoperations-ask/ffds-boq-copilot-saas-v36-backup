@@ -59,6 +59,15 @@ if (!clientEnv.VITE_SUPABASE_ANON_KEY) clientEnv.VITE_SUPABASE_ANON_KEY = '';
 if (!clientEnv.VITE_APP_DOMAIN) clientEnv.VITE_APP_DOMAIN = '';
 if (!clientEnv.VITE_PUBLIC_APP_URL) clientEnv.VITE_PUBLIC_APP_URL = '';
 
+/*
+  Split into chunks. This was one file (--outfile, no --splitting), so every
+  React.lazy tab and every import() -- the Excel and PDF libraries, the client
+  portal, the Design Desk -- was inlined into index.js: 10 MB downloaded and
+  parsed before the first screen. Now index.js holds what the app needs to
+  start, and the rest loads from assets/chunks/ when first used. Chunk names
+  carry a content hash, so a deploy never serves a stale one under the same
+  name. index.js keeps its name: dist/index.html points at it.
+*/
 console.log('5. Bundling client with esbuild...');
 const clientEnvJson = JSON.stringify(clientEnv);
 const envDefines = Object.entries(clientEnv)
@@ -66,7 +75,7 @@ const envDefines = Object.entries(clientEnv)
   .join(' ');
 
 execSync(
-  `npx esbuild index.tsx --bundle --outfile=dist/assets/index.js --format=esm --conditions=style --loader:.tsx=tsx --loader:.ts=ts --loader:.css=css --jsx=automatic --jsx-import-source=react --minify --define:process.env.NODE_ENV=\\"production\\" --define:import.meta.env=${JSON.stringify(clientEnvJson)} ${envDefines}`,
+  `npx esbuild index.tsx --bundle --splitting --outdir=dist/assets --entry-names=[name] --chunk-names=chunks/[name]-[hash] --format=esm --conditions=style --loader:.tsx=tsx --loader:.ts=ts --loader:.css=css --jsx=automatic --jsx-import-source=react --minify --define:process.env.NODE_ENV=\\"production\\" --define:import.meta.env=${JSON.stringify(clientEnvJson)} ${envDefines}`,
   { stdio: 'inherit' }
 );
 

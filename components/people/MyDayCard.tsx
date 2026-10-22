@@ -22,11 +22,18 @@ const btnPri = 'pp-press inline-flex items-center justify-center gap-2 px-5 py-2
 const btnSec = 'inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors disabled:opacity-50';
 const niceDate = (d: string) => new Date(`${d}T12:00:00+05:30`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
+/*
+  The studio's time now, by the server's clock. Everything on the card reads
+  it to the minute (the clock, minutes worked, the ring), so it moves only
+  when the minute turns: the card renders once a minute, not every second.
+*/
 function useNow(serverTime?: string) {
   const offset = useMemo(() => (serverTime ? Date.parse(serverTime) - Date.now() : 0), [serverTime]);
-  const [now, setNow] = useState(() => Date.now() + offset);
+  const minute = () => Math.floor((Date.now() + offset) / 60000) * 60000;
+  const [now, setNow] = useState(minute);
   useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now() + offset), 1000);
+    setNow(minute());
+    const t = window.setInterval(() => setNow(minute()), 1000);
     return () => window.clearInterval(t);
   }, [offset]);
   return new Date(now).toISOString();
